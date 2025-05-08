@@ -60,6 +60,16 @@ impl WasmManager {
         Ok(())
     }
 
+    // add_wasms
+    #[allow(clippy::cast_precision_loss)]
+    pub fn add_wasms(wasms: &[(&'static str, &'static [u8])]) -> Result<(), WasmError> {
+        for (ty, wasm) in wasms {
+            Self::add_wasm(ty.to_string(), wasm)?;
+        }
+
+        Ok(())
+    }
+
     // info
     pub fn info() -> Result<Vec<(String, usize)>, WasmError> {
         let info = WASM_FILES
