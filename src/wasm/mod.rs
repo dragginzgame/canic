@@ -8,11 +8,11 @@ use std::{
 use thiserror::Error as ThisError;
 
 ///
-/// WASM_FILES
+/// WASMS
 /// use Mutex to ensure thread safety for mutable access
 ///
 
-pub static WASM_FILES: LazyLock<Mutex<HashMap<String, &'static [u8]>>> =
+pub static WASMS: LazyLock<Mutex<HashMap<String, &'static [u8]>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 ///
@@ -37,7 +37,7 @@ pub struct WasmManager {}
 impl WasmManager {
     // get_wasm
     pub fn get_wasm(name: &str) -> Result<&'static [u8], WasmError> {
-        let file = WASM_FILES
+        let file = WASMS
             .lock()
             .map_err(|_| WasmError::LockFailed)?
             .get(name)
@@ -50,7 +50,7 @@ impl WasmManager {
     // add_wasm
     #[allow(clippy::cast_precision_loss)]
     pub fn add_wasm(name: String, wasm: &'static [u8]) -> Result<(), WasmError> {
-        WASM_FILES
+        WASMS
             .lock()
             .map_err(|_| WasmError::LockFailed)?
             .insert(name.clone(), wasm);
@@ -72,7 +72,7 @@ impl WasmManager {
 
     // info
     pub fn info() -> Result<Vec<(String, usize)>, WasmError> {
-        let info = WASM_FILES
+        let info = WASMS
             .lock()
             .map_err(|_| WasmError::LockFailed)?
             .iter()
