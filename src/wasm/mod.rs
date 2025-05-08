@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 /// use Mutex to ensure thread safety for mutable access
 ///
 
-pub static WASM_FILES: LazyLock<Mutex<HashMap<CanisterType, &'static [u8]>>> =
+pub static WASM_FILES: LazyLock<Mutex<HashMap<String, &'static [u8]>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 ///
@@ -24,8 +24,8 @@ pub enum WasmError {
     #[error("mutex lock failed")]
     LockFailed,
 
-    #[error("wasm not found for canister type {0}")]
-    WasmNotFound(CanisterType),
+    #[error("wasm not found for canister '{0}'")]
+    WasmNotFound(String),
 }
 
 ///
@@ -36,32 +36,32 @@ pub struct WasmManager {}
 
 impl WasmManager {
     // get_wasm
-    pub fn get_wasm(ty: &CanisterType) -> Result<&'static [u8], WasmError> {
+    pub fn get_wasm(name: &str) -> Result<&'static [u8], WasmError> {
         let file = WASM_FILES
             .lock()
             .map_err(|_| WasmError::LockFailed)?
-            .get(ty)
+            .get(name)
             .copied()
-            .ok_or_else(|| WasmError::WasmNotFound(ty.clone()))?;
+            .ok_or_else(|| WasmError::WasmNotFound(name.to_string()))?;
 
         Ok(file)
     }
 
     // add_wasm
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_wasm(ty: CanisterType, wasm: &'static [u8]) -> Result<(), WasmError> {
+    pub fn add_wasm(name: &str, wasm: &'static [u8]) -> Result<(), WasmError> {
         WASM_FILES
             .lock()
             .map_err(|_| WasmError::LockFailed)?
-            .insert(ty.clone(), wasm);
+            .insert(name.to_string(), wasm);
 
-        println!("add_wasm: {} ({:.2} KB)", ty, wasm.len() as f64 / 1000.0);
+        println!("add_wasm: {} ({:.2} KB)", name, wasm.len() as f64 / 1000.0);
 
         Ok(())
     }
 
     // info
-    pub fn info() -> Result<Vec<(CanisterType, usize)>, WasmError> {
+    pub fn info() -> Result<Vec<(String, usize)>, WasmError> {
         let info = WASM_FILES
             .lock()
             .map_err(|_| WasmError::LockFailed)?
