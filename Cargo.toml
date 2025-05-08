@@ -1,5 +1,5 @@
 [package]
-name = "ic_utils"
+name = "icu"
 version = "0.1.0"
 edition = "2024"
 readme = "README.md"
@@ -9,6 +9,12 @@ readme = "README.md"
 candid = "0.10.13"
 ic-cdk = "0.18.0"
 ic-stable-structures = "0.6.8"
+
+# third party
+derive_more = { version = "2.0", default-features = false, features = ["full"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = "2.0"
+remain = "0.2"
 
 # clippy
 [workspace.lints.clippy]
