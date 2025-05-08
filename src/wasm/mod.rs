@@ -24,7 +24,7 @@ pub enum WasmError {
     #[error("mutex lock failed")]
     LockFailed,
 
-    #[error("wasm not found for canister '{0}'")]
+    #[error("wasm '{0}' not found")]
     WasmNotFound(String),
 }
 
@@ -49,11 +49,11 @@ impl WasmManager {
 
     // add_wasm
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_wasm(name: &str, wasm: &'static [u8]) -> Result<(), WasmError> {
+    pub fn add_wasm(name: String, wasm: &'static [u8]) -> Result<(), WasmError> {
         WASM_FILES
             .lock()
             .map_err(|_| WasmError::LockFailed)?
-            .insert(name.to_string(), wasm);
+            .insert(name.clone(), wasm);
 
         println!("add_wasm: {} ({:.2} KB)", name, wasm.len() as f64 / 1000.0);
 
