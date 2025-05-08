@@ -34,33 +34,7 @@ perf.data.old
 ## backend/
 ##
 
-backend/.env
-backend/target/*
-backend/generated
+.env
+target/*
+generated
 
-# Remove Cargo.lock from gitignore if creating an executable, leave it for libraries
-# More information here https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
-backend/Cargo.lock
-
-##
-## frontend/
-##
-
-# dependencies
-frontend/node_modules
-
-# production
-frontend/build
-frontend/src/declarations
-deps
-
-# NPM & Yarn
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
-frontend/yarn.lock
-frontend/package-lock.json
-
-# .env files
-# https://create-react-app.dev/docs/adding-custom-environment-variables/
-frontend/.env
