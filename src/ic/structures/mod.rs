@@ -1,6 +1,9 @@
 pub mod btreemap;
 pub mod cell;
 
+pub use btreemap::BTreeMap;
+pub use cell::Cell;
+
 pub mod memory {
     pub use ic_stable_structures::memory_manager::*;
 }
