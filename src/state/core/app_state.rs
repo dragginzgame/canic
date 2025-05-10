@@ -1,9 +1,10 @@
 use crate::{
+    Log,
     ic::structures::{
         DefaultMemory,
         cell::{Cell, CellError},
     },
-    impl_storable_unbounded,
+    impl_storable_unbounded, log,
 };
 use candid::CandidType;
 use derive_more::{Deref, DerefMut, Display};
@@ -47,7 +48,7 @@ impl AppState {
 
     // set_data
     pub fn set_data(&mut self, data: AppStateData) -> Result<(), AppStateError> {
-        self.set(data).map_err(AppStateError::MimicError)?;
+        self.set(data)?;
 
         Ok(())
     }

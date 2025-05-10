@@ -1,4 +1,4 @@
-//pub mod core;
+pub mod core;
 
 use crate::memory_manager;
 

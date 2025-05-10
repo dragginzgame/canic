@@ -11,56 +11,46 @@ use thiserror::Error as ThisError;
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum SubnetIndexError {
     #[error("canister type not found: {0}")]
-    CanisterTypeNotFound(CanisterType),
+    CanisterTypeNotFound(String),
 }
 
 ///
 /// SubnetIndex
-/// a map of CanisterType to canister principal
 ///
 
 #[derive(Deref, DerefMut)]
-pub struct SubnetIndex(BTreeMap<CanisterType, Principal>);
+pub struct SubnetIndex(BTreeMap<String, Principal>);
 
 impl SubnetIndex {
-    // init
     #[must_use]
     pub fn init(memory: DefaultMemory) -> Self {
         Self(BTreeMap::init(memory))
     }
 
-    // get_data
     #[must_use]
-    pub fn get_data(&self) -> SubnetIndexData {
-        self.iter().collect()
+    pub fn get_data(&self) -> Vec<(String, Principal)> {
+        self.iter().map(|(k, v)| (k, v)).collect()
     }
 
-    // set_data
-    pub fn set_data(&mut self, data: SubnetIndexData) {
+    pub fn set_data(&mut self, data: Vec<(String, Principal)>) {
         self.clear();
         for (k, v) in data {
             self.insert(k, v);
         }
     }
 
-    // try_get_canister
-    pub fn try_get_canister(&self, canister: &CanisterType) -> Result<Principal, SubnetIndexError> {
-        let canister = self
-            .get_canister(canister)
-            .ok_or_else(|| SubnetIndexError::CanisterTypeNotFound(canister.clone()))?;
-
-        Ok(canister)
+    pub fn try_get_canister(&self, key: &str) -> Result<Principal, SubnetIndexError> {
+        self.get_canister(key)
+            .ok_or_else(|| SubnetIndexError::CanisterTypeNotFound(key.to_string()))
     }
 
-    // get_canister
     #[must_use]
-    pub fn get_canister(&self, canister: &CanisterType) -> Option<Principal> {
-        self.get(canister)
+    pub fn get_canister(&self, key: &str) -> Option<Principal> {
+        self.get(&key.to_string())
     }
 
-    // set_canister
-    pub fn set_canister(&mut self, canister: CanisterType, id: Principal) {
-        self.insert(canister, id);
+    pub fn set_canister(&mut self, key: String, id: Principal) {
+        self.insert(key, id);
     }
 }
 
@@ -68,4 +58,4 @@ impl SubnetIndex {
 /// SubnetIndexData
 ///
 
-pub type SubnetIndexData = Vec<(CanisterType, Principal)>;
+pub type SubnetIndexData = Vec<(String, Principal)>;

@@ -1,7 +1,6 @@
-use crate::structures::DefaultMemory;
+use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
-use ic_stable_structures::BTreeMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -20,7 +19,7 @@ pub enum ChildIndexError {
 ///
 
 #[derive(Deref, DerefMut)]
-pub struct ChildIndex(BTreeMap<Principal, CanisterType>);
+pub struct ChildIndex(BTreeMap<Principal, String>);
 
 impl ChildIndex {
     // init
@@ -36,7 +35,7 @@ impl ChildIndex {
     }
 
     // try_get_canister
-    pub fn try_get_canister(&self, pid: &Principal) -> Result<CanisterType, ChildIndexError> {
+    pub fn try_get_canister(&self, pid: &Principal) -> Result<String, ChildIndexError> {
         let canister = self
             .get_canister(pid)
             .ok_or(ChildIndexError::CanisterNotFound(*pid))?;
@@ -46,12 +45,12 @@ impl ChildIndex {
 
     // get_canister
     #[must_use]
-    pub fn get_canister(&self, pid: &Principal) -> Option<CanisterType> {
+    pub fn get_canister(&self, pid: &Principal) -> Option<String> {
         self.get(pid)
     }
 
     // insert_canister
-    pub fn insert_canister(&mut self, pid: Principal, ty: CanisterType) {
+    pub fn insert_canister(&mut self, pid: Principal, ty: String) {
         self.insert(pid, ty);
     }
 }
@@ -60,4 +59,4 @@ impl ChildIndex {
 /// ChildIndexData
 ///
 
-pub type ChildIndexData = Vec<(Principal, CanisterType)>;
+pub type ChildIndexData = Vec<(Principal, String)>;

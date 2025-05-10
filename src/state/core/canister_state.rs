@@ -1,6 +1,9 @@
 use crate::{
+    ic::structures::{
+        DefaultMemory,
+        cell::{Cell, CellError},
+    },
     impl_storable_unbounded,
-    structures::{DefaultMemory, cell::Cell},
 };
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
@@ -18,6 +21,9 @@ pub enum CanisterStateError {
 
     #[error("root_id has not been set")]
     RootIdNotSet,
+
+    #[error(transparent)]
+    CellError(#[from] CellError),
 }
 
 ///
@@ -41,22 +47,22 @@ impl CanisterState {
 
     // set_data
     pub fn set_data(&mut self, data: CanisterStateData) -> Result<(), CanisterStateError> {
-        self.set(data).map_err(CanisterStateError::MimicError)?;
+        self.set(data)?;
 
         Ok(())
     }
 
     // get_type
-    pub fn get_type(&self) -> Result<CanisterType, CanisterStateError> {
+    pub fn get_type(&self) -> Result<String, CanisterStateError> {
         let ty = self.get().ty.ok_or(CanisterStateError::PathNotSet)?;
 
         Ok(ty)
     }
 
     // set_type
-    pub fn set_type(&mut self, ty: CanisterType) -> Result<(), CanisterStateError> {
+    pub fn set_type(&mut self, ty: &str) -> Result<(), CanisterStateError> {
         let mut state = self.get();
-        state.ty = Some(ty);
+        state.ty = Some(ty.to_string());
         self.set(state)?;
 
         Ok(())
@@ -100,7 +106,7 @@ impl CanisterState {
 
 #[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CanisterStateData {
-    ty: Option<CanisterType>,
+    ty: Option<String>,
     root_id: Option<Principal>,
     parent_id: Option<Principal>,
 }

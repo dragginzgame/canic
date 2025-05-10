@@ -5,3 +5,15 @@ pub mod macros;
 pub mod serialize;
 pub mod state;
 pub mod wasm;
+
+///
+/// Log
+///
+
+pub enum Log {
+    Ok,
+    Perf,
+    Info,
+    Warn,
+    Error,
+}
