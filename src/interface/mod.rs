@@ -1,4 +1,5 @@
 pub mod cascade;
+pub mod ic;
 
 use crate::interface::cascade::CascadeError;
 use candid::CandidType;

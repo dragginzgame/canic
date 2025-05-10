@@ -67,30 +67,52 @@ macro_rules! icu_endpoints {
         }
 
         //
+        // ICU HELPERS
+        //
+
+        // icu_canister_cycle_balance
+        #[::icu::ic::query]
+        fn icu_canister_cycle_balance() -> u128 {
+            ::icu::ic::api::canister_cycle_balance()
+        }
+
+        // icu_canister_version
+        #[::icu::ic::query]
+        pub fn icu_canister_version() -> u64 {
+            ::icu::ic::api::canister_version()
+        }
+
+        // icu_time
+        #[::icu::ic::query]
+        pub fn icu_time() -> u64 {
+            ::icu::ic::api::time()
+        }
+
+        //
         // ICU STATE ENDPOINTS
         //
 
-        // app_state
+        // icu_app_state
         #[::icu::ic::query]
-        fn app_state() -> ::icu::state::AppStateData {
+        fn icu_app_state() -> ::icu::state::AppStateData {
             ::icu::state::APP_STATE.with_borrow(|this| this.get_data())
         }
 
-        // canister_state
+        // icu_canister_state
         #[::icu::ic::query]
-        fn canister_state() -> ::icu::state::CanisterStateData {
+        fn icu_canister_state() -> ::icu::state::CanisterStateData {
             ::icu::state::CANISTER_STATE.with_borrow(|this| this.get_data())
         }
 
-        // child_index
+        // icu_child_index
         #[::icu::ic::query]
-        fn child_index() -> ::icu::state::ChildIndexData {
+        fn icu_child_index() -> ::icu::state::ChildIndexData {
             ::icu::state::CHILD_INDEX.with_borrow(|this| this.get_data())
         }
 
-        // subnet_index
+        // icu_subnet_index
         #[::icu::ic::query]
-        fn subnet_index() -> ::icu::state::SubnetIndexData {
+        fn icu_subnet_index() -> ::icu::state::SubnetIndexData {
             ::icu::state::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
     };
