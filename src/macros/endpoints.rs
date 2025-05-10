@@ -71,25 +71,25 @@ macro_rules! icu_endpoints {
 
         // app_state
         #[$crate::ic::query]
-        fn app_state() -> ::actor::state::core::AppStateData {
+        fn app_state() -> $crate::state::AppStateData {
             $crate::state::APP_STATE.with_borrow(|this| this.get_data())
         }
 
         // canister_state
         #[$crate::ic::query]
-        fn canister_state() -> ::actor::state::core::CanisterStateData {
+        fn canister_state() -> $crate::state::CanisterStateData {
             $crate::state::CANISTER_STATE.with_borrow(|this| this.get_data())
         }
 
         // child_index
         #[$crate::ic::query]
-        fn child_index() -> ::actor::state::core::ChildIndexData {
+        fn child_index() -> $crate::state::ChildIndexData {
             $crate::state::CHILD_INDEX.with_borrow(|this| this.get_data())
         }
 
         // subnet_index
         #[$crate::ic::query]
-        fn subnet_index() -> ::actor::state::core::SubnetIndexData {
+        fn subnet_index() -> $crate::state::SubnetIndexData {
             $crate::state::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
     };
