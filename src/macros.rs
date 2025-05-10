@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! impl_storable_bounded {
     ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
-        impl ::ic_stable_structures::storable::Storable for $ident {
+        impl $crate::ic::structures::storable::Storable for $ident {
             fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
                 ::std::borrow::Cow::Owned(::icu::serialize::serialize(self).unwrap())
             }
@@ -10,8 +10,8 @@ macro_rules! impl_storable_bounded {
                 $crate::serialize::deserialize(&bytes).unwrap()
             }
 
-            const BOUND: ::ic_stable_structures::storable::Bound =
-                ::ic_stable_structures::storable::Bound::Bounded {
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Bounded {
                     max_size: $max_size,
                     is_fixed_size: $is_fixed_size,
                 };
@@ -31,8 +31,8 @@ macro_rules! impl_storable_unbounded {
                 $crate::serialize::deserialize(&bytes).unwrap()
             }
 
-            const BOUND: ::ic_stable_structures::storable::Bound =
-                ::ic_stable_structures::storable::Bound::Unbounded;
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Unbounded;
         }
     };
 }
@@ -50,8 +50,8 @@ macro_rules! memory_manager {
                 ::ic_stable_structures::memory_manager::MemoryManager<
                     ::ic_stable_structures::DefaultMemoryImpl,
                 >,
-            > = ::std::cell::RefCell::new(::ic_stable_structures::memory_manager::MemoryManager::init(
-                ::ic_stable_structures::DefaultMemoryImpl::default(),
+            > = ::std::cell::RefCell::new($crate::ic::structures::memory_manager::MemoryManager::init(
+                $crate::ic::structures::DefaultMemoryImpl::default(),
             ));
 
         }
