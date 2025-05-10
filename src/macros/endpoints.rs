@@ -78,13 +78,13 @@ macro_rules! icu_endpoints {
 
         // icu_canister_version
         #[::icu::ic::query]
-        pub fn icu_canister_version() -> u64 {
+        fn icu_canister_version() -> u64 {
             ::icu::ic::api::canister_version()
         }
 
         // icu_time
         #[::icu::ic::query]
-        pub fn icu_time() -> u64 {
+        fn icu_time() -> u64 {
             ::icu::ic::api::time()
         }
 
