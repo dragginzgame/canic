@@ -1,14 +1,13 @@
 use crate::{
     Log,
-    ic::structures::{
-        DefaultMemory,
-        cell::{Cell, CellError},
-    },
+    ic::structures::{Cell, DefaultMemory, cell::CellError, memory::MemoryId},
     impl_storable_unbounded, log,
+    state::{APP_STATE_MEMORY_ID, MEMORY_MANAGER},
 };
 use candid::CandidType;
 use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -22,6 +21,22 @@ pub enum AppStateError {
 
     #[error(transparent)]
     CellError(#[from] CellError),
+}
+
+//
+// APP_STATE
+//
+// a Cell that's only really meant for small data structures used for global app state
+//
+// defaults to Enabled as then it's possible for non-controllers to call
+// endpoints in order to initialise
+//
+
+thread_local! {
+    pub static APP_STATE: RefCell<AppState> = RefCell::new(AppState::init(
+        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(APP_STATE_MEMORY_ID))),
+        AppMode::Enabled,
+    ));
 }
 
 ///

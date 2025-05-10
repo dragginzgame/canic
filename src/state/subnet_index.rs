@@ -1,7 +1,11 @@
-use crate::ic::structures::{BTreeMap, DefaultMemory};
+use crate::{
+    ic::structures::{BTreeMap, DefaultMemory, memory::MemoryId},
+    state::{MEMORY_MANAGER, SUBNET_INDEX_MEMORY_ID},
+};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -12,6 +16,16 @@ use thiserror::Error as ThisError;
 pub enum SubnetIndexError {
     #[error("canister type not found: {0}")]
     CanisterTypeNotFound(String),
+}
+
+//
+// SUBNET_INDEX
+//
+
+thread_local! {
+    pub static SUBNET_INDEX: RefCell<SubnetIndex> = RefCell::new(SubnetIndex::init(
+        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(SUBNET_INDEX_MEMORY_ID))),
+    ));
 }
 
 ///
@@ -39,18 +53,13 @@ impl SubnetIndex {
         }
     }
 
-    pub fn try_get_canister(&self, key: &str) -> Result<Principal, SubnetIndexError> {
-        self.get_canister(key)
-            .ok_or_else(|| SubnetIndexError::CanisterTypeNotFound(key.to_string()))
-    }
-
     #[must_use]
-    pub fn get_canister(&self, key: &str) -> Option<Principal> {
+    pub fn get_canister<S: ToString>(&self, key: &S) -> Option<Principal> {
         self.get(&key.to_string())
     }
 
-    pub fn set_canister(&mut self, key: String, id: Principal) {
-        self.insert(key, id);
+    pub fn set_canister<S: ToString>(&mut self, key: S, id: Principal) {
+        self.insert(key.to_string(), id);
     }
 }
 

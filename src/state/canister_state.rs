@@ -1,13 +1,12 @@
 use crate::{
-    ic::structures::{
-        DefaultMemory,
-        cell::{Cell, CellError},
-    },
+    ic::structures::{Cell, DefaultMemory, cell::CellError, memory::MemoryId},
     impl_storable_unbounded,
+    state::{CANISTER_STATE_MEMORY_ID, MEMORY_MANAGER},
 };
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -24,6 +23,16 @@ pub enum CanisterStateError {
 
     #[error(transparent)]
     CellError(#[from] CellError),
+}
+
+//
+// CANISTER_STATE
+//
+
+thread_local! {
+    pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(CanisterState::init(
+        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(CANISTER_STATE_MEMORY_ID))),
+    ));
 }
 
 ///
@@ -60,7 +69,7 @@ impl CanisterState {
     }
 
     // set_type
-    pub fn set_type(&mut self, ty: &str) -> Result<(), CanisterStateError> {
+    pub fn set_type<S: ToString>(&mut self, ty: S) -> Result<(), CanisterStateError> {
         let mut state = self.get();
         state.ty = Some(ty.to_string());
         self.set(state)?;
