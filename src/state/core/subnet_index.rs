@@ -1,7 +1,6 @@
-use crate::CanisterType;
+use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
-use mimic::ic::structures::{BTreeMap, DefaultMemory};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 

@@ -8,8 +8,7 @@ pub use canister_state::{CanisterState, CanisterStateData, CanisterStateError};
 pub use child_index::{ChildIndex, ChildIndexData, ChildIndexError};
 pub use subnet_index::{SubnetIndex, SubnetIndexData, SubnetIndexError};
 
-use crate::state::MEMORY_MANAGER;
-use mimic::ic::structures::memory::MemoryId;
+use crate::{ic::structures::memory::MemoryId, state::MEMORY_MANAGER};
 use std::cell::RefCell;
 
 ///

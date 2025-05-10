@@ -1,7 +1,7 @@
-use crate::CanisterType;
+use crate::structures::DefaultMemory;
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
-use mimic::ic::structures::{BTreeMap, DefaultMemory};
+use ic_stable_structures::BTreeMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -37,7 +37,9 @@ impl ChildIndex {
 
     // try_get_canister
     pub fn try_get_canister(&self, pid: &Principal) -> Result<CanisterType, ChildIndexError> {
-        let canister = self.get_canister(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
+        let canister = self
+            .get_canister(pid)
+            .ok_or(ChildIndexError::CanisterNotFound(*pid))?;
 
         Ok(canister)
     }

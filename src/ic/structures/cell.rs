@@ -1,4 +1,4 @@
-use crate::structures::DefaultMemory;
+use crate::ic::structures::DefaultMemory;
 use candid::CandidType;
 use derive_more::{Deref, DerefMut};
 use ic_stable_structures::{Storable, cell::Cell as WrappedCell};

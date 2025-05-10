@@ -1,11 +1,9 @@
-use crate::CanisterType;
+use crate::{
+    impl_storable_unbounded,
+    structures::{DefaultMemory, cell::Cell},
+};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
-use mimic::{
-    Error as MimicError,
-    ic::structures::{Cell, DefaultMemory},
-    impl_storable_unbounded,
-};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -20,9 +18,6 @@ pub enum CanisterStateError {
 
     #[error("root_id has not been set")]
     RootIdNotSet,
-
-    #[error(transparent)]
-    MimicError(#[from] MimicError),
 }
 
 ///

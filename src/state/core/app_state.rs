@@ -1,6 +1,9 @@
-use crate::structures::{
-    DefaultMemory,
-    cell::{Cell, CellError},
+use crate::{
+    ic::structures::{
+        DefaultMemory,
+        cell::{Cell, CellError},
+    },
+    impl_storable_unbounded,
 };
 use candid::CandidType;
 use derive_more::{Deref, DerefMut, Display};
