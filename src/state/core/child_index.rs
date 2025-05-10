@@ -1,0 +1,61 @@
+use crate::CanisterType;
+use candid::{CandidType, Principal};
+use derive_more::{Deref, DerefMut};
+use mimic::ic::structures::{BTreeMap, DefaultMemory};
+use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
+
+///
+/// ChildIndexError
+///
+
+#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+pub enum ChildIndexError {
+    #[error("canister not found: {0}")]
+    CanisterNotFound(Principal),
+}
+
+///
+/// ChildIndex
+///
+
+#[derive(Deref, DerefMut)]
+pub struct ChildIndex(BTreeMap<Principal, CanisterType>);
+
+impl ChildIndex {
+    // init
+    #[must_use]
+    pub fn init(memory: DefaultMemory) -> Self {
+        Self(BTreeMap::init(memory))
+    }
+
+    // get_state
+    #[must_use]
+    pub fn get_data(&self) -> ChildIndexData {
+        self.iter().collect()
+    }
+
+    // try_get_canister
+    pub fn try_get_canister(&self, pid: &Principal) -> Result<CanisterType, ChildIndexError> {
+        let canister = self.get_canister(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
+
+        Ok(canister)
+    }
+
+    // get_canister
+    #[must_use]
+    pub fn get_canister(&self, pid: &Principal) -> Option<CanisterType> {
+        self.get(pid)
+    }
+
+    // insert_canister
+    pub fn insert_canister(&mut self, pid: Principal, ty: CanisterType) {
+        self.insert(pid, ty);
+    }
+}
+
+///
+/// ChildIndexData
+///
+
+pub type ChildIndexData = Vec<(Principal, CanisterType)>;
