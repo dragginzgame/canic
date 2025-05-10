@@ -94,26 +94,26 @@ macro_rules! icu_endpoints {
 
         // icu_app_state
         #[::icu::ic::query]
-        fn icu_app_state() -> ::icu::state::core::::AppStateData {
-            ::icu::state::core::::APP_STATE.with_borrow(|this| this.get_data())
+        fn icu_app_state() -> ::icu::state::core::AppStateData {
+            ::icu::state::core::APP_STATE.with_borrow(|this| this.get_data())
         }
 
         // icu_canister_state
         #[::icu::ic::query]
-        fn icu_canister_state() -> ::icu::state::core::::CanisterStateData {
-            ::icu::state::core::::CANISTER_STATE.with_borrow(|this| this.get_data())
+        fn icu_canister_state() -> ::icu::state::core::CanisterStateData {
+            ::icu::state::core::CANISTER_STATE.with_borrow(|this| this.get_data())
         }
 
         // icu_child_index
         #[::icu::ic::query]
-        fn icu_child_index() -> ::icu::state::core::::ChildIndexData {
+        fn icu_child_index() -> ::icu::state::core::ChildIndexData {
             ::icu::state::core::CHILD_INDEX.with_borrow(|this| this.get_data())
         }
 
         // icu_subnet_index
         #[::icu::ic::query]
-        fn icu_subnet_index() -> ::icu::state::core::::SubnetIndexData {
-            ::icu::state::core::::SUBNET_INDEX.with_borrow(|this| this.get_data())
+        fn icu_subnet_index() -> ::icu::state::core::SubnetIndexData {
+            ::icu::state::core::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
     };
 }
