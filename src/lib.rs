@@ -6,6 +6,10 @@ pub mod serialize;
 pub mod state;
 pub mod wasm;
 
+pub mod export {
+    pub use defer;
+}
+
 ///
 /// Log
 ///

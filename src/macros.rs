@@ -94,8 +94,8 @@ macro_rules! memory_manager {
 #[macro_export]
 macro_rules! perf {
     () => {
-        ::defer::defer!(::mimic::log!(
-            Log::Perf,
+        $crate::export::defer::defer!($crate::log!(
+            $crate::Log::Perf,
             "api call used {} instructions ({})",
             $crate::ic::api::performance_counter(1),
             module_path!()
