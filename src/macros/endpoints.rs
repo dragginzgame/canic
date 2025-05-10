@@ -54,10 +54,10 @@ macro_rules! icu_endpoints {
                 }
         */
 
-        ///
-        /// IC API ENDPOINTS
-        /// these are specific endpoints defined by the IC spec
-        ///
+        //
+        // IC API ENDPOINTS
+        // these are specific endpoints defined by the IC spec
+        //
 
         // ic_cycles_accept
         //    #[$crate::ic::update]
@@ -65,16 +65,16 @@ macro_rules! icu_endpoints {
         //        $crate::ic::api::msg_cycles_accept(max_amount)
         //    }
 
-        ///
-        /// ICU STATE ENDPOINTS
-        ///
+        //
+        // ICU STATE ENDPOINTS
+        //
 
         // app_state
-      //  #[::icu::ic::query]
-      //  fn app_state() -> $crate::state::AppStateData {
-      //      $crate::state::APP_STATE.with_borrow(|this| this.get_data())
-      //  }
-        /*
+        #[$crate::ic::query]
+        fn app_state() -> $crate::state::AppStateData {
+            $crate::state::APP_STATE.with_borrow(|this| this.get_data())
+        }
+
         // canister_state
         #[$crate::ic::query]
         fn canister_state() -> $crate::state::CanisterStateData {
@@ -92,6 +92,5 @@ macro_rules! icu_endpoints {
         fn subnet_index() -> $crate::state::SubnetIndexData {
             $crate::state::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
-        */
     };
 }
