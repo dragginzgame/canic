@@ -1,6 +1,7 @@
 pub mod cycles;
 pub mod helper;
 pub mod ic;
+pub mod interface;
 pub mod macros;
 pub mod serialize;
 pub mod state;

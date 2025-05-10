@@ -1,3 +1,5 @@
+pub mod endpoints;
+
 // log
 #[macro_export]
 macro_rules! log {
