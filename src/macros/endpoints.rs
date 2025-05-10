@@ -61,35 +61,35 @@ macro_rules! icu_endpoints {
         //
 
         // ic_cycles_accept
-        //    #[$crate::ic::update]
-        //    fn ic_cycles_accept(max_amount: u128) -> u128 {
-        //        $crate::ic::api::msg_cycles_accept(max_amount)
-        //    }
+        #[::icu::ic::query]
+        fn ic_cycles_accept(max_amount: u128) -> u128 {
+            ::icu::ic::api::msg_cycles_accept(max_amount)
+        }
 
         //
         // ICU STATE ENDPOINTS
         //
 
         // app_state
-        #[$crate::ic::query]
+        #[::icu::ic::query]
         fn app_state() -> ::icu::state::AppStateData {
             ::icu::state::APP_STATE.with_borrow(|this| this.get_data())
         }
 
         // canister_state
-        #[$crate::ic::query]
+        #[::icu::ic::query]
         fn canister_state() -> ::icu::state::CanisterStateData {
             ::icu::state::CANISTER_STATE.with_borrow(|this| this.get_data())
         }
 
         // child_index
-        #[$crate::ic::query]
+        #[::icu::ic::query]
         fn child_index() -> ::icu::state::ChildIndexData {
             ::icu::state::CHILD_INDEX.with_borrow(|this| this.get_data())
         }
 
         // subnet_index
-        #[$crate::ic::query]
+        #[::icu::ic::query]
         fn subnet_index() -> ::icu::state::SubnetIndexData {
             ::icu::state::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
