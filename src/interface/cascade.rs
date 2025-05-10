@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::InterfaceError,
     log,
-    state::{APP_STATE, AppState, CHILD_INDEX, ChildIndex, SUBNET_INDEX, SubnetIndex},
+    state::core::{APP_STATE, AppState, CHILD_INDEX, ChildIndex, SUBNET_INDEX, SubnetIndex},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

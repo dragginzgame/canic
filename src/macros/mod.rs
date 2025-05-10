@@ -1,4 +1,5 @@
 pub mod endpoints;
+pub mod state;
 
 // log
 #[macro_export]
@@ -67,27 +68,6 @@ macro_rules! impl_storable_unbounded {
 
             const BOUND: $crate::ic::structures::storable::Bound =
                 $crate::ic::structures::storable::Bound::Unbounded;
-        }
-    };
-}
-
-// memory_manager
-#[macro_export]
-macro_rules! memory_manager {
-    () => {
-        thread_local! {
-
-            ///
-            /// Define MEMORY_MANAGER thread-locally for the entire scope
-            ///
-            pub static MEMORY_MANAGER: ::std::cell::RefCell<
-                $crate::ic::structures::memory::MemoryManager<
-                    $crate::ic::structures::DefaultMemoryImpl,
-                >,
-            > = ::std::cell::RefCell::new($crate::ic::structures::memory_manager::MemoryManager::init(
-                $crate::ic::structures::DefaultMemoryImpl::default(),
-            ));
-
         }
     };
 }
