@@ -70,10 +70,10 @@ macro_rules! icu_endpoints {
         ///
 
         // app_state
-        #[::icu::ic::query]
-        fn app_state() -> $crate::state::AppStateData {
-            $crate::state::APP_STATE.with_borrow(|this| this.get_data())
-        }
+      //  #[::icu::ic::query]
+      //  fn app_state() -> $crate::state::AppStateData {
+      //      $crate::state::APP_STATE.with_borrow(|this| this.get_data())
+      //  }
         /*
         // canister_state
         #[$crate::ic::query]
