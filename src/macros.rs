@@ -54,7 +54,7 @@ macro_rules! impl_storable_bounded {
 #[macro_export]
 macro_rules! impl_storable_unbounded {
     ($ident:ident) => {
-        impl ::ic_stable_structures::storable::Storable for $ident {
+        impl $crate::ic::structures::storable::Storable for $ident {
             fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
                 ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
             }
@@ -79,8 +79,8 @@ macro_rules! memory_manager {
             /// Define MEMORY_MANAGER thread-locally for the entire scope
             ///
             pub static MEMORY_MANAGER: ::std::cell::RefCell<
-                ::ic_stable_structures::memory_manager::MemoryManager<
-                    ::ic_stable_structures::DefaultMemoryImpl,
+                $crate::ic::structures::memory::MemoryManager<
+                    $crate::ic::structures::DefaultMemoryImpl,
                 >,
             > = ::std::cell::RefCell::new($crate::ic::structures::memory_manager::MemoryManager::init(
                 $crate::ic::structures::DefaultMemoryImpl::default(),

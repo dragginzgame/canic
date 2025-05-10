@@ -29,7 +29,7 @@ impl SubnetIndex {
 
     #[must_use]
     pub fn get_data(&self) -> Vec<(String, Principal)> {
-        self.iter().map(|(k, v)| (k, v)).collect()
+        self.iter().collect()
     }
 
     pub fn set_data(&mut self, data: Vec<(String, Principal)>) {
