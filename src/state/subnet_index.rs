@@ -14,8 +14,8 @@ use thiserror::Error as ThisError;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum SubnetIndexError {
-    #[error("canister type not found: {0}")]
-    CanisterTypeNotFound(String),
+    #[error("canister not found: {0}")]
+    CanisterNotFound(String),
 }
 
 //
@@ -54,8 +54,13 @@ impl SubnetIndex {
     }
 
     #[must_use]
-    pub fn get_canister<S: ToString>(&self, key: &S) -> Option<Principal> {
+    pub fn get_canister<S: ToString>(&self, key: S) -> Option<Principal> {
         self.get(&key.to_string())
+    }
+
+    pub fn try_get_canister<S: ToString>(&self, key: S) -> Result<Principal, SubnetIndexError> {
+        self.get_canister(key.to_string())
+            .ok_or(SubnetIndexError::CanisterNotFound(key.to_string()))
     }
 
     pub fn set_canister<S: ToString>(&mut self, key: S, id: Principal) {

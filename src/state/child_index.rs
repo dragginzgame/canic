@@ -54,6 +54,15 @@ impl ChildIndex {
         self.get(pid)
     }
 
+    // try_get_canister
+    pub fn try_get_canister(&self, pid: &Principal) -> Result<String, ChildIndexError> {
+        let canister = self
+            .get_canister(pid)
+            .ok_or(ChildIndexError::CanisterNotFound(*pid))?;
+
+        Ok(canister)
+    }
+
     // insert_canister
     pub fn insert_canister(&mut self, pid: Principal, ty: String) {
         self.insert(pid, ty);
