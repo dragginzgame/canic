@@ -14,6 +14,17 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
+/// Prelude
+///
+
+pub mod prelude {
+    pub use crate::{
+        ic::{export_candid, init, query, update},
+        icu_endpoints,
+    };
+}
+
+///
 /// Error
 ///
 
