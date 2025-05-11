@@ -7,7 +7,7 @@ readme = "README.md"
 [dependencies]
 # ic cdk
 candid = "0.10.13"
-ic-cdk = "0.18.0"
+ic-cdk = "0.18.1"
 ic-stable-structures = "0.6.8"
 
 # third party
