@@ -76,10 +76,10 @@ macro_rules! impl_storable_unbounded {
 #[macro_export]
 macro_rules! perf {
     () => {
-        $crate::export::defer::defer!($crate::log!(
-            $crate::Log::Perf,
+        ::icu::export::defer::defer!($crate::log!(
+            ::icu::Log::Perf,
             "api call used {} instructions ({})",
-            $crate::ic::api::performance_counter(1),
+            ::icu::ic::api::performance_counter(1),
             module_path!()
         ));
     };

@@ -19,8 +19,9 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
+        Log,
         ic::{export_candid, init, query, update},
-        icu_endpoints, perf,
+        icu_endpoints, log, perf,
     };
 }
 
