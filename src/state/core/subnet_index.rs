@@ -60,7 +60,7 @@ impl SubnetIndex {
 
     pub fn try_get_canister<S: ToString>(&self, key: S) -> Result<Principal, SubnetIndexError> {
         self.get_canister(key.to_string())
-            .ok_or(SubnetIndexError::CanisterNotFound(key.to_string()))
+            .ok_or_else(|| SubnetIndexError::CanisterNotFound(key.to_string()))
     }
 
     pub fn set_canister<S: ToString>(&mut self, key: S, id: Principal) {

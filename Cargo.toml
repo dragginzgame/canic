@@ -1,6 +1,6 @@
 [package]
 name = "icu"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 readme = "README.md"
 
@@ -14,10 +14,11 @@ ic-stable-structures = "0.6.8"
 ciborium = "0.2"
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-thiserror = "2.0"
 remain = "0.2"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 sha2 = "0.10"
+thiserror = "2.0"
+toml = "0.8"
 
 # clippy
 [lints.clippy]

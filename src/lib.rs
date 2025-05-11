@@ -1,14 +1,31 @@
-pub mod cycles;
+pub mod config;
 pub mod helper;
 pub mod ic;
 pub mod interface;
 pub mod macros;
 pub mod serialize;
 pub mod state;
-pub mod wasm;
-
 pub mod export {
     pub use defer;
+}
+
+use candid::CandidType;
+use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
+
+///
+/// Error
+///
+
+#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+pub enum Error {
+    #[error(transparent)]
+    ConfigError(#[from] config::ConfigError),
+
+    #[error(transparent)]
+    InterfaceError(#[from] interface::InterfaceError),
+    //   #[error(transparent)]
+    //   StateError(#[from] state::StateError),
 }
 
 ///
@@ -22,3 +39,13 @@ pub enum Log {
     Warn,
     Error,
 }
+
+///
+/// CYCLES
+///
+
+pub const KC: u128 = 1_000;
+pub const MC: u128 = 1_000_000;
+pub const BC: u128 = 1_000_000_000;
+pub const TC: u128 = 1_000_000_000_000;
+pub const QC: u128 = 1_000_000_000_000_000;

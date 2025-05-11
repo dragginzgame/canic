@@ -1,7 +1,6 @@
 use crate::{
     Log,
-    cycles::format_cycles,
-    helper::get_wasm_hash,
+    helper::{format_cycles, get_wasm_hash},
     ic::{
         call::{Call, CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
