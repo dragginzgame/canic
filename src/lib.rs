@@ -20,7 +20,7 @@ use thiserror::Error as ThisError;
 pub mod prelude {
     pub use crate::{
         ic::{export_candid, init, query, update},
-        icu_endpoints,
+        icu_endpoints, perf,
     };
 }
 
