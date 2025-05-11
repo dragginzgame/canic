@@ -22,6 +22,7 @@ pub mod prelude {
         Log,
         ic::{export_candid, init, query, update},
         icu_endpoints, log, perf,
+        state::wasm::WasmManager,
     };
 }
 

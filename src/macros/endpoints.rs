@@ -115,5 +115,11 @@ macro_rules! icu_endpoints {
         fn icu_subnet_index() -> ::icu::state::core::SubnetIndexData {
             ::icu::state::core::SUBNET_INDEX.with_borrow(|this| this.get_data())
         }
+
+        // icu_wasm_info
+        #[::icu::ic::query]
+        fn icu_wasm_info() -> Vec<(String, usize)> {
+            ::icu::state::wasm::WasmManager::info().unwrap()
+        }
     };
 }

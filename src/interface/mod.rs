@@ -4,7 +4,6 @@ pub mod guard;
 pub mod ic;
 //pub mod request;
 //pub mod response;
-pub mod wasm;
 
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -24,9 +23,6 @@ pub enum InterfaceError {
 
     #[error(transparent)]
     GuardError(#[from] guard::GuardError),
-
     //  #[error(transparent)]
     //  RequestError(#[from] request::RequestError),
-    #[error(transparent)]
-    WasmError(#[from] wasm::WasmError),
 }
