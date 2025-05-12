@@ -42,7 +42,7 @@ pub struct Canister {
 /// CanisterInfo
 ///
 
-#[derive(Clone, Debug)]
+#[derive(CandidType, Clone, Debug)]
 pub struct CanisterInfo {
     pub def: CanisterDef,
     pub wasm_size: usize,
@@ -61,7 +61,7 @@ impl From<&Canister> for CanisterInfo {
 /// CanisterDef
 ///
 
-#[derive(Clone, Debug)]
+#[derive(CandidType, Clone, Debug)]
 pub struct CanisterDef {
     pub auto_create: bool,
     pub is_sharded: bool,
