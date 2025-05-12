@@ -18,7 +18,7 @@ macro_rules! icu_start {
             _init();
         };
 
-        icu_endpoints!();
+        ::icu::icu_endpoints!();
     };
 }
 
@@ -30,7 +30,7 @@ macro_rules! icu_start_root {
         fn init() {
             use ::icu::interface::state::core::canister_state;
 
-            canister_state::set_root_id(canister_self()).unwrap();
+            canister_state::set_root_id(::icu::ic::api::canister_self()).unwrap();
             canister_state::set_path($canister_path).unwrap();
 
             log!(Log::Info, "init: {} (root)",);
@@ -38,8 +38,8 @@ macro_rules! icu_start_root {
             _init();
         };
 
-        icu_endpoints_root!();
-        icu_endpoints!();
+        ::icu::icu_endpoints_root!();
+        ::icu::icu_endpoints!();
     };
 }
 
