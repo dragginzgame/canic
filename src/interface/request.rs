@@ -135,7 +135,7 @@ pub async fn canister_create_api(canister: &Canister) -> Result<Principal, Error
 
 // canister_upgrade_api
 pub async fn canister_upgrade_api(pid: Principal, canister: &Canister) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, &canister.path);
+    let req = Request::new_canister_upgrade(pid, &canister.path());
     let _res = request_api(req).await?;
 
     Ok(())
