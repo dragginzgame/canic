@@ -63,7 +63,7 @@ macro_rules! icu_endpoints {
         // icu_app_state_cascade
         #[::icu::ic::update]
         async fn icu_app_state_cascade(
-            data: ::icu:::state::core::AppStateData,
+            data: ::icu::state::core::AppStateData,
         ) -> Result<(), ::icu::Error> {
             //    allow_any(vec![Auth::Parent]).await?;
 
