@@ -68,7 +68,7 @@ pub struct CanisterCreate {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterUpgrade {
     pub pid: Principal,
-    pub canister: Canister,
+    pub canister: String,
 }
 
 ///
