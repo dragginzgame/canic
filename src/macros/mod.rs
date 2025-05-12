@@ -6,7 +6,7 @@ pub mod state;
 macro_rules! icu_start {
     ($canister_path:path) => {
         #[::icu::ic::init]
-        fn init(root_id: Option<::candid::Principal>, parent_id: Option<::candid::Principal>) {
+        fn init(root_id: ::candid::Principal, parent_id: ::candid::Principal) {
             use ::icu::interface::state::core::canister_state;
 
             canister_state::set_root_id(root_id).unwrap();
