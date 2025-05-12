@@ -101,24 +101,24 @@ macro_rules! icu_endpoints {
         // icu_canister_state
         #[::icu::ic::query]
         fn icu_canister_state() -> ::icu::state::core::CanisterStateData {
-            ::icu::interface::state::core::app_state::get_data()
+            ::icu::interface::state::core::canister_state::get_data()
         }
 
         // icu_child_index
         #[::icu::ic::query]
         fn icu_child_index() -> ::icu::state::core::ChildIndexData {
-            ::icu::interface::state::core::app_state::get_data()
+            ::icu::interface::state::core::child_index::get_data()
         }
 
         // icu_subnet_index
         #[::icu::ic::query]
         fn icu_subnet_index() -> ::icu::state::core::SubnetIndexData {
-            ::icu::interface::state::core::app_state::get_data()
+            ::icu::interface::state::core::subnet_index::get_data()
         }
 
         // icu_wasm_info
         #[::icu::ic::query]
-        fn icu_wasm_info() -> Result<Vec<(String, usize)>, ::icu::Error> {
+        fn icu_wasm_info() -> Result<::icu::state::wasm::WasmInfoData, ::icu::Error> {
             ::icu::interface::state::wasm::info()
         }
     };

@@ -86,3 +86,9 @@ impl WasmManager {
         Ok(info)
     }
 }
+
+///
+/// WasmInfoData
+///
+
+pub type WasmInfoData = Vec<(String, usize)>;
