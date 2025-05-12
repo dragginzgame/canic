@@ -33,7 +33,7 @@ macro_rules! icu_start_root {
             canister_state::set_root_id(::icu::ic::api::canister_self()).unwrap();
             canister_state::set_path($canister_path).unwrap();
 
-            log!(Log::Info, "init: {} (root)",);
+            log!(Log::Info, "init: {} (root)", $canister_path);
 
             _init();
         }
