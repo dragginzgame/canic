@@ -145,7 +145,7 @@ macro_rules! icu_endpoints {
         #[::icu::ic::query]
         fn icu_canister_registry()
         -> Result<::icu::state::root::canister_registry::CanisterRegistryInfo, ::icu::Error> {
-            ::icu::interface::state::root::canister_registry::CanisterRegistry::info()
+            ::icu::interface::state::root::canister_registry::info()
         }
     };
 }
