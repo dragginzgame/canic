@@ -63,7 +63,7 @@ macro_rules! icu_endpoints {
 
             // set state and cascade
             ::icu::interface::state::core::app_state::set_data(data)?;
-            ::icu::interface::cascade::app_state_cascade_api().await?;
+            ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
         }
@@ -77,7 +77,7 @@ macro_rules! icu_endpoints {
 
             // set index and cascade
             ::icu::interface::state::core::subnet_index::set_data(data);
-            ::icu::interface::cascade::subnet_index_cascade_api().await?;
+            ::icu::interface::cascade::subnet_index_cascade().await?;
 
             Ok(())
         }
