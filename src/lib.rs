@@ -65,6 +65,7 @@ impl Canister {
         Self { path, is_sharded }
     }
 
+    #[must_use]
     pub fn to_dynamic(&self) -> CanisterDyn {
         CanisterDyn {
             path: self.path.to_string(),

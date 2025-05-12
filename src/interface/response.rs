@@ -1,5 +1,5 @@
 use crate::{
-    Canister, Error,
+    CanisterDyn, Error,
     ic::api::msg_caller,
     interface::{
         self,
@@ -30,7 +30,7 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 }
 
 // create_canister
-async fn create_canister(canister: &Canister) -> Result<Response, Error> {
+async fn create_canister(canister: &CanisterDyn) -> Result<Response, Error> {
     let path = &canister.path;
 
     let bytes = interface::state::wasm::get_wasm(path)?;
@@ -48,7 +48,7 @@ async fn create_canister(canister: &Canister) -> Result<Response, Error> {
 }
 
 // upgrade_canister
-async fn upgrade_canister(pid: Principal, canister: &Canister) -> Result<Response, Error> {
+async fn upgrade_canister(pid: Principal, canister: &CanisterDyn) -> Result<Response, Error> {
     let bytes = interface::state::wasm::get_wasm(&canister.path)?;
     interface::ic::upgrade_canister(pid, bytes).await?;
 

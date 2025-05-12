@@ -1,5 +1,5 @@
 use crate::{
-    Canister, Error,
+    Canister, CanisterDyn, Error,
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
@@ -28,14 +28,14 @@ pub struct Request {
 
 impl Request {
     #[must_use]
-    pub fn new_canister_create(canister: Canister) -> Self {
+    pub fn new_canister_create(canister: CanisterDyn) -> Self {
         Self {
             kind: RequestKind::CanisterCreate(CanisterCreate { canister }),
         }
     }
 
     #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, canister: Canister) -> Self {
+    pub fn new_canister_upgrade(pid: Principal, canister: CanisterDyn) -> Self {
         Self {
             kind: RequestKind::CanisterUpgrade(CanisterUpgrade { pid, canister }),
         }
@@ -58,7 +58,7 @@ pub enum RequestKind {
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
-    pub canister_path: String,
+    pub canister: CanisterDyn,
 }
 
 ///
@@ -68,7 +68,7 @@ pub struct CanisterCreate {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterUpgrade {
     pub pid: Principal,
-    pub canister: String,
+    pub canister: CanisterDyn,
 }
 
 ///
@@ -103,7 +103,7 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
 pub async fn canister_create_api(canister: Canister) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(canister.clone());
+    let req = Request::new_canister_create(canister.to_dynamic());
 
     match request_api(req).await {
         Ok(response) => match response {
@@ -128,7 +128,7 @@ pub async fn canister_create_api(canister: Canister) -> Result<Principal, Error>
 
 // canister_upgrade_api
 pub async fn canister_upgrade_api(pid: Principal, canister: Canister) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, canister);
+    let req = Request::new_canister_upgrade(pid, canister.to_dynamic());
     let _res = request_api(req).await?;
 
     Ok(())
