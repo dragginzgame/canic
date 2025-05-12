@@ -2,6 +2,7 @@ use crate::{
     Error,
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
+    traits::Canister,
 };
 use candid::{CandidType, Principal};
 use derive_more::Display;
@@ -109,19 +110,19 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(path);
+pub async fn canister_create_api(canister: impl Canister) -> Result<Principal, Error> {
+    let req = Request::new_canister_create(&canister.path());
 
     match request_api(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
-                interface::state::core::child_index::insert_canister(new_pid, path.to_string());
+                interface::state::core::child_index::insert_canister(new_pid, canister.path());
 
                 // cascade subnet_index after each new canister
-                //        if !path.is_sharded() {
-                //            crate::interface::cascade::subnet_index_cascade_api().await?;
-                //        }
+                if !canister.is_sharded() {
+                    crate::interface::cascade::subnet_index_cascade_api().await?;
+                }
 
                 Ok(new_pid)
             }
@@ -134,8 +135,8 @@ pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, name: &str) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, name);
+pub async fn canister_upgrade_api(pid: Principal, canister: impl Canister) -> Result<(), Error> {
+    let req = Request::new_canister_upgrade(pid, &canister.path());
     let _res = request_api(req).await?;
 
     Ok(())

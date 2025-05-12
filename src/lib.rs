@@ -7,6 +7,7 @@ pub mod interface;
 pub mod macros;
 pub mod serialize;
 pub mod state;
+pub mod traits;
 
 pub mod export {
     pub use ciborium;
