@@ -61,7 +61,7 @@ pub struct Canister {
 
 impl Canister {
     #[must_use]
-    pub fn new(path: &'static str, is_sharded: bool) -> Self {
+    pub const fn new(path: &'static str, is_sharded: bool) -> Self {
         Self { path, is_sharded }
     }
 }
