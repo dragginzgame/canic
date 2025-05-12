@@ -4,7 +4,6 @@ use crate::{
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
 use candid::{CandidType, Principal};
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -29,21 +28,16 @@ pub struct Request {
 
 impl Request {
     #[must_use]
-    pub fn new_canister_create(name: &str) -> Self {
+    pub fn new_canister_create(canister: Canister) -> Self {
         Self {
-            kind: RequestKind::CanisterCreate(CanisterCreate {
-                name: name.to_string(),
-            }),
+            kind: RequestKind::CanisterCreate(CanisterCreate { canister }),
         }
     }
 
     #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, name: &str) -> Self {
+    pub fn new_canister_upgrade(pid: Principal, canister: Canister) -> Self {
         Self {
-            kind: RequestKind::CanisterUpgrade(CanisterUpgrade {
-                pid,
-                name: name.to_string(),
-            }),
+            kind: RequestKind::CanisterUpgrade(CanisterUpgrade { pid, canister }),
         }
     }
 }
@@ -52,7 +46,7 @@ impl Request {
 /// RequestKind
 ///
 
-#[derive(CandidType, Clone, Debug, Display, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub enum RequestKind {
     CanisterCreate(CanisterCreate),
     CanisterUpgrade(CanisterUpgrade),
@@ -62,20 +56,19 @@ pub enum RequestKind {
 /// CanisterCreate
 ///
 
-#[derive(CandidType, Clone, Debug, Display, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
-    pub name: String,
+    pub canister: Canister,
 }
 
 ///
 /// CanisterUpgrade
 ///
 
-#[derive(CandidType, Clone, Debug, Display, Serialize, Deserialize)]
-#[display("pid, name")]
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterUpgrade {
     pub pid: Principal,
-    pub name: String,
+    pub canister: Canister,
 }
 
 ///
@@ -109,17 +102,17 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(canister: &Canister) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(&canister.path());
+pub async fn canister_create_api(canister: Canister) -> Result<Principal, Error> {
+    let req = Request::new_canister_create(canister.clone());
 
     match request_api(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
-                interface::state::core::child_index::insert_canister(new_pid, canister.path());
+                interface::state::core::child_index::insert_canister(new_pid, canister.path);
 
                 // cascade subnet_index after each new canister
-                if !canister.is_sharded() {
+                if !canister.is_sharded {
                     crate::interface::cascade::subnet_index_cascade_api().await?;
                 }
 
@@ -134,8 +127,8 @@ pub async fn canister_create_api(canister: &Canister) -> Result<Principal, Error
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, canister: &Canister) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, &canister.path());
+pub async fn canister_upgrade_api(pid: Principal, canister: Canister) -> Result<(), Error> {
+    let req = Request::new_canister_upgrade(pid, canister);
     let _res = request_api(req).await?;
 
     Ok(())

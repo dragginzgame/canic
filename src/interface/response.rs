@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    Canister, Error,
     ic::api::msg_caller,
     interface::{
         self,
@@ -24,13 +24,15 @@ pub enum Response {
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req.kind {
-        RequestKind::CanisterCreate(kind) => create_canister(&kind.name).await,
-        RequestKind::CanisterUpgrade(kind) => upgrade_canister(kind.pid, &kind.name).await,
+        RequestKind::CanisterCreate(kind) => create_canister(&kind.canister).await,
+        RequestKind::CanisterUpgrade(kind) => upgrade_canister(kind.pid, &kind.canister).await,
     }
 }
 
 // create_canister
-async fn create_canister(path: &str) -> Result<Response, Error> {
+async fn create_canister(canister: &Canister) -> Result<Response, Error> {
+    let path = &canister.path;
+
     let bytes = interface::state::wasm::get_wasm(path)?;
     let root_pid = interface::state::core::canister_state::get_root_pid()?;
 
@@ -38,16 +40,16 @@ async fn create_canister(path: &str) -> Result<Response, Error> {
         crate::interface::ic::create_canister(path, bytes, vec![root_pid], msg_caller()).await?;
 
     // update subnet index
-    //  if !path.is_sharded() {
-    //      SUBNET_INDEX.with_borrow_mut(|this| this.set_canister(path, new_canister_id));
-    //  }
+    if !canister.is_sharded {
+        interface::state::core::subnet_index::set_canister(path, new_canister_id);
+    }
 
     Ok(Response::CanisterCreate(new_canister_id))
 }
 
 // upgrade_canister
-async fn upgrade_canister(pid: Principal, path: &str) -> Result<Response, Error> {
-    let bytes = interface::state::wasm::get_wasm(path)?;
+async fn upgrade_canister(pid: Principal, canister: &Canister) -> Result<Response, Error> {
+    let bytes = interface::state::wasm::get_wasm(&canister.path)?;
     interface::ic::upgrade_canister(pid, bytes).await?;
 
     Ok(Response::CanisterUpgrade)
