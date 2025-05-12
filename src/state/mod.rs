@@ -1,7 +1,7 @@
 pub mod auth;
 pub mod core;
+pub mod root;
 pub mod sharder;
-pub mod wasm;
 
 use crate::memory_manager;
 use candid::CandidType;
@@ -13,7 +13,7 @@ pub use {
         app_state::AppStateError, canister_state::CanisterStateError, child_index::ChildIndexError,
         subnet_index::SubnetIndexError,
     },
-    wasm::WasmError,
+    root::canister_registry::CanisterRegistryError,
 };
 
 //
@@ -34,6 +34,7 @@ const CHILD_INDEX_MEMORY_ID: u8 = 4;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum StateError {
+    // core
     #[error(transparent)]
     AppStateError(#[from] AppStateError),
 
@@ -46,6 +47,7 @@ pub enum StateError {
     #[error(transparent)]
     SubnetIndexError(#[from] SubnetIndexError),
 
+    // root
     #[error(transparent)]
-    WasmError(#[from] WasmError),
+    CanisterRegistryError(#[from] CanisterRegistryError),
 }

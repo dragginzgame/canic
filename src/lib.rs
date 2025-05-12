@@ -23,10 +23,9 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Canister, Log,
+        Log,
         ic::{export_candid, init, query, update},
         icu_start, icu_start_root, log, perf,
-        state::wasm::WasmManager,
     };
 }
 
@@ -47,37 +46,6 @@ pub enum Error {
 
     #[error(transparent)]
     StateError(#[from] state::StateError),
-}
-
-///
-/// Canister
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Canister {
-    pub path: &'static str,
-    pub is_sharded: bool,
-}
-
-impl Canister {
-    #[must_use]
-    pub const fn new(path: &'static str, is_sharded: bool) -> Self {
-        Self { path, is_sharded }
-    }
-
-    #[must_use]
-    pub fn to_dynamic(&self) -> CanisterDyn {
-        CanisterDyn {
-            path: self.path.to_string(),
-            is_sharded: self.is_sharded,
-        }
-    }
-}
-
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct CanisterDyn {
-    path: String,
-    is_sharded: bool,
 }
 
 ///

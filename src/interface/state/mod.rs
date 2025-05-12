@@ -1,2 +1,2 @@
 pub mod core;
-pub mod wasm;
+pub mod root;
