@@ -16,7 +16,7 @@ macro_rules! icu_start {
             log!(Log::Info, "init: {}", $canister_path);
 
             _init();
-        };
+        }
 
         ::icu::icu_endpoints!();
     };
@@ -36,7 +36,7 @@ macro_rules! icu_start_root {
             log!(Log::Info, "init: {} (root)",);
 
             _init();
-        };
+        }
 
         ::icu::icu_endpoints_root!();
         ::icu::icu_endpoints!();
