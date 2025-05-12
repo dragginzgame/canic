@@ -23,7 +23,7 @@ pub mod prelude {
     pub use crate::{
         Log,
         ic::{export_candid, init, query, update},
-        icu_endpoints, log, perf,
+        icu_start, icu_start_root, log, perf,
         state::wasm::WasmManager,
     };
 }
@@ -36,9 +36,6 @@ pub mod prelude {
 pub enum Error {
     #[error(transparent)]
     AuthError(#[from] auth::AuthError),
-
-    #[error("call failed: {0}")]
-    CallFailed(String),
 
     #[error(transparent)]
     ConfigError(#[from] config::ConfigError),
