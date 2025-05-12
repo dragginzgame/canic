@@ -101,12 +101,10 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
 
-    let response = call_response
-        .candid::<Response>()
+    call_response
+        .candid::<Result<Response, Error>>()
         .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
-
-    Ok(response)
+        .map_err(InterfaceError::IcError)?
 }
 
 // canister_create_api
