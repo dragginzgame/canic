@@ -77,7 +77,7 @@ macro_rules! icu_endpoints {
         #[::icu::ic::update]
         async fn icu_subnet_index_cascade(
             data: ::icu::state::core::SubnetIndexData,
-        ) -> Result<(), String> {
+        ) -> Result<(), ::icu::Error> {
             //       allow_any(vec![Auth::Parent]).await?;
 
             // set index and cascade
