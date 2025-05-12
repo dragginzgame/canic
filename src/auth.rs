@@ -1,5 +1,3 @@
-pub mod guard;
-
 pub use crate::state::auth::{Permission, Role};
 
 use crate::{

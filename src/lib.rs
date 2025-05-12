@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+pub mod guard;
 pub mod helper;
 pub mod ic;
 pub mod interface;
