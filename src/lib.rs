@@ -8,6 +8,7 @@ pub mod serialize;
 pub mod state;
 
 pub mod export {
+    pub use ciborium;
     pub use defer;
 }
 
