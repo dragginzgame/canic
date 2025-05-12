@@ -102,7 +102,7 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(canister: Canister) -> Result<Principal, Error> {
+pub async fn canister_create_api(canister: &Canister) -> Result<Principal, Error> {
     let req = Request::new_canister_create(canister.to_dynamic());
 
     match request_api(req).await {
@@ -127,7 +127,7 @@ pub async fn canister_create_api(canister: Canister) -> Result<Principal, Error>
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, canister: Canister) -> Result<(), Error> {
+pub async fn canister_upgrade_api(pid: Principal, canister: &Canister) -> Result<(), Error> {
     let req = Request::new_canister_upgrade(pid, canister.to_dynamic());
     let _res = request_api(req).await?;
 
