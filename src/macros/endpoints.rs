@@ -1,59 +1,86 @@
-// icu_endpo9ints
+// icu_endpoints_root
+#[macro_export]
+macro_rules! icu_endpoints_root {
+    () => {
+        // app
+        // modify app-level state
+        // @todo eventually this will cascade down from an orchestrator canister
+        #[::mimic::ic::update]
+        async fn app(cmd: ::actor::state::core::app_state::AppCommand) -> Result<(), ActorError> {
+            ::actor::interface::state::core::app_state::command_api(cmd)?;
+            ::actor::interface::cascade::app_state_cascade_api().await?;
+
+            Ok(())
+        }
+
+        // response
+        #[::mimic::ic::update]
+        async fn response(
+            request: ::actor::interface::request::Request,
+        ) -> Result<::actor::interface::response::Response, ActorError> {
+            let response = ::actor::interface::response::response(request).await?;
+
+            Ok(response)
+        }
+    };
+}
+
+// icu_endpoints
 #[macro_export]
 macro_rules! icu_endpoints {
     () => {
-        // canister_upgrade_children
+        // icu_canister_upgrade_children
         // canister_id : None means upgrade all children
-        /*
-                #[$crate::ic::update(guard = "guard_update")]
-                async fn canister_upgrade_children(
-                    canister_id: Option<Principal>,
-                ) -> Result<(), ActorError> {
-                    allow_any(vec![Auth::Controller]).await?;
+        #[::icu::ic::update(guard = "guard_update")]
+        async fn icu_canister_upgrade_children(
+            canister_id: Option<Principal>,
+        ) -> Result<(), ActorError> {
+            allow_any(vec![Auth::Controller]).await?;
 
-                    // send a request for each matching canister
-                    for (child_id, path) in child_index() {
-                        if canister_id.is_none() || canister_id == Some(child_id) {
-                            let req = ::actor::interface::request::Request::new_canister_upgrade(
-                                child_id,
-                                path.clone(),
-                            );
+            // send a request for each matching canister
+            for (child_id, path) in child_index() {
+                if canister_id.is_none() || canister_id == Some(child_id) {
+                    let req = ::icu::interface::request::Request::new_canister_upgrade(
+                        child_id,
+                        path.clone(),
+                    );
 
-                            if let Err(e) = ::actor::interface::request::request_api(req).await {
-                                log!(Log::Warn, "{child_id} ({path}): {e}");
-                            }
-                        }
+                    if let Err(e) = ::icu::interface::request::request_api(req).await {
+                        log!(Log::Warn, "{child_id} ({path}): {e}");
                     }
-
-                    Ok(())
                 }
+            }
 
-                // app_state_cascade
-                #[$crate::ic::update]
-                async fn app_state_cascade(data: ::actor::state::core::AppStateData) -> Result<(), String> {
-                    allow_any(vec![Auth::Parent]).await?;
+            Ok(())
+        }
 
-                    // set state and cascade
-                    ::actor::interface::state::core::app_state::set_data_api(data)?;
-                    ::actor::interface::cascade::app_state_cascade_api().await?;
+        // icu_app_state_cascade
+        #[::icu::ic::update]
+        async fn icu_app_state_cascade(
+            data: ::actor::state::core::AppStateData,
+        ) -> Result<(), String> {
+            allow_any(vec![Auth::Parent]).await?;
 
-                    Ok(())
-                }
+            // set state and cascade
+            ::icu::interface::state::core::app_state::set_data_api(data)?;
+            ::icu::interface::cascade::app_state_cascade_api().await?;
 
-                // subnet_index_cascade
-                #[$crate::ic::update]
-                async fn subnet_index_cascade(
-                    data: ::actor::state::core::SubnetIndexData,
-                ) -> Result<(), String> {
-                    allow_any(vec![Auth::Parent]).await?;
+            Ok(())
+        }
 
-                    // set index and cascade
-                    ::actor::interface::state::core::subnet_index::set_data(data);
-                    ::actor::interface::cascade::subnet_index_cascade_api().await?;
+        // icu_subnet_index_cascade
+        #[::icu::ic::update]
+        async fn icu_subnet_index_cascade(
+            data: ::actor::state::core::SubnetIndexData,
+        ) -> Result<(), String> {
+            allow_any(vec![Auth::Parent]).await?;
 
-                    Ok(())
-                }
-        */
+            // set index and cascade
+            ::icu::interface::state::core::subnet_index::set_data(data);
+            ::icu::interface::cascade::subnet_index_cascade_api().await?;
+
+            Ok(())
+        }
 
         //
         // IC API ENDPOINTS
