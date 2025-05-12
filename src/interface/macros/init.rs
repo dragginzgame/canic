@@ -3,7 +3,7 @@
 macro_rules! endpoints_init {
     ($canister_type:expr) => {
         // init
-        #[::mimic::ic::init]
+        #[::icu::ic::init]
         fn init(root_id: Option<Principal>, parent_id: Option<Principal>) {
             use ::actor::interface::state::core::canister_state;
 
@@ -25,8 +25,7 @@ macro_rules! endpoints_init {
             // type
             canister_state::set_type($canister_type).unwrap();
 
-            mimic_init();
-            _init()
+            icu_init()
         }
 
         // init_async

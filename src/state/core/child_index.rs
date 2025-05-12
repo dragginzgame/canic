@@ -64,8 +64,8 @@ impl ChildIndex {
     }
 
     // insert_canister
-    pub fn insert_canister(&mut self, pid: Principal, ty: String) {
-        self.insert(pid, ty);
+    pub fn insert_canister(&mut self, pid: Principal, path: String) {
+        self.insert(pid, path);
     }
 }
 

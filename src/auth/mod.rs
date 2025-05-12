@@ -1,8 +1,10 @@
+pub mod guard;
+
 pub use crate::state::auth::{Permission, Role};
 
 use crate::{
+    Error,
     ic::api::{canister_self, is_controller, msg_caller},
-    interface::{InterfaceError, ic::IcError},
     state::core::{
         CANISTER_STATE, CHILD_INDEX, CanisterState, CanisterStateError, SUBNET_INDEX,
         SubnetIndexError,
@@ -58,9 +60,6 @@ pub enum AuthError {
     CanisterStateError(#[from] CanisterStateError),
 
     #[error(transparent)]
-    IcError(#[from] IcError),
-
-    #[error(transparent)]
     SubnetIndexError(#[from] SubnetIndexError),
 }
 
@@ -82,7 +81,7 @@ pub enum Auth {
 }
 
 impl Auth {
-    pub async fn result(self, pid: Principal) -> Result<(), InterfaceError> {
+    pub async fn result(self, pid: Principal) -> Result<(), Error> {
         match self {
             Self::CanisterType(canister) => rule_canister_type(pid, canister),
             Self::Child => rule_child(pid),
@@ -94,7 +93,7 @@ impl Auth {
             Self::SameSubnet => rule_same_subnet(pid).await,
             Self::SameCanister => rule_same_canister(pid),
         }
-        .map_err(InterfaceError::AuthError)
+        .map_err(Error::AuthError)
     }
 }
 
@@ -110,7 +109,7 @@ pub enum AccessPolicy {
 }
 
 // allow_any
-pub async fn allow_any(rules: Vec<Auth>) -> Result<(), InterfaceError> {
+pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
     // only works for caller now
     let caller = msg_caller();
 

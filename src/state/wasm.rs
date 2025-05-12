@@ -36,30 +36,30 @@ pub struct WasmManager {}
 
 impl WasmManager {
     // get_wasm
-    pub fn get_wasm<S: ToString>(name: S) -> Result<&'static [u8], WasmError> {
-        let name = name.to_string();
+    pub fn get_wasm<S: ToString>(path: S) -> Result<&'static [u8], WasmError> {
+        let path = path.to_string();
 
         let file = WASMS
             .lock()
             .map_err(|_| WasmError::LockFailed)?
-            .get(&name)
+            .get(&path)
             .copied()
-            .ok_or(WasmError::WasmNotFound(name))?;
+            .ok_or(WasmError::WasmNotFound(path))?;
 
         Ok(file)
     }
 
     // add_wasm
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_wasm<S: ToString>(name: S, wasm: &'static [u8]) -> Result<(), WasmError> {
-        let name = name.to_string();
+    pub fn add_wasm<S: ToString>(path: S, wasm: &'static [u8]) -> Result<(), WasmError> {
+        let path = path.to_string();
 
         WASMS
             .lock()
             .map_err(|_| WasmError::LockFailed)?
-            .insert(name.clone(), wasm);
+            .insert(path.clone(), wasm);
 
-        println!("add_wasm: {} ({:.2} KB)", name, wasm.len() as f64 / 1000.0);
+        println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
 
         Ok(())
     }
@@ -67,8 +67,8 @@ impl WasmManager {
     // add_wasms
     #[allow(clippy::cast_precision_loss)]
     pub fn add_wasms<S: ToString>(wasms: &[(S, &'static [u8])]) -> Result<(), WasmError> {
-        for (ty, wasm) in wasms {
-            Self::add_wasm(ty.to_string(), wasm)?;
+        for (path, wasm) in wasms {
+            Self::add_wasm(path.to_string(), wasm)?;
         }
 
         Ok(())

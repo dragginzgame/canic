@@ -61,17 +61,15 @@ impl CanisterState {
         Ok(())
     }
 
-    // get_type
-    pub fn get_type(&self) -> Result<String, CanisterStateError> {
-        let ty = self.get().ty.ok_or(CanisterStateError::PathNotSet)?;
-
-        Ok(ty)
+    // get_path
+    pub fn get_path(&self) -> Result<String, CanisterStateError> {
+        self.get().path.ok_or(CanisterStateError::PathNotSet)
     }
 
-    // set_type
-    pub fn set_type<S: ToString>(&mut self, ty: S) -> Result<(), CanisterStateError> {
+    // set_path
+    pub fn set_path<S: ToString>(&mut self, path: S) -> Result<(), CanisterStateError> {
         let mut state = self.get();
-        state.ty = Some(ty.to_string());
+        state.path = Some(path.to_string());
         self.set(state)?;
 
         Ok(())
@@ -115,7 +113,7 @@ impl CanisterState {
 
 #[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CanisterStateData {
-    ty: Option<String>,
+    path: Option<String>,
     root_id: Option<Principal>,
     parent_id: Option<Principal>,
 }

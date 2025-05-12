@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod config;
 pub mod helper;
 pub mod ic;
@@ -5,6 +6,7 @@ pub mod interface;
 pub mod macros;
 pub mod serialize;
 pub mod state;
+
 pub mod export {
     pub use defer;
 }
@@ -33,12 +35,19 @@ pub mod prelude {
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum Error {
     #[error(transparent)]
+    AuthError(#[from] auth::AuthError),
+
+    #[error("call failed: {0}")]
+    CallFailed(String),
+
+    #[error(transparent)]
     ConfigError(#[from] config::ConfigError),
 
     #[error(transparent)]
     InterfaceError(#[from] interface::InterfaceError),
-    //   #[error(transparent)]
-    //   StateError(#[from] state::StateError),
+
+    #[error(transparent)]
+    StateError(#[from] state::StateError),
 }
 
 ///

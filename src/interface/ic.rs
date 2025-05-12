@@ -1,5 +1,5 @@
 use crate::{
-    Log,
+    Error, Log,
     helper::{format_cycles, get_wasm_hash},
     ic::{
         call::{Call, CallFailed, CandidDecodeFailed, Error as CallError},
@@ -8,6 +8,7 @@ use crate::{
             CreateCanisterArgs, DepositCyclesArgs, InstallCodeArgs, WasmModule,
         },
     },
+    interface::InterfaceError,
     log,
 };
 use candid::{CandidType, Principal};
@@ -55,34 +56,43 @@ pub fn canister_self() -> Principal {
 }
 
 // canister_status
-pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, IcError> {
+pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
     let args = CanisterStatusArgs {
         canister_id: canister_pid,
     };
-    let res = mgmt::canister_status(&args).await?;
+    let res = mgmt::canister_status(&args)
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     Ok(res)
 }
 
 // deposit_cycles
-pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), IcError> {
+pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
     let args = DepositCyclesArgs {
         canister_id: canister_pid,
     };
-    mgmt::deposit_cycles(&args, cycles).await?;
+    mgmt::deposit_cycles(&args, cycles)
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     Ok(())
 }
 
 // install_code
-pub async fn install_code(args: &InstallCodeArgs) -> Result<(), IcError> {
-    mgmt::install_code(args).await?;
+pub async fn install_code(args: &InstallCodeArgs) -> Result<(), Error> {
+    mgmt::install_code(args)
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     Ok(())
 }
 
 // module_hash
-pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, IcError> {
+pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Error> {
     let response = canister_status(canister_id).await?;
 
     Ok(response.module_hash)
@@ -97,7 +107,7 @@ pub async fn create_canister(
     bytes: &[u8],
     controllers: Vec<Principal>,
     parent_pid: Principal,
-) -> Result<Principal, IcError> {
+) -> Result<Principal, Error> {
     //
     // create canister
     //
@@ -109,7 +119,9 @@ pub async fn create_canister(
     });
     let args = CreateCanisterArgs { settings };
     let canister_pid = mgmt::create_canister_with_extra_cycles(&args, cycles)
-        .await?
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?
         .canister_id;
 
     //
@@ -122,13 +134,19 @@ pub async fn create_canister(
         wasm_module: WasmModule::from(bytes),
         arg: ::candid::utils::encode_args((canister_self(), parent_pid)).expect("args encode"),
     };
-    mgmt::install_code(&install_args).await?;
+    mgmt::install_code(&install_args)
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     //
     // call init_async
     //
 
-    Call::unbounded_wait(canister_pid, "init_async").await?;
+    Call::unbounded_wait(canister_pid, "init_async")
+        .await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     //
     // debug
@@ -149,11 +167,11 @@ pub async fn create_canister(
 }
 
 /// upgrade_canister
-pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), IcError> {
+pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
     // module_hash
     let module_hash = module_hash(canister_pid).await?;
     if module_hash == Some(get_wasm_hash(bytes)) {
-        Err(IcError::WasmHashMatches)?;
+        Err(InterfaceError::IcError(IcError::WasmHashMatches))?;
     }
 
     // args
@@ -163,7 +181,10 @@ pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(
         wasm_module: WasmModule::from(bytes),
         arg: vec![],
     };
-    mgmt::install_code(&install_args).await?;
+    mgmt::install_code(&install_args)
+        .await
+        .map_err(|e| IcError::CallFailed(e.to_string()))
+        .map_err(InterfaceError::IcError)?;
 
     // debug
     #[allow(clippy::cast_precision_loss)]
