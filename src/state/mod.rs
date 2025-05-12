@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod config;
 pub mod core;
 pub mod root;
 pub mod sharder;
@@ -9,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 pub use {
+    config::ConfigError,
     core::{
         app_state::AppStateError, canister_state::CanisterStateError, child_index::ChildIndexError,
         subnet_index::SubnetIndexError,
@@ -34,6 +36,10 @@ const CHILD_INDEX_MEMORY_ID: u8 = 4;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum StateError {
+    // shared
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
+
     // core
     #[error(transparent)]
     AppStateError(#[from] AppStateError),

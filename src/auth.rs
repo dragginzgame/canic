@@ -190,8 +190,8 @@ async fn rule_policy(pid: Principal, policy: AccessPolicy) -> Result<(), AuthErr
     }
 }
 
-// roles_have_permission_api
-fn roles_have_permission_api(
+// roles_have_permission
+fn roles_have_permission(
     roles: &[Role],
     permission: &Permission,
 ) -> Result<(), InterfaceError> {

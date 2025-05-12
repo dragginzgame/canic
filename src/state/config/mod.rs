@@ -2,7 +2,6 @@ pub mod types;
 
 pub use types::Config;
 
-use crate::Error;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -35,7 +34,7 @@ pub enum ConfigError {
 static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
 // get_config
-pub fn get_config() -> Result<Config, Error> {
+pub fn get_config() -> Result<Config, ConfigError> {
     let guard = CONFIG
         .lock()
         .map_err(|e| ConfigError::Mutex(e.to_string()))?;
@@ -46,7 +45,7 @@ pub fn get_config() -> Result<Config, Error> {
 }
 
 // init_config
-fn init_config(config: Config) -> Result<(), Error> {
+fn init_config(config: Config) -> Result<(), ConfigError> {
     let mut guard = CONFIG
         .lock()
         .map_err(|e| ConfigError::Mutex(e.to_string()))?;
@@ -61,7 +60,7 @@ fn init_config(config: Config) -> Result<(), Error> {
 }
 
 // init_config_toml
-pub fn init_config_toml(config_str: &str) -> Result<(), Error> {
+pub fn init_config_toml(config_str: &str) -> Result<(), ConfigError> {
     let config =
         toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 

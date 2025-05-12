@@ -91,8 +91,8 @@ pub struct Cycles {
 /// REQUEST
 ///
 
-// request_api
-pub async fn request_api(request: Request) -> Result<Response, Error> {
+// request
+pub async fn request(request: Request) -> Result<Response, Error> {
     let root_pid = crate::interface::state::core::canister_state::get_root_pid()?;
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
@@ -106,13 +106,13 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
         .map_err(InterfaceError::IcError)?
 }
 
-// canister_create_api
+// canister_create
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
+pub async fn canister_create(path: &str) -> Result<Principal, Error> {
     let req = Request::new_canister_create(path);
     let canister = canister_registry::get_canister(path)?;
 
-    match request_api(req).await {
+    match request(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
@@ -133,10 +133,10 @@ pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
     }
 }
 
-// canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, path: &str) -> Result<(), Error> {
+// canister_upgrade
+pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
     let req = Request::new_canister_upgrade(pid, path);
-    let _res = request_api(req).await?;
+    let _res = request(req).await?;
 
     Ok(())
 }

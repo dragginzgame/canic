@@ -1,4 +1,4 @@
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -9,12 +9,5 @@ use serde::{Deserialize, Serialize};
 #[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    pub orm: Orm,
+    pub controllers: Vec<Principal>,
 }
-
-///
-/// Orm
-///
-
-#[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Orm {}

@@ -45,7 +45,7 @@ macro_rules! icu_endpoints {
                     let req =
                         ::icu::interface::request::Request::new_canister_upgrade(child_pid, &path);
 
-                    if let Err(e) = ::icu::interface::request::request_api(req).await {
+                    if let Err(e) = ::icu::interface::request::request(req).await {
                         log!(Log::Warn, "{child_pid} ({path}): {e}");
                     }
                 }
