@@ -28,6 +28,7 @@ pub mod prelude {
         ic::{export_candid, init, query, update},
         icu_start, icu_start_root, log, perf,
         state::wasm::WasmManager,
+        traits::Canister,
     };
 }
 
