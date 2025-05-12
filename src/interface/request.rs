@@ -98,7 +98,8 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
     let res = Call::unbounded_wait(root_pid, "response")
         .with_arg(&request)
         .await
-        .map_err(|e| Error::CallFailed(e.to_string()))?;
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     let a = res
         .candid()
