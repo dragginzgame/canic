@@ -106,14 +106,14 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(path: String) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(path.clone());
+pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
+    let req = Request::new_canister_create(path.to_string());
 
     match request_api(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
-                interface::state::core::child_index::insert_canister(new_pid, path);
+                interface::state::core::child_index::insert_canister(new_pid, path.to_string());
 
                 // cascade subnet_index after each new canister
                 //        if !path.is_sharded() {
