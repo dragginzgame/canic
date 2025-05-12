@@ -11,7 +11,7 @@ macro_rules! icu_start {
 
             canister_state::set_root_id(root_id).unwrap();
             canister_state::set_parent_id(parent_id).unwrap();
-            canister_state::set_type($canister_path).unwrap();
+            canister_state::set_path($canister_path).unwrap();
 
             log!(Log::Info, "init: {}", $canister_path);
 
@@ -31,7 +31,7 @@ macro_rules! icu_start_root {
             use ::icu::interface::state::core::canister_state;
 
             canister_state::set_root_id(canister_self()).unwrap();
-            canister_state::set_type($canister_path).unwrap();
+            canister_state::set_path($canister_path).unwrap();
 
             log!(Log::Info, "init: {} (root)",);
 
