@@ -58,7 +58,7 @@ pub enum RequestKind {
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
-    pub canister: Canister,
+    pub canister_path: String,
 }
 
 ///
