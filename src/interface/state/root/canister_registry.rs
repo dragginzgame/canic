@@ -5,7 +5,7 @@ pub use crate::state::root::canister_registry::{
 };
 
 // add_canister
-pub fn add_canister(path: &str, def: CanisterDef, wasm: &'static [u8]) -> Result<(), Error> {
+pub fn add_canister(path: &str, def: &CanisterDef, wasm: &'static [u8]) -> Result<(), Error> {
     CanisterRegistry::add_canister(path, def, wasm).map_err(StateError::CanisterRegistryError)?;
 
     Ok(())

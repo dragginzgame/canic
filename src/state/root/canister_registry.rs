@@ -63,8 +63,8 @@ impl From<&Canister> for CanisterInfo {
 
 #[derive(Clone, Debug)]
 pub struct CanisterDef {
-    pub is_sharded: bool,
     pub auto_create: bool,
+    pub is_sharded: bool,
 }
 
 ///
@@ -92,7 +92,7 @@ impl CanisterRegistry {
     #[allow(clippy::cast_precision_loss)]
     pub fn add_canister(
         path: &str,
-        def: CanisterDef,
+        def: &CanisterDef,
         wasm: &'static [u8],
     ) -> Result<(), CanisterRegistryError> {
         let path = path.to_string();
@@ -100,7 +100,13 @@ impl CanisterRegistry {
         CANISTER_REGISTRY
             .lock()
             .map_err(|_| CanisterRegistryError::LockFailed)?
-            .insert(path.to_string(), Canister { def, wasm });
+            .insert(
+                path.to_string(),
+                Canister {
+                    def: def.clone(),
+                    wasm,
+                },
+            );
 
         println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
 
