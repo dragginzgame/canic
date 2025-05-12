@@ -95,18 +95,18 @@ pub struct Cycles {
 // request_api
 pub async fn request_api(request: Request) -> Result<Response, Error> {
     let root_pid = crate::interface::state::core::canister_state::get_root_id()?;
-    let res = Call::unbounded_wait(root_pid, "response")
+    let call_response = Call::unbounded_wait(root_pid, "response")
         .with_arg(&request)
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
 
-    let a = res
-        .candid()
+    let response = call_response
+        .candid::<Response>()
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
 
-    Ok(a)
+    Ok(response)
 }
 
 // canister_create_api
