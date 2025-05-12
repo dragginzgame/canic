@@ -53,7 +53,7 @@ pub enum Error {
 /// Canister
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Canister {
     pub path: &'static str,
     pub is_sharded: bool,
