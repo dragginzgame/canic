@@ -40,7 +40,7 @@ macro_rules! icu_endpoints {
             //           allow_any(vec![Auth::Controller]).await?;
 
             // send a request for each matching canister
-            for (child_id, path) in ::icu::interface::core::state::child_index::get_data() {
+            for (child_id, path) in ::icu::interface::state::core::child_index::get_data() {
                 if canister_id.is_none() || canister_id == Some(child_id) {
                     let req = ::icu::interface::request::Request::new_canister_upgrade(
                         child_id,
