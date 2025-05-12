@@ -67,7 +67,7 @@ impl CanisterState {
     }
 
     // set_path
-    pub fn set_path<S: ToString>(&mut self, path: S) -> Result<(), CanisterStateError> {
+    pub fn set_path(&mut self, path: &str) -> Result<(), CanisterStateError> {
         let mut state = self.get();
         state.path = Some(path.to_string());
         self.set(state)?;

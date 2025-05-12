@@ -35,5 +35,5 @@ pub fn get_canister(name: &str) -> Option<Principal> {
 
 // set_canister
 pub fn set_canister(name: &str, principal: Principal) {
-    SUBNET_INDEX.with_borrow_mut(|this| this.set_canister(name.to_string(), principal));
+    SUBNET_INDEX.with_borrow_mut(|this| this.set_canister(name, principal));
 }

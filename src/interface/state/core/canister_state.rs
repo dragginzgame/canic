@@ -25,7 +25,7 @@ pub fn get_path() -> Result<(), Error> {
 // set_path
 pub fn set_path(path: &str) -> Result<(), Error> {
     CANISTER_STATE
-        .with_borrow_mut(|state| state.set_path(path.to_string()))
+        .with_borrow_mut(|state| state.set_path(path))
         .map_err(StateError::CanisterStateError)?;
 
     Ok(())

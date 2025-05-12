@@ -54,17 +54,17 @@ impl SubnetIndex {
     }
 
     #[must_use]
-    pub fn get_canister<S: ToString>(&self, key: S) -> Option<Principal> {
-        self.get(&key.to_string())
+    pub fn get_canister(&self, path: &str) -> Option<Principal> {
+        self.get(&path.to_string())
     }
 
-    pub fn try_get_canister<S: ToString>(&self, key: S) -> Result<Principal, SubnetIndexError> {
-        self.get_canister(key.to_string())
-            .ok_or_else(|| SubnetIndexError::CanisterNotFound(key.to_string()))
+    pub fn try_get_canister(&self, path: &str) -> Result<Principal, SubnetIndexError> {
+        self.get_canister(path)
+            .ok_or_else(|| SubnetIndexError::CanisterNotFound(path.to_string()))
     }
 
-    pub fn set_canister<S: ToString>(&mut self, key: S, id: Principal) {
-        self.insert(key.to_string(), id);
+    pub fn set_canister(&mut self, path: &str, id: Principal) {
+        self.insert(path.to_string(), id);
     }
 }
 

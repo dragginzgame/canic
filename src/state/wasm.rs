@@ -36,7 +36,7 @@ pub struct WasmManager {}
 
 impl WasmManager {
     // get_wasm
-    pub fn get_wasm<S: ToString>(path: S) -> Result<&'static [u8], WasmError> {
+    pub fn get_wasm(path: &str) -> Result<&'static [u8], WasmError> {
         let path = path.to_string();
 
         let file = WASMS
@@ -51,7 +51,7 @@ impl WasmManager {
 
     // add_wasm
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_wasm<S: ToString>(path: S, wasm: &'static [u8]) -> Result<(), WasmError> {
+    pub fn add_wasm(path: &str, wasm: &'static [u8]) -> Result<(), WasmError> {
         let path = path.to_string();
 
         WASMS
@@ -66,9 +66,9 @@ impl WasmManager {
 
     // add_wasms
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_wasms<S: ToString>(wasms: &[(S, &'static [u8])]) -> Result<(), WasmError> {
+    pub fn add_wasms(wasms: &[(&str, &'static [u8])]) -> Result<(), WasmError> {
         for (path, wasm) in wasms {
-            Self::add_wasm(path.to_string(), wasm)?;
+            Self::add_wasm(path, wasm)?;
         }
 
         Ok(())
