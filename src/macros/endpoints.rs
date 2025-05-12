@@ -5,23 +5,25 @@ macro_rules! icu_endpoints_root {
         // app
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
-        #[::mimic::ic::update]
-        async fn app(cmd: ::icu::state::core::app_state::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::interface::state::core::app_state::command_api(cmd)?;
-            ::icu::interface::cascade::app_state_cascade_api().await?;
+        /*
+            #[::mimic::ic::update]
+            async fn app(cmd: ::icu::state::core::app_state::AppCommand) -> Result<(), ::icu::Error> {
+                ::icu::interface::state::core::app_state::command_api(cmd)?;
+                ::icu::interface::cascade::app_state_cascade_api().await?;
 
-            Ok(())
-        }
+                Ok(())
+            }
 
-        // response
-        #[::mimic::ic::update]
-        async fn response(
-            request: ::icu::interface::request::Request,
-        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
-            let response = ::icu::interface::response::response(request).await?;
+            // response
+            #[::mimic::ic::update]
+            async fn response(
+                request: ::icu::interface::request::Request,
+            ) -> Result<::icu::interface::response::Response, ::icu::Error> {
+                let response = ::icu::interface::response::response(request).await?;
 
-            Ok(response)
-        }
+                Ok(response)
+            }
+        */
     };
 }
 
@@ -29,59 +31,61 @@ macro_rules! icu_endpoints_root {
 #[macro_export]
 macro_rules! icu_endpoints {
     () => {
-        // icu_canister_upgrade_children
-        // canister_id : None means upgrade all children
-        #[::icu::ic::update(guard = "guard_update")]
-        async fn icu_canister_upgrade_children(
-            canister_id: Option<Principal>,
-        ) -> Result<(), ::icu::Error> {
-            //           allow_any(vec![Auth::Controller]).await?;
+        /*
 
-            // send a request for each matching canister
-            for (child_id, path) in child_index() {
-                if canister_id.is_none() || canister_id == Some(child_id) {
-                    let req = ::icu::interface::request::Request::new_canister_upgrade(
-                        child_id,
-                        path.clone(),
-                    );
+                // icu_canister_upgrade_children
+                // canister_id : None means upgrade all children
+                #[::icu::ic::update(guard = "guard_update")]
+                async fn icu_canister_upgrade_children(
+                    canister_id: Option<Principal>,
+                ) -> Result<(), ::icu::Error> {
+                    //           allow_any(vec![Auth::Controller]).await?;
 
-                    if let Err(e) = ::icu::interface::request::request_api(req).await {
-                        log!(Log::Warn, "{child_id} ({path}): {e}");
+                    // send a request for each matching canister
+                    for (child_id, path) in child_index() {
+                        if canister_id.is_none() || canister_id == Some(child_id) {
+                            let req = ::icu::interface::request::Request::new_canister_upgrade(
+                                child_id,
+                                path.clone(),
+                            );
+
+                            if let Err(e) = ::icu::interface::request::request_api(req).await {
+                                log!(Log::Warn, "{child_id} ({path}): {e}");
+                            }
+                        }
                     }
+
+                    Ok(())
                 }
-            }
 
-            Ok(())
-        }
+                // icu_app_state_cascade
+                #[::icu::ic::update]
+                async fn icu_app_state_cascade(
+                    data: ::icu:::state::core::AppStateData,
+                ) -> Result<(), String> {
+                    //    allow_any(vec![Auth::Parent]).await?;
 
-        // icu_app_state_cascade
-        #[::icu::ic::update]
-        async fn icu_app_state_cascade(
-            data: ::icu:::state::core::AppStateData,
-        ) -> Result<(), String> {
-            //    allow_any(vec![Auth::Parent]).await?;
+                    // set state and cascade
+                    ::icu::interface::state::core::app_state::set_data_api(data)?;
+                    ::icu::interface::cascade::app_state_cascade_api().await?;
 
-            // set state and cascade
-            ::icu::interface::state::core::app_state::set_data_api(data)?;
-            ::icu::interface::cascade::app_state_cascade_api().await?;
+                    Ok(())
+                }
 
-            Ok(())
-        }
+                // icu_subnet_index_cascade
+                #[::icu::ic::update]
+                async fn icu_subnet_index_cascade(
+                    data: ::icu::state::core::SubnetIndexData,
+                ) -> Result<(), String> {
+             //       allow_any(vec![Auth::Parent]).await?;
 
-        // icu_subnet_index_cascade
-        #[::icu::ic::update]
-        async fn icu_subnet_index_cascade(
-            data: ::icu::state::core::SubnetIndexData,
-        ) -> Result<(), String> {
-     //       allow_any(vec![Auth::Parent]).await?;
+                    // set index and cascade
+                    ::icu::interface::state::core::subnet_index::set_data(data);
+                    ::icu::interface::cascade::subnet_index_cascade_api().await?;
 
-            // set index and cascade
-            ::icu::interface::state::core::subnet_index::set_data(data);
-            ::icu::interface::cascade::subnet_index_cascade_api().await?;
-
-            Ok(())
-        }
-
+                    Ok(())
+                }
+        */
         //
         // IC API ENDPOINTS
         // these are specific endpoints defined by the IC spec
