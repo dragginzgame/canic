@@ -31,34 +31,30 @@ macro_rules! icu_endpoints_root {
 #[macro_export]
 macro_rules! icu_endpoints {
     () => {
-        /*
+        // icu_canister_upgrade_children
+        // canister_id : None means upgrade all children
+        #[::icu::ic::update(guard = "guard_update")]
+        async fn icu_canister_upgrade_children(
+            canister_id: Option<Principal>,
+        ) -> Result<(), ::icu::Error> {
+            //           allow_any(vec![Auth::Controller]).await?;
 
-                // icu_canister_upgrade_children
-                // canister_id : None means upgrade all children
-                #[::icu::ic::update(guard = "guard_update")]
-                async fn icu_canister_upgrade_children(
-                    canister_id: Option<Principal>,
-                ) -> Result<(), ::icu::Error> {
-                    //           allow_any(vec![Auth::Controller]).await?;
+            // send a request for each matching canister
+            for (child_id, path) in child_index() {
+                if canister_id.is_none() || canister_id == Some(child_id) {
+                    let req = ::icu::interface::request::Request::new_canister_upgrade(
+                        child_id,
+                        path.clone(),
+                    );
 
-                    // send a request for each matching canister
-                    for (child_id, path) in child_index() {
-                        if canister_id.is_none() || canister_id == Some(child_id) {
-                            let req = ::icu::interface::request::Request::new_canister_upgrade(
-                                child_id,
-                                path.clone(),
-                            );
-
-                            if let Err(e) = ::icu::interface::request::request_api(req).await {
-                                log!(Log::Warn, "{child_id} ({path}): {e}");
-                            }
-                        }
+                    if let Err(e) = ::icu::interface::request::request_api(req).await {
+                        log!(Log::Warn, "{child_id} ({path}): {e}");
                     }
-
-                    Ok(())
                 }
+            }
 
-        */
+            Ok(())
+        }
 
         // icu_app_state_cascade
         #[::icu::ic::update]
