@@ -7,8 +7,8 @@ macro_rules! icu_endpoints_root {
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
         async fn app(cmd: ::icu::state::core::app_state::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::interface::state::core::app_state::command_api(cmd)?;
-            ::icu::interface::cascade::app_state_cascade_api().await?;
+            ::icu::interface::state::core::app_state::command(cmd)?;
+            ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
         }
