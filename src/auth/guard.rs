@@ -1,6 +1,6 @@
 use crate::{
     ic::api::{is_controller, msg_caller},
-    state::core::{APP_STATE, AppMode, AppState},
+    interface::state::core::app_state::{self, AppMode},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ pub fn guard_query() -> Result<(), String> {
         return Ok(());
     }
 
-    match APP_STATE.with_borrow(AppState::get_mode) {
+    match app_state::get_mode() {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),
     }
@@ -39,7 +39,7 @@ pub fn guard_update() -> Result<(), String> {
         return Ok(());
     }
 
-    match APP_STATE.with_borrow(AppState::get_mode) {
+    match app_state::get_mode() {
         AppMode::Enabled => Ok(()),
         AppMode::Readonly => Err(GuardError::AppReadonly.to_string()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),

@@ -5,10 +5,7 @@ pub use crate::state::auth::{Permission, Role};
 use crate::{
     Error,
     ic::api::{canister_self, is_controller, msg_caller},
-    state::core::{
-        CANISTER_STATE, CHILD_INDEX, CanisterState, CanisterStateError, SUBNET_INDEX,
-        SubnetIndexError,
-    },
+    interface,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -55,12 +52,6 @@ pub enum AuthError {
 
     #[error("role '{0}' not found")]
     RoleNotFound(String),
-
-    #[error(transparent)]
-    CanisterStateError(#[from] CanisterStateError),
-
-    #[error(transparent)]
-    SubnetIndexError(#[from] SubnetIndexError),
 }
 
 ///
@@ -93,7 +84,6 @@ impl Auth {
             Self::SameSubnet => rule_same_subnet(pid).await,
             Self::SameCanister => rule_same_canister(pid),
         }
-        .map_err(Error::AuthError)
     }
 }
 
@@ -136,25 +126,22 @@ pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
 
 // rule_canister_type
 // check caller against the id of a specific canister path
-fn rule_canister_type(pid: Principal, canister: String) -> Result<(), AuthError> {
-    SUBNET_INDEX
-        .with_borrow(|this| this.try_get_canister(&canister))
+fn rule_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
+    interface::state::core::subnet_index::try_get_canister(&canister)
         .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
 
     Ok(())
 }
 
 // rule_child
-fn rule_child(pid: Principal) -> Result<(), AuthError> {
-    CHILD_INDEX
-        .with_borrow(|index| index.get_canister(&pid))
-        .ok_or(AuthError::NotChild(pid))?;
+fn rule_child(pid: Principal) -> Result<(), Error> {
+    interface::state::core::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
 
     Ok(())
 }
 
 // rule_controller
-fn rule_controller(pid: Principal) -> Result<(), AuthError> {
+fn rule_controller(pid: Principal) -> Result<(), Error> {
     if is_controller(&pid) {
         Ok(())
     } else {
@@ -163,8 +150,8 @@ fn rule_controller(pid: Principal) -> Result<(), AuthError> {
 }
 
 // rule_root
-fn rule_root(pid: Principal) -> Result<(), AuthError> {
-    let root_pid = CANISTER_STATE.with_borrow(CanisterState::get_root_id)?;
+fn rule_root(pid: Principal) -> Result<(), Error> {
+    let root_pid = interface::state::core::canister_state::get_root_id()?;
 
     if pid == root_pid {
         Ok(())
@@ -174,8 +161,8 @@ fn rule_root(pid: Principal) -> Result<(), AuthError> {
 }
 
 // rule_parent
-fn rule_parent(pid: Principal) -> Result<(), AuthError> {
-    match CANISTER_STATE.with_borrow(CanisterState::get_parent_id) {
+fn rule_parent(pid: Principal) -> Result<(), Error> {
+    match interface::state::core::canister_state::get_parent_id() {
         Some(parent_id) if parent_id == pid => Ok(()),
         _ => Err(AuthError::NotParent(pid))?,
     }
@@ -222,14 +209,14 @@ fn roles_have_permission_api(
 
 // rule_same_subnet
 #[expect(clippy::unused_async)]
-pub async fn rule_same_subnet(_id: Principal) -> Result<(), AuthError> {
+pub async fn rule_same_subnet(_id: Principal) -> Result<(), Error> {
     // @todo - we need gabriel code here
 
     Ok(())
 }
 
 // rule_same_canister
-fn rule_same_canister(pid: Principal) -> Result<(), AuthError> {
+fn rule_same_canister(pid: Principal) -> Result<(), Error> {
     if pid == canister_self() {
         Ok(())
     } else {

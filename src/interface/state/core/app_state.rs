@@ -1,10 +1,6 @@
-use crate::{
-    Error,
-    state::{
-        StateError,
-        core::{APP_STATE, AppCommand, AppState, AppStateData},
-    },
-};
+use crate::{Error, state::StateError};
+
+pub use crate::state::core::{APP_STATE, AppCommand, AppMode, AppState, AppStateData};
 
 // command
 pub fn command(cmd: AppCommand) -> Result<(), Error> {
@@ -28,4 +24,10 @@ pub fn set_data(data: AppStateData) -> Result<(), Error> {
         .map_err(StateError::AppStateError)?;
 
     Ok(())
+}
+
+// get_mode
+#[must_use]
+pub fn get_mode() -> AppMode {
+    APP_STATE.with_borrow(AppState::get_mode)
 }

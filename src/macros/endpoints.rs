@@ -33,9 +33,9 @@ macro_rules! icu_endpoints {
     () => {
         // icu_canister_upgrade_children
         // canister_id : None means upgrade all children
-        #[::icu::ic::update(guard = "guard_update")]
+        #[::icu::ic::update(guard = "::icu::guard::guard_update")]
         async fn icu_canister_upgrade_children(
-            canister_id: Option<Principal>,
+            canister_id: Option<::candid::Principal>,
         ) -> Result<(), ::icu::Error> {
             //           allow_any(vec![Auth::Controller]).await?;
 
