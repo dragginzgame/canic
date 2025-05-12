@@ -71,21 +71,22 @@ macro_rules! icu_endpoints {
 
                     Ok(())
                 }
-
-                // icu_subnet_index_cascade
-                #[::icu::ic::update]
-                async fn icu_subnet_index_cascade(
-                    data: ::icu::state::core::SubnetIndexData,
-                ) -> Result<(), String> {
-             //       allow_any(vec![Auth::Parent]).await?;
-
-                    // set index and cascade
-                    ::icu::interface::state::core::subnet_index::set_data(data);
-                    ::icu::interface::cascade::subnet_index_cascade_api().await?;
-
-                    Ok(())
-                }
         */
+
+        // icu_subnet_index_cascade
+        #[::icu::ic::update]
+        async fn icu_subnet_index_cascade(
+            data: ::icu::state::core::SubnetIndexData,
+        ) -> Result<(), String> {
+            //       allow_any(vec![Auth::Parent]).await?;
+
+            // set index and cascade
+            ::icu::interface::state::core::subnet_index::set_data(data);
+            ::icu::interface::cascade::subnet_index_cascade_api().await?;
+
+            Ok(())
+        }
+
         //
         // IC API ENDPOINTS
         // these are specific endpoints defined by the IC spec
