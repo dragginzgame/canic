@@ -29,6 +29,6 @@ pub fn try_get_canister(pid: &Principal) -> Result<String, Error> {
 }
 
 // insert_canister
-pub fn insert_canister(pid: Principal, path: &str) {
-    CHILD_INDEX.with_borrow_mut(|this| this.insert(pid, path.to_string()));
+pub fn insert_canister(pid: Principal, path: String) {
+    CHILD_INDEX.with_borrow_mut(|this| this.insert(pid, path));
 }

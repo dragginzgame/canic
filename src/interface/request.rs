@@ -106,9 +106,8 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-#[allow(clippy::unnecessary_map_on_constructor)]
-pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(path);
+pub async fn canister_create_api(path: String) -> Result<Principal, Error> {
+    let req = Request::new_canister_create(path.clone());
 
     match request_api(req).await {
         Ok(response) => match response {
@@ -123,16 +122,16 @@ pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
 
                 Ok(new_pid)
             }
-            Response::CanisterUpgrade => {
-                Err(RequestError::InvalidResponseType).map_err(InterfaceError::RequestError)?
-            }
+            Response::CanisterUpgrade => Err(InterfaceError::RequestError(
+                RequestError::InvalidResponseType,
+            ))?,
         },
         Err(e) => Err(e),
     }
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, name: &str) -> Result<(), Error> {
+pub async fn canister_upgrade_api(pid: Principal, name: String) -> Result<(), Error> {
     let req = Request::new_canister_upgrade(pid, name);
     let _res = request_api(req).await?;
 
