@@ -18,9 +18,9 @@ macro_rules! icu_start {
             canister_state::set_type($canister_type).unwrap();
 
             _init();
-
-            icu_endpoints!();
         };
+
+        icu_endpoints!();
     };
 }
 
@@ -40,10 +40,10 @@ macro_rules! icu_start_root {
             canister_state::set_type($canister_type).unwrap();
 
             _init();
-
-            icu_endpoints_root!();
-            icu_endpoints!();
         };
+
+        icu_endpoints_root!();
+        icu_endpoints!();
     };
 }
 
