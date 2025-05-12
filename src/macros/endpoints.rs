@@ -58,20 +58,21 @@ macro_rules! icu_endpoints {
                     Ok(())
                 }
 
-                // icu_app_state_cascade
-                #[::icu::ic::update]
-                async fn icu_app_state_cascade(
-                    data: ::icu:::state::core::AppStateData,
-                ) -> Result<(), String> {
-                    //    allow_any(vec![Auth::Parent]).await?;
-
-                    // set state and cascade
-                    ::icu::interface::state::core::app_state::set_data_api(data)?;
-                    ::icu::interface::cascade::app_state_cascade_api().await?;
-
-                    Ok(())
-                }
         */
+
+        // icu_app_state_cascade
+        #[::icu::ic::update]
+        async fn icu_app_state_cascade(
+            data: ::icu:::state::core::AppStateData,
+        ) -> Result<(), ::icu::Error> {
+            //    allow_any(vec![Auth::Parent]).await?;
+
+            // set state and cascade
+            ::icu::interface::state::core::app_state::set_data(data)?;
+            ::icu::interface::cascade::app_state_cascade_api().await?;
+
+            Ok(())
+        }
 
         // icu_subnet_index_cascade
         #[::icu::ic::update]
