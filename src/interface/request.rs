@@ -29,16 +29,21 @@ pub struct Request {
 
 impl Request {
     #[must_use]
-    pub fn new_canister_create(name: String) -> Self {
+    pub fn new_canister_create(name: &str) -> Self {
         Self {
-            kind: RequestKind::CanisterCreate(CanisterCreate { name }),
+            kind: RequestKind::CanisterCreate(CanisterCreate {
+                name: name.to_string(),
+            }),
         }
     }
 
     #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, name: String) -> Self {
+    pub fn new_canister_upgrade(pid: Principal, name: &str) -> Self {
         Self {
-            kind: RequestKind::CanisterUpgrade(CanisterUpgrade { pid, name }),
+            kind: RequestKind::CanisterUpgrade(CanisterUpgrade {
+                pid,
+                name: name.to_string(),
+            }),
         }
     }
 }
@@ -107,7 +112,7 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
 pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(path.to_string());
+    let req = Request::new_canister_create(path);
 
     match request_api(req).await {
         Ok(response) => match response {
@@ -131,7 +136,7 @@ pub async fn canister_create_api(path: &str) -> Result<Principal, Error> {
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, name: String) -> Result<(), Error> {
+pub async fn canister_upgrade_api(pid: Principal, name: &str) -> Result<(), Error> {
     let req = Request::new_canister_upgrade(pid, name);
     let _res = request_api(req).await?;
 
