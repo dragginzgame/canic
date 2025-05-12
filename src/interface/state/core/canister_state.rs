@@ -31,10 +31,10 @@ pub fn set_path(path: &str) -> Result<(), Error> {
     Ok(())
 }
 
-// get_root_id
-pub fn get_root_id() -> Result<Principal, Error> {
+// get_root_pid
+pub fn get_root_pid() -> Result<Principal, Error> {
     let root_id = CANISTER_STATE
-        .with_borrow(CanisterState::get_root_id)
+        .with_borrow(CanisterState::get_root_pid)
         .map_err(StateError::CanisterStateError)?;
 
     Ok(root_id)
@@ -49,10 +49,10 @@ pub fn set_root_id(pid: Principal) -> Result<(), Error> {
     Ok(())
 }
 
-// get_parent_id
+// get_parent_pid
 #[must_use]
-pub fn get_parent_id() -> Option<Principal> {
-    CANISTER_STATE.with_borrow(CanisterState::get_parent_id)
+pub fn get_parent_pid() -> Option<Principal> {
+    CANISTER_STATE.with_borrow(CanisterState::get_parent_pid)
 }
 
 // set_parent_id

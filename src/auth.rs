@@ -149,7 +149,7 @@ fn rule_controller(pid: Principal) -> Result<(), Error> {
 
 // rule_root
 fn rule_root(pid: Principal) -> Result<(), Error> {
-    let root_pid = interface::state::core::canister_state::get_root_id()?;
+    let root_pid = interface::state::core::canister_state::get_root_pid()?;
 
     if pid == root_pid {
         Ok(())
@@ -160,7 +160,7 @@ fn rule_root(pid: Principal) -> Result<(), Error> {
 
 // rule_parent
 fn rule_parent(pid: Principal) -> Result<(), Error> {
-    match interface::state::core::canister_state::get_parent_id() {
+    match interface::state::core::canister_state::get_parent_pid() {
         Some(parent_id) if parent_id == pid => Ok(()),
         _ => Err(AuthError::NotParent(pid))?,
     }

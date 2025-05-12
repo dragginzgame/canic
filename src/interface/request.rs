@@ -94,7 +94,7 @@ pub struct Cycles {
 
 // request_api
 pub async fn request_api(request: Request) -> Result<Response, Error> {
-    let root_pid = crate::interface::state::core::canister_state::get_root_id()?;
+    let root_pid = crate::interface::state::core::canister_state::get_root_pid()?;
     let call_response = Call::unbounded_wait(root_pid, "response")
         .with_arg(&request)
         .await

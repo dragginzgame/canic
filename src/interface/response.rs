@@ -31,9 +31,11 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 
 // create_canister
 async fn create_canister(path: &str) -> Result<Response, Error> {
-    let bytes = crate::interface::state::wasm::get_wasm(path)?;
+    let bytes = interface::state::wasm::get_wasm(path)?;
+    let root_pid = interface::state::core::canister_state::get_root_pid()?;
+
     let new_canister_id =
-        crate::interface::ic::create_canister(path, bytes, vec![], msg_caller()).await?;
+        crate::interface::ic::create_canister(path, bytes, vec![root_pid], msg_caller()).await?;
 
     // update subnet index
     //  if !path.is_sharded() {

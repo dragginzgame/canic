@@ -75,8 +75,8 @@ impl CanisterState {
         Ok(())
     }
 
-    // get_root_id
-    pub fn get_root_id(&self) -> Result<Principal, CanisterStateError> {
+    // get_root_pid
+    pub fn get_root_pid(&self) -> Result<Principal, CanisterStateError> {
         let root_id = self.get().root_id.ok_or(CanisterStateError::RootIdNotSet)?;
 
         Ok(root_id)
@@ -91,9 +91,9 @@ impl CanisterState {
         Ok(())
     }
 
-    // get_parent_id
+    // get_parent_pid
     #[must_use]
-    pub fn get_parent_id(&self) -> Option<Principal> {
+    pub fn get_parent_pid(&self) -> Option<Principal> {
         self.get().parent_id
     }
 
