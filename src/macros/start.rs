@@ -8,9 +8,9 @@ macro_rules! icu_start {
 
             canister_state::set_root_pid(root_pid).unwrap();
             canister_state::set_parent_pid(parent_pid).unwrap();
-            canister_state::set_path($canister.path).unwrap();
+            canister_state::set_path($canister).unwrap();
 
-            log!(Log::Info, "init: {}", $canister.path);
+            log!(Log::Info, "init: {}", $canister);
 
             _init();
         }
@@ -33,9 +33,9 @@ macro_rules! icu_start_root {
             use ::icu::interface::state::core::canister_state;
 
             canister_state::set_root_pid(::icu::ic::api::canister_self()).unwrap();
-            canister_state::set_path($canister.path).unwrap();
+            canister_state::set_path($canister).unwrap();
 
-            log!(Log::Info, "init: {} (root)", $canister.path);
+            log!(Log::Info, "init: {} (root)", $canister);
 
             _init();
         }

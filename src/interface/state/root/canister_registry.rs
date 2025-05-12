@@ -20,7 +20,7 @@ pub fn get_canister(path: &str) -> Result<Canister, Error> {
 }
 
 // info
-pub fn info() -> Result<CanisterRegistryInfo, Error> {
+pub fn get_data() -> Result<CanisterRegistryInfo, Error> {
     let info = CanisterRegistry::info().map_err(StateError::CanisterRegistryError)?;
 
     Ok(info)
