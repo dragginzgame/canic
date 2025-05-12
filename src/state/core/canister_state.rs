@@ -77,15 +77,18 @@ impl CanisterState {
 
     // get_root_pid
     pub fn get_root_pid(&self) -> Result<Principal, CanisterStateError> {
-        let root_id = self.get().root_id.ok_or(CanisterStateError::RootIdNotSet)?;
+        let root_id = self
+            .get()
+            .root_pid
+            .ok_or(CanisterStateError::RootIdNotSet)?;
 
         Ok(root_id)
     }
 
-    // set_root_id
-    pub fn set_root_id(&mut self, id: Principal) -> Result<(), CanisterStateError> {
+    // set_root_pid
+    pub fn set_root_pid(&mut self, pid: Principal) -> Result<(), CanisterStateError> {
         let mut state = self.get();
-        state.root_id = Some(id);
+        state.root_pid = Some(pid);
         self.set(state)?;
 
         Ok(())
@@ -94,13 +97,13 @@ impl CanisterState {
     // get_parent_pid
     #[must_use]
     pub fn get_parent_pid(&self) -> Option<Principal> {
-        self.get().parent_id
+        self.get().parent_pid
     }
 
-    // set_parent_id
-    pub fn set_parent_id(&mut self, id: Principal) -> Result<(), CanisterStateError> {
+    // set_parent_pid
+    pub fn set_parent_pid(&mut self, id: Principal) -> Result<(), CanisterStateError> {
         let mut state = self.get();
-        state.parent_id = Some(id);
+        state.parent_pid = Some(id);
         self.set(state)?;
 
         Ok(())
@@ -114,8 +117,8 @@ impl CanisterState {
 #[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CanisterStateData {
     path: Option<String>,
-    root_id: Option<Principal>,
-    parent_id: Option<Principal>,
+    root_pid: Option<Principal>,
+    parent_pid: Option<Principal>,
 }
 
 impl_storable_unbounded!(CanisterStateData);

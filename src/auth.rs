@@ -161,7 +161,7 @@ fn rule_root(pid: Principal) -> Result<(), Error> {
 // rule_parent
 fn rule_parent(pid: Principal) -> Result<(), Error> {
     match interface::state::core::canister_state::get_parent_pid() {
-        Some(parent_id) if parent_id == pid => Ok(()),
+        Some(parent_pid) if parent_pid == pid => Ok(()),
         _ => Err(AuthError::NotParent(pid))?,
     }
 }

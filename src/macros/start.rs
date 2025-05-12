@@ -3,11 +3,11 @@
 macro_rules! icu_start {
     ($canister:path) => {
         #[::icu::ic::init]
-        fn init(root_id: ::candid::Principal, parent_id: ::candid::Principal) {
+        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
             use ::icu::interface::state::core::canister_state;
 
-            canister_state::set_root_id(root_id).unwrap();
-            canister_state::set_parent_id(parent_id).unwrap();
+            canister_state::set_root_pid(root_pid).unwrap();
+            canister_state::set_parent_pid(parent_pid).unwrap();
             canister_state::set_path($canister.path).unwrap();
 
             log!(Log::Info, "init: {}", $canister.path);
@@ -32,7 +32,7 @@ macro_rules! icu_start_root {
         fn init() {
             use ::icu::interface::state::core::canister_state;
 
-            canister_state::set_root_id(::icu::ic::api::canister_self()).unwrap();
+            canister_state::set_root_pid(::icu::ic::api::canister_self()).unwrap();
             canister_state::set_path($canister.path).unwrap();
 
             log!(Log::Info, "init: {} (root)", $canister.path);

@@ -40,10 +40,10 @@ pub fn get_root_pid() -> Result<Principal, Error> {
     Ok(root_id)
 }
 
-// set_root_id
-pub fn set_root_id(pid: Principal) -> Result<(), Error> {
+// set_root_pid
+pub fn set_root_pid(pid: Principal) -> Result<(), Error> {
     CANISTER_STATE
-        .with_borrow_mut(|state| state.set_root_id(pid))
+        .with_borrow_mut(|state| state.set_root_pid(pid))
         .map_err(StateError::CanisterStateError)?;
 
     Ok(())
@@ -55,10 +55,10 @@ pub fn get_parent_pid() -> Option<Principal> {
     CANISTER_STATE.with_borrow(CanisterState::get_parent_pid)
 }
 
-// set_parent_id
-pub fn set_parent_id(pid: Principal) -> Result<(), Error> {
+// set_parent_pid
+pub fn set_parent_pid(pid: Principal) -> Result<(), Error> {
     CANISTER_STATE
-        .with_borrow_mut(|state| state.set_parent_id(pid))
+        .with_borrow_mut(|state| state.set_parent_pid(pid))
         .map_err(StateError::CanisterStateError)?;
 
     Ok(())
