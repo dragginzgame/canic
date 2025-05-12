@@ -54,19 +54,19 @@ pub enum Error {
 ///
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct CanisterStatic {
+pub struct Canister {
     pub path: &'static str,
     pub is_sharded: bool,
 }
 
-impl CanisterStatic {
+impl Canister {
     #[must_use]
     pub const fn new(path: &'static str, is_sharded: bool) -> Self {
         Self { path, is_sharded }
     }
 
-    pub fn to_dynamic(&self) -> Canister {
-        Canister {
+    pub fn to_dynamic(&self) -> CanisterDyn {
+        CanisterDyn {
             path: self.path.to_string(),
             is_sharded: self.is_sharded,
         }
@@ -74,7 +74,7 @@ impl CanisterStatic {
 }
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct Canister {
+pub struct CanisterDyn {
     path: String,
     is_sharded: bool,
 }
