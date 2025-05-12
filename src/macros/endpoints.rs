@@ -141,10 +141,11 @@ macro_rules! icu_endpoints {
             ::icu::interface::state::core::subnet_index::get_data()
         }
 
-        // icu_wasm_info
+        // icu_canister_registry
         #[::icu::ic::query]
-        fn icu_wasm_info() -> Result<::icu::state::wasm::WasmInfoData, ::icu::Error> {
-            ::icu::interface::state::wasm::info()
+        fn icu_canister_registry()
+        -> Result<::icu::state::root::canister_registry::CanisterRegistryInfo, ::icu::Error> {
+            ::icu::interface::state::root::canister_registry::CanisterRegistry::info()
         }
     };
 }
