@@ -1,8 +1,7 @@
 use crate::{
-    Error,
+    Canister, Error,
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
-    traits::Canister,
 };
 use candid::{CandidType, Principal};
 use derive_more::Display;
@@ -110,7 +109,7 @@ pub async fn request_api(request: Request) -> Result<Response, Error> {
 
 // canister_create_api
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_api(canister: impl Canister) -> Result<Principal, Error> {
+pub async fn canister_create_api(canister: &Canister) -> Result<Principal, Error> {
     let req = Request::new_canister_create(&canister.path());
 
     match request_api(req).await {
@@ -135,8 +134,8 @@ pub async fn canister_create_api(canister: impl Canister) -> Result<Principal, E
 }
 
 // canister_upgrade_api
-pub async fn canister_upgrade_api(pid: Principal, canister: impl Canister) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, &canister.path());
+pub async fn canister_upgrade_api(pid: Principal, canister: &Canister) -> Result<(), Error> {
+    let req = Request::new_canister_upgrade(pid, &canister.path);
     let _res = request_api(req).await?;
 
     Ok(())

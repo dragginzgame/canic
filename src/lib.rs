@@ -59,11 +59,22 @@ pub struct Canister {
 }
 
 impl Canister {
+    #[must_use]
     pub fn new(path: &str, is_sharded: bool) -> Self {
         Self {
             path: path.to_string(),
             is_sharded,
         }
+    }
+
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    #[must_use]
+    pub fn is_sharded(&self) -> bool {
+        self.is_sharded
     }
 }
 
