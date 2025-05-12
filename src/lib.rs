@@ -54,19 +54,19 @@ pub enum Error {
 ///
 
 pub struct Canister {
-    path: String,
+    path: &'static str,
     is_sharded: bool,
 }
 
 impl Canister {
     #[must_use]
-    pub const fn new(path: String, is_sharded: bool) -> Self {
+    pub const fn new(path: &'static str, is_sharded: bool) -> Self {
         Self { path, is_sharded }
     }
 
     #[must_use]
     pub fn path(&self) -> String {
-        self.path.clone()
+        self.path.to_string()
     }
 
     #[must_use]
