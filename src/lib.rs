@@ -7,7 +7,6 @@ pub mod interface;
 pub mod macros;
 pub mod serialize;
 pub mod state;
-pub mod traits;
 
 pub mod export {
     pub use ciborium;
@@ -24,11 +23,10 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Log,
+        Canister, Log,
         ic::{export_candid, init, query, update},
         icu_start, icu_start_root, log, perf,
         state::wasm::WasmManager,
-        traits::Canister,
     };
 }
 
@@ -49,6 +47,24 @@ pub enum Error {
 
     #[error(transparent)]
     StateError(#[from] state::StateError),
+}
+
+///
+/// Canister
+///
+
+pub struct Canister {
+    path: String,
+    is_sharded: bool,
+}
+
+impl Canister {
+    pub fn new(path: &str, is_sharded: bool) -> Self {
+        Self {
+            path: path.to_string(),
+            is_sharded,
+        }
+    }
 }
 
 ///
