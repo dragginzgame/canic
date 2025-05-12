@@ -6,9 +6,9 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::mimic::ic::update]
-        async fn app(cmd: ::actor::state::core::app_state::AppCommand) -> Result<(), ActorError> {
-            ::actor::interface::state::core::app_state::command_api(cmd)?;
-            ::actor::interface::cascade::app_state_cascade_api().await?;
+        async fn app(cmd: ::icu::state::core::app_state::AppCommand) -> Result<(), ::icu::Error> {
+            ::icu::interface::state::core::app_state::command_api(cmd)?;
+            ::icu::interface::cascade::app_state_cascade_api().await?;
 
             Ok(())
         }
@@ -16,9 +16,9 @@ macro_rules! icu_endpoints_root {
         // response
         #[::mimic::ic::update]
         async fn response(
-            request: ::actor::interface::request::Request,
-        ) -> Result<::actor::interface::response::Response, ActorError> {
-            let response = ::actor::interface::response::response(request).await?;
+            request: ::icu::interface::request::Request,
+        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
+            let response = ::icu::interface::response::response(request).await?;
 
             Ok(response)
         }
@@ -34,8 +34,8 @@ macro_rules! icu_endpoints {
         #[::icu::ic::update(guard = "guard_update")]
         async fn icu_canister_upgrade_children(
             canister_id: Option<Principal>,
-        ) -> Result<(), ActorError> {
-            allow_any(vec![Auth::Controller]).await?;
+        ) -> Result<(), ::icu::Error> {
+            //           allow_any(vec![Auth::Controller]).await?;
 
             // send a request for each matching canister
             for (child_id, path) in child_index() {
@@ -57,9 +57,9 @@ macro_rules! icu_endpoints {
         // icu_app_state_cascade
         #[::icu::ic::update]
         async fn icu_app_state_cascade(
-            data: ::actor::state::core::AppStateData,
+            data: ::icu:::state::core::AppStateData,
         ) -> Result<(), String> {
-            allow_any(vec![Auth::Parent]).await?;
+            //    allow_any(vec![Auth::Parent]).await?;
 
             // set state and cascade
             ::icu::interface::state::core::app_state::set_data_api(data)?;
@@ -71,9 +71,9 @@ macro_rules! icu_endpoints {
         // icu_subnet_index_cascade
         #[::icu::ic::update]
         async fn icu_subnet_index_cascade(
-            data: ::actor::state::core::SubnetIndexData,
+            data: ::icu::state::core::SubnetIndexData,
         ) -> Result<(), String> {
-            allow_any(vec![Auth::Parent]).await?;
+     //       allow_any(vec![Auth::Parent]).await?;
 
             // set index and cascade
             ::icu::interface::state::core::subnet_index::set_data(data);
