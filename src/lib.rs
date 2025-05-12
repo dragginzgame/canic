@@ -55,8 +55,8 @@ pub enum Error {
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct Canister {
-    path: String,
-    is_sharded: bool,
+    pub path: String,
+    pub is_sharded: bool,
 }
 
 impl Canister {
