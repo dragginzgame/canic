@@ -113,8 +113,8 @@ impl CanisterRegistry {
         Ok(())
     }
 
-    // info
-    pub fn info() -> Result<CanisterRegistryInfo, CanisterRegistryError> {
+    // get_info
+    pub fn get_info() -> Result<CanisterRegistryInfo, CanisterRegistryError> {
         let info = CANISTER_REGISTRY
             .lock()
             .map_err(|_| CanisterRegistryError::LockFailed)?
