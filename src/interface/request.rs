@@ -29,21 +29,16 @@ pub struct Request {
 
 impl Request {
     #[must_use]
-    pub fn new_canister_create(name: &str) -> Self {
+    pub fn new_canister_create(name: String) -> Self {
         Self {
-            kind: RequestKind::CanisterCreate(CanisterCreate {
-                name: name.to_string(),
-            }),
+            kind: RequestKind::CanisterCreate(CanisterCreate { name }),
         }
     }
 
     #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, name: &str) -> Self {
+    pub fn new_canister_upgrade(pid: Principal, name: String) -> Self {
         Self {
-            kind: RequestKind::CanisterUpgrade(CanisterUpgrade {
-                pid,
-                name: name.to_string(),
-            }),
+            kind: RequestKind::CanisterUpgrade(CanisterUpgrade { pid, name }),
         }
     }
 }
