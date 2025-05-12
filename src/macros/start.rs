@@ -15,6 +15,7 @@ macro_rules! icu_start {
             _init();
         }
 
+        #[::icu::ic::update]
         async fn init_async() {
             _init_async().await;
         }
@@ -39,6 +40,7 @@ macro_rules! icu_start_root {
             _init();
         }
 
+        #[::icu::ic::update]
         async fn init_async() {
             _init_async().await;
         }
