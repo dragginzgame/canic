@@ -5,11 +5,6 @@ use crate::{
     log,
 };
 
-// app_state_cascade_api
-pub async fn app_state_cascade_api() -> Result<(), Error> {
-    app_state_cascade().await
-}
-
 // app_state_cascade
 pub async fn app_state_cascade() -> Result<(), Error> {
     let app_state = interface::state::core::app_state::get_data();
@@ -19,19 +14,12 @@ pub async fn app_state_cascade() -> Result<(), Error> {
     for (pid, path) in child_index {
         log!(Log::Info, "app_state_cascade: -> {pid} ({path})");
 
-        Call::unbounded_wait(pid, "app_state_cascade")
+        Call::unbounded_wait(pid, "icu_app_state_cascade")
             .with_arg(app_state)
             .await
             .map_err(IcError::from)
             .map_err(InterfaceError::IcError)?;
     }
-
-    Ok(())
-}
-
-// subnet_index_cascade_api
-pub async fn subnet_index_cascade_api() -> Result<(), Error> {
-    subnet_index_cascade().await?;
 
     Ok(())
 }
@@ -45,7 +33,7 @@ pub async fn subnet_index_cascade() -> Result<(), Error> {
     for (pid, path) in child_index {
         log!(Log::Info, "subnet_index_cascade: -> {pid} ({path})",);
 
-        Call::unbounded_wait(pid, "subnet_index_cascade")
+        Call::unbounded_wait(pid, "icu_subnet_index_cascade")
             .with_arg(&subnet_index)
             .await
             .map_err(IcError::from)

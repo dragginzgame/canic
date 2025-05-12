@@ -6,7 +6,9 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
-        async fn app(cmd: ::icu::state::core::app_state::AppCommand) -> Result<(), ::icu::Error> {
+        async fn icu_app(
+            cmd: ::icu::state::core::app_state::AppCommand,
+        ) -> Result<(), ::icu::Error> {
             ::icu::interface::state::core::app_state::command(cmd)?;
             ::icu::interface::cascade::app_state_cascade().await?;
 
@@ -15,7 +17,7 @@ macro_rules! icu_endpoints_root {
 
         // response
         #[::icu::ic::update]
-        async fn response(
+        async fn icu_response(
             request: ::icu::interface::request::Request,
         ) -> Result<::icu::interface::response::Response, ::icu::Error> {
             let response = ::icu::interface::response::response(request).await?;
