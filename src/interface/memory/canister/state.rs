@@ -1,8 +1,8 @@
 use crate::{
     Error,
-    state::{
-        StateError,
-        core::{CANISTER_STATE, CanisterState, CanisterStateData},
+    memory::{
+        CANISTER_STATE, MemoryError,
+        canister::{CanisterState, CanisterStateData},
     },
 };
 use candid::Principal;
@@ -17,7 +17,7 @@ pub fn get_data() -> CanisterStateData {
 pub fn get_path() -> Result<(), Error> {
     CANISTER_STATE
         .with_borrow(|state| state.get_path())
-        .map_err(StateError::CanisterStateError)?;
+        .map_err(MemoryError::CanisterStateError)?;
 
     Ok(())
 }
@@ -26,7 +26,7 @@ pub fn get_path() -> Result<(), Error> {
 pub fn set_path(path: &str) -> Result<(), Error> {
     CANISTER_STATE
         .with_borrow_mut(|state| state.set_path(path))
-        .map_err(StateError::CanisterStateError)?;
+        .map_err(MemoryError::CanisterStateError)?;
 
     Ok(())
 }
@@ -35,7 +35,7 @@ pub fn set_path(path: &str) -> Result<(), Error> {
 pub fn get_root_pid() -> Result<Principal, Error> {
     let root_id = CANISTER_STATE
         .with_borrow(CanisterState::get_root_pid)
-        .map_err(StateError::CanisterStateError)?;
+        .map_err(MemoryError::CanisterStateError)?;
 
     Ok(root_id)
 }
@@ -44,7 +44,7 @@ pub fn get_root_pid() -> Result<Principal, Error> {
 pub fn set_root_pid(pid: Principal) -> Result<(), Error> {
     CANISTER_STATE
         .with_borrow_mut(|state| state.set_root_pid(pid))
-        .map_err(StateError::CanisterStateError)?;
+        .map_err(MemoryError::CanisterStateError)?;
 
     Ok(())
 }
@@ -59,7 +59,7 @@ pub fn get_parent_pid() -> Option<Principal> {
 pub fn set_parent_pid(pid: Principal) -> Result<(), Error> {
     CANISTER_STATE
         .with_borrow_mut(|state| state.set_parent_pid(pid))
-        .map_err(StateError::CanisterStateError)?;
+        .map_err(MemoryError::CanisterStateError)?;
 
     Ok(())
 }

@@ -100,7 +100,7 @@ pub struct AppStateData {
 impl_storable_unbounded!(AppStateData);
 
 ///
-/// Command
+/// AppCommand
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Display, Eq, PartialEq, Serialize, Deserialize)]

@@ -28,11 +28,11 @@ pub fn get_info() -> Result<CanisterRegistryInfo, Error> {
 
 // create_canisters
 pub async fn create_canisters() -> Result<(), Error> {
-    pub use crate::interface::{request::canister_create, state::core::subnet_index};
+    pub use crate::interface::{memory::subnet::index, request::canister_create};
 
     // iterate canisters
     for (path, info) in get_info()? {
-        if info.def.auto_create && subnet_index::get_canister(&path).is_none() {
+        if info.def.auto_create && index::get_canister(&path).is_none() {
             canister_create(&path).await.unwrap();
         }
     }

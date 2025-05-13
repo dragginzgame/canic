@@ -93,7 +93,7 @@ pub struct Cycles {
 
 // request
 pub async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = crate::interface::state::core::canister_state::get_root_pid()?;
+    let root_pid = crate::interface::memory::canister::state::get_root_pid()?;
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
         .await
@@ -116,7 +116,7 @@ pub async fn canister_create(path: &str) -> Result<Principal, Error> {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
-                interface::state::core::child_index::insert_canister(new_pid, path);
+                interface::memory::canister::child_index::insert_canister(new_pid, path);
 
                 // cascade subnet_index after each new canister
                 if !canister.def.is_sharded {

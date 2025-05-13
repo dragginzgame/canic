@@ -7,8 +7,8 @@ use crate::{
 
 // app_state_cascade
 pub async fn app_state_cascade() -> Result<(), Error> {
-    let app_state = interface::state::core::app_state::get_data();
-    let child_index = interface::state::core::child_index::get_data();
+    let app_state = interface::memory::app::state::get_data();
+    let child_index = interface::memory::canister::child_index::get_data();
 
     // iterate child canisters
     for (pid, path) in child_index {
@@ -26,8 +26,8 @@ pub async fn app_state_cascade() -> Result<(), Error> {
 
 // subnet_index_cascade
 pub async fn subnet_index_cascade() -> Result<(), Error> {
-    let subnet_index = interface::state::core::subnet_index::get_data();
-    let child_index = interface::state::core::child_index::get_data();
+    let subnet_index = interface::memory::subnet::index::get_data();
+    let child_index = interface::memory::canister::child_index::get_data();
 
     // iterate child canisters
     for (pid, path) in child_index {

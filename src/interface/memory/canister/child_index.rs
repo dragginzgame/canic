@@ -1,8 +1,8 @@
 use crate::{
     Error,
-    state::{
-        StateError,
-        core::{CHILD_INDEX, ChildIndex, ChildIndexData},
+    memory::{
+        CHILD_INDEX, MemoryError,
+        canister::{ChildIndex, ChildIndexData},
     },
 };
 use candid::Principal;
@@ -23,7 +23,7 @@ pub fn get_canister(pid: &Principal) -> Option<String> {
 pub fn try_get_canister(pid: &Principal) -> Result<String, Error> {
     let path = CHILD_INDEX
         .with_borrow(|this| this.try_get_canister(pid))
-        .map_err(StateError::ChildIndexError)?;
+        .map_err(MemoryError::ChildIndexError)?;
 
     Ok(path)
 }

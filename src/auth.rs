@@ -125,7 +125,7 @@ pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
 // rule_canister_type
 // check caller against the id of a specific canister path
 fn rule_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
-    interface::state::core::subnet_index::try_get_canister(&canister)
+    interface::memory::subnet::index::try_get_canister(&canister)
         .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
 
     Ok(())
@@ -133,7 +133,7 @@ fn rule_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
 
 // rule_child
 fn rule_child(pid: Principal) -> Result<(), Error> {
-    interface::state::core::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
+    interface::memory::canister::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
 
     Ok(())
 }
@@ -149,7 +149,7 @@ fn rule_controller(pid: Principal) -> Result<(), Error> {
 
 // rule_root
 fn rule_root(pid: Principal) -> Result<(), Error> {
-    let root_pid = interface::state::core::canister_state::get_root_pid()?;
+    let root_pid = interface::memory::canister::state::get_root_pid()?;
 
     if pid == root_pid {
         Ok(())
@@ -160,7 +160,7 @@ fn rule_root(pid: Principal) -> Result<(), Error> {
 
 // rule_parent
 fn rule_parent(pid: Principal) -> Result<(), Error> {
-    match interface::state::core::canister_state::get_parent_pid() {
+    match interface::memory::canister::state::get_parent_pid() {
         Some(parent_pid) if parent_pid == pid => Ok(()),
         _ => Err(AuthError::NotParent(pid))?,
     }

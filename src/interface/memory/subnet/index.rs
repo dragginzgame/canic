@@ -1,8 +1,8 @@
 use crate::{
     Error,
-    state::{
-        StateError,
-        core::{SUBNET_INDEX, SubnetIndex, SubnetIndexData},
+    memory::{
+        MemoryError, SUBNET_INDEX,
+        subnet::{SubnetIndex, SubnetIndexData},
     },
 };
 use candid::Principal;
@@ -22,7 +22,7 @@ pub fn set_data(data: SubnetIndexData) {
 pub fn try_get_canister(name: &str) -> Result<Principal, Error> {
     let canister_pid = SUBNET_INDEX
         .with_borrow(|this| this.try_get_canister(name))
-        .map_err(StateError::SubnetIndexError)?;
+        .map_err(MemoryError::SubnetIndexError)?;
 
     Ok(canister_pid)
 }

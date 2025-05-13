@@ -1,5 +1,6 @@
 pub mod cascade;
 pub mod ic;
+pub mod memory;
 pub mod request;
 pub mod response;
 pub mod state;

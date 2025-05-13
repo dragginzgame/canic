@@ -46,6 +46,9 @@ pub enum Error {
     InterfaceError(#[from] interface::InterfaceError),
 
     #[error(transparent)]
+    MemoryError(#[from] memory::MemoryError),
+
+    #[error(transparent)]
     StateError(#[from] state::StateError),
 }
 

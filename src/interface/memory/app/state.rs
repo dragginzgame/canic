@@ -1,12 +1,15 @@
-use crate::{Error, state::StateError};
+use crate::{Error, memory::MemoryError};
 
-pub use crate::state::core::{APP_STATE, AppCommand, AppMode, AppState, AppStateData};
+pub use crate::memory::{
+    APP_STATE,
+    app::{AppCommand, AppMode, AppState, AppStateData},
+};
 
 // command
 pub fn command(cmd: AppCommand) -> Result<(), Error> {
     APP_STATE
         .with_borrow_mut(|this| this.command(cmd))
-        .map_err(StateError::AppStateError)?;
+        .map_err(MemoryError::AppStateError)?;
 
     Ok(())
 }
@@ -21,7 +24,7 @@ pub fn get_data() -> AppStateData {
 pub fn set_data(data: AppStateData) -> Result<(), Error> {
     APP_STATE
         .with_borrow_mut(|this| this.set_data(data))
-        .map_err(StateError::AppStateError)?;
+        .map_err(MemoryError::AppStateError)?;
 
     Ok(())
 }
