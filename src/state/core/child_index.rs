@@ -1,11 +1,7 @@
-use crate::{
-    ic::structures::{BTreeMap, DefaultMemory, memory::MemoryId},
-    state::{CHILD_INDEX_MEMORY_ID, MEMORY_MANAGER},
-};
+use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -16,16 +12,6 @@ use thiserror::Error as ThisError;
 pub enum ChildIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(Principal),
-}
-
-//
-// CHILD_INDEX
-//
-
-thread_local! {
-    pub static CHILD_INDEX: RefCell<ChildIndex> = RefCell::new(ChildIndex::init(
-        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(CHILD_INDEX_MEMORY_ID))),
-    ));
 }
 
 ///

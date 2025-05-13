@@ -1,9 +1,11 @@
 pub mod auth;
+pub mod config;
 pub mod guard;
 pub mod helper;
 pub mod ic;
 pub mod interface;
 pub mod macros;
+pub mod memory;
 pub mod serialize;
 pub mod state;
 
@@ -36,6 +38,9 @@ pub mod prelude {
 pub enum Error {
     #[error(transparent)]
     AuthError(#[from] auth::AuthError),
+
+    #[error(transparent)]
+    ConfigError(#[from] config::ConfigError),
 
     #[error(transparent)]
     InterfaceError(#[from] interface::InterfaceError),

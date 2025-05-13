@@ -1,34 +1,16 @@
 pub mod auth;
-pub mod config;
 pub mod core;
 pub mod root;
 pub mod sharder;
 
-use crate::icu_memory_manager;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 pub use {
-    config::ConfigError,
-    core::{
-        app_state::AppStateError, canister_state::CanisterStateError, child_index::ChildIndexError,
-        subnet_index::SubnetIndexError,
-    },
+    core::{AppStateError, CanisterStateError, ChildIndexError, SubnetIndexError},
     root::canister_registry::CanisterRegistryError,
 };
-
-//
-// MEMORY_MANAGER
-//
-
-icu_memory_manager!();
-
-// global memory ids are hardcoded in one place
-const APP_STATE_MEMORY_ID: u8 = 1;
-const SUBNET_INDEX_MEMORY_ID: u8 = 2;
-const CANISTER_STATE_MEMORY_ID: u8 = 3;
-const CHILD_INDEX_MEMORY_ID: u8 = 4;
 
 ///
 /// StateError
@@ -36,10 +18,6 @@ const CHILD_INDEX_MEMORY_ID: u8 = 4;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum StateError {
-    // all
-    #[error(transparent)]
-    ConfigError(#[from] ConfigError),
-
     // core
     #[error(transparent)]
     AppStateError(#[from] AppStateError),

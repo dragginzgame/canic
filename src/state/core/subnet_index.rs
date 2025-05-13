@@ -1,11 +1,7 @@
-use crate::{
-    ic::structures::{BTreeMap, DefaultMemory, memory::MemoryId},
-    state::{MEMORY_MANAGER, SUBNET_INDEX_MEMORY_ID},
-};
+use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -21,12 +17,6 @@ pub enum SubnetIndexError {
 //
 // SUBNET_INDEX
 //
-
-thread_local! {
-    pub static SUBNET_INDEX: RefCell<SubnetIndex> = RefCell::new(SubnetIndex::init(
-        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(SUBNET_INDEX_MEMORY_ID))),
-    ));
-}
 
 ///
 /// SubnetIndex

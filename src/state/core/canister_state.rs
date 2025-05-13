@@ -1,12 +1,10 @@
 use crate::{
-    ic::structures::{Cell, DefaultMemory, cell::CellError, memory::MemoryId},
+    ic::structures::{Cell, DefaultMemory, cell::CellError},
     impl_storable_unbounded,
-    state::{CANISTER_STATE_MEMORY_ID, MEMORY_MANAGER},
 };
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 ///
@@ -23,16 +21,6 @@ pub enum CanisterStateError {
 
     #[error(transparent)]
     CellError(#[from] CellError),
-}
-
-//
-// CANISTER_STATE
-//
-
-thread_local! {
-    pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(CanisterState::init(
-        MEMORY_MANAGER.with_borrow(|this| this.get(MemoryId::new(CANISTER_STATE_MEMORY_ID))),
-    ));
 }
 
 ///

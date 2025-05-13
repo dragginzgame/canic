@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.1.2]
 - changed the WasmManager to a CanisterRegistry
+- added a MemoryCounter to handle allocation of memory_ids
 
 ## [0.1.1]
 - moved loads of IC/canister-specific, and shared code from Dragginz into icu
