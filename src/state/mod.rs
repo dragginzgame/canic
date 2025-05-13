@@ -36,7 +36,7 @@ const CHILD_INDEX_MEMORY_ID: u8 = 4;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum StateError {
-    // shared
+    // all
     #[error(transparent)]
     ConfigError(#[from] ConfigError),
 
