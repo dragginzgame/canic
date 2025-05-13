@@ -138,7 +138,7 @@ macro_rules! icu_endpoints {
         // icu_subnet_index
         #[::icu::ic::query]
         fn icu_subnet_index() -> ::icu::memory::subnet::SubnetIndexData {
-            ::icu::interface::memory::subnet::subnet_index::get_data()
+            ::icu::interface::memory::subnet::index::get_data()
         }
 
         // icu_canister_registry
