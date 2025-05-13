@@ -32,7 +32,7 @@ macro_rules! icu_endpoints {
         // icu_canister_upgrade_children
         // canister_id : None means upgrade all children
         // @todo - removed guard
-        #[::icu::ic::update(guard)]
+        #[::icu::ic::update]
         async fn icu_canister_upgrade_children(
             canister_id: Option<::candid::Principal>,
         ) -> Result<(), ::icu::Error> {
