@@ -34,13 +34,9 @@ macro_rules! icu_memory_manager {
 macro_rules! icu_memory_add {
     ($name:ident, $state:ty) => {
         thread_local! {
-            let next_memory_id = MEMORY_COUNTER.with_borrow(|this| this.next_memory_id());
-
-            pub static $name: ::std::cell::RefCell<$state> = ::std::cell::RefCell::new(<$state>::init(
-                MEMORY_MANAGER.with_borrow(|this| {
-                    this.get(::icu::ic::structures::memory::MemoryId::new($memory_id))
-                }),
-            ));
+            pub static $name: ::std::cell::RefCell<$state> = ::std::cell::RefCell::new(
+                ::icu::memory::allocate_state($state)
+            );
         }
     };
 }
