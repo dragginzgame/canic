@@ -1,6 +1,6 @@
 // memory_manager
 #[macro_export]
-macro_rules! memory_manager {
+macro_rules! icu_memory_manager {
     () => {
         thread_local! {
 
@@ -21,7 +21,7 @@ macro_rules! memory_manager {
 
 // state_init
 #[macro_export]
-macro_rules! state_init {
+macro_rules! icu_memory_init {
     ($name:ident, $state:ty, $memory_id:expr) => {
         const _: () = {
             if !($memory_id >= 10 && $memory_id <= 19) {

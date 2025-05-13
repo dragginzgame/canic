@@ -1,6 +1,6 @@
 pub mod endpoints;
+pub mod memory;
 pub mod start;
-pub mod state;
 
 // log
 #[macro_export]

@@ -4,7 +4,7 @@ pub mod core;
 pub mod root;
 pub mod sharder;
 
-use crate::memory_manager;
+use crate::icu_memory_manager;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
@@ -22,7 +22,7 @@ pub use {
 // MEMORY_MANAGER
 //
 
-memory_manager!();
+icu_memory_manager!();
 
 // global memory ids are hardcoded in one place
 const APP_STATE_MEMORY_ID: u8 = 1;
