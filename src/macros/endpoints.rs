@@ -6,10 +6,8 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
-        async fn icu_app(
-            cmd: ::icu::state::core::app_state::AppCommand,
-        ) -> Result<(), ::icu::Error> {
-            ::icu::interface::state::core::app_state::command(cmd)?;
+        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+            ::icu::interface::memory::app::state::command(cmd)?;
             ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
@@ -40,7 +38,7 @@ macro_rules! icu_endpoints {
             //           allow_any(vec![Auth::Controller]).await?;
 
             // send a request for each matching canister
-            for (child_pid, path) in ::icu::interface::state::core::child_index::get_data() {
+            for (child_pid, path) in ::icu::interface::memory::canister::child_index::get_data() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
                     let req =
                         ::icu::interface::request::Request::new_canister_upgrade(child_pid, &path);
@@ -57,12 +55,12 @@ macro_rules! icu_endpoints {
         // icu_app_state_cascade
         #[::icu::ic::update]
         async fn icu_app_state_cascade(
-            data: ::icu::state::core::AppStateData,
+            data: ::icu::memory::app::AppStateData,
         ) -> Result<(), ::icu::Error> {
             //    allow_any(vec![Auth::Parent]).await?;
 
             // set state and cascade
-            ::icu::interface::state::core::app_state::set_data(data)?;
+            ::icu::interface::memory::app::state::set_data(data)?;
             ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
@@ -71,12 +69,12 @@ macro_rules! icu_endpoints {
         // icu_subnet_index_cascade
         #[::icu::ic::update]
         async fn icu_subnet_index_cascade(
-            data: ::icu::state::core::SubnetIndexData,
+            data: ::icu::memory::subnet::SubnetIndexData,
         ) -> Result<(), ::icu::Error> {
             //       allow_any(vec![Auth::Parent]).await?;
 
             // set index and cascade
-            ::icu::interface::state::core::subnet_index::set_data(data);
+            ::icu::interface::memory::subnet::index::set_data(data);
             ::icu::interface::cascade::subnet_index_cascade().await?;
 
             Ok(())
@@ -121,26 +119,26 @@ macro_rules! icu_endpoints {
 
         // icu_app_state
         #[::icu::ic::query]
-        fn icu_app_state() -> ::icu::state::core::AppStateData {
-            ::icu::interface::state::core::app_state::get_data()
+        fn icu_app_state() -> ::icu::memory::app::AppStateData {
+            ::icu::interface::memory::app::state::get_data()
         }
 
         // icu_canister_state
         #[::icu::ic::query]
-        fn icu_canister_state() -> ::icu::state::core::CanisterStateData {
-            ::icu::interface::state::core::canister_state::get_data()
+        fn icu_canister_state() -> ::icu::memory::canister::CanisterStateData {
+            ::icu::interface::memory::canister::state::get_data()
         }
 
         // icu_child_index
         #[::icu::ic::query]
-        fn icu_child_index() -> ::icu::state::core::ChildIndexData {
-            ::icu::interface::state::core::child_index::get_data()
+        fn icu_child_index() -> ::icu::memory::canister::ChildIndexData {
+            ::icu::interface::memory::canister::child_index::get_data()
         }
 
         // icu_subnet_index
         #[::icu::ic::query]
-        fn icu_subnet_index() -> ::icu::state::core::SubnetIndexData {
-            ::icu::interface::state::core::subnet_index::get_data()
+        fn icu_subnet_index() -> ::icu::memory::subnet::SubnetIndexData {
+            ::icu::interface::memory::subnet::subnet_index::get_data()
         }
 
         // icu_canister_registry
