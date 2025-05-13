@@ -24,7 +24,7 @@ pub mod prelude {
     pub use crate::{
         Log,
         ic::{api::msg_caller, export_candid, init, query, update},
-        icu_start, icu_start_root, log, perf,
+        icu_memory_add, icu_memory_manager, icu_start, icu_start_root, log, perf,
     };
 }
 
