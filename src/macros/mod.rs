@@ -8,12 +8,12 @@ macro_rules! log {
     // Match when only the format string is provided (no additional args)
     ($level:expr, $fmt:expr) => {{
         // Pass an empty set of arguments to @inner
-        log!(@inner $level, $fmt,);
+        $crate::log!(@inner $level, $fmt,);
     }};
 
     // Match when additional arguments are provided
     ($level:expr, $fmt:expr, $($arg:tt)*) => {{
-        log!(@inner $level, $fmt, $($arg)*);
+        $crate::log!(@inner $level, $fmt, $($arg)*);
     }};
 
     // Inner macro for actual logging logic to avoid code duplication
