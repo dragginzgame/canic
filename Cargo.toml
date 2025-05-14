@@ -9,6 +9,7 @@ readme = "README.md"
 candid = "0.10.13"
 ic-cdk = "0.18.0-alpha.2"
 ic-stable-structures = "0.6.8"
+icrc-ledger-types = "0.1.8"
 
 # third party
 ciborium = "0.2"
