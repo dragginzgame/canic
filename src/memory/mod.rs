@@ -1,14 +1,17 @@
 pub mod app;
 pub mod canister;
-pub mod counter;
+pub mod registry;
 pub mod subnet;
 
-pub use counter::MemoryCounter;
+pub use registry::{Registry, RegistryError};
 
 use crate::{
-    Log,
-    ic::structures::{DefaultMemory, memory::MemoryId},
-    icu_memory_manager, log,
+    MEMORY_REGISTRY_ID,
+    ic::structures::{
+        DefaultMemoryImpl,
+        memory::{MemoryId, MemoryManager},
+    },
+    icu_register_memory,
     memory::{
         app::{AppMode, AppState, AppStateError},
         canister::{CanisterState, CanisterStateError, ChildIndex, ChildIndexError},
@@ -24,24 +27,41 @@ use thiserror::Error as ThisError;
 // MEMORY_MANAGER
 //
 
-icu_memory_manager!();
-
 thread_local! {
+    ///
+    /// Define MEMORY_MANAGER thread-locally for the entire scope
+    ///
+    pub static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
+        RefCell::new(MemoryManager::init(
+            DefaultMemoryImpl::default()
+        ));
+
+    ///
+    /// MEMORY_REGISTRY
+    ///
+    pub static MEMORY_REGISTRY: RefCell<Registry> =
+        RefCell::new(<Registry>::init(
+            MEMORY_MANAGER.with_borrow(|this| {
+                    this.get(MemoryId::new(MEMORY_REGISTRY_ID))
+                }
+            ),
+        ));
+
 
     pub static APP_STATE: RefCell<AppState> = RefCell::new(
-        allocate_state(|mem| AppState::init(mem, AppMode::Enabled))
+        icu_register_memory!(AppState, 1, |mem| AppState::init(mem, AppMode::Enabled))
     );
 
     pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(
-        allocate_state(CanisterState::init)
+        icu_register_memory!(CanisterState, 2, CanisterState::init)
     );
 
     pub static CHILD_INDEX: RefCell<ChildIndex> = RefCell::new(
-        allocate_state(ChildIndex::init)
+        icu_register_memory!(ChildIndex, 3, ChildIndex::init)
     );
 
     pub static SUBNET_INDEX: RefCell<SubnetIndex> = RefCell::new(
-        allocate_state(SubnetIndex::init)
+        icu_register_memory!(SubnetIndex, 4, SubnetIndex::init)
     );
 
 }
@@ -52,6 +72,11 @@ thread_local! {
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum MemoryError {
+    // registry
+    #[error(transparent)]
+    RegistryError(#[from] RegistryError),
+
+    // others
     #[error(transparent)]
     AppStateError(#[from] AppStateError),
 
@@ -63,17 +88,4 @@ pub enum MemoryError {
 
     #[error(transparent)]
     SubnetIndexError(#[from] SubnetIndexError),
-}
-
-// allocate_state
-pub fn allocate_state<T>(init_fn: impl FnOnce(DefaultMemory) -> T) -> T {
-    let memory_id = MEMORY_COUNTER
-        .with_borrow_mut(|this| this.next_memory_id())
-        .unwrap();
-
-    let memory = MEMORY_MANAGER.with_borrow(|mgr| mgr.get(MemoryId::new(memory_id)));
-
-    log!(Log::Info, "allocating memory {memory_id}");
-
-    init_fn(memory)
 }

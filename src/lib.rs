@@ -26,7 +26,7 @@ pub mod prelude {
     pub use crate::{
         Log,
         ic::{api::msg_caller, export_candid, init, query, update},
-        icu_memory_add, icu_memory_manager, icu_start, icu_start_root, log, perf,
+        icu_register_memory, icu_start, icu_start_root, log, perf,
     };
 }
 
@@ -51,6 +51,12 @@ pub enum Error {
     #[error(transparent)]
     StateError(#[from] state::StateError),
 }
+
+///
+/// MemoryIds
+///
+
+pub const MEMORY_REGISTRY_ID: u8 = 0;
 
 ///
 /// Log

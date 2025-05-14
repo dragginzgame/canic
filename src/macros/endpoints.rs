@@ -118,6 +118,12 @@ macro_rules! icu_endpoints {
         // ICU STATE ENDPOINTS
         //
 
+        // icu_memory_registry
+        #[::icu::ic::query]
+        fn icu_memory_registry() -> ::icu::memory::registry::RegistryData {
+            ::icu::interface::memory::registry::get_data()
+        }
+
         // icu_app_state
         #[::icu::ic::query]
         fn icu_app_state() -> ::icu::memory::app::AppStateData {
