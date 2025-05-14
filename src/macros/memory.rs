@@ -13,6 +13,7 @@ macro_rules! icu_register_memory {
         let mem = $crate::memory::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::ic::structures::memory::MemoryId::new($id)));
 
+        // log
         $crate::log!(
             $crate::Log::Info,
             "icu_register_memory {} {}",
