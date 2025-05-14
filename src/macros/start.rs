@@ -6,6 +6,8 @@ macro_rules! icu_start {
         fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
             use ::icu::interface::memory::canister::state;
 
+            ::icu::memory::init();
+
             state::set_root_pid(root_pid).unwrap();
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
@@ -31,6 +33,8 @@ macro_rules! icu_start_root {
         #[::icu::ic::init]
         fn init() {
             use ::icu::interface::memory::canister::state;
+
+            ::icu::memory::init();
 
             state::set_root_pid(::icu::ic::api::canister_self()).unwrap();
             state::set_path($canister_path).unwrap();

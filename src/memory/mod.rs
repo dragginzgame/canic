@@ -23,6 +23,13 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
+pub fn init() {
+    APP_STATE.with(|_| {});
+    CANISTER_STATE.with(|_| {});
+    CHILD_INDEX.with(|_| {});
+    SUBNET_INDEX.with(|_| {});
+}
+
 //
 // MEMORY_MANAGER
 //
@@ -48,7 +55,7 @@ thread_local! {
         ));
 
     pub static APP_STATE: RefCell<AppState> = RefCell::new(
-        icu_register_memory!(AppState, 1,  AppState::init)
+        icu_register_memory!(AppState, 1, AppState::init)
     );
 
     pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(
