@@ -31,8 +31,8 @@ pub struct AppState(Cell<AppStateData>);
 impl AppState {
     // init
     #[must_use]
-    pub fn init(memory: DefaultMemory, mode: AppMode) -> Self {
-        let cell = Cell::init(memory, AppStateData { mode }).unwrap();
+    pub fn init(memory: DefaultMemory) -> Self {
+        let cell = Cell::init(memory, AppStateData::default()).unwrap();
 
         Self(cell)
     }
@@ -92,7 +92,7 @@ impl AppState {
 /// AppStateData
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct AppStateData {
     mode: AppMode,
 }
@@ -116,9 +116,12 @@ pub enum AppCommand {
 /// Eventually we'll have more granularity overall
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Display, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    CandidType, Clone, Copy, Debug, Default, Display, Eq, PartialEq, Serialize, Deserialize,
+)]
 pub enum AppMode {
     Enabled,
     Readonly,
+    #[default]
     Disabled,
 }

@@ -13,7 +13,7 @@ use crate::{
     },
     icu_register_memory,
     memory::{
-        app::{AppMode, AppState, AppStateError},
+        app::{AppState, AppStateError},
         canister::{CanisterState, CanisterStateError, ChildIndex, ChildIndexError},
         subnet::{SubnetIndex, SubnetIndexError},
     },
@@ -47,9 +47,8 @@ thread_local! {
             ),
         ));
 
-
     pub static APP_STATE: RefCell<AppState> = RefCell::new(
-        icu_register_memory!(AppState, 1, |mem| AppState::init(mem, AppMode::Enabled))
+        icu_register_memory!(AppState, 1,  AppState::init)
     );
 
     pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(
