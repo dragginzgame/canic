@@ -123,6 +123,12 @@ macro_rules! icu_endpoints {
         fn icu_memory_registry() -> ::icu::memory::registry::RegistryData {
             ::icu::interface::memory::registry::get_data()
         }
+        
+        // icu_memory_next_id
+        #[::icu::ic::query]
+        fn icu_memory_next_id() -> u8 {
+            ::icu::interface::memory::registry::next_available_id()
+        }
 
         // icu_app_state
         #[::icu::ic::query]
