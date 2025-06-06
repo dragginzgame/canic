@@ -16,7 +16,7 @@ pub fn get_data() -> CanisterStateData {
 // get_path
 pub fn get_path() -> Result<(), Error> {
     CANISTER_STATE
-        .with_borrow(|state| state.get_path())
+        .with_borrow(CanisterState::get_path)
         .map_err(MemoryError::CanisterStateError)?;
 
     Ok(())

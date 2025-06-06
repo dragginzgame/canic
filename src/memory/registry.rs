@@ -160,7 +160,7 @@ mod tests {
                     assert_eq!(old, "crate::Foo");
                     assert_eq!(new, "crate::Bar");
                 }
-                other => panic!("Unexpected result: {:?}", other),
+                other => panic!("Unexpected result: {other:?}"),
             }
         });
     }

@@ -68,7 +68,7 @@ pub enum Auth {
 }
 
 impl Auth {
-    pub async fn result(self, pid: Principal) -> Result<(), Error> {
+    pub fn result(self, pid: Principal) -> Result<(), Error> {
         match self {
             Self::CanisterType(canister) => rule_canister_type(pid, canister),
             Self::Child => rule_child(pid),
@@ -94,7 +94,7 @@ pub enum AccessPolicy {
 }
 
 // allow_any
-pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
+pub fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
     // only works for caller now
     let caller = msg_caller();
 
@@ -106,7 +106,7 @@ pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
     // check rules
     let mut last_error = None;
     for rule in rules {
-        match rule.result(caller).await {
+        match rule.result(caller) {
             Ok(()) => return Ok(()),
             Err(e) => last_error = Some(e),
         }
@@ -163,47 +163,8 @@ fn rule_parent(pid: Principal) -> Result<(), AuthError> {
     }
 }
 
-// rule_permission
-// will find the user canister from the schema
-/*
-pub async fn rule_permission(pid: Principal, permission: Permission) -> Result<(), AuthError> {
-    let user_canister_pid = SUBNET_INDEX.with_borrow(|this| this.try_get_canister("user")?);
-
-    Call::unbounded_wait(user_canister_pid, "guard_permission")
-        .with_args(&(pid, permission))
-        .await
-        .map_err(|_| AuthError::NotPermitted(permission))?;
-
-    Ok(())
-}
-
-// rule_policy
-// only from non-PlayerHub canisters
-async fn rule_policy(pid: Principal, policy: AccessPolicy) -> Result<(), AuthError> {
-    match policy {
-        AccessPolicy::Allow => Ok(()),
-        AccessPolicy::Deny => Err(AuthError::NotAllowed)?,
-        AccessPolicy::Permission(permission) => rule_permission(pid, permission).await,
-    }
-}
-
-// roles_have_permission
-fn roles_have_permission(
-    roles: &[Role],
-    permission: &Permission,
-) -> Result<(), InterfaceError> {
-    if roles.iter().any(|role| role.has_permission(permission)) {
-        Ok(())
-    } else {
-        Err(InterfaceError::AuthError(AuthError::NotPermitted(
-            *permission,
-        )))
-    }
-}
-    */
-
 // rule_same_subnet
-pub fn rule_same_subnet(id: Principal) -> Result<(), AuthError> {
+pub const fn rule_same_subnet(id: Principal) -> Result<(), AuthError> {
     Err(AuthError::NotThisSubnet(id))
 }
 
