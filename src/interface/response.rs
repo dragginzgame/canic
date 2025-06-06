@@ -42,6 +42,7 @@ async fn create_canister(path: &str) -> Result<Response, Error> {
     // update subnet index
     if !canister.def.is_sharded {
         interface::memory::subnet::index::set_canister(path, new_canister_id);
+        interface::cascade::subnet_index_cascade().await?;
     }
 
     Ok(Response::CanisterCreate(new_canister_id))

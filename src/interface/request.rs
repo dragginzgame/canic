@@ -1,9 +1,7 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{
-        self, InterfaceError, ic::IcError, response::Response, state::root::canister_registry,
-    },
+    interface::{self, InterfaceError, ic::IcError, response::Response},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -110,18 +108,12 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 // create a Request and pass it to the request shared endpoint
 pub async fn canister_create(path: &str) -> Result<Principal, Error> {
     let req = Request::new_canister_create(path);
-    let canister = canister_registry::get_canister(path)?;
 
     match request(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_pid) => {
                 // success, update child index
                 interface::memory::canister::child_index::insert_canister(new_pid, path);
-
-                // cascade subnet_index after each new canister
-                if !canister.def.is_sharded {
-                    crate::interface::cascade::subnet_index_cascade().await?;
-                }
 
                 Ok(new_pid)
             }
