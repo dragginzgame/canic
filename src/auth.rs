@@ -1,5 +1,3 @@
-pub use crate::state::auth::{Permission, Role};
-
 use crate::{
     Error,
     ic::api::{canister_self, is_controller, msg_caller},
@@ -15,6 +13,9 @@ use thiserror::Error as ThisError;
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum AuthError {
+    #[error("the root canister is not defined")]
+    NoRootDefined,
+
     #[error("one or more rules must be defined")]
     NoRulesDefined,
 
@@ -27,23 +28,20 @@ pub enum AuthError {
     #[error("principal '{0}' does not match canister type '{1}'")]
     NotCanisterType(Principal, String),
 
-    #[error("principal '{0}' is not a child of this canister'")]
+    #[error("principal '{0}' is not a child of this canister")]
     NotChild(Principal),
 
-    #[error("principal '{0}' is not a controller of this canister'")]
+    #[error("principal '{0}' is not a controller of this canister")]
     NotController(Principal),
 
-    #[error("principal '{0}' is not the parent of this canister'")]
+    #[error("principal '{0}' is not the parent of this canister")]
     NotParent(Principal),
-
-    #[error("permission '{0}' is required")]
-    NotPermitted(Permission),
 
     #[error("principal '{0}' is not root")]
     NotRoot(Principal),
 
-    #[error("principal '{0}' is not from this subnet")]
-    NotSubnet(Principal),
+    #[error("principal '{0}' is not from this subnet (DOESNT WORK YET)")]
+    NotThisSubnet(Principal),
 
     #[error("principal '{0}' is not the current canister")]
     NotThis(Principal),
@@ -76,12 +74,11 @@ impl Auth {
             Self::Child => rule_child(pid),
             Self::Controller => rule_controller(pid),
             Self::Parent => rule_parent(pid),
-            //       Self::Permission(permission) => rule_permission(pid, permission).await,
-            // Self::Policy(policy) => rule_policy(pid, policy).await,
             Self::Root => rule_root(pid),
-            Self::SameSubnet => rule_same_subnet(pid).await,
+            Self::SameSubnet => rule_same_subnet(pid),
             Self::SameCanister => rule_same_canister(pid),
         }
+        .map_err(Error::from)
     }
 }
 
@@ -93,7 +90,7 @@ impl Auth {
 pub enum AccessPolicy {
     Allow,
     Deny,
-    Permission(Permission),
+    //  Custom - WIP
 }
 
 // allow_any
@@ -124,7 +121,7 @@ pub async fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
 
 // rule_canister_type
 // check caller against the id of a specific canister path
-fn rule_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
+fn rule_canister_type(pid: Principal, canister: String) -> Result<(), AuthError> {
     interface::memory::subnet::index::try_get_canister(&canister)
         .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
 
@@ -132,37 +129,37 @@ fn rule_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
 }
 
 // rule_child
-fn rule_child(pid: Principal) -> Result<(), Error> {
+fn rule_child(pid: Principal) -> Result<(), AuthError> {
     interface::memory::canister::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
 
     Ok(())
 }
 
 // rule_controller
-fn rule_controller(pid: Principal) -> Result<(), Error> {
+fn rule_controller(pid: Principal) -> Result<(), AuthError> {
     if is_controller(&pid) {
         Ok(())
     } else {
-        Err(AuthError::NotController(pid))?
+        Err(AuthError::NotController(pid))
     }
 }
 
 // rule_root
-fn rule_root(pid: Principal) -> Result<(), Error> {
-    let root_pid = interface::memory::canister::state::get_root_pid()?;
+fn rule_root(pid: Principal) -> Result<(), AuthError> {
+    let root_pid =
+        interface::memory::canister::state::get_root_pid().map_err(|_| AuthError::NoRootDefined)?;
 
     if pid == root_pid {
         Ok(())
     } else {
-        Err(AuthError::NotRoot(pid))?
+        Err(AuthError::NotRoot(pid))
     }
 }
-
 // rule_parent
-fn rule_parent(pid: Principal) -> Result<(), Error> {
+fn rule_parent(pid: Principal) -> Result<(), AuthError> {
     match interface::memory::canister::state::get_parent_pid() {
         Some(parent_pid) if parent_pid == pid => Ok(()),
-        _ => Err(AuthError::NotParent(pid))?,
+        _ => Err(AuthError::NotParent(pid)),
     }
 }
 
@@ -206,18 +203,15 @@ fn roles_have_permission(
     */
 
 // rule_same_subnet
-#[expect(clippy::unused_async)]
-pub async fn rule_same_subnet(_id: Principal) -> Result<(), Error> {
-    // @todo - we need gabriel code here
-
-    Ok(())
+pub fn rule_same_subnet(id: Principal) -> Result<(), AuthError> {
+    Err(AuthError::NotThisSubnet(id))
 }
 
 // rule_same_canister
-fn rule_same_canister(pid: Principal) -> Result<(), Error> {
+fn rule_same_canister(pid: Principal) -> Result<(), AuthError> {
     if pid == canister_self() {
         Ok(())
     } else {
-        Err(AuthError::NotThis(pid))?
+        Err(AuthError::NotThis(pid))
     }
 }
