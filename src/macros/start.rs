@@ -1,17 +1,10 @@
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
-    (
-        $canister_path:path
-        $(, args = ( $($aname:ident : $aty:ty),* $(,)? ) )?
-        $(,)?
-    ) => {
+    // Shared macro body: takes arg list and init call
+    (@body $canister_path:path, [$($param:tt)*], $init_call:expr) => {
         #[::icu::ic::init]
-        fn init(
-            root_pid: ::candid::Principal,
-            parent_pid: ::candid::Principal
-            $(, $($aname : $aty)*)?
-        ) {
+        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal $($param)*) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::memory::init();
@@ -22,12 +15,7 @@ macro_rules! icu_start {
 
             log!(Log::Info, "init: {}", $canister_path);
 
-            // Call _init() either with args or nothing
-            #[allow(clippy::needless_return)]
-            return {
-                $( _init($($aname),*); )?
-                $( _init(); )?
-            };
+            $init_call
         }
 
         #[::icu::ic::update]
@@ -36,6 +24,23 @@ macro_rules! icu_start {
         }
 
         ::icu::icu_endpoints!();
+    };
+
+    // with arguments
+    (
+        $canister_path:path,
+        args = ( $($aname:ident : $aty:ty),* $(,)? )
+        $(,)?
+    ) => {
+        $crate::icu_start!(@body $canister_path, [, $($aname : $aty),*], _init($($aname),*););
+    };
+
+    // without arguments
+    (
+        $canister_path:path
+        $(,)?
+    ) => {
+        $crate::icu_start!(@body $canister_path, [], _init(););
     };
 }
 
