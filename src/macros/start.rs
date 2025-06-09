@@ -3,8 +3,8 @@
 macro_rules! icu_start {
     // Required: canister path; Optional: parameter list and _init args
     (
-        $canister_path:path
-        $(, args = ( $($aname:ident : $aty:ty),* $(,)? ) )?
+        $canister_path:path,
+        args = ( $($aname:ident : $aty:ty),* $(,)? )
         $(,)?
     ) => {
         #[::icu::ic::init]
