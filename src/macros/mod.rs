@@ -5,7 +5,6 @@ pub mod start;
 // log
 #[macro_export]
 macro_rules! log {
-    // Match when only the format string is provided (no additional args)
     ($level:expr, $fmt:expr) => {{
         // Pass an empty set of arguments to @inner
         $crate::log!(@inner $level, $fmt,);

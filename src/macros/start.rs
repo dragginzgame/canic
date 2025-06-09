@@ -1,9 +1,15 @@
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
-    ($canister_path:path) => {
+    // Required: canister path; Optional: parameter list and _init args
+    (
+        $canister_path:path
+        $(, args = ( $($pname:ident : $pty:ty),* $(,)? ) )?
+        $(, call = ( $($pval:expr),* $(,)? ) )?
+        $(,)?
+    ) => {
         #[::icu::ic::init]
-        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
+        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal $(, $($pname : $pty)*)?) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::memory::init();
@@ -14,7 +20,9 @@ macro_rules! icu_start {
 
             log!(Log::Info, "init: {}", $canister_path);
 
-            _init();
+            $(
+                _init($($pval),*);
+            )?
         }
 
         #[::icu::ic::update]

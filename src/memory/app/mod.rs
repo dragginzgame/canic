@@ -1,3 +1,3 @@
-pub mod state;
+mod state;
 
 pub use state::*;

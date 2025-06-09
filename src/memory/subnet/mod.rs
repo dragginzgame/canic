@@ -1,3 +1,3 @@
-pub mod index;
+mod index;
 
 pub use index::*;
