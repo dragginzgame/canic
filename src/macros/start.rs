@@ -1,22 +1,32 @@
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
+    // With extra args
     (
         $canister_path:path,
-        args = $arg_ty:ty
+        args = ( $($arg_name:ident : $arg_ty:ty),* $(,)? )
         $(,)?
     ) => {
         #[::icu::ic::init]
-        fn init(args: $arg_ty) {
-            use ::icu::interface::memory::canister::state;
+        fn init(
+            root_pid: ::candid::Principal,
+            parent_pid: ::candid::Principal,
+            $($arg_name : $arg_ty),*
+        ) {
+            use ::icu::{InitArgs, interface::memory::canister::state};
 
             ::icu::memory::init();
-
             ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
 
-            state::set_root_pid(args.root_pid).unwrap();
-            state::set_parent_pid(args.parent_pid).unwrap();
+            state::set_root_pid(root_pid).unwrap();
+            state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
+
+            let args = InitArgs {
+                root_pid,
+                parent_pid,
+                extra: ($($arg_name),*),
+            };
 
             _init(args);
         }
@@ -29,12 +39,41 @@ macro_rules! icu_start {
         ::icu::icu_endpoints!();
     };
 
-    // Default to no extra args (InitArgs<()>)
+    // No extra args
     (
         $canister_path:path
         $(,)?
     ) => {
-        $crate::icu_start!($canister_path, args = ::icu::InitArgs<()>);
+        #[::icu::ic::init]
+        fn init(
+            root_pid: ::candid::Principal,
+            parent_pid: ::candid::Principal,
+        ) {
+            use ::icu::interface::memory::canister::state;
+            use ::icu::InitArgs;
+
+            ::icu::memory::init();
+            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
+
+            state::set_root_pid(root_pid).unwrap();
+            state::set_parent_pid(parent_pid).unwrap();
+            state::set_path($canister_path).unwrap();
+
+            let args = InitArgs {
+                root_pid,
+                parent_pid,
+                extra: (),
+            };
+
+            _init(args);
+        }
+
+        #[::icu::ic::update]
+        async fn init_async() {
+            _init_async().await;
+        }
+
+        ::icu::icu_endpoints!();
     };
 }
 
