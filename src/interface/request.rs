@@ -27,6 +27,30 @@ pub enum Request {
     CanisterUpgrade(CanisterUpgrade),
 }
 
+impl Request {
+    pub fn new_canister_create<A>(path: &str, args: A) -> Result<Self, Error>
+    where
+        A: CandidType + Send + Sync,
+    {
+        let encoded_args = Encode!(&args)
+            .map_err(IcError::from)
+            .map_err(InterfaceError::from)?;
+
+        Ok(Self::CanisterCreate(CanisterCreate {
+            path: path.to_string(),
+            args: encoded_args,
+        }))
+    }
+
+    #[must_use]
+    pub fn new_canister_upgrade(pid: Principal, path: &str) -> Self {
+        Self::CanisterUpgrade(CanisterUpgrade {
+            pid,
+            path: path.to_string(),
+        })
+    }
+}
+
 ///
 /// CanisterCreate
 ///
@@ -81,14 +105,7 @@ pub async fn canister_create<A>(path: &str, args: A) -> Result<Principal, Error>
 where
     A: CandidType + Sync + Send,
 {
-    let encoded_args = Encode!(&args)
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
-
-    let req = Request::CanisterCreate(CanisterCreate {
-        path: path.to_string(),
-        args: encoded_args,
-    });
+    let req = Request::new_canister_create(path, args)?;
 
     match request(req).await {
         Ok(response) => match response {
@@ -108,11 +125,7 @@ where
 
 // canister_upgrade
 pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
-    let req = Request::CanisterUpgrade(CanisterUpgrade {
-        pid,
-        path: path.to_string(),
-    });
-
+    let req = Request::new_canister_upgrade(pid, path);
     let _res = request(req).await?;
 
     Ok(())
