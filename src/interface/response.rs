@@ -1,11 +1,7 @@
 use crate::{
     Error,
     ic::api::msg_caller,
-    interface::{
-        self,
-        request::{Request, RequestKind},
-        state::root::canister_registry,
-    },
+    interface::{self, request::Request, state::root::canister_registry},
 };
 use candid::{CandidType, Principal};
 use derive_more::Display;
@@ -24,20 +20,28 @@ pub enum Response {
 
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
-    match req.kind {
-        RequestKind::CanisterCreate(kind) => create_canister(&kind.path).await,
-        RequestKind::CanisterUpgrade(kind) => upgrade_canister(kind.pid, &kind.path).await,
+    match req {
+        Request::CanisterCreate(cc) => create_canister(&cc.path, cc.args).await,
+        Request::CanisterUpgrade(cu) => upgrade_canister(cu.pid, &cu.path).await,
     }
 }
 
 // create_canister
-async fn create_canister(path: &str) -> Result<Response, Error> {
+async fn create_canister<A>(path: &str, args: A) -> Result<Response, Error>
+where
+    A: CandidType + Send + Sync,
+{
     let canister = canister_registry::get_canister(path)?;
     let root_pid = interface::memory::canister::state::get_root_pid()?;
 
-    let new_canister_id =
-        crate::interface::ic::create_canister(path, canister.wasm, vec![root_pid], msg_caller())
-            .await?;
+    let new_canister_id = crate::interface::ic::create_canister(
+        path,
+        canister.wasm,
+        vec![root_pid],
+        msg_caller(),
+        args,
+    )
+    .await?;
 
     // update subnet index
     if !canister.def.is_sharded {

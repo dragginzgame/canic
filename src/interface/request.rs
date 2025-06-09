@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Principal};
+use candid::{CandidType, Encode, Principal};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -22,37 +22,7 @@ pub enum RequestError {
 ///
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct Request {
-    pub kind: RequestKind,
-}
-
-impl Request {
-    #[must_use]
-    pub fn new_canister_create(path: &str) -> Self {
-        Self {
-            kind: RequestKind::CanisterCreate(CanisterCreate {
-                path: path.to_string(),
-            }),
-        }
-    }
-
-    #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, path: &str) -> Self {
-        Self {
-            kind: RequestKind::CanisterUpgrade(CanisterUpgrade {
-                pid,
-                path: path.to_string(),
-            }),
-        }
-    }
-}
-
-///
-/// RequestKind
-///
-
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub enum RequestKind {
+pub enum Request {
     CanisterCreate(CanisterCreate),
     CanisterUpgrade(CanisterUpgrade),
 }
@@ -64,6 +34,7 @@ pub enum RequestKind {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
     pub path: String,
+    pub args: Vec<u8>,
 }
 
 ///
@@ -106,8 +77,18 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 
 // canister_create
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create(path: &str) -> Result<Principal, Error> {
-    let req = Request::new_canister_create(path);
+pub async fn canister_create<A>(path: &str, args: A) -> Result<Principal, Error>
+where
+    A: CandidType + Sync + Send,
+{
+    let encoded_args = Encode!(&args)
+        .map_err(IcError::from)
+        .map_err(InterfaceError::from)?;
+
+    let req = Request::CanisterCreate(CanisterCreate {
+        path: path.to_string(),
+        args: encoded_args,
+    });
 
     match request(req).await {
         Ok(response) => match response {
@@ -127,7 +108,11 @@ pub async fn canister_create(path: &str) -> Result<Principal, Error> {
 
 // canister_upgrade
 pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, path);
+    let req = Request::CanisterUpgrade(CanisterUpgrade {
+        pid,
+        path: path.to_string(),
+    });
+
     let _res = request(req).await?;
 
     Ok(())

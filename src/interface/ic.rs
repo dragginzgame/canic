@@ -11,7 +11,7 @@ use crate::{
     interface::InterfaceError,
     log,
 };
-use candid::{CandidType, Principal};
+use candid::{CandidType, Error as CandidError, Principal, encode_args};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -25,6 +25,9 @@ pub enum IcError {
     CallFailed(String),
 
     #[error("candid error: {0}")]
+    CandidError(String),
+
+    #[error("candid error: {0}")]
     CandidDecodeFailed(String),
 
     #[error("wasm hash matches")]
@@ -34,6 +37,12 @@ pub enum IcError {
 impl From<CallFailed> for IcError {
     fn from(error: CallFailed) -> Self {
         Self::CallFailed(error.to_string())
+    }
+}
+
+impl From<CandidError> for IcError {
+    fn from(error: CandidError) -> Self {
+        Self::CandidError(error.to_string())
     }
 }
 
@@ -102,12 +111,16 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
 /// create_canister
 ///
 
-pub async fn create_canister(
+pub async fn create_canister<A>(
     name: &str,
     bytes: &[u8],
     controllers: Vec<Principal>,
     parent_pid: Principal,
-) -> Result<Principal, Error> {
+    extra_args: A,
+) -> Result<Principal, Error>
+where
+    A: CandidType + Send + Sync,
+{
     //
     // create canister
     //
@@ -128,11 +141,15 @@ pub async fn create_canister(
     // install code
     //
 
+    let full_args = (canister_self(), parent_pid, extra_args);
+    let arg_blob = encode_args(full_args)
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
         wasm_module: WasmModule::from(bytes),
-        arg: ::candid::utils::encode_args((canister_self(), parent_pid)).expect("args encode"),
+        arg: arg_blob,
     };
     mgmt::install_code(&install_args)
         .await
