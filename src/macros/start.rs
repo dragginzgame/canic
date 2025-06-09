@@ -5,7 +5,6 @@ macro_rules! icu_start {
     (
         $canister_path:path
         $(, args = ( $($pname:ident : $pty:ty),* $(,)? ) )?
-        $(, call = ( $($pval:expr),* $(,)? ) )?
         $(,)?
     ) => {
         #[::icu::ic::init]
@@ -21,7 +20,7 @@ macro_rules! icu_start {
             log!(Log::Info, "init: {}", $canister_path);
 
             $(
-                _init($($pval),*);
+                _init($($pname),*);
             )?
         }
 
