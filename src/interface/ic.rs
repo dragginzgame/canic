@@ -145,6 +145,7 @@ where
     let arg_blob = encode_args((init_args,))
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
+    log!(Log::Warn, "arg blob is {arg_blob:?}");
 
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
