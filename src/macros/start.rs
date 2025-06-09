@@ -32,7 +32,7 @@ macro_rules! icu_start {
         args = ( $($aname:ident : $aty:ty),* $(,)? )
         $(,)?
     ) => {
-        $crate::icu_start!(@body $canister_path, [, $($aname : $aty),*], _init($($aname),*););
+        $crate::icu_start!(@body $canister_path, [, $($aname : $aty),*], _init($($aname),*));
     };
 
     // without arguments
@@ -40,7 +40,7 @@ macro_rules! icu_start {
         $canister_path:path
         $(,)?
     ) => {
-        $crate::icu_start!(@body $canister_path, [], _init(););
+        $crate::icu_start!(@body $canister_path, [], _init());
     };
 }
 
