@@ -14,7 +14,7 @@ pub mod export {
     pub use defer;
 }
 
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use derive_more::{Add, Sub};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
@@ -25,7 +25,7 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Log,
+        InitArgs, Log,
         ic::{api::msg_caller, export_candid, init, query, update},
         icu_register_memory, icu_start, icu_start_root, log, perf,
     };
@@ -51,6 +51,30 @@ pub enum Error {
 
     #[error(transparent)]
     StateError(#[from] state::StateError),
+}
+
+///
+/// InitArgs
+///
+
+#[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
+pub struct InitArgs<T: CandidType> {
+    pub root_pid: Principal,
+    pub parent_pid: Principal,
+    pub extra: T, // tuple of extra values
+}
+
+impl<T> InitArgs<T>
+where
+    T: CandidType,
+{
+    pub fn new(root_pid: Principal, parent_pid: Principal, extra: T) -> Self {
+        Self {
+            root_pid,
+            parent_pid,
+            extra,
+        }
+    }
 }
 
 ///

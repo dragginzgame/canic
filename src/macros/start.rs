@@ -1,21 +1,24 @@
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
-    // Shared macro body: takes arg list and init call
-    (@body $canister_path:path, [$($param:tt)*], $init_call:expr) => {
+    (
+        $canister_path:path,
+        args = $arg_ty:ty
+        $(,)?
+    ) => {
         #[::icu::ic::init]
-        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal $($param)*) {
+        fn init(args: $arg_ty) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::memory::init();
 
-            state::set_root_pid(root_pid).unwrap();
-            state::set_parent_pid(parent_pid).unwrap();
+            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
+
+            state::set_root_pid(args.root_pid).unwrap();
+            state::set_parent_pid(args.parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            log!(Log::Info, "init: {}", $canister_path);
-
-            $init_call
+            _init(args.extra);
         }
 
         #[::icu::ic::update]
@@ -26,21 +29,12 @@ macro_rules! icu_start {
         ::icu::icu_endpoints!();
     };
 
-    // with arguments
-    (
-        $canister_path:path,
-        args = ( $($aname:ident : $aty:ty),* $(,)? )
-        $(,)?
-    ) => {
-        $crate::icu_start!(@body $canister_path, [, $($aname : $aty),*], _init($($aname),*));
-    };
-
-    // without arguments
+    // Default to no extra args (InitArgs<()>)
     (
         $canister_path:path
         $(,)?
     ) => {
-        $crate::icu_start!(@body $canister_path, [], _init());
+        $crate::icu_start!($canister_path, args = ::icu::InitArgs<()>);
     };
 }
 

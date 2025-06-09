@@ -1,5 +1,5 @@
 use crate::{
-    Error, Log,
+    Error, InitArgs, Log,
     helper::{format_cycles, get_wasm_hash},
     ic::{
         call::{Call, CallFailed, CandidDecodeFailed, Error as CallError},
@@ -141,10 +141,11 @@ where
     // install code
     //
 
-    let full_args = (canister_self(), parent_pid, extra_args);
-    let arg_blob = encode_args(full_args)
+    let init_args = InitArgs::new(canister_self(), parent_pid, extra_args);
+    let arg_blob = encode_args((init_args,))
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
+
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
