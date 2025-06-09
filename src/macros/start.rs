@@ -18,7 +18,7 @@ macro_rules! icu_start {
             state::set_parent_pid(args.parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            _init(args.extra);
+            _init(args);
         }
 
         #[::icu::ic::update]
