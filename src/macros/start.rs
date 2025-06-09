@@ -1,14 +1,17 @@
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
-    // Required: canister path; Optional: parameter list and _init args
     (
-        $canister_path:path,
-        args = ( $($aname:ident : $aty:ty),* $(,)? )
+        $canister_path:path
+        $(, args = ( $($aname:ident : $aty:ty),* $(,)? ) )?
         $(,)?
     ) => {
         #[::icu::ic::init]
-        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal $(, $($aname : $aty)*)?) {
+        fn init(
+            root_pid: ::candid::Principal,
+            parent_pid: ::candid::Principal
+            $(, $($aname : $aty)*)?
+        ) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::memory::init();
@@ -19,7 +22,12 @@ macro_rules! icu_start {
 
             log!(Log::Info, "init: {}", $canister_path);
 
-            _init($($aname),*);
+            // Call _init() either with args or nothing
+            #[allow(clippy::needless_return)]
+            return {
+                $( _init($($aname),*); )?
+                $( _init(); )?
+            };
         }
 
         #[::icu::ic::update]
