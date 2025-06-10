@@ -1,7 +1,11 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{self, InterfaceError, ic::IcError, response::Response},
+    interface::{
+        self, InterfaceError,
+        ic::IcError,
+        response::{GenericValue, Response},
+    },
 };
 use candid::{CandidType, Encode, Principal};
 use serde::{Deserialize, Serialize};
@@ -24,6 +28,7 @@ pub enum RequestError {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     CanisterCreate(CanisterCreate),
+    CanisterCreateWithArg(CanisterCreateWithArg),
     CanisterUpgrade(CanisterUpgrade),
 }
 
@@ -64,6 +69,16 @@ impl Request {
 pub struct CanisterCreate {
     pub path: String,
     pub extra: Option<Vec<u8>>,
+}
+
+///
+/// CanisterCreateWithArg
+///
+
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+pub struct CanisterCreateWithArg {
+    pub path: String,
+    pub arg: GenericValue,
 }
 
 ///
