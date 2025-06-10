@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    Error, Log,
     ic::api::msg_caller,
     interface::{
         self, InterfaceError,
@@ -7,6 +7,7 @@ use crate::{
         request::Request,
         state::root::canister_registry,
     },
+    log,
 };
 use candid::{CandidType, Principal, encode_args};
 use derive_more::Display;
@@ -48,6 +49,8 @@ where
     }
     .map_err(IcError::from)
     .map_err(InterfaceError::from)?;
+
+    log!(Log::Warn, "arg is {arg:?}");
 
     // create the canister
     let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
