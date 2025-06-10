@@ -11,7 +11,7 @@ use crate::{
     interface::InterfaceError,
     log,
 };
-use candid::{CandidType, Error as CandidError, Principal, encode_args};
+use candid::{CandidType, Error as CandidError, Principal, encode_args, utils::ArgumentEncoder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -115,10 +115,10 @@ pub async fn create_canister<A>(
     name: &str,
     bytes: &[u8],
     controllers: Vec<Principal>,
-    args: A,
+    arg: A,
 ) -> Result<Principal, Error>
 where
-    A: CandidType + Send + Sync,
+    A: ArgumentEncoder,
 {
     //
     // create canister
@@ -139,15 +139,14 @@ where
     //
     // install code
     //
-
-    let args_blob = encode_args((args,))
+    let arg = encode_args(arg)
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
         wasm_module: WasmModule::from(bytes),
-        arg: args_blob,
+        arg,
     };
     mgmt::install_code(&install_args)
         .await
