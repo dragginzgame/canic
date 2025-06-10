@@ -1,9 +1,14 @@
 use crate::{
     Error,
     ic::api::msg_caller,
-    interface::{self, ic::create_canister, request::Request, state::root::canister_registry},
+    interface::{
+        self, InterfaceError,
+        ic::{IcError, create_canister},
+        request::Request,
+        state::root::canister_registry,
+    },
 };
-use candid::{CandidType, Principal};
+use candid::{CandidType, Principal, encode_args};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
@@ -36,20 +41,16 @@ where
     let parent_pid = msg_caller();
     let controllers = vec![root_pid];
 
+    // format args
+    let arg = match extra {
+        Some(extra_arg) => encode_args((root_pid, parent_pid, extra_arg)),
+        None => encode_args((root_pid, parent_pid)),
+    }
+    .map_err(IcError::from)
+    .map_err(InterfaceError::from)?;
+
     // create the canister
-    // formatting the init args properly
-    let new_canister_id = match extra {
-        Some(extra) => {
-            create_canister(
-                path,
-                canister.wasm,
-                controllers,
-                (root_pid, parent_pid, extra),
-            )
-            .await
-        }
-        None => create_canister(path, canister.wasm, controllers, (root_pid, parent_pid)).await,
-    }?;
+    let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
 
     // update subnet index
     if !canister.def.is_sharded {

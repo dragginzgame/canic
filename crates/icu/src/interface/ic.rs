@@ -11,7 +11,7 @@ use crate::{
     interface::InterfaceError,
     log,
 };
-use candid::{CandidType, Error as CandidError, Principal, encode_args, utils::ArgumentEncoder};
+use candid::{CandidType, Error as CandidError, Principal};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -111,15 +111,12 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
 /// create_canister
 ///
 
-pub async fn create_canister<A>(
+pub async fn create_canister(
     name: &str,
     bytes: &[u8],
     controllers: Vec<Principal>,
-    arg: A,
-) -> Result<Principal, Error>
-where
-    A: ArgumentEncoder,
-{
+    arg: Vec<u8>,
+) -> Result<Principal, Error> {
     //
     // create canister
     //
@@ -139,9 +136,6 @@ where
     //
     // install code
     //
-    let arg = encode_args(arg)
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
