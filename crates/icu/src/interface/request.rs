@@ -52,6 +52,13 @@ impl Request {
         }))
     }
 
+    pub fn new_canister_create_with_arg(path: &str, arg: GenericValue) -> Result<Self, Error> {
+        Ok(Self::CanisterCreateWithArg(CanisterCreateWithArg {
+            path: path.to_string(),
+            arg,
+        }))
+    }
+
     #[must_use]
     pub fn new_canister_upgrade(pid: Principal, path: &str) -> Self {
         Self::CanisterUpgrade(CanisterUpgrade {
