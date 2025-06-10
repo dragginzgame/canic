@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Principal, encode_one};
+use candid::{CandidType, Principal, encode_args};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -34,7 +34,7 @@ impl Request {
     {
         let encoded = match extra {
             Some(v) => Some(
-                encode_one(v)
+                encode_args((v,))
                     .map_err(IcError::from)
                     .map_err(InterfaceError::from)?,
             ),
