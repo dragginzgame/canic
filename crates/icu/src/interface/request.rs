@@ -34,7 +34,7 @@ impl Request {
     {
         let encoded = match extra {
             Some(v) => Some(
-                encode_one(&v)
+                encode_one(v)
                     .map_err(IcError::from)
                     .map_err(InterfaceError::from)?,
             ),
