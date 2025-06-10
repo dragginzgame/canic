@@ -1,7 +1,7 @@
 use crate::{
     Error,
     ic::api::msg_caller,
-    interface::{self, request::Request, state::root::canister_registry},
+    interface::{self, ic::create_canister, request::Request, state::root::canister_registry},
 };
 use candid::{CandidType, Principal};
 use derive_more::Display;
@@ -27,17 +27,29 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 }
 
 // canister_create
-async fn canister_create<A>(path: &str, extra: A) -> Result<Response, Error>
+async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Response, Error>
 where
     A: CandidType + Send + Sync,
 {
     let canister = canister_registry::get_canister(path)?;
     let root_pid = interface::memory::canister::state::get_root_pid()?;
     let parent_pid = msg_caller();
-    let args = (root_pid, parent_pid, extra);
+    let controllers = vec![root_pid];
 
-    let new_canister_id =
-        crate::interface::ic::create_canister(path, canister.wasm, vec![root_pid], args).await?;
+    // create the canister
+    // formatting the init args properly
+    let new_canister_id = match extra {
+        Some(extra) => {
+            create_canister(
+                path,
+                canister.wasm,
+                controllers,
+                (root_pid, parent_pid, extra),
+            )
+            .await
+        }
+        None => create_canister(path, canister.wasm, controllers, (root_pid, parent_pid)).await,
+    }?;
 
     // update subnet index
     if !canister.def.is_sharded {
