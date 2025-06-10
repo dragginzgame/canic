@@ -49,8 +49,8 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
 
     // call _init with the extra param
     match extra {
-        Some(arg) => Call::unbounded_wait(new_canister_id, "_init").with_arg(&arg),
-        None => Call::unbounded_wait(new_canister_id, "_init"),
+        Some(arg) => Call::unbounded_wait(new_canister_id, "init_async").with_arg(&arg),
+        None => Call::unbounded_wait(new_canister_id, "init_async"),
     }
     .await
     .map_err(IcError::from)
