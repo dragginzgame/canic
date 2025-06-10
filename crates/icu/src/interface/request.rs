@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Principal, encode_one};
+use candid::{CandidType, Principal, encode_args, encode_one};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -104,7 +104,7 @@ pub async fn canister_create_arg<A>(path: &str, extra: A) -> Result<Principal, E
 where
     A: CandidType + Send + Sync,
 {
-    let encoded = encode_one(extra)
+    let encoded = encode_args((extra,))
         .map_err(IcError::from)
         .map_err(InterfaceError::from)?;
 
