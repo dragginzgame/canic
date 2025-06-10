@@ -42,24 +42,22 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
 
     log!(Log::Warn, "canister_create: {path:?} {extra:?}");
 
-    let arg = match extra {
-        Some(extra) => encode_args((root_pid, parent_pid, extra)),
-        None => encode_args((root_pid, parent_pid)),
-    }
-    .map_err(IcError::from)
-    .map_err(InterfaceError::from)?;
+    // format args
+    let arg = encode_args((root_pid, parent_pid))
+        .map_err(IcError::from)
+        .map_err(InterfaceError::from)?;
 
     // create the canister
     let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
 
     // call init_async with the extra param
-    // match extra {
-    //     Some(extra) => Call::unbounded_wait(new_canister_id, "init_async").take_raw_args(extra),
-    //     None => Call::unbounded_wait(new_canister_id, "init_async"),
-    // }
-    // .await
-    // .map_err(IcError::from)
-    // .map_err(InterfaceError::IcError)?;
+    match extra {
+        Some(extra) => Call::unbounded_wait(new_canister_id, "init_async").take_raw_args(extra),
+        None => Call::unbounded_wait(new_canister_id, "init_async"),
+    }
+    .await
+    .map_err(IcError::from)
+    .map_err(InterfaceError::IcError)?;
 
     // update subnet index
     if !canister.def.is_sharded {
