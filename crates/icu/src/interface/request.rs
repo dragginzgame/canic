@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Principal, encode_args};
+use candid::{CandidType, Principal, encode_one};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -25,35 +25,6 @@ pub enum RequestError {
 pub enum Request {
     CanisterCreate(CanisterCreate),
     CanisterUpgrade(CanisterUpgrade),
-}
-
-impl Request {
-    pub fn new_canister_create<A>(path: &str, extra: Option<A>) -> Result<Self, Error>
-    where
-        A: CandidType + Send + Sync,
-    {
-        let encoded = match extra {
-            Some(v) => Some(
-                encode_args((v,))
-                    .map_err(IcError::from)
-                    .map_err(InterfaceError::from)?,
-            ),
-            None => None,
-        };
-
-        Ok(Self::CanisterCreate(CanisterCreate {
-            path: path.to_string(),
-            extra: encoded,
-        }))
-    }
-
-    #[must_use]
-    pub fn new_canister_upgrade(pid: Principal, path: &str) -> Self {
-        Self::CanisterUpgrade(CanisterUpgrade {
-            pid,
-            path: path.to_string(),
-        })
-    }
 }
 
 ///
@@ -106,11 +77,41 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 
 // canister_create
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
+pub async fn canister_create(path: &str) -> Result<Principal, Error> {
+    let req = Request::CanisterCreate(CanisterCreate {
+        path: path.to_string(),
+        extra: None,
+    });
+
+    match request(req).await {
+        Ok(response) => match response {
+            Response::CanisterCreate(new_pid) => {
+                // success, update child index
+                interface::memory::canister::child_index::insert_canister(new_pid, path);
+
+                Ok(new_pid)
+            }
+            Response::CanisterUpgrade => Err(InterfaceError::RequestError(
+                RequestError::InvalidResponseType,
+            ))?,
+        },
+        Err(e) => Err(e),
+    }
+}
+
+// canister_create_arg
+pub async fn canister_create_arg<A>(path: &str, extra: A) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync,
 {
-    let req = Request::new_canister_create(path, extra)?;
+    let encoded = encode_one(extra)
+        .map_err(IcError::from)
+        .map_err(InterfaceError::from)?;
+
+    let req = Request::CanisterCreate(CanisterCreate {
+        path: path.to_string(),
+        extra: Some(encoded),
+    });
 
     match request(req).await {
         Ok(response) => match response {
@@ -130,7 +131,11 @@ where
 
 // canister_upgrade
 pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
-    let req = Request::new_canister_upgrade(pid, path);
+    let req = Request::CanisterUpgrade(CanisterUpgrade {
+        pid,
+        path: path.to_string(),
+    });
+
     let _res = request(req).await?;
 
     Ok(())

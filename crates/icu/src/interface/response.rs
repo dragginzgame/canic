@@ -28,8 +28,8 @@ pub enum Response {
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
-        Request::CanisterCreate(cc) => canister_create(&cc.path, cc.extra).await,
-        Request::CanisterUpgrade(cu) => canister_upgrade(cu.pid, &cu.path).await,
+        Request::CanisterCreate(req) => canister_create(&req.path, req.extra).await,
+        Request::CanisterUpgrade(req) => canister_upgrade(req.pid, &req.path).await,
     }
 }
 

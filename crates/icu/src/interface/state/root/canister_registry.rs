@@ -34,7 +34,7 @@ pub async fn create_canisters() -> Result<(), Error> {
     // TODO - this won't work if they have arguments
     for (path, info) in get_info()? {
         if info.def.auto_create && index::get_canister(&path).is_none() {
-            canister_create::<()>(&path, None).await.unwrap();
+            canister_create(&path).await.unwrap();
         }
     }
 
