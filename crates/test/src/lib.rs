@@ -7,11 +7,8 @@ pub static TEST: &str = "test";
 // ICU
 //
 
-icu_start!(TEST, extra = Principal);
+icu_start!(TEST);
 
-fn _init(owner_id: Principal) {
+async fn _init(owner_id: Principal) {
     log!(Log::Warn, "{owner_id:?}");
 }
-
-#[expect(clippy::unused_async)]
-async fn _init_async() {}

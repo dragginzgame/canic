@@ -2,25 +2,15 @@
 #[macro_export]
 macro_rules! icu_start {
     // private implementation arm: accepts optional extra‐argument tokens
-    (@impl $canister_path:path, ( $($extra_arg:ident: $extra_ty:ty)? ), ( $($extra:ident)? )) => {
+    ($canister_path:path) => {
         #[::icu::ic::init]
-        fn init(
-            root_pid: ::candid::Principal,
-            parent_pid: ::candid::Principal
-            $(, $extra_arg: $extra_ty)?
-        ) {
+        async fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
             use ::icu::interface::memory::canister::state;
 
-            // log all provided arguments
-            log!(
+            ::icu::log!(
                 ::icu::Log::Info,
-                concat!("init: ", stringify!($canister_path),
-                    ", root_pid = {:?}, parent_pid = {:?}"
-                    $(, concat!(", ", stringify!($extra_arg), " = {:?}"))?
-                ),
-                root_pid,
-                parent_pid
-                $(, $extra_arg)?
+                "init: {} root: {root_pid} parent: {parent_pid}",
+                $canister_path
             );
 
             ::icu::memory::init();
@@ -28,34 +18,9 @@ macro_rules! icu_start {
             state::set_root_pid(root_pid).unwrap();
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
-
-            // call your user‐defined initializer
-            _init( $($extra)? );
-        }
-
-        #[::icu::ic::update]
-        async fn init_async() {
-            _init_async().await;
         }
 
         ::icu::icu_endpoints!();
-    };
-
-    // public arm: no extra
-    (
-        $canister_path:path
-        $(,)?
-    ) => {
-        icu_start!(@impl $canister_path, (), () );
-    };
-
-    // public arm: with extra
-    (
-        $canister_path:path,
-        extra = $extra_ty:ty
-        $(,)?
-    ) => {
-        icu_start!(@impl $canister_path, (extra: $extra_ty), (extra) );
     };
 }
 
@@ -73,13 +38,6 @@ macro_rules! icu_start_root {
             state::set_path($canister_path).unwrap();
 
             log!(Log::Info, "init: {} (root)", $canister_path);
-
-            _init();
-        }
-
-        #[::icu::ic::update]
-        async fn init_async() {
-            _init_async().await;
         }
 
         ::icu::icu_endpoints_root!();

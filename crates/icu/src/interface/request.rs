@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Encode, Principal};
+use candid::{CandidType, Encode, Principal, utils::ArgumentEncoder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -24,14 +24,13 @@ pub enum RequestError {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     CanisterCreate(CanisterCreate),
-    CanisterCreateWithPrincipalArg(CanisterCreateWithPrincipalArg),
     CanisterUpgrade(CanisterUpgrade),
 }
 
 impl Request {
     pub fn new_canister_create<A>(path: &str, extra: Option<A>) -> Result<Self, Error>
     where
-        A: CandidType + Send + Sync,
+        A: CandidType + ArgumentEncoder,
     {
         let encoded = match extra {
             Some(v) => Some(
@@ -46,18 +45,6 @@ impl Request {
             path: path.to_string(),
             extra: encoded,
         }))
-    }
-
-    pub fn new_canister_create_with_principal_arg(
-        path: &str,
-        principal: Principal,
-    ) -> Result<Self, Error> {
-        Ok(Self::CanisterCreateWithPrincipalArg(
-            CanisterCreateWithPrincipalArg {
-                path: path.to_string(),
-                principal,
-            },
-        ))
     }
 
     #[must_use]
@@ -77,16 +64,6 @@ impl Request {
 pub struct CanisterCreate {
     pub path: String,
     pub extra: Option<Vec<u8>>,
-}
-
-///
-/// CanisterCreateWithPrincipalArg
-///
-
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct CanisterCreateWithPrincipalArg {
-    pub path: String,
-    pub principal: Principal,
 }
 
 ///
@@ -131,33 +108,9 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 // create a Request and pass it to the request shared endpoint
 pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
-    A: CandidType + Sync + Send,
+    A: CandidType + ArgumentEncoder,
 {
     let req = Request::new_canister_create(path, extra)?;
-
-    match request(req).await {
-        Ok(response) => match response {
-            Response::CanisterCreate(new_pid) => {
-                // success, update child index
-                interface::memory::canister::child_index::insert_canister(new_pid, path);
-
-                Ok(new_pid)
-            }
-            Response::CanisterUpgrade => Err(InterfaceError::RequestError(
-                RequestError::InvalidResponseType,
-            ))?,
-        },
-        Err(e) => Err(e),
-    }
-}
-
-// canister_create
-// create a Request and pass it to the request shared endpoint
-pub async fn canister_create_with_principal_arg(
-    path: &str,
-    principal: Principal,
-) -> Result<Principal, Error> {
-    let req = Request::new_canister_create_with_principal_arg(path, principal)?;
 
     match request(req).await {
         Ok(response) => match response {
