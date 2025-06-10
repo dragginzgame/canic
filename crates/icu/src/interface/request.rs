@@ -150,6 +150,27 @@ where
     }
 }
 
+// canister_create
+// create a Request and pass it to the request shared endpoint
+pub async fn canister_create_with_arg(path: &str, arg: GenericValue) -> Result<Principal, Error> {
+    let req = Request::new_canister_create_with_arg(path, arg)?;
+
+    match request(req).await {
+        Ok(response) => match response {
+            Response::CanisterCreate(new_pid) => {
+                // success, update child index
+                interface::memory::canister::child_index::insert_canister(new_pid, path);
+
+                Ok(new_pid)
+            }
+            Response::CanisterUpgrade => Err(InterfaceError::RequestError(
+                RequestError::InvalidResponseType,
+            ))?,
+        },
+        Err(e) => Err(e),
+    }
+}
+
 // canister_upgrade
 pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
     let req = Request::new_canister_upgrade(pid, path);
