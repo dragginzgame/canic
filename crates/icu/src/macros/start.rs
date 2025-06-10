@@ -18,6 +18,8 @@ macro_rules! icu_start {
             state::set_root_pid(root_pid).unwrap();
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
+
+            _init()
         }
 
         ::icu::icu_endpoints!();
@@ -38,6 +40,8 @@ macro_rules! icu_start_root {
             state::set_path($canister_path).unwrap();
 
             log!(Log::Info, "init: {} (root)", $canister_path);
+
+            _init()
         }
 
         ::icu::icu_endpoints_root!();

@@ -9,6 +9,8 @@ pub static TEST: &str = "test";
 
 icu_start!(TEST);
 
-async fn _init(owner_id: Principal) {
+fn _init() {}
+
+async fn _init_async(owner_id: Principal) {
     log!(Log::Warn, "{owner_id:?}");
 }
