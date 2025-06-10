@@ -104,9 +104,11 @@ pub async fn canister_create_arg<A>(path: &str, extra: A) -> Result<Principal, E
 where
     A: CandidType + Send + Sync,
 {
-    let encoded = encode_args((extra,))
+    ic_cdk::println!("Encoding extra parameter of type: {}", std::any::type_name::<A>());
+    let encoded = encode_one(extra)
         .map_err(IcError::from)
         .map_err(InterfaceError::from)?;
+    ic_cdk::println!("Encoded length: {}, bytes: {:?}", encoded.len(), encoded);
 
     let req = Request::CanisterCreate(CanisterCreate {
         path: path.to_string(),
