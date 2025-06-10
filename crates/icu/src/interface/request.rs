@@ -3,7 +3,7 @@ use crate::{
     ic::call::Call,
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
-use candid::{CandidType, Encode, Principal, utils::ArgumentEncoder};
+use candid::{CandidType, Encode, Principal};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -30,7 +30,7 @@ pub enum Request {
 impl Request {
     pub fn new_canister_create<A>(path: &str, extra: Option<A>) -> Result<Self, Error>
     where
-        A: CandidType + ArgumentEncoder,
+        A: CandidType + Send + Sync,
     {
         let encoded = match extra {
             Some(v) => Some(
@@ -108,7 +108,7 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 // create a Request and pass it to the request shared endpoint
 pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
-    A: CandidType + ArgumentEncoder,
+    A: CandidType + Send + Sync,
 {
     let req = Request::new_canister_create(path, extra)?;
 
