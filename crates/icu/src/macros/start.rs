@@ -11,8 +11,19 @@ macro_rules! icu_start {
         ) {
             use ::icu::interface::memory::canister::state;
 
+            // log all provided arguments
+            log!(
+                ::icu::Log::Info,
+                concat!("init: ", stringify!($canister_path),
+                    ", root_pid = {:?}, parent_pid = {:?}"
+                    $(, concat!(", ", stringify!($extra_arg), " = {:?}"))?
+                ),
+                root_pid,
+                parent_pid
+                $(, $extra_arg)?
+            );
+
             ::icu::memory::init();
-            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
 
             state::set_root_pid(root_pid).unwrap();
             state::set_parent_pid(parent_pid).unwrap();
