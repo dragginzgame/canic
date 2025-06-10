@@ -4,7 +4,7 @@ macro_rules! icu_start {
     // private implementation arm: accepts optional extra‐argument tokens
     ($canister_path:path) => {
         #[::icu::ic::init]
-        async fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
+        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::log!(
