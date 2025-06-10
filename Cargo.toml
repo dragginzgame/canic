@@ -1,11 +1,19 @@
-[package]
-name = "icu"
+[workspace]
+members = ["crates/icu", "crates/test"]
+resolver = "2"
+
+[workspace.package]
 rust-version = "1.87.0"
-version = "0.1.3"
 edition = "2024"
+version = "0.1.4"
+authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
+description = "ORM/Database framework for the Internet Computer"
+license = "MIT"
 readme = "README.md"
 
-[dependencies]
+[workspace.dependencies]
+icu = { path = "crates/icu" }
+
 # ic cdk
 candid = "0.10"
 ic-cdk = "0.18.3"
@@ -24,7 +32,7 @@ thiserror = "2.0"
 toml = "0.8"
 
 # clippy
-[lints.clippy]
+[workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "allow", priority = -1 }
 nursery = { level = "allow", priority = -1 }

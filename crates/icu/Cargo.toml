@@ -1,0 +1,23 @@
+[package]
+name = "icu"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+candid = { workspace = true }
+thiserror = { workspace = true }
+ic-cdk = { workspace = true }
+defer = { workspace = true }
+remain = { workspace = true }
+toml = { workspace = true }
+sha2 = { workspace = true }
+icrc-ledger-types = { workspace = true }
+ic-cdk-timers = { workspace = true }
+ciborium = { workspace = true }
+ic-stable-structures = { workspace = true }
+serde = { workspace = true }
+derive_more = { workspace = true }
+
+[lints]
+workspace = true

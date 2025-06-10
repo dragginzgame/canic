@@ -1,5 +1,5 @@
 use crate::{
-    Error, InitArgs, Log,
+    Error, Log,
     helper::{format_cycles, get_wasm_hash},
     ic::{
         call::{Call, CallFailed, CandidDecodeFailed, Error as CallError},
@@ -115,8 +115,7 @@ pub async fn create_canister<A>(
     name: &str,
     bytes: &[u8],
     controllers: Vec<Principal>,
-    parent_pid: Principal,
-    extra_args: Option<A>,
+    args: A,
 ) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync,
@@ -130,8 +129,8 @@ where
         controllers: Some(controllers),
         ..Default::default()
     });
-    let args = CreateCanisterArgs { settings };
-    let canister_pid = mgmt::create_canister_with_extra_cycles(&args, cycles)
+    let cc_args = CreateCanisterArgs { settings };
+    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles)
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?
@@ -141,17 +140,14 @@ where
     // install code
     //
 
-    let init_args = InitArgs::new(canister_self(), parent_pid, extra_args);
-    let arg_blob = encode_args((init_args,))
+    let args_blob = encode_args((args,))
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
-    log!(Log::Warn, "arg blob is {arg_blob:?}");
-
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
         wasm_module: WasmModule::from(bytes),
-        arg: arg_blob,
+        arg: args_blob,
     };
     mgmt::install_code(&install_args)
         .await

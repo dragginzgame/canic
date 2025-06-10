@@ -28,17 +28,22 @@ pub enum Request {
 }
 
 impl Request {
-    pub fn new_canister_create<A>(path: &str, args: Option<A>) -> Result<Self, Error>
+    pub fn new_canister_create<A>(path: &str, extra: Option<A>) -> Result<Self, Error>
     where
         A: CandidType + Send + Sync,
     {
-        let encoded_args = Encode!(&args)
-            .map_err(IcError::from)
-            .map_err(InterfaceError::from)?;
+        let encoded = match extra {
+            Some(v) => Some(
+                Encode!(&v)
+                    .map_err(IcError::from)
+                    .map_err(InterfaceError::from)?,
+            ),
+            None => None,
+        };
 
         Ok(Self::CanisterCreate(CanisterCreate {
             path: path.to_string(),
-            args: encoded_args,
+            extra: encoded,
         }))
     }
 
@@ -58,7 +63,7 @@ impl Request {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
     pub path: String,
-    pub args: Option<Vec<u8>>,
+    pub extra: Option<Vec<u8>>,
 }
 
 ///
@@ -101,11 +106,11 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 
 // canister_create
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create<A>(path: &str, args: A) -> Result<Principal, Error>
+pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
     A: CandidType + Sync + Send,
 {
-    let req = Request::new_canister_create(path, args)?;
+    let req = Request::new_canister_create(path, extra)?;
 
     match request(req).await {
         Ok(response) => match response {
