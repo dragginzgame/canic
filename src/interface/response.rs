@@ -27,7 +27,7 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 }
 
 // create_canister
-async fn create_canister<A>(path: &str, args: A) -> Result<Response, Error>
+async fn create_canister<A>(path: &str, args: Option<A>) -> Result<Response, Error>
 where
     A: CandidType + Send + Sync,
 {

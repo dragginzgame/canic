@@ -61,14 +61,14 @@ pub enum Error {
 pub struct InitArgs<T: CandidType> {
     pub root_pid: Principal,
     pub parent_pid: Principal,
-    pub extra: T, // tuple of extra values
+    pub extra: Option<T>, // tuple of extra values
 }
 
 impl<T> InitArgs<T>
 where
     T: CandidType,
 {
-    pub fn new(root_pid: Principal, parent_pid: Principal, extra: T) -> Self {
+    pub fn new(root_pid: Principal, parent_pid: Principal, extra: Option<T>) -> Self {
         Self {
             root_pid,
             parent_pid,

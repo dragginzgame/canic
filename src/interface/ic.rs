@@ -116,7 +116,7 @@ pub async fn create_canister<A>(
     bytes: &[u8],
     controllers: Vec<Principal>,
     parent_pid: Principal,
-    extra_args: A,
+    extra_args: Option<A>,
 ) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync,

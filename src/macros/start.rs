@@ -4,16 +4,16 @@ macro_rules! icu_start {
     // With extra args
     (
         $canister_path:path,
-        args = ( $($arg_name:ident : $arg_ty:ty),* $(,)? )
+        args = ($($arg_ty:ty),* $(,)?)
         $(,)?
     ) => {
         #[::icu::ic::init]
         fn init(
             root_pid: ::candid::Principal,
             parent_pid: ::candid::Principal,
-            $($arg_name : $arg_ty),*
+            $(_arg: $arg_ty),*
         ) {
-            use ::icu::{InitArgs, interface::memory::canister::state};
+            use ::icu::interface::memory::canister::state;
 
             ::icu::memory::init();
             ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
@@ -22,13 +22,14 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            let args = InitArgs {
+            let extra = ($(_arg),*);
+            let args = ::icu::InitArgs {
                 root_pid,
                 parent_pid,
-                extra: ($($arg_name),*),
+                extra,
             };
 
-            _init(args);
+            _init($(_arg),*);
         }
 
         #[::icu::ic::update]
@@ -39,7 +40,7 @@ macro_rules! icu_start {
         ::icu::icu_endpoints!();
     };
 
-    // No extra args
+    // Without extra args
     (
         $canister_path:path
         $(,)?
@@ -49,8 +50,7 @@ macro_rules! icu_start {
             root_pid: ::candid::Principal,
             parent_pid: ::candid::Principal,
         ) {
-            use ::icu::interface::memory::canister::state;
-            use ::icu::InitArgs;
+            use ::icu::{interface::memory::canister::state};
 
             ::icu::memory::init();
             ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
@@ -59,13 +59,13 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            let args = InitArgs {
+            let args = ::icu::InitArgs {
                 root_pid,
                 parent_pid,
                 extra: (),
             };
 
-            _init(args);
+            _init();
         }
 
         #[::icu::ic::update]

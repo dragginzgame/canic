@@ -28,7 +28,7 @@ pub enum Request {
 }
 
 impl Request {
-    pub fn new_canister_create<A>(path: &str, args: A) -> Result<Self, Error>
+    pub fn new_canister_create<A>(path: &str, args: Option<A>) -> Result<Self, Error>
     where
         A: CandidType + Send + Sync,
     {
@@ -58,7 +58,7 @@ impl Request {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub struct CanisterCreate {
     pub path: String,
-    pub args: Vec<u8>,
+    pub args: Option<Vec<u8>>,
 }
 
 ///
