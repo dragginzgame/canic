@@ -50,6 +50,8 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
 
     if let Some(decoded) = extra.clone().map(|e| candid::decode_one::<Principal>(&e)) {
         log!(Log::Warn, "Decoded principal: {:?}", decoded);
+    } else {
+        log!(Log::Warn, "Not principal: {:?}", extra);
     }
 
     // call init_async with the extra param
