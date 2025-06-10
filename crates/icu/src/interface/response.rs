@@ -50,10 +50,13 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
     // create the canister
     let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
 
-    if let Some(decoded) = extra.clone().map(|e| candid::decode_one::<Principal>(&e)) {
-        log!(Log::Warn, "Decoded principal: {:?}", decoded);
+    if let Some(bytes) = &extra {
+        match candid::decode_one::<Principal>(bytes) {
+            Ok(principal) => log!(Log::Warn, "Decoded principal: {:?}", principal),
+            Err(e) => log!(Log::Warn, "Failed to decode principal: {:?}", e),
+        }
     } else {
-        log!(Log::Warn, "Not principal: {:?}", extra);
+        log!(Log::Warn, "No extra args passed");
     }
 
     // call init_async with the extra param
