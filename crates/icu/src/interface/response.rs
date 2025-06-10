@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    Error, Log,
     ic::{api::msg_caller, call::Call},
     interface::{
         self, InterfaceError,
@@ -7,6 +7,7 @@ use crate::{
         request::Request,
         state::root::canister_registry,
     },
+    log,
 };
 use candid::{CandidType, Principal, encode_args};
 use derive_more::Display;
@@ -47,7 +48,11 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
     // create the canister
     let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
 
-    // call _init with the extra param
+    if let Some(decoded) = extra.clone().map(|e| candid::decode_one::<Principal>(&e)) {
+        log!(Log::Warn, "Decoded principal: {:?}", decoded);
+    }
+
+    // call init_async with the extra param
     match extra {
         Some(arg) => Call::unbounded_wait(new_canister_id, "init_async").with_arg(&arg),
         None => Call::unbounded_wait(new_canister_id, "init_async"),
