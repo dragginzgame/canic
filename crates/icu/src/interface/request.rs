@@ -1,11 +1,7 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{
-        self, InterfaceError,
-        ic::IcError,
-        response::{GenericValue, Response},
-    },
+    interface::{self, InterfaceError, ic::IcError, response::Response},
 };
 use candid::{CandidType, Encode, Principal};
 use serde::{Deserialize, Serialize};
@@ -28,7 +24,7 @@ pub enum RequestError {
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
     CanisterCreate(CanisterCreate),
-    CanisterCreateWithArg(CanisterCreateWithArg),
+    CanisterCreateWithPrincipalArg(CanisterCreateWithPrincipalArg),
     CanisterUpgrade(CanisterUpgrade),
 }
 
@@ -52,11 +48,16 @@ impl Request {
         }))
     }
 
-    pub fn new_canister_create_with_arg(path: &str, arg: GenericValue) -> Result<Self, Error> {
-        Ok(Self::CanisterCreateWithArg(CanisterCreateWithArg {
-            path: path.to_string(),
-            arg,
-        }))
+    pub fn new_canister_create_with_principal_arg(
+        path: &str,
+        principal: Principal,
+    ) -> Result<Self, Error> {
+        Ok(Self::CanisterCreateWithPrincipalArg(
+            CanisterCreateWithPrincipalArg {
+                path: path.to_string(),
+                principal,
+            },
+        ))
     }
 
     #[must_use]
@@ -79,13 +80,13 @@ pub struct CanisterCreate {
 }
 
 ///
-/// CanisterCreateWithArg
+/// CanisterCreateWithPrincipalArg
 ///
 
 #[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
-pub struct CanisterCreateWithArg {
+pub struct CanisterCreateWithPrincipalArg {
     pub path: String,
-    pub arg: GenericValue,
+    pub principal: Principal,
 }
 
 ///
@@ -152,8 +153,11 @@ where
 
 // canister_create
 // create a Request and pass it to the request shared endpoint
-pub async fn canister_create_with_arg(path: &str, arg: GenericValue) -> Result<Principal, Error> {
-    let req = Request::new_canister_create_with_arg(path, arg)?;
+pub async fn canister_create_with_principal_arg(
+    path: &str,
+    principal: Principal,
+) -> Result<Principal, Error> {
+    let req = Request::new_canister_create_with_principal_arg(path, principal)?;
 
     match request(req).await {
         Ok(response) => match response {
