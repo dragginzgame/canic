@@ -68,6 +68,18 @@ pub enum AuthError {
     RoleNotFound(String),
 }
 
+impl From<&str> for AuthError {
+    fn from(s: &str) -> Self {
+        AuthError::Custom(s.to_string())
+    }
+}
+
+impl From<String> for AuthError {
+    fn from(s: String) -> Self {
+        AuthError::Custom(s)
+    }
+}
+
 ///
 /// Rule
 ///
@@ -76,12 +88,13 @@ pub trait Rule {
     fn check(&self, principal: Principal) -> Result<(), Error>;
 }
 
-impl<F> Rule for F
+impl<F, E> Rule for F
 where
-    F: Fn(Principal) -> Result<(), Error> + 'static,
+    F: Fn(Principal) -> Result<(), E> + 'static,
+    E: Into<Error>,
 {
     fn check(&self, principal: Principal) -> Result<(), Error> {
-        (self)(principal)
+        (self)(principal).map_err(Into::into)
     }
 }
 

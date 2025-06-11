@@ -25,7 +25,7 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Log,
+        Error as IcuError, Log,
         ic::{api::msg_caller, export_candid, init, query, update},
         icu_allow_any, icu_register_memory, icu_start, icu_start_root, log, perf,
     };
