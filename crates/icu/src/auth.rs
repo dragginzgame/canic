@@ -12,13 +12,24 @@ use thiserror::Error as ThisError;
 ///
 
 #[macro_export]
-macro_rules! icu_allow_any {
+macro_rules! auth_require_any {
     ($($rule:expr),* $(,)?) => {{
         let rules: Vec<Box<dyn $crate::auth::Rule>> = vec![
             $(Box::new($rule)),*
         ];
 
-        $crate::auth::allow_any(rules)
+        $crate::auth::require_any(rules)
+    }};
+}
+
+#[macro_export]
+macro_rules! auth_require_all {
+    ($($rule:expr),* $(,)?) => {{
+        let rules: Vec<Box<dyn $crate::auth::Rule>> = vec![
+            $(Box::new($rule)),*
+        ];
+
+        $crate::auth::require_all(rules)
     }};
 }
 
@@ -63,9 +74,6 @@ pub enum AuthError {
 
     #[error("principal '{0}' is not the current canister")]
     NotThis(Principal),
-
-    #[error("role '{0}' not found")]
-    RoleNotFound(String),
 }
 
 impl From<&str> for AuthError {
@@ -126,19 +134,8 @@ impl Rule for RuleKind {
     }
 }
 
-///
-/// AccessPolicy
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AccessPolicy {
-    Allow,
-    Deny,
-    //  Custom - WIP
-}
-
-// allow_any
-pub fn allow_any(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
+// require_any
+pub fn require_any(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -154,6 +151,21 @@ pub fn allow_any(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
     }
 
     Err(last_error.unwrap_or(Error::from(AuthError::InvalidState)))
+}
+
+// require_all
+pub fn require_all(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
+    let caller = msg_caller();
+
+    if rules.is_empty() {
+        return Err(AuthError::NoRulesDefined.into());
+    }
+
+    for rule in rules {
+        rule.check(caller)?; // early return on failure
+    }
+
+    Ok(())
 }
 
 ///
