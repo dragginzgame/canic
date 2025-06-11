@@ -73,14 +73,14 @@ pub enum AuthError {
 ///
 
 pub trait Rule {
-    fn check(&self, principal: Principal) -> Result<(), AuthError>;
+    fn check(&self, principal: Principal) -> Result<(), Error>;
 }
 
 impl<F> Rule for F
 where
-    F: Fn(Principal) -> Result<(), AuthError> + 'static,
+    F: Fn(Principal) -> Result<(), Error> + 'static,
 {
-    fn check(&self, principal: Principal) -> Result<(), AuthError> {
+    fn check(&self, principal: Principal) -> Result<(), Error> {
         (self)(principal)
     }
 }
@@ -100,7 +100,7 @@ pub enum RuleKind {
 }
 
 impl Rule for RuleKind {
-    fn check(&self, pid: Principal) -> Result<(), AuthError> {
+    fn check(&self, pid: Principal) -> Result<(), Error> {
         match self {
             Self::CanisterType(canister) => check_canister_type(pid, canister.to_string()),
             Self::Child => check_child(pid),
@@ -109,6 +109,7 @@ impl Rule for RuleKind {
             Self::Root => check_root(pid),
             Self::SameCanister => check_same_canister(pid),
         }
+        .map_err(Error::from)
     }
 }
 
@@ -139,7 +140,7 @@ pub fn allow_any(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
         }
     }
 
-    Err(last_error.unwrap_or(AuthError::InvalidState).into())
+    Err(last_error.unwrap_or(Error::from(AuthError::InvalidState)))
 }
 
 ///
