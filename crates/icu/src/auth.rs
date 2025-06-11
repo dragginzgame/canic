@@ -8,6 +8,21 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
+/// Helper Macros
+///
+
+#[macro_export]
+macro_rules! auth_allow_any {
+    ($($rule:expr),* $(,)?) => {{
+        let rules: Vec<Box<dyn $crate::auth::AuthRule>> = vec![
+            $(Box::new($rule)),*
+        ];
+
+        $crate::auth::allow_any(rules)
+    }};
+}
+
+///
 /// AuthError
 ///
 
@@ -106,16 +121,6 @@ pub enum AccessPolicy {
     Allow,
     Deny,
     //  Custom - WIP
-}
-
-#[macro_export]
-macro_rules! allow_any {
-    ($($rule:expr),* $(,)?) => {{
-        let rules: Vec<Box<dyn $crate::auth::AuthRule>> = vec![
-            $(Box::new($rule)),*
-        ];
-        $crate::auth::allow_any(rules)
-    }};
 }
 
 // allow_any

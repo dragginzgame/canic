@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - refactored into two crates, just so I have a test crate to play with
 - updated icu_start! so it takes another optional argument to pass to the init function
 - added a timer for init_async so we dont call it from the macro
+- auth rules working, now with support for custom auth rules
 
 ## [0.1.3]
 - memory counter has now evolved into a Registry
