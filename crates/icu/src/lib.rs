@@ -26,7 +26,7 @@ use thiserror::Error as ThisError;
 pub mod prelude {
     pub use crate::{
         Log,
-        auth::{AuthError, AuthRule},
+        auth::{AuthError, Rule, RuleKind},
         ic::{api::msg_caller, export_candid, init, query, update},
         icu_allow_any, icu_register_memory, icu_start, icu_start_root, log, perf,
     };

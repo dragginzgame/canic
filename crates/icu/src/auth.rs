@@ -69,14 +69,14 @@ pub enum AuthError {
 }
 
 ///
-/// AuthRule
+/// Rule
 ///
 
-pub trait AuthRule {
+pub trait Rule {
     fn check(&self, principal: Principal) -> Result<(), AuthError>;
 }
 
-impl<F> AuthRule for F
+impl<F> Rule for F
 where
     F: Fn(Principal) -> Result<(), AuthError> + 'static,
 {
@@ -86,11 +86,11 @@ where
 }
 
 ///
-/// Auth
+/// RuleKind
 ///
 
 #[remain::sorted]
-pub enum Auth {
+pub enum RuleKind {
     CanisterType(String),
     Child,
     Controller,
@@ -99,7 +99,7 @@ pub enum Auth {
     SameCanister,
 }
 
-impl AuthRule for Auth {
+impl Rule for RuleKind {
     fn check(&self, pid: Principal) -> Result<(), AuthError> {
         match self {
             Self::CanisterType(canister) => check_canister_type(pid, canister.to_string()),
@@ -124,7 +124,7 @@ pub enum AccessPolicy {
 }
 
 // allow_any
-pub fn allow_any(rules: Vec<Box<dyn AuthRule>>) -> Result<(), Error> {
+pub fn allow_any(rules: Vec<Box<dyn Rule>>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
