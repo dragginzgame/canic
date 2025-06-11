@@ -38,8 +38,8 @@ pub mod prelude {
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum Error {
-    #[error("{0}")]
-    AuthError(String),
+    #[error(transparent)]
+    AuthError(#[from] auth::AuthError),
 
     #[error(transparent)]
     ConfigError(#[from] config::ConfigError),

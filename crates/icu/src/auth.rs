@@ -8,79 +8,22 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
-/// AuthRule
-///
-
-pub trait AuthRule {
-    fn check(&self, principal: Principal) -> Result<(), String>;
-}
-
-///
-/// Auth
-///
-
-#[remain::sorted]
-pub enum Auth {
-    CanisterType(String),
-    Child,
-    Controller,
-    Parent,
-    Root,
-    SameCanister,
-}
-
-impl AuthRule for Auth {
-    fn check(&self, pid: Principal) -> Result<(), String> {
-        match self {
-            Self::CanisterType(canister) => check_canister_type(pid, canister.to_string()),
-            Self::Child => check_child(pid),
-            Self::Controller => check_controller(pid),
-            Self::Parent => check_parent(pid),
-            Self::Root => check_root(pid),
-            Self::SameCanister => check_same_canister(pid),
-        }
-        .map_err(|e| e.to_string())
-    }
-}
-
-///
-/// AccessPolicy
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AccessPolicy {
-    Allow,
-    Deny,
-    //  Custom - WIP
-}
-
-// allow_any
-pub fn allow_any(rules: Vec<&dyn AuthRule>) -> Result<(), Error> {
-    let caller = msg_caller();
-
-    if rules.is_empty() {
-        return Err(Error::AuthError("no rules defined".into()));
-    }
-
-    let mut last_error = None;
-    for rule in rules {
-        match rule.check(caller) {
-            Ok(()) => return Ok(()),
-            Err(e) => last_error = Some(e),
-        }
-    }
-
-    last_error.map_or(Ok(()), |e| Err(Error::AuthError(e)))
-}
-
-///
-/// CheckError
+/// AuthError
 ///
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
-pub enum CheckError {
+pub enum AuthError {
+    #[error("{0}")]
+    Custom(String),
+
+    #[error("invalid error state - this should never happen")]
+    InvalidState,
+
     #[error("the root canister is not defined")]
     NoRootDefined,
+
+    #[error("one or more rules must be defined")]
+    NoRulesDefined,
 
     #[error("there has to be a user canister defined in the schema")]
     NoUserCanister,
@@ -111,60 +54,127 @@ pub enum CheckError {
 }
 
 ///
-/// CHECK METHODS
+/// AuthRule
+///
+
+pub trait AuthRule {
+    fn check(&self, principal: Principal) -> Result<(), AuthError>;
+}
+
+///
+/// Auth
+///
+
+#[remain::sorted]
+pub enum Auth {
+    CanisterType(String),
+    Child,
+    Controller,
+    Parent,
+    Root,
+    SameCanister,
+}
+
+impl AuthRule for Auth {
+    fn check(&self, pid: Principal) -> Result<(), AuthError> {
+        match self {
+            Self::CanisterType(canister) => check_canister_type(pid, canister.to_string()),
+            Self::Child => check_child(pid),
+            Self::Controller => check_controller(pid),
+            Self::Parent => check_parent(pid),
+            Self::Root => check_root(pid),
+            Self::SameCanister => check_same_canister(pid),
+        }
+    }
+}
+
+///
+/// AccessPolicy
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AccessPolicy {
+    Allow,
+    Deny,
+    //  Custom - WIP
+}
+
+// allow_any
+pub fn allow_any(rules: Vec<&dyn AuthRule>) -> Result<(), Error> {
+    let caller = msg_caller();
+
+    if rules.is_empty() {
+        Err(AuthError::NoRulesDefined)?;
+    }
+
+    let mut last_error = None;
+    for rule in rules {
+        match rule.check(caller) {
+            Ok(()) => return Ok(()),
+            Err(e) => last_error = Some(e),
+        }
+    }
+
+    match last_error {
+        Some(e) => Err(e),
+        None => Err(AuthError::InvalidState),
+    }?
+}
+
+///
+/// RULE MACROS
 ///
 
 // check_canister_type
 // check caller against the id of a specific canister path
-fn check_canister_type(pid: Principal, canister: String) -> Result<(), CheckError> {
+fn check_canister_type(pid: Principal, canister: String) -> Result<(), AuthError> {
     interface::memory::subnet::index::try_get_canister(&canister)
-        .map_err(|_| CheckError::NotCanisterType(pid, canister.clone()))?;
+        .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
 
     Ok(())
 }
 
 // check_child
-fn check_child(pid: Principal) -> Result<(), CheckError> {
-    interface::memory::canister::child_index::get_canister(&pid)
-        .ok_or(CheckError::NotChild(pid))?;
+fn check_child(pid: Principal) -> Result<(), AuthError> {
+    interface::memory::canister::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
 
     Ok(())
 }
 
 // check_controller
-fn check_controller(pid: Principal) -> Result<(), CheckError> {
+fn check_controller(pid: Principal) -> Result<(), AuthError> {
     if is_controller(&pid) {
         Ok(())
     } else {
-        Err(CheckError::NotController(pid))
+        Err(AuthError::NotController(pid))
     }
 }
 
 // check_root
-fn check_root(pid: Principal) -> Result<(), CheckError> {
-    let root_pid = interface::memory::canister::state::get_root_pid()
-        .map_err(|_| CheckError::NoRootDefined)?;
+fn check_root(pid: Principal) -> Result<(), AuthError> {
+    let root_pid =
+        interface::memory::canister::state::get_root_pid().map_err(|_| AuthError::NoRootDefined)?;
 
     if pid == root_pid {
         Ok(())
     } else {
-        Err(CheckError::NotRoot(pid))
+        Err(AuthError::NotRoot(pid))
     }
 }
 
 // check_parent
-fn check_parent(pid: Principal) -> Result<(), CheckError> {
+fn check_parent(pid: Principal) -> Result<(), AuthError> {
     match interface::memory::canister::state::get_parent_pid() {
         Some(parent_pid) if parent_pid == pid => Ok(()),
-        _ => Err(CheckError::NotParent(pid)),
+        _ => Err(AuthError::NotParent(pid)),
     }
 }
 
 // check_same_canister
-fn check_same_canister(pid: Principal) -> Result<(), CheckError> {
+fn check_same_canister(pid: Principal) -> Result<(), AuthError> {
     if pid == canister_self() {
         Ok(())
     } else {
-        Err(CheckError::NotThis(pid))
+        Err(AuthError::NotThis(pid))
     }
 }
