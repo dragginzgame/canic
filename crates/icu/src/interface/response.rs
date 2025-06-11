@@ -56,7 +56,10 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
             .map_err(InterfaceError::IcError)?;
     }
 
-    // update subnet index
+    // update child index
+    interface::memory::canister::child_index::insert_canister(new_canister_id, path);
+
+    // optional - update subnet index
     if !canister.def.is_sharded {
         interface::memory::subnet::index::set_canister(path, new_canister_id);
         interface::cascade::subnet_index_cascade().await?;

@@ -1,7 +1,7 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{self, InterfaceError, ic::IcError, response::Response},
+    interface::{InterfaceError, ic::IcError, response::Response},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::{Deserialize, Serialize};
@@ -85,12 +85,7 @@ pub async fn canister_create(path: &str) -> Result<Principal, Error> {
 
     match request(req).await {
         Ok(response) => match response {
-            Response::CanisterCreate(new_pid) => {
-                // success, update child index
-                interface::memory::canister::child_index::insert_canister(new_pid, path);
-
-                Ok(new_pid)
-            }
+            Response::CanisterCreate(new_pid) => Ok(new_pid),
             Response::CanisterUpgrade => Err(InterfaceError::RequestError(
                 RequestError::InvalidResponseType,
             ))?,
@@ -120,12 +115,7 @@ where
 
     match request(req).await {
         Ok(response) => match response {
-            Response::CanisterCreate(new_pid) => {
-                // success, update child index
-                interface::memory::canister::child_index::insert_canister(new_pid, path);
-
-                Ok(new_pid)
-            }
+            Response::CanisterCreate(new_pid) => Ok(new_pid),
             Response::CanisterUpgrade => Err(InterfaceError::RequestError(
                 RequestError::InvalidResponseType,
             ))?,
