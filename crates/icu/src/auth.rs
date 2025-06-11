@@ -61,6 +61,15 @@ pub trait AuthRule {
     fn check(&self, principal: Principal) -> Result<(), AuthError>;
 }
 
+impl<F> AuthRule for F
+where
+    F: Fn(Principal) -> Result<(), AuthError> + 'static,
+{
+    fn check(&self, principal: Principal) -> Result<(), AuthError> {
+        (self)(principal)
+    }
+}
+
 ///
 /// Auth
 ///
