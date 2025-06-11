@@ -1,5 +1,5 @@
 use crate::{
-    Error, Log,
+    Error,
     ic::{api::msg_caller, call::Call},
     interface::{
         self, InterfaceError,
@@ -7,7 +7,6 @@ use crate::{
         request::Request,
         state::root::canister_registry,
     },
-    log,
 };
 use candid::{CandidType, Principal, encode_args};
 use derive_more::Display;
@@ -39,8 +38,6 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
     let root_pid = interface::memory::canister::state::get_root_pid()?;
     let parent_pid = msg_caller();
     let controllers = vec![root_pid];
-
-    log!(Log::Warn, "canister_create: {path:?} {extra:?}");
 
     // format args
     let arg = encode_args((root_pid, parent_pid))
