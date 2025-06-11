@@ -108,12 +108,22 @@ pub enum AccessPolicy {
     //  Custom - WIP
 }
 
+#[macro_export]
+macro_rules! allow_any {
+    ($($rule:expr),* $(,)?) => {{
+        let rules: Vec<Box<dyn $crate::auth::AuthRule>> = vec![
+            $(Box::new($rule)),*
+        ];
+        $crate::auth::allow_any(rules)
+    }};
+}
+
 // allow_any
-pub fn allow_any(rules: Vec<&dyn AuthRule>) -> Result<(), Error> {
+pub fn allow_any(rules: Vec<Box<dyn AuthRule>>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
-        Err(AuthError::NoRulesDefined)?;
+        return Err(AuthError::NoRulesDefined.into());
     }
 
     let mut last_error = None;
@@ -124,10 +134,7 @@ pub fn allow_any(rules: Vec<&dyn AuthRule>) -> Result<(), Error> {
         }
     }
 
-    match last_error {
-        Some(e) => Err(e),
-        None => Err(AuthError::InvalidState),
-    }?
+    Err(last_error.unwrap_or(AuthError::InvalidState).into())
 }
 
 ///
