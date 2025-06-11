@@ -51,13 +51,20 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
     let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
 
     // call init_async with the extra param
-    match extra {
-        Some(extra) => Call::unbounded_wait(new_canister_id, "init_async").take_raw_args(extra),
-        None => Call::unbounded_wait(new_canister_id, "init_async"),
-    }
-    .await
-    .map_err(IcError::from)
-    .map_err(InterfaceError::IcError)?;
+    let call = match extra {
+        Some(ref extra_data) => {
+            println!("extra data: {:?}", extra_data.len());
+            Call::unbounded_wait(new_canister_id, "init_async").with_raw_args(extra_data)
+        }
+        None => {
+            println!("no extra data");
+            Call::unbounded_wait(new_canister_id, "init_async")
+        }
+    };
+
+    call.await
+        .map_err(IcError::from)
+        .map_err(InterfaceError::IcError)?;
 
     // update subnet index
     if !canister.def.is_sharded {

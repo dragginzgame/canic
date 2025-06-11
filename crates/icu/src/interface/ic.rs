@@ -150,11 +150,10 @@ pub async fn create_canister(
     //
     // call init_async
     //
-
-    Call::unbounded_wait(canister_pid, "init_async")
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+    // Call::unbounded_wait(canister_pid, "init_async")
+    //     .await
+    //     .map_err(IcError::from)
+    //     .map_err(InterfaceError::IcError)?;
 
     //
     // debug

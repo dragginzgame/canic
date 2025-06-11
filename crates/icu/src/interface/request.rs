@@ -100,17 +100,22 @@ pub async fn canister_create(path: &str) -> Result<Principal, Error> {
 }
 
 // canister_create_arg
-pub async fn canister_create_arg<A>(path: &str, extra: A) -> Result<Principal, Error>
+pub async fn canister_create_arg<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync + Serialize + DeserializeOwned,
 {
-    let encoded = encode_one(extra)
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
+    let encoded = match extra {
+        Some(extra) => Some(
+            encode_one(extra)
+                .map_err(IcError::from)
+                .map_err(InterfaceError::from)?,
+        ),
+        None => None,
+    };
 
     let req = Request::CanisterCreate(CanisterCreate {
         path: path.to_string(),
-        extra: Some(encoded),
+        extra: encoded,
     });
 
     match request(req).await {
