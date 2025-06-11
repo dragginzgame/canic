@@ -26,6 +26,7 @@ use thiserror::Error as ThisError;
 pub mod prelude {
     pub use crate::{
         Log,
+        auth::AuthRule,
         ic::{api::msg_caller, export_candid, init, query, update},
         icu_register_memory, icu_start, icu_start_root, log, perf,
     };
@@ -37,8 +38,8 @@ pub mod prelude {
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
 pub enum Error {
-    #[error(transparent)]
-    AuthError(#[from] auth::AuthError),
+    #[error("{0}")]
+    AuthError(String),
 
     #[error(transparent)]
     ConfigError(#[from] config::ConfigError),

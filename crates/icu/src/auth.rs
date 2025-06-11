@@ -8,16 +8,79 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
-/// AuthError
+/// AuthRule
+///
+
+pub trait AuthRule {
+    fn check(&self, principal: Principal) -> Result<(), String>;
+}
+
+///
+/// Auth
+///
+
+#[remain::sorted]
+pub enum Auth {
+    CanisterType(String),
+    Child,
+    Controller,
+    Parent,
+    Root,
+    SameCanister,
+}
+
+impl AuthRule for Auth {
+    fn check(&self, pid: Principal) -> Result<(), String> {
+        match self {
+            Self::CanisterType(canister) => check_canister_type(pid, canister.to_string()),
+            Self::Child => check_child(pid),
+            Self::Controller => check_controller(pid),
+            Self::Parent => check_parent(pid),
+            Self::Root => check_root(pid),
+            Self::SameCanister => check_same_canister(pid),
+        }
+        .map_err(|e| e.to_string())
+    }
+}
+
+///
+/// AccessPolicy
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AccessPolicy {
+    Allow,
+    Deny,
+    //  Custom - WIP
+}
+
+// allow_any
+pub fn allow_any(rules: Vec<&dyn AuthRule>) -> Result<(), Error> {
+    let caller = msg_caller();
+
+    if rules.is_empty() {
+        return Err(Error::AuthError("no rules defined".into()));
+    }
+
+    let mut last_error = None;
+    for rule in rules {
+        match rule.check(caller) {
+            Ok(()) => return Ok(()),
+            Err(e) => last_error = Some(e),
+        }
+    }
+
+    last_error.map_or(Ok(()), |e| Err(Error::AuthError(e)))
+}
+
+///
+/// CheckError
 ///
 
 #[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
-pub enum AuthError {
+pub enum CheckError {
     #[error("the root canister is not defined")]
     NoRootDefined,
-
-    #[error("one or more rules must be defined")]
-    NoRulesDefined,
 
     #[error("there has to be a user canister defined in the schema")]
     NoUserCanister,
@@ -40,9 +103,6 @@ pub enum AuthError {
     #[error("principal '{0}' is not root")]
     NotRoot(Principal),
 
-    #[error("principal '{0}' is not from this subnet (DOESNT WORK YET)")]
-    NotThisSubnet(Principal),
-
     #[error("principal '{0}' is not the current canister")]
     NotThis(Principal),
 
@@ -51,128 +111,60 @@ pub enum AuthError {
 }
 
 ///
-/// Auth
+/// CHECK METHODS
 ///
 
-#[remain::sorted]
-pub enum Auth {
-    CanisterType(String),
-    Child,
-    Controller,
-    Parent,
-    //   Permission(Permission),
-    // Policy(AccessPolicy),
-    Root,
-    SameCanister,
-    SameSubnet,
-}
-
-impl Auth {
-    pub fn result(self, pid: Principal) -> Result<(), Error> {
-        match self {
-            Self::CanisterType(canister) => rule_canister_type(pid, canister),
-            Self::Child => rule_child(pid),
-            Self::Controller => rule_controller(pid),
-            Self::Parent => rule_parent(pid),
-            Self::Root => rule_root(pid),
-            Self::SameSubnet => rule_same_subnet(pid),
-            Self::SameCanister => rule_same_canister(pid),
-        }
-        .map_err(Error::from)
-    }
-}
-
-///
-/// AccessPolicy
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AccessPolicy {
-    Allow,
-    Deny,
-    //  Custom - WIP
-}
-
-// allow_any
-pub fn allow_any(rules: Vec<Auth>) -> Result<(), Error> {
-    // only works for caller now
-    let caller = msg_caller();
-
-    // in case rules are accidentally blank / commented out
-    if rules.is_empty() {
-        Err(AuthError::NoRulesDefined)?;
-    }
-
-    // check rules
-    let mut last_error = None;
-    for rule in rules {
-        match rule.result(caller) {
-            Ok(()) => return Ok(()),
-            Err(e) => last_error = Some(e),
-        }
-    }
-
-    last_error.map_or(Ok(()), Err)
-}
-
-///
-/// RULE MACROS
-///
-
-// rule_canister_type
+// check_canister_type
 // check caller against the id of a specific canister path
-fn rule_canister_type(pid: Principal, canister: String) -> Result<(), AuthError> {
+fn check_canister_type(pid: Principal, canister: String) -> Result<(), CheckError> {
     interface::memory::subnet::index::try_get_canister(&canister)
-        .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
+        .map_err(|_| CheckError::NotCanisterType(pid, canister.clone()))?;
 
     Ok(())
 }
 
-// rule_child
-fn rule_child(pid: Principal) -> Result<(), AuthError> {
-    interface::memory::canister::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
+// check_child
+fn check_child(pid: Principal) -> Result<(), CheckError> {
+    interface::memory::canister::child_index::get_canister(&pid)
+        .ok_or(CheckError::NotChild(pid))?;
 
     Ok(())
 }
 
-// rule_controller
-fn rule_controller(pid: Principal) -> Result<(), AuthError> {
+// check_controller
+fn check_controller(pid: Principal) -> Result<(), CheckError> {
     if is_controller(&pid) {
         Ok(())
     } else {
-        Err(AuthError::NotController(pid))
+        Err(CheckError::NotController(pid))
     }
 }
 
-// rule_root
-fn rule_root(pid: Principal) -> Result<(), AuthError> {
-    let root_pid =
-        interface::memory::canister::state::get_root_pid().map_err(|_| AuthError::NoRootDefined)?;
+// check_root
+fn check_root(pid: Principal) -> Result<(), CheckError> {
+    let root_pid = interface::memory::canister::state::get_root_pid()
+        .map_err(|_| CheckError::NoRootDefined)?;
 
     if pid == root_pid {
         Ok(())
     } else {
-        Err(AuthError::NotRoot(pid))
+        Err(CheckError::NotRoot(pid))
     }
 }
-// rule_parent
-fn rule_parent(pid: Principal) -> Result<(), AuthError> {
+
+// check_parent
+fn check_parent(pid: Principal) -> Result<(), CheckError> {
     match interface::memory::canister::state::get_parent_pid() {
         Some(parent_pid) if parent_pid == pid => Ok(()),
-        _ => Err(AuthError::NotParent(pid)),
+        _ => Err(CheckError::NotParent(pid)),
     }
 }
 
-// rule_same_subnet
-pub const fn rule_same_subnet(id: Principal) -> Result<(), AuthError> {
-    Err(AuthError::NotThisSubnet(id))
-}
-
-// rule_same_canister
-fn rule_same_canister(pid: Principal) -> Result<(), AuthError> {
+// check_same_canister
+fn check_same_canister(pid: Principal) -> Result<(), CheckError> {
     if pid == canister_self() {
         Ok(())
     } else {
-        Err(AuthError::NotThis(pid))
+        Err(CheckError::NotThis(pid))
     }
 }
