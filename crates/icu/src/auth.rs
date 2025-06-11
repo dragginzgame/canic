@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 ///
 
 #[macro_export]
-macro_rules! auth_allow_any {
+macro_rules! icu_allow_any {
     ($($rule:expr),* $(,)?) => {{
         let rules: Vec<Box<dyn $crate::auth::AuthRule>> = vec![
             $(Box::new($rule)),*

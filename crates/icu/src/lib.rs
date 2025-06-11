@@ -28,7 +28,7 @@ pub mod prelude {
         Log,
         auth::{AuthError, AuthRule},
         ic::{api::msg_caller, export_candid, init, query, update},
-        icu_register_memory, icu_start, icu_start_root, log, perf,
+        icu_allow_any, icu_register_memory, icu_start, icu_start_root, log, perf,
     };
 }
 
