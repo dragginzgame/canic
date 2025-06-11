@@ -7,11 +7,7 @@ macro_rules! icu_start {
         fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal) {
             use ::icu::interface::memory::canister::state;
 
-            ::icu::log!(
-                ::icu::Log::Info,
-                "init: {} root: {root_pid} parent: {parent_pid}",
-                $canister_path
-            );
+            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
 
             ::icu::memory::init();
 
@@ -19,7 +15,9 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            _init()
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::ic::futures::spawn(init_async())
+            });
         }
 
         ::icu::icu_endpoints!();
@@ -34,14 +32,16 @@ macro_rules! icu_start_root {
         fn init() {
             use ::icu::interface::memory::canister::state;
 
+            log!(Log::Info, "init (root): {}", $canister_path);
+
             ::icu::memory::init();
 
             state::set_root_pid(::icu::ic::api::canister_self()).unwrap();
             state::set_path($canister_path).unwrap();
 
-            log!(Log::Info, "init: {} (root)", $canister_path);
-
-            _init()
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::ic::futures::spawn(init_async())
+            });
         }
 
         ::icu::icu_endpoints_root!();

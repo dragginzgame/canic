@@ -2,7 +2,7 @@ use crate::{
     Error, Log,
     helper::{format_cycles, get_wasm_hash},
     ic::{
-        call::{Call, CallFailed, CandidDecodeFailed, Error as CallError},
+        call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
             self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
             CreateCanisterArgs, DepositCyclesArgs, InstallCodeArgs, WasmModule,
@@ -136,6 +136,7 @@ pub async fn create_canister(
     //
     // install code
     //
+
     let install_args = InstallCodeArgs {
         mode: CanisterInstallMode::Install,
         canister_id: canister_pid,
@@ -146,14 +147,6 @@ pub async fn create_canister(
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
-
-    //
-    // call init_async
-    //
-    // Call::unbounded_wait(canister_pid, "init_async")
-    //     .await
-    //     .map_err(IcError::from)
-    //     .map_err(InterfaceError::IcError)?;
 
     //
     // debug

@@ -4,7 +4,7 @@ use crate::{
     interface::{self, InterfaceError, ic::IcError, response::Response},
 };
 use candid::{CandidType, Principal, encode_one};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
@@ -102,7 +102,7 @@ pub async fn canister_create(path: &str) -> Result<Principal, Error> {
 // canister_create_arg
 pub async fn canister_create_arg<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
-    A: CandidType + Send + Sync + Serialize + DeserializeOwned,
+    A: CandidType + Send + Sync,
 {
     let encoded = match extra {
         Some(extra) => Some(

@@ -919,7 +919,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "test"
+name = "test_canister"
 version = "0.1.4"
 dependencies = [
  "candid",

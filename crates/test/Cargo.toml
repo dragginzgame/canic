@@ -1,8 +1,11 @@
 [package]
-name = "test"
+name = "test_canister"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }

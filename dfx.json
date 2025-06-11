@@ -1,0 +1,43 @@
+{
+    "dfx": "0.27.0",
+    "canisters": {
+        "test": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/test_canister/test_canister.did",
+            "build": "bash -c 'scripts/app/build.sh test_canister'",
+            "wasm": ".dfx/local/canisters/test_canister/test_canister.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
+            ]
+        }
+    },
+    "networks": {
+        "staging": {
+            "providers": [
+                "https://icp0.io"
+            ],
+            "type": "persistent"
+        },
+        "mainnet": {
+            "providers": [
+                "https://icp0.io"
+            ],
+            "type": "persistent"
+        }
+    },
+    "defaults": {
+        "build": {
+            "output": "canisters/"
+        }
+    },
+    "metadata": [
+        {
+            "name": "candid:service"
+        }
+    ],
+    "version": 1
+}
