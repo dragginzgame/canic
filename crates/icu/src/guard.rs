@@ -1,8 +1,8 @@
 use crate::{
     ic::api::{is_controller, msg_caller},
     interface::memory::app::state::{AppMode, get_mode},
+    prelude::*,
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
