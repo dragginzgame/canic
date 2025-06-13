@@ -1,7 +1,9 @@
 pub mod btreemap;
+pub mod btreeset;
 pub mod cell;
 
 pub use btreemap::BTreeMap;
+pub use btreeset::BTreeSet;
 pub use cell::Cell;
 
 pub mod memory {
