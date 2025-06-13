@@ -76,22 +76,8 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 }
 
 // canister_create
-// create a Request and pass it to the request shared endpoint
 pub async fn canister_create(path: &str) -> Result<Principal, Error> {
-    let req = Request::CanisterCreate(CanisterCreate {
-        path: path.to_string(),
-        extra: None,
-    });
-
-    match request(req).await {
-        Ok(response) => match response {
-            Response::CanisterCreate(new_pid) => Ok(new_pid),
-            Response::CanisterUpgrade => Err(InterfaceError::RequestError(
-                RequestError::InvalidResponseType,
-            ))?,
-        },
-        Err(e) => Err(e),
-    }
+    canister_create_arg::<()>(path, None).await
 }
 
 // canister_create_arg
