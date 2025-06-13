@@ -593,6 +593,7 @@ dependencies = [
  "ic-cdk",
  "ic-cdk-timers",
  "ic-ledger-types",
+ "ic-management-canister-types",
  "ic-stable-structures",
  "ic_principal",
  "icrc-ledger-types",

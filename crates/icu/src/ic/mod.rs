@@ -15,6 +15,10 @@ pub mod mgmt {
     pub use ic_cdk::management_canister::*;
 }
 
+pub mod mgmt_types {
+    pub use ic_management_canister_types::*;
+}
+
 pub mod ledger_types {
     pub use ic_ledger_types::*;
 }
