@@ -37,6 +37,7 @@ pub mod timers {
 
 pub mod structures;
 
+#[cfg(feature = "vetkeys")]
 pub mod vetkeys {
     pub use ic_vetkeys::*;
 }
