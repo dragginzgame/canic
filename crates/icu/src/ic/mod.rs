@@ -36,3 +36,7 @@ pub mod timers {
 }
 
 pub mod structures;
+
+pub mod vetkeys {
+    pub use ic_vetkeys::*;
+}

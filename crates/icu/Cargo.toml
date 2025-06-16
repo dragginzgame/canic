@@ -15,6 +15,7 @@ sha2 = { workspace = true }
 icrc-ledger-types = { workspace = true }
 ic-management-canister-types = { workspace = true }
 ic-ledger-types = { workspace = true }
+ic-vetkeys = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic_principal = { workspace = true }
 ciborium = { workspace = true }
