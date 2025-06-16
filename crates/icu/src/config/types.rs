@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// nothing here yet, but its coded so that's nice
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
     pub controllers: Vec<Principal>,

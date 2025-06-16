@@ -11,10 +11,6 @@ description = "ORM/Database framework for the Internet Computer"
 license = "MIT"
 readme = "README.md"
 
-[workspace.features]
-default = []
-vetkeys = ["ic-vetkeys"]
-
 [workspace.dependencies]
 icu = { path = "crates/icu" }
 

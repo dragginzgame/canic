@@ -13,7 +13,7 @@ use thiserror::Error as ThisError;
 /// SerializeError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum SerializeError {
     #[error("serialize error: {0}")]
     Serialize(String),

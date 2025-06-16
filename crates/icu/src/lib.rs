@@ -39,7 +39,7 @@ pub mod prelude {
 /// Error
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum Error {
     #[error(transparent)]
     AuthError(#[from] auth::AuthError),
@@ -89,7 +89,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
 /// Cycles
 ///
 
-#[derive(Add, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, Sub)]
+#[derive(Add, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, Sub)]
 pub struct Cycles(pub u128);
 
 impl From<u128> for Cycles {

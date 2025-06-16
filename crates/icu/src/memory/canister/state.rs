@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 /// CanisterStateError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum CanisterStateError {
     #[error("path has not been set")]
     PathNotSet,
@@ -102,7 +102,7 @@ impl CanisterState {
 /// CanisterStateData
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CanisterStateData {
     path: Option<String>,
     root_pid: Option<Principal>,

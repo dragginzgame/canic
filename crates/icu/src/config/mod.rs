@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 /// ConfigError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,

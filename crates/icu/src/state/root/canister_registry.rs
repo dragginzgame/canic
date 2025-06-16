@@ -19,7 +19,7 @@ pub static CANISTER_REGISTRY: LazyLock<Mutex<HashMap<String, Canister>>> =
 /// CanisterRegistryError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum CanisterRegistryError {
     #[error("mutex lock failed")]
     LockFailed,

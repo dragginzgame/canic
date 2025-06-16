@@ -11,7 +11,7 @@ pub use root::canister_registry::CanisterRegistryError;
 /// StateError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum StateError {
     #[error(transparent)]
     CanisterRegistryError(#[from] CanisterRegistryError),

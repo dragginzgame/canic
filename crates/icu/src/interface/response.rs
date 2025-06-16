@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 /// the root canister currently is the only one with the response() endpoint
 ///
 
-#[derive(CandidType, Clone, Debug, Display, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Display, Serialize)]
 pub enum Response {
     CanisterCreate(Principal),
     CanisterUpgrade,

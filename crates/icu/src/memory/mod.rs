@@ -76,7 +76,7 @@ thread_local! {
 /// MemoryError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum MemoryError {
     // registry
     #[error(transparent)]

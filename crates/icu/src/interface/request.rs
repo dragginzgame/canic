@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 /// RequestError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum RequestError {
     #[error("invalid response type")]
     InvalidResponseType,
@@ -21,7 +21,7 @@ pub enum RequestError {
 /// Request
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Request {
     CanisterCreate(CanisterCreate),
     CanisterUpgrade(CanisterUpgrade),
@@ -31,7 +31,7 @@ pub enum Request {
 /// CanisterCreate
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterCreate {
     pub path: String,
     pub extra: Option<Vec<u8>>,
@@ -41,7 +41,7 @@ pub struct CanisterCreate {
 /// CanisterUpgrade
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterUpgrade {
     pub pid: Principal,
     pub path: String,
@@ -51,7 +51,7 @@ pub struct CanisterUpgrade {
 /// Cycles
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct Cycles {
     pub cycles: u128,
 }

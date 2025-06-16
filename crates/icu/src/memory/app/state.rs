@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 /// AppStateError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum AppStateError {
     #[error("app is already in {0} mode")]
     AlreadyInMode(AppMode),
@@ -92,7 +92,7 @@ impl AppState {
 /// AppStateData
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Serialize)]
 pub struct AppStateData {
     mode: AppMode,
 }
@@ -103,7 +103,7 @@ impl_storable_unbounded!(AppStateData);
 /// AppCommand
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Display, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 pub enum AppCommand {
     Start,
     Readonly,

@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 /// The guard functions require a String to be returned, not an Error
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum GuardError {
     #[error("app is disabled")]
     AppDisabled,

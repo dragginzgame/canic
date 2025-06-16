@@ -14,7 +14,7 @@ use thiserror::Error as ThisError;
 /// InterfaceError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum InterfaceError {
     #[error(transparent)]
     IcError(#[from] ic::IcError),

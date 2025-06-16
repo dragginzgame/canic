@@ -8,7 +8,7 @@ use thiserror::Error as ThisError;
 /// SubnetIndexError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum SubnetIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(String),

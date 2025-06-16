@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 /// RegistryError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum RegistryError {
     #[error("ID {0} is already registered with type {1}, tried to register type {2}")]
     AlreadyRegistered(u8, String, String),
@@ -65,7 +65,7 @@ impl Registry {
 /// RegistryEntry
 ///
 
-#[derive(CandidType, Debug, Clone, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct RegistryEntry {
     pub path: String,
 }

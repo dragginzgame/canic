@@ -19,7 +19,7 @@ use thiserror::Error as ThisError;
 /// IcError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum IcError {
     #[error("call rejected: {0}")]
     CallFailed(String),

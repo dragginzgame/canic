@@ -9,7 +9,7 @@ use thiserror::Error as ThisError;
 /// CellError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum CellError {
     #[error("{0}")]
     Init(String),

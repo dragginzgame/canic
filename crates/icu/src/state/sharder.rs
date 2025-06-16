@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 /// SharderError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum SharderError {
     #[error("principal '{0}' already exists")]
     PrincipalExists(Principal),
@@ -22,7 +22,7 @@ pub enum SharderError {
 /// CanisterShard
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterShard {
     pub pid: Principal,
     pub users: u16,

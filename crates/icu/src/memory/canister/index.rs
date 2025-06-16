@@ -8,7 +8,7 @@ use thiserror::Error as ThisError;
 /// ChildIndexError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum ChildIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(Principal),

@@ -37,7 +37,7 @@ macro_rules! auth_require_all {
 /// AuthError
 ///
 
-#[derive(CandidType, Debug, Serialize, Deserialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum AuthError {
     #[error("{0}")]
     Custom(String),
