@@ -75,7 +75,7 @@ macro_rules! impl_storable_unbounded {
 // perf
 #[macro_export]
 macro_rules! perf {
-    ($label:expr) => {{
+    ($($label:tt)*) => {{
         $crate::state::PERF_LAST.with(|last| {
             let now = ::icu::ic::api::performance_counter(1);
             let then = *last.borrow();
@@ -87,9 +87,9 @@ macro_rules! perf {
 
             $crate::log!(
                 ::icu::Log::Perf,
-                "{} ({}) used {} insns since last (total: {})",
-                concat!(module_path!(), "::", stringify!(fn)),
-                $label,
+                "{}: {} used {}i since last (total: {})",
+                module_path!(),
+                format!($($label)*),
                 delta_fmt,
                 now_fmt
             );
@@ -107,8 +107,8 @@ macro_rules! perf_start {
 
             $crate::log!(
                 ::icu::Log::Perf,
-                "{} used {} insns in this call",
-                concat!(module_path!(), "::", stringify!(fn)),
+                "{} used {}i in this call",
+                module_path!(),
                 end_fmt,
             )
         });
