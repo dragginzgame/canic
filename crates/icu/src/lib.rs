@@ -131,3 +131,22 @@ pub fn parse_cycles(value: &str) -> Result<u128, String> {
     #[allow(clippy::cast_possible_truncation)]
     Ok((number * multiplier) as u128)
 }
+
+///
+/// Instructions
+///
+
+#[must_use]
+pub fn format_instructions(n: u64) -> String {
+    if n >= 1_000_000_000_000 {
+        format!("{:.2}T", n as f64 / 1_000_000_000_000.0)
+    } else if n >= 1_000_000_000 {
+        format!("{:.2}B", n as f64 / 1_000_000_000.0)
+    } else if n >= 1_000_000 {
+        format!("{:.2}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.2}K", n as f64 / 1_000.0)
+    } else {
+        format!("{}", n)
+    }
+}

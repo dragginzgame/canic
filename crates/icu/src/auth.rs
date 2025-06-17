@@ -64,7 +64,7 @@ impl From<String> for AuthError {
 }
 
 ///
-/// RuleFn
+/// Rule
 ///
 
 pub type RuleFn =

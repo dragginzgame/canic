@@ -82,13 +82,16 @@ macro_rules! perf {
             let delta = now.saturating_sub(then);
             *last.borrow_mut() = now;
 
+            let delta_fmt = $crate::format_instructions(delta);
+            let now_fmt = $crate::format_instructions(now);
+
             $crate::log!(
                 ::icu::Log::Perf,
                 "{} ({}) used {} insns since last (total: {})",
                 concat!(module_path!(), "::", stringify!(fn)),
                 $label,
-                delta,
-                now
+                delta_fmt,
+                now_fmt
             );
         });
     }};
@@ -98,11 +101,14 @@ macro_rules! perf {
 #[macro_export]
 macro_rules! perf_start {
     () => {
+        let end = ::icu::ic::api::performance_counter(1);
+        let end_fmt = ::icu::format_instructions(end);
+
         ::icu::export::defer::defer!($crate::log!(
             ::icu::Log::Perf,
             "{} used {} insns in this call",
             concat!(module_path!(), "::", stringify!(fn)),
-            ::icu::ic::api::performance_counter(1),
+            end_fmt,
         ));
     };
 }
