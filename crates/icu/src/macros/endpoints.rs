@@ -8,7 +8,7 @@ macro_rules! icu_endpoints {
         async fn icu_canister_upgrade_children(
             canister_id: Option<::candid::Principal>,
         ) -> Result<(), ::icu::Error> {
-            ::icu::auth::require_any(vec![::icu::auth::is_controller]).await?;
+            ::icu::auth_require_any!(::icu::auth::is_controller)?;
 
             // send a request for each matching canister
             for (child_pid, path) in ::icu::interface::memory::canister::child_index::get_data() {
@@ -25,7 +25,7 @@ macro_rules! icu_endpoints {
         async fn icu_app_state_cascade(
             data: ::icu::memory::app::AppStateData,
         ) -> Result<(), ::icu::Error> {
-            ::icu::auth::require_any(vec![::icu::auth::is_parent]).await?;
+            ::icu::auth_require_any!(::icu::auth::is_parent)?;
 
             // set state and cascade
             ::icu::interface::memory::app::state::set_data(data)?;
@@ -39,7 +39,7 @@ macro_rules! icu_endpoints {
         async fn icu_subnet_index_cascade(
             data: ::icu::memory::subnet::SubnetIndexData,
         ) -> Result<(), ::icu::Error> {
-            ::icu::auth::require_any(vec![::icu::auth::is_parent]).await?;
+            ::icu::auth_require_any!(::icu::auth::is_parent)?;
 
             // set index and cascade
             ::icu::interface::memory::subnet::index::set_data(data);
