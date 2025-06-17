@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "ciborium",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "test_canister"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "ic-cdk",

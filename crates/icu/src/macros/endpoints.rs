@@ -1,42 +1,14 @@
-// icu_endpoints_root
-#[macro_export]
-macro_rules! icu_endpoints_root {
-    () => {
-        // app
-        // modify app-level state
-        // @todo eventually this will cascade down from an orchestrator canister
-        #[::icu::ic::update]
-        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::interface::memory::app::state::command(cmd)?;
-            ::icu::interface::cascade::app_state_cascade().await?;
-
-            Ok(())
-        }
-
-        // response
-        #[::icu::ic::update]
-        async fn icu_response(
-            request: ::icu::interface::request::Request,
-        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
-            let response = ::icu::interface::response::response(request).await?;
-
-            Ok(response)
-        }
-    };
-}
-
 // icu_endpoints
 #[macro_export]
 macro_rules! icu_endpoints {
     () => {
         // icu_canister_upgrade_children
         // canister_id : None means upgrade all children
-        // @todo - removed guard
         #[::icu::ic::update]
         async fn icu_canister_upgrade_children(
             canister_id: Option<::candid::Principal>,
         ) -> Result<(), ::icu::Error> {
-            //           allow_any(vec![Auth::Controller]).await?;
+            ::icu::auth::require_any(vec![::icu::auth::is_controller]).await?;
 
             // send a request for each matching canister
             for (child_pid, path) in ::icu::interface::memory::canister::child_index::get_data() {
@@ -53,7 +25,7 @@ macro_rules! icu_endpoints {
         async fn icu_app_state_cascade(
             data: ::icu::memory::app::AppStateData,
         ) -> Result<(), ::icu::Error> {
-            //    allow_any(vec![Auth::Parent]).await?;
+            ::icu::auth::require_any(vec![::icu::auth::is_parent]).await?;
 
             // set state and cascade
             ::icu::interface::memory::app::state::set_data(data)?;
@@ -67,7 +39,7 @@ macro_rules! icu_endpoints {
         async fn icu_subnet_index_cascade(
             data: ::icu::memory::subnet::SubnetIndexData,
         ) -> Result<(), ::icu::Error> {
-            //       allow_any(vec![Auth::Parent]).await?;
+            ::icu::auth::require_any(vec![::icu::auth::is_parent]).await?;
 
             // set index and cascade
             ::icu::interface::memory::subnet::index::set_data(data);

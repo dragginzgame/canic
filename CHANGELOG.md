@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.1.6]
+- auth rewritten to be async, and to just use function names
+- perf and perf_start got a big upgrade
+
 ## [0.1.5]
 - not using candid Principal any more, switching to ic_principal and ic_ledger_types
 - added wrapper for BTreeSet from ic-stable-structures 0.6.9

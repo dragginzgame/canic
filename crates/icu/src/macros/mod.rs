@@ -75,12 +75,34 @@ macro_rules! impl_storable_unbounded {
 // perf
 #[macro_export]
 macro_rules! perf {
+    ($label:expr) => {{
+        $crate::state::PERF_LAST.with(|last| {
+            let now = ::icu::ic::api::performance_counter(1);
+            let then = *last.borrow();
+            let delta = now.saturating_sub(then);
+            *last.borrow_mut() = now;
+
+            $crate::log!(
+                ::icu::Log::Perf,
+                "{} ({}) used {} insns since last (total: {})",
+                concat!(module_path!(), "::", stringify!(fn)),
+                $label,
+                delta,
+                now
+            );
+        });
+    }};
+}
+
+// perf_start
+#[macro_export]
+macro_rules! perf_start {
     () => {
         ::icu::export::defer::defer!($crate::log!(
             ::icu::Log::Perf,
-            "api call used {} instructions ({})",
+            "{} used {} insns in this call",
+            concat!(module_path!(), "::", stringify!(fn)),
             ::icu::ic::api::performance_counter(1),
-            module_path!()
         ));
     };
 }

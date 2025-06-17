@@ -32,7 +32,7 @@ macro_rules! icu_start_root {
         fn init() {
             use ::icu::interface::memory::canister::state;
 
-            log!(Log::Info, "init (root): {}", $canister_path);
+            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
 
             ::icu::memory::init();
 
@@ -44,7 +44,38 @@ macro_rules! icu_start_root {
             });
         }
 
-        ::icu::icu_endpoints_root!();
         ::icu::icu_endpoints!();
+
+        // app
+        // modify app-level state
+        // @todo eventually this will cascade down from an orchestrator canister
+        #[::icu::ic::update]
+        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+            ::icu::interface::memory::app::state::command(cmd)?;
+            ::icu::interface::cascade::app_state_cascade().await?;
+
+            Ok(())
+        }
+
+        // response
+        #[::icu::ic::update]
+        async fn icu_response(
+            request: ::icu::interface::request::Request,
+        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
+            let response = ::icu::interface::response::response(request).await?;
+
+            Ok(response)
+        }
+    };
+}
+
+/// icu_start_common
+#[macro_export]
+macro_rules! icu_start_common {
+    () => {
+        thread_local! {
+            static PERF_LAST: std::cell::RefCell<u64> = std::cell::RefCell::new(::icu::ic::api::performance_counter(1));
+        }
+
     };
 }
