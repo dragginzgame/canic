@@ -34,18 +34,7 @@ pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where
     T: DeserializeOwned,
 {
-    postcard::from_bytes(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))
+    crate::ic::println!("deserializing {} bytes: {:x?}", bytes.len(), bytes);
 
-    /*
-    from_reader(bytes).map_err(|e| {
-        // attempt to deserialize into a more generic Value for debugging
-        match from_reader::<Value, _>(bytes) {
-            Ok(value) => {
-                SerializeError::Deserialize(format!("failed to deserialize: {e} ({value:?})"))
-            }
-            Err(debug_error) => SerializeError::Deserialize(format!(
-                "failed to deserialize: {e}. DEBUG FAILED {debug_error}"
-            )),
-        }
-    })*/
+    postcard::from_bytes(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))
 }
