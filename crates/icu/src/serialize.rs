@@ -21,20 +21,18 @@ pub enum SerializeError {
     Deserialize(String),
 }
 
-// serialize
+/// Serialize using `serde_cbor` (non-canonical)
 pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerializeError>
 where
     T: Serialize,
 {
-    postcard::to_stdvec(value).map_err(|e| SerializeError::Serialize(e.to_string()))
+    serde_cbor::to_vec(value).map_err(|e| SerializeError::Serialize(e.to_string()))
 }
 
-// deserialize
+/// Deserialize using `serde_cbor`
 pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where
     T: DeserializeOwned,
 {
-    crate::ic::println!("deserializing {} bytes: {:x?}", bytes.len(), bytes);
-
-    postcard::from_bytes(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))
+    serde_cbor::from_slice(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))
 }

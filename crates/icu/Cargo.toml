@@ -18,7 +18,7 @@ ic-ledger-types = { workspace = true }
 ic-vetkeys = { workspace = true, optional = true }
 ic-cdk-timers = { workspace = true }
 ic_principal = { workspace = true }
-postcard = { workspace = true }
+serde_cbor = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde = { workspace = true }
 derive_more = { workspace = true }
