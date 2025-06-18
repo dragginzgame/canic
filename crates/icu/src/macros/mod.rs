@@ -87,7 +87,7 @@ macro_rules! perf {
 
             $crate::log!(
                 ::icu::Log::Perf,
-                "{}: '{}' used {}i since last (total: {})",
+                "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),
                 format!($($label)*),
                 delta_fmt,
