@@ -37,7 +37,7 @@ async fn test_perf() {
     perf!("c");
 
     // Prevent optimization
-    icu::ic::println!("acc: {}", acc);
+    icu::ic::println!("acc: {acc}");
 }
 
 export_candid!();
