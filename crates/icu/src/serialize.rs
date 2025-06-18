@@ -1,5 +1,5 @@
 use candid::CandidType;
-use ciborium::{Value, de::from_reader, ser::into_writer};
+use minicbor_serde::{from_slice, to_vec};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use thiserror::Error as ThisError;
@@ -23,14 +23,13 @@ pub enum SerializeError {
 }
 
 // serialize
-pub fn serialize<T>(ty: &T) -> Result<Vec<u8>, SerializeError>
+pub fn serialize<T>(t: &T) -> Result<Vec<u8>, SerializeError>
 where
     T: Serialize,
 {
-    let mut writer = Vec::<u8>::new();
-    into_writer(ty, &mut writer).map_err(|e| SerializeError::Serialize(e.to_string()))?;
+    let bytes = to_vec(t).map_err(|e| SerializeError::Serialize(e.to_string()))?;
 
-    Ok(writer)
+    Ok(bytes)
 }
 
 // deserialize
@@ -38,15 +37,7 @@ pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where
     T: DeserializeOwned,
 {
-    from_reader(bytes).map_err(|e| {
-        // attempt to deserialize into a more generic Value for debugging
-        match from_reader::<Value, _>(bytes) {
-            Ok(value) => {
-                SerializeError::Deserialize(format!("failed to deserialize: {e} ({value:?})"))
-            }
-            Err(debug_error) => SerializeError::Deserialize(format!(
-                "failed to deserialize: {e}. DEBUG FAILED {debug_error}"
-            )),
-        }
-    })
+    let t: T = from_slice(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))?;
+
+    Ok(t)
 }
