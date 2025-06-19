@@ -68,14 +68,3 @@ macro_rules! icu_start_root {
         }
     };
 }
-
-/// icu_start_common
-#[macro_export]
-macro_rules! icu_start_common {
-    () => {
-        thread_local! {
-            static PERF_LAST: std::cell::RefCell<u64> = std::cell::RefCell::new(::icu::ic::api::performance_counter(1));
-        }
-
-    };
-}
