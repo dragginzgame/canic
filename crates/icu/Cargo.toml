@@ -5,6 +5,7 @@ rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
+canbench = { workspace = true }
 candid = { workspace = true }
 thiserror = { workspace = true }
 ic-cdk = { workspace = true }

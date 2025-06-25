@@ -7,37 +7,41 @@ pub mod api {
     pub use ic_cdk::api::*;
 }
 
+pub mod canbench {
+    pub use ::canbench::*;
+}
+
 pub mod candid {
-    pub use candid::*;
+    pub use ::candid::*;
 }
 
 pub mod mgmt {
-    pub use ic_cdk::management_canister::*;
+    pub use ::ic_cdk::management_canister::*;
 }
 
 pub mod mgmt_types {
-    pub use ic_management_canister_types::*;
+    pub use ::ic_management_canister_types::*;
 }
 
 pub mod ledger_types {
-    pub use ic_ledger_types::*;
+    pub use ::ic_ledger_types::*;
 }
 
 pub mod icrc_ledger_types {
-    pub use icrc_ledger_types::*;
+    pub use ::icrc_ledger_types::*;
 }
 
 pub mod principal {
-    pub use ic_principal::*;
+    pub use ::ic_principal::*;
 }
 
 pub mod timers {
-    pub use ic_cdk_timers::*;
+    pub use ::ic_cdk_timers::*;
 }
 
 pub mod structures;
 
 #[cfg(feature = "vetkeys")]
 pub mod vetkeys {
-    pub use ic_vetkeys::*;
+    pub use ::ic_vetkeys::*;
 }
