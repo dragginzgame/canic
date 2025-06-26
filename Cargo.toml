@@ -16,13 +16,13 @@ icu = { path = "crates/icu" }
 
 # ic cdk
 candid = "0.10"
-ic-cdk = "0.18.4"
+ic-cdk = "0.18.5"
 ic-stable-structures = "0.6.9"
 ic-management-canister-types = "0.3.1"
 ic-ledger-types = "0.15.0"
 ic_principal = "0.1"
 icrc-ledger-types = "0.1.10"
-ic-cdk-timers = "0.12.1"
+ic-cdk-timers = "0.12.2"
 
 # third party
 minicbor-serde = { version = "0.5", features = ["alloc"] }
