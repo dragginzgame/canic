@@ -3,7 +3,7 @@ members = ["crates/icu", "crates/test"]
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.87.0"
+rust-version = "1.88.0"
 edition = "2024"
 version = "0.1.6"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]

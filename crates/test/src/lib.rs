@@ -14,7 +14,7 @@ async fn init_async() {
 }
 
 #[update]
-async fn test_perf() {
+fn test_perf() {
     perf_start!();
 
     // Simulate some work before 'a'

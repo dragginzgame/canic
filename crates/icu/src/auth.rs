@@ -53,13 +53,13 @@ pub enum AuthError {
 
 impl From<&str> for AuthError {
     fn from(s: &str) -> Self {
-        AuthError::Custom(s.to_string())
+        Self::Custom(s.to_string())
     }
 }
 
 impl From<String> for AuthError {
     fn from(s: String) -> Self {
-        AuthError::Custom(s)
+        Self::Custom(s)
     }
 }
 
