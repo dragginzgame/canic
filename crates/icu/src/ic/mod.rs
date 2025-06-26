@@ -7,10 +7,6 @@ pub mod api {
     pub use ic_cdk::api::*;
 }
 
-pub mod canbench {
-    pub use ::canbench::*;
-}
-
 pub mod candid {
     pub use ::candid::*;
 }
@@ -40,8 +36,3 @@ pub mod timers {
 }
 
 pub mod structures;
-
-#[cfg(feature = "vetkeys")]
-pub mod vetkeys {
-    pub use ::ic_vetkeys::*;
-}
