@@ -1,5 +1,4 @@
 pub mod cascade;
-pub mod config;
 pub mod ic;
 pub mod memory;
 pub mod request;

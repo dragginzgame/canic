@@ -9,13 +9,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - auth rewritten to be async, and to just use function names
 - perf and perf_start got a big upgrade
 - changed the underlying serialization method from ciborium to minicbor-serde
-- added a re-export for canbench
 
 ## [0.1.5]
 - not using candid Principal any more, switching to ic_principal and ic_ledger_types
 - added wrapper for BTreeSet from ic-stable-structures 0.6.9
 - adding in ic-management-canister-types
-- re-exporting ic-vetkeys
 
 ## [0.1.4]
 - refactored into two crates, just so I have a test crate to play with

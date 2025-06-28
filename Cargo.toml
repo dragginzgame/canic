@@ -28,7 +28,6 @@ ic-cdk-timers = "0.12.2"
 minicbor-serde = { version = "0.5", features = ["alloc"] }
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
-remain = "0.2"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 sha2 = "0.10"
 thiserror = "2.0"

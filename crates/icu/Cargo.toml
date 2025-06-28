@@ -9,8 +9,6 @@ candid = { workspace = true }
 thiserror = { workspace = true }
 ic-cdk = { workspace = true }
 defer = { workspace = true }
-remain = { workspace = true }
-toml = { workspace = true }
 sha2 = { workspace = true }
 icrc-ledger-types = { workspace = true }
 ic-management-canister-types = { workspace = true }
