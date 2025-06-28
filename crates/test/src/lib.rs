@@ -1,6 +1,6 @@
 use icu::prelude::*;
 
-pub static TEST: &str = "test";
+pub const TEST: &str = "test";
 
 //
 // ICU
