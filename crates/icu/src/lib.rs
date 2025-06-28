@@ -13,7 +13,6 @@ pub mod export {
 }
 
 use candid::CandidType;
-use derive_more::{Add, Sub};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -84,7 +83,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
 /// Cycles
 ///
 
-#[derive(Add, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, Sub)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Cycles(pub u128);
 
 impl From<u128> for Cycles {

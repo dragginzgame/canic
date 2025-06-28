@@ -3,6 +3,7 @@ name = "test_canister"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

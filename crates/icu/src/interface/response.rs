@@ -9,7 +9,6 @@ use crate::{
     },
 };
 use candid::{CandidType, Principal, encode_args};
-use derive_more::Display;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// the root canister currently is the only one with the response() endpoint
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Display, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
     CanisterCreate(Principal),
     CanisterUpgrade,
