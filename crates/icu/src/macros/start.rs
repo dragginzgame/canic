@@ -18,7 +18,10 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            init_async(args);
+            // automatically calls init_async
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::ic::futures::spawn(init_async(args))
+            });
         }
 
         ::icu::icu_endpoints!();
