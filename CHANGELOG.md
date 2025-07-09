@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.1.7]
+- now create_canister always sends args, Option<Vec<u8>>
+
 ## [0.1.6]
 - auth rewritten to be async, and to just use function names
 - perf and perf_start got a big upgrade

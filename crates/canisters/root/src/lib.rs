@@ -1,5 +1,5 @@
 use icu::{
-    interface::state::root::canister_registry::{self, CanisterDef},
+    interface::state::root::canister_registry::{self, CanisterDef, create_canisters},
     prelude::*,
 };
 
@@ -14,6 +14,7 @@ icu_start_root!(ROOT);
 #[update]
 async fn init_async() {
     register_canisters();
+    create_canisters().await.unwrap()
 }
 
 // register_canisters

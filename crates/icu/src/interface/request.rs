@@ -76,12 +76,7 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 }
 
 // canister_create
-pub async fn canister_create(path: &str) -> Result<Principal, Error> {
-    canister_create_arg::<()>(path, None).await
-}
-
-// canister_create_arg
-pub async fn canister_create_arg<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
+pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync,
 {
