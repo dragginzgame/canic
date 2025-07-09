@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - auth rewritten to be async, and to just use function names
 - perf and perf_start got a big upgrade
 - changed the underlying serialization method from ciborium to minicbor-serde
+- only one init_async now, we don't have a race condition with the init_setup
 
 ## [0.1.5]
 - not using candid Principal any more, switching to ic_principal and ic_ledger_types

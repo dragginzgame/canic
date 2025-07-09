@@ -23,6 +23,7 @@ use thiserror::Error as ThisError;
 pub mod prelude {
     pub use crate::{
         Error as IcuError, Log, auth_require_all, auth_require_any,
+        guard::{guard_query, guard_update},
         ic::{
             api::msg_caller, candid::CandidType, export_candid,
             icrc_ledger_types::icrc1::account::Account, init, ledger_types::Subaccount,
