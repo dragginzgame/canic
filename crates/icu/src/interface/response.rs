@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::{api::msg_caller, call::Call},
+    ic::api::msg_caller,
     interface::{
         self, InterfaceError,
         ic::{IcError, create_canister},
@@ -38,22 +38,13 @@ async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response,
     let parent_pid = msg_caller();
     let controllers = vec![root_pid];
 
-    // format args
-    let arg = encode_args((root_pid, parent_pid))
+    // encode the standard init args
+    let args = encode_args((root_pid, parent_pid, extra))
         .map_err(IcError::from)
         .map_err(InterfaceError::from)?;
 
     // create the canister
-    let new_canister_id = create_canister(path, canister.wasm, controllers, arg).await?;
-
-    // call init_setup with the extra param
-    if let Some(args) = extra {
-        Call::unbounded_wait(new_canister_id, "init_setup")
-            .take_raw_args(args)
-            .await
-            .map_err(IcError::from)
-            .map_err(InterfaceError::IcError)?;
-    }
+    let new_canister_id = create_canister(path, canister.wasm, controllers, args).await?;
 
     // update child index
     interface::memory::canister::child_index::insert_canister(new_canister_id, path);
