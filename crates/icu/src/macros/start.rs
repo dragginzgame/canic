@@ -18,11 +18,9 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            let extra: Option<Vec<u8>> = args
-                .map(|bytes| candid::decode_one(&bytes).expect("failed to decode Option<Vec<u8>>"));
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(init_async(extra))
+                ::icu::ic::futures::spawn(init_async(args))
             });
         }
 
