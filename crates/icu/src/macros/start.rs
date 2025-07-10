@@ -3,11 +3,7 @@
 macro_rules! icu_start {
     ($canister_path:path) => {
         #[::icu::ic::init]
-        fn init(
-            root_pid: ::candid::Principal,
-            parent_pid: ::candid::Principal,
-            args: Option<Vec<u8>>,
-        ) {
+        fn init(root_pid: ::candid::Principal, parent_pid: ::candid::Principal, args: Vec<u8>) {
             use ::icu::interface::memory::canister::state;
 
             ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
@@ -18,9 +14,9 @@ macro_rules! icu_start {
             state::set_parent_pid(parent_pid).unwrap();
             state::set_path($canister_path).unwrap();
 
-            // args is: (Option<Vec<u8>>), already stripped to just the third argument
-            let (extra,): (Option<Vec<u8>>,) = candid::decode_args(&args.expect("missing args"))
-                .expect("failed to decode outer args");
+            // decode third arg
+            let extra: Option<Vec<u8>> =
+                candid::decode_one(&args).expect("failed to decode Option<Vec<u8>>");
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
