@@ -34,7 +34,7 @@ macro_rules! icu_start {
 /// icu_start_root
 #[macro_export]
 macro_rules! icu_start_root {
-    ($canister_path:path) => {
+    ($canister_path:expr) => {
         #[::icu::ic::init]
         fn init() {
             use ::icu::interface::memory::canister::state;

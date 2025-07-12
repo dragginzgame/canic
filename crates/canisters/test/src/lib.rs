@@ -1,12 +1,10 @@
 use icu::prelude::*;
 
-pub const TEST: &str = "test";
-
 //
 // ICU
 //
 
-icu_start!(TEST);
+icu_start!("test");
 
 #[update]
 async fn init_async(args: Option<Vec<u8>>) {

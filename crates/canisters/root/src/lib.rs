@@ -3,13 +3,11 @@ use icu::{
     prelude::*,
 };
 
-pub const ROOT: &str = "root";
-
 //
 // ICU
 //
 
-icu_start_root!(ROOT);
+icu_start_root!("root");
 
 #[update]
 async fn init_async() {
