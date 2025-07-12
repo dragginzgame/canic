@@ -38,3 +38,44 @@ macro_rules! icu_register_memory {
         $init(mem)
     }};
 }
+
+// impl_storable_bounded
+#[macro_export]
+macro_rules! impl_storable_bounded {
+    ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
+        impl $crate::ic::structures::storable::Storable for $ident {
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Bounded {
+                    max_size: $max_size,
+                    is_fixed_size: $is_fixed_size,
+                };
+
+            fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
+                ::std::borrow::Cow::Owned(::icu::serialize::serialize(self).unwrap())
+            }
+
+            fn from_bytes(bytes: ::std::borrow::Cow<[u8]>) -> Self {
+                $crate::serialize::deserialize(&bytes).unwrap()
+            }
+        }
+    };
+}
+
+// impl_storable_unbounded
+#[macro_export]
+macro_rules! impl_storable_unbounded {
+    ($ident:ident) => {
+        impl $crate::ic::structures::storable::Storable for $ident {
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Unbounded;
+
+            fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
+                ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
+            }
+
+            fn from_bytes(bytes: ::std::borrow::Cow<[u8]>) -> Self {
+                $crate::serialize::deserialize(&bytes).unwrap()
+            }
+        }
+    };
+}
