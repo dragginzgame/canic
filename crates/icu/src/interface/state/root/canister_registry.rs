@@ -1,4 +1,5 @@
 use crate::{Error, state::StateError};
+use candid::Principal;
 
 pub use crate::state::root::canister_registry::{
     Canister, CanisterDef, CanisterRegistry, CanisterRegistryInfo,
@@ -27,13 +28,15 @@ pub fn get_info() -> Result<CanisterRegistryInfo, Error> {
 }
 
 // create_canisters
-pub async fn create_canisters() -> Result<(), Error> {
+pub async fn create_canisters(controllers: &[Principal]) -> Result<(), Error> {
     pub use crate::interface::{memory::subnet::index, request::canister_create};
 
     // iterate canisters
     for (path, info) in get_info()? {
         if info.def.auto_create && index::get_canister(&path).is_none() {
-            canister_create::<()>(&path, None).await.unwrap();
+            canister_create::<()>(&path, controllers, None)
+                .await
+                .unwrap();
         }
     }
 

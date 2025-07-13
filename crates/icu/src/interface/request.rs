@@ -34,6 +34,7 @@ pub enum Request {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterCreate {
     pub path: String,
+    pub controllers: Vec<Principal>,
     pub extra: Option<Vec<u8>>,
 }
 
@@ -76,7 +77,11 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 }
 
 // canister_create
-pub async fn canister_create<A>(path: &str, extra: Option<A>) -> Result<Principal, Error>
+pub async fn canister_create<A>(
+    path: &str,
+    controllers: &[Principal],
+    extra: Option<A>,
+) -> Result<Principal, Error>
 where
     A: CandidType + Send + Sync,
 {
@@ -91,6 +96,7 @@ where
 
     let req = Request::CanisterCreate(CanisterCreate {
         path: path.to_string(),
+        controllers: controllers.to_vec(),
         extra: encoded,
     });
 

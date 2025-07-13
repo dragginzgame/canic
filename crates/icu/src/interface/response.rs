@@ -26,17 +26,26 @@ pub enum Response {
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
-        Request::CanisterCreate(req) => canister_create(&req.path, req.extra).await,
+        Request::CanisterCreate(req) => {
+            canister_create(&req.path, &req.controllers, req.extra).await
+        }
         Request::CanisterUpgrade(req) => canister_upgrade(req.pid, &req.path).await,
     }
 }
 
 // canister_create
-async fn canister_create(path: &str, extra: Option<Vec<u8>>) -> Result<Response, Error> {
+async fn canister_create(
+    path: &str,
+    controllers: &[Principal],
+    extra: Option<Vec<u8>>,
+) -> Result<Response, Error> {
     let canister = canister_registry::get_canister(path)?;
     let root_pid = interface::memory::canister::state::get_root_pid()?;
     let parent_pid = msg_caller();
-    let controllers = vec![root_pid];
+
+    // controllers
+    let mut controllers = controllers.to_vec();
+    controllers.push(root_pid);
 
     // encode the standard init args
     let args = encode_args((root_pid, parent_pid, extra))
