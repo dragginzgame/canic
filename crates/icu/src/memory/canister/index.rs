@@ -49,9 +49,21 @@ impl ChildIndex {
         Ok(canister)
     }
 
+    // get_canisters_by_type
+    #[must_use]
+    pub fn get_canisters_by_type(&self, ty: &str) -> Vec<Principal> {
+        self.iter()
+            .filter_map(
+                |(pid, type_name)| {
+                    if type_name == ty { Some(pid) } else { None }
+                },
+            )
+            .collect()
+    }
+
     // insert_canister
-    pub fn insert_canister(&mut self, pid: Principal, path: &str) {
-        self.insert(pid, path.to_string());
+    pub fn insert_canister(&mut self, pid: Principal, ty: &str) {
+        self.insert(pid, ty.to_string());
     }
 }
 
