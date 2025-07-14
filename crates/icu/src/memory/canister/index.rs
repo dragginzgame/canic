@@ -28,10 +28,10 @@ impl ChildIndex {
         Self(BTreeMap::init(memory))
     }
 
-    // get_state
+    // get_data
     #[must_use]
     pub fn get_data(&self) -> ChildIndexData {
-        self.iter().collect()
+        ChildIndexData(self.iter().collect())
     }
 
     // get_canister
@@ -49,18 +49,6 @@ impl ChildIndex {
         Ok(canister)
     }
 
-    // get_canisters_by_type
-    #[must_use]
-    pub fn get_canisters_by_type(&self, ty: &str) -> Vec<Principal> {
-        self.iter()
-            .filter_map(
-                |(pid, type_name)| {
-                    if type_name == ty { Some(pid) } else { None }
-                },
-            )
-            .collect()
-    }
-
     // insert_canister
     pub fn insert_canister(&mut self, pid: Principal, ty: &str) {
         self.insert(pid, ty.to_string());
@@ -71,4 +59,31 @@ impl ChildIndex {
 /// ChildIndexData
 ///
 
-pub type ChildIndexData = Vec<(Principal, String)>;
+#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+pub struct ChildIndexData(pub Vec<(Principal, String)>);
+
+impl ChildIndexData {
+    #[must_use]
+    pub fn get(&self, pid: &Principal) -> Option<&str> {
+        self.0
+            .iter()
+            .find_map(|(p, ty)| if p == pid { Some(ty.as_str()) } else { None })
+    }
+
+    #[must_use]
+    pub fn get_by_type(&self, ty: &str) -> Vec<Principal> {
+        self.0
+            .iter()
+            .filter_map(|(p, t)| if t == ty { Some(*p) } else { None })
+            .collect()
+    }
+}
+
+impl IntoIterator for ChildIndexData {
+    type Item = (Principal, String);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
