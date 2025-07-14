@@ -32,11 +32,11 @@ impl SubnetIndex {
     }
 
     #[must_use]
-    pub fn get_data(&self) -> Vec<(String, Principal)> {
-        self.iter().collect()
+    pub fn get_data(&self) -> SubnetIndexData {
+        SubnetIndexData(self.iter().collect())
     }
 
-    pub fn set_data(&mut self, data: Vec<(String, Principal)>) {
+    pub fn set_data(&mut self, data: SubnetIndexData) {
         self.clear();
         for (k, v) in data {
             self.insert(k, v);
@@ -62,4 +62,14 @@ impl SubnetIndex {
 /// SubnetIndexData
 ///
 
-pub type SubnetIndexData = Vec<(String, Principal)>;
+#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+pub struct SubnetIndexData(Vec<(String, Principal)>);
+
+impl IntoIterator for SubnetIndexData {
+    type Item = (String, Principal);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
