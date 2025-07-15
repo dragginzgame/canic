@@ -2,6 +2,7 @@ use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error as ThisError;
 
 ///
@@ -60,16 +61,9 @@ impl ChildIndex {
 ///
 
 #[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
-pub struct ChildIndexData(pub Vec<(Principal, String)>);
+pub struct ChildIndexData(HashMap<Principal, String>);
 
 impl ChildIndexData {
-    #[must_use]
-    pub fn get(&self, pid: &Principal) -> Option<&str> {
-        self.0
-            .iter()
-            .find_map(|(p, ty)| if p == pid { Some(ty.as_str()) } else { None })
-    }
-
     #[must_use]
     pub fn get_by_type(&self, ty: &str) -> Vec<Principal> {
         self.0
@@ -81,7 +75,7 @@ impl ChildIndexData {
 
 impl IntoIterator for ChildIndexData {
     type Item = (Principal, String);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = std::collections::hash_map::IntoIter<Principal, String>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

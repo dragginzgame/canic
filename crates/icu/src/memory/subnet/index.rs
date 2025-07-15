@@ -2,6 +2,7 @@ use crate::ic::structures::{BTreeMap, DefaultMemory};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error as ThisError;
 
 ///
@@ -13,10 +14,6 @@ pub enum SubnetIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(String),
 }
-
-//
-// SUBNET_INDEX
-//
 
 ///
 /// SubnetIndex
@@ -38,8 +35,8 @@ impl SubnetIndex {
 
     pub fn set_data(&mut self, data: SubnetIndexData) {
         self.clear();
-        for (k, v) in data {
-            self.insert(k, v);
+        for (k, v) in data.iter() {
+            self.insert(k.to_string(), *v);
         }
     }
 
@@ -56,6 +53,10 @@ impl SubnetIndex {
     pub fn set_canister(&mut self, path: &str, id: Principal) {
         self.insert(path.to_string(), id);
     }
+
+    pub fn remove_canister(&mut self, path: &str) {
+        self.remove(&path.to_string());
+    }
 }
 
 ///
@@ -63,11 +64,11 @@ impl SubnetIndex {
 ///
 
 #[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
-pub struct SubnetIndexData(Vec<(String, Principal)>);
+pub struct SubnetIndexData(HashMap<String, Principal>);
 
 impl IntoIterator for SubnetIndexData {
     type Item = (String, Principal);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = std::collections::hash_map::IntoIter<String, Principal>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
