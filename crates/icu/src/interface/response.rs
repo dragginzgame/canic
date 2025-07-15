@@ -34,7 +34,7 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 }
 
 // root_canister_create
-pub async fn root_canister_create(
+async fn root_canister_create(
     path: &str,
     controllers: &[Principal],
     extra: Option<Vec<u8>>,
