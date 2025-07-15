@@ -97,18 +97,21 @@ pub fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
 
 #[macro_export]
 macro_rules! auth_require_all {
-    ($($f:path),* $(,)?) => {{
-        $crate::auth::require_all(vec![$( Box::new($f) ),*])
+    ($($rule:expr),* $(,)?) => {{
+        $crate::auth::require_all(vec![$(
+            Box::new($rule) as Box<dyn Fn(Principal) -> Result<(), $crate::Error> + Send + Sync>
+        ),*])
     }};
 }
 
 #[macro_export]
 macro_rules! auth_require_any {
-    ($($f:path),* $(,)?) => {{
-        $crate::auth::require_any(vec![$( Box::new($f) ),*])
+    ($($rule:expr),* $(,)?) => {{
+        $crate::auth::require_any(vec![$(
+            Box::new($rule) as Box<dyn Fn(Principal) -> Result<(), $crate::Error> + Send + Sync>
+        ),*])
     }};
 }
-
 ///
 /// RULE FUNCTIONS
 ///
