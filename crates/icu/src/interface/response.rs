@@ -3,7 +3,7 @@ use crate::{
     ic::api::msg_caller,
     interface::{
         self, InterfaceError,
-        ic::{IcError, create_canister},
+        ic::{IcError, ic_create_canister, ic_upgrade_canister},
         request::Request,
         state::root::canister_registry,
     },
@@ -27,14 +27,14 @@ pub enum Response {
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
         Request::CanisterCreate(req) => {
-            canister_create(&req.path, &req.controllers, req.extra).await
+            root_canister_create(&req.path, &req.controllers, req.extra).await
         }
-        Request::CanisterUpgrade(req) => canister_upgrade(req.pid, &req.path).await,
+        Request::CanisterUpgrade(req) => root_canister_upgrade(req.pid, &req.path).await,
     }
 }
 
-// canister_create
-async fn canister_create(
+// root_canister_create
+pub async fn root_canister_create(
     path: &str,
     controllers: &[Principal],
     extra: Option<Vec<u8>>,
@@ -53,10 +53,7 @@ async fn canister_create(
         .map_err(InterfaceError::from)?;
 
     // create the canister
-    let new_canister_id = create_canister(path, canister.wasm, controllers, args).await?;
-
-    // update child index
-    interface::memory::canister::child_index::insert_canister(new_canister_id, path);
+    let new_canister_id = ic_create_canister(path, canister.wasm, controllers, args).await?;
 
     // optional - update subnet index
     if !canister.def.is_sharded {
@@ -67,10 +64,10 @@ async fn canister_create(
     Ok(Response::CanisterCreate(new_canister_id))
 }
 
-// canister_upgrade
-async fn canister_upgrade(pid: Principal, path: &str) -> Result<Response, Error> {
+// root_canister_upgrade
+async fn root_canister_upgrade(pid: Principal, path: &str) -> Result<Response, Error> {
     let canister = canister_registry::get_canister(path)?;
-    interface::ic::upgrade_canister(pid, canister.wasm).await?;
+    ic_upgrade_canister(pid, canister.wasm).await?;
 
     Ok(Response::CanisterUpgrade)
 }

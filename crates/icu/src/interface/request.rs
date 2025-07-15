@@ -62,8 +62,10 @@ pub struct Cycles {
 ///
 
 // request
+// sends the request to root::icu_response
 pub async fn request(request: Request) -> Result<Response, Error> {
     let root_pid = crate::interface::memory::canister::state::get_root_pid()?;
+
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
         .await
@@ -76,8 +78,8 @@ pub async fn request(request: Request) -> Result<Response, Error> {
         .map_err(InterfaceError::IcError)?
 }
 
-// canister_create
-pub async fn canister_create<A>(
+// canister_create_request
+pub async fn canister_create_request<A>(
     path: &str,
     controllers: &[Principal],
     extra: Option<A>,
@@ -116,8 +118,8 @@ where
     }
 }
 
-// canister_upgrade
-pub async fn canister_upgrade(pid: Principal, path: &str) -> Result<(), Error> {
+// canister_upgrade_request
+pub async fn canister_upgrade_request(pid: Principal, path: &str) -> Result<(), Error> {
     let req = Request::CanisterUpgrade(CanisterUpgrade {
         pid,
         path: path.to_string(),

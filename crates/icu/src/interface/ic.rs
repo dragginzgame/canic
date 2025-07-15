@@ -108,10 +108,10 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
 }
 
 ///
-/// create_canister
+/// ic_create_canister
 ///
 
-pub async fn create_canister(
+pub async fn ic_create_canister(
     name: &str,
     bytes: &[u8],
     controllers: Vec<Principal>,
@@ -166,8 +166,8 @@ pub async fn create_canister(
     Ok(canister_pid)
 }
 
-/// upgrade_canister
-pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
+/// ic_upgrade_canister
+pub async fn ic_upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
     // module_hash
     let module_hash = module_hash(canister_pid).await?;
     if module_hash == Some(get_wasm_hash(bytes)) {

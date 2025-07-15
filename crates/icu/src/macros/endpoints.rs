@@ -13,7 +13,7 @@ macro_rules! icu_endpoints {
             // send a request for each matching canister
             for (child_pid, path) in ::icu::interface::memory::canister::child_index::get_data() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
-                    ::icu::interface::request::canister_upgrade(child_pid, &path).await?
+                    ::icu::interface::request::canister_upgrade_request(child_pid, &path).await?
                 }
             }
 
