@@ -51,15 +51,10 @@ pub enum AuthError {
     NotThis(Principal),
 }
 
-impl From<&str> for AuthError {
-    fn from(s: &str) -> Self {
+impl AuthError {
+    #[must_use]
+    pub fn custom(s: &str) -> Self {
         Self::Custom(s.to_string())
-    }
-}
-
-impl From<String> for AuthError {
-    fn from(s: String) -> Self {
-        Self::Custom(s)
     }
 }
 
