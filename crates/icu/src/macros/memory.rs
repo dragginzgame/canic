@@ -3,10 +3,6 @@ macro_rules! icu_register_memory {
     ($ty:ty, $id:expr) => {{
         let path = stringify!($ty).to_string();
 
-        if $id == $crate::memory::MEMORY_REGISTRY_MEMORY_ID {
-            panic!("cannot register the memory registry itself");
-        }
-
         // check the registry with logging
         let result = $crate::memory::MemoryRegistry::register(
             $id,
