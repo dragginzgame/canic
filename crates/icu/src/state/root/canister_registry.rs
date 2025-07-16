@@ -1,19 +1,17 @@
 use candid::CandidType;
+use derive_more::{Deref, DerefMut};
 use ic_cdk::println;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{LazyLock, Mutex},
-};
+use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
-///
-/// CANISTER_REGISTRY
-/// use Mutex to ensure thread safety for mutable access
-///
+//
+// CANISTER_REGISTRY
+//
 
-pub static CANISTER_REGISTRY: LazyLock<Mutex<HashMap<String, Canister>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+thread_local! {
+    pub static CANISTER_REGISTRY: RefCell<CanisterRegistry> = RefCell::new(CanisterRegistry::new());
+}
 
 ///
 /// CanisterRegistryError
@@ -21,9 +19,6 @@ pub static CANISTER_REGISTRY: LazyLock<Mutex<HashMap<String, Canister>>> =
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum CanisterRegistryError {
-    #[error("mutex lock failed")]
-    LockFailed,
-
     #[error("canister '{0}' not found")]
     CanisterNotFound(String),
 }
@@ -34,35 +29,36 @@ pub enum CanisterRegistryError {
 
 #[derive(Clone, Debug)]
 pub struct Canister {
-    pub def: CanisterDef,
+    pub attributes: CanisterAttributes,
     pub wasm: &'static [u8],
 }
 
 ///
-/// CanisterInfo
+/// CanisterData
+/// the front-facing version
 ///
 
-#[derive(CandidType, Clone, Debug)]
-pub struct CanisterInfo {
-    pub def: CanisterDef,
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+pub struct CanisterData {
+    pub attributes: CanisterAttributes,
     pub wasm_size: usize,
 }
 
-impl From<&Canister> for CanisterInfo {
+impl From<&Canister> for CanisterData {
     fn from(canister: &Canister) -> Self {
         Self {
-            def: canister.def.clone(),
+            attributes: canister.attributes.clone(),
             wasm_size: canister.wasm.len(),
         }
     }
 }
 
 ///
-/// CanisterDef
+/// CanisterAttributes
 ///
 
-#[derive(CandidType, Clone, Debug)]
-pub struct CanisterDef {
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+pub struct CanisterAttributes {
     pub auto_create: bool,
     pub is_sharded: bool,
 }
@@ -71,63 +67,74 @@ pub struct CanisterDef {
 /// CanisterRegistry
 ///
 
-pub struct CanisterRegistry {}
+#[derive(Default, Debug, Deref, DerefMut)]
+pub struct CanisterRegistry(HashMap<String, Canister>);
 
 impl CanisterRegistry {
-    // get_canister
-    pub fn get_canister(path: &str) -> Result<Canister, CanisterRegistryError> {
-        let path = path.to_string();
+    // new
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-        let canister = CANISTER_REGISTRY
-            .lock()
-            .map_err(|_| CanisterRegistryError::LockFailed)?
-            .get(&path)
-            .cloned()
-            .ok_or(CanisterRegistryError::CanisterNotFound(path))?;
-
-        Ok(canister)
+    // try_get_canister
+    pub fn try_get_canister(path: &str) -> Result<Canister, CanisterRegistryError> {
+        CANISTER_REGISTRY.with_borrow(|reg| {
+            reg.get(path)
+                .cloned()
+                .ok_or_else(|| CanisterRegistryError::CanisterNotFound(path.to_string()))
+        })
     }
 
     // add_canister
     #[allow(clippy::cast_precision_loss)]
     pub fn add_canister(
         path: &str,
-        def: &CanisterDef,
+        attributes: &CanisterAttributes,
         wasm: &'static [u8],
     ) -> Result<(), CanisterRegistryError> {
-        let path = path.to_string();
-
-        CANISTER_REGISTRY
-            .lock()
-            .map_err(|_| CanisterRegistryError::LockFailed)?
-            .insert(
+        CANISTER_REGISTRY.with_borrow_mut(|reg| {
+            reg.insert(
                 path.to_string(),
                 Canister {
-                    def: def.clone(),
+                    attributes: attributes.clone(),
                     wasm,
                 },
             );
+        });
 
         println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
 
         Ok(())
     }
 
-    // get_info
-    pub fn get_info() -> Result<CanisterRegistryInfo, CanisterRegistryError> {
-        let info = CANISTER_REGISTRY
-            .lock()
-            .map_err(|_| CanisterRegistryError::LockFailed)?
-            .iter()
-            .map(|(k, v)| (k.clone(), v.into()))
-            .collect::<Vec<(String, CanisterInfo)>>();
+    // get_data
+    #[must_use]
+    pub fn get_data() -> CanisterRegistryData {
+        let data = CANISTER_REGISTRY.with(|registry| {
+            registry
+                .borrow()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.into()))
+                .collect()
+        });
 
-        Ok(info)
+        CanisterRegistryData(data)
     }
 }
 
 ///
-/// CanisterRegistryInfo
+/// CanisterRegistryData
 ///
 
-pub type CanisterRegistryInfo = Vec<(String, CanisterInfo)>;
+#[derive(Debug, Clone, CandidType, Serialize, Deserialize, Deref)]
+pub struct CanisterRegistryData(HashMap<String, CanisterData>);
+
+impl IntoIterator for CanisterRegistryData {
+    type Item = (String, CanisterData);
+    type IntoIter = std::collections::hash_map::IntoIter<String, CanisterData>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}

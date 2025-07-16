@@ -1,11 +1,26 @@
 use crate::{
-    ic::structures::{Cell, DefaultMemory, cell::CellError},
-    impl_storable_unbounded,
+    ic::{
+        api::canister_self,
+        structures::{Cell, cell::CellError},
+    },
+    icu_register_memory, impl_storable_unbounded,
+    memory::CANISTER_STATE_MEMORY_ID,
 };
 use candid::{CandidType, Principal};
-use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
+
+//
+// CANISTER_STATE
+//
+
+thread_local! {
+    pub static CANISTER_STATE: RefCell<Cell<CanisterStateData>> = RefCell::new(Cell::init(
+        icu_register_memory!(AppStateData, CANISTER_STATE_MEMORY_ID),
+        CanisterStateData::default(),
+    ).unwrap());
+}
 
 ///
 /// CanisterStateError
@@ -13,11 +28,11 @@ use thiserror::Error as ThisError;
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum CanisterStateError {
-    #[error("path has not been set")]
-    PathNotSet,
+    #[error("canister kind has not been set")]
+    KindNotSet,
 
-    #[error("root_id has not been set")]
-    RootIdNotSet,
+    #[error("this canister does not have any parents")]
+    NoParents,
 
     #[error(transparent)]
     CellError(#[from] CellError),
@@ -27,74 +42,79 @@ pub enum CanisterStateError {
 /// CanisterState
 ///
 
-#[derive(Deref, DerefMut)]
-pub struct CanisterState(Cell<CanisterStateData>);
+pub struct CanisterState;
 
 impl CanisterState {
+    pub fn with<R>(f: impl FnOnce(&Cell<CanisterStateData>) -> R) -> R {
+        CANISTER_STATE.with(|cell| f(&cell.borrow()))
+    }
+
+    pub fn with_mut<R>(f: impl FnOnce(&mut Cell<CanisterStateData>) -> R) -> R {
+        CANISTER_STATE.with(|cell| f(&mut cell.borrow_mut()))
+    }
+
     #[must_use]
-    pub fn init(memory: DefaultMemory) -> Self {
-        Self(Cell::init(memory, CanisterStateData::default()).unwrap())
+    pub fn get_data() -> CanisterStateData {
+        Self::with(|cell| cell.get())
     }
 
-    // get_data
     #[must_use]
-    pub fn get_data(&self) -> CanisterStateData {
-        self.get()
+    pub fn get_kind() -> Option<String> {
+        Self::with(|cell| cell.get().kind)
     }
 
-    // set_data
-    pub fn set_data(&mut self, data: CanisterStateData) -> Result<(), CanisterStateError> {
-        self.set(data)?;
-
-        Ok(())
+    pub fn try_get_kind() -> Result<String, CanisterStateError> {
+        Self::with(|cell| cell.get().kind).ok_or(CanisterStateError::KindNotSet)
     }
 
-    // get_path
-    pub fn get_path(&self) -> Result<String, CanisterStateError> {
-        self.get().path.ok_or(CanisterStateError::PathNotSet)
-    }
-
-    // set_path
-    pub fn set_path(&mut self, path: &str) -> Result<(), CanisterStateError> {
-        let mut state = self.get();
-        state.path = Some(path.to_string());
-        self.set(state)?;
-
-        Ok(())
-    }
-
-    // get_root_pid
-    pub fn get_root_pid(&self) -> Result<Principal, CanisterStateError> {
-        let root_id = self
-            .get()
-            .root_pid
-            .ok_or(CanisterStateError::RootIdNotSet)?;
-
-        Ok(root_id)
-    }
-
-    // set_root_pid
-    pub fn set_root_pid(&mut self, pid: Principal) -> Result<(), CanisterStateError> {
-        let mut state = self.get();
-        state.root_pid = Some(pid);
-        self.set(state)?;
-
-        Ok(())
-    }
-
-    // get_parent_pid
     #[must_use]
-    pub fn get_parent_pid(&self) -> Option<Principal> {
-        self.get().parent_pid
+    pub fn is_root() -> bool {
+        Self::get_parents().is_empty()
     }
 
-    // set_parent_pid
-    pub fn set_parent_pid(&mut self, id: Principal) -> Result<(), CanisterStateError> {
-        let mut state = self.get();
-        state.parent_pid = Some(id);
-        self.set(state)?;
+    #[must_use]
+    pub fn has_parent_pid(parent_pid: &Principal) -> bool {
+        Self::get_parents()
+            .iter()
+            .any(|p| p.principal == *parent_pid)
+    }
 
-        Ok(())
+    pub fn get_root_pid() -> Principal {
+        Self::get_parents()
+            .first()
+            .map(|p| p.principal)
+            .unwrap_or_else(canister_self)
+    }
+
+    pub fn set_kind(kind: &str) -> Result<(), CanisterStateError> {
+        Self::with_mut(|cell| {
+            let mut state = cell.get();
+            state.kind = Some(kind.to_string());
+            cell.set(state).map(|_| ())
+        })
+        .map_err(Into::into)
+    }
+
+    #[must_use]
+    pub fn get_parents() -> Vec<CanisterParent> {
+        Self::with(|cell| cell.get().parents)
+    }
+
+    #[must_use]
+    pub fn get_parent_by_kind(kind: &str) -> Option<Principal> {
+        Self::get_parents()
+            .iter()
+            .find(|p| p.kind == kind)
+            .map(|p| p.principal)
+    }
+
+    pub fn set_parents(parents: Vec<CanisterParent>) -> Result<(), CanisterStateError> {
+        Self::with_mut(|cell| {
+            let mut state = cell.get();
+            state.parents = parents;
+            cell.set(state).map(|_| ())
+        })
+        .map_err(Into::into)
     }
 }
 
@@ -104,9 +124,29 @@ impl CanisterState {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CanisterStateData {
-    path: Option<String>,
-    root_pid: Option<Principal>,
-    parent_pid: Option<Principal>,
+    kind: Option<String>,
+    parents: Vec<CanisterParent>,
 }
 
 impl_storable_unbounded!(CanisterStateData);
+
+///
+/// CanisterParent
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterParent {
+    pub kind: String,
+    pub principal: Principal,
+}
+
+impl CanisterParent {
+    pub fn this() -> Result<Self, CanisterStateError> {
+        let kind = CanisterState::try_get_kind()?;
+
+        Ok(Self {
+            kind,
+            principal: canister_self(),
+        })
+    }
+}

@@ -1,5 +1,4 @@
-pub mod root;
-pub mod sharder;
+mod root;
 
 use crate::ic::api::performance_counter;
 use candid::CandidType;
@@ -7,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-pub use root::canister_registry::CanisterRegistryError;
+pub use root::{
+    CanisterAttributes, CanisterData, CanisterRegistry, CanisterRegistryData, CanisterRegistryError,
+};
 
 ///
 /// StateError

@@ -1,7 +1,7 @@
 use crate::{
     Error,
     ic::api::{canister_self, msg_caller},
-    interface,
+    memory,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,7 @@ macro_rules! auth_require_any {
 // is_canister_type
 // check caller against the id of a specific canister path
 pub fn is_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
-    interface::memory::subnet::index::try_get_canister(&canister)
+    memory::SubnetIndex::try_get_canister(&canister)
         .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
 
     Ok(())
@@ -127,7 +127,7 @@ pub fn is_canister_type(pid: Principal, canister: String) -> Result<(), Error> {
 
 // is_child
 pub fn is_child(pid: Principal) -> Result<(), Error> {
-    interface::memory::canister::child_index::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
+    memory::ChildIndex::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
 
     Ok(())
 }
@@ -143,8 +143,7 @@ pub fn is_controller(pid: Principal) -> Result<(), Error> {
 
 // is_root
 pub fn is_root(pid: Principal) -> Result<(), Error> {
-    let root_pid =
-        interface::memory::canister::state::get_root_pid().map_err(|_| AuthError::NoRootDefined)?;
+    let root_pid = memory::CanisterState::get_root_pid();
 
     if pid == root_pid {
         Ok(())
@@ -155,9 +154,10 @@ pub fn is_root(pid: Principal) -> Result<(), Error> {
 
 // is_parent
 pub fn is_parent(pid: Principal) -> Result<(), Error> {
-    match interface::memory::canister::state::get_parent_pid() {
-        Some(parent_pid) if parent_pid == pid => Ok(()),
-        _ => Err(AuthError::NotParent(pid))?,
+    if memory::CanisterState::has_parent_pid(&pid) {
+        Ok(())
+    } else {
+        Err(AuthError::NotParent(pid))?
     }
 }
 

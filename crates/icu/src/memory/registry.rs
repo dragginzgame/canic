@@ -34,8 +34,8 @@ impl Registry {
     }
 
     #[must_use]
-    pub fn get_data(&self) -> RegistryData {
-        self.iter().collect()
+    pub fn as_data(&self) -> RegistryData {
+        RegistryData(self.iter().collect())
     }
 
     pub fn register(&mut self, id: u8, entry: RegistryEntry) -> Result<(), RegistryError> {
@@ -76,7 +76,8 @@ impl_storable_unbounded!(RegistryEntry);
 /// RegistryData
 ///
 
-pub type RegistryData = Vec<(u8, RegistryEntry)>;
+#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+pub struct RegistryData(Vec<(u8, RegistryEntry)>);
 
 ///
 /// TESTS
@@ -185,7 +186,7 @@ mod tests {
                 )
                 .unwrap();
 
-            let data = registry.get_data();
+            let data = registry.as_data();
             assert_eq!(data.len(), 2);
             assert!(
                 data.iter()

@@ -3,19 +3,20 @@ pub mod canister;
 pub mod registry;
 pub mod subnet;
 
-pub use registry::{Registry, RegistryError};
+pub use app::{AppState, AppStateData};
+pub use canister::{CanisterState, CanisterStateData, ChildIndex, ChildIndexData};
+pub use registry::{Registry, RegistryData, RegistryError};
+pub use subnet::{SubnetIndex, SubnetIndexData};
 
 use crate::{
-    MEMORY_REGISTRY_ID,
     ic::structures::{
         DefaultMemoryImpl,
         memory::{MemoryId, MemoryManager},
     },
-    icu_register_memory,
     memory::{
-        app::{AppState, AppStateError},
-        canister::{CanisterState, CanisterStateError, ChildIndex, ChildIndexError},
-        subnet::{SubnetIndex, SubnetIndexError},
+        app::AppStateError,
+        canister::{CanisterStateError, ChildIndexError},
+        subnet::SubnetIndexError,
     },
 };
 use candid::CandidType;
@@ -23,12 +24,16 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-pub fn init() {
-    APP_STATE.with(|_| {});
-    CANISTER_STATE.with(|_| {});
-    CHILD_INDEX.with(|_| {});
-    SUBNET_INDEX.with(|_| {});
-}
+//
+// IDs
+//
+
+pub(crate) const MEMORY_REGISTRY_ID: u8 = 0;
+
+pub(crate) const APP_STATE_MEMORY_ID: u8 = 1;
+pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 2;
+pub(crate) const CHILD_INDEX_MEMORY_ID: u8 = 3;
+pub(crate) const SUBNET_INDEX_MEMORY_ID: u8 = 4;
 
 //
 // MEMORY_MANAGER
@@ -54,22 +59,15 @@ thread_local! {
             ),
         ));
 
-    pub static APP_STATE: RefCell<AppState> = RefCell::new(
-        icu_register_memory!(AppState, 1, AppState::init)
-    );
+}
 
-    pub static CANISTER_STATE: RefCell<CanisterState> = RefCell::new(
-        icu_register_memory!(CanisterState, 2, CanisterState::init)
-    );
+///
+/// Helpers
+///
 
-    pub static CHILD_INDEX: RefCell<ChildIndex> = RefCell::new(
-        icu_register_memory!(ChildIndex, 3, ChildIndex::init)
-    );
-
-    pub static SUBNET_INDEX: RefCell<SubnetIndex> = RefCell::new(
-        icu_register_memory!(SubnetIndex, 4, SubnetIndex::init)
-    );
-
+#[must_use]
+pub fn memory_registry_data() -> RegistryData {
+    MEMORY_REGISTRY.with_borrow(|state| state.as_data())
 }
 
 ///

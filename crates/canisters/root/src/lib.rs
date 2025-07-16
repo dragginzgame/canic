@@ -1,6 +1,7 @@
 use icu::{
-    interface::state::root::canister_registry::{self, CanisterDef, create_canisters},
+    interface::state::create_canisters,
     prelude::*,
+    state::{CanisterAttributes, CanisterRegistry},
 };
 
 //
@@ -17,9 +18,9 @@ async fn init_async() {
 
 // register_canisters
 fn register_canisters() {
-    let canisters: &[(&'static str, CanisterDef, &'static [u8])] = &[(
+    let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
         "test",
-        CanisterDef {
+        CanisterAttributes {
             auto_create: true,
             is_sharded: false,
         },
@@ -27,7 +28,7 @@ fn register_canisters() {
     )];
 
     for (path, def, wasm) in canisters {
-        canister_registry::add_canister(path, def, wasm).unwrap();
+        CanisterRegistry::add_canister(path, def, wasm).unwrap();
     }
 }
 

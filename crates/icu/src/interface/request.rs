@@ -1,7 +1,8 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{self, InterfaceError, ic::IcError, response::Response},
+    interface::{InterfaceError, ic::IcError, response::Response},
+    memory::{CanisterState, ChildIndex, MemoryError, canister::CanisterParent},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,8 @@ pub enum Request {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterCreate {
-    pub path: String,
+    pub kind: String,
+    pub parents: Vec<CanisterParent>,
     pub controllers: Vec<Principal>,
     pub extra: Option<Vec<u8>>,
 }
@@ -45,7 +47,7 @@ pub struct CanisterCreate {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterUpgrade {
     pub pid: Principal,
-    pub path: String,
+    pub kind: String,
 }
 
 ///
@@ -64,7 +66,7 @@ pub struct Cycles {
 // request
 // sends the request to root::icu_response
 pub async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = crate::interface::memory::canister::state::get_root_pid()?;
+    let root_pid = CanisterState::get_root_pid();
 
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
@@ -80,7 +82,7 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 
 // canister_create_request
 pub async fn canister_create_request<A>(
-    path: &str,
+    kind: &str,
     controllers: &[Principal],
     extra: Option<A>,
 ) -> Result<Principal, Error>
@@ -96,8 +98,15 @@ where
         None => None,
     };
 
+    // build parents
+    let mut parents = CanisterState::get_parents();
+    let this = CanisterParent::this().map_err(MemoryError::from)?;
+    parents.push(this);
+
+    // build request
     let req = Request::CanisterCreate(CanisterCreate {
-        path: path.to_string(),
+        kind: kind.to_string(),
+        parents,
         controllers: controllers.to_vec(),
         extra: encoded,
     });
@@ -105,9 +114,9 @@ where
     match request(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_canister_pid) => {
-                interface::memory::canister::child_index::insert_canister(new_canister_pid, path);
-
                 // update child index
+                ChildIndex::insert_canister(new_canister_pid, kind);
+
                 Ok(new_canister_pid)
             }
             Response::CanisterUpgrade => Err(InterfaceError::RequestError(
@@ -119,10 +128,10 @@ where
 }
 
 // canister_upgrade_request
-pub async fn canister_upgrade_request(pid: Principal, path: &str) -> Result<(), Error> {
+pub async fn canister_upgrade_request(pid: Principal, kind: &str) -> Result<(), Error> {
     let req = Request::CanisterUpgrade(CanisterUpgrade {
         pid,
-        path: path.to_string(),
+        kind: kind.to_string(),
     });
 
     let _res = request(req).await?;

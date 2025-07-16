@@ -1,5 +1,5 @@
-mod index;
+mod child_index;
 mod state;
 
-pub use index::*;
+pub use child_index::*;
 pub use state::*;

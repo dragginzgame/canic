@@ -57,12 +57,6 @@ pub enum Error {
 }
 
 ///
-/// MemoryIds
-///
-
-pub const MEMORY_REGISTRY_ID: u8 = 0;
-
-///
 /// Log
 ///
 

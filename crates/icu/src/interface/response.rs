@@ -1,15 +1,14 @@
 use crate::{
     Error,
-    ic::api::msg_caller,
     interface::{
         self, InterfaceError,
         ic::{IcError, ic_create_canister, ic_upgrade_canister},
         request::Request,
-        state::root::canister_registry,
     },
+    memory::{CanisterState, SubnetIndex, canister::CanisterParent},
+    state::{CanisterRegistry, StateError},
 };
 use candid::{CandidType, Principal, encode_args};
-
 use serde::{Deserialize, Serialize};
 
 ///
@@ -27,37 +26,37 @@ pub enum Response {
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
         Request::CanisterCreate(req) => {
-            root_canister_create(&req.path, &req.controllers, req.extra).await
+            root_canister_create(&req.kind, &req.parents, &req.controllers, req.extra).await
         }
-        Request::CanisterUpgrade(req) => root_canister_upgrade(req.pid, &req.path).await,
+        Request::CanisterUpgrade(req) => root_canister_upgrade(req.pid, &req.kind).await,
     }
 }
 
 // root_canister_create
 async fn root_canister_create(
-    path: &str,
+    kind: &str,
+    parents: &[CanisterParent],
     controllers: &[Principal],
     extra: Option<Vec<u8>>,
 ) -> Result<Response, Error> {
-    let canister = canister_registry::get_canister(path)?;
-    let root_pid = interface::memory::canister::state::get_root_pid()?;
-    let parent_pid = msg_caller();
+    let canister = CanisterRegistry::try_get_canister(kind).map_err(StateError::from)?;
+    let root_pid = CanisterState::get_root_pid();
 
     // controllers
     let mut controllers = controllers.to_vec();
     controllers.push(root_pid);
 
     // encode the standard init args
-    let args = encode_args((root_pid, parent_pid, extra))
+    let args = encode_args((parents, extra))
         .map_err(IcError::from)
         .map_err(InterfaceError::from)?;
 
     // create the canister
-    let new_canister_id = ic_create_canister(path, canister.wasm, controllers, args).await?;
+    let new_canister_id = ic_create_canister(kind, canister.wasm, controllers, args).await?;
 
     // optional - update subnet index
-    if !canister.def.is_sharded {
-        interface::memory::subnet::index::set_canister(path, new_canister_id);
+    if !canister.attributes.is_sharded {
+        SubnetIndex::set_canister(kind, new_canister_id);
         interface::cascade::subnet_index_cascade().await?;
     }
 
@@ -66,7 +65,7 @@ async fn root_canister_create(
 
 // root_canister_upgrade
 async fn root_canister_upgrade(pid: Principal, path: &str) -> Result<Response, Error> {
-    let canister = canister_registry::get_canister(path)?;
+    let canister = CanisterRegistry::try_get_canister(path).map_err(StateError::from)?;
     ic_upgrade_canister(pid, canister.wasm).await?;
 
     Ok(Response::CanisterUpgrade)

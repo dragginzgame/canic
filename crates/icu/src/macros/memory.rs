@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! icu_register_memory {
-    ($ty:ty, $id:expr, $init:expr) => {{
+    ($ty:ty, $id:expr) => {{
         let path = stringify!($ty).to_string();
 
         // check the registry with logging
@@ -31,11 +31,8 @@ macro_rules! icu_register_memory {
         });
 
         // acquire memory_id
-        let mem = $crate::memory::MEMORY_MANAGER
-            .with_borrow_mut(|mgr| mgr.get($crate::ic::structures::memory::MemoryId::new($id)));
-
-        // init
-        $init(mem)
+        $crate::memory::MEMORY_MANAGER
+            .with_borrow_mut(|mgr| mgr.get($crate::ic::structures::memory::MemoryId::new($id)))
     }};
 }
 

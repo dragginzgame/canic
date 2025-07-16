@@ -4,22 +4,13 @@ pub mod memory;
 /// icu_start
 #[macro_export]
 macro_rules! icu_start {
-    ($canister_path:expr) => {
+    ($kind:expr) => {
         #[::icu::ic::init]
-        fn init(
-            root_pid: ::candid::Principal,
-            parent_pid: ::candid::Principal,
-            args: Option<Vec<u8>>,
-        ) {
-            use ::icu::interface::memory::canister::state;
+        fn init(parents: Vec<::icu::memory::canister::CanisterParent>, args: Option<Vec<u8>>) {
+            ::icu::log!(::icu::Log::Info, "init: {}", $kind);
 
-            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
-
-            ::icu::memory::init();
-
-            state::set_root_pid(root_pid).unwrap();
-            state::set_parent_pid(parent_pid).unwrap();
-            state::set_path($canister_path).unwrap();
+            ::icu::memory::CanisterState::set_parents(parents).unwrap();
+            ::icu::memory::CanisterState::set_kind($kind).unwrap();
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -34,17 +25,12 @@ macro_rules! icu_start {
 /// icu_start_root
 #[macro_export]
 macro_rules! icu_start_root {
-    ($canister_path:expr) => {
+    ($kind:expr) => {
         #[::icu::ic::init]
         fn init() {
-            use ::icu::interface::memory::canister::state;
+            ::icu::log!(::icu::Log::Info, "init: {}", $kind);
 
-            ::icu::log!(::icu::Log::Info, "init: {}", $canister_path);
-
-            ::icu::memory::init();
-
-            state::set_root_pid(::icu::ic::api::canister_self()).unwrap();
-            state::set_path($canister_path).unwrap();
+            ::icu::memory::CanisterState::set_kind($kind).unwrap();
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -59,7 +45,7 @@ macro_rules! icu_start_root {
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::interface::memory::app::state::command(cmd)?;
+            ::icu::memory::AppState::command(cmd).map_err(::icu::memory::MemoryError::from)?;
             ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())

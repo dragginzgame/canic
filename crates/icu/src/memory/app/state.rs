@@ -1,12 +1,25 @@
 use crate::{
     Log,
-    ic::structures::{Cell, DefaultMemory, cell::CellError},
-    impl_storable_unbounded, log,
+    ic::structures::{Cell, cell::CellError},
+    icu_register_memory, impl_storable_unbounded, log,
+    memory::APP_STATE_MEMORY_ID,
 };
 use candid::CandidType;
-use derive_more::{Deref, DerefMut, Display};
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
+
+//
+// APP_STATE
+//
+
+thread_local! {
+    pub static APP_STATE: RefCell<Cell<AppStateData>> = RefCell::new(Cell::init(
+        icu_register_memory!(AppStateData, APP_STATE_MEMORY_ID),
+        AppStateData::default(),
+    ).unwrap());
+}
 
 ///
 /// AppStateError
@@ -25,62 +38,59 @@ pub enum AppStateError {
 /// AppState
 ///
 
-#[derive(Deref, DerefMut)]
-pub struct AppState(Cell<AppStateData>);
+pub struct AppState();
 
 impl AppState {
-    // init
-    #[must_use]
-    pub fn init(memory: DefaultMemory) -> Self {
-        let cell = Cell::init(memory, AppStateData::default()).unwrap();
-
-        Self(cell)
+    pub fn with<R>(f: impl FnOnce(&Cell<AppStateData>) -> R) -> R {
+        APP_STATE.with_borrow(|s| f(s))
     }
 
-    // get_data
+    pub fn with_mut<R>(f: impl FnOnce(&mut Cell<AppStateData>) -> R) -> R {
+        APP_STATE.with_borrow_mut(|s| f(s))
+    }
+
     #[must_use]
-    pub fn get_data(&self) -> AppStateData {
-        self.get()
+    pub fn get_data() -> AppStateData {
+        Self::with(|cell| cell.get())
     }
 
     // set_data
-    pub fn set_data(&mut self, data: AppStateData) -> Result<(), AppStateError> {
-        self.set(data)?;
+    pub fn set_data(data: AppStateData) -> Result<(), AppStateError> {
+        Self::with_mut(|cell| cell.set(data))?;
 
         Ok(())
     }
 
-    // get_mode
     #[must_use]
-    pub fn get_mode(&self) -> AppMode {
-        self.get().mode
+    pub fn get_mode() -> AppMode {
+        Self::with(|cell| cell.get().mode)
     }
 
-    // set_mode
-    pub fn set_mode(&mut self, mode: AppMode) -> Result<(), AppStateError> {
-        let mut cur_state = self.get();
-        cur_state.mode = mode;
-        self.set(cur_state)?;
+    pub fn set_mode(mode: AppMode) -> Result<(), AppStateError> {
+        Self::with_mut(|cell| {
+            let mut cur = cell.get();
+            cur.mode = mode;
 
-        Ok(())
+            cell.set(cur).map(|_| ())
+        })
+        .map_err(Into::into)
     }
 
     // command
-    pub fn command(&mut self, cmd: AppCommand) -> Result<(), AppStateError> {
-        let old_mode = self.get().mode;
+    pub fn command(cmd: AppCommand) -> Result<(), AppStateError> {
+        let old_mode = Self::with(|cell| cell.get().mode);
+
         let new_mode = match cmd {
             AppCommand::Start => AppMode::Enabled,
             AppCommand::Readonly => AppMode::Readonly,
             AppCommand::Stop => AppMode::Disabled,
         };
 
-        // already in mode?
         if old_mode == new_mode {
-            Err(AppStateError::AlreadyInMode(old_mode))?;
+            return Err(AppStateError::AlreadyInMode(old_mode));
         }
 
-        // set mode
-        self.set_mode(new_mode)?;
+        Self::set_mode(new_mode)?;
 
         log!(Log::Ok, "app: mode changed {old_mode} -> {new_mode}");
 

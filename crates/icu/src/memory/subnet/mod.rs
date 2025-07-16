@@ -1,3 +1,3 @@
-mod index;
+mod subnet_index;
 
-pub use index::*;
+pub use subnet_index::*;
