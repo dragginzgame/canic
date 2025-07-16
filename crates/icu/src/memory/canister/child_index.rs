@@ -81,9 +81,7 @@ impl ChildIndex {
 
     // try_get_canister
     pub fn try_get_canister(pid: &Principal) -> Result<String, ChildIndexError> {
-        let canister = Self::get_canister(pid)
-            .ok_or(ChildIndexError::CanisterNotFound(*pid))?
-            .to_string();
+        let canister = Self::get_canister(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
 
         Ok(canister)
     }

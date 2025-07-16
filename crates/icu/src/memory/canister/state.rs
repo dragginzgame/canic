@@ -55,7 +55,7 @@ impl CanisterState {
 
     #[must_use]
     pub fn get_data() -> CanisterStateData {
-        Self::with(|cell| cell.get())
+        Self::with(Cell::get)
     }
 
     #[must_use]
@@ -82,8 +82,7 @@ impl CanisterState {
     pub fn get_root_pid() -> Principal {
         Self::get_parents()
             .first()
-            .map(|p| p.principal)
-            .unwrap_or_else(canister_self)
+            .map_or_else(canister_self, |p| p.principal)
     }
 
     pub fn set_kind(kind: &str) -> Result<(), CanisterStateError> {

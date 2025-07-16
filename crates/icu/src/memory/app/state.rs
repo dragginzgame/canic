@@ -51,7 +51,7 @@ impl AppState {
 
     #[must_use]
     pub fn get_data() -> AppStateData {
-        Self::with(|cell| cell.get())
+        Self::with(Cell::get)
     }
 
     // set_data

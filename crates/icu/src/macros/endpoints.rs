@@ -87,8 +87,8 @@ macro_rules! icu_endpoints {
 
         // icu_memory_registry
         #[::icu::ic::query]
-        fn icu_memory_registry() -> ::icu::memory::RegistryData {
-            $crate::memory::memory_registry_data()
+        fn icu_memory_registry() -> ::icu::memory::MemoryRegistryData {
+            $crate::memory::MemoryRegistry::get_data()
         }
 
         // icu_app_state

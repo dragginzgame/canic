@@ -3,32 +3,34 @@ macro_rules! icu_register_memory {
     ($ty:ty, $id:expr) => {{
         let path = stringify!($ty).to_string();
 
+        if $id == $crate::memory::MEMORY_REGISTRY_MEMORY_ID {
+            panic!("cannot register the memory registry itself");
+        }
+
         // check the registry with logging
-        $crate::memory::MEMORY_REGISTRY.with_borrow_mut(|reg| {
-            let result = reg.register(
+        let result = $crate::memory::MemoryRegistry::register(
+            $id,
+            $crate::memory::registry::MemoryRegistryEntry { path: path.clone() },
+        );
+
+        if let Err(ref err) = result {
+            $crate::log!(
+                $crate::Log::Error,
+                "❌ icu_register_memory failed for {} @ {}: {}",
+                path,
                 $id,
-                $crate::memory::registry::RegistryEntry { path: path.clone() },
+                err
             );
+        } else {
+            $crate::log!(
+                $crate::Log::Info,
+                "✅ icu_register_memory registered {} @ {}",
+                path,
+                $id
+            );
+        }
 
-            if let Err(ref err) = result {
-                $crate::log!(
-                    $crate::Log::Error,
-                    "❌ icu_register_memory failed for {} @ {}: {}",
-                    path,
-                    $id,
-                    err
-                );
-            } else {
-                $crate::log!(
-                    $crate::Log::Info,
-                    "✅ icu_register_memory registered {} @ {}",
-                    path,
-                    $id
-                );
-            }
-
-            result.unwrap()
-        });
+        result.unwrap();
 
         // acquire memory_id
         $crate::memory::MEMORY_MANAGER

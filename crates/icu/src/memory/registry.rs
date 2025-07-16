@@ -1,18 +1,33 @@
 use crate::{
-    ic::structures::{BTreeMap, DefaultMemory},
+    ic::structures::{BTreeMap, memory::MemoryId},
     impl_storable_unbounded,
+    memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID},
 };
 use candid::CandidType;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
+//
+// MEMORY_REGISTRY
+//
+
+thread_local! {
+    pub static MEMORY_REGISTRY: RefCell<BTreeMap<u8, MemoryRegistryEntry>> =
+        RefCell::new(BTreeMap::init(
+            MEMORY_MANAGER.with_borrow(|this| {
+                this.get(MemoryId::new(MEMORY_REGISTRY_MEMORY_ID))
+            }),
+        ));
+}
+
 ///
-/// RegistryError
+/// MemoryRegistryError
 ///
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
-pub enum RegistryError {
+pub enum MemoryRegistryError {
     #[error("ID {0} is already registered with type {1}, tried to register type {2}")]
     AlreadyRegistered(u8, String, String),
 
@@ -21,63 +36,66 @@ pub enum RegistryError {
 }
 
 ///
-/// Registry
+/// MemoryRegistry
 ///
 
-#[derive(Deref, DerefMut)]
-pub struct Registry(BTreeMap<u8, RegistryEntry>);
+pub struct MemoryRegistry {}
 
-impl Registry {
-    #[must_use]
-    pub fn init(memory: DefaultMemory) -> Self {
-        Self(BTreeMap::init(memory))
+impl MemoryRegistry {
+    pub fn with<R>(f: impl FnOnce(&BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
+        MEMORY_REGISTRY.with(|cell| f(&cell.borrow()))
     }
 
-    #[must_use]
-    pub fn as_data(&self) -> RegistryData {
-        RegistryData(self.iter().collect())
+    pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
+        MEMORY_REGISTRY.with(|cell| f(&mut cell.borrow_mut()))
     }
 
-    pub fn register(&mut self, id: u8, entry: RegistryEntry) -> Result<(), RegistryError> {
-        if id == 0 {
-            Err(RegistryError::Reserved(id))?;
-        }
-
-        if let Some(existing) = self.get(&id) {
-            if existing.path != entry.path {
-                return Err(RegistryError::AlreadyRegistered(
-                    id,
-                    existing.path,
-                    entry.path,
-                ));
+    pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), MemoryRegistryError> {
+        Self::with_mut(|map| {
+            if id == MEMORY_REGISTRY_MEMORY_ID {
+                return Err(MemoryRegistryError::Reserved(id));
             }
 
-            return Ok(());
-        }
+            if let Some(existing) = map.get(&id) {
+                if existing.path != entry.path {
+                    return Err(MemoryRegistryError::AlreadyRegistered(
+                        id,
+                        existing.path,
+                        entry.path,
+                    ));
+                }
 
-        self.insert(id, entry);
+                return Ok(());
+            }
 
-        Ok(())
+            map.insert(id, entry);
+            Ok(())
+        })
+    }
+
+    #[must_use]
+    pub fn get_data() -> MemoryRegistryData {
+        Self::with(|map| MemoryRegistryData(map.iter().collect()))
     }
 }
 
 ///
-/// RegistryEntry
+/// MemoryRegistryEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct RegistryEntry {
+pub struct MemoryRegistryEntry {
     pub path: String,
 }
 
-impl_storable_unbounded!(RegistryEntry);
+impl_storable_unbounded!(MemoryRegistryEntry);
 
 ///
-/// RegistryData
+/// MemoryRegistryData
 ///
 
 #[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
-pub struct RegistryData(Vec<(u8, RegistryEntry)>);
+pub struct MemoryRegistryData(Vec<(u8, MemoryRegistryEntry)>);
 
 ///
 /// TESTS
@@ -86,116 +104,101 @@ pub struct RegistryData(Vec<(u8, RegistryEntry)>);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::MEMORY_REGISTRY;
 
     #[test]
     fn cannot_register_zero() {
-        MEMORY_REGISTRY.with_borrow_mut(|registry| {
-            let result = registry.register(
-                0,
-                RegistryEntry {
-                    path: "crate::Foo".to_string(),
-                },
-            );
-            assert!(matches!(result, Err(RegistryError::Reserved(0))));
-        });
+        let result = MemoryRegistry::register(
+            0,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        );
+        assert!(matches!(result, Err(MemoryRegistryError::Reserved(0))));
     }
 
     #[test]
     fn can_register_valid_id() {
-        MEMORY_REGISTRY.with_borrow_mut(|registry| {
-            let result = registry.register(
-                1,
-                RegistryEntry {
-                    path: "crate::Foo".to_string(),
-                },
-            );
-            assert!(result.is_ok());
-        });
+        let result = MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
     fn duplicate_same_path_is_ok() {
-        MEMORY_REGISTRY.with_borrow_mut(|registry| {
-            registry
-                .register(
-                    1,
-                    RegistryEntry {
-                        path: "crate::Foo".to_string(),
-                    },
-                )
-                .unwrap();
+        MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        )
+        .unwrap();
 
-            let result = registry.register(
-                1,
-                RegistryEntry {
-                    path: "crate::Foo".to_string(),
-                },
-            );
-            assert!(result.is_ok());
-        });
+        let result = MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
     fn duplicate_different_path_fails() {
-        MEMORY_REGISTRY.with_borrow_mut(|registry| {
-            registry
-                .register(
-                    1,
-                    RegistryEntry {
-                        path: "crate::Foo".to_string(),
-                    },
-                )
-                .unwrap();
+        MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        )
+        .unwrap();
 
-            let result = registry.register(
-                1,
-                RegistryEntry {
-                    path: "crate::Bar".to_string(),
-                },
-            );
+        let result = MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Bar".to_string(),
+            },
+        );
 
-            match result {
-                Err(RegistryError::AlreadyRegistered(id, old, new)) => {
-                    assert_eq!(id, 1);
-                    assert_eq!(old, "crate::Foo");
-                    assert_eq!(new, "crate::Bar");
-                }
-                other => panic!("Unexpected result: {other:?}"),
+        match result {
+            Err(MemoryRegistryError::AlreadyRegistered(id, old, new)) => {
+                assert_eq!(id, 1);
+                assert_eq!(old, "crate::Foo");
+                assert_eq!(new, "crate::Bar");
             }
-        });
+            other => panic!("Unexpected result: {other:?}"),
+        }
     }
 
     #[test]
     fn registry_data_is_correct() {
-        MEMORY_REGISTRY.with_borrow_mut(|registry| {
-            registry
-                .register(
-                    1,
-                    RegistryEntry {
-                        path: "crate::Foo".to_string(),
-                    },
-                )
-                .unwrap();
-            registry
-                .register(
-                    2,
-                    RegistryEntry {
-                        path: "crate::Bar".to_string(),
-                    },
-                )
-                .unwrap();
+        MemoryRegistry::register(
+            1,
+            MemoryRegistryEntry {
+                path: "crate::Foo".to_string(),
+            },
+        )
+        .unwrap();
+        MemoryRegistry::register(
+            2,
+            MemoryRegistryEntry {
+                path: "crate::Bar".to_string(),
+            },
+        )
+        .unwrap();
 
-            let data = registry.as_data();
-            assert_eq!(data.len(), 2);
-            assert!(
-                data.iter()
-                    .any(|(id, e)| *id == 1 && e.path == "crate::Foo")
-            );
-            assert!(
-                data.iter()
-                    .any(|(id, e)| *id == 2 && e.path == "crate::Bar")
-            );
-        });
+        let data = MemoryRegistry::get_data();
+        assert_eq!(data.len(), 2);
+        assert!(
+            data.iter()
+                .any(|(id, e)| *id == 1 && e.path == "crate::Foo")
+        );
+        assert!(
+            data.iter()
+                .any(|(id, e)| *id == 2 && e.path == "crate::Bar")
+        );
     }
 }

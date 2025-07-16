@@ -5,14 +5,11 @@ pub mod subnet;
 
 pub use app::{AppState, AppStateData};
 pub use canister::{CanisterState, CanisterStateData, ChildIndex, ChildIndexData};
-pub use registry::{Registry, RegistryData, RegistryError};
+pub use registry::{MemoryRegistry, MemoryRegistryData, MemoryRegistryError};
 pub use subnet::{SubnetIndex, SubnetIndexData};
 
 use crate::{
-    ic::structures::{
-        DefaultMemoryImpl,
-        memory::{MemoryId, MemoryManager},
-    },
+    ic::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
         app::AppStateError,
         canister::{CanisterStateError, ChildIndexError},
@@ -28,7 +25,7 @@ use thiserror::Error as ThisError;
 // IDs
 //
 
-pub(crate) const MEMORY_REGISTRY_ID: u8 = 0;
+pub(crate) const MEMORY_REGISTRY_MEMORY_ID: u8 = 0;
 
 pub(crate) const APP_STATE_MEMORY_ID: u8 = 1;
 pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 2;
@@ -47,27 +44,6 @@ thread_local! {
         RefCell::new(MemoryManager::init(
             DefaultMemoryImpl::default()
         ));
-
-    ///
-    /// MEMORY_REGISTRY
-    ///
-    pub static MEMORY_REGISTRY: RefCell<Registry> =
-        RefCell::new(<Registry>::init(
-            MEMORY_MANAGER.with_borrow(|this| {
-                    this.get(MemoryId::new(MEMORY_REGISTRY_ID))
-                }
-            ),
-        ));
-
-}
-
-///
-/// Helpers
-///
-
-#[must_use]
-pub fn memory_registry_data() -> RegistryData {
-    MEMORY_REGISTRY.with_borrow(|state| state.as_data())
 }
 
 ///
@@ -76,11 +52,9 @@ pub fn memory_registry_data() -> RegistryData {
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum MemoryError {
-    // registry
     #[error(transparent)]
-    RegistryError(#[from] RegistryError),
+    MemoryRegistryError(#[from] MemoryRegistryError),
 
-    // others
     #[error(transparent)]
     AppStateError(#[from] AppStateError),
 
