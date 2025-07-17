@@ -12,6 +12,8 @@ pub mod export {
     pub use defer;
 }
 
+pub use Error as IcuError;
+
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
@@ -22,7 +24,7 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Error as IcuError, Log, auth_require_all, auth_require_any,
+        IcuError, Log, auth_require_all, auth_require_any,
         guard::{guard_query, guard_update},
         ic::{
             api::msg_caller,

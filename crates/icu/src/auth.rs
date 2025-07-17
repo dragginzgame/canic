@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    IcuError,
     ic::api::{canister_self, msg_caller},
     memory,
 };
@@ -52,17 +52,18 @@ pub enum AuthError {
 /// Rule
 ///
 
-pub type RuleFn =
-    Box<dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + Sync>;
+pub type RuleFn = Box<
+    dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), IcuError>> + Send>> + Send + Sync,
+>;
 
-pub type RuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+pub type RuleResult = Pin<Box<dyn Future<Output = Result<(), IcuError>> + Send>>;
 
 ///
 /// Auth Functions
 ///
 
 // require_all
-pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
+pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), IcuError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -77,7 +78,7 @@ pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
 }
 
 // require_any
-pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), Error> {
+pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), IcuError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
