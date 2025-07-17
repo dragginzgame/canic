@@ -14,6 +14,9 @@ use thiserror::Error as ThisError;
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
 pub enum AuthError {
+    #[error("{0}")]
+    Custom(String),
+
     #[error("invalid error state - this should never happen")]
     InvalidState,
 
@@ -46,6 +49,13 @@ pub enum AuthError {
 
     #[error("principal '{0}' is not the current canister")]
     NotThis(Principal),
+}
+
+impl AuthError {
+    #[must_use]
+    pub fn custom(s: &str) -> Self {
+        Self::Custom(s.to_string())
+    }
 }
 
 ///
