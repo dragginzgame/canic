@@ -13,7 +13,7 @@ icu_start_root!("root");
 #[update]
 async fn init_async() {
     register_canisters();
-    create_canisters(&[]).await.unwrap()
+    create_canisters(&[]).await.unwrap();
 }
 
 // register_canisters
