@@ -45,11 +45,11 @@ macro_rules! impl_storable_bounded {
                     is_fixed_size: $is_fixed_size,
                 };
 
-            fn to_bytes(self) -> ::std::borrow::Cow<[u8]> {
+            fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
                 ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
             }
 
-            fn into_bytes(&self) -> Vec<u8> {
+            fn into_bytes(self) -> Vec<u8> {
                 $crate::serialize::serialize(self).unwrap()
             }
 
