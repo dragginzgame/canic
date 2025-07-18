@@ -45,7 +45,7 @@ macro_rules! impl_storable_bounded {
                     is_fixed_size: $is_fixed_size,
                 };
 
-            fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
+            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
                 ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
             }
 
@@ -53,7 +53,7 @@ macro_rules! impl_storable_bounded {
                 $crate::serialize::serialize(self).unwrap()
             }
 
-            fn from_bytes(bytes: ::std::borrow::Cow<[u8]>) -> Self {
+            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
                 $crate::serialize::deserialize(&bytes).unwrap()
             }
         }
@@ -68,7 +68,7 @@ macro_rules! impl_storable_unbounded {
             const BOUND: $crate::ic::structures::storable::Bound =
                 $crate::ic::structures::storable::Bound::Unbounded;
 
-            fn to_bytes(&self) -> ::std::borrow::Cow<[u8]> {
+            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
                 ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
             }
 
@@ -76,7 +76,7 @@ macro_rules! impl_storable_unbounded {
                 $crate::serialize::serialize(&self).unwrap()
             }
 
-            fn from_bytes(bytes: ::std::borrow::Cow<[u8]>) -> Self {
+            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
                 $crate::serialize::deserialize(&bytes).unwrap()
             }
         }
