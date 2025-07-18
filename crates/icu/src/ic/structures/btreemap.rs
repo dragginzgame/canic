@@ -1,6 +1,7 @@
 use crate::ic::structures::DefaultMemory;
 use derive_more::{Deref, DerefMut};
 use ic_stable_structures::{Storable, btreemap::BTreeMap as WrappedBTreeMap};
+use std::ops::RangeBounds;
 
 ///
 /// BTreeMap
@@ -31,6 +32,14 @@ where
     /// Returns an iterator over cloned `(K, V)` pairs.
     pub fn iter_pairs(&self) -> impl Iterator<Item = (K, V)> + '_ {
         self.iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+    }
+
+    pub fn range_pairs<R>(&self, range: R) -> impl Iterator<Item = (K, V)> + '_
+    where
+        R: RangeBounds<K>,
+    {
+        self.range(range)
             .map(|entry| (entry.key().clone(), entry.value().clone()))
     }
 
