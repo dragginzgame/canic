@@ -50,7 +50,7 @@ macro_rules! impl_storable_bounded {
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                $crate::serialize::serialize(self).unwrap()
+                $crate::serialize::serialize(&self).unwrap()
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
