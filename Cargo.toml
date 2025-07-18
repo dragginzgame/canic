@@ -17,7 +17,7 @@ icu = { path = "crates/icu" }
 # ic cdk
 candid = { version = "0.10", default-features = false, features = ["value"] }
 ic-cdk = "0.18.5"
-ic-stable-structures = "0.6.9"
+ic-stable-structures = "0.7.0"
 ic-management-canister-types = "0.3.1"
 ic-ledger-types = "0.15.0"
 ic_principal = "0.1"

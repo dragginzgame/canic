@@ -9,8 +9,8 @@ macro_rules! icu_start {
         fn init(parents: Vec<::icu::memory::canister::CanisterParent>, args: Option<Vec<u8>>) {
             ::icu::log!(::icu::Log::Info, "init: {}", $kind);
 
-            ::icu::memory::CanisterState::set_parents(parents).unwrap();
-            ::icu::memory::CanisterState::set_kind($kind).unwrap();
+            ::icu::memory::CanisterState::set_parents(parents);
+            ::icu::memory::CanisterState::set_kind($kind);
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -30,7 +30,7 @@ macro_rules! icu_start_root {
         fn init() {
             ::icu::log!(::icu::Log::Info, "init: {}", $kind);
 
-            ::icu::memory::CanisterState::set_kind($kind).unwrap();
+            ::icu::memory::CanisterState::set_kind($kind);
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {

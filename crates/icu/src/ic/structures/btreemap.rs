@@ -11,7 +11,7 @@ use ic_stable_structures::{Storable, btreemap::BTreeMap as WrappedBTreeMap};
 pub struct BTreeMap<K, V>
 where
     K: Storable + Ord + Clone,
-    V: Storable,
+    V: Storable + Clone,
 {
     data: WrappedBTreeMap<K, V, DefaultMemory>,
 }
@@ -19,13 +19,19 @@ where
 impl<K, V> BTreeMap<K, V>
 where
     K: Storable + Ord + Clone,
-    V: Storable,
+    V: Storable + Clone,
 {
     #[must_use]
     pub fn init(memory: DefaultMemory) -> Self {
         Self {
             data: WrappedBTreeMap::init(memory),
         }
+    }
+
+    /// Returns an iterator over cloned `(K, V)` pairs.
+    pub fn iter_pairs(&self) -> impl Iterator<Item = (K, V)> + '_ {
+        self.iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
     }
 
     /// clear

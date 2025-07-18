@@ -42,7 +42,7 @@ impl ChildIndex {
 
     #[must_use]
     pub fn get_data() -> ChildIndexData {
-        Self::with(|map| ChildIndexData(map.iter().collect()))
+        Self::with(|map| ChildIndexData(map.iter_pairs().collect()))
     }
 
     pub fn insert_canister(pid: Principal, ty: &str) {
@@ -67,7 +67,7 @@ impl ChildIndex {
     #[must_use]
     pub fn get_by_type(ty: &str) -> Vec<Principal> {
         Self::with(|map| {
-            map.iter()
+            map.iter_pairs()
                 .filter_map(|(p, t)| if t == ty { Some(p) } else { None })
                 .collect()
         })

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.1.8]
 - complete refactor of stable structures, much better now!
+- also updated to ic-stable-structures 0.7.0
 
 ## [0.1.7]
 - now create_canister always sends args, Option<Vec<u8>>

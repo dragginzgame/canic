@@ -475,6 +475,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-stable-structures"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e54aeb082293c69def5ab34c70593ba85ff000386f7d0eacdf73514daaeca031"
+dependencies = [
+ "ic_principal",
+]
+
+[[package]]
 name = "ic0"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -515,7 +524,7 @@ dependencies = [
  "candid",
  "crc32fast",
  "hex",
- "ic-stable-structures",
+ "ic-stable-structures 0.6.9",
  "icrc-cbor",
  "itertools",
  "minicbor 0.19.1",
@@ -540,7 +549,7 @@ dependencies = [
  "ic-cdk-timers",
  "ic-ledger-types",
  "ic-management-canister-types",
- "ic-stable-structures",
+ "ic-stable-structures 0.7.0",
  "ic_principal",
  "icrc-ledger-types",
  "minicbor-serde",

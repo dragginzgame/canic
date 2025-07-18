@@ -1,7 +1,5 @@
 use crate::{
-    Log,
-    ic::structures::{Cell, cell::CellError},
-    icu_register_memory, impl_storable_unbounded, log,
+    Log, ic::structures::Cell, icu_register_memory, impl_storable_unbounded, log,
     memory::APP_STATE_MEMORY_ID,
 };
 use candid::CandidType;
@@ -18,7 +16,7 @@ thread_local! {
     pub static APP_STATE: RefCell<Cell<AppStateData>> = RefCell::new(Cell::init(
         icu_register_memory!(AppStateData, APP_STATE_MEMORY_ID),
         AppStateData::default(),
-    ).unwrap());
+    ));
 }
 
 ///
@@ -29,9 +27,6 @@ thread_local! {
 pub enum AppStateError {
     #[error("app is already in {0} mode")]
     AlreadyInMode(AppMode),
-
-    #[error(transparent)]
-    CellError(#[from] CellError),
 }
 
 ///
@@ -55,10 +50,8 @@ impl AppState {
     }
 
     // set_data
-    pub fn set_data(data: AppStateData) -> Result<(), AppStateError> {
-        Self::with_mut(|cell| cell.set(data))?;
-
-        Ok(())
+    pub fn set_data(data: AppStateData) {
+        Self::with_mut(|cell| cell.set(data));
     }
 
     #[must_use]
@@ -66,14 +59,13 @@ impl AppState {
         Self::with(|cell| cell.get().mode)
     }
 
-    pub fn set_mode(mode: AppMode) -> Result<(), AppStateError> {
+    pub fn set_mode(mode: AppMode) {
         Self::with_mut(|cell| {
             let mut cur = cell.get();
             cur.mode = mode;
 
-            cell.set(cur).map(|_| ())
-        })
-        .map_err(Into::into)
+            cell.set(cur);
+        });
     }
 
     // command
@@ -90,7 +82,7 @@ impl AppState {
             return Err(AppStateError::AlreadyInMode(old_mode));
         }
 
-        Self::set_mode(new_mode)?;
+        Self::set_mode(new_mode);
 
         log!(Log::Ok, "app: mode changed {old_mode} -> {new_mode}");
 

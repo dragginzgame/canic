@@ -75,7 +75,14 @@ impl MemoryRegistry {
 
     #[must_use]
     pub fn get_data() -> MemoryRegistryData {
-        Self::with(|map| MemoryRegistryData(map.iter().collect()))
+        Self::with(|map| {
+            let data = map
+                .iter()
+                .map(|entry| (*entry.key(), entry.value().clone()))
+                .collect();
+
+            MemoryRegistryData(data)
+        })
     }
 }
 

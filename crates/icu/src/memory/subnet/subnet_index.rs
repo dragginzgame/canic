@@ -38,7 +38,7 @@ impl SubnetIndex {
 
     #[must_use]
     pub fn get_data() -> SubnetIndexData {
-        Self::with(|map| SubnetIndexData(map.iter().collect()))
+        Self::with(|map| SubnetIndexData(map.iter_pairs().collect()))
     }
 
     pub fn set_data(data: SubnetIndexData) {

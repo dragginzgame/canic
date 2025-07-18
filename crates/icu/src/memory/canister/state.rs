@@ -1,8 +1,5 @@
 use crate::{
-    ic::{
-        api::canister_self,
-        structures::{Cell, cell::CellError},
-    },
+    ic::{api::canister_self, structures::Cell},
     icu_register_memory, impl_storable_unbounded,
     memory::CANISTER_STATE_MEMORY_ID,
 };
@@ -19,7 +16,7 @@ thread_local! {
     pub static CANISTER_STATE: RefCell<Cell<CanisterStateData>> = RefCell::new(Cell::init(
         icu_register_memory!(AppStateData, CANISTER_STATE_MEMORY_ID),
         CanisterStateData::default(),
-    ).unwrap());
+    ));
 }
 
 ///
@@ -33,9 +30,6 @@ pub enum CanisterStateError {
 
     #[error("this canister does not have any parents")]
     NoParents,
-
-    #[error(transparent)]
-    CellError(#[from] CellError),
 }
 
 ///
@@ -85,13 +79,12 @@ impl CanisterState {
             .map_or_else(canister_self, |p| p.principal)
     }
 
-    pub fn set_kind(kind: &str) -> Result<(), CanisterStateError> {
+    pub fn set_kind(kind: &str) {
         Self::with_mut(|cell| {
             let mut state = cell.get();
             state.kind = Some(kind.to_string());
-            cell.set(state).map(|_| ())
-        })
-        .map_err(Into::into)
+            cell.set(state)
+        });
     }
 
     #[must_use]
@@ -107,13 +100,12 @@ impl CanisterState {
             .map(|p| p.principal)
     }
 
-    pub fn set_parents(parents: Vec<CanisterParent>) -> Result<(), CanisterStateError> {
+    pub fn set_parents(parents: Vec<CanisterParent>) {
         Self::with_mut(|cell| {
             let mut state = cell.get();
             state.parents = parents;
-            cell.set(state).map(|_| ())
-        })
-        .map_err(Into::into)
+            cell.set(state);
+        });
     }
 }
 

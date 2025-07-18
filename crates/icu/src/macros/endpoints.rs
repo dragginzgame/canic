@@ -28,7 +28,7 @@ macro_rules! icu_endpoints {
             ::icu::auth_require_any!(::icu::auth::is_parent)?;
 
             // set state and cascade
-            ::icu::memory::AppState::set_data(data).map_err(::icu::memory::MemoryError::from)?;
+            ::icu::memory::AppState::set_data(data);
             ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
