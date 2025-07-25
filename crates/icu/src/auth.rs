@@ -148,7 +148,7 @@ pub fn is_canister_type(pid: Principal, canister: String) -> RuleResult {
 #[must_use]
 pub fn is_child(pid: Principal) -> RuleResult {
     Box::pin(async move {
-        memory::ChildIndex::get_canister(&pid).ok_or(AuthError::NotChild(pid))?;
+        memory::ChildIndex::get(&pid).ok_or(AuthError::NotChild(pid))?;
 
         Ok(())
     })

@@ -6,7 +6,7 @@ use thiserror::Error as ThisError;
 
 ///
 /// Serialize/Deserialize
-/// forces use of cbor (ciborium)
+/// for consistent use of mimicbor (super efficient, no_std)
 ///
 
 ///

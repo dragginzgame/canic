@@ -128,12 +128,12 @@ where
 }
 
 // canister_upgrade_request
-pub async fn canister_upgrade_request(pid: Principal, kind: &str) -> Result<(), Error> {
-    let req = Request::CanisterUpgrade(CanisterUpgrade {
-        pid,
-        kind: kind.to_string(),
-    });
+pub async fn canister_upgrade_request(pid: Principal) -> Result<(), Error> {
+    // check this is a valid child
+    let kind = ChildIndex::try_get(&pid).map_err(MemoryError::from)?;
 
+    // send the request
+    let req = Request::CanisterUpgrade(CanisterUpgrade { pid, kind });
     let _res = request(req).await?;
 
     Ok(())

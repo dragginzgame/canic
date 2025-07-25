@@ -45,9 +45,9 @@ impl ChildIndex {
         Self::with(|map| ChildIndexData(map.iter_pairs().collect()))
     }
 
-    pub fn insert_canister(pid: Principal, ty: &str) {
+    pub fn insert_canister(pid: Principal, kind: &str) {
         Self::with_mut(|map| {
-            map.insert(pid, ty.to_string());
+            map.insert(pid, kind.to_string());
         });
     }
 
@@ -63,27 +63,27 @@ impl ChildIndex {
         });
     }
 
-    // get_by_type
+    // get
     #[must_use]
-    pub fn get_by_type(ty: &str) -> Vec<Principal> {
-        Self::with(|map| {
-            map.iter_pairs()
-                .filter_map(|(p, t)| if t == ty { Some(p) } else { None })
-                .collect()
-        })
-    }
-
-    // get_canister
-    #[must_use]
-    pub fn get_canister(pid: &Principal) -> Option<String> {
+    pub fn get(pid: &Principal) -> Option<String> {
         Self::with(|map| map.get(pid))
     }
 
-    // try_get_canister
-    pub fn try_get_canister(pid: &Principal) -> Result<String, ChildIndexError> {
-        let canister = Self::get_canister(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
+    // try_get
+    pub fn try_get(pid: &Principal) -> Result<String, ChildIndexError> {
+        let canister = Self::get(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
 
         Ok(canister)
+    }
+
+    // get_by_kind
+    #[must_use]
+    pub fn get_by_kind(kind: &str) -> Vec<Principal> {
+        Self::with(|map| {
+            map.iter_pairs()
+                .filter_map(|(p, k)| if k == kind { Some(p) } else { None })
+                .collect()
+        })
     }
 }
 

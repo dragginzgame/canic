@@ -1,5 +1,5 @@
+mod canister_state;
 mod child_index;
-mod state;
 
+pub use canister_state::*;
 pub use child_index::*;
-pub use state::*;

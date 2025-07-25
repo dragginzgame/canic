@@ -29,12 +29,13 @@ where
         }
     }
 
-    /// Returns an iterator over cloned `(K, V)` pairs.
+    /// Returns an iterator over all cloned `(K, V)` pairs.
     pub fn iter_pairs(&self) -> impl Iterator<Item = (K, V)> + '_ {
         self.iter()
             .map(|entry| (entry.key().clone(), entry.value().clone()))
     }
 
+    /// Returns an iterator over a range of cloned `(K, V)` pairs.
     pub fn range_pairs<R>(&self, range: R) -> impl Iterator<Item = (K, V)> + '_
     where
         R: RangeBounds<K>,
