@@ -1,6 +1,5 @@
 use crate::{
     Error, Log,
-    helper::{format_cycles, get_wasm_hash},
     ic::{
         call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
@@ -10,6 +9,7 @@ use crate::{
     },
     interface::InterfaceError,
     log,
+    utils::{cycles::format_cycles, wasm::get_wasm_hash},
 };
 use candid::{CandidType, Error as CandidError, Principal};
 use serde::{Deserialize, Serialize};

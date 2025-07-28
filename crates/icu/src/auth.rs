@@ -44,6 +44,9 @@ pub enum AuthError {
     #[error("principal '{0}' is not the parent of this canister")]
     NotParent(Principal),
 
+    #[error("principal '{0}' is not the same as principal '{1}'")]
+    NotPrincipal(Principal, Principal),
+
     #[error("principal '{0}' is not root")]
     NotRoot(Principal),
 
@@ -112,18 +115,18 @@ pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), IcuError> {
 
 #[macro_export]
 macro_rules! auth_require_all {
-    ($($f:path),* $(,)?) => {{
+    ($($f:expr),* $(,)?) => {{
         $crate::auth::require_all(vec![
-            $( Box::new(|pid| Box::pin($f(pid))) ),*
+            $( Box::new(|caller| Box::pin($f(caller))) ),*
         ]).await
     }};
 }
 
 #[macro_export]
 macro_rules! auth_require_any {
-    ($($f:path),* $(,)?) => {{
+    ($($f:expr),* $(,)?) => {{
         $crate::auth::require_any(vec![
-            $( Box::new(|pid| Box::pin($f(pid))) ),*
+            $( Box::new(|caller| Box::pin($f(caller))) ),*
         ]).await
     }};
 }
@@ -135,10 +138,10 @@ macro_rules! auth_require_any {
 // is_canister_type
 // check caller against the id of a specific canister path
 #[must_use]
-pub fn is_canister_type(pid: Principal, canister: String) -> RuleResult {
+pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
     Box::pin(async move {
         memory::SubnetIndex::try_get_canister(&canister)
-            .map_err(|_| AuthError::NotCanisterType(pid, canister.clone()))?;
+            .map_err(|_| AuthError::NotCanisterType(caller, canister.clone()))?;
 
         Ok(())
     })
@@ -146,9 +149,9 @@ pub fn is_canister_type(pid: Principal, canister: String) -> RuleResult {
 
 // is_child
 #[must_use]
-pub fn is_child(pid: Principal) -> RuleResult {
+pub fn is_child(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        memory::ChildIndex::get(&pid).ok_or(AuthError::NotChild(pid))?;
+        memory::ChildIndex::get(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -156,50 +159,62 @@ pub fn is_child(pid: Principal) -> RuleResult {
 
 // is_controller
 #[must_use]
-pub fn is_controller(pid: Principal) -> RuleResult {
+pub fn is_controller(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        if crate::ic::api::is_controller(&pid) {
+        if crate::ic::api::is_controller(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotController(pid).into())
+            Err(AuthError::NotController(caller).into())
         }
     })
 }
 
 // is_root
 #[must_use]
-pub fn is_root(pid: Principal) -> RuleResult {
+pub fn is_root(caller: Principal) -> RuleResult {
     Box::pin(async move {
         let root_pid = memory::CanisterState::get_root_pid();
 
-        if pid == root_pid {
+        if caller == root_pid {
             Ok(())
         } else {
-            Err(AuthError::NotRoot(pid))?
+            Err(AuthError::NotRoot(caller))?
         }
     })
 }
 
 // is_parent
 #[must_use]
-pub fn is_parent(pid: Principal) -> RuleResult {
+pub fn is_parent(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        if memory::CanisterState::has_parent_pid(&pid) {
+        if memory::CanisterState::has_parent_pid(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotParent(pid))?
+            Err(AuthError::NotParent(caller))?
+        }
+    })
+}
+
+// is_principal
+#[must_use]
+pub fn is_principal(caller: Principal, pid: Principal) -> RuleResult {
+    Box::pin(async move {
+        if caller == pid {
+            Ok(())
+        } else {
+            Err(AuthError::NotPrincipal(caller, pid))?
         }
     })
 }
 
 // is_same_canister
 #[must_use]
-pub fn is_same_canister(pid: Principal) -> RuleResult {
+pub fn is_same_canister(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        if pid == canister_self() {
+        if caller == canister_self() {
             Ok(())
         } else {
-            Err(AuthError::NotThis(pid))?
+            Err(AuthError::NotThis(caller))?
         }
     })
 }

@@ -1,0 +1,16 @@
+///
+/// CYCLES
+///
+
+pub const KC: u128 = 1_000;
+pub const MC: u128 = 1_000_000;
+pub const BC: u128 = 1_000_000_000;
+pub const TC: u128 = 1_000_000_000_000;
+pub const QC: u128 = 1_000_000_000_000_000;
+
+// format_cycles
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
+pub fn format_cycles(cycles: u128) -> String {
+    format!("{:.6} TC", cycles as f64 / TC as f64)
+}

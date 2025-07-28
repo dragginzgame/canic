@@ -1,12 +1,12 @@
 pub mod auth;
 pub mod guard;
-pub mod helper;
 pub mod ic;
 pub mod interface;
 pub mod macros;
 pub mod memory;
 pub mod serialize;
 pub mod state;
+pub mod utils;
 
 pub mod export {
     pub use defer;
@@ -69,16 +69,6 @@ pub enum Log {
     Warn,
     Error,
 }
-
-///
-/// CYCLES
-///
-
-pub const KC: u128 = 1_000;
-pub const MC: u128 = 1_000_000;
-pub const BC: u128 = 1_000_000_000;
-pub const TC: u128 = 1_000_000_000_000;
-pub const QC: u128 = 1_000_000_000_000_000;
 
 ///
 /// Cycles

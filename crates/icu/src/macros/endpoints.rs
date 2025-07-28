@@ -82,43 +82,26 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU STATE ENDPOINTS
+        // ICU DELEGATION ENDPOINTS
         //
 
-        // icu_memory_registry
-        #[::icu::ic::query]
-        fn icu_memory_registry() -> ::icu::memory::MemoryRegistryData {
-            $crate::memory::MemoryRegistry::get_data()
+        // icu_delegation_register
+        #[::icu::ic::update]
+        async fn icu_delegation_register(
+            args: ::icu::state::RegisterSessionArgs,
+        ) -> Result<(), ::icu::Error> {
+            $crate::state::DelegatedSessions::register_session(args)
         }
 
-        // icu_app_state
-        #[::icu::ic::query]
-        fn icu_app_state() -> ::icu::memory::AppStateData {
-            $crate::memory::AppState::get_data()
-        }
+        // icu_delegation_revoke
+        #[::icu::ic::update]
+        async fn icu_delegation_revoke(pid: Principal) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_parent, |pid| ::icu::auth::is_principal(
+                pid,
+                msg_caller()
+            ))?;
 
-        // icu_canister_state
-        #[::icu::ic::query]
-        fn icu_canister_state() -> ::icu::memory::CanisterStateData {
-            $crate::memory::CanisterState::get_data()
-        }
-
-        // icu_child_index
-        #[::icu::ic::query]
-        fn icu_child_index() -> ::icu::memory::ChildIndexData {
-            $crate::memory::ChildIndex::get_data()
-        }
-
-        // icu_subnet_index
-        #[::icu::ic::query]
-        fn icu_subnet_index() -> ::icu::memory::SubnetIndexData {
-            $crate::memory::SubnetIndex::get_data()
-        }
-
-        // icu_canister_registry
-        #[::icu::ic::query]
-        fn icu_canister_registry() -> ::icu::state::CanisterRegistryData {
-            $crate::state::CanisterRegistry::get_data()
+            $crate::state::DelegatedSessions::revoke_session(pid)
         }
     };
 }

@@ -78,7 +78,7 @@ impl MemoryRegistry {
         Self::with(|map| {
             let data = map
                 .iter()
-                .map(|entry| (*entry.key(), entry.value().clone()))
+                .map(|entry| (*entry.key(), entry.value()))
                 .collect();
 
             MemoryRegistryData(data)

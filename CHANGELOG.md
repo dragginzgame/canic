@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.1.9]
+- added a whole state for session delegations
+- added a utils/ module and moved rand, hash and time from mimic
+
 ## [0.1.8]
 - complete refactor of stable structures, much better now!
 - also updated to ic-stable-structures 0.7.0
