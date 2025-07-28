@@ -88,9 +88,9 @@ macro_rules! icu_endpoints {
         // icu_delegation_register
         #[::icu::ic::update]
         async fn icu_delegation_register(
-            args: ::icu::state::RegisterSessionArgs,
+            args: ::icu::state::RegisterDelegationArgs,
         ) -> Result<(), ::icu::Error> {
-            $crate::state::DelegatedSessions::register_session(args)
+            $crate::state::DelegationList::register_delegation(args)
         }
 
         // icu_delegation_revoke
@@ -101,7 +101,7 @@ macro_rules! icu_endpoints {
                 msg_caller()
             ))?;
 
-            $crate::state::DelegatedSessions::revoke_session(pid)
+            $crate::state::DelegationList::revoke_delegation(pid)
         }
     };
 }

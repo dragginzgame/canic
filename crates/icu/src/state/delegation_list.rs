@@ -1,4 +1,4 @@
-use crate::{Error, ic::api::msg_caller, state::StateError, utils::time::now_secs};
+use crate::{Error, state::StateError, utils::time::now_secs};
 use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
@@ -14,20 +14,20 @@ const MIN_EXPIRATION: Duration = Duration::from_secs(60); // 1 minute
 const CLEANUP_THRESHOLD: u64 = 1000;
 
 //
-// DELEGATIONS
+// SESSIONS
 //
 
 thread_local! {
-    static DELEGATED_SESSIONS: RefCell<DelegatedSessions> = RefCell::new(DelegatedSessions::new());
+    static DELEGATION_LIST: RefCell<DelegationList> = RefCell::new(DelegationList::new());
     static CALL_COUNT: RefCell<u64> = const { RefCell::new(0) };
 }
 
 ///
-/// DelegationError
+/// DelegationListError
 ///
 
 #[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
-pub enum DelegationError {
+pub enum DelegationListError {
     #[error("delegation expired at {0} (current time: {1})")]
     DelegationExpired(u64, u64),
 
@@ -51,64 +51,65 @@ pub enum DelegationError {
 #[derive(Debug, CandidType, Deserialize, Clone)]
 pub struct Delegation {
     wallet_pid: Principal,
-    expires_at: Option<u64>, // timestamp
+    expires_at: Option<u64>,
 }
 
 #[derive(Debug, CandidType, Deserialize, Clone)]
 pub struct DelegationView {
     wallet_pid: Principal,
+    session_pid: Principal,
     expires_at: Option<u64>,
     is_expired: bool,
-    session_pid: Principal,
 }
 
 #[derive(Debug, CandidType, Deserialize)]
-pub struct RegisterSessionArgs {
+pub struct RegisterDelegationArgs {
+    pub wallet_pid: Principal,
     pub session_pid: Principal,
     pub duration_secs: u64,
 }
 
 ///
-/// DelegatedSessions
+/// DelegationList
+/// map of the session pid to the Delegation
 ///
 
 #[derive(Default, Debug, Deref, DerefMut)]
-pub struct DelegatedSessions(HashMap<Principal, Delegation>);
+pub struct DelegationList(HashMap<Principal, Delegation>);
 
-impl DelegatedSessions {
+impl DelegationList {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn register_session(args: RegisterSessionArgs) -> Result<(), Error> {
-        let wallet_pid = msg_caller();
+    pub fn register_delegation(args: RegisterDelegationArgs) -> Result<(), Error> {
         let duration = Duration::from_secs(args.duration_secs);
 
         // Validate expiration time
         if duration < MIN_EXPIRATION {
-            Err(StateError::from(DelegationError::SessionTooShort(
+            Err(StateError::from(DelegationListError::SessionTooShort(
                 MIN_EXPIRATION.as_secs(),
             )))?;
         }
 
         if duration > MIN_EXPIRATION {
-            Err(StateError::from(DelegationError::SessionTooLong(
+            Err(StateError::from(DelegationListError::SessionTooLong(
                 MAX_EXPIRATION.as_secs(),
             )))?;
         }
 
         let expires_at = now_secs() + args.duration_secs;
 
-        DELEGATED_SESSIONS.with_borrow_mut(|map| {
+        DELEGATION_LIST.with_borrow_mut(|map| {
             // Remove any existing delegation from the same wallet
-            map.retain(|_, delegation| delegation.wallet_pid != wallet_pid);
+            map.retain(|_, session| session.wallet_pid != args.wallet_pid);
 
             // Insert the new delegation
             map.insert(
                 args.session_pid,
                 Delegation {
-                    wallet_pid,
+                    wallet_pid: args.wallet_pid,
                     expires_at: Some(expires_at),
                 },
             );
@@ -119,17 +120,17 @@ impl DelegatedSessions {
 
     pub fn get_delegation_info(session_pid: Principal) -> Result<DelegationView, Error> {
         let now = now_secs();
-        let delegation = DELEGATED_SESSIONS
+        let session = DELEGATION_LIST
             .with_borrow(|map| map.get(&session_pid).cloned())
-            .ok_or_else(|| StateError::from(DelegationError::NotFound(session_pid)))?;
+            .ok_or_else(|| StateError::from(DelegationListError::NotFound(session_pid)))?;
 
-        let is_expired = delegation.expires_at.is_none_or(|ts| now > ts);
+        let is_expired = session.expires_at.is_none_or(|ts| now > ts);
 
         Ok(DelegationView {
-            wallet_pid: delegation.wallet_pid,
-            expires_at: delegation.expires_at,
-            is_expired,
+            wallet_pid: session.wallet_pid,
             session_pid,
+            expires_at: session.expires_at,
+            is_expired,
         })
     }
 
@@ -137,32 +138,32 @@ impl DelegatedSessions {
     pub fn list_delegations() -> Vec<DelegationView> {
         let now = now_secs();
 
-        DELEGATED_SESSIONS.with_borrow(|map| {
+        DELEGATION_LIST.with_borrow(|map| {
             map.iter()
-                .map(|(&session_pid, d)| DelegationView {
+                .map(|(&s, d)| DelegationView {
+                    session_pid: s,
                     wallet_pid: d.wallet_pid,
                     expires_at: d.expires_at,
                     is_expired: d.expires_at.is_none_or(|expiry| now > expiry),
-                    session_pid,
                 })
                 .collect()
         })
     }
 
-    pub fn revoke_session(pid: Principal) -> Result<(), Error> {
-        let was_session = DELEGATED_SESSIONS.with_borrow(|map| map.contains_key(&pid));
+    pub fn revoke_delegation(pid: Principal) -> Result<(), Error> {
+        let was_session = DELEGATION_LIST.with_borrow(|map| map.contains_key(&pid));
 
         // Was there a session?
         if was_session {
-            DELEGATED_SESSIONS.with_borrow_mut(|map| {
+            DELEGATION_LIST.with_borrow_mut(|map| {
                 map.remove(&pid);
             });
 
             return Ok(());
         }
 
-        // Revoke all sessions from this wallet
-        let removed = DELEGATED_SESSIONS.with_borrow_mut(|map| {
+        // Revoke all delegation sessions from this wallet
+        let removed = DELEGATION_LIST.with_borrow_mut(|map| {
             let original_len = map.len();
             map.retain(|_, d| d.wallet_pid != pid);
             original_len - map.len()
@@ -171,25 +172,25 @@ impl DelegatedSessions {
         if removed > 0 {
             Ok(())
         } else {
-            Err(StateError::from(DelegationError::NotFound(pid)).into())
+            Err(StateError::from(DelegationListError::NotFound(pid)).into())
         }
     }
 
     #[must_use]
-    pub fn get_wallet_delegations(wallet_pid: Principal) -> Vec<DelegationView> {
+    pub fn get_wallet_delegations(delegator_pid: Principal) -> Vec<DelegationView> {
         let now = now_secs();
 
-        DELEGATED_SESSIONS.with_borrow(|map| {
+        DELEGATION_LIST.with_borrow(|map| {
             map.iter()
-                .filter(|(_, delegation)| delegation.wallet_pid == wallet_pid)
-                .map(|(session_pid, delegation)| {
-                    let is_expired = delegation.expires_at.is_none_or(|expiry| now > expiry);
+                .filter(|(_, del)| del.wallet_pid == delegator_pid)
+                .map(|(&session_pid, del)| {
+                    let is_expired = del.expires_at.is_none_or(|expiry| now > expiry);
 
                     DelegationView {
-                        wallet_pid: delegation.wallet_pid,
-                        expires_at: delegation.expires_at,
+                        session_pid,
+                        wallet_pid: del.wallet_pid,
+                        expires_at: del.expires_at,
                         is_expired,
-                        session_pid: *session_pid,
                     }
                 })
                 .collect()
@@ -199,15 +200,15 @@ impl DelegatedSessions {
     pub fn cleanup_expired_delegations() {
         let now = now_secs();
 
-        DELEGATED_SESSIONS.with_borrow_mut(|map| {
+        DELEGATION_LIST.with_borrow_mut(|map| {
             map.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
         });
     }
 
     pub fn cleanup_delegations() -> Result<u32, Error> {
-        let before_count = DELEGATED_SESSIONS.with_borrow(|map| map.len());
+        let before_count = DELEGATION_LIST.with_borrow(|map| map.len());
         Self::cleanup_expired_delegations();
-        let after_count = DELEGATED_SESSIONS.with_borrow(|map| map.len());
+        let after_count = DELEGATION_LIST.with_borrow(|map| map.len());
 
         #[allow(clippy::cast_possible_truncation)]
         Ok((before_count - after_count) as u32)
@@ -232,19 +233,19 @@ impl DelegatedSessions {
         let now = now_secs();
 
         // Check if delegation exists
-        let delegation = DELEGATED_SESSIONS
+        let delegation = DELEGATION_LIST
             .with_borrow(|map| map.get(&caller).cloned())
-            .ok_or_else(|| StateError::from(DelegationError::NotFound(caller)))?;
+            .ok_or_else(|| StateError::from(DelegationListError::NotFound(caller)))?;
 
         // Check it has a valid expiry
         let expires_at = delegation
             .expires_at
-            .ok_or_else(|| StateError::from(DelegationError::NoExpirySet(caller)))?;
+            .ok_or_else(|| StateError::from(DelegationListError::NoExpirySet(caller)))?;
 
         // Check it has expired
         if now > expires_at {
             return Err(
-                StateError::from(DelegationError::DelegationExpired(expires_at, now)).into(),
+                StateError::from(DelegationListError::DelegationExpired(expires_at, now)).into(),
             );
         }
 
@@ -262,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_register_and_list_delegations() {
-        let mut store = DelegatedSessions::new();
+        let mut store = DelegationList::new();
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
         let now = 1_000_000;
@@ -294,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_expired_delegation_cleanup() {
-        let mut store = DelegatedSessions::new();
+        let mut store = DelegationList::new();
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
 
@@ -314,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_multiple_sessions_from_one_wallet() {
-        let mut store = DelegatedSessions::new();
+        let mut store = DelegationList::new();
         let wallet = dummy_pid(1);
         let s1 = dummy_pid(10);
         let s2 = dummy_pid(11);
@@ -341,9 +342,9 @@ mod tests {
             .filter(|(_, d)| d.wallet_pid == wallet)
             .map(|(&session_pid, d)| DelegationView {
                 wallet_pid: d.wallet_pid,
+                session_pid,
                 expires_at: d.expires_at,
                 is_expired: d.expires_at.is_none_or(|ts| now > ts),
-                session_pid,
             })
             .collect::<Vec<_>>();
 

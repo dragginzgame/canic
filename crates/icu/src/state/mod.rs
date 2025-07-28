@@ -1,4 +1,4 @@
-mod delegated_sessions;
+mod delegation_list;
 mod root;
 
 use crate::ic::api::performance_counter;
@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-pub use delegated_sessions::{DelegatedSessions, Delegation, DelegationError, RegisterSessionArgs};
+pub use delegation_list::{
+    Delegation, DelegationList, DelegationListError, RegisterDelegationArgs,
+};
 pub use root::{
     CanisterAttributes, CanisterData, CanisterRegistry, CanisterRegistryData, CanisterRegistryError,
 };
@@ -22,7 +24,7 @@ pub enum StateError {
     CanisterRegistryError(#[from] CanisterRegistryError),
 
     #[error(transparent)]
-    DelegationError(#[from] DelegationError),
+    DelegationListError(#[from] DelegationListError),
 }
 
 thread_local! {
