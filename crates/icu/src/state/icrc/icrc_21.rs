@@ -1,6 +1,6 @@
 use crate::interface::icrc::*;
 use derive_more::{Deref, DerefMut};
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 //
 // ICRC 21 REGISTRY
@@ -16,13 +16,13 @@ thread_local! {
 ///
 
 pub type Icrc21ConsentHandlerFn =
-    fn(request: Icrc21ConsentMessageRequest) -> Result<Icrc21ConsentMessageResponse, String>;
+    Arc<dyn Fn(Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse + 'static>;
 
 ///
 /// Icrc21Registry
 ///
 
-#[derive(Default, Debug, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut)]
 pub struct Icrc21Registry(pub HashMap<String, Icrc21ConsentHandlerFn>);
 
 impl Icrc21Registry {
@@ -31,26 +31,33 @@ impl Icrc21Registry {
         Self::default()
     }
 
-    pub fn register(method: &str, handler: Icrc21ConsentHandlerFn) {
-        ICRC_21_REGISTRY.with_borrow_mut(|reg| reg.insert(method.to_string(), handler));
+    pub fn register<F>(method: &str, handler: F)
+    where
+        F: Fn(Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse + 'static,
+    {
+        ICRC_21_REGISTRY.with_borrow_mut(|reg| {
+            reg.insert(method.to_string(), Arc::new(handler));
+        });
+    }
+
+    pub fn register_static(method: &str, message: &'static str) {
+        Icrc21Registry::register(method, move |req| {
+            Icrc21ConsentMessageResponse::Ok(Icrc21ConsentInfo {
+                consent_message: Icrc21ConsentMessage::GenericDisplayMessage(message.to_string()),
+                metadata: req.user_preferences.metadata,
+            })
+        });
     }
 
     #[must_use]
     pub fn get_handler(method: &str) -> Option<Icrc21ConsentHandlerFn> {
-        ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).copied())
+        ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).cloned())
     }
 
     #[must_use]
     pub fn consent_message(req: Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse {
         match Self::get_handler(&req.method) {
-            Some(handler) => match handler(req) {
-                Ok(response) => response,
-
-                Err(desc) => Icrc21ConsentMessageResponse::Err(Icrc21Error::GenericError {
-                    error_code: 1,
-                    description: desc,
-                }),
-            },
+            Some(handler) => handler(req),
             None => Icrc21ConsentMessageResponse::Err(Icrc21Error::UnsupportedCanisterCall(
                 Icrc21ErrorInfo {
                     description: "No handler registered for this method.".to_string(),
