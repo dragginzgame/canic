@@ -63,10 +63,29 @@ macro_rules! icu_endpoints {
         // ICRC ENDPOINTS
         //
 
+        pub const ICRC_SUPPORTED_STANDARDS: &[(&str, &str)] = &[
+            (
+                "ICRC-10",
+                "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10/ICRC-10.md",
+            ),
+            (
+                "ICRC-21",
+                "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21/ICRC-21.md",
+            ),
+        ];
+
+        #[must_use]
+        pub fn icrc10_supported_standards() -> Vec<(String, String)> {
+            ICRC_SUPPORTED_STANDARDS
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        }
+
         #[::icu::ic::update]
         async fn icrc21_canister_call_consent_message(
-            req: ::icu::state::Icrc21ConsentMessageRequest,
-        ) -> ::icu::state::Icrc21ConsentMessageResponse {
+            req: ::icu::interface::icrc::Icrc21ConsentMessageRequest,
+        ) -> ::icu::interface::icrc::Icrc21ConsentMessageResponse {
             $crate::state::Icrc21Registry::consent_message(req)
         }
 
