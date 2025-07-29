@@ -40,10 +40,14 @@ impl Icrc21Registry {
         });
     }
 
-    pub fn register_static(method: &str, message: &'static str) {
+    pub fn register_static_with<F>(method: &str, generator: F)
+    where
+        F: Fn(&Icrc21ConsentMessageRequest) -> String + 'static,
+    {
         Icrc21Registry::register(method, move |req| {
+            let message = generator(&req);
             Icrc21ConsentMessageResponse::Ok(Icrc21ConsentInfo {
-                consent_message: Icrc21ConsentMessage::GenericDisplayMessage(message.to_string()),
+                consent_message: Icrc21ConsentMessage::GenericDisplayMessage(message),
                 metadata: req.user_preferences.metadata,
             })
         });
