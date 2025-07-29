@@ -16,17 +16,19 @@ thread_local! {
 /// Data Structures
 ///
 
-pub type ConsentHandlerFn =
-    fn(arg: Vec<u8>, prefs: ConsentPreferences) -> Result<Option<ConsentMessage>, Error>;
+pub type Icrc21ConsentHandlerFn = fn(
+    arg: Vec<u8>,
+    prefs: Icrc21ConsentPreferences,
+) -> Result<Option<Icrc21ConsentMessage>, Error>;
 
 #[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
-pub struct ConsentMessage {
+pub struct Icrc21ConsentMessage {
     pub consent_message: String,
     pub language: String,
 }
 
 #[derive(CandidType, Deserialize, Clone)]
-pub struct ConsentPreferences {
+pub struct Icrc21ConsentPreferences {
     pub language: String,
 }
 
@@ -42,7 +44,7 @@ pub enum Icrc21ConsentMessageResponse {
 pub struct Icrc21ConsentMessageRequest {
     pub method: String,
     pub arg: Vec<u8>, // Candid-encoded
-    pub consent_preferences: ConsentPreferences,
+    pub consent_preferences: Icrc21ConsentPreferences,
 }
 
 ///
@@ -50,7 +52,7 @@ pub struct Icrc21ConsentMessageRequest {
 ///
 
 #[derive(Default, Debug, Deref, DerefMut)]
-pub struct Icrc21Registry(pub HashMap<String, ConsentHandlerFn>);
+pub struct Icrc21Registry(pub HashMap<String, Icrc21ConsentHandlerFn>);
 
 impl Icrc21Registry {
     #[must_use]
@@ -58,12 +60,12 @@ impl Icrc21Registry {
         Self::default()
     }
 
-    pub fn register(method: &str, handler: ConsentHandlerFn) {
+    pub fn register(method: &str, handler: Icrc21ConsentHandlerFn) {
         ICRC_21_REGISTRY.with_borrow_mut(|reg| reg.insert(method.to_string(), handler));
     }
 
     #[must_use]
-    pub fn get_handler(method: &str) -> Option<ConsentHandlerFn> {
+    pub fn get_handler(method: &str) -> Option<Icrc21ConsentHandlerFn> {
         ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).copied())
     }
 
