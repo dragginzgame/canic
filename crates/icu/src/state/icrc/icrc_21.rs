@@ -16,9 +16,8 @@ thread_local! {
 /// this is what the user has to pass into icu
 ///
 
-pub type Icrc21ConsentHandlerFn = fn(
-    request: Icrc21ConsentMessageRequest,
-) -> Result<Option<Icrc21ConsentMessageResponse>, String>;
+pub type Icrc21ConsentHandlerFn =
+    fn(request: Icrc21ConsentMessageRequest) -> Result<Icrc21ConsentMessageResponse, String>;
 
 ///
 
@@ -45,7 +44,7 @@ pub struct Icrc21ConsentMessageSpec {
 pub struct Icrc21ConsentMessageRequest {
     pub method: String,
     pub arg: Vec<u8>,
-    pub user_preferences: Icrc21ConsentPreferences,
+    pub user_preferences: Icrc21ConsentMessageSpec,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -67,7 +66,7 @@ pub struct Icrc21ConsentMessageMetadata {
 }
 
 ///
-/// Icrc21ConsertPreferences
+/// Icrc21ConsentPreferences
 ///
 
 #[derive(CandidType, Deserialize, Clone)]
@@ -161,13 +160,8 @@ impl Icrc21Registry {
     pub fn consent_message(req: Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse {
         match Self::get_handler(&req.method) {
             Some(handler) => match handler(req) {
-                Ok(Some(response)) => response,
+                Ok(response) => response,
 
-                Ok(None) => Icrc21ConsentMessageResponse::Err(
-                    Icrc21Error::ConsentMessageUnavailable(Icrc21ErrorInfo {
-                        description: "No consent message available.".to_string(),
-                    }),
-                ),
                 Err(desc) => Icrc21ConsentMessageResponse::Err(Icrc21Error::GenericError {
                     error_code: 1,
                     description: desc,

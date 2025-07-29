@@ -106,7 +106,6 @@ macro_rules! icu_endpoints {
             // make sure the caller == wallet_pid
             // or a parent canister
             let expected = args.wallet_pid;
-
             $crate::auth_require_any!(is_parent, move |caller| { is_principal(caller, expected) })?;
 
             $crate::state::DelegationList::register_delegation(args)
