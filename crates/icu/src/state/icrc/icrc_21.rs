@@ -58,36 +58,39 @@ impl Icrc21Registry {
         Self::default()
     }
 
-    pub fn register(&mut self, method: &str, handler: ConsentHandlerFn) {
-        self.insert(method.to_string(), handler);
+    pub fn register(method: &str, handler: ConsentHandlerFn) {
+        ICRC_21_REGISTRY.with_borrow_mut(|reg| reg.insert(method.to_string(), handler));
     }
 
     #[must_use]
-    pub fn get_handler(&self, method: &str) -> Option<&ConsentHandlerFn> {
-        self.get(method)
+    pub fn get_handler(method: &str) -> Option<ConsentHandlerFn> {
+        ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).copied())
     }
 
     #[must_use]
     pub fn consent_message(req: Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse {
-        ICRC_21_REGISTRY.with_borrow(|reg| match reg.get_handler(&req.method) {
+        match Self::get_handler(&req.method) {
             Some(handler) => match handler(req.arg.clone(), req.consent_preferences.clone()) {
                 Ok(Some(msg)) => Icrc21ConsentMessageResponse::Ok {
                     consent_message: msg.consent_message,
                     language: msg.language,
                 },
+
                 Ok(None) => Icrc21ConsentMessageResponse::Ok {
                     consent_message: "No consent message available.".to_string(),
                     language: "en-US".to_string(),
                 },
+
                 Err(_) => Icrc21ConsentMessageResponse::Ok {
                     consent_message: "Error generating consent message.".to_string(),
                     language: "en-US".to_string(),
                 },
             },
+
             None => Icrc21ConsentMessageResponse::Ok {
                 consent_message: "No handler registered for method.".to_string(),
                 language: "en-US".to_string(),
             },
-        })
+        }
     }
 }
