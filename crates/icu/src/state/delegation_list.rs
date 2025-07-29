@@ -257,98 +257,127 @@ impl DelegationList {
 mod tests {
     use super::*;
 
-    fn dummy_pid(byte: u8) -> Principal {
-        Principal::from_slice(&[byte; 29])
+    fn dummy_pid(n: u8) -> Principal {
+        Principal::from_slice(&[n; 29])
     }
 
-    #[test]
-    fn test_register_and_list_delegations() {
-        let mut store = DelegationList::new();
-        let wallet = dummy_pid(1);
-        let session = dummy_pid(2);
-        let now = 1_000_000;
-
-        // Simulate inserting a session
-        let expires_at = now + 300;
-        store.insert(
-            session,
+    fn create_test_delegation(
+        map: &mut DelegationList,
+        wallet_pid: Principal,
+        session_pid: Principal,
+        expires_at: u64,
+    ) {
+        map.insert(
+            session_pid,
             Delegation {
-                wallet_pid: wallet,
+                wallet_pid,
                 expires_at: Some(expires_at),
             },
         );
-
-        let views = store
-            .iter()
-            .map(|(&session_pid, d)| DelegationView {
-                wallet_pid: d.wallet_pid,
-                expires_at: d.expires_at,
-                is_expired: d.expires_at.is_none_or(|ts| now > ts),
-                session_pid,
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(views.len(), 1);
-        assert_eq!(views[0].wallet_pid, wallet);
-        assert!(!views[0].is_expired);
     }
 
     #[test]
-    fn test_expired_delegation_cleanup() {
-        let mut store = DelegationList::new();
+    fn register_and_query_delegation_view() {
+        let mut list = DelegationList::new();
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
+        let now = 1_000_000;
+        let expires_at = now + 300;
 
-        // Simulate expired
-        store.insert(
-            session,
-            Delegation {
-                wallet_pid: wallet,
-                expires_at: Some(500),
-            },
-        );
+        create_test_delegation(&mut list, wallet, session, expires_at);
 
-        let now = 1_000;
-        store.retain(|_, d| d.expires_at.is_none_or(|ts| now <= ts));
-        assert!(store.is_empty());
+        let result = list.get(&session);
+        assert!(result.is_some());
+        let delegation = result.unwrap();
+
+        assert_eq!(delegation.wallet_pid, wallet);
+        assert_eq!(delegation.expires_at, Some(expires_at));
     }
 
     #[test]
-    fn test_multiple_sessions_from_one_wallet() {
-        let mut store = DelegationList::new();
-        let wallet = dummy_pid(1);
-        let s1 = dummy_pid(10);
-        let s2 = dummy_pid(11);
+    fn expired_delegation_should_be_cleaned_up() {
+        let mut list = DelegationList::new();
+        let wallet = dummy_pid(3);
+        let session = dummy_pid(4);
         let now = 1_000;
 
-        store.insert(
-            s1,
-            Delegation {
-                wallet_pid: wallet,
-                expires_at: Some(now + 100),
-            },
-        );
+        create_test_delegation(&mut list, wallet, session, 900); // already expired
 
-        store.insert(
-            s2,
-            Delegation {
-                wallet_pid: wallet,
-                expires_at: Some(now + 200),
-            },
-        );
+        list.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
+        assert!(list.is_empty());
+    }
 
-        let views = store
+    #[test]
+    fn multiple_sessions_can_be_tracked_for_wallet() {
+        let mut list = DelegationList::new();
+        let wallet = dummy_pid(5);
+        let session1 = dummy_pid(6);
+        let session2 = dummy_pid(7);
+        let now = 1_000;
+
+        create_test_delegation(&mut list, wallet, session1, now + 100);
+        create_test_delegation(&mut list, wallet, session2, now + 200);
+
+        let views: Vec<_> = list
             .iter()
             .filter(|(_, d)| d.wallet_pid == wallet)
-            .map(|(&session_pid, d)| DelegationView {
-                wallet_pid: d.wallet_pid,
-                session_pid,
-                expires_at: d.expires_at,
-                is_expired: d.expires_at.is_none_or(|ts| now > ts),
-            })
-            .collect::<Vec<_>>();
+            .collect();
 
         assert_eq!(views.len(), 2);
-        assert!(views.iter().all(|v| v.wallet_pid == wallet));
+        assert!(views.iter().all(|(_, d)| d.wallet_pid == wallet));
+    }
+
+    #[test]
+    fn revoke_specific_session_removes_only_target() {
+        let mut list = DelegationList::new();
+        let wallet = dummy_pid(8);
+        let session1 = dummy_pid(9);
+        let session2 = dummy_pid(10);
+        let expiry = 2_000;
+
+        create_test_delegation(&mut list, wallet, session1, expiry);
+        create_test_delegation(&mut list, wallet, session2, expiry);
+
+        assert!(list.contains_key(&session1));
+        assert!(list.contains_key(&session2));
+
+        list.remove(&session1);
+        assert!(!list.contains_key(&session1));
+        assert!(list.contains_key(&session2));
+    }
+
+    #[test]
+    fn revoke_all_sessions_from_wallet_removes_them_all() {
+        let mut list = DelegationList::new();
+        let wallet = dummy_pid(11);
+        let s1 = dummy_pid(12);
+        let s2 = dummy_pid(13);
+        let s3 = dummy_pid(99); // other wallet
+
+        create_test_delegation(&mut list, wallet, s1, 10_000);
+        create_test_delegation(&mut list, wallet, s2, 10_000);
+        create_test_delegation(&mut list, dummy_pid(200), s3, 10_000);
+
+        let original_len = list.len();
+        list.retain(|_, d| d.wallet_pid != wallet);
+
+        assert_eq!(list.len(), original_len - 2);
+        assert!(!list.contains_key(&s1));
+        assert!(!list.contains_key(&s2));
+        assert!(list.contains_key(&s3));
+    }
+
+    #[test]
+    fn view_contains_expired_flag() {
+        let now = 1_000;
+        let wallet = dummy_pid(20);
+        let session = dummy_pid(21);
+        let mut list = DelegationList::new();
+
+        create_test_delegation(&mut list, wallet, session, 500); // expired
+
+        let d = list.get(&session).unwrap();
+        let is_expired = d.expires_at.is_none_or(|ts| now > ts);
+        assert!(is_expired);
     }
 }
