@@ -24,7 +24,7 @@ use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        IcuError, Log, auth_require_all, auth_require_any,
+        Log, auth_require_all, auth_require_any,
         guard::{guard_query, guard_update},
         ic::{
             api::msg_caller,
@@ -42,21 +42,38 @@ pub mod prelude {
 ///
 /// Error
 ///
+/// top level error should handle all sub-errors, but not expose the child candid types
+///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(CandidType, Deserialize, Debug, ThisError)]
 pub enum Error {
-    #[error(transparent)]
-    AuthError(#[from] auth::AuthError),
+    #[error("{0}")]
+    AuthError(String),
 
-    #[error(transparent)]
-    InterfaceError(#[from] interface::InterfaceError),
+    #[error("{0}")]
+    InterfaceError(String),
 
-    #[error(transparent)]
-    MemoryError(#[from] memory::MemoryError),
+    #[error("{0}")]
+    MemoryError(String),
 
-    #[error(transparent)]
-    StateError(#[from] state::StateError),
+    #[error("{0}")]
+    StateError(String),
 }
+
+macro_rules! from_to_string {
+    ($from:ty, $variant:ident) => {
+        impl From<$from> for Error {
+            fn from(e: $from) -> Self {
+                Error::$variant(e.to_string())
+            }
+        }
+    };
+}
+
+from_to_string!(auth::AuthError, AuthError);
+from_to_string!(interface::InterfaceError, InterfaceError);
+from_to_string!(memory::MemoryError, MemoryError);
+from_to_string!(state::StateError, StateError);
 
 ///
 /// Log

@@ -3,8 +3,7 @@ use crate::{
     ic::api::{canister_self, msg_caller},
     memory,
 };
-use candid::{CandidType, Principal};
-use serde::{Deserialize, Serialize};
+use candid::Principal;
 use std::pin::Pin;
 use thiserror::Error as ThisError;
 
@@ -12,7 +11,7 @@ use thiserror::Error as ThisError;
 /// AuthError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum AuthError {
     #[error("{0}")]
     Custom(String),

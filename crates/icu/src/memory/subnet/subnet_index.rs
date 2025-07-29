@@ -1,6 +1,6 @@
 use crate::{ic::structures::BTreeMap, icu_register_memory, memory::SUBNET_INDEX_MEMORY_ID};
 use candid::{CandidType, Principal};
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -19,11 +19,15 @@ thread_local! {
 /// SubnetIndexError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum SubnetIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(String),
 }
+
+///
+/// SubnetIndex
+///
 
 pub struct SubnetIndex {}
 
@@ -76,7 +80,7 @@ impl SubnetIndex {
 /// SubnetIndexData
 ///
 
-#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
 pub struct SubnetIndexData(HashMap<String, Principal>);
 
 impl IntoIterator for SubnetIndexData {

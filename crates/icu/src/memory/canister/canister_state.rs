@@ -23,7 +23,7 @@ thread_local! {
 /// CanisterStateError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum CanisterStateError {
     #[error("canister kind has not been set")]
     KindNotSet,
@@ -36,7 +36,7 @@ pub enum CanisterStateError {
 /// CanisterState
 ///
 
-pub struct CanisterState;
+pub struct CanisterState {}
 
 impl CanisterState {
     pub fn with<R>(f: impl FnOnce(&Cell<CanisterStateData>) -> R) -> R {

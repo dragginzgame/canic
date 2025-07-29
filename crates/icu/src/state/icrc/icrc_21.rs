@@ -1,5 +1,4 @@
 use crate::interface::icrc::*;
-use derive_more::{Deref, DerefMut};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 //
@@ -7,7 +6,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 //
 
 thread_local! {
-    static ICRC_21_REGISTRY: RefCell<Icrc21Registry> = RefCell::new(Icrc21Registry::new());
+    static ICRC_21_REGISTRY: RefCell<HashMap<String, Icrc21ConsentHandlerFn>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -22,15 +21,9 @@ pub type Icrc21ConsentHandlerFn =
 /// Icrc21Registry
 ///
 
-#[derive(Default, Deref, DerefMut)]
-pub struct Icrc21Registry(pub HashMap<String, Icrc21ConsentHandlerFn>);
+pub struct Icrc21Registry {}
 
 impl Icrc21Registry {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn register<F>(method: &str, handler: F)
     where
         F: Fn(Icrc21ConsentMessageRequest) -> Icrc21ConsentMessageResponse + 'static,

@@ -1,9 +1,7 @@
 use crate::{
     ic::api::{is_controller, msg_caller},
     memory::{self, app::AppMode},
-    prelude::*,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
@@ -12,7 +10,7 @@ use thiserror::Error as ThisError;
 /// The guard functions require a String to be returned, not an Error
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum GuardError {
     #[error("app is disabled")]
     AppDisabled,

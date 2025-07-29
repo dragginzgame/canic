@@ -16,8 +16,6 @@ use crate::{
         subnet::SubnetIndexError,
     },
 };
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
@@ -50,7 +48,7 @@ thread_local! {
 /// MemoryError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum MemoryError {
     #[error(transparent)]
     MemoryRegistryError(#[from] MemoryRegistryError),

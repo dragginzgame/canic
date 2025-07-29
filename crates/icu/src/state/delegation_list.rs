@@ -1,7 +1,6 @@
 use crate::{Error, state::StateError, utils::time::now_secs};
 use candid::{CandidType, Principal};
-use derive_more::{Deref, DerefMut};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 use thiserror::Error as ThisError;
 
@@ -18,7 +17,7 @@ const CLEANUP_THRESHOLD: u64 = 1000;
 //
 
 thread_local! {
-    static DELEGATION_LIST: RefCell<DelegationList> = RefCell::new(DelegationList::new());
+    static DELEGATION_LIST: RefCell<HashMap<Principal, Delegation>> = RefCell::new(HashMap::new());
     static CALL_COUNT: RefCell<u64> = const { RefCell::new(0) };
 }
 
@@ -26,7 +25,7 @@ thread_local! {
 /// DelegationListError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum DelegationListError {
     #[error("delegation expired at {0} (current time: {1})")]
     DelegationExpired(u64, u64),
@@ -74,15 +73,9 @@ pub struct RegisterDelegationArgs {
 /// map of the session pid to the Delegation
 ///
 
-#[derive(Default, Debug, Deref, DerefMut)]
-pub struct DelegationList(HashMap<Principal, Delegation>);
+pub struct DelegationList {}
 
 impl DelegationList {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn register_delegation(args: RegisterDelegationArgs) -> Result<(), Error> {
         let duration = Duration::from_secs(args.duration_secs);
 
@@ -93,7 +86,7 @@ impl DelegationList {
             )))?;
         }
 
-        if duration > MIN_EXPIRATION {
+        if duration > MAX_EXPIRATION {
             Err(StateError::from(DelegationListError::SessionTooLong(
                 MAX_EXPIRATION.as_secs(),
             )))?;
@@ -252,7 +245,6 @@ impl DelegationList {
         Ok(delegation.wallet_pid)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,123 +253,124 @@ mod tests {
         Principal::from_slice(&[n; 29])
     }
 
-    fn create_test_delegation(
-        map: &mut DelegationList,
-        wallet_pid: Principal,
-        session_pid: Principal,
-        expires_at: u64,
-    ) {
-        map.insert(
-            session_pid,
-            Delegation {
-                wallet_pid,
-                expires_at: Some(expires_at),
-            },
-        );
+    fn reset_state() {
+        DELEGATION_LIST.with_borrow_mut(|map| map.clear());
+        CALL_COUNT.with_borrow_mut(|count| *count = 0);
     }
 
     #[test]
     fn register_and_query_delegation_view() {
-        let mut list = DelegationList::new();
+        reset_state();
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
-        let now = 1_000_000;
-        let expires_at = now + 300;
 
-        create_test_delegation(&mut list, wallet, session, expires_at);
+        DelegationList::register_delegation(RegisterDelegationArgs {
+            wallet_pid: wallet,
+            session_pid: session,
+            duration_secs: 300,
+        })
+        .unwrap();
 
-        let result = list.get(&session);
-        assert!(result.is_some());
-        let delegation = result.unwrap();
-
-        assert_eq!(delegation.wallet_pid, wallet);
-        assert_eq!(delegation.expires_at, Some(expires_at));
+        let view = DelegationList::get_delegation_info(session).unwrap();
+        assert_eq!(view.wallet_pid, wallet);
+        assert_eq!(view.session_pid, session);
+        assert!(!view.is_expired);
     }
 
     #[test]
     fn expired_delegation_should_be_cleaned_up() {
-        let mut list = DelegationList::new();
+        reset_state();
         let wallet = dummy_pid(3);
         let session = dummy_pid(4);
-        let now = 1_000;
 
-        create_test_delegation(&mut list, wallet, session, 900); // already expired
+        DELEGATION_LIST.with_borrow_mut(|map| {
+            map.insert(
+                session,
+                Delegation {
+                    wallet_pid: wallet,
+                    expires_at: Some(now_secs() - 10), // already expired
+                },
+            );
+        });
 
-        list.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
-        assert!(list.is_empty());
-    }
-
-    #[test]
-    fn multiple_sessions_can_be_tracked_for_wallet() {
-        let mut list = DelegationList::new();
-        let wallet = dummy_pid(5);
-        let session1 = dummy_pid(6);
-        let session2 = dummy_pid(7);
-        let now = 1_000;
-
-        create_test_delegation(&mut list, wallet, session1, now + 100);
-        create_test_delegation(&mut list, wallet, session2, now + 200);
-
-        let views: Vec<_> = list
-            .iter()
-            .filter(|(_, d)| d.wallet_pid == wallet)
-            .collect();
-
-        assert_eq!(views.len(), 2);
-        assert!(views.iter().all(|(_, d)| d.wallet_pid == wallet));
+        DelegationList::cleanup_expired_delegations();
+        let found = DELEGATION_LIST.with_borrow(|map| map.contains_key(&session));
+        assert!(!found);
     }
 
     #[test]
     fn revoke_specific_session_removes_only_target() {
-        let mut list = DelegationList::new();
-        let wallet = dummy_pid(8);
-        let session1 = dummy_pid(9);
-        let session2 = dummy_pid(10);
-        let expiry = 2_000;
+        reset_state();
+        let wallet1 = dummy_pid(8);
+        let wallet2 = dummy_pid(9);
+        let session1 = dummy_pid(10);
+        let session2 = dummy_pid(11);
 
-        create_test_delegation(&mut list, wallet, session1, expiry);
-        create_test_delegation(&mut list, wallet, session2, expiry);
+        DelegationList::register_delegation(RegisterDelegationArgs {
+            wallet_pid: wallet1,
+            session_pid: session1,
+            duration_secs: 1000,
+        })
+        .unwrap();
 
-        assert!(list.contains_key(&session1));
-        assert!(list.contains_key(&session2));
+        DelegationList::register_delegation(RegisterDelegationArgs {
+            wallet_pid: wallet2,
+            session_pid: session2,
+            duration_secs: 1000,
+        })
+        .unwrap();
 
-        list.remove(&session1);
-        assert!(!list.contains_key(&session1));
-        assert!(list.contains_key(&session2));
+        DelegationList::revoke_delegation(session1).unwrap();
+
+        let still_exists = DELEGATION_LIST.with_borrow(|map| map.contains_key(&session2));
+        assert!(still_exists);
+
+        let removed = DELEGATION_LIST.with_borrow(|map| !map.contains_key(&session1));
+        assert!(removed);
     }
 
     #[test]
     fn revoke_all_sessions_from_wallet_removes_them_all() {
-        let mut list = DelegationList::new();
+        reset_state();
         let wallet = dummy_pid(11);
         let s1 = dummy_pid(12);
         let s2 = dummy_pid(13);
-        let s3 = dummy_pid(99); // other wallet
+        let s3 = dummy_pid(99); // different wallet
 
-        create_test_delegation(&mut list, wallet, s1, 10_000);
-        create_test_delegation(&mut list, wallet, s2, 10_000);
-        create_test_delegation(&mut list, dummy_pid(200), s3, 10_000);
+        for (wallet_pid, session_pid) in [(wallet, s1), (wallet, s2), (dummy_pid(200), s3)] {
+            DelegationList::register_delegation(RegisterDelegationArgs {
+                wallet_pid,
+                session_pid,
+                duration_secs: 1000,
+            })
+            .unwrap();
+        }
 
-        let original_len = list.len();
-        list.retain(|_, d| d.wallet_pid != wallet);
+        DelegationList::revoke_delegation(wallet).unwrap();
 
-        assert_eq!(list.len(), original_len - 2);
-        assert!(!list.contains_key(&s1));
-        assert!(!list.contains_key(&s2));
-        assert!(list.contains_key(&s3));
+        let keys = DELEGATION_LIST.with_borrow(|map| map.keys().copied().collect::<Vec<_>>());
+        assert!(!keys.contains(&s1));
+        assert!(!keys.contains(&s2));
+        assert!(keys.contains(&s3));
     }
 
     #[test]
     fn view_contains_expired_flag() {
-        let now = 1_000;
+        reset_state();
         let wallet = dummy_pid(20);
         let session = dummy_pid(21);
-        let mut list = DelegationList::new();
 
-        create_test_delegation(&mut list, wallet, session, 500); // expired
+        DELEGATION_LIST.with_borrow_mut(|map| {
+            map.insert(
+                session,
+                Delegation {
+                    wallet_pid: wallet,
+                    expires_at: Some(now_secs() - 1), // expired
+                },
+            );
+        });
 
-        let d = list.get(&session).unwrap();
-        let is_expired = d.expires_at.is_none_or(|ts| now > ts);
-        assert!(is_expired);
+        let view = DelegationList::get_delegation_info(session).unwrap();
+        assert!(view.is_expired);
     }
 }

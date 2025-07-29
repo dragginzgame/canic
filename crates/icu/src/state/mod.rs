@@ -7,8 +7,6 @@ pub use icrc::*;
 pub use root::*;
 
 use crate::ic::api::performance_counter;
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
@@ -16,7 +14,7 @@ use thiserror::Error as ThisError;
 /// StateError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum StateError {
     #[error(transparent)]
     CanisterRegistryError(#[from] CanisterRegistryError),

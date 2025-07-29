@@ -11,15 +11,14 @@ use crate::{
     log,
     utils::{cycles::format_cycles, wasm::get_wasm_hash},
 };
-use candid::{CandidType, Error as CandidError, Principal};
-use serde::{Deserialize, Serialize};
+use candid::{Error as CandidError, Principal};
 use thiserror::Error as ThisError;
 
 ///
 /// IcError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum IcError {
     #[error("call rejected: {0}")]
     CallFailed(String),

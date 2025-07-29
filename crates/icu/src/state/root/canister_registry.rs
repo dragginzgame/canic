@@ -1,5 +1,5 @@
 use candid::CandidType;
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use ic_cdk::println;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
@@ -17,7 +17,7 @@ thread_local! {
 /// CanisterRegistryError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum CanisterRegistryError {
     #[error("canister '{0}' not found")]
     CanisterNotFound(String),
@@ -67,7 +67,7 @@ pub struct CanisterAttributes {
 /// CanisterRegistry
 ///
 
-#[derive(Default, Debug, Deref, DerefMut)]
+#[derive(Default, Debug, Deref)]
 pub struct CanisterRegistry(HashMap<String, Canister>);
 
 impl CanisterRegistry {
@@ -94,7 +94,7 @@ impl CanisterRegistry {
         wasm: &'static [u8],
     ) -> Result<(), CanisterRegistryError> {
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(
+            reg.0.insert(
                 path.to_string(),
                 Canister {
                     attributes: attributes.clone(),

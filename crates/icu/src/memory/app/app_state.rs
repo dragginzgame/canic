@@ -23,7 +23,7 @@ thread_local! {
 /// AppStateError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum AppStateError {
     #[error("app is already in {0} mode")]
     AlreadyInMode(AppMode),
@@ -33,7 +33,7 @@ pub enum AppStateError {
 /// AppState
 ///
 
-pub struct AppState();
+pub struct AppState {}
 
 impl AppState {
     pub fn with<R>(f: impl FnOnce(&Cell<AppStateData>) -> R) -> R {

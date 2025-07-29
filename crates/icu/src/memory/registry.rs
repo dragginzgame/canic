@@ -4,7 +4,7 @@ use crate::{
     memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID},
 };
 use candid::CandidType;
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -26,7 +26,7 @@ thread_local! {
 /// MemoryRegistryError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum MemoryRegistryError {
     #[error("ID {0} is already registered with type {1}, tried to register type {2}")]
     AlreadyRegistered(u8, String, String),
@@ -101,7 +101,7 @@ impl_storable_unbounded!(MemoryRegistryEntry);
 /// MemoryRegistryData
 ///
 
-#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
 pub struct MemoryRegistryData(Vec<(u8, MemoryRegistryEntry)>);
 
 ///

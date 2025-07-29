@@ -1,6 +1,6 @@
 use crate::{ic::structures::BTreeMap, icu_register_memory, memory::CHILD_INDEX_MEMORY_ID};
 use candid::{CandidType, Principal};
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -19,7 +19,7 @@ thread_local! {
 /// ChildIndexError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum ChildIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(Principal),
@@ -29,7 +29,7 @@ pub enum ChildIndexError {
 /// ChildIndex
 ///
 
-pub struct ChildIndex;
+pub struct ChildIndex {}
 
 impl ChildIndex {
     pub fn with<R>(f: impl FnOnce(&BTreeMap<Principal, String>) -> R) -> R {
@@ -91,7 +91,7 @@ impl ChildIndex {
 /// ChildIndexData
 ///
 
-#[derive(Clone, Debug, Deref, DerefMut, CandidType, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
 pub struct ChildIndexData(HashMap<Principal, String>);
 
 impl IntoIterator for ChildIndexData {

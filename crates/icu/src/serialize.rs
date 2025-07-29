@@ -1,6 +1,5 @@
-use candid::CandidType;
 use minicbor_serde::{from_slice, to_vec};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
@@ -13,7 +12,7 @@ use thiserror::Error as ThisError;
 /// SerializeError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum SerializeError {
     #[error("serialize error: {0}")]
     Serialize(String),
