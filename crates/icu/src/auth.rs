@@ -117,7 +117,7 @@ pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), IcuError> {
 macro_rules! auth_require_all {
     ($($f:expr),* $(,)?) => {{
         $crate::auth::require_all(vec![
-            $( Box::new(|caller| Box::pin($f(caller))) ),*
+            $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};
 }
@@ -126,7 +126,7 @@ macro_rules! auth_require_all {
 macro_rules! auth_require_any {
     ($($f:expr),* $(,)?) => {{
         $crate::auth::require_any(vec![
-            $( Box::new(|caller| Box::pin($f(caller))) ),*
+            $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};
 }

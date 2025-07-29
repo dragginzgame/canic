@@ -62,7 +62,7 @@ pub struct DelegationView {
     is_expired: bool,
 }
 
-#[derive(Debug, CandidType, Deserialize)]
+#[derive(Debug, CandidType, Deserialize, Clone)]
 pub struct RegisterDelegationArgs {
     pub wallet_pid: Principal,
     pub session_pid: Principal,

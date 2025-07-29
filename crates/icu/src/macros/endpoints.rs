@@ -90,16 +90,20 @@ macro_rules! icu_endpoints {
         async fn icu_delegation_register(
             args: ::icu::state::RegisterDelegationArgs,
         ) -> Result<(), ::icu::Error> {
+            // make sure the caller == wallet_pid
+            $crate::auth_require_any!(move |pid| ::icu::auth::is_principal(
+                args.wallet_pid,
+                msg_caller()
+            ))?;
+
             $crate::state::DelegationList::register_delegation(args)
         }
 
         // icu_delegation_revoke
         #[::icu::ic::update]
         async fn icu_delegation_revoke(pid: Principal) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_parent, |pid| ::icu::auth::is_principal(
-                pid,
-                msg_caller()
-            ))?;
+            // make sure the caller == pid to revoke
+            $crate::auth_require_any!(|pid| ::icu::auth::is_principal(pid, msg_caller()))?;
 
             $crate::state::DelegationList::revoke_delegation(pid)
         }
