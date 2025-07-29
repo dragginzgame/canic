@@ -168,13 +168,11 @@ impl Icrc21Registry {
                         description: "No consent message available.".to_string(),
                     }),
                 ),
-
                 Err(desc) => Icrc21ConsentMessageResponse::Err(Icrc21Error::GenericError {
                     error_code: 1,
                     description: desc,
                 }),
             },
-
             None => Icrc21ConsentMessageResponse::Err(Icrc21Error::UnsupportedCanisterCall(
                 Icrc21ErrorInfo {
                     description: "No handler registered for this method.".to_string(),
