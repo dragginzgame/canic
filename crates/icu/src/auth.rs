@@ -44,7 +44,7 @@ pub enum AuthError {
     #[error("principal '{0}' is not the parent of this canister")]
     NotParent(Principal),
 
-    #[error("principal '{0}' is not the same as principal '{1}'")]
+    #[error("expected principal '{1}' got '{0}'")]
     NotPrincipal(Principal, Principal),
 
     #[error("principal '{0}' is not root")]
@@ -197,12 +197,12 @@ pub fn is_parent(caller: Principal) -> RuleResult {
 
 // is_principal
 #[must_use]
-pub fn is_principal(caller: Principal, pid: Principal) -> RuleResult {
+pub fn is_principal(caller: Principal, expected: Principal) -> RuleResult {
     Box::pin(async move {
-        if caller == pid {
+        if caller == expected {
             Ok(())
         } else {
-            Err(AuthError::NotPrincipal(caller, pid))?
+            Err(AuthError::NotPrincipal(caller, expected))?
         }
     })
 }
