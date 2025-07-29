@@ -25,11 +25,11 @@ macro_rules! icu_endpoints {
         async fn icu_app_state_cascade(
             data: ::icu::memory::AppStateData,
         ) -> Result<(), ::icu::Error> {
-            ::icu::auth_require_any!(::icu::auth::is_parent)?;
+            $crate::auth_require_any!(::icu::auth::is_parent)?;
 
             // set state and cascade
-            ::icu::memory::AppState::set_data(data);
-            ::icu::interface::cascade::app_state_cascade().await?;
+            $crate::memory::AppState::set_data(data);
+            $crate::interface::cascade::app_state_cascade().await?;
 
             Ok(())
         }
@@ -60,7 +60,18 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU HELPERS
+        // ICRC ENDPOINTS
+        //
+
+        #[::icu::ic::update]
+        async fn icrc21_canister_call_consent_message(
+            req: ::icu::state::Icrc21ConsentMessageRequest,
+        ) -> ::icu::state::Icrc21ConsentMessageResponse {
+            $crate::state::Icrc21Registry::consent_message(req)
+        }
+
+        //
+        // ICU CANISTER HELPERS
         //
 
         // icu_canister_cycle_balance

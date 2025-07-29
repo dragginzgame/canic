@@ -1,18 +1,16 @@
 mod delegation_list;
+mod icrc;
 mod root;
+
+pub use delegation_list::*;
+pub use icrc::*;
+pub use root::*;
 
 use crate::ic::api::performance_counter;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
-
-pub use delegation_list::{
-    Delegation, DelegationList, DelegationListError, RegisterDelegationArgs,
-};
-pub use root::{
-    CanisterAttributes, CanisterData, CanisterRegistry, CanisterRegistryData, CanisterRegistryError,
-};
 
 ///
 /// StateError
