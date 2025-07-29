@@ -1,4 +1,3 @@
-use crate::Error;
 use candid::CandidType;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
@@ -19,7 +18,7 @@ thread_local! {
 pub type Icrc21ConsentHandlerFn = fn(
     arg: Vec<u8>,
     prefs: Icrc21ConsentPreferences,
-) -> Result<Option<Icrc21ConsentMessage>, Error>;
+) -> Result<Option<Icrc21ConsentMessage>, String>;
 
 #[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
 pub struct Icrc21ConsentMessage {
