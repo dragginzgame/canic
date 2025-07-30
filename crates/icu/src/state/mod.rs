@@ -1,10 +1,10 @@
-mod delegation_list;
 mod icrc;
 mod root;
+mod session_registry;
 
-pub use delegation_list::*;
 pub use icrc::*;
 pub use root::*;
+pub use session_registry::*;
 
 use crate::ic::api::performance_counter;
 use std::cell::RefCell;
@@ -20,7 +20,7 @@ pub enum StateError {
     CanisterRegistryError(#[from] CanisterRegistryError),
 
     #[error(transparent)]
-    DelegationListError(#[from] DelegationListError),
+    SessionRegistryError(#[from] SessionRegistryError),
 }
 
 thread_local! {

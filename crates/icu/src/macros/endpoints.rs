@@ -63,12 +63,12 @@ macro_rules! icu_endpoints {
         // ICRC ENDPOINTS
         //
 
-        #[must_use]
+        #[::icu::ic::query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
             $crate::state::Icrc10Registry::supported_standards()
         }
 
-        #[::icu::ic::update]
+        #[::icu::ic::query]
         async fn icrc21_canister_call_consent_message(
             req: ::icu::interface::icrc::Icrc21ConsentMessageRequest,
         ) -> ::icu::interface::icrc::Icrc21ConsentMessageResponse {
@@ -79,19 +79,16 @@ macro_rules! icu_endpoints {
         // ICU CANISTER HELPERS
         //
 
-        // icu_canister_cycle_balance
         #[::icu::ic::query]
         fn icu_canister_cycle_balance() -> u128 {
             $crate::ic::api::canister_cycle_balance()
         }
 
-        // icu_canister_version
         #[::icu::ic::query]
         fn icu_canister_version() -> u64 {
             $crate::ic::api::canister_version()
         }
 
-        // icu_time
         #[::icu::ic::query]
         fn icu_time() -> u64 {
             $crate::ic::api::time()
@@ -101,7 +98,6 @@ macro_rules! icu_endpoints {
         // ICU DELEGATION ENDPOINTS
         //
 
-        // icu_delegation_register
         #[::icu::ic::update]
         async fn icu_delegation_register(
             args: ::icu::state::RegisterDelegationArgs,
@@ -116,7 +112,6 @@ macro_rules! icu_endpoints {
             $crate::state::DelegationList::register_delegation(args)
         }
 
-        // icu_delegation_revoke
         #[::icu::ic::update]
         async fn icu_delegation_revoke(pid: Principal) -> Result<(), ::icu::Error> {
             use ::icu::auth::{is_parent, is_principal};
