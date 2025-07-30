@@ -6,7 +6,7 @@ use serde::Deserialize;
 /// Icrc10Standard
 ///
 
-#[derive(Debug, Display, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Display, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum Icrc10Standard {
     Icrc10,
     Icrc21,

@@ -202,36 +202,33 @@ impl SessionRegistry {
     }
 
     ///
-    /// Revokes a session or all sessions granted by a wallet.
+    /// Revokes a session or all sessions granted by a wallet principal.
     ///
-    /// - If `pid` matches a known session ID (i.e., a `Principal` that was delegated),
-    ///   that specific session will be removed.
-    /// - Otherwise, if `pid` matches a grantor (wallet principal), all sessions
-    ///   granted by that wallet will be revoked.
-    /// - Returns an error if no matching session or grantor is found.
+    /// - If `pid` matches a registered session, that session is removed.
+    /// - Otherwise, removes all sessions issued by `pid` (wallet).
     ///
-    pub fn revoke_sessions_by_wallet(wallet_pid: Principal) -> Result<(), Error> {
-        let removed_count = SESSION_REGISTRY.with_borrow_mut(|map| {
-            let before = map.len();
-            map.retain(|_, s| s.wallet_pid != wallet_pid);
-            before - map.len()
+    /// Returns an error if no matching entry is found.
+    ///
+    pub fn revoke_session_or_wallet(pid: Principal) -> Result<(), Error> {
+        // 1. Try as session ID
+        if SESSION_REGISTRY.with_borrow(|map| map.contains_key(&pid)) {
+            SESSION_REGISTRY.with_borrow_mut(|map| {
+                map.remove(&pid);
+            });
+            return Ok(());
+        }
+
+        // 2. Try as wallet grantor
+        let removed = SESSION_REGISTRY.with_borrow_mut(|map| {
+            let original_len = map.len();
+            map.retain(|_, s| s.wallet_pid != pid);
+            original_len - map.len()
         });
 
-        if removed_count > 0 {
+        if removed > 0 {
             Ok(())
         } else {
-            Err(StateError::from(SessionRegistryError::NotFound(wallet_pid)).into())
-        }
-    }
-
-    /// Revokes a specific session by its session ID.
-    pub fn revoke_session_by_id(session_id: Principal) -> Result<(), Error> {
-        let removed = SESSION_REGISTRY.with_borrow_mut(|map| map.remove(&session_id));
-
-        if removed.is_some() {
-            Ok(())
-        } else {
-            Err(StateError::from(SessionRegistryError::NotFound(session_id)).into())
+            Err(StateError::from(SessionRegistryError::NotFound(pid)).into())
         }
     }
 
@@ -327,7 +324,7 @@ mod tests {
         })
         .unwrap();
 
-        SessionRegistry::revoke_session_by_id(session1).unwrap();
+        SessionRegistry::revoke_session_or_wallet(session1).unwrap();
 
         let still_exists = SESSION_REGISTRY.with_borrow(|map| map.contains_key(&session2));
         assert!(still_exists);
@@ -353,7 +350,7 @@ mod tests {
             .unwrap();
         }
 
-        SessionRegistry::revoke_sessions_by_wallet(wallet).unwrap();
+        SessionRegistry::revoke_session_or_wallet(wallet).unwrap();
 
         let keys = SESSION_REGISTRY.with_borrow(|map| map.keys().copied().collect::<Vec<_>>());
         assert!(!keys.contains(&s1));

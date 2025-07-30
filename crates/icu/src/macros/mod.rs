@@ -1,5 +1,6 @@
 pub mod endpoints;
 pub mod memory;
+pub mod root;
 
 /// icu_start
 #[macro_export]
@@ -39,6 +40,7 @@ macro_rules! icu_start_root {
         }
 
         ::icu::icu_endpoints!();
+        ::icu::icu_endpoints_root!();
 
         // app
         // modify app-level state

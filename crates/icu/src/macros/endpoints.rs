@@ -95,12 +95,36 @@ macro_rules! icu_endpoints {
         }
 
         //
+        // ICU MEMORY HELPERS
+        //
+
+        #[::icu::ic::query]
+        fn icu_app_state() -> ::icu::memory::AppStateData {
+            $crate::memory::AppState::get_data()
+        }
+
+        #[::icu::ic::query]
+        fn icu_canister_state() -> ::icu::memory::CanisterStateData {
+            $crate::memory::CanisterState::get_data()
+        }
+
+        #[::icu::ic::query]
+        fn icu_child_index() -> ::icu::memory::ChildIndexData {
+            $crate::memory::ChildIndex::get_data()
+        }
+
+        #[::icu::ic::query]
+        fn icu_subnet_index() -> ::icu::memory::SubnetIndexData {
+            $crate::memory::SubnetIndex::get_data()
+        }
+
+        //
         // ICU DELEGATION ENDPOINTS
         //
 
         #[::icu::ic::update]
         async fn icu_delegation_register(
-            args: ::icu::state::RegisterDelegationArgs,
+            args: ::icu::state::RegisterSessionArgs,
         ) -> Result<(), ::icu::Error> {
             use ::icu::auth::{is_parent, is_principal};
 
@@ -109,7 +133,7 @@ macro_rules! icu_endpoints {
             let expected = args.wallet_pid;
             $crate::auth_require_any!(is_parent, move |caller| { is_principal(caller, expected) })?;
 
-            $crate::state::DelegationList::register_delegation(args)
+            $crate::state::SessionRegistry::register_session(args)
         }
 
         #[::icu::ic::update]
@@ -121,7 +145,7 @@ macro_rules! icu_endpoints {
             let expected = pid;
             $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
 
-            $crate::state::DelegationList::revoke_delegation(pid)
+            $crate::state::SessionRegistry::revoke_session_or_wallet(pid)
         }
     };
 }
