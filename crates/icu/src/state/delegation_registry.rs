@@ -17,20 +17,20 @@ const CLEANUP_THRESHOLD: u64 = 1000;
 //
 
 thread_local! {
-    static SESSION_REGISTRY: RefCell<HashMap<Principal, Session>> = RefCell::new(HashMap::new());
+    static DELEGATION_REGISTRY: RefCell<HashMap<Principal, DelegationSession>> = RefCell::new(HashMap::new());
     static CALL_COUNT: RefCell<u64> = const { RefCell::new(0) };
 }
 
 ///
-/// SessionRegistry
+/// DelegationRegistry
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SessionRegistryError {
+pub enum DelegationRegistryError {
     #[error("no expiry set for session '{0}'")]
     NoExpirySet(Principal),
 
-    #[error("no session found for principal '{0}'")]
+    #[error("no delegation found for principal '{0}'")]
     NotFound(Principal),
 
     #[error("session expired at {0} (current time: {1})")]
@@ -44,22 +44,42 @@ pub enum SessionRegistryError {
 }
 
 ///
-/// Data Structures
+/// DelegationSession
 ///
 
 #[derive(Debug, CandidType, Deserialize, Clone)]
-pub struct Session {
+pub struct DelegationSession {
     wallet_pid: Principal,
     expires_at: Option<u64>,
+    requesting_canisters: Vec<Principal>,
 }
 
-#[derive(Debug, CandidType, Deserialize, Clone)]
-pub struct SessionInfo {
-    wallet_pid: Principal,
-    session_pid: Principal,
-    expires_at: Option<u64>,
-    is_expired: bool,
+impl DelegationSession {
+    #[must_use]
+    pub fn new(wallet_pid: Principal, expires_at: Option<u64>) -> Self {
+        Self {
+            wallet_pid,
+            expires_at,
+            requesting_canisters: Vec::new(),
+        }
+    }
 }
+
+///
+/// DelegationSessionInfo
+///
+
+#[derive(Debug, CandidType, Deserialize, Clone)]
+pub struct DelegationSessionInfo {
+    pub wallet_pid: Principal,
+    pub session_pid: Principal,
+    pub expires_at: Option<u64>,
+    pub is_expired: bool,
+}
+
+///
+/// RegisterSessionArgs
+///
 
 #[derive(Debug, CandidType, Deserialize, Clone)]
 pub struct RegisterSessionArgs {
@@ -69,23 +89,23 @@ pub struct RegisterSessionArgs {
 }
 
 ///
-/// SessionRegistry
+/// DelegationRegistry
 /// map of the session pid (temporary principal) to the session
 ///
 
-pub struct SessionRegistry {}
+pub struct DelegationRegistry {}
 
-impl SessionRegistry {
+impl DelegationRegistry {
     /// Returns info about a specific session, including expiration status.
-    pub fn get_session_info(session_pid: Principal) -> Result<SessionInfo, Error> {
+    pub fn get_session_info(session_pid: Principal) -> Result<DelegationSessionInfo, Error> {
         let now = now_secs();
-        let session = SESSION_REGISTRY
+        let session = DELEGATION_REGISTRY
             .with_borrow(|map| map.get(&session_pid).cloned())
-            .ok_or_else(|| StateError::from(SessionRegistryError::NotFound(session_pid)))?;
+            .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(session_pid)))?;
 
         let is_expired = session.expires_at.is_none_or(|ts| now > ts);
 
-        Ok(SessionInfo {
+        Ok(DelegationSessionInfo {
             wallet_pid: session.wallet_pid,
             session_pid,
             expires_at: session.expires_at,
@@ -98,19 +118,19 @@ impl SessionRegistry {
         let now = now_secs();
 
         // Check if session exists
-        let session = SESSION_REGISTRY
+        let session = DELEGATION_REGISTRY
             .with_borrow(|map| map.get(&caller).cloned())
-            .ok_or_else(|| StateError::from(SessionRegistryError::NotFound(caller)))?;
+            .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(caller)))?;
 
         // Check it has a valid expiry
         let expires_at = session
             .expires_at
-            .ok_or_else(|| StateError::from(SessionRegistryError::NoExpirySet(caller)))?;
+            .ok_or_else(|| StateError::from(DelegationRegistryError::NoExpirySet(caller)))?;
 
         // Check it has expired
         if now > expires_at {
             return Err(
-                StateError::from(SessionRegistryError::SessionExpired(expires_at, now)).into(),
+                StateError::from(DelegationRegistryError::SessionExpired(expires_at, now)).into(),
             );
         }
 
@@ -119,12 +139,12 @@ impl SessionRegistry {
 
     /// Lists all sessions currently in the registry.
     #[must_use]
-    pub fn list_all_sessions() -> Vec<SessionInfo> {
+    pub fn list_all_sessions() -> Vec<DelegationSessionInfo> {
         let now = now_secs();
 
-        SESSION_REGISTRY.with_borrow(|map| {
+        DELEGATION_REGISTRY.with_borrow(|map| {
             map.iter()
-                .map(|(&s, d)| SessionInfo {
+                .map(|(&s, d)| DelegationSessionInfo {
                     session_pid: s,
                     wallet_pid: d.wallet_pid,
                     expires_at: d.expires_at,
@@ -136,16 +156,16 @@ impl SessionRegistry {
 
     /// Lists all sessions associated with the given wallet principal.
     #[must_use]
-    pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<SessionInfo> {
+    pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<DelegationSessionInfo> {
         let now = now_secs();
 
-        SESSION_REGISTRY.with_borrow(|map| {
+        DELEGATION_REGISTRY.with_borrow(|map| {
             map.iter()
                 .filter(|(_, del)| del.wallet_pid == wallet_pid)
                 .map(|(&session_pid, del)| {
                     let is_expired = del.expires_at.is_none_or(|expiry| now > expiry);
 
-                    SessionInfo {
+                    DelegationSessionInfo {
                         session_pid,
                         wallet_pid: del.wallet_pid,
                         expires_at: del.expires_at,
@@ -163,29 +183,30 @@ impl SessionRegistry {
 
         // Validate expiration time
         if duration < MIN_EXPIRATION {
-            Err(StateError::from(SessionRegistryError::SessionTooShort(
+            Err(StateError::from(DelegationRegistryError::SessionTooShort(
                 MIN_EXPIRATION.as_secs(),
             )))?;
         }
 
         if duration > MAX_EXPIRATION {
-            Err(StateError::from(SessionRegistryError::SessionTooLong(
+            Err(StateError::from(DelegationRegistryError::SessionTooLong(
                 MAX_EXPIRATION.as_secs(),
             )))?;
         }
 
         let expires_at = now_secs() + args.duration_secs;
 
-        SESSION_REGISTRY.with_borrow_mut(|map| {
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
             // Remove any existing session from the same wallet
             map.retain(|_, session| session.wallet_pid != args.wallet_pid);
 
             // Insert the new session
             map.insert(
                 args.session_pid,
-                Session {
+                DelegationSession {
                     wallet_pid: args.wallet_pid,
                     expires_at: Some(expires_at),
+                    requesting_canisters: Vec::new(),
                 },
             );
         });
@@ -194,7 +215,7 @@ impl SessionRegistry {
         CALL_COUNT.with_borrow_mut(|count| {
             *count += 1;
             if *count % CLEANUP_THRESHOLD == 0 {
-                Self::cleanup();
+                Self::cleanup_expired();
             }
         });
 
@@ -211,15 +232,15 @@ impl SessionRegistry {
     ///
     pub fn revoke_session_or_wallet(pid: Principal) -> Result<(), Error> {
         // 1. Try as session ID
-        if SESSION_REGISTRY.with_borrow(|map| map.contains_key(&pid)) {
-            SESSION_REGISTRY.with_borrow_mut(|map| {
+        if DELEGATION_REGISTRY.with_borrow(|map| map.contains_key(&pid)) {
+            DELEGATION_REGISTRY.with_borrow_mut(|map| {
                 map.remove(&pid);
             });
             return Ok(());
         }
 
         // 2. Try as wallet grantor
-        let removed = SESSION_REGISTRY.with_borrow_mut(|map| {
+        let removed = DELEGATION_REGISTRY.with_borrow_mut(|map| {
             let original_len = map.len();
             map.retain(|_, s| s.wallet_pid != pid);
             original_len - map.len()
@@ -228,20 +249,20 @@ impl SessionRegistry {
         if removed > 0 {
             Ok(())
         } else {
-            Err(StateError::from(SessionRegistryError::NotFound(pid)).into())
+            Err(StateError::from(DelegationRegistryError::NotFound(pid)).into())
         }
     }
 
     /// Removes all expired sessions from the registry.
-    fn cleanup() {
-        let before = SESSION_REGISTRY.with_borrow(|map| map.len());
+    fn cleanup_expired() {
+        let before = DELEGATION_REGISTRY.with_borrow(|map| map.len());
 
         let now = now_secs();
-        SESSION_REGISTRY.with_borrow_mut(|map| {
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
             map.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
         });
 
-        let after = SESSION_REGISTRY.with_borrow(|map| map.len());
+        let after = DELEGATION_REGISTRY.with_borrow(|map| map.len());
 
         log!(
             Log::Info,
@@ -258,7 +279,7 @@ mod tests {
     }
 
     fn reset_state() {
-        SESSION_REGISTRY.with_borrow_mut(|map| map.clear());
+        DELEGATION_REGISTRY.with_borrow_mut(|map| map.clear());
         CALL_COUNT.with_borrow_mut(|count| *count = 0);
     }
 
@@ -268,14 +289,14 @@ mod tests {
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
 
-        SessionRegistry::register_session(RegisterSessionArgs {
+        DelegationRegistry::register_session(RegisterSessionArgs {
             wallet_pid: wallet,
             session_pid: session,
             duration_secs: 300,
         })
         .unwrap();
 
-        let view = SessionRegistry::get_session_info(session).unwrap();
+        let view = DelegationRegistry::get_session_info(session).unwrap();
         assert_eq!(view.wallet_pid, wallet);
         assert_eq!(view.session_pid, session);
         assert!(!view.is_expired);
@@ -287,18 +308,15 @@ mod tests {
         let wallet = dummy_pid(3);
         let session = dummy_pid(4);
 
-        SESSION_REGISTRY.with_borrow_mut(|map| {
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
             map.insert(
                 session,
-                Session {
-                    wallet_pid: wallet,
-                    expires_at: Some(now_secs() - 10), // already expired
-                },
+                DelegationSession::new(wallet, Some(now_secs() - 10)),
             );
         });
 
-        SessionRegistry::cleanup();
-        let found = SESSION_REGISTRY.with_borrow(|map| map.contains_key(&session));
+        DelegationRegistry::cleanup_expired();
+        let found = DELEGATION_REGISTRY.with_borrow(|map| map.contains_key(&session));
         assert!(!found);
     }
 
@@ -310,26 +328,26 @@ mod tests {
         let session1 = dummy_pid(10);
         let session2 = dummy_pid(11);
 
-        SessionRegistry::register_session(RegisterSessionArgs {
+        DelegationRegistry::register_session(RegisterSessionArgs {
             wallet_pid: wallet1,
             session_pid: session1,
             duration_secs: 1000,
         })
         .unwrap();
 
-        SessionRegistry::register_session(RegisterSessionArgs {
+        DelegationRegistry::register_session(RegisterSessionArgs {
             wallet_pid: wallet2,
             session_pid: session2,
             duration_secs: 1000,
         })
         .unwrap();
 
-        SessionRegistry::revoke_session_or_wallet(session1).unwrap();
+        DelegationRegistry::revoke_session_or_wallet(session1).unwrap();
 
-        let still_exists = SESSION_REGISTRY.with_borrow(|map| map.contains_key(&session2));
+        let still_exists = DELEGATION_REGISTRY.with_borrow(|map| map.contains_key(&session2));
         assert!(still_exists);
 
-        let removed = SESSION_REGISTRY.with_borrow(|map| !map.contains_key(&session1));
+        let removed = DELEGATION_REGISTRY.with_borrow(|map| !map.contains_key(&session1));
         assert!(removed);
     }
 
@@ -342,7 +360,7 @@ mod tests {
         let s3 = dummy_pid(99); // different wallet
 
         for (wallet_pid, session_pid) in [(wallet, s1), (wallet, s2), (dummy_pid(200), s3)] {
-            SessionRegistry::register_session(RegisterSessionArgs {
+            DelegationRegistry::register_session(RegisterSessionArgs {
                 wallet_pid,
                 session_pid,
                 duration_secs: 1000,
@@ -350,9 +368,9 @@ mod tests {
             .unwrap();
         }
 
-        SessionRegistry::revoke_session_or_wallet(wallet).unwrap();
+        DelegationRegistry::revoke_session_or_wallet(wallet).unwrap();
 
-        let keys = SESSION_REGISTRY.with_borrow(|map| map.keys().copied().collect::<Vec<_>>());
+        let keys = DELEGATION_REGISTRY.with_borrow(|map| map.keys().copied().collect::<Vec<_>>());
         assert!(!keys.contains(&s1));
         assert!(!keys.contains(&s2));
         assert!(keys.contains(&s3));
@@ -364,17 +382,14 @@ mod tests {
         let wallet = dummy_pid(20);
         let session = dummy_pid(21);
 
-        SESSION_REGISTRY.with_borrow_mut(|map| {
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
             map.insert(
                 session,
-                Session {
-                    wallet_pid: wallet,
-                    expires_at: Some(now_secs() - 1), // expired
-                },
-            );
+                DelegationSession::new(wallet, Some(now_secs() - 1)),
+            )
         });
 
-        let view = SessionRegistry::get_session_info(session).unwrap();
+        let view = DelegationRegistry::get_session_info(session).unwrap();
         assert!(view.is_expired);
     }
 }

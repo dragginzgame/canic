@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.1.10]
 - added a way to make ICRC-21 easy
 - made ICRC-10 native
+- added a DelegationCache for other canisters to query an Auth canister
 
 ## [0.1.9]
 - added a whole state for session delegations

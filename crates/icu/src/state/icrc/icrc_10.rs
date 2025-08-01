@@ -9,6 +9,7 @@ thread_local! {
     static ICRC_10_REGISTRY: RefCell<HashSet<Icrc10Standard>> = RefCell::new({
         let mut set = HashSet::new();
         set.insert(Icrc10Standard::Icrc10); // Always register ICRC-10 by default
+
         set
     });
 }
