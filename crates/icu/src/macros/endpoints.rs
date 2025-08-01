@@ -123,11 +123,9 @@ macro_rules! icu_endpoints {
         //
 
         #[::icu::ic::query]
-        async fn icu_delegation_query(
+        async fn icu_delegation_get(
             session_pid: Principal,
         ) -> Result<::icu::state::DelegationSessionInfo, ::icu::Error> {
-            // auth should basically be is_subnet but that doesnt work
-
             $crate::state::DelegationRegistry::get_session_info(session_pid)
         }
 
@@ -135,14 +133,7 @@ macro_rules! icu_endpoints {
         async fn icu_delegation_register(
             args: ::icu::state::RegisterSessionArgs,
         ) -> Result<(), ::icu::Error> {
-            use ::icu::auth::{is_parent, is_principal};
-
-            // make sure the caller == wallet_pid
-            // or a parent canister
-            let expected = args.wallet_pid;
-            $crate::auth_require_any!(is_parent, move |caller| { is_principal(caller, expected) })?;
-
-            $crate::state::DelegationRegistry::register_session(args)
+            $crate::state::DelegationRegistry::register_session(msg_caller(), args)
         }
 
         #[::icu::ic::update]

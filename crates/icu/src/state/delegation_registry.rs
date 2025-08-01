@@ -83,7 +83,6 @@ pub struct DelegationSessionInfo {
 
 #[derive(Debug, CandidType, Deserialize, Clone)]
 pub struct RegisterSessionArgs {
-    pub wallet_pid: Principal,
     pub session_pid: Principal,
     pub duration_secs: u64,
 }
@@ -178,7 +177,7 @@ impl DelegationRegistry {
 
     /// Registers a new session for a wallet with a limited duration.
     /// Removes any previous session associated with the same wallet.
-    pub fn register_session(args: RegisterSessionArgs) -> Result<(), Error> {
+    pub fn register_session(wallet_pid: Principal, args: RegisterSessionArgs) -> Result<(), Error> {
         let duration = Duration::from_secs(args.duration_secs);
 
         // Validate expiration time
@@ -198,13 +197,13 @@ impl DelegationRegistry {
 
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
             // Remove any existing session from the same wallet
-            map.retain(|_, session| session.wallet_pid != args.wallet_pid);
+            map.retain(|_, session| session.wallet_pid != wallet_pid);
 
             // Insert the new session
             map.insert(
                 args.session_pid,
                 DelegationSession {
-                    wallet_pid: args.wallet_pid,
+                    wallet_pid,
                     expires_at: Some(expires_at),
                     requesting_canisters: Vec::new(),
                 },
@@ -289,11 +288,13 @@ mod tests {
         let wallet = dummy_pid(1);
         let session = dummy_pid(2);
 
-        DelegationRegistry::register_session(RegisterSessionArgs {
-            wallet_pid: wallet,
-            session_pid: session,
-            duration_secs: 300,
-        })
+        DelegationRegistry::register_session(
+            wallet,
+            RegisterSessionArgs {
+                session_pid: session,
+                duration_secs: 300,
+            },
+        )
         .unwrap();
 
         let view = DelegationRegistry::get_session_info(session).unwrap();
@@ -328,18 +329,22 @@ mod tests {
         let session1 = dummy_pid(10);
         let session2 = dummy_pid(11);
 
-        DelegationRegistry::register_session(RegisterSessionArgs {
-            wallet_pid: wallet1,
-            session_pid: session1,
-            duration_secs: 1000,
-        })
+        DelegationRegistry::register_session(
+            wallet1,
+            RegisterSessionArgs {
+                session_pid: session1,
+                duration_secs: 1000,
+            },
+        )
         .unwrap();
 
-        DelegationRegistry::register_session(RegisterSessionArgs {
-            wallet_pid: wallet2,
-            session_pid: session2,
-            duration_secs: 1000,
-        })
+        DelegationRegistry::register_session(
+            wallet2,
+            RegisterSessionArgs {
+                session_pid: session2,
+                duration_secs: 1000,
+            },
+        )
         .unwrap();
 
         DelegationRegistry::revoke_session_or_wallet(session1).unwrap();
@@ -360,11 +365,13 @@ mod tests {
         let s3 = dummy_pid(99); // different wallet
 
         for (wallet_pid, session_pid) in [(wallet, s1), (wallet, s2), (dummy_pid(200), s3)] {
-            DelegationRegistry::register_session(RegisterSessionArgs {
+            DelegationRegistry::register_session(
                 wallet_pid,
-                session_pid,
-                duration_secs: 1000,
-            })
+                RegisterSessionArgs {
+                    session_pid,
+                    duration_secs: 1000,
+                },
+            )
             .unwrap();
         }
 
