@@ -6,20 +6,20 @@ version = { workspace = true }
 
 [dependencies]
 candid = { workspace = true }
-thiserror = { workspace = true }
-ic-cdk = { workspace = true }
 defer = { workspace = true }
-sha2 = { workspace = true }
-icrc-ledger-types = { workspace = true }
-ic-management-canister-types = { workspace = true }
-ic-ledger-types = { workspace = true }
-ic-cdk-timers = { workspace = true }
-ic_principal = { workspace = true }
-tinyrand = { workspace = true }
-minicbor-serde = { workspace = true }
-ic-stable-structures = { workspace = true }
-serde = { workspace = true }
 derive_more = { workspace = true }
+ic-cdk = { workspace = true }
+ic-cdk-timers = { workspace = true }
+ic-ledger-types = { workspace = true }
+ic-management-canister-types = { workspace = true }
+ic-stable-structures = { workspace = true }
+ic_principal = { workspace = true }
+icrc-ledger-types = { workspace = true }
+minicbor-serde = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tinyrand = { workspace = true }
 
 [lints]
 workspace = true

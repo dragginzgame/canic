@@ -91,7 +91,7 @@ impl ChildIndex {
 /// ChildIndexData
 ///
 
-#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
 pub struct ChildIndexData(HashMap<Principal, String>);
 
 impl IntoIterator for ChildIndexData {

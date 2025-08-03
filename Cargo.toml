@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/icu", "crates/canisters/test", "crates/canisters/root"]
+members = ["crates/canisters/root", "crates/canisters/test", "crates/icu"]
 resolver = "2"
 
 [workspace.package]
@@ -12,31 +12,30 @@ license = "MIT"
 readme = "README.md"
 
 [workspace.dependencies]
-icu = { path = "crates/icu" }
 
 # ic cdk
 candid = { version = "0.10", default-features = false, features = ["value"] }
-ic-cdk = "0.18.5"
-ic-stable-structures = "0.7.0"
-ic-management-canister-types = "0.3.2"
-ic-ledger-types = "0.15.0"
-ic_principal = "0.1"
-icrc-ledger-types = "0.1.10"
-ic-cdk-timers = "0.12.2"
-
-# third party
-minicbor-serde = { version = "0.6", features = ["alloc"] }
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = [
     "deref",
     "deref_mut",
     "display",
 ] }
+ic-cdk = "0.18.5"
+ic-cdk-timers = "0.12.2"
+ic-ledger-types = "0.15.0"
+ic-management-canister-types = "0.3.2"
+ic-stable-structures = "0.7.0"
+ic_principal = "0.1"
+icrc-ledger-types = "0.1.10"
+icu = { path = "crates/icu" }
+
+# third party
+minicbor-serde = { version = "0.6", features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 sha2 = "0.10"
 thiserror = "2.0"
 tinyrand = "0.5"
-
 
 # clippy
 [workspace.lints.clippy]

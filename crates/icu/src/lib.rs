@@ -45,7 +45,7 @@ pub mod prelude {
 /// top level error should handle all sub-errors, but not expose the child candid types
 ///
 
-#[derive(CandidType, Deserialize, Debug, ThisError)]
+#[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum Error {
     #[error("{0}")]
     AuthError(String),

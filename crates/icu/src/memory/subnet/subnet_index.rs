@@ -80,7 +80,7 @@ impl SubnetIndex {
 /// SubnetIndexData
 ///
 
-#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
 pub struct SubnetIndexData(HashMap<String, Principal>);
 
 impl IntoIterator for SubnetIndexData {

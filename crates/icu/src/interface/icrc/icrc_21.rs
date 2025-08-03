@@ -20,7 +20,7 @@ pub struct Icrc21ConsentInfo {
     pub metadata: Icrc21ConsentMessageMetadata,
 }
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Deserialize)]
 pub struct Icrc21ConsentMessageSpec {
     pub metadata: Icrc21ConsentMessageMetadata,
     pub device_spec: Option<Icrc21DeviceSpec>,
@@ -39,7 +39,7 @@ pub enum Icrc21ConsentMessageResponse {
     Err(Icrc21Error),
 }
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Deserialize)]
 pub struct Icrc21ConsentMessageMetadata {
     pub language: String,
     pub utc_offset_minutes: Option<i16>,
@@ -49,12 +49,12 @@ pub struct Icrc21ConsentMessageMetadata {
 /// Icrc21ConsentPreferences
 ///
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Deserialize)]
 pub struct Icrc21ConsentPreferences {
     pub language: String,
 }
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Deserialize)]
 pub enum Icrc21DeviceSpec {
     GenericDisplay,
     FieldsDisplay,

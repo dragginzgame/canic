@@ -101,7 +101,7 @@ impl_storable_unbounded!(MemoryRegistryEntry);
 /// MemoryRegistryData
 ///
 
-#[derive(Clone, Debug, Deref, CandidType, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
 pub struct MemoryRegistryData(Vec<(u8, MemoryRegistryEntry)>);
 
 ///

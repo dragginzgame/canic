@@ -6,7 +6,7 @@ use serde::Deserialize;
 /// Icrc10Standard
 ///
 
-#[derive(Debug, Display, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Display, Eq, Hash, PartialEq)]
 pub enum Icrc10Standard {
     Icrc10,
     Icrc21,
@@ -16,7 +16,7 @@ pub enum Icrc10Standard {
 /// Icrc10SupportedStandard
 ///
 
-#[derive(CandidType, Deserialize, Eq, PartialEq, Debug)]
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
 pub struct Icrc10SupportedStandard {
     pub url: String,
     pub name: String,

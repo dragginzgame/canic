@@ -10,8 +10,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-icu = { workspace = true }
 ic-cdk = { workspace = true }
+icu = { workspace = true }
 
 [lints]
 workspace = true

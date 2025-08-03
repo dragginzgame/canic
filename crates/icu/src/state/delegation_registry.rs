@@ -47,7 +47,7 @@ pub enum DelegationRegistryError {
 /// DelegationSession
 ///
 
-#[derive(Debug, CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationSession {
     wallet_pid: Principal,
     expires_at: Option<u64>,
@@ -69,7 +69,7 @@ impl DelegationSession {
 /// DelegationSessionInfo
 ///
 
-#[derive(Debug, CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationSessionInfo {
     pub wallet_pid: Principal,
     pub session_pid: Principal,
@@ -81,7 +81,7 @@ pub struct DelegationSessionInfo {
 /// RegisterSessionArgs
 ///
 
-#[derive(Debug, CandidType, Deserialize, Clone)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RegisterSessionArgs {
     pub session_pid: Principal,
     pub duration_secs: u64,

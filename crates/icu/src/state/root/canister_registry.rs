@@ -38,7 +38,7 @@ pub struct Canister {
 /// the front-facing version
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterData {
     pub attributes: CanisterAttributes,
     pub wasm_size: usize,
@@ -57,7 +57,7 @@ impl From<&Canister> for CanisterData {
 /// CanisterAttributes
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterAttributes {
     pub auto_create: bool,
     pub is_sharded: bool,
@@ -67,7 +67,7 @@ pub struct CanisterAttributes {
 /// CanisterRegistry
 ///
 
-#[derive(Default, Debug, Deref)]
+#[derive(Debug, Default, Deref)]
 pub struct CanisterRegistry(HashMap<String, Canister>);
 
 impl CanisterRegistry {
@@ -127,7 +127,7 @@ impl CanisterRegistry {
 /// CanisterRegistryData
 ///
 
-#[derive(Debug, Clone, CandidType, Serialize, Deserialize, Deref)]
+#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
 pub struct CanisterRegistryData(HashMap<String, CanisterData>);
 
 impl IntoIterator for CanisterRegistryData {
