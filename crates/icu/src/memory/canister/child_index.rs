@@ -37,6 +37,10 @@ pub enum ChildIndexError {
 pub struct ChildIndex {}
 
 impl ChildIndex {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&BTreeMap<Principal, String>) -> R) -> R {
         CHILD_INDEX.with(|cell| f(&cell.borrow()))
     }
@@ -45,18 +49,39 @@ impl ChildIndex {
         CHILD_INDEX.with(|cell| f(&mut cell.borrow_mut()))
     }
 
+    //
+    // METHODS
+    //
+
     #[must_use]
-    pub fn get_data() -> ChildIndexData {
-        Self::with(|map| ChildIndexData(map.iter_pairs().collect()))
+    pub fn get(pid: &Principal) -> Option<String> {
+        Self::with(|map| map.get(pid))
     }
 
-    pub fn insert_canister(pid: Principal, kind: &str) {
+    pub fn try_get(pid: &Principal) -> Result<String, Error> {
+        if let Some(kind) = Self::get(pid) {
+            Ok(kind)
+        } else {
+            Err(MemoryError::from(ChildIndexError::CanisterNotFound(*pid)))?
+        }
+    }
+
+    #[must_use]
+    pub fn get_by_kind(kind: &str) -> Vec<Principal> {
+        Self::with(|map| {
+            map.iter_pairs()
+                .filter_map(|(p, k)| if k == kind { Some(p) } else { None })
+                .collect()
+        })
+    }
+
+    pub fn insert(pid: Principal, kind: &str) {
         Self::with_mut(|map| {
             map.insert(pid, kind.to_string());
         });
     }
 
-    pub fn remove_canister(pid: &Principal) {
+    pub fn remove(pid: &Principal) {
         Self::with_mut(|map| {
             map.remove(pid);
         });
@@ -68,29 +93,13 @@ impl ChildIndex {
         });
     }
 
-    // get
-    #[must_use]
-    pub fn get(pid: &Principal) -> Option<String> {
-        Self::with(|map| map.get(pid))
-    }
+    //
+    // EXPORT
+    //
 
-    // try_get
-    pub fn try_get(pid: &Principal) -> Result<String, Error> {
-        if let Some(kind) = Self::get(pid) {
-            Ok(kind)
-        } else {
-            Err(MemoryError::from(ChildIndexError::CanisterNotFound(*pid)))?
-        }
-    }
-
-    // get_by_kind
     #[must_use]
-    pub fn get_by_kind(kind: &str) -> Vec<Principal> {
-        Self::with(|map| {
-            map.iter_pairs()
-                .filter_map(|(p, k)| if k == kind { Some(p) } else { None })
-                .collect()
-        })
+    pub fn export() -> ChildIndexData {
+        Self::with(|map| ChildIndexData(map.iter_pairs().collect()))
     }
 }
 

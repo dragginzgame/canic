@@ -38,6 +38,10 @@ pub enum AppStateError {
 pub struct AppState {}
 
 impl AppState {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&Cell<AppStateData>) -> R) -> R {
         APP_STATE.with_borrow(|s| f(s))
     }
@@ -46,15 +50,9 @@ impl AppState {
         APP_STATE.with_borrow_mut(|s| f(s))
     }
 
-    #[must_use]
-    pub fn get_data() -> AppStateData {
-        Self::with(Cell::get)
-    }
-
-    // set_data
-    pub fn set_data(data: AppStateData) {
-        Self::with_mut(|cell| cell.set(data));
-    }
+    //
+    // METHODS
+    //
 
     #[must_use]
     pub fn get_mode() -> AppMode {
@@ -70,7 +68,6 @@ impl AppState {
         });
     }
 
-    // command
     pub fn command(cmd: AppCommand) -> Result<(), Error> {
         let old_mode = Self::with(|cell| cell.get().mode);
 
@@ -89,6 +86,19 @@ impl AppState {
         log!(Log::Ok, "app: mode changed {old_mode} -> {new_mode}");
 
         Ok(())
+    }
+
+    //
+    // IMPORT & EXPORT
+    //
+
+    pub fn import(data: AppStateData) {
+        Self::with_mut(|cell| cell.set(data));
+    }
+
+    #[must_use]
+    pub fn export() -> AppStateData {
+        Self::with(Cell::get)
     }
 }
 

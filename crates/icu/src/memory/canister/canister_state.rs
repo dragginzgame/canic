@@ -40,6 +40,10 @@ pub enum CanisterStateError {
 pub struct CanisterState {}
 
 impl CanisterState {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&Cell<CanisterStateData>) -> R) -> R {
         CANISTER_STATE.with(|cell| f(&cell.borrow()))
     }
@@ -48,10 +52,9 @@ impl CanisterState {
         CANISTER_STATE.with(|cell| f(&mut cell.borrow_mut()))
     }
 
-    #[must_use]
-    pub fn get_data() -> CanisterStateData {
-        Self::with(Cell::get)
-    }
+    //
+    // METHODS
+    //
 
     #[must_use]
     pub fn get_kind() -> Option<String> {
@@ -69,13 +72,6 @@ impl CanisterState {
     #[must_use]
     pub fn is_root() -> bool {
         Self::get_parents().is_empty()
-    }
-
-    #[must_use]
-    pub fn has_parent_pid(parent_pid: &Principal) -> bool {
-        Self::get_parents()
-            .iter()
-            .any(|p| p.principal == *parent_pid)
     }
 
     pub fn get_root_pid() -> Principal {
@@ -105,12 +101,28 @@ impl CanisterState {
             .map(|p| p.principal)
     }
 
+    #[must_use]
+    pub fn has_parent_pid(parent_pid: &Principal) -> bool {
+        Self::get_parents()
+            .iter()
+            .any(|p| p.principal == *parent_pid)
+    }
+
     pub fn set_parents(parents: Vec<CanisterParent>) {
         Self::with_mut(|cell| {
             let mut state = cell.get();
             state.parents = parents;
             cell.set(state);
         });
+    }
+
+    //
+    // EXPORT
+    //
+
+    #[must_use]
+    pub fn export() -> CanisterStateData {
+        Self::with(Cell::get)
     }
 }
 

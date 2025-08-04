@@ -28,7 +28,7 @@ fn register_canisters() {
     )];
 
     for (path, def, wasm) in canisters {
-        CanisterRegistry::add_canister(path, def, wasm).unwrap();
+        CanisterRegistry::insert(path, def, wasm).unwrap();
     }
 }
 

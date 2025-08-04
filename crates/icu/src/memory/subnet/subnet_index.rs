@@ -37,6 +37,10 @@ pub enum SubnetIndexError {
 pub struct SubnetIndex {}
 
 impl SubnetIndex {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&BTreeMap<String, Principal>) -> R) -> R {
         SUBNET_INDEX.with(|cell| f(&cell.borrow()))
     }
@@ -45,12 +49,42 @@ impl SubnetIndex {
         SUBNET_INDEX.with(|cell| f(&mut cell.borrow_mut()))
     }
 
+    //
+    // METHODS
+    //
+
     #[must_use]
-    pub fn get_data() -> SubnetIndexData {
-        Self::with(|map| SubnetIndexData(map.iter_pairs().collect()))
+    pub fn get(kind: &str) -> Option<Principal> {
+        Self::with(|map| map.get(&kind.to_string()))
     }
 
-    pub fn set_data(data: SubnetIndexData) {
+    pub fn try_get(kind: &str) -> Result<Principal, Error> {
+        if let Some(pid) = Self::get(kind) {
+            Ok(pid)
+        } else {
+            Err(MemoryError::from(SubnetIndexError::CanisterNotFound(
+                kind.to_string(),
+            )))?
+        }
+    }
+
+    pub fn insert(kind: &str, id: Principal) {
+        Self::with_mut(|map| {
+            map.insert(kind.to_string(), id);
+        });
+    }
+
+    pub fn remove(kind: &str) {
+        Self::with_mut(|map| {
+            map.remove(&kind.to_string());
+        });
+    }
+
+    //
+    // IMPORT & EXPORT
+    //
+
+    pub fn import(data: SubnetIndexData) {
         Self::with_mut(|map| {
             map.clear();
             for (k, v) in data.iter() {
@@ -60,30 +94,8 @@ impl SubnetIndex {
     }
 
     #[must_use]
-    pub fn get_canister(kind: &str) -> Option<Principal> {
-        Self::with(|map| map.get(&kind.to_string()))
-    }
-
-    pub fn try_get_canister(kind: &str) -> Result<Principal, Error> {
-        if let Some(pid) = Self::get_canister(kind) {
-            Ok(pid)
-        } else {
-            Err(MemoryError::from(SubnetIndexError::CanisterNotFound(
-                kind.to_string(),
-            )))?
-        }
-    }
-
-    pub fn set_canister(kind: &str, id: Principal) {
-        Self::with_mut(|map| {
-            map.insert(kind.to_string(), id);
-        });
-    }
-
-    pub fn remove_canister(kind: &str) {
-        Self::with_mut(|map| {
-            map.remove(&kind.to_string());
-        });
+    pub fn export() -> SubnetIndexData {
+        Self::with(|map| SubnetIndexData(map.iter_pairs().collect()))
     }
 }
 

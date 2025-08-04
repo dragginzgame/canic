@@ -43,6 +43,10 @@ pub enum MemoryRegistryError {
 pub struct MemoryRegistry {}
 
 impl MemoryRegistry {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
         MEMORY_REGISTRY.with(|cell| f(&cell.borrow()))
     }
@@ -50,6 +54,10 @@ impl MemoryRegistry {
     pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
         MEMORY_REGISTRY.with(|cell| f(&mut cell.borrow_mut()))
     }
+
+    //
+    // METHODS
+    //
 
     pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
         Self::with_mut(|map| {
@@ -75,8 +83,12 @@ impl MemoryRegistry {
         })
     }
 
+    //
+    // EXPORT
+    //
+
     #[must_use]
-    pub fn get_data() -> MemoryRegistryData {
+    pub fn export() -> MemoryRegistryData {
         Self::with(|map| {
             let data = map
                 .iter()
@@ -192,7 +204,7 @@ mod tests {
         )
         .unwrap();
 
-        let data = MemoryRegistry::get_data();
+        let data = MemoryRegistry::export();
         assert_eq!(data.len(), 2);
         assert!(
             data.iter()

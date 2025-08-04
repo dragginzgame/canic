@@ -1,11 +1,11 @@
 pub mod app;
 pub mod canister;
-pub mod registry;
+pub mod memory_registry;
 pub mod subnet;
 
 pub use app::{AppState, AppStateData};
 pub use canister::{CanisterState, CanisterStateData, ChildIndex, ChildIndexData};
-pub use registry::{MemoryRegistry, MemoryRegistryData, MemoryRegistryError};
+pub use memory_registry::{MemoryRegistry, MemoryRegistryData, MemoryRegistryError};
 pub use subnet::{SubnetIndex, SubnetIndexData};
 
 use crate::{

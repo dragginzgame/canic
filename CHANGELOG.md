@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - made ICRC-10 native
 - added a DelegationCache for other canisters to query an Auth canister
 - made all the CanisterState / Registry errors type 'Error' not the internal Error type
+- rewrote the API for all states and memories to be consistent
 
 ## [0.1.9]
 - added a whole state for session delegations

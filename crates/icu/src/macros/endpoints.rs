@@ -11,7 +11,7 @@ macro_rules! icu_endpoints {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
             // send a request for each matching canister
-            for (child_pid, _) in ::icu::memory::ChildIndex::get_data() {
+            for (child_pid, _) in ::icu::memory::ChildIndex::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
                     $crate::interface::request::canister_upgrade_request(child_pid).await?
                 }
@@ -28,7 +28,7 @@ macro_rules! icu_endpoints {
             $crate::auth_require_any!(::icu::auth::is_parent)?;
 
             // set state and cascade
-            $crate::memory::AppState::set_data(data);
+            $crate::memory::AppState::import(data);
             $crate::interface::cascade::app_state_cascade().await?;
 
             Ok(())
@@ -42,7 +42,7 @@ macro_rules! icu_endpoints {
             $crate::auth_require_any!(::icu::auth::is_parent)?;
 
             // set index and cascade
-            $crate::memory::SubnetIndex::set_data(data);
+            $crate::memory::SubnetIndex::import(data);
             $crate::interface::cascade::subnet_index_cascade().await?;
 
             Ok(())
@@ -100,22 +100,22 @@ macro_rules! icu_endpoints {
 
         #[::icu::ic::query]
         fn icu_app_state() -> ::icu::memory::AppStateData {
-            $crate::memory::AppState::get_data()
+            $crate::memory::AppState::export()
         }
 
         #[::icu::ic::query]
         fn icu_canister_state() -> ::icu::memory::CanisterStateData {
-            $crate::memory::CanisterState::get_data()
+            $crate::memory::CanisterState::export()
         }
 
         #[::icu::ic::query]
         fn icu_child_index() -> ::icu::memory::ChildIndexData {
-            $crate::memory::ChildIndex::get_data()
+            $crate::memory::ChildIndex::export()
         }
 
         #[::icu::ic::query]
         fn icu_subnet_index() -> ::icu::memory::SubnetIndexData {
-            $crate::memory::SubnetIndex::get_data()
+            $crate::memory::SubnetIndex::export()
         }
 
         //

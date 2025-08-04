@@ -115,7 +115,7 @@ where
         Ok(response) => match response {
             Response::CanisterCreate(new_canister_pid) => {
                 // update child index
-                ChildIndex::insert_canister(new_canister_pid, kind);
+                ChildIndex::insert(new_canister_pid, kind);
 
                 Ok(new_canister_pid)
             }

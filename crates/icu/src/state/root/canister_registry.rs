@@ -1,6 +1,6 @@
+use crate::{Error, ic::println, state::StateError};
 use candid::CandidType;
 use derive_more::Deref;
-use ic_cdk::println;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -71,24 +71,32 @@ pub struct CanisterAttributes {
 pub struct CanisterRegistry(HashMap<String, Canister>);
 
 impl CanisterRegistry {
-    // new
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    // try_get_canister
-    pub fn try_get_canister(path: &str) -> Result<Canister, CanisterRegistryError> {
-        CANISTER_REGISTRY.with_borrow(|reg| {
-            reg.get(path)
-                .cloned()
-                .ok_or_else(|| CanisterRegistryError::CanisterNotFound(path.to_string()))
-        })
+    //
+    // METHODS
+    //
+
+    #[must_use]
+    pub fn get(path: &str) -> Option<Canister> {
+        CANISTER_REGISTRY.with_borrow(|reg| reg.get(path).cloned())
     }
 
-    // add_canister
+    pub fn try_get(path: &str) -> Result<Canister, Error> {
+        if let Some(canister) = Self::get(path) {
+            Ok(canister)
+        } else {
+            Err(StateError::from(CanisterRegistryError::CanisterNotFound(
+                path.to_string(),
+            )))?
+        }
+    }
+
     #[allow(clippy::cast_precision_loss)]
-    pub fn add_canister(
+    pub fn insert(
         path: &str,
         attributes: &CanisterAttributes,
         wasm: &'static [u8],
@@ -108,9 +116,12 @@ impl CanisterRegistry {
         Ok(())
     }
 
-    // get_data
+    //
+    // EXPORT
+    //
+
     #[must_use]
-    pub fn get_data() -> CanisterRegistryData {
+    pub fn export() -> CanisterRegistryData {
         let data = CANISTER_REGISTRY.with(|registry| {
             registry
                 .borrow()

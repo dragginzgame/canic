@@ -138,7 +138,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
     Box::pin(async move {
-        memory::SubnetIndex::try_get_canister(&canister)
+        memory::SubnetIndex::try_get(&canister)
             .map_err(|_| AuthError::NotCanisterType(caller, canister.clone()))?;
 
         Ok(())

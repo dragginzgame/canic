@@ -6,7 +6,7 @@ macro_rules! icu_register_memory {
         // check the registry with logging
         let result = $crate::memory::MemoryRegistry::register(
             $id,
-            $crate::memory::registry::MemoryRegistryEntry { path: path.clone() },
+            $crate::memory::memory_registry::MemoryRegistryEntry { path: path.clone() },
         );
 
         if let Err(ref err) = result {
