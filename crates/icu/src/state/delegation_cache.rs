@@ -1,4 +1,4 @@
-use crate::{Log, log, state::DelegationSessionInfo, utils::time::now_secs};
+use crate::{Log, log, state::DelegationSessionView, utils::time::now_secs};
 use candid::Principal;
 use std::{cell::RefCell, collections::HashMap};
 
@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashMap};
 //
 
 thread_local! {
-    static DELEGATION_CACHE: RefCell<HashMap<Principal, DelegationSessionInfo>> = RefCell::new(HashMap::new());
+    static DELEGATION_CACHE: RefCell<HashMap<Principal, DelegationSessionView>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -18,11 +18,11 @@ pub struct DelegationCache {}
 
 impl DelegationCache {
     #[must_use]
-    pub fn get(session_pid: Principal) -> Option<DelegationSessionInfo> {
+    pub fn get(session_pid: Principal) -> Option<DelegationSessionView> {
         DELEGATION_CACHE.with_borrow(|map| map.get(&session_pid).cloned())
     }
 
-    pub fn insert(session_pid: Principal, session: DelegationSessionInfo) {
+    pub fn insert(session_pid: Principal, session: DelegationSessionView) {
         DELEGATION_CACHE.with_borrow_mut(|map| {
             map.insert(session_pid, session);
         });
@@ -34,7 +34,7 @@ impl DelegationCache {
     }
 
     #[must_use]
-    pub fn list() -> Vec<(Principal, DelegationSessionInfo)> {
+    pub fn list() -> Vec<(Principal, DelegationSessionView)> {
         DELEGATION_CACHE.with_borrow(|map| map.iter().map(|(k, v)| (*k, v.clone())).collect())
     }
 
@@ -42,9 +42,7 @@ impl DelegationCache {
         let now = now_secs();
 
         let before = DELEGATION_CACHE.with_borrow(HashMap::len);
-        DELEGATION_CACHE.with_borrow_mut(|map| {
-            map.retain(|_, s| s.expires_at.is_some_and(|ts| ts > now));
-        });
+        DELEGATION_CACHE.with_borrow_mut(|map| map.retain(|_, s| s.expires_at > now));
         let after = DELEGATION_CACHE.with_borrow(HashMap::len);
 
         log!(

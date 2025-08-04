@@ -125,8 +125,15 @@ macro_rules! icu_endpoints {
         #[::icu::ic::query]
         async fn icu_delegation_get(
             session_pid: Principal,
-        ) -> Result<::icu::state::DelegationSessionInfo, ::icu::Error> {
-            $crate::state::DelegationRegistry::get_session_info(session_pid)
+        ) -> Result<::icu::state::DelegationSessionView, ::icu::Error> {
+            $crate::state::DelegationRegistry::get(session_pid)
+        }
+
+        #[::icu::ic::update]
+        async fn icu_delegation_track(
+            session_pid: Principal,
+        ) -> Result<::icu::state::DelegationSessionView, ::icu::Error> {
+            $crate::state::DelegationRegistry::track(msg_caller(), session_pid)
         }
 
         #[::icu::ic::update]
