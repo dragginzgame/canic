@@ -1,4 +1,9 @@
-use crate::{ic::structures::BTreeMap, icu_register_memory, memory::CHILD_INDEX_MEMORY_ID};
+use crate::{
+    Error,
+    ic::structures::BTreeMap,
+    icu_register_memory,
+    memory::{CHILD_INDEX_MEMORY_ID, MemoryError},
+};
 use candid::{CandidType, Principal};
 use derive_more::Deref;
 use serde::{Deserialize, Serialize};
@@ -70,10 +75,12 @@ impl ChildIndex {
     }
 
     // try_get
-    pub fn try_get(pid: &Principal) -> Result<String, ChildIndexError> {
-        let canister = Self::get(pid).ok_or(ChildIndexError::CanisterNotFound(*pid))?;
-
-        Ok(canister)
+    pub fn try_get(pid: &Principal) -> Result<String, Error> {
+        if let Some(kind) = Self::get(pid) {
+            Ok(kind)
+        } else {
+            Err(MemoryError::from(ChildIndexError::CanisterNotFound(*pid)))?
+        }
     }
 
     // get_by_kind

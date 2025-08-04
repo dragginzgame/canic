@@ -37,15 +37,16 @@ pub struct Icrc10Registry();
 impl Icrc10Registry {
     pub fn register(standard: Icrc10Standard) {
         ICRC_10_REGISTRY.with_borrow_mut(|reg| {
-            if !reg.insert(standard) {
-                panic!("standard '{standard}' has already been registered");
-            }
-        })
+            assert!(
+                reg.insert(standard),
+                "standard '{standard}' has already been registered"
+            );
+        });
     }
 
     pub fn register_many(standards: &[Icrc10Standard]) {
         for standard in standards {
-            Self::register(*standard)
+            Self::register(*standard);
         }
     }
 
@@ -61,7 +62,7 @@ impl Icrc10Registry {
             ICRC_10_SUPPORTED_STANDARDS
                 .iter()
                 .filter(|(standard, _, _)| reg.contains(standard))
-                .map(|(_, name, url)| (name.to_string(), url.to_string()))
+                .map(|(_, name, url)| ((*name).to_string(), (*url).to_string()))
                 .collect()
         })
     }

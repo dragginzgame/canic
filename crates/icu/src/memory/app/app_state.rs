@@ -1,6 +1,8 @@
 use crate::{
-    Log, ic::structures::Cell, icu_register_memory, impl_storable_unbounded, log,
-    memory::APP_STATE_MEMORY_ID,
+    Error, Log,
+    ic::structures::Cell,
+    icu_register_memory, impl_storable_unbounded, log,
+    memory::{APP_STATE_MEMORY_ID, MemoryError},
 };
 use candid::CandidType;
 use derive_more::Display;
@@ -69,7 +71,7 @@ impl AppState {
     }
 
     // command
-    pub fn command(cmd: AppCommand) -> Result<(), AppStateError> {
+    pub fn command(cmd: AppCommand) -> Result<(), Error> {
         let old_mode = Self::with(|cell| cell.get().mode);
 
         let new_mode = match cmd {
@@ -79,7 +81,7 @@ impl AppState {
         };
 
         if old_mode == new_mode {
-            return Err(AppStateError::AlreadyInMode(old_mode));
+            return Err(MemoryError::from(AppStateError::AlreadyInMode(old_mode)))?;
         }
 
         Self::set_mode(new_mode);

@@ -1,7 +1,8 @@
 use crate::{
+    Error,
     ic::{api::canister_self, structures::Cell},
     icu_register_memory, impl_storable_unbounded,
-    memory::CANISTER_STATE_MEMORY_ID,
+    memory::{CANISTER_STATE_MEMORY_ID, MemoryError},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -57,8 +58,12 @@ impl CanisterState {
         Self::with(|cell| cell.get().kind)
     }
 
-    pub fn try_get_kind() -> Result<String, CanisterStateError> {
-        Self::with(|cell| cell.get().kind).ok_or(CanisterStateError::KindNotSet)
+    pub fn try_get_kind() -> Result<String, Error> {
+        if let Some(kind) = Self::get_kind() {
+            Ok(kind)
+        } else {
+            Err(MemoryError::from(CanisterStateError::KindNotSet))?
+        }
     }
 
     #[must_use]
@@ -132,7 +137,7 @@ pub struct CanisterParent {
 }
 
 impl CanisterParent {
-    pub fn this() -> Result<Self, CanisterStateError> {
+    pub fn this() -> Result<Self, Error> {
         let kind = CanisterState::try_get_kind()?;
 
         Ok(Self {

@@ -56,7 +56,7 @@ pub struct DelegationSession {
 
 impl DelegationSession {
     #[must_use]
-    pub fn new(wallet_pid: Principal, expires_at: Option<u64>) -> Self {
+    pub const fn new(wallet_pid: Principal, expires_at: Option<u64>) -> Self {
         Self {
             wallet_pid,
             expires_at,
@@ -160,14 +160,14 @@ impl DelegationRegistry {
 
         DELEGATION_REGISTRY.with_borrow(|map| {
             map.iter()
-                .filter(|(_, del)| del.wallet_pid == wallet_pid)
-                .map(|(&session_pid, del)| {
-                    let is_expired = del.expires_at.is_none_or(|expiry| now > expiry);
+                .filter(|(_, d)| d.wallet_pid == wallet_pid)
+                .map(|(&session_pid, d)| {
+                    let is_expired = d.expires_at.is_none_or(|expiry| now > expiry);
 
                     DelegationSessionInfo {
                         session_pid,
-                        wallet_pid: del.wallet_pid,
-                        expires_at: del.expires_at,
+                        wallet_pid: d.wallet_pid,
+                        expires_at: d.expires_at,
                         is_expired,
                     }
                 })
@@ -254,14 +254,14 @@ impl DelegationRegistry {
 
     /// Removes all expired sessions from the registry.
     fn cleanup_expired() {
-        let before = DELEGATION_REGISTRY.with_borrow(|map| map.len());
+        let before = DELEGATION_REGISTRY.with_borrow(HashMap::len);
 
         let now = now_secs();
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
             map.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
         });
 
-        let after = DELEGATION_REGISTRY.with_borrow(|map| map.len());
+        let after = DELEGATION_REGISTRY.with_borrow(HashMap::len);
 
         log!(
             Log::Info,
@@ -278,7 +278,7 @@ mod tests {
     }
 
     fn reset_state() {
-        DELEGATION_REGISTRY.with_borrow_mut(|map| map.clear());
+        DELEGATION_REGISTRY.with_borrow_mut(HashMap::clear);
         CALL_COUNT.with_borrow_mut(|count| *count = 0);
     }
 

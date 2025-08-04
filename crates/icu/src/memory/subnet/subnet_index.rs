@@ -1,4 +1,9 @@
-use crate::{ic::structures::BTreeMap, icu_register_memory, memory::SUBNET_INDEX_MEMORY_ID};
+use crate::{
+    Error,
+    ic::structures::BTreeMap,
+    icu_register_memory,
+    memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
+};
 use candid::{CandidType, Principal};
 use derive_more::Deref;
 use serde::{Deserialize, Serialize};
@@ -59,8 +64,14 @@ impl SubnetIndex {
         Self::with(|map| map.get(&kind.to_string()))
     }
 
-    pub fn try_get_canister(kind: &str) -> Result<Principal, SubnetIndexError> {
-        Self::get_canister(kind).ok_or_else(|| SubnetIndexError::CanisterNotFound(kind.to_string()))
+    pub fn try_get_canister(kind: &str) -> Result<Principal, Error> {
+        if let Some(pid) = Self::get_canister(kind) {
+            Ok(pid)
+        } else {
+            Err(MemoryError::from(SubnetIndexError::CanisterNotFound(
+                kind.to_string(),
+            )))?
+        }
     }
 
     pub fn set_canister(kind: &str, id: Principal) {

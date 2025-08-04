@@ -41,11 +41,11 @@ impl DelegationCache {
     pub fn cleanup_expired() {
         let now = now_secs();
 
-        let before = DELEGATION_CACHE.with_borrow(|map| map.len());
+        let before = DELEGATION_CACHE.with_borrow(HashMap::len);
         DELEGATION_CACHE.with_borrow_mut(|map| {
             map.retain(|_, s| s.expires_at.is_some_and(|ts| ts > now));
         });
-        let after = DELEGATION_CACHE.with_borrow(|map| map.len());
+        let after = DELEGATION_CACHE.with_borrow(HashMap::len);
 
         log!(
             Log::Info,
@@ -55,6 +55,6 @@ impl DelegationCache {
 
     #[must_use]
     pub fn count() -> usize {
-        DELEGATION_CACHE.with_borrow(|map| map.len())
+        DELEGATION_CACHE.with_borrow(HashMap::len)
     }
 }

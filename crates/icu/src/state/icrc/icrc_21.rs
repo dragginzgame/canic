@@ -37,7 +37,7 @@ impl Icrc21Registry {
     where
         F: Fn(&Icrc21ConsentMessageRequest) -> String + 'static,
     {
-        Icrc21Registry::register(method, move |req| {
+        Self::register(method, move |req| {
             let message = generator(&req);
             Icrc21ConsentMessageResponse::Ok(Icrc21ConsentInfo {
                 consent_message: Icrc21ConsentMessage::GenericDisplayMessage(message),
