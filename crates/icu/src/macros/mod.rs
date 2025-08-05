@@ -125,7 +125,7 @@ macro_rules! perf_start {
     () => {
         ::icu::export::defer::defer!({
             let end = ::icu::ic::api::performance_counter(1);
-            let end_fmt = ::icu::format_instructions(end);
+            let end_fmt = ::icu::utils::instructions::format_instructions(end);
 
             $crate::log!(
                 ::icu::Log::Perf,
