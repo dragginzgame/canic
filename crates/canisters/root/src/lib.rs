@@ -1,7 +1,4 @@
-use icu::{
-    interface::state::create_canisters,
-    prelude::*,
-};
+use icu::{interface::state::create_canisters, prelude::*};
 
 //
 // ICU

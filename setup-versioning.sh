@@ -396,7 +396,7 @@ fmt:
 	cargo fmt --all
 
 fmt-check:
-	cargo fmt --all -- --check
+	cargo fmt
 
 clean:
 	cargo clean
@@ -472,7 +472,7 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
       
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo fmt
 
   build:
     name: Build

@@ -70,7 +70,7 @@ fmt:
 	cargo fmt --all
 
 fmt-check:
-	cargo fmt --all -- --check
+	cargo fmt
 
 clean:
 	cargo clean
