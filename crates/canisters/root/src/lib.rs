@@ -1,7 +1,6 @@
 use icu::{
     interface::state::create_canisters,
     prelude::*,
-    state::{CanisterAttributes, CanisterRegistry},
 };
 
 //
@@ -18,18 +17,18 @@ async fn init_async() {
 
 // register_canisters
 fn register_canisters() {
-    let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
-        "test",
-        CanisterAttributes {
-            auto_create: true,
-            is_sharded: false,
-        },
-        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
-    )];
+    // let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
+    //     "test",
+    //     CanisterAttributes {
+    //         auto_create: true,
+    //         is_sharded: false,
+    //     },
+    //     include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    // )];
 
-    for (path, def, wasm) in canisters {
-        CanisterRegistry::insert(path, def, wasm).unwrap();
-    }
+    // for (path, def, wasm) in canisters {
+    //     CanisterRegistry::insert(path, def, wasm).unwrap();
+    // }
 }
 
 export_candid!();
