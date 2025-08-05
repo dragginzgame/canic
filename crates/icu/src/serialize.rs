@@ -5,7 +5,7 @@ use thiserror::Error as ThisError;
 
 ///
 /// Serialize/Deserialize
-/// for consistent use of mimicbor (super efficient, no_std)
+/// for consistent use of minicbor (super efficient, no_std)
 ///
 
 ///
