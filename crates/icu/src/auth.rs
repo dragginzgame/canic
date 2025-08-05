@@ -19,17 +19,8 @@ pub enum AuthError {
     #[error("invalid error state - this should never happen")]
     InvalidState,
 
-    #[error("the root canister is not defined")]
-    NoRootDefined,
-
     #[error("one or more rules must be defined")]
     NoRulesDefined,
-
-    #[error("there has to be a user canister defined in the schema")]
-    NoUserCanister,
-
-    #[error("this action is not allowed due to configuration settings")]
-    NotAllowed,
 
     #[error("principal '{0}' does not match canister type '{1}'")]
     NotCanisterType(Principal, String),
@@ -50,7 +41,7 @@ pub enum AuthError {
     NotRoot(Principal),
 
     #[error("principal '{0}' is not the current canister")]
-    NotThis(Principal),
+    NotSameCanister(Principal),
 }
 
 impl AuthError {
@@ -212,7 +203,7 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
         if caller == canister_self() {
             Ok(())
         } else {
-            Err(AuthError::NotThis(caller))?
+            Err(AuthError::NotSameCanister(caller))?
         }
     })
 }

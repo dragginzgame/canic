@@ -51,15 +51,6 @@ pub struct CanisterUpgrade {
 }
 
 ///
-/// Cycles
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct Cycles {
-    pub cycles: u128,
-}
-
-///
 /// REQUEST
 ///
 
