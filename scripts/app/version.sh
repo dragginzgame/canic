@@ -127,8 +127,8 @@ case "${1:-help}" in
         ;;
     "major")
         check_working_directory
-        local current_version=$(get_current_version)
-        local new_version=$(bump_version "$current_version" "major")
+        current_version=$(get_current_version)
+        new_version=$(bump_version "$current_version" "major")
         print_info "Bumping major version: $current_version -> $new_version"
         update_cargo_version "$new_version"
         update_changelog "$new_version"
@@ -139,8 +139,8 @@ case "${1:-help}" in
         ;;
     "minor")
         check_working_directory
-        local current_version=$(get_current_version)
-        local new_version=$(bump_version "$current_version" "minor")
+        current_version=$(get_current_version)
+        new_version=$(bump_version "$current_version" "minor")
         print_info "Bumping minor version: $current_version -> $new_version"
         update_cargo_version "$new_version"
         update_changelog "$new_version"
@@ -151,8 +151,8 @@ case "${1:-help}" in
         ;;
     "patch")
         check_working_directory
-        local current_version=$(get_current_version)
-        local new_version=$(bump_version "$current_version" "patch")
+        current_version=$(get_current_version)
+        new_version=$(bump_version "$current_version" "patch")
         print_info "Bumping patch version: $current_version -> $new_version"
         update_cargo_version "$new_version"
         update_changelog "$new_version"
@@ -162,7 +162,7 @@ case "${1:-help}" in
         print_success "Version bumped to $new_version"
         ;;
     "release")
-        local version=${2:-$(get_current_version)}
+        version=${2:-$(get_current_version)}
         check_working_directory
         print_info "Creating release for version $version"
         create_git_tag "$version"
