@@ -30,6 +30,7 @@ fn register_canisters() {
     // for (path, def, wasm) in canisters {
     //     CanisterRegistry::insert(path, def, wasm).unwrap();
     // }
+    // chore
 }
 
 export_candid!();
