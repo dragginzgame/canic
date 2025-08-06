@@ -1,7 +1,7 @@
 use crate::Error;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashSet};
 use thiserror::Error as ThisError;
 
 //
@@ -82,6 +82,6 @@ impl Config {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigData {
-    pub controllers: HashMap<String, Principal>,
-    pub whitelist: HashMap<String, Principal>,
+    pub controllers: HashSet<Principal>,
+    pub whitelist: HashSet<Principal>,
 }

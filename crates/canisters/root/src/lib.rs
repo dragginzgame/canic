@@ -13,9 +13,7 @@ async fn init_async() {
     register_canisters();
     create_canisters(&[]).await.unwrap();
 
-    let config = icu::config::Config::get();
-
-    panic!("{config:?}");
+    // let config = icu::config::Config::get();
 }
 
 // register_canisters

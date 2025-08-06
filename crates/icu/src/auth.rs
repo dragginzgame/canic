@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    config::Config,
     ic::api::{canister_self, msg_caller},
     memory,
 };
@@ -42,6 +43,9 @@ pub enum AuthError {
 
     #[error("principal '{0}' is not the current canister")]
     NotSameCanister(Principal),
+
+    #[error("principal '{0}' is not on the whitelist")]
+    NotWhitelisted(Principal),
 }
 
 impl AuthError {
@@ -204,6 +208,20 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
             Ok(())
         } else {
             Err(AuthError::NotSameCanister(caller))?
+        }
+    })
+}
+
+// is_whitelisted
+#[must_use]
+pub fn is_whitelisted(caller: Principal) -> RuleResult {
+    Box::pin(async move {
+        let config = Config::get()?;
+
+        if config.whitelist.contains(&caller) {
+            Ok(())
+        } else {
+            Err(AuthError::NotWhitelisted(caller))?
         }
     })
 }

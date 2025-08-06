@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.1.15] - 2025-08-06
 - added config, with principals and whitelist.  icu_config("filename.toml")
+- added is_whitelisted auth rule
 
 ## [0.1.14]
 - now doing tagged releases
