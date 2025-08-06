@@ -82,6 +82,11 @@ impl Config {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigData {
-    pub controllers: HashSet<Principal>,
+    // controllers
+    // a vec because we just append it to the canister_create arguments
+    pub controllers: Vec<Principal>,
+
+    // whitelist
+    // a hashset as we constantly have to do lookups
     pub whitelist: HashSet<Principal>,
 }

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
 ## [Unreleased]
+- removed the ability for custom controllers as it's all in the config file now
 
 ## [0.1.18] - 2025-08-06
 - getting the hang of github tags

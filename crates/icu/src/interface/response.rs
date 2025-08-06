@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    config::Config,
     interface::{
         self, InterfaceError,
         ic::{IcError, ic_create_canister, ic_upgrade_canister},
@@ -26,7 +27,7 @@ pub enum Response {
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
         Request::CanisterCreate(req) => {
-            root_canister_create(&req.kind, &req.parents, &req.controllers, req.extra).await
+            root_canister_create(&req.kind, &req.parents, req.extra).await
         }
         Request::CanisterUpgrade(req) => root_canister_upgrade(req.pid, &req.kind).await,
     }
@@ -36,14 +37,15 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 async fn root_canister_create(
     kind: &str,
     parents: &[CanisterParent],
-    controllers: &[Principal],
     extra: Option<Vec<u8>>,
 ) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(kind)?;
     let root_pid = CanisterState::get_root_pid();
 
-    // controllers
-    let mut controllers = controllers.to_vec();
+    // controllers are :
+    // - the controllers that are specified in the config file
+    // - root
+    let mut controllers = Config::get()?.controllers;
     controllers.push(root_pid);
 
     // encode the standard init args
