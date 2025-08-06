@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod config;
 pub mod guard;
 pub mod ic;
 pub mod interface;
@@ -51,6 +52,9 @@ pub enum Error {
     AuthError(String),
 
     #[error("{0}")]
+    ConfigError(String),
+
+    #[error("{0}")]
     InterfaceError(String),
 
     #[error("{0}")]
@@ -71,6 +75,7 @@ macro_rules! from_to_string {
 }
 
 from_to_string!(auth::AuthError, AuthError);
+from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(memory::MemoryError, MemoryError);
 from_to_string!(state::StateError, StateError);

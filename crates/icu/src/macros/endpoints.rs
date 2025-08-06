@@ -11,7 +11,7 @@ macro_rules! icu_endpoints {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
             // send a request for each matching canister
-            for (child_pid, _) in ::icu::memory::ChildIndex::export() {
+            for (child_pid, _) in $crate::memory::ChildIndex::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
                     $crate::interface::request::canister_upgrade_request(child_pid).await?
                 }

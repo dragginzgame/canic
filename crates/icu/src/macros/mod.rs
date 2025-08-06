@@ -65,6 +65,17 @@ macro_rules! icu_start_root {
     };
 }
 
+// icu_config
+#[macro_export]
+macro_rules! icu_config {
+    ($file:expr) => {{
+        let config = ::config::IcuConfig::load_from_file($file)
+            .expect("Failed to load config file {}", $file);
+
+        let kind = config.kind;
+    }};
+}
+
 // log
 #[macro_export]
 macro_rules! log {
