@@ -1,5 +1,5 @@
 use crate::{
-    IcuError,
+    Error,
     ic::api::{canister_self, msg_caller},
     memory,
 };
@@ -19,17 +19,8 @@ pub enum AuthError {
     #[error("invalid error state - this should never happen")]
     InvalidState,
 
-    #[error("the root canister is not defined")]
-    NoRootDefined,
-
     #[error("one or more rules must be defined")]
     NoRulesDefined,
-
-    #[error("there has to be a user canister defined in the schema")]
-    NoUserCanister,
-
-    #[error("this action is not allowed due to configuration settings")]
-    NotAllowed,
 
     #[error("principal '{0}' does not match canister type '{1}'")]
     NotCanisterType(Principal, String),
@@ -50,7 +41,7 @@ pub enum AuthError {
     NotRoot(Principal),
 
     #[error("principal '{0}' is not the current canister")]
-    NotThis(Principal),
+    NotSameCanister(Principal),
 }
 
 impl AuthError {
@@ -64,18 +55,17 @@ impl AuthError {
 /// Rule
 ///
 
-pub type RuleFn = Box<
-    dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), IcuError>> + Send>> + Send + Sync,
->;
+pub type RuleFn =
+    Box<dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + Sync>;
 
-pub type RuleResult = Pin<Box<dyn Future<Output = Result<(), IcuError>> + Send>>;
+pub type RuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 ///
 /// Auth Functions
 ///
 
 // require_all
-pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), IcuError> {
+pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -90,7 +80,7 @@ pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), IcuError> {
 }
 
 // require_any
-pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), IcuError> {
+pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -139,7 +129,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
     Box::pin(async move {
-        memory::SubnetIndex::try_get_canister(&canister)
+        memory::SubnetIndex::try_get(&canister)
             .map_err(|_| AuthError::NotCanisterType(caller, canister.clone()))?;
 
         Ok(())
@@ -213,7 +203,7 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
         if caller == canister_self() {
             Ok(())
         } else {
-            Err(AuthError::NotThis(caller))?
+            Err(AuthError::NotSameCanister(caller))?
         }
     })
 }

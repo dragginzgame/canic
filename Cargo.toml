@@ -5,9 +5,9 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.88.0"
 edition = "2024"
-version = "0.1.10"
+version = "0.1.14"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
-description = "ORM/Database framework for the Internet Computer"
+description = "Internet Computer Utilities"
 license = "MIT"
 readme = "README.md"
 

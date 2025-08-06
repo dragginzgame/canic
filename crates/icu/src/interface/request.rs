@@ -2,7 +2,7 @@ use crate::{
     Error,
     ic::call::Call,
     interface::{InterfaceError, ic::IcError, response::Response},
-    memory::{CanisterState, ChildIndex, MemoryError, canister::CanisterParent},
+    memory::{CanisterState, ChildIndex, canister::CanisterParent},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::{Deserialize, Serialize};
@@ -51,15 +51,6 @@ pub struct CanisterUpgrade {
 }
 
 ///
-/// Cycles
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct Cycles {
-    pub cycles: u128,
-}
-
-///
 /// REQUEST
 ///
 
@@ -100,7 +91,7 @@ where
 
     // build parents
     let mut parents = CanisterState::get_parents();
-    let this = CanisterParent::this().map_err(MemoryError::from)?;
+    let this = CanisterParent::this()?;
     parents.push(this);
 
     // build request
@@ -115,7 +106,7 @@ where
         Ok(response) => match response {
             Response::CanisterCreate(new_canister_pid) => {
                 // update child index
-                ChildIndex::insert_canister(new_canister_pid, kind);
+                ChildIndex::insert(new_canister_pid, kind);
 
                 Ok(new_canister_pid)
             }
@@ -130,7 +121,7 @@ where
 // canister_upgrade_request
 pub async fn canister_upgrade_request(pid: Principal) -> Result<(), Error> {
     // check this is a valid child
-    let kind = ChildIndex::try_get(&pid).map_err(MemoryError::from)?;
+    let kind = ChildIndex::try_get(&pid)?;
 
     // send the request
     let req = Request::CanisterUpgrade(CanisterUpgrade { pid, kind });

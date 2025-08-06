@@ -47,7 +47,7 @@ macro_rules! icu_start_root {
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::memory::AppState::command(cmd).map_err(::icu::memory::MemoryError::from)?;
+            ::icu::memory::AppState::command(cmd)?;
             ::icu::interface::cascade::app_state_cascade().await?;
 
             Ok(())
@@ -125,7 +125,7 @@ macro_rules! perf_start {
     () => {
         ::icu::export::defer::defer!({
             let end = ::icu::ic::api::performance_counter(1);
-            let end_fmt = ::icu::format_instructions(end);
+            let end_fmt = ::icu::utils::instructions::format_instructions(end);
 
             $crate::log!(
                 ::icu::Log::Perf,

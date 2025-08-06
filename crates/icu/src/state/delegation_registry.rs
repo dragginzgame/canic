@@ -27,9 +27,6 @@ thread_local! {
 
 #[derive(Debug, ThisError)]
 pub enum DelegationRegistryError {
-    #[error("no expiry set for session '{0}'")]
-    NoExpirySet(Principal),
-
     #[error("no delegation found for principal '{0}'")]
     NotFound(Principal),
 
@@ -50,31 +47,47 @@ pub enum DelegationRegistryError {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationSession {
     wallet_pid: Principal,
-    expires_at: Option<u64>,
+    expires_at: u64,
     requesting_canisters: Vec<Principal>,
 }
 
 impl DelegationSession {
     #[must_use]
-    pub fn new(wallet_pid: Principal, expires_at: Option<u64>) -> Self {
+    pub const fn new(wallet_pid: Principal, expires_at: u64) -> Self {
         Self {
             wallet_pid,
             expires_at,
             requesting_canisters: Vec::new(),
         }
     }
+
+    #[must_use]
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < now_secs()
+    }
 }
 
 ///
-/// DelegationSessionInfo
+/// DelegationSessionView
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationSessionInfo {
+pub struct DelegationSessionView {
     pub wallet_pid: Principal,
     pub session_pid: Principal,
-    pub expires_at: Option<u64>,
+    pub expires_at: u64,
     pub is_expired: bool,
+}
+
+impl From<(Principal, &DelegationSession)> for DelegationSessionView {
+    fn from((session_pid, session): (Principal, &DelegationSession)) -> Self {
+        Self {
+            session_pid,
+            wallet_pid: session.wallet_pid,
+            expires_at: session.expires_at,
+            is_expired: session.is_expired(),
+        }
+    }
 }
 
 ///
@@ -96,41 +109,45 @@ pub struct DelegationRegistry {}
 
 impl DelegationRegistry {
     /// Returns info about a specific session, including expiration status.
-    pub fn get_session_info(session_pid: Principal) -> Result<DelegationSessionInfo, Error> {
-        let now = now_secs();
+    pub fn get(session_pid: Principal) -> Result<DelegationSessionView, Error> {
         let session = DELEGATION_REGISTRY
             .with_borrow(|map| map.get(&session_pid).cloned())
             .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(session_pid)))?;
 
-        let is_expired = session.expires_at.is_none_or(|ts| now > ts);
+        Ok((session_pid, &session).into())
+    }
 
-        Ok(DelegationSessionInfo {
-            wallet_pid: session.wallet_pid,
-            session_pid,
-            expires_at: session.expires_at,
-            is_expired,
+    pub fn track(
+        caller: Principal,
+        session_pid: Principal,
+    ) -> Result<DelegationSessionView, Error> {
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
+            let session = map
+                .get_mut(&session_pid)
+                .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(session_pid)))?;
+
+            if !session.requesting_canisters.contains(&caller) {
+                session.requesting_canisters.push(caller);
+            }
+
+            Ok(DelegationSessionView::from((session_pid, &*session)))
         })
     }
 
     /// Resolves the wallet (grantor) associated with a valid, non-expired session.
     pub fn resolve_wallet(caller: Principal) -> Result<Principal, Error> {
-        let now = now_secs();
-
         // Check if session exists
         let session = DELEGATION_REGISTRY
             .with_borrow(|map| map.get(&caller).cloned())
             .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(caller)))?;
 
-        // Check it has a valid expiry
-        let expires_at = session
-            .expires_at
-            .ok_or_else(|| StateError::from(DelegationRegistryError::NoExpirySet(caller)))?;
-
         // Check it has expired
-        if now > expires_at {
-            return Err(
-                StateError::from(DelegationRegistryError::SessionExpired(expires_at, now)).into(),
-            );
+        if session.is_expired() {
+            return Err(StateError::from(DelegationRegistryError::SessionExpired(
+                session.expires_at,
+                now_secs(),
+            ))
+            .into());
         }
 
         Ok(session.wallet_pid)
@@ -138,45 +155,28 @@ impl DelegationRegistry {
 
     /// Lists all sessions currently in the registry.
     #[must_use]
-    pub fn list_all_sessions() -> Vec<DelegationSessionInfo> {
-        let now = now_secs();
-
+    pub fn list_all_sessions() -> Vec<DelegationSessionView> {
         DELEGATION_REGISTRY.with_borrow(|map| {
             map.iter()
-                .map(|(&s, d)| DelegationSessionInfo {
-                    session_pid: s,
-                    wallet_pid: d.wallet_pid,
-                    expires_at: d.expires_at,
-                    is_expired: d.expires_at.is_none_or(|expiry| now > expiry),
-                })
+                .map(|(&pid, session)| (pid, session).into())
                 .collect()
         })
     }
 
     /// Lists all sessions associated with the given wallet principal.
     #[must_use]
-    pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<DelegationSessionInfo> {
-        let now = now_secs();
-
+    pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<DelegationSessionView> {
         DELEGATION_REGISTRY.with_borrow(|map| {
             map.iter()
-                .filter(|(_, del)| del.wallet_pid == wallet_pid)
-                .map(|(&session_pid, del)| {
-                    let is_expired = del.expires_at.is_none_or(|expiry| now > expiry);
-
-                    DelegationSessionInfo {
-                        session_pid,
-                        wallet_pid: del.wallet_pid,
-                        expires_at: del.expires_at,
-                        is_expired,
-                    }
-                })
+                .filter(|(_, session)| session.wallet_pid == wallet_pid)
+                .map(|(&pid, session)| (pid, session).into())
                 .collect()
         })
     }
 
     /// Registers a new session for a wallet with a limited duration.
     /// Removes any previous session associated with the same wallet.
+    /// This call is expected to come from the front end
     pub fn register_session(wallet_pid: Principal, args: RegisterSessionArgs) -> Result<(), Error> {
         let duration = Duration::from_secs(args.duration_secs);
 
@@ -193,8 +193,6 @@ impl DelegationRegistry {
             )))?;
         }
 
-        let expires_at = now_secs() + args.duration_secs;
-
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
             // Remove any existing session from the same wallet
             map.retain(|_, session| session.wallet_pid != wallet_pid);
@@ -204,19 +202,14 @@ impl DelegationRegistry {
                 args.session_pid,
                 DelegationSession {
                     wallet_pid,
-                    expires_at: Some(expires_at),
+                    expires_at: now_secs() + args.duration_secs,
                     requesting_canisters: Vec::new(),
                 },
             );
         });
 
         // Periodically clean up expired sessions (every CLEANUP_THRESHOLD calls)
-        CALL_COUNT.with_borrow_mut(|count| {
-            *count += 1;
-            if *count % CLEANUP_THRESHOLD == 0 {
-                Self::cleanup_expired();
-            }
-        });
+        Self::maybe_cleanup();
 
         Ok(())
     }
@@ -252,16 +245,26 @@ impl DelegationRegistry {
         }
     }
 
-    /// Removes all expired sessions from the registry.
-    fn cleanup_expired() {
-        let before = DELEGATION_REGISTRY.with_borrow(|map| map.len());
+    // maybe_cleanup
+    fn maybe_cleanup() {
+        CALL_COUNT.with_borrow_mut(|count| {
+            *count += 1;
+            if *count % CLEANUP_THRESHOLD == 0 {
+                Self::cleanup();
+            }
+        });
+    }
 
-        let now = now_secs();
+    /// Removes all expired sessions from the registry.
+    fn cleanup() {
+        let before = DELEGATION_REGISTRY.with_borrow(HashMap::len);
+
+        // retain the ones not expired
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
-            map.retain(|_, d| d.expires_at.is_some_and(|ts| now <= ts));
+            map.retain(|_, s| !s.is_expired());
         });
 
-        let after = DELEGATION_REGISTRY.with_borrow(|map| map.len());
+        let after = DELEGATION_REGISTRY.with_borrow(HashMap::len);
 
         log!(
             Log::Info,
@@ -278,7 +281,7 @@ mod tests {
     }
 
     fn reset_state() {
-        DELEGATION_REGISTRY.with_borrow_mut(|map| map.clear());
+        DELEGATION_REGISTRY.with_borrow_mut(HashMap::clear);
         CALL_COUNT.with_borrow_mut(|count| *count = 0);
     }
 
@@ -297,7 +300,7 @@ mod tests {
         )
         .unwrap();
 
-        let view = DelegationRegistry::get_session_info(session).unwrap();
+        let view = DelegationRegistry::get(session).unwrap();
         assert_eq!(view.wallet_pid, wallet);
         assert_eq!(view.session_pid, session);
         assert!(!view.is_expired);
@@ -310,13 +313,10 @@ mod tests {
         let session = dummy_pid(4);
 
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
-            map.insert(
-                session,
-                DelegationSession::new(wallet, Some(now_secs() - 10)),
-            );
+            map.insert(session, DelegationSession::new(wallet, now_secs() - 10));
         });
 
-        DelegationRegistry::cleanup_expired();
+        DelegationRegistry::cleanup();
         let found = DELEGATION_REGISTRY.with_borrow(|map| map.contains_key(&session));
         assert!(!found);
     }
@@ -390,13 +390,10 @@ mod tests {
         let session = dummy_pid(21);
 
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
-            map.insert(
-                session,
-                DelegationSession::new(wallet, Some(now_secs() - 1)),
-            )
+            map.insert(session, DelegationSession::new(wallet, now_secs() - 1))
         });
 
-        let view = DelegationRegistry::get_session_info(session).unwrap();
+        let view = DelegationRegistry::get(session).unwrap();
         assert!(view.is_expired);
     }
 }

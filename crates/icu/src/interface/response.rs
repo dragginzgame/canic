@@ -6,7 +6,7 @@ use crate::{
         request::Request,
     },
     memory::{CanisterState, SubnetIndex, canister::CanisterParent},
-    state::{CanisterRegistry, StateError},
+    state::CanisterRegistry,
 };
 use candid::{CandidType, Principal, encode_args};
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ async fn root_canister_create(
     controllers: &[Principal],
     extra: Option<Vec<u8>>,
 ) -> Result<Response, Error> {
-    let canister = CanisterRegistry::try_get_canister(kind).map_err(StateError::from)?;
+    let canister = CanisterRegistry::try_get(kind)?;
     let root_pid = CanisterState::get_root_pid();
 
     // controllers
@@ -56,7 +56,7 @@ async fn root_canister_create(
 
     // optional - update subnet index
     if !canister.attributes.is_sharded {
-        SubnetIndex::set_canister(kind, new_canister_id);
+        SubnetIndex::insert(kind, new_canister_id);
         interface::cascade::subnet_index_cascade().await?;
     }
 
@@ -65,7 +65,7 @@ async fn root_canister_create(
 
 // root_canister_upgrade
 async fn root_canister_upgrade(pid: Principal, path: &str) -> Result<Response, Error> {
-    let canister = CanisterRegistry::try_get_canister(path).map_err(StateError::from)?;
+    let canister = CanisterRegistry::try_get(path)?;
     ic_upgrade_canister(pid, canister.wasm).await?;
 
     Ok(Response::CanisterUpgrade)

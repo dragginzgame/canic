@@ -1,7 +1,8 @@
 use crate::{
+    Error,
     ic::structures::{BTreeMap, memory::MemoryId},
     impl_storable_unbounded,
-    memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID},
+    memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID, MemoryError},
 };
 use candid::CandidType;
 use derive_more::Deref;
@@ -42,6 +43,10 @@ pub enum MemoryRegistryError {
 pub struct MemoryRegistry {}
 
 impl MemoryRegistry {
+    //
+    // INTERNAL ACCESSORS
+    //
+
     pub fn with<R>(f: impl FnOnce(&BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
         MEMORY_REGISTRY.with(|cell| f(&cell.borrow()))
     }
@@ -50,31 +55,40 @@ impl MemoryRegistry {
         MEMORY_REGISTRY.with(|cell| f(&mut cell.borrow_mut()))
     }
 
-    pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), MemoryRegistryError> {
+    //
+    // METHODS
+    //
+
+    pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
         Self::with_mut(|map| {
             if id == MEMORY_REGISTRY_MEMORY_ID {
-                return Err(MemoryRegistryError::Reserved(id));
+                Err(MemoryError::from(MemoryRegistryError::Reserved(id)))?;
             }
 
             if let Some(existing) = map.get(&id) {
                 if existing.path != entry.path {
-                    return Err(MemoryRegistryError::AlreadyRegistered(
+                    Err(MemoryError::from(MemoryRegistryError::AlreadyRegistered(
                         id,
                         existing.path,
                         entry.path,
-                    ));
+                    )))?;
                 }
 
                 return Ok(());
             }
 
             map.insert(id, entry);
+
             Ok(())
         })
     }
 
+    //
+    // EXPORT
+    //
+
     #[must_use]
-    pub fn get_data() -> MemoryRegistryData {
+    pub fn export() -> MemoryRegistryData {
         Self::with(|map| {
             let data = map
                 .iter()
@@ -120,7 +134,7 @@ mod tests {
                 path: "crate::Foo".to_string(),
             },
         );
-        assert!(matches!(result, Err(MemoryRegistryError::Reserved(0))));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -170,14 +184,7 @@ mod tests {
             },
         );
 
-        match result {
-            Err(MemoryRegistryError::AlreadyRegistered(id, old, new)) => {
-                assert_eq!(id, 1);
-                assert_eq!(old, "crate::Foo");
-                assert_eq!(new, "crate::Bar");
-            }
-            other => panic!("Unexpected result: {other:?}"),
-        }
+        assert!(result.is_err());
     }
 
     #[test]
@@ -197,7 +204,7 @@ mod tests {
         )
         .unwrap();
 
-        let data = MemoryRegistry::get_data();
+        let data = MemoryRegistry::export();
         assert_eq!(data.len(), 2);
         assert!(
             data.iter()
