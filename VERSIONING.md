@@ -85,7 +85,7 @@ This will:
 
 When you push a version tag (e.g., `v1.0.0`), the following happens automatically:
 
-1. **Testing**: All tests run
+1. **Testing**: All tests run on multiple targets
 2. **Building**: Release builds are created
 3. **GitHub Release**: A GitHub release is created with notes from the changelog
 
@@ -114,6 +114,60 @@ When making changes, add them to the `[Unreleased]` section:
 - Breaking: Changed API for Z
 ```
 
+## Workspace Versioning
+
+All crates in the workspace share the same version. When you bump the version:
+
+- The workspace `Cargo.toml` is updated
+- All crate dependencies are automatically updated
+- All crates are built with the same version
+
+## Pre-release Versions
+
+For pre-releases (alpha, beta, rc), you can use the release command with a specific version:
+
+```bash
+# Create alpha release
+./scripts/app/version.sh release 1.0.0-alpha.1
+
+# Create beta release
+./scripts/app/version.sh release 1.0.0-beta.1
+
+# Create release candidate
+./scripts/app/version.sh release 1.0.0-rc.1
+```
+
+## Troubleshooting
+
+### Working Directory Not Clean
+
+If you get an error about the working directory not being clean:
+
+```bash
+# Commit your changes first
+git add .
+git commit -m "Your commit message"
+
+# Then run the version script
+./scripts/app/version.sh patch
+```
+
+### Tag Already Exists
+
+If a tag already exists for the version you're trying to create:
+
+1. Delete the local tag: `git tag -d v1.0.0`
+2. Delete the remote tag: `git push origin :refs/tags/v1.0.0`
+3. Run the version script again
+
+### Release Issues
+
+If GitHub release creation fails:
+
+1. Check that the GitHub Actions workflow is configured correctly
+2. Ensure the tag was pushed to the remote repository
+3. Verify that the changelog format is correct
+
 ## Security & Tag Immutability
 
 ### 🔒 Tag Immutability
@@ -137,6 +191,16 @@ make security-check
 # - Broken or invalid tags
 ```
 
+### What Happens When You Try to Modify a Tagged Version
+
+```bash
+# This will FAIL if v1.0.0 is already tagged
+make patch  # Error: Current version is already tagged
+
+# You must bump to a new version instead
+make patch  # Creates v1.0.1
+```
+
 ## Best Practices
 
 1. **Always update the changelog** before creating a release
@@ -146,3 +210,20 @@ make security-check
 5. **Review the automated release** after pushing tags
 6. **Never modify existing tags** - always bump to a new version
 7. **Run security checks** regularly with `make security-check`
+
+## Manual Version Management
+
+If you need to manually manage versions:
+
+```bash
+# Update version in Cargo.toml
+sed -i 's/^version = ".*"/version = "1.0.0"/' Cargo.toml
+
+# Create git tag
+git add Cargo.toml
+git commit -m "Bump version to 1.0.0"
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push --follow-tags
+```
+
+However, it's recommended to use the version script for consistency and automation. 

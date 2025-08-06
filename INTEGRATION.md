@@ -8,7 +8,7 @@ This guide explains how to integrate ICU (Internet Computer Utilities) as a git 
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10", features = [] }
+icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
 ```
 
 ### With Features
@@ -17,7 +17,7 @@ icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10", features =
 [dependencies]
 icu = { 
     git = "https://github.com/dragginzgame/icu", 
-    tag = "v0.1.10", 
+    tag = "v0.1.12", 
     features = ["feature1", "feature2"] 
 }
 ```
@@ -33,7 +33,7 @@ icu = { git = "https://github.com/dragginzgame/icu", branch = "main", features =
 
 ```toml
 [workspace.dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10", features = [] }
+icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
 
 [dependencies]
 icu = { workspace = true }
@@ -62,10 +62,10 @@ If you're migrating from a registry dependency:
 
 ```toml
 # Before (registry)
-icu = "0.1.10"
+icu = "0.1.12"
 
 # After (git dependency)
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10" }
+icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12" }
 ```
 
 ## Troubleshooting
@@ -75,7 +75,7 @@ icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10" }
 If you get a "tag not found" error:
 
 1. Check the tag exists: `git ls-remote --tags https://github.com/dragginzgame/icu`
-2. Ensure the tag format is correct: `v0.1.10` (with the 'v' prefix)
+2. Ensure the tag format is correct: `v0.1.12` (with the 'v' prefix)
 3. Verify the repository URL is correct
 
 ### Build Issues

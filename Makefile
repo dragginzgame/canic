@@ -1,7 +1,6 @@
-# Makefile for Rust Workspace with Versioning
+.PHONY: help version current tags patch minor major release test build check clippy fmt fmt-check clean check-versioning git-versions security-check all install-dev test-watch
 
-.PHONY: help version current tags patch minor major release test build check clippy fmt fmt-check clean check-versioning git-versions security-check all
-
+# Default target
 help:
 	@echo "Available commands:"
 	@echo ""
@@ -60,6 +59,8 @@ test:
 build:
 	cargo build --release --workspace
 
+
+
 check:
 	cargo check --workspace
 
@@ -70,32 +71,31 @@ fmt:
 	cargo fmt --all
 
 fmt-check:
-	cargo fmt
+	cargo fmt --all -- --check
 
 clean:
 	cargo clean
 	rm -rf target/
 
+# Install development dependencies
+install-dev:
+	cargo install cargo-watch
+
+# Run tests in watch mode
+test-watch:
+	cargo watch -x test
+
 # Check versioning system
 check-versioning:
-	@echo "Checking versioning system setup..."
-	@test -f scripts/app/version.sh || (echo "❌ version.sh not found" && exit 1)
-	@test -f scripts/app/security-check.sh || (echo "❌ security-check.sh not found" && exit 1)
-	@test -f Makefile || (echo "❌ Makefile not found" && exit 1)
-	@test -f Cargo.toml || (echo "❌ Cargo.toml not found" && exit 1)
-	@echo "✅ Versioning system setup complete"
+	@./scripts/app/check-versioning.sh
 
 # Check available git versions
 git-versions:
-	@echo "Available versions for git dependencies:"
-	@git tag --sort=-version:refname | head -10
-	@echo ""
-	@echo "Example usage:"
-	@echo '  icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.10", features = [] }'
+	@./scripts/app/check-git-versions.sh
 
 # Security check for tag immutability
 security-check:
 	@./scripts/app/security-check.sh
 
 # Build and test everything
-all: clean check fmt-check clippy test build
+all: clean check fmt-check clippy test build 
