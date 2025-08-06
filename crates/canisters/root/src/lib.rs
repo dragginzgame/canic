@@ -9,8 +9,11 @@ icu_start_root!("root");
 #[update]
 async fn init_async() {
     register_canisters();
+    register_canister();
     create_canisters(&[]).await.unwrap();
 }
+
+fn register_canister() {}
 
 // register_canisters
 fn register_canisters() {
