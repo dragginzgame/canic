@@ -11,7 +11,7 @@ async fn init_async() {
     icu_config!("../../icu.toml");
 
     register_canisters();
-    create_canisters(&[]).await.unwrap();
+    create_canisters().await.unwrap();
 
     // let config = icu::config::Config::get();
 }
