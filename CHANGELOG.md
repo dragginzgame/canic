@@ -5,11 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.1.16] - 2025-08-06
-
-## [0.1.17] - 2025-08-06
 
 ## [Unreleased]
+
+## [0.1.18] - 2025-08-06
+- getting the hang of github tags
 
 ## [0.1.15] - 2025-08-06
 - added config, with principals and whitelist.  icu_config("filename.toml")
