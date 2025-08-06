@@ -8,12 +8,15 @@ icu_start_root!("root");
 
 #[update]
 async fn init_async() {
-    register_canisters();
-    register_canister();
-    create_canisters(&[]).await.unwrap();
-}
+    icu_config!("../../icu.toml");
 
-fn register_canister() {}
+    register_canisters();
+    create_canisters(&[]).await.unwrap();
+
+    let config = icu::config::Config::get();
+
+    panic!("{config:?}");
+}
 
 // register_canisters
 fn register_canisters() {

@@ -69,10 +69,8 @@ macro_rules! icu_start_root {
 #[macro_export]
 macro_rules! icu_config {
     ($file:expr) => {{
-        let config = ::config::IcuConfig::load_from_file($file)
-            .expect("Failed to load config file {}", $file);
-
-        let kind = config.kind;
+        let config_str = include_str!($file);
+        $crate::config::Config::init_from_toml(config_str).unwrap()
     }};
 }
 

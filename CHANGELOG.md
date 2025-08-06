@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+- added config, with principals and whitelist.  icu_config("filename.toml")
 
+## [0.1.14]
+- now doing tagged releases
 
 ## [0.1.10]
 - added a way to make ICRC-21 easy

@@ -36,7 +36,7 @@ pub mod prelude {
             principal::Principal,
             query, update,
         },
-        icu_register_memory, icu_start, icu_start_root, log, perf, perf_start,
+        icu_config, icu_register_memory, icu_start, icu_start_root, log, perf, perf_start,
     };
 }
 

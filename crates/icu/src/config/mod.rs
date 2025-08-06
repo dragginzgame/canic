@@ -1,7 +1,7 @@
 use crate::Error;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
 //
@@ -25,7 +25,7 @@ pub enum ConfigError {
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
-    #[error("config not yet initialized")]
+    #[error("config not initialized")]
     NotInitialized,
 }
 
@@ -82,6 +82,6 @@ impl Config {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigData {
-    pub controllers: Vec<Principal>,
-    pub whitelist: Vec<Principal>,
+    pub controllers: HashMap<String, Principal>,
+    pub whitelist: HashMap<String, Principal>,
 }
