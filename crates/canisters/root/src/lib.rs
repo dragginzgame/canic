@@ -24,7 +24,7 @@ fn register_canisters() {
     //         auto_create: true,
     //         is_sharded: false,
     //     },
-    ///     include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    //     include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     // )];
 
     // for (path, def, wasm) in canisters {
