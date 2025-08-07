@@ -60,7 +60,7 @@ impl From<&Canister> for CanisterData {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterAttributes {
     pub auto_create: bool,
-    pub is_sharded: bool,
+    pub indexable: bool,
 }
 
 ///

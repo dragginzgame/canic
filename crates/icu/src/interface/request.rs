@@ -84,6 +84,8 @@ where
         None => None,
     };
 
+    crate::log!(crate::Log::Info, "canister_create_request: {kind}");
+
     // build parents
     let mut parents = CanisterState::get_parents();
     let this = CanisterParent::this()?;
@@ -99,7 +101,7 @@ where
     match request(req).await {
         Ok(response) => match response {
             Response::CanisterCreate(new_canister_pid) => {
-                // update child index
+                // update the local child index
                 ChildIndex::insert(new_canister_pid, kind);
 
                 Ok(new_canister_pid)

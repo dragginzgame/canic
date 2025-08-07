@@ -11,8 +11,8 @@ pub async fn app_state_cascade() -> Result<(), Error> {
     let child_index = memory::ChildIndex::export();
 
     // iterate child canisters
-    for (pid, path) in child_index {
-        log!(Log::Info, "app_state_cascade: -> {pid} ({path})");
+    for (pid, kind) in child_index {
+        log!(Log::Info, "app_state_cascade: -> {pid} ({kind})");
 
         Call::unbounded_wait(pid, "icu_app_state_cascade")
             .with_arg(app_state)
@@ -30,8 +30,8 @@ pub async fn subnet_index_cascade() -> Result<(), Error> {
     let child_index = memory::ChildIndex::export();
 
     // iterate child canisters
-    for (pid, path) in child_index {
-        log!(Log::Info, "subnet_index_cascade: -> {pid} ({path})",);
+    for (pid, kind) in child_index {
+        log!(Log::Info, "subnet_index_cascade: -> {pid} ({kind})",);
 
         Call::unbounded_wait(pid, "icu_subnet_index_cascade")
             .with_arg(&subnet_index)

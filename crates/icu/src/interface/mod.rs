@@ -3,7 +3,7 @@ pub mod ic;
 pub mod icrc;
 pub mod request;
 pub mod response;
-pub mod state;
+pub mod root;
 
 use thiserror::Error as ThisError;
 
@@ -13,6 +13,12 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum InterfaceError {
+    #[error("indexable canisters can only be created on root")]
+    CannotCreateIndexable,
+
+    #[error("this can only be called from the root canister")]
+    NotRoot,
+
     #[error(transparent)]
     IcError(#[from] ic::IcError),
 
