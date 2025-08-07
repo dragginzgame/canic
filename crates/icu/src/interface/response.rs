@@ -19,20 +19,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
-    CanisterCreate(Principal),
-    CanisterUpgrade,
+    CreateCanister(Principal),
+    UpgradeCanister,
 }
 
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
-        Request::CanisterCreate(req) => canister_create(&req.kind, &req.parents, req.extra).await,
-        Request::CanisterUpgrade(req) => canister_upgrade(req.pid, &req.kind).await,
+        Request::CreateCanister(req) => create_canister(&req.kind, &req.parents, req.extra).await,
+        Request::UpgradeCanister(req) => upgrade_canister(req.pid, &req.kind).await,
     }
 }
 
-// canister_create
-async fn canister_create(
+// create_canister
+async fn create_canister(
     kind: &str,
     parents: &[CanisterParent],
     extra: Option<Vec<u8>>,
@@ -59,13 +59,13 @@ async fn canister_create(
     // create the canister
     let new_canister_id = ic_create_canister(kind, canister.wasm, controllers, args).await?;
 
-    Ok(Response::CanisterCreate(new_canister_id))
+    Ok(Response::CreateCanister(new_canister_id))
 }
 
-// canister_upgrade
-async fn canister_upgrade(pid: Principal, path: &str) -> Result<Response, Error> {
+// upgrade_canister
+async fn upgrade_canister(pid: Principal, path: &str) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(path)?;
     ic_upgrade_canister(pid, canister.wasm).await?;
 
-    Ok(Response::CanisterUpgrade)
+    Ok(Response::UpgradeCanister)
 }

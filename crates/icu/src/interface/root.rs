@@ -11,7 +11,7 @@ use crate::{
 };
 use candid::{Principal, encode_args};
 
-// root_c
+// root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {
     let root_pid = CanisterState::get_root_pid();
 
@@ -22,7 +22,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     // iterate canisters
     for (kind, data) in CanisterRegistry::export() {
         if data.attributes.auto_create && SubnetIndex::get(&kind).is_none() {
-            root_canister_create(&kind, None).await.unwrap();
+            root_create_canister(&kind, None).await.unwrap();
         }
     }
 
@@ -31,8 +31,8 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     Ok(())
 }
 
-// root_canister_create
-async fn root_canister_create(kind: &str, extra: Option<Vec<u8>>) -> Result<Principal, Error> {
+// root_create_canister
+async fn root_create_canister(kind: &str, extra: Option<Vec<u8>>) -> Result<Principal, Error> {
     let canister = CanisterRegistry::try_get(kind)?;
     let root_pid = CanisterState::get_root_pid();
 

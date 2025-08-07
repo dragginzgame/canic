@@ -5,11 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.1.22] - 2025-08-07
+## [Unreleased]
+- renamed canister methods to be consistent with ic cdk
 
 ## [0.1.23] - 2025-08-07
-
-## [Unreleased]
+- removed the test.wasm because it wasnt building
 
 ## [0.1.21] - 2025-08-07
 - fixed a bug in subnet_index, a race condition when adding the child index

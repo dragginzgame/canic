@@ -13,7 +13,7 @@ macro_rules! icu_endpoints {
             // send a request for each matching canister
             for (child_pid, _) in $crate::memory::ChildIndex::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
-                    $crate::interface::request::canister_upgrade_request(child_pid).await?
+                    $crate::interface::request::upgrade_canister_request(child_pid).await?
                 }
             }
 

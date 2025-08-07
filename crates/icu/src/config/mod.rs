@@ -44,7 +44,7 @@ impl Config {
             return Err(ConfigError::NotInitialized)?;
         }
 
-        Ok(CONFIG.with_borrow(|cfg| cfg.clone()))
+        Ok(CONFIG.with_borrow(Clone::clone))
     }
 
     /// Initialize the global configuration from a TOML string.
@@ -83,7 +83,7 @@ impl Config {
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigData {
     // controllers
-    // a vec because we just append it to the canister_create arguments
+    // a vec because we just append it to the controller arguments
     pub controllers: Vec<Principal>,
 
     // whitelist
