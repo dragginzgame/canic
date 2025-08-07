@@ -13,8 +13,8 @@ use candid::{Principal, encode_args};
 
 // root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {
+    // must be root
     let root_pid = CanisterState::get_root_pid();
-
     if root_pid != canister_self() {
         return Err(InterfaceError::NotRoot)?;
     }
@@ -25,8 +25,6 @@ pub async fn root_create_canisters() -> Result<(), Error> {
             root_create_canister(&kind, None).await.unwrap();
         }
     }
-
-    subnet_index_cascade().await?;
 
     Ok(())
 }
@@ -57,6 +55,7 @@ async fn root_create_canister(kind: &str, extra: Option<Vec<u8>>) -> Result<Prin
     // optional - update subnet index
     if canister.attributes.indexable {
         SubnetIndex::insert(kind, new_canister_id);
+        subnet_index_cascade().await?;
     }
 
     Ok(new_canister_id)
