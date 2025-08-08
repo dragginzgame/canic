@@ -28,8 +28,8 @@ fn register_canisters() {
             auto_create: true,
             indexable: false,
         },
-        // &[],
-        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        &[],
+        //   include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {
