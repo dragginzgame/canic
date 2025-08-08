@@ -17,33 +17,54 @@ thread_local! {
 pub struct DelegationCache {}
 
 impl DelegationCache {
+    //
+    // INTERNAL ACCESSORS
+    //
+
+    pub fn with<R>(f: impl FnOnce(&HashMap<Principal, DelegationSessionView>) -> R) -> R {
+        DELEGATION_CACHE.with_borrow(|cell| f(cell))
+    }
+
+    pub fn with_mut<R>(f: impl FnOnce(&mut HashMap<Principal, DelegationSessionView>) -> R) -> R {
+        DELEGATION_CACHE.with_borrow_mut(|cell| f(cell))
+    }
+
+    //
+    // METHODS
+    //
+
+    #[must_use]
+    pub fn is_empty() -> bool {
+        Self::with(HashMap::is_empty)
+    }
+
     #[must_use]
     pub fn get(session_pid: Principal) -> Option<DelegationSessionView> {
-        DELEGATION_CACHE.with_borrow(|map| map.get(&session_pid).cloned())
+        Self::with(|map| map.get(&session_pid).cloned())
     }
 
     pub fn insert(session_pid: Principal, session: DelegationSessionView) {
-        DELEGATION_CACHE.with_borrow_mut(|map| {
+        Self::with_mut(|map| {
             map.insert(session_pid, session);
         });
     }
 
     #[must_use]
     pub fn remove(session_pid: Principal) -> bool {
-        DELEGATION_CACHE.with_borrow_mut(|map| map.remove(&session_pid).is_some())
+        Self::with_mut(|map| map.remove(&session_pid).is_some())
     }
 
     #[must_use]
     pub fn list() -> Vec<(Principal, DelegationSessionView)> {
-        DELEGATION_CACHE.with_borrow(|map| map.iter().map(|(k, v)| (*k, v.clone())).collect())
+        Self::with(|map| map.iter().map(|(k, v)| (*k, v.clone())).collect())
     }
 
     pub fn cleanup_expired() {
         let now = now_secs();
 
-        let before = DELEGATION_CACHE.with_borrow(HashMap::len);
-        DELEGATION_CACHE.with_borrow_mut(|map| map.retain(|_, s| s.expires_at > now));
-        let after = DELEGATION_CACHE.with_borrow(HashMap::len);
+        let before = Self::with(HashMap::len);
+        Self::with_mut(|map| map.retain(|_, s| s.expires_at > now));
+        let after = Self::with(HashMap::len);
 
         log!(
             Log::Info,
@@ -53,6 +74,6 @@ impl DelegationCache {
 
     #[must_use]
     pub fn count() -> usize {
-        DELEGATION_CACHE.with_borrow(HashMap::len)
+        Self::with(HashMap::len)
     }
 }

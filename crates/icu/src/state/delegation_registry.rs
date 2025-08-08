@@ -108,10 +108,30 @@ pub struct RegisterSessionArgs {
 pub struct DelegationRegistry {}
 
 impl DelegationRegistry {
+    //
+    // INTERNAL ACCESSORS
+    //
+
+    pub fn with<R>(f: impl FnOnce(&HashMap<Principal, DelegationSession>) -> R) -> R {
+        DELEGATION_REGISTRY.with_borrow(|cell| f(cell))
+    }
+
+    pub fn with_mut<R>(f: impl FnOnce(&mut HashMap<Principal, DelegationSession>) -> R) -> R {
+        DELEGATION_REGISTRY.with_borrow_mut(|cell| f(cell))
+    }
+
+    //
+    // METHODS
+    //
+
+    #[must_use]
+    pub fn is_empty() -> bool {
+        Self::with(HashMap::is_empty)
+    }
+
     /// Returns info about a specific session, including expiration status.
     pub fn get(session_pid: Principal) -> Result<DelegationSessionView, Error> {
-        let session = DELEGATION_REGISTRY
-            .with_borrow(|map| map.get(&session_pid).cloned())
+        let session = Self::with(|map| map.get(&session_pid).cloned())
             .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(session_pid)))?;
 
         Ok((session_pid, &session).into())
@@ -121,7 +141,7 @@ impl DelegationRegistry {
         caller: Principal,
         session_pid: Principal,
     ) -> Result<DelegationSessionView, Error> {
-        DELEGATION_REGISTRY.with_borrow_mut(|map| {
+        Self::with_mut(|map| {
             let session = map
                 .get_mut(&session_pid)
                 .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(session_pid)))?;
@@ -137,8 +157,7 @@ impl DelegationRegistry {
     /// Resolves the wallet (grantor) associated with a valid, non-expired session.
     pub fn resolve_wallet(caller: Principal) -> Result<Principal, Error> {
         // Check if session exists
-        let session = DELEGATION_REGISTRY
-            .with_borrow(|map| map.get(&caller).cloned())
+        let session = Self::with(|map| map.get(&caller).cloned())
             .ok_or_else(|| StateError::from(DelegationRegistryError::NotFound(caller)))?;
 
         // Check it has expired
@@ -156,7 +175,7 @@ impl DelegationRegistry {
     /// Lists all sessions currently in the registry.
     #[must_use]
     pub fn list_all_sessions() -> Vec<DelegationSessionView> {
-        DELEGATION_REGISTRY.with_borrow(|map| {
+        Self::with(|map| {
             map.iter()
                 .map(|(&pid, session)| (pid, session).into())
                 .collect()
@@ -166,7 +185,7 @@ impl DelegationRegistry {
     /// Lists all sessions associated with the given wallet principal.
     #[must_use]
     pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<DelegationSessionView> {
-        DELEGATION_REGISTRY.with_borrow(|map| {
+        Self::with(|map| {
             map.iter()
                 .filter(|(_, session)| session.wallet_pid == wallet_pid)
                 .map(|(&pid, session)| (pid, session).into())
@@ -193,7 +212,7 @@ impl DelegationRegistry {
             )))?;
         }
 
-        DELEGATION_REGISTRY.with_borrow_mut(|map| {
+        Self::with_mut(|map| {
             // Remove any existing session from the same wallet
             map.retain(|_, session| session.wallet_pid != wallet_pid);
 
@@ -224,15 +243,16 @@ impl DelegationRegistry {
     ///
     pub fn revoke_session_or_wallet(pid: Principal) -> Result<(), Error> {
         // 1. Try as session ID
-        if DELEGATION_REGISTRY.with_borrow(|map| map.contains_key(&pid)) {
-            DELEGATION_REGISTRY.with_borrow_mut(|map| {
+        if Self::with(|map| map.contains_key(&pid)) {
+            Self::with_mut(|map| {
                 map.remove(&pid);
             });
+
             return Ok(());
         }
 
         // 2. Try as wallet grantor
-        let removed = DELEGATION_REGISTRY.with_borrow_mut(|map| {
+        let removed = Self::with_mut(|map| {
             let original_len = map.len();
             map.retain(|_, s| s.wallet_pid != pid);
             original_len - map.len()
@@ -257,14 +277,14 @@ impl DelegationRegistry {
 
     /// Removes all expired sessions from the registry.
     fn cleanup() {
-        let before = DELEGATION_REGISTRY.with_borrow(HashMap::len);
+        let before = Self::with(HashMap::len);
 
         // retain the ones not expired
-        DELEGATION_REGISTRY.with_borrow_mut(|map| {
+        Self::with_mut(|map| {
             map.retain(|_, s| !s.is_expired());
         });
 
-        let after = DELEGATION_REGISTRY.with_borrow(HashMap::len);
+        let after = Self::with(HashMap::len);
 
         log!(
             Log::Info,

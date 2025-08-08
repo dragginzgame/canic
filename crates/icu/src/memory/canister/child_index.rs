@@ -42,16 +42,21 @@ impl ChildIndex {
     //
 
     pub fn with<R>(f: impl FnOnce(&BTreeMap<Principal, String>) -> R) -> R {
-        CHILD_INDEX.with(|cell| f(&cell.borrow()))
+        CHILD_INDEX.with_borrow(|cell| f(cell))
     }
 
     pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<Principal, String>) -> R) -> R {
-        CHILD_INDEX.with(|cell| f(&mut cell.borrow_mut()))
+        CHILD_INDEX.with_borrow_mut(|cell| f(cell))
     }
 
     //
     // METHODS
     //
+
+    #[must_use]
+    pub fn is_empty() -> bool {
+        Self::with(|map| map.is_empty())
+    }
 
     #[must_use]
     pub fn get(pid: &Principal) -> Option<String> {

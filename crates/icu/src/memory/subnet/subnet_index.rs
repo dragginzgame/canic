@@ -42,16 +42,21 @@ impl SubnetIndex {
     //
 
     pub fn with<R>(f: impl FnOnce(&BTreeMap<String, Principal>) -> R) -> R {
-        SUBNET_INDEX.with(|cell| f(&cell.borrow()))
+        SUBNET_INDEX.with_borrow(|cell| f(cell))
     }
 
     pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<String, Principal>) -> R) -> R {
-        SUBNET_INDEX.with(|cell| f(&mut cell.borrow_mut()))
+        SUBNET_INDEX.with_borrow_mut(|cell| f(cell))
     }
 
     //
     // METHODS
     //
+
+    #[must_use]
+    pub fn is_empty() -> bool {
+        Self::with(|map| map.is_empty())
+    }
 
     #[must_use]
     pub fn get(kind: &str) -> Option<Principal> {

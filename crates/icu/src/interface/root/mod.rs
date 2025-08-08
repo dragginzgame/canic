@@ -24,7 +24,6 @@ pub async fn root_create_canisters() -> Result<(), Error> {
 
     // iterate canisters
     for (kind, data) in CanisterRegistry::export() {
-        crate::log!(crate::Log::Warn, "create: {kind}");
         if data.attributes.auto_create && SubnetIndex::get(&kind).is_none() {
             root_create_canister(&kind, None).await.unwrap();
         }

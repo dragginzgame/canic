@@ -45,11 +45,11 @@ impl CanisterState {
     //
 
     pub fn with<R>(f: impl FnOnce(&Cell<CanisterStateData>) -> R) -> R {
-        CANISTER_STATE.with(|cell| f(&cell.borrow()))
+        CANISTER_STATE.with_borrow(|cell| f(cell))
     }
 
     pub fn with_mut<R>(f: impl FnOnce(&mut Cell<CanisterStateData>) -> R) -> R {
-        CANISTER_STATE.with(|cell| f(&mut cell.borrow_mut()))
+        CANISTER_STATE.with_borrow_mut(|cell| f(cell))
     }
 
     //

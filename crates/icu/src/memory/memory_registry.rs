@@ -48,16 +48,21 @@ impl MemoryRegistry {
     //
 
     pub fn with<R>(f: impl FnOnce(&BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
-        MEMORY_REGISTRY.with(|cell| f(&cell.borrow()))
+        MEMORY_REGISTRY.with_borrow(|cell| f(cell))
     }
 
     pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
-        MEMORY_REGISTRY.with(|cell| f(&mut cell.borrow_mut()))
+        MEMORY_REGISTRY.with_borrow_mut(|cell| f(cell))
     }
 
     //
     // METHODS
     //
+
+    #[must_use]
+    pub fn is_empty() -> bool {
+        Self::with(|map| map.is_empty())
+    }
 
     pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
         Self::with_mut(|map| {

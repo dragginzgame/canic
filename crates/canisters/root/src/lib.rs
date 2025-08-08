@@ -26,10 +26,10 @@ fn register_canisters() {
         "test",
         CanisterAttributes {
             auto_create: true,
-            indexable: true,
+            indexable: false,
         },
-        &[],
-        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        // &[],
+        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {
