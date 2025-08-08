@@ -25,11 +25,11 @@ fn register_canisters() {
     let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
         "test",
         CanisterAttributes {
-            auto_create: false,
+            auto_create: true,
             indexable: true,
         },
         &[],
-        //    include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {

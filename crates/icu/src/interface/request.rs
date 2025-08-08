@@ -1,7 +1,7 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{InterfaceError, ic::IcError, response::Response},
+    interface::{InterfaceError, ic::IcError, root::response::Response},
     memory::{CanisterState, ChildIndex, canister::CanisterParent},
 };
 use candid::{CandidType, Principal, encode_one};

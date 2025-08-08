@@ -1,13 +1,13 @@
 use crate::{
     Error,
-    config::Config,
     interface::{
         InterfaceError,
         cascade::subnet_index_cascade,
         ic::{IcError, ic_create_canister, ic_upgrade_canister},
         request::Request,
+        root::new_canister_controllers,
     },
-    memory::{CanisterState, canister::CanisterParent},
+    memory::canister::CanisterParent,
     state::CanisterRegistry,
 };
 use candid::{CandidType, Principal, encode_args};
@@ -27,13 +27,15 @@ pub enum Response {
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
-        Request::CreateCanister(req) => create_canister(&req.kind, &req.parents, req.extra).await,
-        Request::UpgradeCanister(req) => upgrade_canister(req.pid, &req.kind).await,
+        Request::CreateCanister(req) => {
+            response_create_canister(&req.kind, &req.parents, req.extra).await
+        }
+        Request::UpgradeCanister(req) => response_upgrade_canister(req.pid, &req.kind).await,
     }
 }
 
-// create_canister
-async fn create_canister(
+// response_create_canister
+async fn response_create_canister(
     kind: &str,
     parents: &[CanisterParent],
     extra: Option<Vec<u8>>,
@@ -45,29 +47,23 @@ async fn create_canister(
         return Err(InterfaceError::CannotCreateIndexable)?;
     }
 
-    // controllers are :
-    // - the controllers that are specified in the config file
-    // - root
-    let mut controllers = Config::get()?.controllers;
-    let root_pid = CanisterState::get_root_pid();
-    controllers.push(root_pid);
-
     // encode the standard init args
     let args = encode_args((parents, extra))
         .map_err(IcError::from)
         .map_err(InterfaceError::from)?;
 
     // create the canister
+    let controllers = new_canister_controllers()?;
     let new_canister_id = ic_create_canister(kind, canister.wasm, controllers, args).await?;
 
-    // cascade subnet (from root)
+    // cascade subnet, as we're on root
     subnet_index_cascade().await?;
 
     Ok(Response::CreateCanister(new_canister_id))
 }
 
-// upgrade_canister
-async fn upgrade_canister(pid: Principal, path: &str) -> Result<Response, Error> {
+// response_upgrade_canister
+async fn response_upgrade_canister(pid: Principal, path: &str) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(path)?;
     ic_upgrade_canister(pid, canister.wasm).await?;
 

@@ -57,8 +57,8 @@ macro_rules! icu_start_root {
         #[::icu::ic::update]
         async fn icu_response(
             request: ::icu::interface::request::Request,
-        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
-            let response = ::icu::interface::response::response(request).await?;
+        ) -> Result<::icu::interface::root::response::Response, ::icu::Error> {
+            let response = ::icu::interface::root::response::response(request).await?;
 
             Ok(response)
         }

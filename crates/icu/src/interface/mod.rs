@@ -2,7 +2,6 @@ pub mod cascade;
 pub mod ic;
 pub mod icrc;
 pub mod request;
-pub mod response;
 pub mod root;
 
 use thiserror::Error as ThisError;

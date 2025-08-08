@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 - renamed canister methods to be consistent with ic cdk
+- update to rust 1.89
 
 ## [0.1.23] - 2025-08-07
 - removed the test.wasm because it wasnt building
