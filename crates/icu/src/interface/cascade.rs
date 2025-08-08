@@ -1,14 +1,15 @@
 use crate::{
     Error, Log,
-    ic::call::Call,
+    ic::{api::canister_self, call::Call},
     interface::{InterfaceError, ic::IcError},
-    log, memory,
+    log,
+    memory::{AppState, CanisterState, ChildIndex, SubnetIndex},
 };
 
 // app_state_cascade
 pub async fn app_state_cascade() -> Result<(), Error> {
-    let app_state = memory::AppState::export();
-    let child_index = memory::ChildIndex::export();
+    let app_state = AppState::export();
+    let child_index = ChildIndex::export();
 
     // iterate child canisters
     for (pid, kind) in child_index {
@@ -26,12 +27,18 @@ pub async fn app_state_cascade() -> Result<(), Error> {
 
 // subnet_index_cascade
 pub async fn subnet_index_cascade() -> Result<(), Error> {
-    let subnet_index = memory::SubnetIndex::export();
-    let child_index = memory::ChildIndex::export();
+    let subnet_index = SubnetIndex::export();
+    let child_index = ChildIndex::export();
+
+    let canister_self = canister_self();
+    let canister_kind = CanisterState::try_get_kind()?;
 
     // iterate child canisters
     for (pid, kind) in child_index {
-        log!(Log::Info, "subnet_index_cascade: -> {pid} ({kind})",);
+        log!(
+            Log::Info,
+            "subnet_index_cascade: {canister_self} {canister_kind} -> {pid} ({kind})",
+        );
 
         Call::unbounded_wait(pid, "icu_subnet_index_cascade")
             .with_arg(&subnet_index)
