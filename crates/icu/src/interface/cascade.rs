@@ -37,7 +37,7 @@ pub async fn subnet_index_cascade() -> Result<(), Error> {
     for (pid, kind) in child_index {
         log!(
             Log::Info,
-            "subnet_index_cascade: {canister_self} {canister_kind} -> {pid} ({kind})",
+            "subnet_index_cascade: {canister_self} ({canister_kind}) -> {pid} ({kind})",
         );
 
         Call::unbounded_wait(pid, "icu_subnet_index_cascade")
