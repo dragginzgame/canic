@@ -6,8 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.1.24] - 2025-08-08
-
-## [Unreleased]
+- fixed nasty cascade bug
 - renamed canister methods to be consistent with ic cdk
 - update to rust 1.89
 
