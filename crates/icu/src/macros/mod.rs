@@ -34,7 +34,9 @@ macro_rules! icu_start_root {
     ($kind:expr) => {
         #[::icu::ic::init]
         fn init() {
+            ::icu::log!(::icu::Log::Info, "");
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
+            ::icu::log!(::icu::Log::Info, "");
 
             ::icu::memory::CanisterState::set_kind($kind);
 
