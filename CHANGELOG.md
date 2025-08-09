@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.1.27] - 2025-08-09
+- new SubnetIndex, now you can store many canisters per type
+- moved all the root canister registry to canister/ and cleaned up unused structs
+
 ## [0.1.26] - 2025-08-09
 - overhaul of cascade/update state.  One function to transfer any number of states and
 it's also sent via canister create args
