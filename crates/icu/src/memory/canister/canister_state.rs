@@ -15,7 +15,7 @@ use thiserror::Error as ThisError;
 
 thread_local! {
     pub static CANISTER_STATE: RefCell<Cell<CanisterStateData>> = RefCell::new(Cell::init(
-        icu_register_memory!(AppStateData, CANISTER_STATE_MEMORY_ID),
+        icu_register_memory!(CanisterStateData, CANISTER_STATE_MEMORY_ID),
         CanisterStateData::default(),
     ));
 }

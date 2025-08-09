@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 
 thread_local! {
     pub static CHILD_INDEX: RefCell<BTreeMap<Principal, String>> = RefCell::new(BTreeMap::init(
-        icu_register_memory!(AppStateData, CHILD_INDEX_MEMORY_ID),
+        icu_register_memory!(ChildIndexData, CHILD_INDEX_MEMORY_ID),
     ));
 }
 
