@@ -5,7 +5,7 @@ use crate::{
     memory::{CHILD_INDEX_MEMORY_ID, MemoryError},
 };
 use candid::{CandidType, Principal};
-use derive_more::Deref;
+use derive_more::IntoIterator;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -112,14 +112,5 @@ impl ChildIndex {
 /// ChildIndexData
 ///
 
-#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, IntoIterator, Deserialize, Serialize)]
 pub struct ChildIndexData(HashMap<Principal, String>);
-
-impl IntoIterator for ChildIndexData {
-    type Item = (Principal, String);
-    type IntoIter = std::collections::hash_map::IntoIter<Principal, String>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}

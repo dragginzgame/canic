@@ -1,6 +1,6 @@
 use crate::{Error, state::StateError};
 use candid::CandidType;
-use derive_more::Deref;
+use derive_more::IntoIterator;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static CANISTER_REGISTRY: RefCell<CanisterRegistry> = RefCell::new(CanisterRegistry::new());
+    pub static CANISTER_REGISTRY: RefCell<HashMap<String, Canister>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -67,8 +67,8 @@ pub struct CanisterAttributes {
 /// CanisterRegistry
 ///
 
-#[derive(Debug, Default, Deref)]
-pub struct CanisterRegistry(HashMap<String, Canister>);
+#[derive(Debug, Default)]
+pub struct CanisterRegistry {}
 
 impl CanisterRegistry {
     #[must_use]
@@ -102,7 +102,7 @@ impl CanisterRegistry {
         wasm: &'static [u8],
     ) -> Result<(), CanisterRegistryError> {
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
-            reg.0.insert(
+            reg.insert(
                 path.to_string(),
                 Canister {
                     attributes: attributes.clone(),
@@ -122,13 +122,8 @@ impl CanisterRegistry {
 
     #[must_use]
     pub fn export() -> CanisterRegistryData {
-        let data = CANISTER_REGISTRY.with(|registry| {
-            registry
-                .borrow()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.into()))
-                .collect()
-        });
+        let data = CANISTER_REGISTRY
+            .with_borrow(|reg| reg.iter().map(|(k, v)| (k.clone(), v.into())).collect());
 
         CanisterRegistryData(data)
     }
@@ -138,14 +133,5 @@ impl CanisterRegistry {
 /// CanisterRegistryData
 ///
 
-#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, IntoIterator, Deserialize, Serialize)]
 pub struct CanisterRegistryData(HashMap<String, CanisterData>);
-
-impl IntoIterator for CanisterRegistryData {
-    type Item = (String, CanisterData);
-    type IntoIter = std::collections::hash_map::IntoIter<String, CanisterData>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}

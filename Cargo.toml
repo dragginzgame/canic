@@ -20,6 +20,7 @@ derive_more = { version = "2.0", default-features = false, features = [
     "deref",
     "deref_mut",
     "display",
+    "into_iterator",
 ] }
 ic-cdk = "0.18.5"
 ic-cdk-timers = "0.12.2"

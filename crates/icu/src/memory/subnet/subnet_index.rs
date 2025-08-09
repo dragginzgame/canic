@@ -5,8 +5,8 @@ use crate::{
     memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
 };
 use candid::{CandidType, Principal};
-use derive_more::Deref;
-use serde::{Deserialize, Serialize};
+use derive_more::IntoIterator;
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 
 thread_local! {
     pub static SUBNET_INDEX: RefCell<BTreeMap<String, Principal>> = RefCell::new(BTreeMap::init(
-        icu_register_memory!(AppStateData, SUBNET_INDEX_MEMORY_ID),
+        icu_register_memory!(SubnetIndexData, SUBNET_INDEX_MEMORY_ID),
     ));
 }
 
@@ -87,8 +87,8 @@ impl SubnetIndex {
     pub fn import(data: SubnetIndexData) {
         Self::with_mut(|map| {
             map.clear();
-            for (k, v) in data.iter() {
-                map.insert(k.clone(), *v);
+            for (k, v) in data.into_iter() {
+                map.insert(k.clone(), v);
             }
         });
     }
@@ -103,14 +103,5 @@ impl SubnetIndex {
 /// SubnetIndexData
 ///
 
-#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, IntoIterator, Deserialize)]
 pub struct SubnetIndexData(HashMap<String, Principal>);
-
-impl IntoIterator for SubnetIndexData {
-    type Item = (String, Principal);
-    type IntoIter = std::collections::hash_map::IntoIter<String, Principal>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
