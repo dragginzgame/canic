@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [0.1.24] - 2025-08-08
+- redid cascade so it's just one endpoint and has a bundle of optional data types
+- removed Serialize where it wasn't needed
 
 ## [0.1.24] - 2025-08-08
 - fixed nasty cascade bug
