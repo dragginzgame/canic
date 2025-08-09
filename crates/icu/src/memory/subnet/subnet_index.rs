@@ -27,7 +27,10 @@ thread_local! {
 #[derive(Debug, ThisError)]
 pub enum SubnetIndexError {
     #[error("canister not found: {0}")]
-    CanisterNotFound(String),
+    NotFound(String),
+
+    #[error("canister kind '{0}' is not a singleton")]
+    NotSingleton(String),
 
     #[error("canister kind '{0}' is not indexable")]
     NotIndexable(String),
@@ -85,7 +88,19 @@ impl SubnetIndex {
         if let Some(entry) = Self::get(kind) {
             Ok(entry)
         } else {
-            Err(MemoryError::from(SubnetIndexError::CanisterNotFound(
+            Err(MemoryError::from(SubnetIndexError::NotFound(
+                kind.to_string(),
+            )))?
+        }
+    }
+
+    pub fn try_get_singleton(kind: &str) -> Result<Principal, Error> {
+        let entry = Self::try_get(kind)?;
+
+        if entry.canisters.len() == 1 {
+            Ok(entry.canisters[0])
+        } else {
+            Err(MemoryError::from(SubnetIndexError::NotSingleton(
                 kind.to_string(),
             )))?
         }
