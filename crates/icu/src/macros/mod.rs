@@ -34,7 +34,7 @@ macro_rules! icu_start_root {
     ($kind:expr) => {
         #[::icu::ic::init]
         fn init() {
-            ::icu::log!(::icu::Log::Info, "");
+            ::icu::ic::println!("");
             ::icu::log!(
                 ::icu::Log::Info,
                 "-------------------------------------------------------"
