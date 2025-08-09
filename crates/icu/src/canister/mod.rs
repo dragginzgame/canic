@@ -78,6 +78,11 @@ pub enum CanisterIndexable {
 
 impl CanisterIndexable {
     #[must_use]
+    pub const fn singleton() -> Self {
+        Self::Limited(1)
+    }
+
+    #[must_use]
     pub const fn limited(limit: u16) -> Self {
         Self::Limited(limit)
     }
