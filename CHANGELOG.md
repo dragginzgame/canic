@@ -5,8 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.1.26] - 2025-08-09
+- overhaul of cascade/update state.  One function to transfer any number of states and
+it's also sent via canister create args
 
-## [0.1.24] - 2025-08-08
+## [0.1.25] - 2025-08-08
 - redid cascade so it's just one endpoint and has a bundle of optional data types
 - removed Serialize where it wasn't needed
 
