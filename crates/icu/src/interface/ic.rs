@@ -1,5 +1,6 @@
 use crate::{
     Error, Log,
+    config::Config,
     ic::{
         call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
@@ -7,11 +8,12 @@ use crate::{
             CreateCanisterArgs, DepositCyclesArgs, InstallCodeArgs, WasmModule,
         },
     },
-    interface::InterfaceError,
+    interface::{InterfaceError, state::StateBundle},
     log,
+    memory::{CanisterState, canister::CanisterParent},
     utils::{cycles::format_cycles, wasm::get_wasm_hash},
 };
-use candid::{Error as CandidError, Principal};
+use candid::{Error as CandidError, Principal, encode_args};
 use thiserror::Error as ThisError;
 
 ///
@@ -113,9 +115,18 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
 pub async fn ic_create_canister(
     name: &str,
     bytes: &[u8],
-    controllers: Vec<Principal>,
-    arg: Vec<u8>,
+    parents: &[CanisterParent],
+    extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
+    //
+    // controllers
+    // (possibly could add extra ones in the future)
+    //
+
+    let mut controllers = Config::get()?.controllers;
+    let root_pid = CanisterState::get_root_pid();
+    controllers.push(root_pid);
+
     //
     // create canister
     //
@@ -131,6 +142,15 @@ pub async fn ic_create_canister(
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?
         .canister_id;
+
+    //
+    // args are specific to icu
+    //
+
+    let bundle = StateBundle::all();
+    let arg = encode_args((bundle, parents, extra_arg))
+        .map_err(IcError::from)
+        .map_err(InterfaceError::from)?;
 
     //
     // install code

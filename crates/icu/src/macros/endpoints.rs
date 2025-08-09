@@ -20,14 +20,25 @@ macro_rules! icu_endpoints {
             Ok(())
         }
 
-        // icu_cascade
         #[::icu::ic::update]
-        async fn icu_cascade(
-            bundle: ::icu::interface::cascade::CascadeBundle,
+        async fn icu_state_update(
+            bundle: ::icu::interface::state::StateBundle,
         ) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_parent)?;
 
-            $crate::interface::cascade::cascade(&bundle).await
+            $crate::interface::state::save_state(&bundle);
+
+            Ok(())
+        }
+
+        #[::icu::ic::update]
+        async fn icu_state_cascade(
+            bundle: ::icu::interface::state::StateBundle,
+        ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_parent)?;
+
+            $crate::interface::state::save_state(&bundle);
+            $crate::interface::state::cascade(&bundle).await
         }
 
         //

@@ -27,7 +27,6 @@ ic-ledger-types = "0.15.0"
 ic-management-canister-types = "0.3.2"
 ic-stable-structures = "0.7.0"
 ic_principal = "0.1"
-toml = "0.9"
 icrc-ledger-types = "0.1.10"
 icu = { path = "crates/icu" }
 
@@ -37,6 +36,7 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 sha2 = "0.10"
 thiserror = "2.0"
 tinyrand = "0.5"
+toml = "0.9"
 
 # clippy
 [workspace.lints.clippy]

@@ -1,5 +1,6 @@
 use icu::{
-    interface::root::root_create_canisters,
+    Error,
+    interface::{request::create_canister_request, root::root_create_canisters},
     prelude::*,
     state::{CanisterAttributes, CanisterRegistry},
 };
@@ -26,15 +27,21 @@ fn register_canisters() {
         "test",
         CanisterAttributes {
             auto_create: true,
-            indexable: false,
+            indexable: true,
         },
         &[],
-        // include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {
         CanisterRegistry::insert(path, atts, wasm).unwrap();
     }
+}
+
+// create_test
+#[update]
+async fn create_test() -> Result<Principal, Error> {
+    create_canister_request::<()>("test", None).await
 }
 
 // end

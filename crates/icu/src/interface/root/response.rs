@@ -2,15 +2,14 @@ use crate::{
     Error,
     interface::{
         InterfaceError,
-        cascade::{CascadeBundle, cascade},
-        ic::{IcError, ic_create_canister, ic_upgrade_canister},
+        ic::{ic_create_canister, ic_upgrade_canister},
         request::Request,
-        root::new_canister_controllers,
+        state::{StateBundle, cascade, update_canister},
     },
-    memory::canister::CanisterParent,
+    memory::{CanisterState, SubnetIndex, canister::CanisterParent},
     state::CanisterRegistry,
 };
-use candid::{CandidType, Principal, encode_args};
+use candid::{CandidType, Principal};
 use serde::Deserialize;
 
 ///
@@ -28,43 +27,47 @@ pub enum Response {
 pub async fn response(req: Request) -> Result<Response, Error> {
     match req {
         Request::CreateCanister(req) => {
-            response_create_canister(&req.kind, &req.parents, req.extra).await
+            create_canister_response(&req.kind, &req.parents, req.extra).await
         }
-        Request::UpgradeCanister(req) => response_upgrade_canister(req.pid, &req.kind).await,
+        Request::UpgradeCanister(req) => upgrade_canister_response(req.pid, &req.kind).await,
     }
 }
 
-// response_create_canister
-async fn response_create_canister(
+// create_canister_response
+async fn create_canister_response(
     kind: &str,
     parents: &[CanisterParent],
-    extra: Option<Vec<u8>>,
+    extra_arg: Option<Vec<u8>>,
 ) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(kind)?;
+    let is_root = CanisterState::is_root();
 
     // only allow non-indexable canisters
-    if canister.attributes.indexable {
+    if !is_root && canister.attributes.indexable {
         return Err(InterfaceError::CannotCreateIndexable)?;
     }
 
-    // encode the standard init args
-    let args = encode_args((parents, extra))
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
-
     // create the canister
-    let controllers = new_canister_controllers()?;
-    let new_canister_id = ic_create_canister(kind, canister.wasm, controllers, args).await?;
+    let new_canister_id = ic_create_canister(kind, canister.wasm, parents, extra_arg).await?;
 
-    // cascade subnet, as we're on root
-    let bundle = CascadeBundle::subnet_index();
-    cascade(&bundle).await?;
+    // if root creates a indexable canister, cascade
+    if is_root && canister.attributes.indexable {
+        SubnetIndex::insert(kind, new_canister_id);
+
+        let bundle = StateBundle::subnet_index();
+
+        // update directly as it won't yet be in the child index
+        update_canister(&new_canister_id, &bundle).await?;
+
+        // cascade to existing child index
+        cascade(&bundle).await?;
+    }
 
     Ok(Response::CreateCanister(new_canister_id))
 }
 
-// response_upgrade_canister
-async fn response_upgrade_canister(pid: Principal, path: &str) -> Result<Response, Error> {
+// upgrade_canister_response
+async fn upgrade_canister_response(pid: Principal, path: &str) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(path)?;
     ic_upgrade_canister(pid, canister.wasm).await?;
 

@@ -7,9 +7,14 @@ pub mod root;
 macro_rules! icu_start {
     ($kind:expr) => {
         #[::icu::ic::init]
-        fn init(parents: Vec<::icu::memory::canister::CanisterParent>, args: Option<Vec<u8>>) {
+        fn init(
+            bundle: ::icu::interface::state::StateBundle,
+            parents: Vec<::icu::memory::canister::CanisterParent>,
+            args: Option<Vec<u8>>,
+        ) {
             ::icu::log!(::icu::Log::Info, "init: {}", $kind);
 
+            ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
             ::icu::memory::CanisterState::set_kind($kind);
 
@@ -49,8 +54,8 @@ macro_rules! icu_start_root {
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
             ::icu::memory::AppState::command(cmd)?;
 
-            let bundle = ::icu::interface::cascade::CascadeBundle::app_state();
-            ::icu::interface::cascade::cascade(&bundle).await?;
+            let bundle = ::icu::interface::state::StateBundle::app_state();
+            ::icu::interface::state::cascade(&bundle).await?;
 
             Ok(())
         }
