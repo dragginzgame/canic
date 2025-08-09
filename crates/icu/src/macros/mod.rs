@@ -99,11 +99,11 @@ macro_rules! log {
         let formatted_message = format!($fmt, $($arg)*);  // Apply formatting with args
 
         let msg = match $level {
-            $crate::Log::Ok => format!("\x1b[32mOK\x1b[0m: {}", formatted_message),
+            $crate::Log::Ok => format!("\x1b[32mOK  \x1b[0m: {}", formatted_message),
             $crate::Log::Perf => format!("\x1b[35mPERF\x1b[0m: {}", formatted_message),
             $crate::Log::Info => format!("\x1b[34mINFO\x1b[0m: {}", formatted_message),
             $crate::Log::Warn => format!("\x1b[33mWARN\x1b[0m: {}", formatted_message),
-            $crate::Log::Error => format!("\x1b[31mERROR\x1b[0m: {}", formatted_message),
+            $crate::Log::Error => format!("\x1b[31mERR \x1b[0m: {}", formatted_message),
         };
 
         $crate::ic::println!("{}", msg);
