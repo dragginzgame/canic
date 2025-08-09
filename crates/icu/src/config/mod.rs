@@ -1,6 +1,6 @@
 use crate::Error;
 use candid::{CandidType, Principal};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashSet};
 use thiserror::Error as ThisError;
 
@@ -17,7 +17,7 @@ thread_local! {
 /// ConfigError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,
@@ -80,7 +80,7 @@ impl Config {
 /// ConfigData
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct ConfigData {
     // controllers
     // a vec because we just append it to the controller arguments

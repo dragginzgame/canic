@@ -5,14 +5,14 @@ use crate::{
     memory::{CanisterState, ChildIndex, canister::CanisterParent},
 };
 use candid::{CandidType, Principal, encode_one};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error as ThisError;
 
 ///
 /// RequestError
 ///
 
-#[derive(CandidType, Debug, Deserialize, Serialize, ThisError)]
+#[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum RequestError {
     #[error("invalid response type")]
     InvalidResponseType,
@@ -22,7 +22,7 @@ pub enum RequestError {
 /// Request
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
     CreateCanister(CreateCanisterArgs),
     UpgradeCanister(UpgradeCanisterArgs),
@@ -32,7 +32,7 @@ pub enum Request {
 /// CreateCanisterArgs
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterArgs {
     pub kind: String,
     pub parents: Vec<CanisterParent>,
@@ -43,7 +43,7 @@ pub struct CreateCanisterArgs {
 /// UpgradeCanisterArgs
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterArgs {
     pub pid: Principal,
     pub kind: String,

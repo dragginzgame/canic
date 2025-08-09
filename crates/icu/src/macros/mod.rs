@@ -48,7 +48,9 @@ macro_rules! icu_start_root {
         #[::icu::ic::update]
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
             ::icu::memory::AppState::command(cmd)?;
-            ::icu::interface::cascade::app_state_cascade().await?;
+
+            let bundle = ::icu::interface::cascade::CascadeBundle::app_state();
+            ::icu::interface::cascade::cascade(&bundle).await?;
 
             Ok(())
         }

@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     interface::{
         InterfaceError,
-        cascade::subnet_index_cascade,
+        cascade::{CascadeBundle, cascade},
         ic::{IcError, canister_self, ic_create_canister},
     },
     memory::{CanisterState, ChildIndex, SubnetIndex, canister::CanisterParent},
@@ -56,7 +56,8 @@ async fn root_create_canister(kind: &str, extra: Option<Vec<u8>>) -> Result<Prin
     }
 
     // always cascade to the new canister
-    subnet_index_cascade().await?;
+    let bundle = CascadeBundle::subnet_index();
+    cascade(&bundle).await?;
 
     Ok(new_canister_id)
 }

@@ -2,7 +2,7 @@ use crate::{
     Error,
     interface::{
         InterfaceError,
-        cascade::subnet_index_cascade,
+        cascade::{CascadeBundle, cascade},
         ic::{IcError, ic_create_canister, ic_upgrade_canister},
         request::Request,
         root::new_canister_controllers,
@@ -11,14 +11,14 @@ use crate::{
     state::CanisterRegistry,
 };
 use candid::{CandidType, Principal, encode_args};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 ///
 /// Response
 /// the root canister is the only one with the response() endpoint
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Response {
     CreateCanister(Principal),
     UpgradeCanister,
@@ -57,7 +57,8 @@ async fn response_create_canister(
     let new_canister_id = ic_create_canister(kind, canister.wasm, controllers, args).await?;
 
     // cascade subnet, as we're on root
-    subnet_index_cascade().await?;
+    let bundle = CascadeBundle::subnet_index();
+    cascade(&bundle).await?;
 
     Ok(Response::CreateCanister(new_canister_id))
 }
