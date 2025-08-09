@@ -13,9 +13,8 @@ pub async fn root_create_canisters() -> Result<(), Error> {
         }
     }
 
-    log!(Log::Info, "🌐 [SUBNET INDEX]");
     for (kind, pid) in SubnetIndex::export() {
-        log!(Log::Info, "{kind}: {pid}");
+        log!(Log::Info, "🥫 {kind}: {pid}");
     }
 
     Ok(())

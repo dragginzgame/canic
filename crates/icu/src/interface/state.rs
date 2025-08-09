@@ -71,9 +71,9 @@ pub fn save_state(bundle: &StateBundle) {
         SubnetIndex::import(data.clone());
     }
 
-    let debug_str = &bundle.debug();
+    //   let debug_str = &bundle.debug();
 
-    log!(Log::Info, "state.save [{debug_str}]: saved bundle");
+    //log!(Log::Info, "state.save [{debug_str}]: saved bundle");
 }
 
 // cascade
@@ -93,7 +93,7 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
 
     log!(
         Log::Info,
-        "state.cascade [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
+        "🌊 state.cascade [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
     );
 
     Call::unbounded_wait(*pid, "icu_state_cascade")
@@ -113,7 +113,7 @@ pub async fn update_canister(pid: &Principal, bundle: &StateBundle) -> Result<()
 
     log!(
         Log::Info,
-        "state.update [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
+        "🔄 state.update [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
     );
 
     Call::unbounded_wait(*pid, "icu_state_update")
