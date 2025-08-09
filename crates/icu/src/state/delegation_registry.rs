@@ -292,6 +292,11 @@ impl DelegationRegistry {
         );
     }
 }
+
+///
+/// TESTS
+///
+
 #[cfg(test)]
 mod tests {
     use super::*;

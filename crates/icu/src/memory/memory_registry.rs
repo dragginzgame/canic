@@ -5,7 +5,6 @@ use crate::{
     memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID, MemoryError},
 };
 use candid::CandidType;
-use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -35,6 +34,12 @@ pub enum MemoryRegistryError {
     #[error("memory id {0} is reserved")]
     Reserved(u8),
 }
+
+///
+/// MemoryRegistryData
+///
+
+pub type MemoryRegistryData = Vec<(u8, MemoryRegistryEntry)>;
 
 ///
 /// MemoryRegistry
@@ -95,12 +100,9 @@ impl MemoryRegistry {
     #[must_use]
     pub fn export() -> MemoryRegistryData {
         Self::with(|map| {
-            let data = map
-                .iter()
+            map.iter()
                 .map(|entry| (*entry.key(), entry.value()))
-                .collect();
-
-            MemoryRegistryData(data)
+                .collect()
         })
     }
 }
@@ -115,13 +117,6 @@ pub struct MemoryRegistryEntry {
 }
 
 impl_storable_unbounded!(MemoryRegistryEntry);
-
-///
-/// MemoryRegistryData
-///
-
-#[derive(CandidType, Clone, Debug, Deref, Deserialize, Serialize)]
-pub struct MemoryRegistryData(Vec<(u8, MemoryRegistryEntry)>);
 
 ///
 /// TESTS

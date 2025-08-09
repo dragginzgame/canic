@@ -4,9 +4,7 @@ use crate::{
     icu_register_memory,
     memory::{CHILD_INDEX_MEMORY_ID, MemoryError},
 };
-use candid::{CandidType, Principal};
-use derive_more::IntoIterator;
-use serde::{Deserialize, Serialize};
+use candid::Principal;
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
@@ -29,6 +27,12 @@ pub enum ChildIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(Principal),
 }
+
+///
+/// ChildIndexData
+///
+
+pub type ChildIndexData = HashMap<Principal, String>;
 
 ///
 /// ChildIndex
@@ -104,13 +108,6 @@ impl ChildIndex {
 
     #[must_use]
     pub fn export() -> ChildIndexData {
-        Self::with(|map| ChildIndexData(map.iter_pairs().collect()))
+        Self::with(|map| map.iter_pairs().collect())
     }
 }
-
-///
-/// ChildIndexData
-///
-
-#[derive(CandidType, Clone, Debug, IntoIterator, Deserialize, Serialize)]
-pub struct ChildIndexData(HashMap<Principal, String>);

@@ -1,6 +1,5 @@
 use crate::{Error, state::StateError};
 use candid::CandidType;
-use derive_more::IntoIterator;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -24,6 +23,12 @@ pub enum CanisterRegistryError {
 }
 
 ///
+/// CanisterRegistryData
+///
+
+pub type CanisterRegistryData = HashMap<String, CanisterInfo>;
+
+///
 /// Canister
 ///
 
@@ -34,17 +39,17 @@ pub struct Canister {
 }
 
 ///
-/// CanisterData
+/// CanisterInfo
 /// the front-facing version
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterData {
+pub struct CanisterInfo {
     pub attributes: CanisterAttributes,
     pub wasm_size: usize,
 }
 
-impl From<&Canister> for CanisterData {
+impl From<&Canister> for CanisterInfo {
     fn from(canister: &Canister) -> Self {
         Self {
             attributes: canister.attributes.clone(),
@@ -122,16 +127,7 @@ impl CanisterRegistry {
 
     #[must_use]
     pub fn export() -> CanisterRegistryData {
-        let data = CANISTER_REGISTRY
-            .with_borrow(|reg| reg.iter().map(|(k, v)| (k.clone(), v.into())).collect());
-
-        CanisterRegistryData(data)
+        CANISTER_REGISTRY
+            .with_borrow(|reg| reg.iter().map(|(k, v)| (k.clone(), v.into())).collect())
     }
 }
-
-///
-/// CanisterRegistryData
-///
-
-#[derive(CandidType, Clone, Debug, IntoIterator, Deserialize, Serialize)]
-pub struct CanisterRegistryData(HashMap<String, CanisterData>);

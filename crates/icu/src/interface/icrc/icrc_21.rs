@@ -99,11 +99,6 @@ pub struct Icrc21TextValue {
 ///
 
 #[derive(CandidType, Deserialize)]
-pub struct Icrc21ErrorInfo {
-    pub description: String,
-}
-
-#[derive(CandidType, Deserialize)]
 pub enum Icrc21Error {
     ConsentMessageUnavailable(Icrc21ErrorInfo),
     GenericError {
@@ -112,4 +107,9 @@ pub enum Icrc21Error {
     },
     InsufficientPayment(Icrc21ErrorInfo),
     UnsupportedCanisterCall(Icrc21ErrorInfo),
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct Icrc21ErrorInfo {
+    pub description: String,
 }
