@@ -175,7 +175,7 @@ pub async fn ic_create_canister(
     let bytes_fmt = bytes.len() as f64 / 1_000.0;
     log!(
         Log::Ok,
-        "ic.create_canister: {} created ({} KB) {} with {}",
+        "⚡ create_canister: {} created ({} KB) {} with {}",
         name,
         bytes_fmt,
         canister_pid,
