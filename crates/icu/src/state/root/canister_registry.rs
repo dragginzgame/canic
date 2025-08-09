@@ -1,4 +1,4 @@
-use crate::{Error, ic::println, state::StateError};
+use crate::{Error, state::StateError};
 use candid::CandidType;
 use derive_more::Deref;
 use serde::{Deserialize, Serialize};
@@ -111,7 +111,7 @@ impl CanisterRegistry {
             );
         });
 
-        println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
+        //   println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
 
         Ok(())
     }

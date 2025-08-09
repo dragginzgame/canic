@@ -20,7 +20,7 @@ macro_rules! icu_register_memory {
         } else {
             $crate::log!(
                 $crate::Log::Info,
-                "✅ icu_register_memory registered {} @ {}",
+                "💾 icu_register_memory registered {} @ {}",
                 path,
                 $id
             );

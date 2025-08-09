@@ -54,9 +54,8 @@ async fn create_canister_response(
     if is_root && canister.attributes.indexable {
         SubnetIndex::insert(kind, new_canister_id);
 
-        let bundle = StateBundle::subnet_index();
-
         // update directly as it won't yet be in the child index
+        let bundle = StateBundle::subnet_index();
         update_canister(&new_canister_id, &bundle).await?;
 
         // cascade to existing child index

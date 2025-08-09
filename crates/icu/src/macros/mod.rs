@@ -12,7 +12,7 @@ macro_rules! icu_start {
             parents: Vec<::icu::memory::canister::CanisterParent>,
             args: Option<Vec<u8>>,
         ) {
-            ::icu::log!(::icu::Log::Info, "init: {}", $kind);
+            ::icu::log!(::icu::Log::Info, "🚀 init: {}", $kind);
 
             ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
@@ -34,7 +34,7 @@ macro_rules! icu_start_root {
     ($kind:expr) => {
         #[::icu::ic::init]
         fn init() {
-            ::icu::log!(::icu::Log::Info, "init: {}", $kind);
+            ::icu::log!(::icu::Log::Info, "👑 init: root");
 
             ::icu::memory::CanisterState::set_kind($kind);
 

@@ -84,8 +84,6 @@ where
         None => None,
     };
 
-    crate::log!(crate::Log::Info, "create_canister_request: {kind}");
-
     // build parents
     let mut parents = CanisterState::get_parents();
     let this = CanisterParent::this()?;
