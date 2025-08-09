@@ -29,8 +29,8 @@ fn register_canisters() {
             auto_create: Some(2),
             indexable: Some(CanisterIndexable::unlimited()),
         },
-        //&[],
-        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        &[],
+        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {
