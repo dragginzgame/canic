@@ -93,7 +93,7 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
 
     log!(
         Log::Info,
-        "🌊 state.cascade [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
+        "💦 state.cascade [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
     );
 
     Call::unbounded_wait(*pid, "icu_state_cascade")
