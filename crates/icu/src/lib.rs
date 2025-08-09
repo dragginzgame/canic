@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod canister;
 pub mod config;
 pub mod guard;
 pub mod ic;
@@ -52,6 +53,9 @@ pub enum Error {
     AuthError(String),
 
     #[error("{0}")]
+    CanisterError(String),
+
+    #[error("{0}")]
     ConfigError(String),
 
     #[error("{0}")]
@@ -75,6 +79,7 @@ macro_rules! from_to_string {
 }
 
 from_to_string!(auth::AuthError, AuthError);
+from_to_string!(canister::CanisterError, CanisterError);
 from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(memory::MemoryError, MemoryError);

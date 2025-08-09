@@ -10,8 +10,8 @@ macro_rules! icu_endpoints_root {
 
         // icu_canister_registry
         #[::icu::ic::query]
-        fn icu_canister_registry() -> ::icu::state::CanisterRegistryData {
-            $crate::state::CanisterRegistry::export()
+        fn icu_canister_registry() -> ::icu::canister::CanisterRegistryData {
+            $crate::canister::CanisterRegistry::export()
         }
     };
 }

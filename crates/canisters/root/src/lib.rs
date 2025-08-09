@@ -1,8 +1,8 @@
 use icu::{
     Error,
+    canister::{CanisterAttributes, CanisterIndexable, CanisterRegistry},
     interface::{request::create_canister_request, root::root_create_canisters},
     prelude::*,
-    state::{CanisterAttributes, CanisterRegistry},
 };
 
 //
@@ -26,11 +26,11 @@ fn register_canisters() {
     let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
         "test",
         CanisterAttributes {
-            auto_create: true,
-            indexable: true,
+            auto_create: Some(2),
+            indexable: Some(CanisterIndexable::unlimited()),
         },
-        &[],
-        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+        //&[],
+        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {

@@ -1,10 +1,12 @@
 use crate::{
     Error,
+    canister::{Canister, CanisterIndexable},
     ic::structures::BTreeMap,
-    icu_register_memory,
+    icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
+use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
@@ -13,7 +15,7 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static SUBNET_INDEX: RefCell<BTreeMap<String, Principal>> = RefCell::new(BTreeMap::init(
+    pub static SUBNET_INDEX: RefCell<BTreeMap<String, SubnetIndexEntry>> = RefCell::new(BTreeMap::init(
         icu_register_memory!(SubnetIndexData, SUBNET_INDEX_MEMORY_ID),
     ));
 }
@@ -26,13 +28,30 @@ thread_local! {
 pub enum SubnetIndexError {
     #[error("canister not found: {0}")]
     CanisterNotFound(String),
+
+    #[error("canister kind '{0}' is not indexable")]
+    NotIndexable(String),
+
+    #[error("subnet index capacity reached for kind '{kind}' (cap {cap})")]
+    CapacityReached { kind: String, cap: u16 },
 }
 
 ///
 /// SubnetIndexData
 ///
 
-pub type SubnetIndexData = HashMap<String, Principal>;
+pub type SubnetIndexData = HashMap<String, SubnetIndexEntry>;
+
+///
+/// SubnetIndexEntry
+///
+
+#[derive(CandidType, Clone, Default, Debug, Serialize, Deserialize)]
+pub struct SubnetIndexEntry {
+    pub canisters: Vec<Principal>,
+}
+
+impl_storable_unbounded!(SubnetIndexEntry);
 
 ///
 /// SubnetIndex
@@ -45,12 +64,12 @@ impl SubnetIndex {
     // INTERNAL ACCESSORS
     //
 
-    pub fn with<R>(f: impl FnOnce(&BTreeMap<String, Principal>) -> R) -> R {
-        SUBNET_INDEX.with(|cell| f(&cell.borrow()))
+    pub fn with<R>(f: impl FnOnce(&BTreeMap<String, SubnetIndexEntry>) -> R) -> R {
+        SUBNET_INDEX.with_borrow(|cell| f(cell))
     }
 
-    pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<String, Principal>) -> R) -> R {
-        SUBNET_INDEX.with(|cell| f(&mut cell.borrow_mut()))
+    pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<String, SubnetIndexEntry>) -> R) -> R {
+        SUBNET_INDEX.with_borrow_mut(|cell| f(cell))
     }
 
     //
@@ -58,13 +77,13 @@ impl SubnetIndex {
     //
 
     #[must_use]
-    pub fn get(kind: &str) -> Option<Principal> {
+    pub fn get(kind: &str) -> Option<SubnetIndexEntry> {
         Self::with(|map| map.get(&kind.to_string()))
     }
 
-    pub fn try_get(kind: &str) -> Result<Principal, Error> {
-        if let Some(pid) = Self::get(kind) {
-            Ok(pid)
+    pub fn try_get(kind: &str) -> Result<SubnetIndexEntry, Error> {
+        if let Some(entry) = Self::get(kind) {
+            Ok(entry)
         } else {
             Err(MemoryError::from(SubnetIndexError::CanisterNotFound(
                 kind.to_string(),
@@ -72,16 +91,66 @@ impl SubnetIndex {
         }
     }
 
-    pub fn insert(kind: &str, id: Principal) {
-        Self::with_mut(|map| {
-            map.insert(kind.to_string(), id);
-        });
+    // can_insert
+    pub fn can_insert(canister: &Canister) -> Result<(), Error> {
+        let kind = canister.kind.to_string();
+        let attrs = &canister.attributes;
+        let entry = Self::with(|map| map.get(&kind)).unwrap_or_default();
+
+        match attrs.indexable {
+            None => Err(MemoryError::from(SubnetIndexError::NotIndexable(kind))),
+
+            Some(CanisterIndexable::Limited(cap)) if (entry.canisters.len() as u16) >= cap => {
+                Err(MemoryError::from(SubnetIndexError::CapacityReached {
+                    kind,
+                    cap,
+                }))
+            }
+            _ => Ok(()),
+        }?;
+
+        Ok(())
     }
 
-    pub fn remove(kind: &str) {
+    // insert
+    // canister gets passed in (from canister registry), because it contains
+    // subnet-specific logic
+    pub fn insert(canister: &Canister, id: Principal) -> Result<(), Error> {
+        Self::can_insert(canister)?;
+
         Self::with_mut(|map| {
-            map.remove(&kind.to_string());
+            let kind = canister.kind.to_string();
+            let mut entry = map.get(&kind).unwrap_or_default();
+
+            // add if its not there
+            if !entry.canisters.contains(&id) {
+                entry.canisters.push(id);
+                map.insert(kind, entry);
+            }
         });
+
+        Ok(())
+    }
+
+    // remove
+    // Make insert/remove return Result<(), Error> even if children won’t
+    // hit the policy—useful for root callers and consistent API.
+    pub fn remove(kind: &str, id: Principal) -> Result<(), Error> {
+        Self::with_mut(|map| {
+            let key = kind.to_string();
+
+            if let Some(mut entry) = map.get(&key) {
+                entry.canisters.retain(|p| p != &id);
+
+                if entry.canisters.is_empty() {
+                    map.remove(&key);
+                } else {
+                    map.insert(key, entry);
+                }
+            }
+        });
+
+        Ok(())
     }
 
     //
@@ -91,7 +160,7 @@ impl SubnetIndex {
     pub fn import(data: SubnetIndexData) {
         Self::with_mut(|map| {
             map.clear();
-            for (k, v) in data.into_iter() {
+            for (k, v) in data {
                 map.insert(k.clone(), v);
             }
         });

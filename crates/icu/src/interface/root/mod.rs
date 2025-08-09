@@ -1,20 +1,34 @@
 pub mod response;
 
 use crate::{
-    Error, Log, interface::request::create_canister_request, log, memory::SubnetIndex,
-    state::CanisterRegistry,
+    Error, Log, canister::CanisterRegistry, interface::request::create_canister_request, log,
+    memory::SubnetIndex,
 };
 
 // root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {
-    for (kind, data) in CanisterRegistry::export() {
-        if data.attributes.auto_create && SubnetIndex::get(&kind).is_none() {
-            create_canister_request::<()>(&kind, None).await.unwrap();
+    // Top-up pass
+    for (kind, canister) in CanisterRegistry::export() {
+        let Some(auto_create) = canister.attributes.auto_create else {
+            continue;
+        };
+
+        for _ in 0..auto_create {
+            // let this bubble up instead of unwrap()
+            create_canister_request::<()>(&kind, None).await?;
         }
     }
 
-    for (kind, pid) in SubnetIndex::export() {
-        log!(Log::Info, "🥫 {kind}: {pid}");
+    // Report pass
+    for (kind, entry) in SubnetIndex::export() {
+        let canisters = entry
+            .canisters
+            .iter()
+            .map(|p| p.to_text())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        log!(Log::Info, "🥫 {kind}: {canisters}");
     }
 
     Ok(())

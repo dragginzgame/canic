@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    canister::CanisterRegistry,
     interface::{
         InterfaceError,
         ic::{ic_create_canister, ic_upgrade_canister},
@@ -7,7 +8,6 @@ use crate::{
         state::{StateBundle, cascade, update_canister},
     },
     memory::{CanisterState, SubnetIndex, canister::CanisterParent},
-    state::CanisterRegistry,
 };
 use candid::{CandidType, Principal};
 use serde::Deserialize;
@@ -41,18 +41,23 @@ async fn create_canister_response(
 ) -> Result<Response, Error> {
     let canister = CanisterRegistry::try_get(kind)?;
     let is_root = CanisterState::is_root();
+    let is_indexable = canister.attributes.is_indexable();
 
-    // only allow non-indexable canisters
-    if !is_root && canister.attributes.indexable {
-        return Err(InterfaceError::CannotCreateIndexable)?;
+    // indexable canisters have to be on root
+    // and subnet_index has to be able to accept them
+    if is_indexable {
+        if !is_root {
+            return Err(InterfaceError::CannotCreateIndexable)?;
+        } else {
+            SubnetIndex::can_insert(&canister)?;
+        }
     }
 
-    // create the canister
     let new_canister_id = ic_create_canister(kind, canister.wasm, parents, extra_arg).await?;
 
     // if root creates a indexable canister, cascade
-    if is_root && canister.attributes.indexable {
-        SubnetIndex::insert(kind, new_canister_id);
+    if is_root && is_indexable {
+        SubnetIndex::insert(&canister, new_canister_id)?;
 
         // update directly as it won't yet be in the child index
         let bundle = StateBundle::subnet_index();

@@ -1,8 +1,8 @@
-use crate::{Error, state::StateError};
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
+use crate::{
+    Error,
+    canister::{Canister, CanisterAttributes, CanisterError, CanisterInfo},
+};
 use std::{cell::RefCell, collections::HashMap};
-use thiserror::Error as ThisError;
 
 //
 // CANISTER_REGISTRY
@@ -13,60 +13,10 @@ thread_local! {
 }
 
 ///
-/// CanisterRegistryError
-///
-
-#[derive(Debug, ThisError)]
-pub enum CanisterRegistryError {
-    #[error("canister '{0}' not found")]
-    CanisterNotFound(String),
-}
-
-///
 /// CanisterRegistryData
 ///
 
 pub type CanisterRegistryData = HashMap<String, CanisterInfo>;
-
-///
-/// Canister
-///
-
-#[derive(Clone, Debug)]
-pub struct Canister {
-    pub attributes: CanisterAttributes,
-    pub wasm: &'static [u8],
-}
-
-///
-/// CanisterInfo
-/// the front-facing version
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterInfo {
-    pub attributes: CanisterAttributes,
-    pub wasm_size: usize,
-}
-
-impl From<&Canister> for CanisterInfo {
-    fn from(canister: &Canister) -> Self {
-        Self {
-            attributes: canister.attributes.clone(),
-            wasm_size: canister.wasm.len(),
-        }
-    }
-}
-
-///
-/// CanisterAttributes
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterAttributes {
-    pub auto_create: bool,
-    pub indexable: bool,
-}
 
 ///
 /// CanisterRegistry
@@ -94,7 +44,7 @@ impl CanisterRegistry {
         if let Some(canister) = Self::get(path) {
             Ok(canister)
         } else {
-            Err(StateError::from(CanisterRegistryError::CanisterNotFound(
+            Err(Error::from(CanisterError::CanisterNotFound(
                 path.to_string(),
             )))?
         }
@@ -102,14 +52,15 @@ impl CanisterRegistry {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn insert(
-        path: &str,
+        kind: &'static str,
         attributes: &CanisterAttributes,
         wasm: &'static [u8],
-    ) -> Result<(), CanisterRegistryError> {
+    ) -> Result<(), CanisterError> {
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
             reg.insert(
-                path.to_string(),
+                kind.to_string(),
                 Canister {
+                    kind,
                     attributes: attributes.clone(),
                     wasm,
                 },
