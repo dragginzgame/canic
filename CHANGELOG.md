@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.2.0] - Toko Time
+- fresh new minor release as we're gearing up for Toko now
+
 ## [0.1.29] - 2025-08-09
 - new SubnetIndex, now you can store many canisters per type
 - moved all the root canister registry to canister/ and cleaned up unused structs
