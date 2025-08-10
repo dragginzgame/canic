@@ -49,7 +49,7 @@ pub type SubnetIndexData = HashMap<String, SubnetIndexEntry>;
 /// SubnetIndexEntry
 ///
 
-#[derive(CandidType, Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SubnetIndexEntry {
     pub canisters: Vec<Principal>,
 }
