@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    canister::{Canister, CanisterIndexable},
+    canister::Canister,
     ic::structures::BTreeMap,
     icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
@@ -112,10 +112,10 @@ impl SubnetIndex {
         let attrs = &canister.attributes;
         let entry = Self::with(|map| map.get(&kind)).unwrap_or_default();
 
-        match attrs.indexable {
+        match attrs.indexing.limit() {
             None => Err(MemoryError::from(SubnetIndexError::NotIndexable(kind))),
 
-            Some(CanisterIndexable::Limited(cap)) if (entry.canisters.len() as u16) >= cap => {
+            Some(cap) if (entry.canisters.len() as u16) >= cap => {
                 Err(MemoryError::from(SubnetIndexError::CapacityReached {
                     kind,
                     cap,

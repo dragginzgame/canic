@@ -1,8 +1,9 @@
 use crate::{
     Error,
-    canister::{Canister, CanisterAttributes, CanisterError, CanisterInfo},
+    canister::{Attributes, Canister, CanisterError, CanisterView},
 };
 use std::{cell::RefCell, collections::HashMap};
+use thiserror::Error as ThisError;
 
 //
 // CANISTER_REGISTRY
@@ -13,10 +14,20 @@ thread_local! {
 }
 
 ///
+/// CanisterRegistryError
+///
+
+#[derive(Debug, ThisError)]
+pub enum CanisterRegistryError {
+    #[error("canister '{0}' not found")]
+    CanisterNotFound(String),
+}
+
+///
 /// CanisterRegistryData
 ///
 
-pub type CanisterRegistryData = HashMap<String, CanisterInfo>;
+pub type CanisterRegistryData = HashMap<String, CanisterView>;
 
 ///
 /// CanisterRegistry
@@ -44,18 +55,14 @@ impl CanisterRegistry {
         if let Some(canister) = Self::get(path) {
             Ok(canister)
         } else {
-            Err(Error::from(CanisterError::CanisterNotFound(
-                path.to_string(),
+            Err(Error::from(CanisterError::CanisterRegistryError(
+                CanisterRegistryError::CanisterNotFound(path.to_string()),
             )))?
         }
     }
 
     #[allow(clippy::cast_precision_loss)]
-    pub fn insert(
-        kind: &'static str,
-        attributes: &CanisterAttributes,
-        wasm: &'static [u8],
-    ) -> Result<(), CanisterError> {
+    pub fn insert(kind: &'static str, attributes: &Attributes, wasm: &'static [u8]) {
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
             reg.insert(
                 kind.to_string(),
@@ -68,8 +75,6 @@ impl CanisterRegistry {
         });
 
         //   println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
-
-        Ok(())
     }
 
     //

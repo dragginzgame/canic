@@ -1,6 +1,6 @@
 use icu::{
     Error,
-    canister::{CanisterAttributes, CanisterIndexable, CanisterRegistry},
+    canister::{Attributes, CanisterRegistry, IndexingPolicy},
     interface::{request::create_canister_request, root::root_create_canisters},
     prelude::*,
 };
@@ -23,18 +23,18 @@ async fn init_async() {
 
 // register_canisters
 fn register_canisters() {
-    let canisters: &[(&'static str, CanisterAttributes, &'static [u8])] = &[(
+    let canisters: &[(&'static str, Attributes, &'static [u8])] = &[(
         "test",
-        CanisterAttributes {
+        Attributes {
             auto_create: Some(2),
-            indexable: Some(CanisterIndexable::unlimited()),
+            indexing: IndexingPolicy::Limited(2),
         },
         &[],
         //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     )];
 
     for (path, atts, wasm) in canisters {
-        CanisterRegistry::insert(path, atts, wasm).unwrap();
+        CanisterRegistry::insert(path, atts, wasm);
     }
 }
 

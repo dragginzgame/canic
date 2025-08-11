@@ -12,8 +12,8 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum CanisterError {
-    #[error("canister '{0}' not found")]
-    CanisterNotFound(String),
+    #[error(transparent)]
+    CanisterRegistryError(#[from] CanisterRegistryError),
 }
 
 ///
@@ -23,22 +23,22 @@ pub enum CanisterError {
 #[derive(Clone, Debug)]
 pub struct Canister {
     pub kind: &'static str,
-    pub attributes: CanisterAttributes,
+    pub attributes: Attributes,
     pub wasm: &'static [u8],
 }
 
 ///
-/// CanisterInfo
+/// CanisterView
 /// the front-facing version
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterInfo {
-    pub attributes: CanisterAttributes,
+pub struct CanisterView {
+    pub attributes: Attributes,
     pub wasm_size: usize,
 }
 
-impl From<&Canister> for CanisterInfo {
+impl From<&Canister> for CanisterView {
     fn from(canister: &Canister) -> Self {
         Self {
             attributes: canister.attributes.clone(),
@@ -48,47 +48,50 @@ impl From<&Canister> for CanisterInfo {
 }
 
 ///
-/// CanisterAttributes
+/// Attributes
 ///
 /// auto_create : number of canisters to create on root
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterAttributes {
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Attributes {
     pub auto_create: Option<u16>,
-    pub indexable: Option<CanisterIndexable>,
+    pub indexing: IndexingPolicy,
 }
 
-impl CanisterAttributes {
+impl Attributes {
     #[must_use]
-    pub fn is_indexable(&self) -> bool {
-        self.indexable.is_some()
+    pub const fn is_indexable(&self) -> bool {
+        self.indexing.is_indexable()
     }
 }
 
 ///
-/// CanisterIndexable
+/// IndexingPolicy
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum CanisterIndexable {
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IndexingPolicy {
+    #[default]
+    None,
     Limited(u16),
     Unlimited,
 }
 
-impl CanisterIndexable {
-    #[must_use]
-    pub const fn singleton() -> Self {
-        Self::Limited(1)
+impl IndexingPolicy {
+    pub const fn is_indexable(self) -> bool {
+        !matches!(self, Self::None)
     }
 
-    #[must_use]
-    pub const fn limited(limit: u16) -> Self {
-        Self::Limited(limit)
+    pub const fn is_unlimited(self) -> bool {
+        matches!(self, Self::Unlimited)
     }
 
-    #[must_use]
-    pub const fn unlimited() -> Self {
-        Self::Unlimited
+    pub const fn limit(self) -> Option<u16> {
+        if let Self::Limited(n) = self {
+            Some(n)
+        } else {
+            None
+        }
     }
 }
