@@ -79,14 +79,17 @@ pub enum IndexingPolicy {
 }
 
 impl IndexingPolicy {
+    #[must_use]
     pub const fn is_indexable(self) -> bool {
         !matches!(self, Self::None)
     }
 
+    #[must_use]
     pub const fn is_unlimited(self) -> bool {
         matches!(self, Self::Unlimited)
     }
 
+    #[must_use]
     pub const fn limit(self) -> Option<u16> {
         if let Self::Limited(n) = self {
             Some(n)

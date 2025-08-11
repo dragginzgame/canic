@@ -4,6 +4,7 @@ use crate::{
     Error, Log, canister::CanisterRegistry, interface::request::create_canister_request, log,
     memory::SubnetIndex,
 };
+use candid::Principal;
 
 // root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {
@@ -24,7 +25,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
         let canisters = entry
             .canisters
             .iter()
-            .map(|p| p.to_text())
+            .map(Principal::to_text)
             .collect::<Vec<_>>()
             .join(", ");
 

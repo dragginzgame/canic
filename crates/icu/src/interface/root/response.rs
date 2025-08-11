@@ -46,10 +46,10 @@ async fn create_canister_response(
     // indexable canisters have to be on root
     // and subnet_index has to be able to accept them
     if is_indexable {
-        if !is_root {
-            return Err(InterfaceError::CannotCreateIndexable)?;
-        } else {
+        if is_root {
             SubnetIndex::can_insert(&canister)?;
+        } else {
+            return Err(InterfaceError::CannotCreateIndexable)?;
         }
     }
 
