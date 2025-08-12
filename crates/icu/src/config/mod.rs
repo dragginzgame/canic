@@ -10,6 +10,7 @@ use thiserror::Error as ThisError;
 
 thread_local! {
     static CONFIG: RefCell<ConfigData> = RefCell::new(ConfigData::default());
+
     static CONFIG_INITIALIZED: RefCell<bool> = const { RefCell::new(false) };
 }
 
