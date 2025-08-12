@@ -133,6 +133,8 @@ macro_rules! icu_endpoints {
         async fn icu_delegation_register(
             args: ::icu::state::RegisterSessionArgs,
         ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_whitelisted)?;
+
             $crate::state::DelegationRegistry::register_session(msg_caller(), args)
         }
 
