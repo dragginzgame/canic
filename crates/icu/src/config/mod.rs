@@ -87,7 +87,16 @@ pub struct ConfigData {
     // a vec because we just append it to the controller arguments
     pub controllers: Vec<Principal>,
 
-    // whitelist
+    pub whitelist: Option<WhiteList>,
+}
+
+///
+/// ConfigWhitelist
+///
+
+#[derive(CandidType, Clone, Debug, Default, Deserialize)]
+pub struct WhiteList {
+    // principals
     // a hashset as we constantly have to do lookups
-    pub whitelist: HashSet<Principal>,
+    pub principals: HashSet<Principal>,
 }

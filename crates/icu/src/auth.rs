@@ -213,15 +213,18 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
 }
 
 // is_whitelisted
+// only works if the whitelist is active
 #[must_use]
 pub fn is_whitelisted(caller: Principal) -> RuleResult {
     Box::pin(async move {
         let config = Config::get()?;
 
-        if config.whitelist.contains(&caller) {
-            Ok(())
-        } else {
+        if let Some(whitelist) = config.whitelist
+            && !whitelist.principals.contains(&caller)
+        {
             Err(AuthError::NotWhitelisted(caller))?
         }
+
+        Ok(())
     })
 }
