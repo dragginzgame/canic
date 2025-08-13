@@ -85,8 +85,10 @@ impl Config {
 pub struct ConfigData {
     // controllers
     // a vec because we just append it to the controller arguments
+    #[serde(default)]
     pub controllers: Vec<Principal>,
 
+    #[serde(default)]
     pub whitelist: Option<WhiteList>,
 }
 
@@ -96,9 +98,11 @@ pub struct ConfigData {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct WhiteList {
+    #[serde(default)]
     pub bypass_whitelist: bool,
 
     // principals
     // a hashset as we constantly have to do lookups
+    #[serde(default)]
     pub principals: HashSet<Principal>,
 }
