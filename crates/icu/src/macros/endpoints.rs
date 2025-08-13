@@ -112,6 +112,15 @@ macro_rules! icu_endpoints {
         }
 
         //
+        // ICU CONFIG ENDPOINTS
+        //
+
+        #[::icu::ic::query]
+        fn icu_config() -> Result<::icu::config::ConfigData, ::icu::Error> {
+            $crate::config::Config::get()
+        }
+
+        //
         // ICU DELEGATION ENDPOINTS
         //
 
