@@ -31,7 +31,8 @@ pub const CANISTERS: &[Canister] = &[(Canister {
     #[cfg(feature = "ic")]
     wasm: &[],
     #[cfg(not(feature = "ic"))]
-    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    wasm: &[],
+    //    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
 })];
 
 ///
