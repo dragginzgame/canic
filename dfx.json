@@ -3,9 +3,9 @@
     "canisters": {
         "root": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/canister_root/canister_root.did",
-            "build": "bash -c 'scripts/app/build.sh canister_root'",
-            "wasm": ".dfx/local/canisters/canister_root/canister_root.wasm",
+            "candid": ".dfx/local/canisters/root/root.did",
+            "build": "bash -c 'scripts/app/build.sh root'",
+            "wasm": ".dfx/local/canisters/root/root.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
@@ -19,9 +19,9 @@
         },
         "test": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/canister_test/canister_test.did",
-            "build": "bash -c 'scripts/app/build.sh canister_test'",
-            "wasm": ".dfx/local/canisters/canister_test/canister_test.wasm",
+            "candid": ".dfx/local/canisters/test/test.did",
+            "build": "bash -c 'scripts/app/build.sh test'",
+            "wasm": ".dfx/local/canisters/test/test.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

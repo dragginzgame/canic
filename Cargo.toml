@@ -60,5 +60,13 @@ option_if_let_else = "allow"
 significant_drop_tightening = "allow"
 wildcard_imports = "allow"
 
-[profile.release]
-overflow-checks = true
+# profiles
+# we don't need release as it's a library
+
+[profile.dev]
+opt-level = 1          # Small speed-up, less aggressive than release
+lto = false            # No link-time optimization in dev
+codegen-units = 16     # More parallelism for faster compile
+strip = "debuginfo"    # Remove debug sections from Wasm
+debug = false          # Don't embed debug info in code
+overflow-checks = true # Keep runtime overflow checks for safety
