@@ -96,6 +96,8 @@ pub struct ConfigData {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct WhiteList {
+    pub bypass_whitelist: bool,
+
     // principals
     // a hashset as we constantly have to do lookups
     pub principals: HashSet<Principal>,

@@ -220,6 +220,7 @@ pub fn is_whitelisted(caller: Principal) -> RuleResult {
         let config = Config::get()?;
 
         if let Some(whitelist) = config.whitelist
+            && !whitelist.bypass_whitelist
             && !whitelist.principals.contains(&caller)
         {
             Err(AuthError::NotWhitelisted(caller))?
