@@ -20,8 +20,16 @@ macro_rules! icu_start {
 
             // automatically calls icu_init
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_init(args));
-                ::icu::ic::futures::spawn(icu_startup());
+                ::icu::ic::futures::spawn(icu_setup());
+                ::icu::ic::futures::spawn(icu_install(args));
+            });
+        }
+
+        #[::icu::ic::post_upgrade]
+        fn post_upgrade() {
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::ic::futures::spawn(icu_setup());
+                ::icu::ic::futures::spawn(icu_upgrade());
             });
         }
 
@@ -44,10 +52,24 @@ macro_rules! icu_start_root {
 
             ::icu::memory::CanisterState::set_kind_root();
 
+            // import canisters
+            ::icu::canister::CanisterRegistry::import(CANISTERS);
+
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_init());
-                ::icu::ic::futures::spawn(icu_startup());
+                ::icu::ic::futures::spawn(icu_setup());
+                ::icu::ic::futures::spawn(icu_install());
+            });
+        }
+
+        #[::icu::ic::post_upgrade]
+        fn post_upgrade() {
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                // import canisters
+                ::icu::canister::CanisterRegistry::import(CANISTERS);
+
+                ::icu::ic::futures::spawn(icu_setup());
+                ::icu::ic::futures::spawn(icu_upgrade());
             });
         }
 

@@ -1,7 +1,7 @@
 use icu::{
     Error,
-    canister::{Attributes, Canister, CanisterRegistry, IndexingPolicy},
-    interface::request::create_canister_request,
+    canister::{Attributes, Canister, IndexingPolicy},
+    interface::{request::create_canister_request, root::root_create_canisters},
     prelude::*,
 };
 
@@ -11,13 +11,15 @@ use icu::{
 
 icu_start_root!();
 
-async fn icu_init() {}
-
-async fn icu_startup() {
+async fn icu_setup() {
     icu_config!("../../icu.toml");
-
-    CanisterRegistry::import(CANISTERS);
 }
+
+async fn icu_install() {
+    root_create_canisters().await.unwrap();
+}
+
+async fn icu_upgrade() {}
 
 // CANISTERS
 pub const CANISTERS: &[Canister] = &[(Canister {
@@ -26,8 +28,8 @@ pub const CANISTERS: &[Canister] = &[(Canister {
         auto_create: Some(2),
         indexing: IndexingPolicy::Limited(2),
     },
-    //wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
-    wasm: &[],
+    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    //wasm: &[],
 })];
 
 ///

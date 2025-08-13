@@ -7,13 +7,6 @@ macro_rules! icu_endpoints {
         // these are specific endpoints defined by the IC spec
         //
 
-        #[::icu::ic::post_upgrade]
-        fn post_upgrade() {
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_startup());
-            });
-        }
-
         // ic_cycles_accept
         #[::icu::ic::query]
         fn ic_cycles_accept(max_amount: u128) -> u128 {

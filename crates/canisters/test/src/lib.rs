@@ -6,14 +6,13 @@ use icu::{Error, interface::request::create_canister_request, prelude::*};
 
 icu_start!("test");
 
-#[allow(clippy::unused_async)]
-async fn icu_init(args: Option<Vec<u8>>) {
-    log!(Log::Warn, "init_async: args = {args:?}");
-}
-
-async fn icu_startup() {
+async fn icu_setup() {
     icu_config!("../../icu.toml");
 }
+
+async fn icu_install(_: Option<Vec<u8>>) {}
+
+async fn icu_upgrade() {}
 
 // create_test
 #[update]
