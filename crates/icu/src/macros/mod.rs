@@ -18,9 +18,10 @@ macro_rules! icu_start {
             ::icu::memory::CanisterState::set_parents(parents);
             ::icu::memory::CanisterState::set_kind($kind);
 
-            // automatically calls init_async
+            // automatically calls icu_init
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(init_async(args))
+                ::icu::ic::futures::spawn(icu_init(args));
+                ::icu::ic::futures::spawn(icu_startup());
             });
         }
 
@@ -45,7 +46,8 @@ macro_rules! icu_start_root {
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(init_async())
+                ::icu::ic::futures::spawn(icu_init());
+                ::icu::ic::futures::spawn(icu_startup());
             });
         }
 

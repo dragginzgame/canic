@@ -2,6 +2,24 @@
 #[macro_export]
 macro_rules! icu_endpoints {
     () => {
+        //
+        // IC API ENDPOINTS (IMPORTANT!!)
+        // these are specific endpoints defined by the IC spec
+        //
+
+        #[::icu::ic::post_upgrade]
+        fn post_upgrade() {
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::ic::futures::spawn(icu_startup());
+            });
+        }
+
+        // ic_cycles_accept
+        #[::icu::ic::query]
+        fn ic_cycles_accept(max_amount: u128) -> u128 {
+            $crate::ic::api::msg_cycles_accept(max_amount)
+        }
+
         // icu_canister_upgrade_children
         // canister_id : None means upgrade all children
         #[::icu::ic::update]
@@ -39,17 +57,6 @@ macro_rules! icu_endpoints {
 
             $crate::interface::state::save_state(&bundle);
             $crate::interface::state::cascade(&bundle).await
-        }
-
-        //
-        // IC API ENDPOINTS
-        // these are specific endpoints defined by the IC spec
-        //
-
-        // ic_cycles_accept
-        #[::icu::ic::query]
-        fn ic_cycles_accept(max_amount: u128) -> u128 {
-            $crate::ic::api::msg_cycles_accept(max_amount)
         }
 
         //

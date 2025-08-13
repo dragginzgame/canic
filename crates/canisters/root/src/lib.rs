@@ -11,14 +11,15 @@ use icu::{
 
 icu_start_root!("root");
 
-#[update]
-async fn init_async() {
-    icu_config!("../../icu.toml");
-
+async fn icu_init() {
     register_canisters();
     root_create_canisters().await.unwrap();
 
     // let config = icu::config::Config::get();
+}
+
+async fn icu_startup() {
+    icu_config!("../../icu.toml");
 }
 
 // register_canisters
