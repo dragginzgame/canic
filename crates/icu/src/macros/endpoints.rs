@@ -88,7 +88,7 @@ macro_rules! icu_endpoints {
         }
 
         #[::icu::ic::update]
-        async fn icu_canister_status() -> Result<::icu::ic::mgmt::CanisterStatusResult, Error> {
+        async fn icu_canister_status() -> Result<::icu::ic::mgmt::CanisterStatusResult, ::icu::Error> {
             ::icu::interface::ic::canister_status(::icu::ic::api::canister_self()).await
         }
 
