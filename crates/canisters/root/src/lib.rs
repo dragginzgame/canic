@@ -29,7 +29,7 @@ pub const CANISTERS: &[Canister] = &[(Canister {
         indexing: IndexingPolicy::Limited(2),
     },
     wasm: &[],
-    //    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    //wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
 })];
 
 ///
