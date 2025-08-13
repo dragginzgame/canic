@@ -87,6 +87,11 @@ macro_rules! icu_endpoints {
             $crate::ic::api::time()
         }
 
+        #[::icu::ic::update]
+        async fn icu_canister_status() -> Result<::icu::ic::mgmt::CanisterStatusResult, Error> {
+            ::icu::interface::ic::canister_status(::icu::ic::api::canister_self()).await
+        }
+
         //
         // ICU MEMORY HELPERS
         //

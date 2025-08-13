@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.2.13]
+- added an icu_canister_status endpoint to all canisters
+
 ## [0.2.12]
 - config.whitelist.bypass_whitelist
 - config toml now uses #[serde(default)]
