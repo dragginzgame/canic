@@ -16,7 +16,7 @@ macro_rules! icu_start {
 
             ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
-            ::icu::memory::CanisterState::set_kind($kind);
+            ::icu::memory::CanisterState::set_kind($kind).unwrap();
 
             // automatically calls icu_init
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -32,7 +32,7 @@ macro_rules! icu_start {
 /// icu_start_root
 #[macro_export]
 macro_rules! icu_start_root {
-    ($kind:expr) => {
+    () => {
         #[::icu::ic::init]
         fn init() {
             ::icu::ic::println!("");
@@ -42,7 +42,7 @@ macro_rules! icu_start_root {
             );
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
-            ::icu::memory::CanisterState::set_kind($kind);
+            ::icu::memory::CanisterState::set_kind_root();
 
             // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {

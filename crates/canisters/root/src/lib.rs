@@ -9,7 +9,7 @@ use icu::{
 // ICU
 //
 
-icu_start_root!("root");
+icu_start_root!();
 
 async fn icu_init() {
     register_canisters();

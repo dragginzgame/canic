@@ -20,6 +20,10 @@ thread_local! {
     ));
 }
 
+// ROOT_KIND is special
+
+pub const ROOT_KIND: &str = "root";
+
 ///
 /// CanisterStateError
 ///
@@ -28,6 +32,9 @@ thread_local! {
 pub enum CanisterStateError {
     #[error("canister kind has not been set")]
     KindNotSet,
+
+    #[error("this canister kind has been reserved")]
+    KindReserved,
 
     #[error("this canister does not have any parents")]
     NoParents,
@@ -80,10 +87,24 @@ impl CanisterState {
             .map_or_else(canister_self, |p| p.principal)
     }
 
-    pub fn set_kind(kind: &str) {
+    pub fn set_kind(kind: &str) -> Result<(), Error> {
+        if kind == ROOT_KIND {
+            Err(MemoryError::from(CanisterStateError::KindReserved))?;
+        }
+
         Self::with_mut(|cell| {
             let mut state = cell.get();
             state.kind = Some(kind.to_string());
+            cell.set(state)
+        });
+
+        Ok(())
+    }
+
+    pub fn set_kind_root() {
+        Self::with_mut(|cell| {
+            let mut state = cell.get();
+            state.kind = Some(ROOT_KIND.to_string());
             cell.set(state)
         });
     }
