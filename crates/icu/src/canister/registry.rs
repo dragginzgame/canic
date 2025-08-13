@@ -1,6 +1,7 @@
 use crate::{
-    Error,
-    canister::{Attributes, Canister, CanisterError, CanisterView},
+    Error, Log,
+    canister::{Canister, CanisterError, CanisterView},
+    log,
 };
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -62,24 +63,28 @@ impl CanisterRegistry {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    pub fn insert(kind: &'static str, attributes: &Attributes, wasm: &'static [u8]) {
+    pub fn insert(canister: &Canister) {
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(
-                kind.to_string(),
-                Canister {
-                    kind,
-                    attributes: attributes.clone(),
-                    wasm,
-                },
-            );
+            reg.insert(canister.kind.to_string(), canister.clone());
         });
 
-        //   println!("add_wasm: {} ({:.2} KB)", path, wasm.len() as f64 / 1000.0);
+        log!(
+            Log::Info,
+            "📄 canister_registry.insert: {} ({:.2} KB)",
+            canister.kind,
+            canister.wasm.len() as f64 / 1000.0
+        );
     }
 
     //
-    // EXPORT
+    // IMPORT & EXPORT
     //
+
+    pub fn import(canisters: &[Canister]) {
+        for canister in canisters {
+            CanisterRegistry::insert(canister);
+        }
+    }
 
     #[must_use]
     pub fn export() -> CanisterRegistryData {

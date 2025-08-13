@@ -1,7 +1,7 @@
 use icu::{
     Error,
-    canister::{Attributes, CanisterRegistry, IndexingPolicy},
-    interface::{request::create_canister_request, root::root_create_canisters},
+    canister::{Attributes, Canister, CanisterRegistry, IndexingPolicy},
+    interface::request::create_canister_request,
     prelude::*,
 };
 
@@ -11,33 +11,28 @@ use icu::{
 
 icu_start_root!();
 
-async fn icu_init() {
-    register_canisters();
-    root_create_canisters().await.unwrap();
-
-    // let config = icu::config::Config::get();
-}
+async fn icu_init() {}
 
 async fn icu_startup() {
     icu_config!("../../icu.toml");
+
+    CanisterRegistry::import(CANISTERS);
 }
 
-// register_canisters
-fn register_canisters() {
-    let canisters: &[(&'static str, Attributes, &'static [u8])] = &[(
-        "test",
-        Attributes {
-            auto_create: Some(2),
-            indexing: IndexingPolicy::Limited(2),
-        },
-        &[],
-        //include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
-    )];
+// CANISTERS
+pub const CANISTERS: &[Canister] = &[(Canister {
+    kind: "test",
+    attributes: Attributes {
+        auto_create: Some(2),
+        indexing: IndexingPolicy::Limited(2),
+    },
+    //wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    wasm: &[],
+})];
 
-    for (path, atts, wasm) in canisters {
-        CanisterRegistry::insert(path, atts, wasm);
-    }
-}
+///
+/// ENDPOINTS
+///
 
 // create_test
 #[update]

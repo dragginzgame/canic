@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.2.6] - CANISTERS
+- now canisters are stored in a constant slice and made the import procedure much easier
+
 ## [0.2.5] - icu_init + icu_startup
 - split these functions, now post_upgrade calls icu_startup in addition to icu_init
 
