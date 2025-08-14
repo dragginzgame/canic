@@ -64,18 +64,27 @@ impl Config {
     }
 
     fn validate(config: &ConfigData) -> Result<(), Error> {
-        // validate all principal strings
         if let Some(ref wl) = config.whitelist {
             for (i, s) in wl.principals.iter().enumerate() {
-                if let Err(e) = Principal::from_text(s) {
+                let s_trimmed = s.trim();
+
+                // Reject if not ASCII
+                if !s_trimmed.is_ascii() {
                     return Err(ConfigError::CannotParseToml(format!(
-                        "Invalid principal at index {i}: '{s}' ({e})",
+                        "Non-ASCII character in principal at index {i}: '{s_trimmed}'"
+                    ))
+                    .into());
+                }
+
+                // Reject if invalid principal format
+                if let Err(e) = Principal::from_text(s_trimmed) {
+                    return Err(ConfigError::CannotParseToml(format!(
+                        "Invalid principal at index {i}: '{s_trimmed}' ({e})"
                     ))
                     .into());
                 }
             }
         }
-
         Ok(())
     }
 }
