@@ -28,8 +28,10 @@ pub const CANISTERS: &[Canister] = &[(Canister {
         auto_create: Some(2),
         indexing: IndexingPolicy::Limited(2),
     },
+    #[cfg(github_ci)]
     wasm: &[],
-    //wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    #[cfg(not(github_ci))]
+    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
 })];
 
 ///

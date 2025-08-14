@@ -60,6 +60,9 @@ option_if_let_else = "allow"
 significant_drop_tightening = "allow"
 wildcard_imports = "allow"
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(github_ci)'] }
+
 # profiles
 # we don't need release as it's a library
 
