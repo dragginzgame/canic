@@ -1,8 +1,11 @@
 #[macro_export]
 macro_rules! icu_config {
     () => {{
-        let config_str = include_str!(env!("ICU_CONFIG_PATH"));
-        $crate::config::Config::init_from_toml(config_str).unwrap()
+        #[cfg(icu_config)]
+        {
+            let config_str = include_str!(env!("ICU_CONFIG_PATH"));
+            $crate::config::Config::init_from_toml(config_str).unwrap()
+        }
     }};
 }
 
@@ -33,7 +36,6 @@ macro_rules! icu_start {
 
         #[::icu::ic::post_upgrade]
         fn post_upgrade() {
-            // config
             icu_config!();
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
