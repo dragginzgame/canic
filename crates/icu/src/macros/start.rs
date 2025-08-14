@@ -1,4 +1,11 @@
-/// icu_start
+#[macro_export]
+macro_rules! icu_config {
+    () => {{
+        let config_str = include_str!(env!("ICU_CONFIG_PATH"));
+        $crate::config::Config::init_from_toml(config_str).unwrap()
+    }};
+}
+
 #[macro_export]
 macro_rules! icu_start {
     ($kind:expr) => {
@@ -14,6 +21,9 @@ macro_rules! icu_start {
             ::icu::memory::CanisterState::set_parents(parents);
             ::icu::memory::CanisterState::set_kind($kind).unwrap();
 
+            // config
+            icu_config!();
+
             // automatically calls icu_init
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::ic::futures::spawn(icu_setup());
@@ -23,6 +33,9 @@ macro_rules! icu_start {
 
         #[::icu::ic::post_upgrade]
         fn post_upgrade() {
+            // config
+            icu_config!();
+
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_upgrade());
@@ -33,7 +46,6 @@ macro_rules! icu_start {
     };
 }
 
-/// icu_start_root
 #[macro_export]
 macro_rules! icu_start_root {
     () => {
@@ -48,6 +60,9 @@ macro_rules! icu_start_root {
 
             ::icu::memory::CanisterState::set_kind_root();
 
+            // config
+            icu_config!();
+
             // import canisters
             ::icu::canister::CanisterRegistry::import(CANISTERS);
 
@@ -60,10 +75,13 @@ macro_rules! icu_start_root {
 
         #[::icu::ic::post_upgrade]
         fn post_upgrade() {
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                // import canisters
-                ::icu::canister::CanisterRegistry::import(CANISTERS);
+            // config
+            icu_config!();
 
+            // import canisters
+            ::icu::canister::CanisterRegistry::import(CANISTERS);
+
+            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_upgrade());
             });

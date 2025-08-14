@@ -1,26 +1,39 @@
 #[macro_export]
 macro_rules! icu_build {
-    // No-config form: just set the CI cfg if we're in GitHub Actions.
     () => {
         $crate::icu_build!(@common);
     };
 
-    // With-config form: include the file at compile time (errors if missing),
-    // parse/validate it now, then run the common CI bits.
     ($file:expr) => {{
-        // Compile-time include; if the path is wrong, you'll get a hard compile error.
-        const __ICU_CFG: &str = include_str!($file);
+        // Use the workspace root so every crate gets the same base
+        let ws_root = std::env::var("CARGO_WORKSPACE_ROOT")
+            .unwrap_or_else(|_| std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let cfg_path = std::path::PathBuf::from(ws_root).join($file);
 
-        // Validate/initialize your config at build time.
-        // If parsing fails, build.rs will fail the build (good signal).
-        $crate::config::Config::init_from_toml(__ICU_CFG)
-            .expect("invalid TOML in icu_build! config");
+        // Re-run if config changes
+        println!("cargo:rerun-if-changed={}", cfg_path.display());
+
+        // Validate config now (fails the build early if invalid)
+        let cfg_str = std::fs::read_to_string(&cfg_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {e}", cfg_path.display()));
+
+        // Init config
+        icu::config::Config::init_from_toml(&cfg_str)
+            .expect("Invalid ICU config");
+
+        // Pass the path to lib.rs so it can also include_str! without hardcoding
+        println!("cargo:rustc-env=ICU_CONFIG_PATH={}", cfg_path.display());
 
         $crate::icu_build!(@common);
     }};
 
     // Internal shared logic
     (@common) => {{
+        //
+        // Set the icu_github_ci flag so you can conditionally execute
+        // code if it's in CI
+        //
+
         // Tell rustc that `icu_github_ci` is a valid cfg to avoid warnings.
         println!("cargo::rustc-check-cfg=cfg(icu_github_ci)");
 

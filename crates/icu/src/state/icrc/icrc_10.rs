@@ -34,7 +34,7 @@ impl Icrc10Registry {
         #[allow(clippy::collapsible_if)]
         if let Some(standards) = config.standards {
             if standards.icrc21 {
-                supported.push(Icrc10Standard::Icrc21)
+                supported.push(Icrc10Standard::Icrc21);
             }
 
             // if standards.
