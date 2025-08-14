@@ -69,10 +69,7 @@ impl Config {
             for (i, s) in wl.principals.iter().enumerate() {
                 if let Err(e) = Principal::from_text(s) {
                     return Err(ConfigError::CannotParseToml(format!(
-                        "Invalid principal at index {}: '{}' ({})",
-                        i + 1,
-                        s,
-                        e
+                        "Invalid principal at index {i}: '{s}' ({e})",
                     ))
                     .into());
                 }
