@@ -1,12 +1,13 @@
+#[doc(hidden)]
 #[macro_export]
-macro_rules! icu_config {
-    () => {{
+macro_rules! __icu_load_config {
+    () => {
         #[cfg(icu_config)]
         {
             let config_str = include_str!(env!("ICU_CONFIG_PATH"));
             $crate::config::Config::init_from_toml(config_str).unwrap()
         }
-    }};
+    };
 }
 
 #[macro_export]
@@ -20,28 +21,29 @@ macro_rules! icu_start {
         ) {
             ::icu::log!(::icu::Log::Info, "🚀 init: {}", $kind);
 
+            // setup
             ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
             ::icu::memory::CanisterState::set_kind($kind).unwrap();
+            __icu_shared_setup();
 
-            // config
-            icu_config!();
-
-            // automatically calls icu_init
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_install(args));
             });
         }
 
         #[::icu::ic::post_upgrade]
         fn post_upgrade() {
-            icu_config!();
+            __icu_shared_setup();
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_upgrade());
             });
+        }
+
+        fn __icu_shared_setup() {
+            ::icu::__icu_load_config!();
+            icu_setup();
         }
 
         ::icu::icu_endpoints!();
@@ -56,63 +58,35 @@ macro_rules! icu_start_root {
             ::icu::ic::println!("");
             ::icu::log!(
                 ::icu::Log::Info,
-                "-------------------------------------------------------"
+                "------------------------------------------------------------"
             );
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
+            // setup
             ::icu::memory::CanisterState::set_kind_root();
+            __icu_shared_setup();
 
-            // config
-            icu_config!();
-
-            // import canisters
-            ::icu::canister::CanisterRegistry::import(CANISTERS);
-
-            // automatically calls init_async
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_install());
             });
         }
 
         #[::icu::ic::post_upgrade]
         fn post_upgrade() {
-            // config
-            icu_config!();
-
-            // import canisters
-            ::icu::canister::CanisterRegistry::import(CANISTERS);
+            __icu_shared_setup();
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_setup());
                 ::icu::ic::futures::spawn(icu_upgrade());
             });
         }
 
+        fn __icu_shared_setup() {
+            ::icu::__icu_load_config!();
+            ::icu::canister::CanisterRegistry::import(CANISTERS);
+            icu_setup();
+        }
+
         ::icu::icu_endpoints!();
         ::icu::icu_endpoints_root!();
-
-        // app
-        // modify app-level state
-        // @todo eventually this will cascade down from an orchestrator canister
-        #[::icu::ic::update]
-        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
-            ::icu::memory::AppState::command(cmd)?;
-
-            let bundle = ::icu::interface::state::StateBundle::app_state();
-            ::icu::interface::state::cascade(&bundle).await?;
-
-            Ok(())
-        }
-
-        // response
-        #[::icu::ic::update]
-        async fn icu_response(
-            request: ::icu::interface::request::Request,
-        ) -> Result<::icu::interface::root::response::Response, ::icu::Error> {
-            let response = ::icu::interface::root::response::response(request).await?;
-
-            Ok(response)
-        }
     };
 }

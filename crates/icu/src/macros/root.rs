@@ -2,6 +2,32 @@
 #[macro_export]
 macro_rules! icu_endpoints_root {
     () => {
+        // icu_app
+        // modify app-level state
+        // @todo eventually this will cascade down from an orchestrator canister
+        #[::icu::ic::update]
+        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+            ::icu::memory::AppState::command(cmd)?;
+
+            let bundle = ::icu::interface::state::StateBundle::app_state();
+            ::icu::interface::state::cascade(&bundle).await?;
+
+            Ok(())
+        }
+
+        // icu_response
+        // root's way to respond to a generic request from another canister
+        #[::icu::ic::update]
+        async fn icu_response(
+            request: ::icu::interface::request::Request,
+        ) -> Result<::icu::interface::root::response::Response, ::icu::Error> {
+            let response = ::icu::interface::root::response::response(request).await?;
+
+            Ok(response)
+        }
+
+        // icu_canister_status
+        // this can be called via root as root is the master controller
         #[::icu::ic::update]
         async fn icu_canister_status(
             pid: Principal,
@@ -9,11 +35,13 @@ macro_rules! icu_endpoints_root {
             ::icu::interface::ic::canister_status(pid).await
         }
 
+        // icu_memory_registry
         #[::icu::ic::query]
         fn icu_memory_registry() -> ::icu::memory::MemoryRegistryData {
             $crate::memory::MemoryRegistry::export()
         }
 
+        // icu_canister_registry
         #[::icu::ic::query]
         fn icu_canister_registry() -> ::icu::canister::CanisterRegistryData {
             $crate::canister::CanisterRegistry::export()

@@ -1,7 +1,7 @@
 mod types;
 
 use crate::Error;
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use serde::Deserialize;
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -49,6 +49,8 @@ impl Config {
         let config: ConfigData =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
+        Self::validate(&config)?;
+
         Self::set_config(config);
 
         Ok(())
@@ -59,5 +61,24 @@ impl Config {
         CONFIG.with(|cfg| {
             *cfg.borrow_mut() = config;
         });
+    }
+
+    fn validate(config: &ConfigData) -> Result<(), Error> {
+        // validate all principal strings
+        if let Some(ref wl) = config.whitelist {
+            for (i, s) in wl.principals.iter().enumerate() {
+                if let Err(e) = Principal::from_text(s) {
+                    return Err(ConfigError::CannotParseToml(format!(
+                        "Invalid principal at index {}: '{}' ({})",
+                        i + 1,
+                        s,
+                        e
+                    ))
+                    .into());
+                }
+            }
+        }
+
+        Ok(())
     }
 }

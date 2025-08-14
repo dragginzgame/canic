@@ -13,7 +13,7 @@ use icu::{
 
 icu_start_root!();
 
-async fn icu_setup() {}
+fn icu_setup() {}
 
 async fn icu_install() {
     root_create_canisters().await.unwrap();

@@ -221,7 +221,7 @@ pub fn is_whitelisted(caller: Principal) -> RuleResult {
 
         if let Some(whitelist) = config.whitelist
             && !whitelist.bypass_whitelist
-            && !whitelist.principals.contains(&caller)
+            && !whitelist.principals.contains(&caller.to_string())
         {
             Err(AuthError::NotWhitelisted(caller))?;
         }

@@ -33,8 +33,9 @@ pub struct WhiteList {
 
     // principals
     // a hashset as we constantly have to do lookups
+    // strings because then we can validate and know if there are any bad ones
     #[serde(default)]
-    pub principals: HashSet<Principal>,
+    pub principals: HashSet<String>,
 }
 
 ///

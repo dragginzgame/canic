@@ -8,7 +8,7 @@ use icu::{Error, interface::request::create_canister_request, prelude::*};
 
 icu_start!("test");
 
-async fn icu_setup() {}
+fn icu_setup() {}
 
 async fn icu_install(_: Option<Vec<u8>>) {}
 

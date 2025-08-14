@@ -30,7 +30,6 @@ macro_rules! icu_build {
     }};
 
     // Internal shared logic
-
     (@common) => {{
         // Always declare the cfg names
         println!("cargo:rustc-check-cfg=cfg(icu_config)");
