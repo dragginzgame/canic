@@ -107,6 +107,7 @@ impl SubnetIndex {
     }
 
     // can_insert
+    #[allow(clippy::cast_possible_truncation)]
     pub fn can_insert(canister: &Canister) -> Result<(), Error> {
         let kind = canister.kind.to_string();
         let attrs = &canister.attributes;

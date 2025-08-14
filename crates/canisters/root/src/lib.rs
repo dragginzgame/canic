@@ -1,3 +1,5 @@
+#![allow(clippy::unused_async)]
+
 use icu::{
     Error,
     canister::{Attributes, Canister, IndexingPolicy},
@@ -11,9 +13,7 @@ use icu::{
 
 icu_start_root!();
 
-async fn icu_setup() {
-    icu_config!("../../icu.toml");
-}
+async fn icu_setup() {}
 
 async fn icu_install() {
     root_create_canisters().await.unwrap();

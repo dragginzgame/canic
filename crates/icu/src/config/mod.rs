@@ -1,8 +1,12 @@
+mod types;
+
 use crate::Error;
-use candid::{CandidType, Principal};
+use candid::CandidType;
 use serde::Deserialize;
-use std::{cell::RefCell, collections::HashSet};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
+
+pub use types::ConfigData;
 
 //
 // CONFIG
@@ -10,8 +14,6 @@ use thiserror::Error as ThisError;
 
 thread_local! {
     static CONFIG: RefCell<ConfigData> = RefCell::new(ConfigData::default());
-
-    static CONFIG_INITIALIZED: RefCell<bool> = const { RefCell::new(false) };
 }
 
 ///
@@ -38,14 +40,8 @@ pub struct Config {}
 
 impl Config {
     /// Get the global config data.
-    pub fn get() -> Result<ConfigData, Error> {
-        let is_initialized = CONFIG_INITIALIZED.with(|flag| *flag.borrow());
-
-        if !is_initialized {
-            return Err(ConfigError::NotInitialized)?;
-        }
-
-        Ok(CONFIG.with_borrow(Clone::clone))
+    pub fn get() -> ConfigData {
+        CONFIG.with_borrow(Clone::clone)
     }
 
     /// Initialize the global configuration from a TOML string.
@@ -53,56 +49,15 @@ impl Config {
         let config: ConfigData =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
-        Self::set_config(config)?;
+        Self::set_config(config);
 
         Ok(())
     }
 
     /// Set the global configuration.
-    fn set_config(config: ConfigData) -> Result<(), ConfigError> {
-        CONFIG_INITIALIZED.with_borrow_mut(|flag| {
-            if *flag {
-                return Err(ConfigError::AlreadyInitialized);
-            }
-
-            // Write the config and mark as initialized
-            CONFIG.with(|cfg| {
-                *cfg.borrow_mut() = config;
-            });
-
-            *flag = true;
-
-            Ok(())
-        })
+    fn set_config(config: ConfigData) {
+        CONFIG.with(|cfg| {
+            *cfg.borrow_mut() = config;
+        });
     }
-}
-
-///
-/// ConfigData
-///
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
-pub struct ConfigData {
-    // controllers
-    // a vec because we just append it to the controller arguments
-    #[serde(default)]
-    pub controllers: Vec<Principal>,
-
-    #[serde(default)]
-    pub whitelist: Option<WhiteList>,
-}
-
-///
-/// ConfigWhitelist
-///
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
-pub struct WhiteList {
-    #[serde(default)]
-    pub bypass_whitelist: bool,
-
-    // principals
-    // a hashset as we constantly have to do lookups
-    #[serde(default)]
-    pub principals: HashSet<Principal>,
 }

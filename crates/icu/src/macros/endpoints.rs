@@ -116,7 +116,7 @@ macro_rules! icu_endpoints {
         //
 
         #[::icu::ic::query]
-        fn icu_config() -> Result<::icu::config::ConfigData, ::icu::Error> {
+        fn icu_config() -> ::icu::config::ConfigData {
             $crate::config::Config::get()
         }
 

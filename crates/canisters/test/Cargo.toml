@@ -13,5 +13,8 @@ candid = { workspace = true }
 ic-cdk = { workspace = true }
 icu = { workspace = true }
 
+[build-dependencies]
+icu = { workspace = true }
+
 [lints]
 workspace = true

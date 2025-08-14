@@ -82,7 +82,7 @@ impl CanisterRegistry {
 
     pub fn import(canisters: &[Canister]) {
         for canister in canisters {
-            CanisterRegistry::insert(canister);
+            Self::insert(canister);
         }
     }
 
