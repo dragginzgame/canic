@@ -5,11 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.2.20]
+## [0.2.29]
 - moved icrc supported standards into Config
 - config is now created by default, so no error variant when retrieving the config
 - config now implements serde deny_unknown_fields
 - icu_build!() macro so that config errors can be caught at compile time not on deploy
+- added VERSION
 
 ## [0.2.19]
 - added an icu_canister_status endpoint to all canisters
