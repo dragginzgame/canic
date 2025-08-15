@@ -4,6 +4,10 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
+[features]
+default = []
+ic = []
+
 [dependencies]
 candid = { workspace = true }
 defer = { workspace = true }

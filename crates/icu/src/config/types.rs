@@ -28,9 +28,6 @@ pub struct ConfigData {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WhiteList {
-    #[serde(default)]
-    pub bypass_whitelist: bool,
-
     // principals
     // a hashset as we constantly have to do lookups
     // strings because then we can validate and know if there are any bad ones

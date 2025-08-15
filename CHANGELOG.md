@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+- removed CandidType from Config, and removed endpoint to avoid unneccessary bloat and
+possible security issues
+- whitelist now just only works on mainnet
+
 ## [0.2.29]
 - moved icrc supported standards into Config
 - config is now created by default, so no error variant when retrieving the config
@@ -17,7 +22,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - fixed the error when sending a include_bytes!() to github actions
 
 ## [0.2.12]
-- config.whitelist.bypass_whitelist
 - config toml now uses #[serde(default)]
 
 ## [0.2.9]

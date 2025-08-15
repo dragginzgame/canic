@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    config::Config,
     ic::api::{canister_self, msg_caller},
     memory,
 };
@@ -213,17 +212,22 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
 }
 
 // is_whitelisted
-// only works if the whitelist is active
+// only on mainnet - only if the whitelist is active
 #[must_use]
+#[allow(unused_variables)]
 pub fn is_whitelisted(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        let config = Config::get();
-
-        if let Some(whitelist) = config.whitelist
-            && !whitelist.bypass_whitelist
-            && !whitelist.principals.contains(&caller.to_string())
+        #[cfg(feature = "ic")]
         {
-            Err(AuthError::NotWhitelisted(caller))?;
+            use crate::config::Config;
+
+            let config = Config::get();
+
+            if let Some(whitelist) = config.whitelist
+                && !whitelist.principals.contains(&caller.to_string())
+            {
+                Err(AuthError::NotWhitelisted(caller))?;
+            }
         }
 
         Ok(())
