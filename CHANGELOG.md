@@ -5,14 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.2.30] - 2025-08-15
-
 ## [Unreleased]
+
+## [0.2.30] - 2025-08-15
+- whitelist now just only works on mainnet, don't need bypass any more
 - removed CandidType from Config, and removed endpoint to avoid unneccessary bloat and
 possible security issues
-- whitelist now just only works on mainnet
 
-## [0.2.29]
+## [0.2.29] - 2025-08-14
 - moved icrc supported standards into Config
 - config is now created by default, so no error variant when retrieving the config
 - config now implements serde deny_unknown_fields
