@@ -1,4 +1,4 @@
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -6,7 +6,7 @@ use std::collections::HashSet;
 /// ConfigData
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigData {
     // controllers
@@ -25,7 +25,7 @@ pub struct ConfigData {
 /// Whitelist
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WhiteList {
     #[serde(default)]
@@ -42,7 +42,7 @@ pub struct WhiteList {
 /// Standards
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Standards {
     #[serde(default)]
