@@ -19,7 +19,7 @@ macro_rules! icu_build {
             .expect("Invalid ICU config");
 
         // Export an ABSOLUTE path for include_str!
-        let abs = cfg_path.canonicalize().expect("canonicalize icu config");
+        let abs = cfg_path.canonicalize().expect("canonicalize icu config path");
         println!("cargo:rustc-env=ICU_CONFIG_PATH={}", abs.display());
         println!("cargo:rerun-if-changed={}", abs.display());
 

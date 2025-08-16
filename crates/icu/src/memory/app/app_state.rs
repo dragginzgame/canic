@@ -106,23 +106,12 @@ impl AppState {
 /// AppStateData
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct AppStateData {
     mode: AppMode,
 }
 
 impl_storable_unbounded!(AppStateData);
-
-///
-/// AppCommand
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
-pub enum AppCommand {
-    Start,
-    Readonly,
-    Stop,
-}
 
 ///
 /// AppMode
@@ -138,4 +127,15 @@ pub enum AppMode {
     Readonly,
     #[default]
     Disabled,
+}
+
+///
+/// AppCommand
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq)]
+pub enum AppCommand {
+    Start,
+    Readonly,
+    Stop,
 }

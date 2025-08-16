@@ -1,5 +1,3 @@
-fn main() -> std::io::Result<()> {
+fn main() {
     icu::icu_build!("../icu.toml");
-
-    Ok(())
 }

@@ -27,12 +27,12 @@ pub struct Icrc10Registry();
 
 impl Icrc10Registry {
     fn standards() -> Vec<Icrc10Standard> {
-        let config = Config::get();
+        let config = Config::try_get().unwrap();
 
         let mut supported = vec![Icrc10Standard::Icrc10];
 
         #[allow(clippy::collapsible_if)]
-        if let Some(standards) = config.standards {
+        if let Some(standards) = &config.standards {
             if standards.icrc21 {
                 supported.push(Icrc10Standard::Icrc21);
             }
@@ -57,7 +57,7 @@ impl Icrc10Registry {
         ICRC_10_SUPPORTED_STANDARDS
             .iter()
             .filter(|(standard, _, _)| reg.contains(standard))
-            .map(|(_, name, url)| (name.to_string(), url.to_string()))
+            .map(|(_, name, url)| ((*name).to_string(), (*url).to_string()))
             .collect()
     }
 }

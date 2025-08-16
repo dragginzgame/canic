@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+- changed Config to an Arc as it could get big and can potentially be requested many times
 
 ## [0.2.30] - 2025-08-15
 - whitelist now just only works on mainnet, don't need bypass any more

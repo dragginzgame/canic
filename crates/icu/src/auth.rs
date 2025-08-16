@@ -221,9 +221,9 @@ pub fn is_whitelisted(caller: Principal) -> RuleResult {
         {
             use crate::config::Config;
 
-            let config = Config::get();
+            let config = Config::try_get()?;
 
-            if let Some(whitelist) = config.whitelist
+            if let Some(whitelist) = &config.whitelist
                 && !whitelist.principals.contains(&caller.to_string())
             {
                 Err(AuthError::NotWhitelisted(caller))?;

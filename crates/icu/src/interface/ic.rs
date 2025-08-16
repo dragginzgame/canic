@@ -123,7 +123,8 @@ pub async fn ic_create_canister(
     // (possibly could add extra ones in the future)
     //
 
-    let mut controllers = Config::get().controllers;
+    let config = Config::try_get()?;
+    let mut controllers = config.controllers.clone();
     let root_pid = CanisterState::get_root_pid();
     controllers.push(root_pid);
 

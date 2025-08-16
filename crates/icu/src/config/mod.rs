@@ -1,9 +1,9 @@
 mod types;
 
 use crate::Error;
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::Deserialize;
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
 pub use types::ConfigData;
@@ -13,14 +13,14 @@ pub use types::ConfigData;
 //
 
 thread_local! {
-    static CONFIG: RefCell<ConfigData> = RefCell::new(ConfigData::default());
+    static CONFIG: RefCell<Option<Arc<ConfigData>>> = const {  RefCell::new(None) };
 }
 
 ///
 /// ConfigError
 ///
 
-#[derive(CandidType, Debug, Deserialize, ThisError)]
+#[derive(Debug, Deserialize, ThisError)]
 pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,
@@ -28,7 +28,10 @@ pub enum ConfigError {
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
-    #[error("config not initialized")]
+    #[error("invalid principal: {0} ({1})")]
+    InvalidPrincipal(String, u32),
+
+    #[error("config has not been initialized")]
     NotInitialized,
 }
 
@@ -39,9 +42,16 @@ pub enum ConfigError {
 pub struct Config {}
 
 impl Config {
-    /// Get the global config data.
-    pub fn get() -> ConfigData {
-        CONFIG.with_borrow(Clone::clone)
+    // use an Arc to avoid repeatedly cloning
+    pub fn try_get() -> Result<Arc<ConfigData>, Error> {
+        let arc = CONFIG.with(|cfg| {
+            cfg.borrow()
+                .as_ref()
+                .cloned()
+                .ok_or(ConfigError::NotInitialized)
+        })?;
+
+        Ok(arc)
     }
 
     /// Initialize the global configuration from a TOML string.
@@ -51,37 +61,24 @@ impl Config {
 
         Self::validate(&config)?;
 
-        Self::set_config(config);
-
-        Ok(())
-    }
-
-    /// Set the global configuration.
-    fn set_config(config: ConfigData) {
         CONFIG.with(|cfg| {
-            *cfg.borrow_mut() = config;
-        });
+            let mut borrow = cfg.borrow_mut();
+            if borrow.is_some() {
+                return Err(ConfigError::AlreadyInitialized.into());
+            }
+            *borrow = Some(Arc::new(config));
+
+            Ok(())
+        })
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     fn validate(config: &ConfigData) -> Result<(), Error> {
         if let Some(ref wl) = config.whitelist {
             for (i, s) in wl.principals.iter().enumerate() {
-                let s_trimmed = s.trim();
-
-                // Reject if not ASCII
-                if !s_trimmed.is_ascii() {
-                    return Err(ConfigError::CannotParseToml(format!(
-                        "Non-ASCII character in principal at index {i}: '{s_trimmed}'"
-                    ))
-                    .into());
-                }
-
                 // Reject if invalid principal format
-                if let Err(e) = Principal::from_text(s_trimmed) {
-                    return Err(ConfigError::CannotParseToml(format!(
-                        "Invalid principal at index {i}: '{s_trimmed}' ({e})"
-                    ))
-                    .into());
+                if Principal::from_text(s).is_err() {
+                    return Err(ConfigError::InvalidPrincipal(s.to_string(), i as u32).into());
                 }
             }
         }
