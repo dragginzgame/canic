@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 /// RequestError
 ///
 
-#[derive(CandidType, Debug, Deserialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum RequestError {
     #[error("invalid response type")]
     InvalidResponseType,

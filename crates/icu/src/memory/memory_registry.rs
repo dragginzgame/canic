@@ -4,7 +4,6 @@ use crate::{
     impl_storable_unbounded,
     memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID, MemoryError},
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -111,7 +110,7 @@ impl MemoryRegistry {
 /// MemoryRegistryEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRegistryEntry {
     pub path: String,
 }

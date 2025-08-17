@@ -2,8 +2,6 @@ mod registry;
 
 pub use registry::*;
 
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
@@ -32,7 +30,7 @@ pub struct Canister {
 /// the front-facing version
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CanisterView {
     pub attributes: Attributes,
     pub wasm_size: usize,
@@ -53,7 +51,7 @@ impl From<&Canister> for CanisterView {
 /// auto_create : number of canisters to create on root
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Attributes {
     pub auto_create: Option<u16>,
     pub indexing: IndexingPolicy,
@@ -70,7 +68,7 @@ impl Attributes {
 /// IndexingPolicy
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum IndexingPolicy {
     #[default]
     None,

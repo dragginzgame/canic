@@ -2,7 +2,6 @@ mod types;
 
 use crate::Error;
 use candid::Principal;
-use serde::Deserialize;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
@@ -20,7 +19,7 @@ thread_local! {
 /// ConfigError
 ///
 
-#[derive(Debug, Deserialize, ThisError)]
+#[derive(Debug, ThisError)]
 pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,
@@ -29,7 +28,7 @@ pub enum ConfigError {
     CannotParseToml(String),
 
     #[error("invalid principal: {0} ({1})")]
-    InvalidPrincipal(String, u32),
+    InvalidPrincipal(String, usize),
 
     #[error("config has not been initialized")]
     NotInitialized,
@@ -59,6 +58,7 @@ impl Config {
         let config: ConfigData =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
+        // validate
         Self::validate(&config)?;
 
         CONFIG.with(|cfg| {
@@ -72,13 +72,12 @@ impl Config {
         })
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     fn validate(config: &ConfigData) -> Result<(), Error> {
-        if let Some(ref wl) = config.whitelist {
-            for (i, s) in wl.principals.iter().enumerate() {
+        if let Some(list) = &config.whitelist {
+            for (i, s) in list.principals.iter().enumerate() {
                 // Reject if invalid principal format
                 if Principal::from_text(s).is_err() {
-                    return Err(ConfigError::InvalidPrincipal(s.to_string(), i as u32).into());
+                    return Err(ConfigError::InvalidPrincipal(s.to_string(), i).into());
                 }
             }
         }
