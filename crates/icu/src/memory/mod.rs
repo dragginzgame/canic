@@ -4,9 +4,11 @@ pub mod memory_registry;
 pub mod subnet;
 
 pub use app::{AppState, AppStateData};
-pub use canister::{CanisterState, CanisterStateData, ChildIndex, ChildIndexData};
-pub use memory_registry::{MemoryRegistry, MemoryRegistryData, MemoryRegistryError};
-pub use subnet::{SubnetIndex, SubnetIndexData};
+pub use canister::{
+    CanisterState, CanisterStateData, ChildIndex, ChildIndexView, CycleTracker, CycleTrackerView,
+};
+pub use memory_registry::{MemoryRegistry, MemoryRegistryError, MemoryRegistryView};
+pub use subnet::{SubnetIndex, SubnetIndexView};
 
 use crate::{
     ic::structures::{DefaultMemoryImpl, memory::MemoryManager},
@@ -29,6 +31,7 @@ pub(crate) const APP_STATE_MEMORY_ID: u8 = 1;
 pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 2;
 pub(crate) const CHILD_INDEX_MEMORY_ID: u8 = 3;
 pub(crate) const SUBNET_INDEX_MEMORY_ID: u8 = 4;
+pub(crate) const CYCLE_TRACKER_MEMORY_ID: u8 = 5;
 
 //
 // MEMORY_MANAGER

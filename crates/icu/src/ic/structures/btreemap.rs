@@ -1,6 +1,5 @@
-use crate::ic::structures::DefaultMemory;
 use derive_more::{Deref, DerefMut};
-use ic_stable_structures::{Storable, btreemap::BTreeMap as WrappedBTreeMap};
+use ic_stable_structures::{Memory, Storable, btreemap::BTreeMap as WrappedBTreeMap};
 use std::ops::RangeBounds;
 
 ///
@@ -9,21 +8,23 @@ use std::ops::RangeBounds;
 ///
 
 #[derive(Deref, DerefMut)]
-pub struct BTreeMap<K, V>
+pub struct BTreeMap<K, V, M>
 where
     K: Storable + Ord + Clone,
     V: Storable + Clone,
+    M: Memory,
 {
-    data: WrappedBTreeMap<K, V, DefaultMemory>,
+    data: WrappedBTreeMap<K, V, M>,
 }
 
-impl<K, V> BTreeMap<K, V>
+impl<K, V, M> BTreeMap<K, V, M>
 where
     K: Storable + Ord + Clone,
     V: Storable + Clone,
+    M: Memory,
 {
     #[must_use]
-    pub fn init(memory: DefaultMemory) -> Self {
+    pub fn init(memory: M) -> Self {
         Self {
             data: WrappedBTreeMap::init(memory),
         }

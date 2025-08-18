@@ -102,13 +102,18 @@ macro_rules! icu_endpoints {
         }
 
         #[::icu::ic::query]
-        fn icu_child_index() -> ::icu::memory::ChildIndexData {
+        fn icu_child_index() -> ::icu::memory::ChildIndexView {
             $crate::memory::ChildIndex::export()
         }
 
         #[::icu::ic::query]
-        fn icu_subnet_index() -> ::icu::memory::SubnetIndexData {
+        fn icu_subnet_index() -> ::icu::memory::SubnetIndexView {
             $crate::memory::SubnetIndex::export()
+        }
+
+        #[::icu::ic::query]
+        fn icu_cycle_tracker() -> ::icu::memory::CycleTrackerView {
+            $crate::memory::CycleTracker::export()
         }
 
         //

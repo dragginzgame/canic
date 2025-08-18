@@ -5,9 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.2.31] - 2025-08-16
+## [0.3.0] - Cycle Tracker
+- added the CycleTracker stable memory
+- rewrote all stable memory wrappers so they can be tested properly
+- removed wrapper for Cell and BTreeSet as they were redundant
 
-## [Unreleased]
+## [0.2.31] - 2025-08-16
 - changed Config to an Arc as it could get big and can potentially be requested many times
 
 ## [0.2.30] - 2025-08-15

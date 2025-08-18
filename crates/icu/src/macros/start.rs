@@ -43,6 +43,7 @@ macro_rules! icu_start {
 
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
+            ::icu::memory::CycleTracker::start();
             icu_setup();
         }
 
@@ -82,6 +83,7 @@ macro_rules! icu_start_root {
 
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
+            ::icu::memory::CycleTracker::start();
             ::icu::canister::CanisterRegistry::import(CANISTERS);
             icu_setup();
         }

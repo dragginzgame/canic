@@ -3,7 +3,7 @@ use crate::{
     ic::{api::canister_self, call::Call},
     interface::{InterfaceError, ic::IcError},
     log,
-    memory::{AppState, AppStateData, CanisterState, ChildIndex, SubnetIndex, SubnetIndexData},
+    memory::{AppState, AppStateData, CanisterState, ChildIndex, SubnetIndex, SubnetIndexView},
 };
 use candid::{CandidType, Principal};
 use serde::Deserialize;
@@ -15,7 +15,7 @@ use serde::Deserialize;
 #[derive(CandidType, Debug, Default, Deserialize)]
 pub struct StateBundle {
     app_state_data: Option<AppStateData>,
-    subnet_index_data: Option<SubnetIndexData>,
+    subnet_index_data: Option<SubnetIndexView>,
 }
 
 impl StateBundle {

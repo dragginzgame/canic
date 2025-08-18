@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! icu_register_memory {
-    ($ty:ty, $id:expr) => {{
-        let path = stringify!($ty).to_string();
+    ($id:expr) => {{
+        let path = concat!(module_path!(), "::", line!()).to_string();
 
         // check the registry with logging
         let result = $crate::memory::MemoryRegistry::register(
@@ -28,7 +28,7 @@ macro_rules! icu_register_memory {
 
         result.unwrap();
 
-        // acquire memory_id
+        // acquire memory_id → explicitly return VirtualMemory<DefaultMemoryImpl>
         $crate::memory::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::ic::structures::memory::MemoryId::new($id)))
     }};

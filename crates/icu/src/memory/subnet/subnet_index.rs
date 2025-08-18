@@ -1,13 +1,13 @@
 use crate::{
     Error,
     canister::Canister,
-    ic::structures::BTreeMap,
+    ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 //
@@ -15,9 +15,10 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static SUBNET_INDEX: RefCell<BTreeMap<String, SubnetIndexEntry>> = RefCell::new(BTreeMap::init(
-        icu_register_memory!(SubnetIndexData, SUBNET_INDEX_MEMORY_ID),
-    ));
+    pub static SUBNET_INDEX: RefCell<SubnetIndexCore<VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(SubnetIndexCore::new(BTreeMap::init(
+            icu_register_memory!(SUBNET_INDEX_MEMORY_ID),
+        )));
 }
 
 ///
@@ -40,12 +41,6 @@ pub enum SubnetIndexError {
 }
 
 ///
-/// SubnetIndexData
-///
-
-pub type SubnetIndexData = HashMap<String, SubnetIndexEntry>;
-
-///
 /// SubnetIndexEntry
 ///
 
@@ -60,32 +55,65 @@ impl_storable_unbounded!(SubnetIndexEntry);
 /// SubnetIndex
 ///
 
-pub struct SubnetIndex {}
+pub type SubnetIndexView = Vec<(String, SubnetIndexEntry)>;
+
+pub struct SubnetIndex;
 
 impl SubnetIndex {
-    //
-    // INTERNAL ACCESSORS
-    //
-
-    pub fn with<R>(f: impl FnOnce(&BTreeMap<String, SubnetIndexEntry>) -> R) -> R {
-        SUBNET_INDEX.with_borrow(|cell| f(cell))
-    }
-
-    pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<String, SubnetIndexEntry>) -> R) -> R {
-        SUBNET_INDEX.with_borrow_mut(|cell| f(cell))
-    }
-
-    //
-    // METHODS
-    //
-
     #[must_use]
     pub fn get(kind: &str) -> Option<SubnetIndexEntry> {
-        Self::with(|map| map.get(&kind.to_string()))
+        SUBNET_INDEX.with_borrow(|core| core.get(kind))
     }
 
     pub fn try_get(kind: &str) -> Result<SubnetIndexEntry, Error> {
-        if let Some(entry) = Self::get(kind) {
+        SUBNET_INDEX.with_borrow(|core| core.try_get(kind))
+    }
+
+    pub fn try_get_singleton(kind: &str) -> Result<Principal, Error> {
+        SUBNET_INDEX.with_borrow(|core| core.try_get_singleton(kind))
+    }
+
+    pub fn can_insert(canister: &Canister) -> Result<(), Error> {
+        SUBNET_INDEX.with_borrow(|core| core.can_insert(canister))
+    }
+
+    pub fn insert(canister: &Canister, id: Principal) -> Result<(), Error> {
+        SUBNET_INDEX.with_borrow_mut(|core| core.insert(canister, id))
+    }
+
+    pub fn remove(kind: &str, id: Principal) -> Result<(), Error> {
+        SUBNET_INDEX.with_borrow_mut(|core| core.remove(kind, id))
+    }
+
+    pub fn import(view: SubnetIndexView) {
+        SUBNET_INDEX.with_borrow_mut(|core| core.import(view));
+    }
+
+    #[must_use]
+    pub fn export() -> SubnetIndexView {
+        SUBNET_INDEX.with_borrow(SubnetIndexCore::export)
+    }
+}
+
+///
+/// SubnetIndexCore
+///
+
+pub struct SubnetIndexCore<M: Memory> {
+    map: BTreeMap<String, SubnetIndexEntry, M>,
+}
+
+impl<M: Memory> SubnetIndexCore<M> {
+    pub const fn new(map: BTreeMap<String, SubnetIndexEntry, M>) -> Self {
+        Self { map }
+    }
+
+    pub fn get(&self, kind: &str) -> Option<SubnetIndexEntry> {
+        self.map.get(&kind.to_string())
+    }
+
+    pub fn try_get(&self, kind: &str) -> Result<SubnetIndexEntry, Error> {
+        if let Some(entry) = self.get(kind) {
             Ok(entry)
         } else {
             Err(MemoryError::from(SubnetIndexError::NotFound(
@@ -94,8 +122,8 @@ impl SubnetIndex {
         }
     }
 
-    pub fn try_get_singleton(kind: &str) -> Result<Principal, Error> {
-        let entry = Self::try_get(kind)?;
+    pub fn try_get_singleton(&self, kind: &str) -> Result<Principal, Error> {
+        let entry = self.try_get(kind)?;
 
         if entry.canisters.len() == 1 {
             Ok(entry.canisters[0])
@@ -106,16 +134,14 @@ impl SubnetIndex {
         }
     }
 
-    // can_insert
     #[allow(clippy::cast_possible_truncation)]
-    pub fn can_insert(canister: &Canister) -> Result<(), Error> {
+    pub fn can_insert(&self, canister: &Canister) -> Result<(), Error> {
         let kind = canister.kind.to_string();
         let attrs = &canister.attributes;
-        let entry = Self::with(|map| map.get(&kind)).unwrap_or_default();
+        let entry = self.get(&kind).unwrap_or_default();
 
         match attrs.indexing.limit() {
             None => Err(MemoryError::from(SubnetIndexError::NotIndexable(kind))),
-
             Some(cap) if (entry.canisters.len() as u16) >= cap => {
                 Err(MemoryError::from(SubnetIndexError::CapacityReached {
                     kind,
@@ -123,67 +149,49 @@ impl SubnetIndex {
                 }))
             }
             _ => Ok(()),
-        }?;
+        }?; // propagate
 
         Ok(())
     }
 
-    // insert
-    // canister gets passed in (from canister registry), because it contains
-    // subnet-specific logic
-    pub fn insert(canister: &Canister, id: Principal) -> Result<(), Error> {
-        Self::can_insert(canister)?;
+    pub fn insert(&mut self, canister: &Canister, id: Principal) -> Result<(), Error> {
+        self.can_insert(canister)?;
 
-        Self::with_mut(|map| {
-            let kind = canister.kind.to_string();
-            let mut entry = map.get(&kind).unwrap_or_default();
+        let kind = canister.kind.to_string();
+        let mut entry = self.get(&kind).unwrap_or_default();
 
-            // add if its not there
-            if !entry.canisters.contains(&id) {
-                entry.canisters.push(id);
-                map.insert(kind, entry);
-            }
-        });
+        if !entry.canisters.contains(&id) {
+            entry.canisters.push(id);
+            self.map.insert(kind, entry);
+        }
 
         Ok(())
     }
 
-    // remove
-    // Make insert/remove return Result<(), Error> even if children won’t
-    // hit the policy—useful for root callers and consistent API.
-    pub fn remove(kind: &str, id: Principal) -> Result<(), Error> {
-        Self::with_mut(|map| {
-            let key = kind.to_string();
+    pub fn remove(&mut self, kind: &str, id: Principal) -> Result<(), Error> {
+        let key = kind.to_string();
 
-            if let Some(mut entry) = map.get(&key) {
-                entry.canisters.retain(|p| p != &id);
+        if let Some(mut entry) = self.get(&key) {
+            entry.canisters.retain(|p| p != &id);
 
-                if entry.canisters.is_empty() {
-                    map.remove(&key);
-                } else {
-                    map.insert(key, entry);
-                }
+            if entry.canisters.is_empty() {
+                self.map.remove(&key);
+            } else {
+                self.map.insert(key, entry);
             }
-        });
+        }
 
         Ok(())
     }
 
-    //
-    // IMPORT & EXPORT
-    //
-
-    pub fn import(data: SubnetIndexData) {
-        Self::with_mut(|map| {
-            map.clear();
-            for (k, v) in data {
-                map.insert(k.clone(), v);
-            }
-        });
+    pub fn import(&mut self, view: SubnetIndexView) {
+        self.map.clear();
+        for (k, v) in view {
+            self.map.insert(k.clone(), v);
+        }
     }
 
-    #[must_use]
-    pub fn export() -> SubnetIndexData {
-        Self::with(|map| map.iter_pairs().collect())
+    pub fn export(&self) -> SubnetIndexView {
+        self.map.iter_pairs().collect()
     }
 }

@@ -1,6 +1,9 @@
 use crate::{
     Error,
-    ic::structures::{BTreeMap, memory::MemoryId},
+    ic::structures::{
+        BTreeMap, DefaultMemoryImpl,
+        memory::{MemoryId, VirtualMemory},
+    },
     impl_storable_unbounded,
     memory::{MEMORY_MANAGER, MEMORY_REGISTRY_MEMORY_ID, MemoryError},
 };
@@ -13,12 +16,13 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static MEMORY_REGISTRY: RefCell<BTreeMap<u8, MemoryRegistryEntry>> =
-        RefCell::new(BTreeMap::init(
+    pub static MEMORY_REGISTRY: RefCell<MemoryRegistryCore<VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(MemoryRegistryCore::new(BTreeMap::init(
             MEMORY_MANAGER.with_borrow(|this| {
                 this.get(MemoryId::new(MEMORY_REGISTRY_MEMORY_ID))
             }),
-        ));
+        )));
+
 }
 
 ///
@@ -35,78 +39,6 @@ pub enum MemoryRegistryError {
 }
 
 ///
-/// MemoryRegistryData
-///
-
-pub type MemoryRegistryData = Vec<(u8, MemoryRegistryEntry)>;
-
-///
-/// MemoryRegistry
-///
-
-pub struct MemoryRegistry {}
-
-impl MemoryRegistry {
-    //
-    // INTERNAL ACCESSORS
-    //
-
-    pub fn with<R>(f: impl FnOnce(&BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
-        MEMORY_REGISTRY.with_borrow(|cell| f(cell))
-    }
-
-    pub fn with_mut<R>(f: impl FnOnce(&mut BTreeMap<u8, MemoryRegistryEntry>) -> R) -> R {
-        MEMORY_REGISTRY.with_borrow_mut(|cell| f(cell))
-    }
-
-    //
-    // METHODS
-    //
-
-    #[must_use]
-    pub fn is_empty() -> bool {
-        Self::with(|map| map.is_empty())
-    }
-
-    pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
-        Self::with_mut(|map| {
-            if id == MEMORY_REGISTRY_MEMORY_ID {
-                Err(MemoryError::from(MemoryRegistryError::Reserved(id)))?;
-            }
-
-            if let Some(existing) = map.get(&id) {
-                if existing.path != entry.path {
-                    Err(MemoryError::from(MemoryRegistryError::AlreadyRegistered(
-                        id,
-                        existing.path,
-                        entry.path,
-                    )))?;
-                }
-
-                return Ok(());
-            }
-
-            map.insert(id, entry);
-
-            Ok(())
-        })
-    }
-
-    //
-    // EXPORT
-    //
-
-    #[must_use]
-    pub fn export() -> MemoryRegistryData {
-        Self::with(|map| {
-            map.iter()
-                .map(|entry| (*entry.key(), entry.value()))
-                .collect()
-        })
-    }
-}
-
-///
 /// MemoryRegistryEntry
 ///
 
@@ -118,17 +50,97 @@ pub struct MemoryRegistryEntry {
 impl_storable_unbounded!(MemoryRegistryEntry);
 
 ///
+/// MemoryRegistry
+///
+
+pub struct MemoryRegistry;
+
+pub type MemoryRegistryView = Vec<(u8, MemoryRegistryEntry)>;
+
+impl MemoryRegistry {
+    #[must_use]
+    pub fn is_empty() -> bool {
+        MEMORY_REGISTRY.with_borrow(MemoryRegistryCore::is_empty)
+    }
+
+    pub fn register(id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
+        MEMORY_REGISTRY.with_borrow_mut(|core| core.register(id, entry))
+    }
+
+    #[must_use]
+    pub fn export() -> MemoryRegistryView {
+        MEMORY_REGISTRY.with_borrow(MemoryRegistryCore::export)
+    }
+}
+
+///
+/// MemoryRegistryCore
+///
+
+pub struct MemoryRegistryCore<M: crate::ic::structures::Memory> {
+    map: BTreeMap<u8, MemoryRegistryEntry, M>,
+}
+
+impl<M: crate::ic::structures::Memory> MemoryRegistryCore<M> {
+    pub const fn new(map: BTreeMap<u8, MemoryRegistryEntry, M>) -> Self {
+        Self { map }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn register(&mut self, id: u8, entry: MemoryRegistryEntry) -> Result<(), Error> {
+        if id == MEMORY_REGISTRY_MEMORY_ID {
+            Err(MemoryError::from(MemoryRegistryError::Reserved(id)))?;
+        }
+
+        if let Some(existing) = self.map.get(&id) {
+            if existing.path != entry.path {
+                Err(MemoryError::from(MemoryRegistryError::AlreadyRegistered(
+                    id,
+                    existing.path,
+                    entry.path,
+                )))?;
+            }
+            return Ok(()); // same path = idempotent
+        }
+
+        self.map.insert(id, entry);
+        Ok(())
+    }
+
+    pub fn export(&self) -> MemoryRegistryView {
+        self.map
+            .iter()
+            .map(|entry| (*entry.key(), entry.value()))
+            .collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
+}
+
+///
 /// TESTS
 ///
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ic::structures::DefaultMemoryImpl;
+
+    fn make_core() -> MemoryRegistryCore<DefaultMemoryImpl> {
+        let map = BTreeMap::init(DefaultMemoryImpl::default());
+        MemoryRegistryCore::new(map)
+    }
 
     #[test]
-    fn cannot_register_zero() {
-        let result = MemoryRegistry::register(
-            0,
+    fn cannot_register_reserved_id() {
+        let mut core = make_core();
+        let result = core.register(
+            MEMORY_REGISTRY_MEMORY_ID,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
             },
@@ -138,18 +150,21 @@ mod tests {
 
     #[test]
     fn can_register_valid_id() {
-        let result = MemoryRegistry::register(
+        let mut core = make_core();
+        let result = core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
             },
         );
         assert!(result.is_ok());
+        assert!(!core.is_empty());
     }
 
     #[test]
     fn duplicate_same_path_is_ok() {
-        MemoryRegistry::register(
+        let mut core = make_core();
+        core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
@@ -157,7 +172,8 @@ mod tests {
         )
         .unwrap();
 
-        let result = MemoryRegistry::register(
+        // re-register with same path → ok
+        let result = core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
@@ -168,7 +184,8 @@ mod tests {
 
     #[test]
     fn duplicate_different_path_fails() {
-        MemoryRegistry::register(
+        let mut core = make_core();
+        core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
@@ -176,26 +193,26 @@ mod tests {
         )
         .unwrap();
 
-        let result = MemoryRegistry::register(
+        let result = core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Bar".to_string(),
             },
         );
-
         assert!(result.is_err());
     }
 
     #[test]
-    fn registry_data_is_correct() {
-        MemoryRegistry::register(
+    fn export_contains_all_entries() {
+        let mut core = make_core();
+        core.register(
             1,
             MemoryRegistryEntry {
                 path: "crate::Foo".to_string(),
             },
         )
         .unwrap();
-        MemoryRegistry::register(
+        core.register(
             2,
             MemoryRegistryEntry {
                 path: "crate::Bar".to_string(),
@@ -203,7 +220,7 @@ mod tests {
         )
         .unwrap();
 
-        let data = MemoryRegistry::export();
+        let data = core.export();
         assert_eq!(data.len(), 2);
         assert!(
             data.iter()

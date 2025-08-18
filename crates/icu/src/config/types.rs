@@ -19,6 +19,9 @@ pub struct ConfigData {
 
     #[serde(default)]
     pub standards: Option<Standards>,
+
+    #[serde(default)]
+    pub cycle_tracker: bool,
 }
 
 ///

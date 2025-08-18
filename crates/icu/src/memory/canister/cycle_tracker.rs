@@ -1,0 +1,424 @@
+use crate::{
+    Log,
+    ic::{
+        api::canister_cycle_balance,
+        structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+        timers::{TimerId, clear_timer, set_timer_interval},
+    },
+    icu_register_memory, log,
+    memory::CYCLE_TRACKER_MEMORY_ID,
+    utils::time::now_secs,
+};
+use std::cell::RefCell;
+
+//
+// CYCLE_TRACKER
+// Timestamp, number of cycles
+//
+
+thread_local! {
+    static TRACKER: RefCell<CycleTrackerCore<VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(CycleTrackerCore::new(BTreeMap::init(icu_register_memory!(
+            CYCLE_TRACKER_MEMORY_ID
+        ))));
+
+    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+}
+
+const TIMEOUT_SECS: u64 = 60 * 10; // 10 minutes
+const RETAIN_SECS: u64 = 60 * 60 * 24 * 10; // ~10 days
+const PURGE_INTERVAL_SECS: u64 = 60 * 60 * 6; // 6 hours
+const MIN_SPACING_SECS: u64 = 30; // anti-spam safety
+
+///
+/// CycleTracker
+///
+
+pub type CycleTrackerView = Vec<(u64, u128)>;
+
+pub struct CycleTracker;
+
+impl CycleTracker {
+    /// Start recurring tracking every X seconds
+    /// Safe to call multiple times: only one loop will run.
+    pub fn start() {
+        TIMER.with_borrow_mut(|slot| {
+            if slot.is_some() {
+                return; // already running
+            }
+
+            // Do one immediately
+            if Self::track() {
+                log!(Log::Ok, "cycle tracker starting");
+            }
+
+            let id = set_timer_interval(std::time::Duration::from_secs(TIMEOUT_SECS), || {
+                if Self::track() {
+                    log!(Log::Ok, "cycle tracker recorded a new entry");
+                }
+            });
+
+            *slot = Some(id);
+        });
+    }
+
+    /// Stop recurring tracking.
+    pub fn stop() {
+        TIMER.with_borrow_mut(|slot| {
+            if let Some(id) = slot.take() {
+                clear_timer(id);
+            }
+        });
+    }
+
+    #[must_use]
+    pub fn track() -> bool {
+        let ts = now_secs();
+        let cycles = canister_cycle_balance();
+
+        TRACKER.with_borrow_mut(|core| core.track(ts, cycles))
+    }
+
+    #[must_use]
+    pub fn purge_old() -> usize {
+        let ts = now_secs();
+        TRACKER.with_borrow_mut(|core| core.purge_old(ts))
+    }
+
+    pub fn clear() {
+        TRACKER.with_borrow_mut(CycleTrackerCore::clear);
+    }
+
+    #[must_use]
+    pub fn export() -> CycleTrackerView {
+        TRACKER.with_borrow(CycleTrackerCore::export)
+    }
+}
+
+///
+/// CycleTrackerCore
+///
+
+pub struct CycleTrackerCore<M: Memory> {
+    map: BTreeMap<u64, u128, M>,
+    first_ts: Option<u64>,
+    last_ts: Option<u64>,
+    last_purge_ts: Option<u64>,
+}
+
+impl<M: Memory> CycleTrackerCore<M> {
+    pub const fn new(map: BTreeMap<u64, u128, M>) -> Self {
+        Self {
+            map,
+            first_ts: None,
+            last_ts: None,
+            last_purge_ts: None,
+        }
+    }
+
+    // for testing
+    #[cfg(test)]
+    const fn map(&self) -> &BTreeMap<u64, u128, M> {
+        &self.map
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+        self.first_ts = None;
+        self.last_ts = None;
+        self.last_purge_ts = None;
+    }
+
+    pub fn track(&mut self, now: u64, cycles: u128) -> bool {
+        // first_ts and last_ts won't persist after a canister upgrade
+        // so let's just reset them here
+        if self.first_ts.is_none() {
+            self.first_ts = self.map.first_key_value().map(|(ts, _)| ts);
+        }
+        if self.last_ts.is_none() {
+            self.last_ts = self.map.last_key_value().map(|(ts, _)| ts);
+        }
+
+        // check timeout
+        let can_insert = match self.last_ts {
+            Some(last_ts) => now.saturating_sub(last_ts) >= MIN_SPACING_SECS,
+            None => true,
+        };
+
+        if can_insert {
+            self.map.insert(now, cycles);
+            if self.first_ts.is_none() {
+                self.first_ts = Some(now);
+            }
+            self.last_ts = Some(now);
+
+            // purge if it's been >= interval since last purge
+            match self.last_purge_ts {
+                Some(last) if now.saturating_sub(last) >= PURGE_INTERVAL_SECS => {
+                    self.purge_old(now);
+                    self.last_purge_ts = Some(now);
+                }
+                None => {
+                    // First purge trigger after startup/upgrade
+                    self.purge_old(now);
+                    self.last_purge_ts = Some(now);
+                }
+                _ => {}
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    // purge_old
+    pub fn purge_old(&mut self, now: u64) -> usize {
+        let cutoff = now.saturating_sub(RETAIN_SECS);
+        let mut purged = 0;
+
+        while let Some(first_ts) = self.first_ts {
+            if first_ts < cutoff {
+                self.map.remove(&first_ts);
+                purged += 1;
+                self.first_ts = self.map.first_key_value().map(|(ts, _)| ts);
+            } else {
+                break;
+            }
+        }
+
+        log!(Log::Info, "cycle_tracker: purged {purged} old entries");
+
+        purged
+    }
+
+    // export
+    // export to an ordered vec view
+    pub fn export(&self) -> CycleTrackerView {
+        self.map.iter_pairs().collect()
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ic::structures::DefaultMemoryImpl;
+
+    fn make_core() -> CycleTrackerCore<DefaultMemoryImpl> {
+        let tree = BTreeMap::init(DefaultMemoryImpl::default());
+        CycleTrackerCore::new(tree)
+    }
+
+    #[test]
+    fn test_track_and_purge() {
+        let mut tracker = make_core();
+
+        // First insert always accepted
+        assert!(tracker.track(1000, 111));
+        // Too soon (< MIN_SPACING_SECS)
+        assert!(!tracker.track(1000 + (MIN_SPACING_SECS - 1), 222));
+        // Exactly on spacing boundary is ok
+        assert!(tracker.track(1000 + MIN_SPACING_SECS, 333));
+
+        assert_eq!(tracker.first_ts, Some(1000));
+        assert_eq!(tracker.last_ts, Some(1000 + MIN_SPACING_SECS));
+
+        // Purge old entries when well past retention window
+        let purged = tracker.purge_old(1000 + RETAIN_SECS + 1);
+        assert!(purged >= 1);
+    }
+
+    #[test]
+    fn test_is_empty_and_clear() {
+        let mut tracker = make_core();
+        assert!(tracker.is_empty());
+
+        tracker.track(10, 1000);
+        assert!(!tracker.is_empty());
+
+        tracker.clear();
+        assert!(tracker.is_empty());
+        assert_eq!(tracker.first_ts, None);
+        assert_eq!(tracker.last_ts, None);
+    }
+
+    #[test]
+    fn test_track_spacing() {
+        let mut tracker = make_core();
+
+        // First always goes in
+        assert!(tracker.track(0, 1));
+        // Too soon (< MIN_SPACING_SECS)
+        assert!(!tracker.track(MIN_SPACING_SECS - 1, 2));
+        // Exactly on spacing boundary
+        assert!(tracker.track(MIN_SPACING_SECS, 3));
+        // Well beyond spacing
+        assert!(tracker.track(2 * MIN_SPACING_SECS + 5, 4));
+
+        let data = tracker.map();
+        assert_eq!(data.len(), 3); // first, third, fourth inserted
+        assert!(data.contains_key(&0));
+        assert!(data.contains_key(&MIN_SPACING_SECS));
+        assert!(data.contains_key(&(2 * MIN_SPACING_SECS + 5)));
+    }
+
+    #[test]
+    fn test_purge_keeps_recent_entries() {
+        let mut tracker = make_core();
+        tracker.track(100, 1);
+        tracker.track(200, 2);
+        tracker.track(300, 3);
+
+        // cutoff is now - RETAIN_SECS; here, all timestamps are "recent"
+        let purged = tracker.purge_old(400);
+        assert_eq!(purged, 0);
+
+        // far future: everything should be purged
+        let purged = tracker.purge_old(400 + RETAIN_SECS + 1);
+        assert!(purged >= 1);
+        assert!(tracker.is_empty());
+    }
+
+    #[test]
+    fn test_export_matches_inserted() {
+        let mut tracker = make_core();
+        tracker.track(10, 100);
+        tracker.track(20 + TIMEOUT_SECS, 200);
+
+        let map = tracker.map();
+        assert_eq!(map.get(&10), Some(100));
+        assert_eq!(map.get(&(20 + TIMEOUT_SECS)), Some(200));
+    }
+
+    #[test]
+    fn test_auto_purge_triggers_every_6_hours() {
+        let mut tracker = make_core();
+
+        // Insert at t=0 and t=60
+        assert!(tracker.track(0, 1));
+        assert!(tracker.track(TIMEOUT_SECS, 2));
+
+        // Insert at 6h + TIMEOUT_SECS = 21_660
+        let ts = PURGE_INTERVAL_SECS + TIMEOUT_SECS;
+        assert!(tracker.track(ts, 3));
+
+        // Verify purge happened and last_purge_ts was updated to *this insert time*
+        assert_eq!(tracker.last_purge_ts, Some(ts));
+    }
+
+    #[test]
+    fn test_purge_interval_respected() {
+        let mut tracker = make_core();
+
+        // Insert first entry → purge runs immediately, last_purge_ts should equal that ts
+        assert!(tracker.track(0, 1));
+        assert_eq!(
+            tracker.last_purge_ts,
+            Some(0),
+            "first insert always purges immediately"
+        );
+
+        // Insert within less than 6h, should NOT purge again
+        assert!(tracker.track(PURGE_INTERVAL_SECS / 2, 2));
+        assert_eq!(
+            tracker.last_purge_ts,
+            Some(0),
+            "purge should not have run again yet"
+        );
+
+        // Next insert at >= 6h should trigger purge
+        assert!(tracker.track(PURGE_INTERVAL_SECS, 3));
+        assert_eq!(tracker.last_purge_ts, Some(PURGE_INTERVAL_SECS));
+    }
+
+    #[test]
+    fn test_purge_removes_only_old_entries() {
+        let mut tracker = make_core();
+
+        // Insert entries spaced far apart
+        tracker.track(0, 1);
+        tracker.track(RETAIN_SECS / 2, 2);
+        tracker.track(RETAIN_SECS, 3);
+
+        // Purge just after RETAIN_SECS + 1 → first entry should go
+        let purged = tracker.purge_old(RETAIN_SECS + 1);
+        assert_eq!(purged, 1);
+        assert!(tracker.map().contains_key(&(RETAIN_SECS / 2)));
+        assert!(tracker.map().contains_key(&RETAIN_SECS));
+    }
+
+    #[test]
+    fn test_first_and_last_recovery_after_clear() {
+        let mut tracker = make_core();
+
+        tracker.track(10, 111);
+        tracker.track(10 + TIMEOUT_SECS, 222);
+
+        assert_eq!(tracker.first_ts, Some(10));
+        assert_eq!(tracker.last_ts, Some(10 + TIMEOUT_SECS));
+
+        tracker.clear();
+        assert_eq!(tracker.first_ts, None);
+        assert_eq!(tracker.last_ts, None);
+
+        // Tracking again should recover first/last correctly
+        tracker.track(500, 999);
+        assert_eq!(tracker.first_ts, Some(500));
+        assert_eq!(tracker.last_ts, Some(500));
+    }
+
+    #[test]
+    fn test_track_skips_if_too_soon() {
+        let mut tracker = make_core();
+
+        assert!(tracker.track(1000, 1));
+        // Too soon (< MIN_SPACING_SECS)
+        assert!(!tracker.track(1000 + MIN_SPACING_SECS - 1, 2));
+        // Exactly at spacing boundary
+        assert!(tracker.track(1000 + MIN_SPACING_SECS, 3));
+
+        let map = tracker.map();
+        assert_eq!(map.len(), 2);
+        assert!(map.contains_key(&1000));
+        assert!(map.contains_key(&(1000 + MIN_SPACING_SECS)));
+    }
+
+    #[test]
+    fn test_track_multiple_calls_within_spacing() {
+        let mut tracker = make_core();
+
+        assert!(tracker.track(500, 10));
+        // spam calls within 1 second each
+        for i in 0..10 {
+            assert!(!tracker.track(500 + i, 20));
+        }
+
+        // only first entry should be present
+        let map = tracker.map();
+        assert_eq!(map.len(), 1);
+        assert!(map.contains_key(&500));
+    }
+
+    #[test]
+    fn test_track_allows_after_spacing() {
+        let mut tracker = make_core();
+
+        assert!(tracker.track(1000, 1));
+        assert!(!tracker.track(1000 + 5, 2)); // too soon
+        assert!(tracker.track(1000 + MIN_SPACING_SECS, 3)); // ok after spacing
+        assert!(tracker.track(1000 + 2 * MIN_SPACING_SECS, 4)); // also ok
+
+        let map = tracker.map();
+        assert_eq!(map.len(), 3);
+        assert!(map.contains_key(&1000));
+        assert!(map.contains_key(&(1000 + MIN_SPACING_SECS)));
+        assert!(map.contains_key(&(1000 + 2 * MIN_SPACING_SECS)));
+    }
+}
