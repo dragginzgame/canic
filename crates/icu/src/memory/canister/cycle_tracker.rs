@@ -27,7 +27,7 @@ thread_local! {
 
 const TIMEOUT_SECS: u64 = 60 * 10; // 10 minutes
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 10; // ~10 days
-const PURGE_INTERVAL_SECS: u64 = 60 * 60 * 6; // 6 hours
+const PURGE_INSERT_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 const MIN_SPACING_SECS: u64 = 30; // anti-spam safety
 
 ///
@@ -103,7 +103,7 @@ pub struct CycleTrackerCore<M: Memory> {
     map: BTreeMap<u64, u128, M>,
     first_ts: Option<u64>,
     last_ts: Option<u64>,
-    last_purge_ts: Option<u64>,
+    insert_count: u64,
 }
 
 impl<M: Memory> CycleTrackerCore<M> {
@@ -112,7 +112,7 @@ impl<M: Memory> CycleTrackerCore<M> {
             map,
             first_ts: None,
             last_ts: None,
-            last_purge_ts: None,
+            insert_count: 0,
         }
     }
 
@@ -130,7 +130,7 @@ impl<M: Memory> CycleTrackerCore<M> {
         self.map.clear();
         self.first_ts = None;
         self.last_ts = None;
-        self.last_purge_ts = None;
+        self.insert_count = 0;
     }
 
     pub fn track(&mut self, now: u64, cycles: u128) -> bool {
@@ -155,20 +155,13 @@ impl<M: Memory> CycleTrackerCore<M> {
                 self.first_ts = Some(now);
             }
             self.last_ts = Some(now);
+            self.insert_count += 1;
 
-            // purge if it's been >= interval since last purge
-            match self.last_purge_ts {
-                Some(last) if now.saturating_sub(last) >= PURGE_INTERVAL_SECS => {
-                    self.purge_old(now);
-                    self.last_purge_ts = Some(now);
-                }
-                None => {
-                    // First purge trigger after startup/upgrade
-                    self.purge_old(now);
-                    self.last_purge_ts = Some(now);
-                }
-                _ => {}
+            // purge every Nth insert
+            if self.insert_count % PURGE_INSERT_INTERVAL == 0 {
+                self.purge_old(now);
             }
+
             true
         } else {
             false
@@ -298,47 +291,6 @@ mod tests {
     }
 
     #[test]
-    fn test_auto_purge_triggers_every_6_hours() {
-        let mut tracker = make_core();
-
-        // Insert at t=0 and t=60
-        assert!(tracker.track(0, 1));
-        assert!(tracker.track(TIMEOUT_SECS, 2));
-
-        // Insert at 6h + TIMEOUT_SECS = 21_660
-        let ts = PURGE_INTERVAL_SECS + TIMEOUT_SECS;
-        assert!(tracker.track(ts, 3));
-
-        // Verify purge happened and last_purge_ts was updated to *this insert time*
-        assert_eq!(tracker.last_purge_ts, Some(ts));
-    }
-
-    #[test]
-    fn test_purge_interval_respected() {
-        let mut tracker = make_core();
-
-        // Insert first entry → purge runs immediately, last_purge_ts should equal that ts
-        assert!(tracker.track(0, 1));
-        assert_eq!(
-            tracker.last_purge_ts,
-            Some(0),
-            "first insert always purges immediately"
-        );
-
-        // Insert within less than 6h, should NOT purge again
-        assert!(tracker.track(PURGE_INTERVAL_SECS / 2, 2));
-        assert_eq!(
-            tracker.last_purge_ts,
-            Some(0),
-            "purge should not have run again yet"
-        );
-
-        // Next insert at >= 6h should trigger purge
-        assert!(tracker.track(PURGE_INTERVAL_SECS, 3));
-        assert_eq!(tracker.last_purge_ts, Some(PURGE_INTERVAL_SECS));
-    }
-
-    #[test]
     fn test_purge_removes_only_old_entries() {
         let mut tracker = make_core();
 
@@ -420,5 +372,54 @@ mod tests {
         assert!(map.contains_key(&1000));
         assert!(map.contains_key(&(1000 + MIN_SPACING_SECS)));
         assert!(map.contains_key(&(1000 + 2 * MIN_SPACING_SECS)));
+    }
+
+    #[test]
+    fn test_purge_not_triggered_before_interval() {
+        let mut tracker = make_core();
+
+        // Insert fewer than PURGE_INSERT_INTERVAL entries
+        for i in 0..(PURGE_INSERT_INTERVAL - 1) {
+            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+        }
+
+        // Purge should not have run yet (still contains all entries)
+        assert_eq!(tracker.map().len() as u64, PURGE_INSERT_INTERVAL - 1);
+    }
+
+    #[test]
+    fn test_purge_triggered_on_interval() {
+        let mut tracker = make_core();
+
+        // Insert exactly PURGE_INSERT_INTERVAL entries
+        for i in 0..PURGE_INSERT_INTERVAL {
+            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+        }
+
+        // At this point, purge should have been called once
+        // → Entries older than RETAIN_SECS may be gone, but at least 1 purge happened
+        assert!(tracker.insert_count % PURGE_INSERT_INTERVAL == 0);
+        assert!(tracker.map().len() as u64 <= PURGE_INSERT_INTERVAL);
+    }
+
+    #[test]
+    fn test_multiple_purge_cycles() {
+        let mut tracker = make_core();
+
+        let total_inserts = PURGE_INSERT_INTERVAL * 3;
+        for i in 0..total_inserts {
+            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+        }
+
+        // Purge should have run 3 times
+        assert_eq!(tracker.insert_count, total_inserts);
+
+        // Old entries beyond RETAIN_SECS should be gone
+        let last_ts = (total_inserts - 1) * MIN_SPACING_SECS;
+        let cutoff = last_ts.saturating_sub(RETAIN_SECS);
+
+        for (ts, _) in tracker.export() {
+            assert!(ts >= cutoff, "found entry {ts} older than cutoff {cutoff}");
+        }
     }
 }

@@ -17,11 +17,14 @@ macro_rules! icu_endpoints_root {
 
         // icu_response
         // root's way to respond to a generic request from another canister
+        // has to come from a direct child canister
         #[::icu::ic::update]
         async fn icu_response(
             request: ::icu::interface::request::Request,
-        ) -> Result<::icu::interface::root::response::Response, ::icu::Error> {
-            let response = ::icu::interface::root::response::response(request).await?;
+        ) -> Result<::icu::interface::response::Response, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_child)?;
+
+            let response = ::icu::interface::response::response(request).await?;
 
             Ok(response)
         }

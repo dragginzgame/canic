@@ -1,6 +1,10 @@
 #![allow(clippy::unused_async)]
 
-use icu::{Error, interface::request::create_canister_request, prelude::*};
+use icu::{
+    Error,
+    interface::{request::create_canister_request, response::Response},
+    prelude::*,
+};
 
 //
 // ICU
@@ -16,7 +20,7 @@ async fn icu_upgrade() {}
 
 // create_test
 #[update]
-async fn create_test() -> Result<Principal, Error> {
+async fn create_test() -> Result<Response, Error> {
     create_canister_request::<()>("test", None).await
 }
 

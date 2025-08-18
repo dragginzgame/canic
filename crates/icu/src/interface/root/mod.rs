@@ -1,5 +1,3 @@
-pub mod response;
-
 use crate::{
     Error, Log, canister::CanisterRegistry, interface::request::create_canister_request, log,
     memory::SubnetIndex,

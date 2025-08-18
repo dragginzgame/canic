@@ -18,17 +18,21 @@ macro_rules! icu_endpoints {
         #[::icu::ic::update]
         async fn icu_canister_upgrade_children(
             canister_id: Option<::candid::Principal>,
-        ) -> Result<(), ::icu::Error> {
+        ) -> Result<Vec<Result<::icu::interface::response::Response, ::icu::Error>>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            // send a request for each matching canister
+            let mut results = Vec::new();
+
             for (child_pid, _) in $crate::memory::ChildIndex::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
-                    $crate::interface::request::upgrade_canister_request(child_pid).await?
+                    // Push the result (either Ok(resp) or Err(err)) into the vec
+                    let result =
+                        $crate::interface::request::upgrade_canister_request(child_pid).await;
+                    results.push(result);
                 }
             }
 
-            Ok(())
+            Ok(results)
         }
 
         #[::icu::ic::update]
