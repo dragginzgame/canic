@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.89.0"
 edition = "2024"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Internet Computer Utilities"
 license = "MIT"
