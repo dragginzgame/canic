@@ -5,10 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.2] - 2025-08-19
+- SubnetIndex renamed to SubnetDirectory, and SubnetRegistry added to root
+
 ## [0.3.1] - It's a Bit Breaky!
 - 💥icu_canister_upgrade_children now returns a Vec<Result>
 - 💥create_canister_request now returns a Response::CreateCanisterResponse
-- added a root/child auth check to responses - will break stuff
+- 💥added a root/child auth check to responses - will break stuff
 
 ## [0.3.0] - Cycle Tracker
 - added the CycleTracker stable memory

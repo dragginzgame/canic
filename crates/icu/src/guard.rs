@@ -1,6 +1,6 @@
 use crate::{
     ic::api::{is_controller, msg_caller},
-    memory::{self, app::AppMode},
+    memory::{self, cells::AppMode},
 };
 use thiserror::Error as ThisError;
 

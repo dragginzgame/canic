@@ -1,7 +1,7 @@
 use crate::{
     Error,
     ic::api::{canister_self, msg_caller},
-    memory,
+    memory::{CanisterState, ChildIndex, SubnetDirectory, SubnetRegistry},
 };
 use candid::Principal;
 use std::pin::Pin;
@@ -22,28 +22,31 @@ pub enum AuthError {
     #[error("one or more rules must be defined")]
     NoRulesDefined,
 
-    #[error("principal '{0}' does not match canister type '{1}'")]
+    #[error("caller '{0}' is not an application canister on this subnet")]
+    NotApp(Principal),
+
+    #[error("caller '{0}' does not match canister type '{1}'")]
     NotCanisterType(Principal, String),
 
-    #[error("principal '{0}' is not a child of this canister")]
+    #[error("caller '{0}' is not a child of this canister")]
     NotChild(Principal),
 
-    #[error("principal '{0}' is not a controller of this canister")]
+    #[error("caller '{0}' is not a controller of this canister")]
     NotController(Principal),
 
-    #[error("principal '{0}' is not the parent of this canister")]
+    #[error("caller '{0}' is not the parent of this canister")]
     NotParent(Principal),
 
-    #[error("expected principal '{1}' got '{0}'")]
+    #[error("expected caller principal '{1}' got '{0}'")]
     NotPrincipal(Principal, Principal),
 
-    #[error("principal '{0}' is not root")]
+    #[error("caller '{0}' is not root")]
     NotRoot(Principal),
 
-    #[error("principal '{0}' is not the current canister")]
+    #[error("caller '{0}' is not the current canister")]
     NotSameCanister(Principal),
 
-    #[error("principal '{0}' is not on the whitelist")]
+    #[error("caller '{0}' is not on the whitelist")]
     NotWhitelisted(Principal),
 }
 
@@ -127,12 +130,23 @@ macro_rules! auth_require_any {
 /// RULE FUNCTIONS
 ///
 
+// is_app
+#[must_use]
+pub fn is_app(caller: Principal) -> RuleResult {
+    Box::pin(async move {
+        match SubnetRegistry::get(caller) {
+            Some(_) => Ok(()),
+            None => Err(AuthError::NotApp(caller))?,
+        }
+    })
+}
+
 // is_canister_type
 // check caller against the id of a specific canister path
 #[must_use]
 pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
     Box::pin(async move {
-        memory::SubnetIndex::try_get(&canister)
+        SubnetDirectory::try_get(&canister)
             .map_err(|_| AuthError::NotCanisterType(caller, canister.clone()))?;
 
         Ok(())
@@ -143,7 +157,7 @@ pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
 #[must_use]
 pub fn is_child(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        memory::ChildIndex::get(&caller).ok_or(AuthError::NotChild(caller))?;
+        ChildIndex::get(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -165,7 +179,7 @@ pub fn is_controller(caller: Principal) -> RuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        let root_pid = memory::CanisterState::get_root_pid();
+        let root_pid = CanisterState::get_root_pid();
 
         if caller == root_pid {
             Ok(())
@@ -179,7 +193,7 @@ pub fn is_root(caller: Principal) -> RuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        if memory::CanisterState::has_parent_pid(&caller) {
+        if CanisterState::has_parent_pid(&caller) {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?

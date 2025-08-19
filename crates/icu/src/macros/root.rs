@@ -6,7 +6,7 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
-        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+        async fn icu_app(cmd: ::icu::memory::AppCommand) -> Result<(), ::icu::Error> {
             ::icu::memory::AppState::command(cmd)?;
 
             let bundle = ::icu::interface::state::StateBundle::app_state();
@@ -22,7 +22,7 @@ macro_rules! icu_endpoints_root {
         async fn icu_response(
             request: ::icu::interface::request::Request,
         ) -> Result<::icu::interface::response::Response, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_child)?;
+            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_app)?;
 
             let response = ::icu::interface::response::response(request).await?;
 
@@ -36,6 +36,12 @@ macro_rules! icu_endpoints_root {
             pid: Principal,
         ) -> Result<::icu::ic::mgmt::CanisterStatusResult, ::icu::Error> {
             ::icu::interface::ic::canister_status(pid).await
+        }
+
+        // icu_subnet_registry
+        #[::icu::ic::query]
+        fn icu_subnet_registry() -> ::icu::memory::SubnetRegistryView {
+            $crate::memory::SubnetRegistry::export()
         }
     };
 }

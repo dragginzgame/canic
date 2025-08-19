@@ -1,18 +1,6 @@
-mod registry;
+mod canister_registry;
 
-pub use registry::*;
-
-use thiserror::Error as ThisError;
-
-///
-/// CanisterError
-///
-
-#[derive(Debug, ThisError)]
-pub enum CanisterError {
-    #[error(transparent)]
-    CanisterRegistryError(#[from] CanisterRegistryError),
-}
+pub use canister_registry::*;
 
 ///
 /// Canister
@@ -54,31 +42,31 @@ impl From<&Canister> for CanisterView {
 #[derive(Clone, Debug, Default)]
 pub struct Attributes {
     pub auto_create: Option<u16>,
-    pub indexing: IndexingPolicy,
+    pub directory: DirectoryPolicy,
 }
 
 impl Attributes {
     #[must_use]
-    pub const fn is_indexable(&self) -> bool {
-        self.indexing.is_indexable()
+    pub const fn uses_directory(&self) -> bool {
+        self.directory.uses_directory()
     }
 }
 
 ///
-/// IndexingPolicy
+/// DirectoryPolicy
 ///
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum IndexingPolicy {
+pub enum DirectoryPolicy {
     #[default]
     None,
     Limited(u16),
     Unlimited,
 }
 
-impl IndexingPolicy {
+impl DirectoryPolicy {
     #[must_use]
-    pub const fn is_indexable(self) -> bool {
+    pub const fn uses_directory(self) -> bool {
         !matches!(self, Self::None)
     }
 

@@ -1,9 +1,9 @@
 use crate::{
     Error,
-    canister::Canister,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
-    memory::{MemoryError, SUBNET_INDEX_MEMORY_ID},
+    memory::{MemoryError, SUBNET_DIRECTORY_MEMORY_ID},
+    state::canister::Canister,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -11,22 +11,22 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 //
-// SUBNET_INDEX
+// SUBNET_DIRECTORY
 //
 
 thread_local! {
-    pub static SUBNET_INDEX: RefCell<SubnetIndexCore<VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(SubnetIndexCore::new(BTreeMap::init(
-            icu_register_memory!(SUBNET_INDEX_MEMORY_ID),
+    pub static SUBNET_DIRECTORY: RefCell<SubnetDirectoryCore<VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(SubnetDirectoryCore::new(BTreeMap::init(
+            icu_register_memory!(SUBNET_DIRECTORY_MEMORY_ID),
         )));
 }
 
 ///
-/// SubnetIndexError
+/// SubnetDirectoryError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SubnetIndexError {
+pub enum SubnetDirectoryError {
     #[error("canister not found: {0}")]
     NotFound(String),
 
@@ -36,87 +36,87 @@ pub enum SubnetIndexError {
     #[error("canister kind '{0}' is not indexable")]
     NotIndexable(String),
 
-    #[error("subnet index capacity reached for kind '{kind}' (cap {cap})")]
+    #[error("subnet directory capacity reached for kind '{kind}' (cap {cap})")]
     CapacityReached { kind: String, cap: u16 },
 }
 
 ///
-/// SubnetIndexEntry
+/// SubnetDirectoryEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
-pub struct SubnetIndexEntry {
+pub struct SubnetDirectoryEntry {
     pub canisters: Vec<Principal>,
 }
 
-impl_storable_unbounded!(SubnetIndexEntry);
+impl_storable_unbounded!(SubnetDirectoryEntry);
 
 ///
-/// SubnetIndex
+/// SubnetDirectory
 ///
 
-pub type SubnetIndexView = Vec<(String, SubnetIndexEntry)>;
+pub type SubnetDirectoryView = Vec<(String, SubnetDirectoryEntry)>;
 
-pub struct SubnetIndex;
+pub struct SubnetDirectory;
 
-impl SubnetIndex {
+impl SubnetDirectory {
     #[must_use]
-    pub fn get(kind: &str) -> Option<SubnetIndexEntry> {
-        SUBNET_INDEX.with_borrow(|core| core.get(kind))
+    pub fn get(kind: &str) -> Option<SubnetDirectoryEntry> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.get(kind))
     }
 
-    pub fn try_get(kind: &str) -> Result<SubnetIndexEntry, Error> {
-        SUBNET_INDEX.with_borrow(|core| core.try_get(kind))
+    pub fn try_get(kind: &str) -> Result<SubnetDirectoryEntry, Error> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.try_get(kind))
     }
 
     pub fn try_get_singleton(kind: &str) -> Result<Principal, Error> {
-        SUBNET_INDEX.with_borrow(|core| core.try_get_singleton(kind))
+        SUBNET_DIRECTORY.with_borrow(|core| core.try_get_singleton(kind))
     }
 
     pub fn can_insert(canister: &Canister) -> Result<(), Error> {
-        SUBNET_INDEX.with_borrow(|core| core.can_insert(canister))
+        SUBNET_DIRECTORY.with_borrow(|core| core.can_insert(canister))
     }
 
     pub fn insert(canister: &Canister, id: Principal) -> Result<(), Error> {
-        SUBNET_INDEX.with_borrow_mut(|core| core.insert(canister, id))
+        SUBNET_DIRECTORY.with_borrow_mut(|core| core.insert(canister, id))
     }
 
     pub fn remove(kind: &str, id: Principal) -> Result<(), Error> {
-        SUBNET_INDEX.with_borrow_mut(|core| core.remove(kind, id))
+        SUBNET_DIRECTORY.with_borrow_mut(|core| core.remove(kind, id))
     }
 
-    pub fn import(view: SubnetIndexView) {
-        SUBNET_INDEX.with_borrow_mut(|core| core.import(view));
+    pub fn import(view: SubnetDirectoryView) {
+        SUBNET_DIRECTORY.with_borrow_mut(|core| core.import(view));
     }
 
     #[must_use]
-    pub fn export() -> SubnetIndexView {
-        SUBNET_INDEX.with_borrow(SubnetIndexCore::export)
+    pub fn export() -> SubnetDirectoryView {
+        SUBNET_DIRECTORY.with_borrow(SubnetDirectoryCore::export)
     }
 }
 
 ///
-/// SubnetIndexCore
+/// SubnetDirectoryCore
 ///
 
-pub struct SubnetIndexCore<M: Memory> {
-    map: BTreeMap<String, SubnetIndexEntry, M>,
+pub struct SubnetDirectoryCore<M: Memory> {
+    map: BTreeMap<String, SubnetDirectoryEntry, M>,
 }
 
-impl<M: Memory> SubnetIndexCore<M> {
-    pub const fn new(map: BTreeMap<String, SubnetIndexEntry, M>) -> Self {
+impl<M: Memory> SubnetDirectoryCore<M> {
+    pub const fn new(map: BTreeMap<String, SubnetDirectoryEntry, M>) -> Self {
         Self { map }
     }
 
-    pub fn get(&self, kind: &str) -> Option<SubnetIndexEntry> {
+    pub fn get(&self, kind: &str) -> Option<SubnetDirectoryEntry> {
         self.map.get(&kind.to_string())
     }
 
-    pub fn try_get(&self, kind: &str) -> Result<SubnetIndexEntry, Error> {
+    pub fn try_get(&self, kind: &str) -> Result<SubnetDirectoryEntry, Error> {
         if let Some(entry) = self.get(kind) {
             Ok(entry)
         } else {
-            Err(MemoryError::from(SubnetIndexError::NotFound(
+            Err(MemoryError::from(SubnetDirectoryError::NotFound(
                 kind.to_string(),
             )))?
         }
@@ -128,7 +128,7 @@ impl<M: Memory> SubnetIndexCore<M> {
         if entry.canisters.len() == 1 {
             Ok(entry.canisters[0])
         } else {
-            Err(MemoryError::from(SubnetIndexError::NotSingleton(
+            Err(MemoryError::from(SubnetDirectoryError::NotSingleton(
                 kind.to_string(),
             )))?
         }
@@ -140,10 +140,10 @@ impl<M: Memory> SubnetIndexCore<M> {
         let attrs = &canister.attributes;
         let entry = self.get(&kind).unwrap_or_default();
 
-        match attrs.indexing.limit() {
-            None => Err(MemoryError::from(SubnetIndexError::NotIndexable(kind))),
+        match attrs.directory.limit() {
+            None => Err(MemoryError::from(SubnetDirectoryError::NotIndexable(kind))),
             Some(cap) if (entry.canisters.len() as u16) >= cap => {
-                Err(MemoryError::from(SubnetIndexError::CapacityReached {
+                Err(MemoryError::from(SubnetDirectoryError::CapacityReached {
                     kind,
                     cap,
                 }))
@@ -184,14 +184,14 @@ impl<M: Memory> SubnetIndexCore<M> {
         Ok(())
     }
 
-    pub fn import(&mut self, view: SubnetIndexView) {
+    pub fn import(&mut self, view: SubnetDirectoryView) {
         self.map.clear();
         for (k, v) in view {
             self.map.insert(k.clone(), v);
         }
     }
 
-    pub fn export(&self) -> SubnetIndexView {
+    pub fn export(&self) -> SubnetDirectoryView {
         self.map.iter_pairs().collect()
     }
 }

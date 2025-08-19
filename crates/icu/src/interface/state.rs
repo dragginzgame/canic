@@ -3,7 +3,9 @@ use crate::{
     ic::{api::canister_self, call::Call},
     interface::{InterfaceError, ic::IcError},
     log,
-    memory::{AppState, AppStateData, CanisterState, ChildIndex, SubnetIndex, SubnetIndexView},
+    memory::{
+        AppState, AppStateData, CanisterState, ChildIndex, SubnetDirectory, SubnetDirectoryView,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::Deserialize;
@@ -14,23 +16,23 @@ use serde::Deserialize;
 
 #[derive(CandidType, Debug, Default, Deserialize)]
 pub struct StateBundle {
-    app_state_data: Option<AppStateData>,
-    subnet_index_data: Option<SubnetIndexView>,
+    app_state: Option<AppStateData>,
+    subnet_directory: Option<SubnetDirectoryView>,
 }
 
 impl StateBundle {
     #[must_use]
     pub fn all() -> Self {
         Self {
-            app_state_data: Some(AppState::export()),
-            subnet_index_data: Some(SubnetIndex::export()),
+            app_state: Some(AppState::export()),
+            subnet_directory: Some(SubnetDirectory::export()),
         }
     }
 
     #[must_use]
     pub fn app_state() -> Self {
         Self {
-            app_state_data: Some(AppState::export()),
+            app_state: Some(AppState::export()),
             ..Default::default()
         }
     }
@@ -38,23 +40,23 @@ impl StateBundle {
     #[must_use]
     pub fn subnet_index() -> Self {
         Self {
-            subnet_index_data: Some(SubnetIndex::export()),
+            subnet_directory: Some(SubnetDirectory::export()),
             ..Default::default()
         }
     }
 
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.app_state_data.is_none() && self.subnet_index_data.is_none()
+        self.app_state.is_none() && self.subnet_directory.is_none()
     }
 
     fn debug(&self) -> String {
         let mut debug_str = String::new();
 
-        if self.app_state_data.is_some() {
+        if self.app_state.is_some() {
             debug_str.push('a');
         }
-        if self.subnet_index_data.is_some() {
+        if self.subnet_directory.is_some() {
             debug_str.push('s');
         }
 
@@ -64,11 +66,11 @@ impl StateBundle {
 
 // save_state
 pub fn save_state(bundle: &StateBundle) {
-    if let Some(data) = &bundle.app_state_data {
+    if let Some(data) = &bundle.app_state {
         AppState::import(*data);
     }
-    if let Some(data) = &bundle.subnet_index_data {
-        SubnetIndex::import(data.clone());
+    if let Some(data) = &bundle.subnet_directory {
+        SubnetDirectory::import(data.clone());
     }
 
     //   let debug_str = &bundle.debug();

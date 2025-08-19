@@ -380,7 +380,7 @@ mod tests {
 
         // Insert fewer than PURGE_INSERT_INTERVAL entries
         for i in 0..(PURGE_INSERT_INTERVAL - 1) {
-            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+            assert!(tracker.track(i * MIN_SPACING_SECS, u128::from(i)));
         }
 
         // Purge should not have run yet (still contains all entries)
@@ -393,7 +393,7 @@ mod tests {
 
         // Insert exactly PURGE_INSERT_INTERVAL entries
         for i in 0..PURGE_INSERT_INTERVAL {
-            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+            assert!(tracker.track(i * MIN_SPACING_SECS, u128::from(i)));
         }
 
         // At this point, purge should have been called once
@@ -408,7 +408,7 @@ mod tests {
 
         let total_inserts = PURGE_INSERT_INTERVAL * 3;
         for i in 0..total_inserts {
-            assert!(tracker.track(i * MIN_SPACING_SECS, i as u128));
+            assert!(tracker.track(i * MIN_SPACING_SECS, u128::from(i)));
         }
 
         // Purge should have run 3 times

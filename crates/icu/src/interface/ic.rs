@@ -10,7 +10,7 @@ use crate::{
     },
     interface::{InterfaceError, state::StateBundle},
     log,
-    memory::{CanisterState, canister::CanisterParent},
+    memory::{CanisterParent, CanisterState},
     utils::{cycles::format_cycles, wasm::get_wasm_hash},
 };
 use candid::{Error as CandidError, Principal, encode_args};

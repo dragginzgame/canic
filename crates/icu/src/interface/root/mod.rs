@@ -1,6 +1,6 @@
 use crate::{
-    Error, Log, canister::CanisterRegistry, interface::request::create_canister_request, log,
-    memory::SubnetIndex,
+    Error, Log, interface::request::create_canister_request, log, memory::SubnetDirectory,
+    state::canister::CanisterRegistry,
 };
 use candid::Principal;
 
@@ -19,7 +19,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for (kind, entry) in SubnetIndex::export() {
+    for (kind, entry) in SubnetDirectory::export() {
         let canisters = entry
             .canisters
             .iter()

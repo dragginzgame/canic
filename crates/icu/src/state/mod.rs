@@ -1,12 +1,25 @@
-mod delegation_cache;
-mod delegation_registry;
-mod icrc;
+pub mod canister;
 
-pub use delegation_cache::*;
-pub use delegation_registry::*;
-pub use icrc::*;
+pub mod delegation {
+    mod delegation_cache;
+    mod delegation_registry;
 
-use crate::ic::api::performance_counter;
+    pub use delegation_cache::*;
+    pub use delegation_registry::*;
+}
+
+pub mod icrc {
+    mod icrc_10;
+    mod icrc_21;
+
+    pub use icrc_10::*;
+    pub use icrc_21::*;
+}
+
+use crate::{
+    ic::api::performance_counter,
+    state::{canister::CanisterRegistryError, delegation::DelegationRegistryError},
+};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
@@ -16,6 +29,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum StateError {
+    #[error(transparent)]
+    CanisterRegistryError(#[from] CanisterRegistryError),
+
     #[error(transparent)]
     DelegationRegistryError(#[from] DelegationRegistryError),
 }

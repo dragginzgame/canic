@@ -2,7 +2,7 @@ use crate::{
     Error,
     ic::call::Call,
     interface::{InterfaceError, ic::IcError, response::Response},
-    memory::{CanisterState, ChildIndex, canister::CanisterParent},
+    memory::{CanisterParent, CanisterState, ChildIndex},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::Deserialize;
@@ -101,13 +101,13 @@ where
     parents.push(this);
 
     // build request
-    let req = Request::CreateCanister(CreateCanisterRequest {
+    let q = Request::CreateCanister(CreateCanisterRequest {
         kind: kind.to_string(),
         parents,
         extra_arg: encoded,
     });
 
-    match request(req).await {
+    match request(q).await {
         Ok(response) => match response {
             Response::CreateCanister(ref res) => {
                 // update the local child index
@@ -129,16 +129,16 @@ pub async fn upgrade_canister_request(canister_pid: Principal) -> Result<Respons
     let kind = ChildIndex::try_get(&canister_pid)?;
 
     // send the request
-    let req = Request::UpgradeCanister(UpgradeCanisterRequest { canister_pid, kind });
-    let res = request(req).await?;
+    let q = Request::UpgradeCanister(UpgradeCanisterRequest { canister_pid, kind });
+    let res = request(q).await?;
 
     Ok(res)
 }
 
 // cycles_request
 pub async fn cycles_request(cycles: u128) -> Result<Response, Error> {
-    let req = Request::Cycles(CyclesRequest { cycles });
-    let res = request(req).await?;
+    let q = Request::Cycles(CyclesRequest { cycles });
+    let res = request(q).await?;
 
     Ok(res)
 }

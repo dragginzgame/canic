@@ -2,11 +2,11 @@
 
 use icu::{
     Error,
-    canister::{Attributes, Canister, IndexingPolicy},
     interface::{
         request::create_canister_request, response::Response, root::root_create_canisters,
     },
     prelude::*,
+    state::canister::{Attributes, Canister, DirectoryPolicy},
 };
 
 //
@@ -28,7 +28,7 @@ pub const CANISTERS: &[Canister] = &[(Canister {
     kind: "test",
     attributes: Attributes {
         auto_create: Some(2),
-        indexing: IndexingPolicy::Limited(2),
+        directory: DirectoryPolicy::Limited(6),
     },
     #[cfg(icu_github_ci)]
     wasm: &[],

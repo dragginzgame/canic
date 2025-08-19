@@ -1,4 +1,4 @@
-use crate::{Log, log, state::DelegationSessionView, utils::time::now_secs};
+use crate::{Log, log, state::delegation::DelegationSessionView, utils::time::now_secs};
 use candid::Principal;
 use std::{cell::RefCell, collections::HashMap};
 

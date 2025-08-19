@@ -1,7 +1,9 @@
 use crate::{
-    Error, Log,
-    canister::{Canister, CanisterError, CanisterView},
-    log,
+    Error, Log, log,
+    state::{
+        StateError,
+        canister::{Canister, CanisterView},
+    },
 };
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
@@ -25,10 +27,10 @@ pub enum CanisterRegistryError {
 }
 
 ///
-/// CanisterRegistryData
+/// CanisterRegistryView
 ///
 
-pub type CanisterRegistryData = HashMap<String, CanisterView>;
+pub type CanisterRegistryView = Vec<(String, CanisterView)>;
 
 ///
 /// CanisterRegistry
@@ -56,7 +58,7 @@ impl CanisterRegistry {
         if let Some(canister) = Self::get(path) {
             Ok(canister)
         } else {
-            Err(Error::from(CanisterError::CanisterRegistryError(
+            Err(Error::from(StateError::CanisterRegistryError(
                 CanisterRegistryError::CanisterNotFound(path.to_string()),
             )))?
         }
@@ -87,7 +89,7 @@ impl CanisterRegistry {
     }
 
     #[must_use]
-    pub fn export() -> CanisterRegistryData {
+    pub fn export() -> CanisterRegistryView {
         CANISTER_REGISTRY
             .with_borrow(|reg| reg.iter().map(|(k, v)| (k.clone(), v.into())).collect())
     }

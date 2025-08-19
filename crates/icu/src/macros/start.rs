@@ -16,7 +16,7 @@ macro_rules! icu_start {
         #[::icu::ic::init]
         fn init(
             bundle: ::icu::interface::state::StateBundle,
-            parents: Vec<::icu::memory::canister::CanisterParent>,
+            parents: Vec<::icu::memory::CanisterParent>,
             args: Option<Vec<u8>>,
         ) {
             ::icu::log!(::icu::Log::Info, "🚀 init: {}", $kind);
@@ -84,7 +84,7 @@ macro_rules! icu_start_root {
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::CycleTracker::start();
-            ::icu::canister::CanisterRegistry::import(CANISTERS);
+            ::icu::state::canister::CanisterRegistry::import(CANISTERS);
             icu_setup();
         }
 
