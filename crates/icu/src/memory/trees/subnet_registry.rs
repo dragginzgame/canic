@@ -137,6 +137,7 @@ impl<M: Memory> SubnetRegistryCore<M> {
             Some(mut entry) => {
                 entry.status = status;
                 self.map.insert(pid, entry);
+
                 Ok(())
             }
             None => Err(MemoryError::from(SubnetRegistryError::NotFound(pid)))?,
