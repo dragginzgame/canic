@@ -4,6 +4,7 @@ use crate::{
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_REGISTRY_MEMORY_ID},
+    utils::time::now_secs,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,7 @@ pub struct SubnetRegistryEntry {
     pub canister_type: CanisterType,
     pub parent_pid: Option<Principal>,
     pub status: CanisterStatus,
+    pub created_at: u64,
 }
 
 impl_storable_unbounded!(SubnetRegistryEntry);
@@ -63,6 +65,18 @@ pub type SubnetRegistryView = Vec<(Principal, SubnetRegistryEntry)>;
 pub struct SubnetRegistry;
 
 impl SubnetRegistry {
+    /// Initialize the registry with the root canister marked as Installed.
+    pub fn init_root(root_pid: Principal) {
+        let entry = SubnetRegistryEntry {
+            canister_type: CanisterType::Root,
+            parent_pid: None,
+            status: CanisterStatus::Installed,
+            created_at: now_secs(),
+        };
+
+        SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(root_pid, entry));
+    }
+
     #[must_use]
     pub fn get(pid: Principal) -> Option<SubnetRegistryEntry> {
         SUBNET_REGISTRY.with_borrow(|core| core.get(pid))
@@ -72,13 +86,15 @@ impl SubnetRegistry {
         SUBNET_REGISTRY.with_borrow(|core| core.try_get(pid))
     }
 
-    pub fn insert(
-        canister_pid: Principal,
-        canister_type: &CanisterType,
-        parent_pid: Option<Principal>,
-    ) {
-        SUBNET_REGISTRY
-            .with_borrow_mut(|core| core.insert(canister_pid, canister_type, parent_pid));
+    pub fn register_pending(pid: Principal, ty: &CanisterType, parent: Option<Principal>) {
+        let entry = SubnetRegistryEntry {
+            canister_type: ty.clone(),
+            parent_pid: parent,
+            status: CanisterStatus::Pending,
+            created_at: now_secs(),
+        };
+
+        SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(pid, entry));
     }
 
     pub fn set_status(pid: Principal, status: CanisterStatus) -> Result<(), Error> {
@@ -116,20 +132,8 @@ impl<M: Memory> SubnetRegistryCore<M> {
         }
     }
 
-    pub fn insert(
-        &mut self,
-        canister_pid: Principal,
-        canister_type: &CanisterType,
-        parent_pid: Option<Principal>,
-    ) {
-        self.map.insert(
-            canister_pid,
-            SubnetRegistryEntry {
-                canister_type: canister_type.clone(),
-                parent_pid,
-                status: CanisterStatus::Pending,
-            },
-        );
+    pub fn insert(&mut self, pid: Principal, entry: SubnetRegistryEntry) {
+        self.map.insert(pid, entry);
     }
 
     pub fn set_status(&mut self, pid: Principal, status: CanisterStatus) -> Result<(), Error> {

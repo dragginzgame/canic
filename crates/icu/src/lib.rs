@@ -27,7 +27,7 @@ use thiserror::Error as ThisError;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub static TEST: CanisterType = CanisterType::custom("test");
+pub static TEST: &CanisterType = &CanisterType::custom("test");
 
 ///
 /// Prelude

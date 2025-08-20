@@ -27,7 +27,7 @@ async fn icu_upgrade() {}
 
 // CANISTERS
 pub static CANISTERS: &[(&CanisterType, Canister)] = &[(
-    &TEST,
+    TEST,
     Canister {
         attributes: Attributes {
             auto_create: Some(2),

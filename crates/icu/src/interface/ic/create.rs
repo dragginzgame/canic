@@ -108,15 +108,10 @@ fn register_pending_canister(
     canister_type: &CanisterType,
     parents: &[CanisterParent],
 ) {
-    SubnetRegistry::insert(
+    SubnetRegistry::register_pending(
         canister_pid,
         canister_type,
         parents.last().map(|p| p.principal),
-    );
-
-    crate::log!(
-        crate::Log::Warn,
-        "subnet_registry: registered pending {canister_pid}"
     );
 }
 
