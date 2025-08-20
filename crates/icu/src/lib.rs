@@ -36,6 +36,7 @@ pub static TEST: CanisterType = CanisterType::custom("test");
 pub mod prelude {
     pub use crate::{
         Log, auth_require_all, auth_require_any,
+        canister::CanisterType,
         guard::{guard_query, guard_update},
         ic::{
             api::msg_caller, candid::CandidType, export_candid, init, principal::Principal, query,

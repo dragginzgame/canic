@@ -70,7 +70,7 @@ macro_rules! icu_start_root {
             // register in SubnetRegistry
             ::icu::memory::SubnetRegistry::insert(
                 ::icu::ic::api::canister_self(),
-                &CanisterType::Root,
+                &::icu::canister::CanisterType::Root,
                 None,
             );
 

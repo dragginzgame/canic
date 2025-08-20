@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -489,9 +489,9 @@ dependencies = [
 
 [[package]]
 name = "ic-stable-structures"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e54aeb082293c69def5ab34c70593ba85ff000386f7d0eacdf73514daaeca031"
+checksum = "48efe2f2c371e8cb732512d67da61268d6948136cee304721dad6b56efec565d"
 dependencies = [
  "ic_principal",
 ]
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "candid",
  "defer",
@@ -562,7 +562,7 @@ dependencies = [
  "ic-cdk-timers",
  "ic-ledger-types",
  "ic-management-canister-types",
- "ic-stable-structures 0.7.0",
+ "ic-stable-structures 0.7.1",
  "ic_principal",
  "icrc-ledger-types",
  "minicbor-serde",
