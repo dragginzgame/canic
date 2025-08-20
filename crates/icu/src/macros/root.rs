@@ -22,10 +22,7 @@ macro_rules! icu_endpoints_root {
         async fn icu_response(
             request: ::icu::interface::request::Request,
         ) -> Result<::icu::interface::response::Response, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_app)?;
-
             let caller = ::icu::ic::api::msg_caller();
-
             ::icu::log!(
                 Log::Warn,
                 "icu_response: caller: {} {:?} {:?}",
@@ -33,6 +30,8 @@ macro_rules! icu_endpoints_root {
                 ::icu::auth::is_root(caller).await,
                 ::icu::auth::is_app(caller).await
             );
+
+            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_app)?;
 
             let response = ::icu::interface::response::response(request).await?;
 
