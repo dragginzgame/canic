@@ -12,7 +12,7 @@ use crate::{
         state::{StateBundle, cascade, update_canister},
     },
     log,
-    memory::{CanisterParent, CanisterState, SubnetDirectory, SubnetRegistry},
+    memory::{CanisterParent, CanisterState, CanisterStatus, SubnetDirectory, SubnetRegistry},
     state::canister::CanisterRegistry,
 };
 use candid::{Principal, encode_args};
@@ -98,48 +98,59 @@ async fn install_canister(
 }
 
 ///
-/// register_installed_canister
-/// updates SubnetRegistry + Directory
+/// register_pending_canister
 ///
-async fn register_installed_canister(
-    canister_type: &CanisterType,
+/// Insert into SubnetRegistry immediately after creation,
+/// before install_code runs.
+///
+fn register_pending_canister(
     canister_pid: Principal,
+    canister_type: &CanisterType,
     parents: &[CanisterParent],
-) -> Result<(), Error> {
-    let uses_directory = CanisterRegistry::try_get(canister_type)?
-        .attributes
-        .uses_directory();
-
-    // subnet directory
-    if uses_directory {
-        SubnetDirectory::can_insert(canister_type)?;
-    }
-
-    // SubnetRegistry (root only)
+) {
     SubnetRegistry::insert(
         canister_pid,
         canister_type,
         parents.last().map(|p| p.principal),
     );
-    crate::log!(crate::Log::Warn, "subnet_registry inserting {canister_pid}");
 
-    // insert into the SubnetDirectory
-    // and then cascade it down from root
+    crate::log!(
+        crate::Log::Warn,
+        "subnet_registry: registered pending {canister_pid}"
+    );
+}
+
+///
+/// mark_canister_installed
+///
+/// Update SubnetRegistry entry from Pending → Installed,
+/// then update SubnetDirectory + cascade if needed.
+///
+async fn mark_canister_installed(
+    canister_type: &CanisterType,
+    canister_pid: Principal,
+) -> Result<(), Error> {
+    // flip to Installed
+    SubnetRegistry::set_status(canister_pid, CanisterStatus::Installed)?;
+
+    // if this type uses the directory, insert + cascade
+    let uses_directory = CanisterRegistry::try_get(canister_type)?
+        .attributes
+        .uses_directory();
+
     if uses_directory {
+        SubnetDirectory::can_insert(canister_type)?;
         SubnetDirectory::insert(canister_type.clone(), canister_pid)?;
+
         let bundle = StateBundle::subnet_directory();
         update_canister(&canister_pid, &bundle).await?;
-
         cascade(&bundle).await?;
     }
 
     Ok(())
 }
 
-///
 /// ic_create_canister_full
-/// high-level: create + install + register
-///
 pub async fn ic_create_canister_full(
     canister_type: &CanisterType,
     parents: &[CanisterParent],
@@ -147,12 +158,18 @@ pub async fn ic_create_canister_full(
 ) -> Result<Principal, Error> {
     let canister_pid = raw_create_canister().await?;
 
+    // Phase 1: insert as pending
+    register_pending_canister(canister_pid, canister_type, parents);
+
+    // Phase 2: install wasm
     install_canister(canister_type, canister_pid, parents, extra_arg).await?;
-    register_installed_canister(canister_type, canister_pid, parents).await?;
+
+    // Phase 3: mark installed + cascade
+    mark_canister_installed(canister_type, canister_pid).await?;
 
     log!(
         Log::Ok,
-        "⚡ create_canister: {canister_type} {canister_pid} installed + registered"
+        "⚡ create_canister_full: {canister_type} {canister_pid} installed + registered"
     );
 
     Ok(canister_pid)

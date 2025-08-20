@@ -22,6 +22,16 @@ thread_local! {
 }
 
 ///
+/// CanisterStatus
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub enum CanisterStatus {
+    Pending,
+    Installed,
+}
+
+///
 /// SubnetRegistryError
 ///
 
@@ -39,6 +49,7 @@ pub enum SubnetRegistryError {
 pub struct SubnetRegistryEntry {
     pub canister_type: CanisterType,
     pub parent_pid: Option<Principal>,
+    pub status: CanisterStatus,
 }
 
 impl_storable_unbounded!(SubnetRegistryEntry);
@@ -68,6 +79,10 @@ impl SubnetRegistry {
     ) {
         SUBNET_REGISTRY
             .with_borrow_mut(|core| core.insert(canister_pid, canister_type, parent_pid));
+    }
+
+    pub fn set_status(pid: Principal, status: CanisterStatus) -> Result<(), Error> {
+        SUBNET_REGISTRY.with_borrow_mut(|core| core.set_status(pid, status))
     }
 
     #[must_use]
@@ -112,8 +127,20 @@ impl<M: Memory> SubnetRegistryCore<M> {
             SubnetRegistryEntry {
                 canister_type: canister_type.clone(),
                 parent_pid,
+                status: CanisterStatus::Pending,
             },
         );
+    }
+
+    pub fn set_status(&mut self, pid: Principal, status: CanisterStatus) -> Result<(), Error> {
+        match self.map.get(&pid) {
+            Some(mut entry) => {
+                entry.status = status;
+                self.map.insert(pid, entry);
+                Ok(())
+            }
+            None => Err(MemoryError::from(SubnetRegistryError::NotFound(pid)))?,
+        }
     }
 
     pub fn export(&self) -> SubnetRegistryView {
