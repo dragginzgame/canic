@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    canister::CanisterType,
     ic::call::Call,
     interface::{
         InterfaceError,
@@ -39,20 +40,20 @@ pub enum Request {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
-    pub kind: String,
+    pub canister_type: CanisterType,
     pub parents: Vec<CanisterParent>,
     pub extra_arg: Option<Vec<u8>>,
 }
 
 ///
 /// UpgradeCanisterRequest
-/// upgrades canister_pid with the CanisterKind wasm
+/// upgrades canister_pid with the canister's wasm
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
-    pub kind: String,
+    pub canister_type: CanisterType,
 }
 
 ///
@@ -70,7 +71,7 @@ pub struct CyclesRequest {
 
 // request
 // sends the request to root::icu_response
-pub async fn request(request: Request) -> Result<Response, Error> {
+async fn request(request: Request) -> Result<Response, Error> {
     let root_pid = CanisterState::get_root_pid();
 
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
@@ -87,7 +88,7 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 
 // create_canister_request
 pub async fn create_canister_request<A>(
-    kind: &str,
+    canister_type: &CanisterType,
     extra: Option<A>,
 ) -> Result<CreateCanisterResponse, Error>
 where
@@ -109,7 +110,7 @@ where
 
     // build request
     let q = Request::CreateCanister(CreateCanisterRequest {
-        kind: kind.to_string(),
+        canister_type: canister_type.clone(),
         parents,
         extra_arg: encoded,
     });
@@ -117,7 +118,7 @@ where
     match request(q).await? {
         Response::CreateCanister(res) => {
             // update the local child index
-            ChildIndex::insert(res.new_canister_pid, kind);
+            ChildIndex::insert(res.new_canister_pid, canister_type.clone());
 
             Ok(res)
         }
@@ -132,10 +133,13 @@ pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
-    let kind = ChildIndex::try_get(&canister_pid)?;
+    let canister_type = ChildIndex::try_get(&canister_pid)?;
 
     // send the request
-    let q = Request::UpgradeCanister(UpgradeCanisterRequest { canister_pid, kind });
+    let q = Request::UpgradeCanister(UpgradeCanisterRequest {
+        canister_pid,
+        canister_type,
+    });
 
     match request(q).await? {
         Response::UpgradeCanister(res) => Ok(res),

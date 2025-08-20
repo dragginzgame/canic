@@ -1,19 +1,21 @@
+mod create;
+
+pub use create::*;
+
 use crate::{
     Error, Log,
-    config::Config,
     ic::{
         call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
-            self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
-            CreateCanisterArgs, DepositCyclesArgs, InstallCodeArgs, WasmModule,
+            self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
+            InstallCodeArgs, WasmModule,
         },
     },
-    interface::{InterfaceError, state::StateBundle},
+    interface::InterfaceError,
     log,
-    memory::{CanisterParent, CanisterState},
-    utils::{cycles::format_cycles, wasm::get_wasm_hash},
+    utils::wasm::get_wasm_hash,
 };
-use candid::{Error as CandidError, Principal, encode_args};
+use candid::{Error as CandidError, Principal};
 use thiserror::Error as ThisError;
 
 ///
@@ -106,84 +108,6 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
     let response = canister_status(canister_id).await?;
 
     Ok(response.module_hash)
-}
-
-///
-/// ic_create_canister
-///
-
-pub async fn ic_create_canister(
-    name: &str,
-    bytes: &[u8],
-    parents: &[CanisterParent],
-    extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, Error> {
-    //
-    // controllers
-    // (possibly could add extra ones in the future)
-    //
-
-    let config = Config::try_get()?;
-    let mut controllers = config.controllers.clone();
-    let root_pid = CanisterState::get_root_pid();
-    controllers.push(root_pid);
-
-    //
-    // create canister
-    //
-
-    let cycles = 5_000_000_000_000;
-    let settings = Some(CanisterSettings {
-        controllers: Some(controllers),
-        ..Default::default()
-    });
-    let cc_args = CreateCanisterArgs { settings };
-    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles)
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?
-        .canister_id;
-
-    //
-    // args are specific to icu
-    //
-
-    let bundle = StateBundle::all();
-    let arg = encode_args((bundle, parents, extra_arg))
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
-
-    //
-    // install code
-    //
-
-    let install_args = InstallCodeArgs {
-        mode: CanisterInstallMode::Install,
-        canister_id: canister_pid,
-        wasm_module: WasmModule::from(bytes),
-        arg,
-    };
-    mgmt::install_code(&install_args)
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
-
-    //
-    // debug
-    //
-
-    #[allow(clippy::cast_precision_loss)]
-    let bytes_fmt = bytes.len() as f64 / 1_000.0;
-    log!(
-        Log::Ok,
-        "⚡ create_canister: {} created ({} KB) {} with {}",
-        name,
-        bytes_fmt,
-        canister_pid,
-        format_cycles(cycles)
-    );
-
-    Ok(canister_pid)
 }
 
 /// ic_upgrade_canister

@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.4] - 2025-08-20
+- relaxed the restriction that directory canisters can only be created under root
+
 ## [0.3.3] - 2025-08-19
 - 💥CanisterUpgrade, Create, Cycles requests now all return their appropriate responses, not an enum
 

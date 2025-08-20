@@ -13,9 +13,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum InterfaceError {
-    #[error("indexable canisters can only be created on root")]
-    CannotCreateIndexable,
-
     #[error(transparent)]
     IcError(#[from] ic::IcError),
 

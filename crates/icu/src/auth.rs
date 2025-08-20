@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    canister::CanisterType,
     ic::api::{canister_self, msg_caller},
     memory::{CanisterState, ChildIndex, SubnetDirectory, SubnetRegistry},
 };
@@ -26,7 +27,7 @@ pub enum AuthError {
     NotApp(Principal),
 
     #[error("caller '{0}' does not match canister type '{1}'")]
-    NotCanisterType(Principal, String),
+    NotCanisterType(Principal, CanisterType),
 
     #[error("caller '{0}' is not a child of this canister")]
     NotChild(Principal),
@@ -144,10 +145,10 @@ pub fn is_app(caller: Principal) -> RuleResult {
 // is_canister_type
 // check caller against the id of a specific canister path
 #[must_use]
-pub fn is_canister_type(caller: Principal, canister: String) -> RuleResult {
+pub fn is_canister_type(caller: Principal, ty: CanisterType) -> RuleResult {
     Box::pin(async move {
-        SubnetDirectory::try_get(&canister)
-            .map_err(|_| AuthError::NotCanisterType(caller, canister.clone()))?;
+        SubnetDirectory::try_get(&ty)
+            .map_err(|_| AuthError::NotCanisterType(caller, ty.clone()))?;
 
         Ok(())
     })

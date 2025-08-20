@@ -1,9 +1,10 @@
 use crate::{
     Error,
+    canister::CanisterType,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_DIRECTORY_MEMORY_ID},
-    state::canister::Canister,
+    state::canister::CanisterRegistry,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -28,16 +29,16 @@ thread_local! {
 #[derive(Debug, ThisError)]
 pub enum SubnetDirectoryError {
     #[error("canister not found: {0}")]
-    NotFound(String),
+    NotFound(CanisterType),
 
-    #[error("canister kind '{0}' is not a singleton")]
-    NotSingleton(String),
+    #[error("canister type '{0}' is not a singleton")]
+    NotSingleton(CanisterType),
 
-    #[error("canister kind '{0}' is not indexable")]
-    NotIndexable(String),
+    #[error("canister type '{0}' cannot be in the directory")]
+    NotDirectory(CanisterType),
 
-    #[error("subnet directory capacity reached for kind '{kind}' (cap {cap})")]
-    CapacityReached { kind: String, cap: u16 },
+    #[error("subnet directory capacity reached for type '{ty}' (cap {cap})")]
+    CapacityReached { ty: CanisterType, cap: u16 },
 }
 
 ///
@@ -55,34 +56,34 @@ impl_storable_unbounded!(SubnetDirectoryEntry);
 /// SubnetDirectory
 ///
 
-pub type SubnetDirectoryView = Vec<(String, SubnetDirectoryEntry)>;
+pub type SubnetDirectoryView = Vec<(CanisterType, SubnetDirectoryEntry)>;
 
 pub struct SubnetDirectory;
 
 impl SubnetDirectory {
     #[must_use]
-    pub fn get(kind: &str) -> Option<SubnetDirectoryEntry> {
-        SUBNET_DIRECTORY.with_borrow(|core| core.get(kind))
+    pub fn get(ty: &CanisterType) -> Option<SubnetDirectoryEntry> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.get(ty))
     }
 
-    pub fn try_get(kind: &str) -> Result<SubnetDirectoryEntry, Error> {
-        SUBNET_DIRECTORY.with_borrow(|core| core.try_get(kind))
+    pub fn try_get(ty: &CanisterType) -> Result<SubnetDirectoryEntry, Error> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.try_get(ty))
     }
 
-    pub fn try_get_singleton(kind: &str) -> Result<Principal, Error> {
-        SUBNET_DIRECTORY.with_borrow(|core| core.try_get_singleton(kind))
+    pub fn try_get_singleton(ty: &CanisterType) -> Result<Principal, Error> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.try_get_singleton(ty))
     }
 
-    pub fn can_insert(canister: &Canister) -> Result<(), Error> {
-        SUBNET_DIRECTORY.with_borrow(|core| core.can_insert(canister))
+    pub fn can_insert(ty: &CanisterType) -> Result<(), Error> {
+        SUBNET_DIRECTORY.with_borrow(|core| core.can_insert(ty))
     }
 
-    pub fn insert(canister: &Canister, id: Principal) -> Result<(), Error> {
-        SUBNET_DIRECTORY.with_borrow_mut(|core| core.insert(canister, id))
+    pub fn insert(ty: CanisterType, id: Principal) -> Result<(), Error> {
+        SUBNET_DIRECTORY.with_borrow_mut(|core| core.insert(ty, id))
     }
 
-    pub fn remove(kind: &str, id: Principal) -> Result<(), Error> {
-        SUBNET_DIRECTORY.with_borrow_mut(|core| core.remove(kind, id))
+    pub fn remove(ty: &CanisterType, id: Principal) -> Result<(), Error> {
+        SUBNET_DIRECTORY.with_borrow_mut(|core| core.remove(ty, id))
     }
 
     pub fn import(view: SubnetDirectoryView) {
@@ -100,84 +101,86 @@ impl SubnetDirectory {
 ///
 
 pub struct SubnetDirectoryCore<M: Memory> {
-    map: BTreeMap<String, SubnetDirectoryEntry, M>,
+    map: BTreeMap<CanisterType, SubnetDirectoryEntry, M>,
 }
 
 impl<M: Memory> SubnetDirectoryCore<M> {
-    pub const fn new(map: BTreeMap<String, SubnetDirectoryEntry, M>) -> Self {
+    pub const fn new(map: BTreeMap<CanisterType, SubnetDirectoryEntry, M>) -> Self {
         Self { map }
     }
 
-    pub fn get(&self, kind: &str) -> Option<SubnetDirectoryEntry> {
-        self.map.get(&kind.to_string())
+    pub fn get(&self, ty: &CanisterType) -> Option<SubnetDirectoryEntry> {
+        self.map.get(ty)
     }
 
-    pub fn try_get(&self, kind: &str) -> Result<SubnetDirectoryEntry, Error> {
-        if let Some(entry) = self.get(kind) {
+    pub fn try_get(&self, ty: &CanisterType) -> Result<SubnetDirectoryEntry, Error> {
+        if let Some(entry) = self.get(ty) {
             Ok(entry)
         } else {
             Err(MemoryError::from(SubnetDirectoryError::NotFound(
-                kind.to_string(),
+                ty.clone(),
             )))?
         }
     }
 
-    pub fn try_get_singleton(&self, kind: &str) -> Result<Principal, Error> {
-        let entry = self.try_get(kind)?;
+    pub fn try_get_singleton(&self, ty: &CanisterType) -> Result<Principal, Error> {
+        let entry = self.try_get(ty)?;
 
         if entry.canisters.len() == 1 {
             Ok(entry.canisters[0])
         } else {
             Err(MemoryError::from(SubnetDirectoryError::NotSingleton(
-                kind.to_string(),
+                ty.clone(),
             )))?
         }
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn can_insert(&self, canister: &Canister) -> Result<(), Error> {
-        let kind = canister.kind.to_string();
-        let attrs = &canister.attributes;
-        let entry = self.get(&kind).unwrap_or_default();
+    pub fn can_insert(&self, ty: &CanisterType) -> Result<(), Error> {
+        let canister = CanisterRegistry::try_get(ty)?;
 
-        match attrs.directory.limit() {
-            None => Err(MemoryError::from(SubnetDirectoryError::NotIndexable(kind))),
-            Some(cap) if (entry.canisters.len() as u16) >= cap => {
-                Err(MemoryError::from(SubnetDirectoryError::CapacityReached {
-                    kind,
-                    cap,
-                }))
+        match canister.attributes.directory.limit() {
+            Some(cap) => {
+                let entry = self.get(ty).unwrap_or_default();
+
+                if (entry.canisters.len() as u16) >= cap {
+                    Err(MemoryError::from(SubnetDirectoryError::CapacityReached {
+                        ty: ty.clone(),
+                        cap,
+                    }))
+                } else {
+                    Ok(())
+                }
             }
-            _ => Ok(()),
-        }?; // propagate
+            None => Err(MemoryError::from(SubnetDirectoryError::NotDirectory(
+                ty.clone(),
+            ))),
+        }?;
 
         Ok(())
     }
 
-    pub fn insert(&mut self, canister: &Canister, id: Principal) -> Result<(), Error> {
-        self.can_insert(canister)?;
+    pub fn insert(&mut self, ty: CanisterType, id: Principal) -> Result<(), Error> {
+        self.can_insert(&ty)?;
 
-        let kind = canister.kind.to_string();
-        let mut entry = self.get(&kind).unwrap_or_default();
+        let mut entry = self.get(&ty).unwrap_or_default();
 
         if !entry.canisters.contains(&id) {
             entry.canisters.push(id);
-            self.map.insert(kind, entry);
+            self.map.insert(ty, entry);
         }
 
         Ok(())
     }
 
-    pub fn remove(&mut self, kind: &str, id: Principal) -> Result<(), Error> {
-        let key = kind.to_string();
-
-        if let Some(mut entry) = self.get(&key) {
+    pub fn remove(&mut self, ty: &CanisterType, id: Principal) -> Result<(), Error> {
+        if let Some(mut entry) = self.get(ty) {
             entry.canisters.retain(|p| p != &id);
 
             if entry.canisters.is_empty() {
-                self.map.remove(&key);
+                self.map.remove(ty);
             } else {
-                self.map.insert(key, entry);
+                self.map.insert(ty.clone(), entry);
             }
         }
 

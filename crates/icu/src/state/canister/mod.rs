@@ -2,13 +2,14 @@ mod canister_registry;
 
 pub use canister_registry::*;
 
+use crate::canister::CanisterType;
+
 ///
 /// Canister
 ///
 
 #[derive(Clone, Debug)]
 pub struct Canister {
-    pub kind: &'static str,
     pub attributes: Attributes,
     pub wasm: &'static [u8],
 }

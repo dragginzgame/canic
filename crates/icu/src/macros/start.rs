@@ -12,19 +12,19 @@ macro_rules! __icu_load_config {
 
 #[macro_export]
 macro_rules! icu_start {
-    ($kind:expr) => {
+    ($canister_type:expr) => {
         #[::icu::ic::init]
         fn init(
             bundle: ::icu::interface::state::StateBundle,
             parents: Vec<::icu::memory::CanisterParent>,
             args: Option<Vec<u8>>,
         ) {
-            ::icu::log!(::icu::Log::Info, "🚀 init: {}", $kind);
+            ::icu::log!(::icu::Log::Info, "🚀 init: {}", $canister_type);
 
             // setup
             ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
-            ::icu::memory::CanisterState::set_kind($kind).unwrap();
+            ::icu::memory::CanisterState::set_type($canister_type).unwrap();
             __icu_shared_setup();
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -64,8 +64,15 @@ macro_rules! icu_start_root {
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
             // setup
-            ::icu::memory::CanisterState::set_kind_root();
+            ::icu::memory::CanisterState::set_type(&::icu::canister::CanisterType::Root).unwrap();
             __icu_shared_setup();
+
+            // register in SubnetRegistry
+            ::icu::memory::SubnetRegistry::insert(
+                ::icu::ic::api::canister_self(),
+                &CanisterType::Root,
+                None,
+            );
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::ic::futures::spawn(icu_install());

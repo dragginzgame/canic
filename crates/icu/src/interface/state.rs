@@ -38,7 +38,7 @@ impl StateBundle {
     }
 
     #[must_use]
-    pub fn subnet_index() -> Self {
+    pub fn subnet_directory() -> Self {
         Self {
             subnet_directory: Some(SubnetDirectory::export()),
             ..Default::default()
@@ -90,12 +90,12 @@ pub async fn cascade(bundle: &StateBundle) -> Result<(), Error> {
 // cascade_canister
 pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let canister_self = canister_self();
-    let canister_kind = CanisterState::try_get_kind()?;
+    let canister_type = CanisterState::try_get_type()?;
     let debug_str = &bundle.debug();
 
     log!(
         Log::Info,
-        "💦 state.cascade [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
+        "💦 state.cascade [{debug_str}]: {canister_self} ({canister_type}) -> {pid}"
     );
 
     Call::unbounded_wait(*pid, "icu_state_cascade")
@@ -110,12 +110,12 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
 // update_canister
 pub async fn update_canister(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let canister_self = canister_self();
-    let canister_kind = CanisterState::try_get_kind()?;
+    let canister_type = CanisterState::try_get_type()?;
     let debug_str = &bundle.debug();
 
     log!(
         Log::Info,
-        "🔄 state.update [{debug_str}]: {canister_self} ({canister_kind}) -> {pid}"
+        "🔄 state.update [{debug_str}]: {canister_self} ({canister_type}) -> {pid}"
     );
 
     Call::unbounded_wait(*pid, "icu_state_update")

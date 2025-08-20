@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    canister::CanisterType,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{MemoryError, SUBNET_REGISTRY_MEMORY_ID},
@@ -36,8 +37,7 @@ pub enum SubnetRegistryError {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct SubnetRegistryEntry {
-    pub canister_pid: Principal,
-    pub kind: String,
+    pub canister_type: CanisterType,
     pub parent_pid: Option<Principal>,
 }
 
@@ -61,8 +61,13 @@ impl SubnetRegistry {
         SUBNET_REGISTRY.with_borrow(|core| core.try_get(pid))
     }
 
-    pub fn insert(entry: SubnetRegistryEntry) {
-        SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(entry));
+    pub fn insert(
+        canister_pid: Principal,
+        canister_type: &CanisterType,
+        parent_pid: Option<Principal>,
+    ) {
+        SUBNET_REGISTRY
+            .with_borrow_mut(|core| core.insert(canister_pid, canister_type, parent_pid));
     }
 
     #[must_use]
@@ -96,8 +101,19 @@ impl<M: Memory> SubnetRegistryCore<M> {
         }
     }
 
-    pub fn insert(&mut self, entry: SubnetRegistryEntry) {
-        self.map.insert(entry.canister_pid, entry);
+    pub fn insert(
+        &mut self,
+        canister_pid: Principal,
+        canister_type: &CanisterType,
+        parent_pid: Option<Principal>,
+    ) {
+        self.map.insert(
+            canister_pid,
+            SubnetRegistryEntry {
+                canister_type: canister_type.clone(),
+                parent_pid,
+            },
+        );
     }
 
     pub fn export(&self) -> SubnetRegistryView {

@@ -1,7 +1,8 @@
 #![allow(clippy::unused_async)]
 
 use icu::{
-    Error,
+    Error, TEST,
+    canister::CanisterType,
     interface::{
         request::create_canister_request, response::CreateCanisterResponse,
         root::root_create_canisters,
@@ -25,17 +26,19 @@ async fn icu_install() {
 async fn icu_upgrade() {}
 
 // CANISTERS
-pub const CANISTERS: &[Canister] = &[(Canister {
-    kind: "test",
-    attributes: Attributes {
-        auto_create: Some(2),
-        directory: DirectoryPolicy::Limited(6),
+pub static CANISTERS: &[(&CanisterType, Canister)] = &[(
+    &TEST,
+    Canister {
+        attributes: Attributes {
+            auto_create: Some(2),
+            directory: DirectoryPolicy::Limited(6),
+        },
+        #[cfg(icu_github_ci)]
+        wasm: &[],
+        #[cfg(not(icu_github_ci))]
+        wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
     },
-    #[cfg(icu_github_ci)]
-    wasm: &[],
-    #[cfg(not(icu_github_ci))]
-    wasm: include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
-})];
+)];
 
 ///
 /// ENDPOINTS
@@ -44,7 +47,7 @@ pub const CANISTERS: &[Canister] = &[(Canister {
 // create_test
 #[update]
 async fn create_test() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>("test", None).await
+    create_canister_request::<()>(&TEST, None).await
 }
 
 // end

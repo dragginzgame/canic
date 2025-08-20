@@ -2,7 +2,7 @@ use crate::{
     Error, Log, log,
     state::{
         StateError,
-        canister::{Canister, CanisterView},
+        canister::{Canister, CanisterType, CanisterView},
     },
 };
 use std::{cell::RefCell, collections::HashMap};
@@ -13,7 +13,7 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static CANISTER_REGISTRY: RefCell<HashMap<String, Canister>> = RefCell::new(HashMap::new());
+    pub static CANISTER_REGISTRY: RefCell<HashMap<CanisterType, Canister>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -23,14 +23,14 @@ thread_local! {
 #[derive(Debug, ThisError)]
 pub enum CanisterRegistryError {
     #[error("canister '{0}' not found")]
-    CanisterNotFound(String),
+    CanisterNotFound(CanisterType),
 }
 
 ///
 /// CanisterRegistryView
 ///
 
-pub type CanisterRegistryView = Vec<(String, CanisterView)>;
+pub type CanisterRegistryView = Vec<(CanisterType, CanisterView)>;
 
 ///
 /// CanisterRegistry
@@ -45,36 +45,32 @@ impl CanisterRegistry {
         Self::default()
     }
 
-    //
-    // METHODS
-    //
-
     #[must_use]
-    pub fn get(path: &str) -> Option<Canister> {
-        CANISTER_REGISTRY.with_borrow(|reg| reg.get(path).cloned())
+    pub fn get(ty: &CanisterType) -> Option<Canister> {
+        CANISTER_REGISTRY.with_borrow(|reg| reg.get(ty).cloned())
     }
 
-    pub fn try_get(path: &str) -> Result<Canister, Error> {
-        if let Some(canister) = Self::get(path) {
-            Ok(canister)
-        } else {
-            Err(Error::from(StateError::CanisterRegistryError(
-                CanisterRegistryError::CanisterNotFound(path.to_string()),
-            )))?
-        }
+    pub fn try_get(ty: &CanisterType) -> Result<Canister, Error> {
+        Self::get(ty).ok_or_else(|| {
+            Error::from(StateError::CanisterRegistryError(
+                CanisterRegistryError::CanisterNotFound(ty.clone()),
+            ))
+        })
     }
 
     #[allow(clippy::cast_precision_loss)]
-    pub fn insert(canister: &Canister) {
+    pub fn insert(canister_type: &CanisterType, canister: Canister) {
+        let wasm_size = canister.wasm.len();
+
         CANISTER_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(canister.kind.to_string(), canister.clone());
+            reg.insert(canister_type.clone(), canister);
         });
 
         log!(
             Log::Info,
             "📄 canister_registry.insert: {} ({:.2} KB)",
-            canister.kind,
-            canister.wasm.len() as f64 / 1000.0
+            canister_type,
+            wasm_size as f64 / 1000.0
         );
     }
 
@@ -82,9 +78,9 @@ impl CanisterRegistry {
     // IMPORT & EXPORT
     //
 
-    pub fn import(canisters: &[Canister]) {
-        for canister in canisters {
-            Self::insert(canister);
+    pub fn import(canisters: &'static [(&'static CanisterType, Canister)]) {
+        for (ty, canister) in canisters {
+            Self::insert(ty, canister.clone());
         }
     }
 

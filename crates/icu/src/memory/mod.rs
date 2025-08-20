@@ -41,7 +41,6 @@ pub(crate) const MEMORY_REGISTRY_MEMORY_ID: u8 = 0;
 
 pub(crate) const APP_STATE_MEMORY_ID: u8 = 1;
 pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 2;
-
 pub(crate) const SUBNET_REGISTRY_MEMORY_ID: u8 = 3;
 pub(crate) const SUBNET_DIRECTORY_MEMORY_ID: u8 = 4;
 pub(crate) const CHILD_INDEX_MEMORY_ID: u8 = 5;

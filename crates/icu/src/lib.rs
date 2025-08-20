@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod canister;
 pub mod config;
 pub mod guard;
 pub mod ic;
@@ -16,6 +17,7 @@ pub mod export {
 pub use Error as IcuError;
 
 use candid::CandidType;
+use canister::CanisterType;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
 
@@ -24,6 +26,8 @@ use thiserror::Error as ThisError;
 ///
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub static TEST: CanisterType = CanisterType::custom("test");
 
 ///
 /// Prelude
