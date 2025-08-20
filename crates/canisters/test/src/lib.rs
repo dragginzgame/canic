@@ -2,7 +2,7 @@
 
 use icu::{
     Error,
-    interface::{request::create_canister_request, response::Response},
+    interface::{request::create_canister_request, response::CreateCanisterResponse},
     prelude::*,
 };
 
@@ -20,7 +20,7 @@ async fn icu_upgrade() {}
 
 // create_test
 #[update]
-async fn create_test() -> Result<Response, Error> {
+async fn create_test() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>("test", None).await
 }
 

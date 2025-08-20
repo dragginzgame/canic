@@ -18,7 +18,10 @@ macro_rules! icu_endpoints {
         #[::icu::ic::update]
         async fn icu_canister_upgrade_children(
             canister_id: Option<::candid::Principal>,
-        ) -> Result<Vec<Result<::icu::interface::response::Response, ::icu::Error>>, ::icu::Error> {
+        ) -> Result<
+            Vec<Result<::icu::interface::response::UpgradeCanisterResponse, ::icu::Error>>,
+            ::icu::Error,
+        > {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
             let mut results = Vec::new();

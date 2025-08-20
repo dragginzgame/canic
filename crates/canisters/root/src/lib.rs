@@ -3,7 +3,8 @@
 use icu::{
     Error,
     interface::{
-        request::create_canister_request, response::Response, root::root_create_canisters,
+        request::create_canister_request, response::CreateCanisterResponse,
+        root::root_create_canisters,
     },
     prelude::*,
     state::canister::{Attributes, Canister, DirectoryPolicy},
@@ -42,7 +43,7 @@ pub const CANISTERS: &[Canister] = &[(Canister {
 
 // create_test
 #[update]
-async fn create_test() -> Result<Response, Error> {
+async fn create_test() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>("test", None).await
 }
 

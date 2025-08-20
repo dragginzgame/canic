@@ -1,7 +1,11 @@
 use crate::{
     Error,
     ic::call::Call,
-    interface::{InterfaceError, ic::IcError, response::Response},
+    interface::{
+        InterfaceError,
+        ic::IcError,
+        response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
+    },
     memory::{CanisterParent, CanisterState, ChildIndex},
 };
 use candid::{CandidType, Principal, encode_one};
@@ -82,7 +86,10 @@ pub async fn request(request: Request) -> Result<Response, Error> {
 }
 
 // create_canister_request
-pub async fn create_canister_request<A>(kind: &str, extra: Option<A>) -> Result<Response, Error>
+pub async fn create_canister_request<A>(
+    kind: &str,
+    extra: Option<A>,
+) -> Result<CreateCanisterResponse, Error>
 where
     A: CandidType + Send + Sync,
 {
@@ -107,38 +114,45 @@ where
         extra_arg: encoded,
     });
 
-    match request(q).await {
-        Ok(response) => match response {
-            Response::CreateCanister(ref res) => {
-                // update the local child index
-                ChildIndex::insert(res.new_canister_pid, kind);
+    match request(q).await? {
+        Response::CreateCanister(res) => {
+            // update the local child index
+            ChildIndex::insert(res.new_canister_pid, kind);
 
-                Ok(response)
-            }
-            _ => Err(InterfaceError::RequestError(
-                RequestError::InvalidResponseType,
-            ))?,
-        },
-        Err(e) => Err(e),
+            Ok(res)
+        }
+        _ => Err(InterfaceError::RequestError(
+            RequestError::InvalidResponseType,
+        ))?,
     }
 }
 
 // upgrade_canister_request
-pub async fn upgrade_canister_request(canister_pid: Principal) -> Result<Response, Error> {
+pub async fn upgrade_canister_request(
+    canister_pid: Principal,
+) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
     let kind = ChildIndex::try_get(&canister_pid)?;
 
     // send the request
     let q = Request::UpgradeCanister(UpgradeCanisterRequest { canister_pid, kind });
-    let res = request(q).await?;
 
-    Ok(res)
+    match request(q).await? {
+        Response::UpgradeCanister(res) => Ok(res),
+        _ => Err(InterfaceError::RequestError(
+            RequestError::InvalidResponseType,
+        ))?,
+    }
 }
 
 // cycles_request
-pub async fn cycles_request(cycles: u128) -> Result<Response, Error> {
+pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
-    let res = request(q).await?;
 
-    Ok(res)
+    match request(q).await? {
+        Response::Cycles(res) => Ok(res),
+        _ => Err(InterfaceError::RequestError(
+            RequestError::InvalidResponseType,
+        ))?,
+    }
 }
