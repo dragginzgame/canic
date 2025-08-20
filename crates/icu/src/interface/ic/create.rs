@@ -121,6 +121,7 @@ async fn register_installed_canister(
         canister_type,
         parents.last().map(|p| p.principal),
     );
+    crate::log!(crate::Log::Warn, "subnet_registry inserting {canister_pid}");
 
     // insert into the SubnetDirectory
     // and then cascade it down from root
