@@ -37,12 +37,12 @@ get_current_version() {
 bump_version() {
     local current_version=$1
     local bump_type=$2
-    
+
     IFS='.' read -ra VERSION_PARTS <<< "$current_version"
     local major=${VERSION_PARTS[0]}
     local minor=${VERSION_PARTS[1]}
     local patch=${VERSION_PARTS[2]}
-    
+
     case $bump_type in
         "major")
             echo "$((major + 1)).0.0"
@@ -72,7 +72,7 @@ update_cargo_version() {
 update_changelog() {
     local new_version=$1
     local current_date=$(date +%Y-%m-%d)
-    
+
     # Create changelog if it doesn't exist
     if [ ! -f "CHANGELOG.md" ]; then
         cat > CHANGELOG.md << CHANGELOG_EOF
@@ -89,11 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 CHANGELOG_EOF
         print_success "Created CHANGELOG.md"
-    else
-        # Add new version entry
-        sed -i.bak "s/## \[Unreleased\]/## [$new_version] - $current_date\n\n## [Unreleased]/" CHANGELOG.md
-        rm CHANGELOG.md.bak
-        print_success "Added version $new_version to CHANGELOG.md"
     fi
 }
 
@@ -101,13 +96,19 @@ CHANGELOG_EOF
 create_git_tag() {
     local version=$1
     local tag_name="v$version"
-    
-    # Check if tag already exists
+
+    # Check if tag exists locally
     if git tag -l | grep -q "^$tag_name$"; then
-        print_error "Tag $tag_name already exists!"
+        print_error "Tag $tag_name already exists locally!"
         exit 1
     fi
-    
+
+    # Check if tag exists on remote
+    if git ls-remote --tags origin "$tag_name" | grep -q "$tag_name"; then
+        print_error "Tag $tag_name already exists on remote!"
+        exit 1
+    fi
+
     git tag -a "$tag_name" -m "Release version $version"
     print_success "Created git tag $tag_name"
 }
