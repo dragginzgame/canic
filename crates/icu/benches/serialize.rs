@@ -9,8 +9,8 @@ struct CanisterPoolEntry {
 
 fn bench_minicbor(c: &mut Criterion) {
     let entry = CanisterPoolEntry {
-        created_at: 123456789,
-        cycles: 123123123, // must fit in u64 for minicbor
+        created_at: 123_456_789,
+        cycles: 123_123_123, // must fit in u64 for minicbor
     };
 
     c.bench_function("minicbor serialize/deserialize", |b| {
@@ -18,7 +18,7 @@ fn bench_minicbor(c: &mut Criterion) {
             let bytes = minicbor_serde::to_vec(&entry).unwrap();
             let decoded: CanisterPoolEntry = minicbor_serde::from_slice(&bytes).unwrap();
             black_box(decoded)
-        })
+        });
     });
 }
 
