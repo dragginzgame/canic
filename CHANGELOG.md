@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - ic-stable-structures bumped to 0.7.1
 - CanisterType in prelude
 - fixed auth race condition
+- added the CanisterPool structure to root only
+- added uninstall_canister to the interface::ic
 
 ## [0.3.4] - 2025-08-20
 - relaxed the restriction that directory canisters can only be created under root

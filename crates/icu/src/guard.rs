@@ -1,6 +1,6 @@
 use crate::{
     ic::api::{is_controller, msg_caller},
-    memory::{self, cells::AppMode},
+    memory::{AppState, app_state::AppMode},
 };
 use thiserror::Error as ThisError;
 
@@ -25,7 +25,7 @@ pub fn guard_query() -> Result<(), String> {
         return Ok(());
     }
 
-    match memory::AppState::get_mode() {
+    match AppState::get_mode() {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),
     }
@@ -37,7 +37,7 @@ pub fn guard_update() -> Result<(), String> {
         return Ok(());
     }
 
-    match memory::AppState::get_mode() {
+    match AppState::get_mode() {
         AppMode::Enabled => Ok(()),
         AppMode::Readonly => Err(GuardError::AppReadonly.to_string()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),

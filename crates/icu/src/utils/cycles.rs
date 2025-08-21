@@ -12,7 +12,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
 #[must_use]
 #[allow(clippy::cast_precision_loss)]
 pub fn format_cycles(cycles: u128) -> String {
-    format!("{:.6} TC", cycles as f64 / TC as f64)
+    format!("{:.3} TC", cycles as f64 / TC as f64)
 }
 
 // parse_cycles

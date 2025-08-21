@@ -48,9 +48,8 @@ impl CycleTracker {
             }
 
             // Do one immediately
-            if Self::track() {
-                log!(Log::Ok, "cycle tracker starting");
-            }
+            let _ = Self::track();
+            //log!(Log::Ok, "cycle tracker starting");
 
             let id = set_timer_interval(std::time::Duration::from_secs(TIMEOUT_SECS), || {
                 if Self::track() {

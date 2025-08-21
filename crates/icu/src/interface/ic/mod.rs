@@ -8,7 +8,7 @@ use crate::{
         call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
             self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
-            InstallCodeArgs, WasmModule,
+            InstallCodeArgs, UninstallCodeArgs, WasmModule, uninstall_code,
         },
     },
     interface::InterfaceError,
@@ -61,12 +61,6 @@ impl From<CallError> for IcError {
     }
 }
 
-// canister_self
-#[must_use]
-pub fn canister_self() -> Principal {
-    crate::ic::api::canister_self()
-}
-
 // canister_status
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
     let args = CanisterStatusArgs {
@@ -85,17 +79,8 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
     let args = DepositCyclesArgs {
         canister_id: canister_pid,
     };
+
     mgmt::deposit_cycles(&args, cycles)
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
-
-    Ok(())
-}
-
-// install_code
-pub async fn install_code(args: &InstallCodeArgs) -> Result<(), Error> {
-    mgmt::install_code(args)
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
@@ -110,8 +95,8 @@ pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Erro
     Ok(response.module_hash)
 }
 
-/// ic_upgrade_canister
-pub async fn ic_upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
+/// upgrade_canister
+pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
     // module_hash
     let module_hash = module_hash(canister_pid).await?;
     if module_hash == Some(get_wasm_hash(bytes)) {
@@ -139,6 +124,20 @@ pub async fn ic_upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Resul
         canister_pid,
         bytes_fmt,
     );
+
+    Ok(())
+}
+
+// uninstall_canister
+pub async fn uninstall_canister(canister_pid: Principal) -> Result<(), Error> {
+    let args = UninstallCodeArgs {
+        canister_id: canister_pid,
+    };
+
+    uninstall_code(&args)
+        .await
+        .map_err(|e| IcError::CallFailed(e.to_string()))
+        .map_err(InterfaceError::IcError)?;
 
     Ok(())
 }

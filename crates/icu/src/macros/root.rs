@@ -6,7 +6,7 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::ic::update]
-        async fn icu_app(cmd: ::icu::memory::AppCommand) -> Result<(), ::icu::Error> {
+        async fn icu_app(cmd: ::icu::memory::app_state::AppCommand) -> Result<(), ::icu::Error> {
             ::icu::memory::AppState::command(cmd)?;
 
             let bundle = ::icu::interface::state::StateBundle::app_state();
@@ -38,7 +38,15 @@ macro_rules! icu_endpoints_root {
             ::icu::interface::ic::canister_status(pid).await
         }
 
-        // icu_subnet_registry
+        ///
+        /// MEMORY ENDPOINTS
+        ///
+
+        #[::icu::ic::query]
+        fn icu_canister_pool() -> ::icu::memory::CanisterPoolView {
+            $crate::memory::CanisterPool::export()
+        }
+
         #[::icu::ic::query]
         fn icu_subnet_registry() -> ::icu::memory::SubnetRegistryView {
             $crate::memory::SubnetRegistry::export()

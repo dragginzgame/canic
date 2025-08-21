@@ -4,7 +4,10 @@ use crate::{
     interface::{InterfaceError, ic::IcError},
     log,
     memory::{
-        AppState, AppStateData, CanisterState, ChildIndex, SubnetDirectory, SubnetDirectoryView,
+        app_state::{AppState, AppStateData},
+        canister_state::CanisterState,
+        child_index::ChildIndex,
+        subnet_directory::{SubnetDirectory, SubnetDirectoryView},
     },
 };
 use candid::{CandidType, Principal};

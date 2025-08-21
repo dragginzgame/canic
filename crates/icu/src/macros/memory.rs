@@ -17,7 +17,9 @@ macro_rules! icu_register_memory {
                 $id,
                 err
             );
-        } else {
+        }
+        /*
+         else {
             $crate::log!(
                 $crate::Log::Info,
                 "💾 icu_register_memory registered {} @ {}",
@@ -25,6 +27,7 @@ macro_rules! icu_register_memory {
                 $id
             );
         }
+        */
 
         result.unwrap();
 

@@ -13,7 +13,6 @@ pub async fn root_create_canisters() -> Result<(), Error> {
         };
 
         for _ in 0..auto_create {
-            // let this bubble up instead of unwrap()
             create_canister_request::<()>(&ty.clone(), None).await?;
         }
     }

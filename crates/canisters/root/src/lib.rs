@@ -4,8 +4,8 @@ use icu::{
     Error, TEST,
     canister::CanisterType,
     interface::{
-        request::create_canister_request, response::CreateCanisterResponse,
-        root::root_create_canisters,
+        ic::create_canister_pool, request::create_canister_request,
+        response::CreateCanisterResponse, root::root_create_canisters,
     },
     prelude::*,
     state::canister::{Attributes, Canister, DirectoryPolicy},
@@ -47,7 +47,13 @@ pub static CANISTERS: &[(&CanisterType, Canister)] = &[(
 // create_test
 #[update]
 async fn create_test() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&TEST, None).await
+    create_canister_request::<()>(TEST, None).await
+}
+
+// create_pool
+#[update]
+async fn create_pool() -> Result<Principal, Error> {
+    create_canister_pool().await
 }
 
 // end

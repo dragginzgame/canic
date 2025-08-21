@@ -7,7 +7,10 @@ use crate::{
         ic::IcError,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
     },
-    memory::{CanisterParent, CanisterState, ChildIndex},
+    memory::{
+        canister_state::{CanisterParent, CanisterState},
+        child_index::ChildIndex,
+    },
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::Deserialize;

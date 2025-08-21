@@ -5,7 +5,9 @@ use thiserror::Error as ThisError;
 
 ///
 /// Serialize/Deserialize
+///
 /// for consistent use of minicbor (super efficient, no_std)
+/// minicbor does not support u128/i128 but its 3x faster so who cares
 ///
 
 ///

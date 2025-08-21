@@ -13,6 +13,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum InterfaceError {
+    #[error("this function can only be called from the root canister")]
+    NotRoot,
+
     #[error(transparent)]
     IcError(#[from] ic::IcError),
 

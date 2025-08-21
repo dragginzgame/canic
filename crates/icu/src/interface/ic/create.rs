@@ -12,10 +12,87 @@ use crate::{
         state::{StateBundle, cascade, update_canister},
     },
     log,
-    memory::{CanisterParent, CanisterState, CanisterStatus, SubnetDirectory, SubnetRegistry},
+    memory::{
+        CanisterPool, CanisterState, SubnetDirectory, SubnetRegistry,
+        canister_state::CanisterParent, subnet_registry::CanisterStatus,
+    },
     state::canister::CanisterRegistry,
+    utils::cycles::format_cycles,
 };
 use candid::{Principal, encode_args};
+
+///
+/// CreateCanisterResult
+///
+
+pub struct CreateCanisterResult {
+    pub canister_pid: Principal,
+    pub cycles: u128,
+}
+
+///
+/// create_canister_full
+/// creates the canister, installs it, adds it to registries
+///
+pub async fn create_canister_full(
+    canister_type: &CanisterType,
+    parents: &[CanisterParent],
+    extra_arg: Option<Vec<u8>>,
+) -> Result<Principal, Error> {
+    if !CanisterState::is_root() {
+        Err(InterfaceError::NotRoot)?;
+    }
+
+    let CreateCanisterResult {
+        canister_pid,
+        cycles,
+    } = create_canister().await?;
+
+    // Phase 1: insert as pending
+    register_pending_canister(canister_pid, canister_type, parents);
+
+    // Phase 2: install wasm
+    install_canister(canister_type, canister_pid, parents, extra_arg).await?;
+
+    // Phase 3: mark installed + cascade
+    mark_canister_installed(canister_type, canister_pid).await?;
+
+    log!(
+        Log::Ok,
+        "⚡ create_canister_full: {} {} ({})",
+        canister_pid,
+        canister_type,
+        format_cycles(cycles),
+    );
+
+    Ok(canister_pid)
+}
+
+///
+/// create_canister_pool
+/// creates an empty canister and registers it with the CanisterPool
+///
+pub async fn create_canister_pool() -> Result<Principal, Error> {
+    if !CanisterState::is_root() {
+        Err(InterfaceError::NotRoot)?;
+    }
+
+    let CreateCanisterResult {
+        canister_pid,
+        cycles,
+    } = create_canister().await?;
+
+    log!(
+        Log::Ok,
+        "⚡ create_canister_pool: pid {} ({})",
+        canister_pid,
+        format_cycles(cycles)
+    );
+
+    CanisterPool::register(canister_pid, cycles);
+
+    Ok(canister_pid)
+}
 
 ///
 /// get_controllers
@@ -33,10 +110,10 @@ fn get_controllers() -> Result<Vec<Principal>, Error> {
 }
 
 ///
-/// raw_create_canister
+/// create_canister
 /// allocates PID + cycles + controllers
 ///
-async fn raw_create_canister() -> Result<Principal, Error> {
+async fn create_canister() -> Result<CreateCanisterResult, Error> {
     let cycles = 5_000_000_000_000;
     let controllers = get_controllers()?;
     let settings = Some(CanisterSettings {
@@ -52,7 +129,10 @@ async fn raw_create_canister() -> Result<Principal, Error> {
         .map_err(InterfaceError::IcError)?
         .canister_id;
 
-    Ok(canister_pid)
+    Ok(CreateCanisterResult {
+        canister_pid,
+        cycles,
+    })
 }
 
 ///
@@ -91,7 +171,7 @@ async fn install_canister(
     let bytes_fmt = bytes.len() as f64 / 1_000.0;
     log!(
         Log::Ok,
-        "⚡ install_canister: installed {bytes_fmt} KB on {canister_pid} ({canister_type})"
+        "⚡ install_canister: installed {bytes_fmt} KiB on {canister_pid} ({canister_type})"
     );
 
     Ok(())
@@ -143,40 +223,4 @@ async fn mark_canister_installed(
     }
 
     Ok(())
-}
-
-/// ic_create_canister_full
-pub async fn ic_create_canister_full(
-    canister_type: &CanisterType,
-    parents: &[CanisterParent],
-    extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, Error> {
-    let canister_pid = raw_create_canister().await?;
-
-    // Phase 1: insert as pending
-    register_pending_canister(canister_pid, canister_type, parents);
-
-    // Phase 2: install wasm
-    install_canister(canister_type, canister_pid, parents, extra_arg).await?;
-
-    // Phase 3: mark installed + cascade
-    mark_canister_installed(canister_type, canister_pid).await?;
-
-    log!(
-        Log::Ok,
-        "⚡ create_canister_full: {canister_type} {canister_pid} installed + registered"
-    );
-
-    Ok(canister_pid)
-}
-
-///
-/// ic_create_canister_empty
-/// high-level: create only (empty)
-///
-pub async fn ic_create_canister_empty() -> Result<Principal, Error> {
-    let canister_pid = raw_create_canister().await?;
-    log!(Log::Ok, "⚡ create_canister_empty: pid {canister_pid}");
-
-    Ok(canister_pid)
 }
