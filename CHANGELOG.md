@@ -5,7 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.3.8]
+## [0.4.0] - Canister Pool
+- Rewrote a lot of the canister states, now we have CanisterChildren, CanisterDirectory, CanisterRegistry
+- CanisterConfig -> CanisterCatalog(Type, Config)
+- added icu_create_pool_canister and icu_move_canister_to_pool
+
+## [0.3.8] - 2025-08-21
 - fixed patch script
 
 ## [0.3.7] - 2025-08-21
