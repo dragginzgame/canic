@@ -71,7 +71,7 @@ possible security issues
 - use this for toko
 
 ## [0.2.1] - 2025-08-11
-- changes to ergonomics on the CanisterRegistry
+- changes to ergonomics on the CanisterConfig
 
 ## [0.2.0] - Toko Time
 - fresh new minor release as we're gearing up for Toko now
@@ -153,7 +153,7 @@ it's also sent via canister create args
 - memory counter has now evolved into a Registry
 
 ## [0.1.2]
-- changed the WasmManager to a CanisterRegistry
+- changed the WasmManager to a CanisterConfig
 - added a MemoryCounter to handle allocation of memory_ids
 
 ## [0.1.1]

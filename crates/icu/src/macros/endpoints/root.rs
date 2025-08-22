@@ -39,6 +39,24 @@ macro_rules! icu_endpoints_root {
         }
 
         ///
+        /// POOL ENDPOINTS
+        ///
+
+        #[update]
+        async fn icu_create_pool_canister() -> Result<Principal, Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            ::icu::interface::ic::create_pool_canister().await
+        }
+
+        #[update]
+        async fn icu_move_canister_to_pool(pid: Principal) -> Result<(), Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            ::icu::interface::ic::move_canister_to_pool(pid).await
+        }
+
+        ///
         /// MEMORY ENDPOINTS
         ///
 
@@ -48,8 +66,8 @@ macro_rules! icu_endpoints_root {
         }
 
         #[::icu::ic::query]
-        fn icu_subnet_registry() -> ::icu::memory::SubnetRegistryView {
-            $crate::memory::SubnetRegistry::export()
+        fn icu_canister_registry() -> ::icu::memory::CanisterRegistryView {
+            $crate::memory::CanisterRegistry::export()
         }
     };
 }

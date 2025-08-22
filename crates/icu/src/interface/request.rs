@@ -7,10 +7,7 @@ use crate::{
         ic::IcError,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
     },
-    memory::{
-        canister_state::{CanisterParent, CanisterState},
-        child_index::ChildIndex,
-    },
+    memory::{CanisterChildren, CanisterState, canister::CanisterEntry},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::Deserialize;
@@ -44,7 +41,7 @@ pub enum Request {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
     pub canister_type: CanisterType,
-    pub parents: Vec<CanisterParent>,
+    pub parents: Vec<CanisterEntry>,
     pub extra_arg: Option<Vec<u8>>,
 }
 
@@ -108,7 +105,7 @@ where
 
     // build parents
     let mut parents = CanisterState::get_parents();
-    let this = CanisterParent::this()?;
+    let this = CanisterEntry::this()?;
     parents.push(this);
 
     // build request
@@ -121,7 +118,7 @@ where
     match request(q).await? {
         Response::CreateCanister(res) => {
             // update the local child index
-            ChildIndex::insert(res.new_canister_pid, canister_type.clone());
+            CanisterChildren::insert(res.new_canister_pid, canister_type.clone());
 
             Ok(res)
         }
@@ -136,7 +133,7 @@ pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
-    let canister_type = ChildIndex::try_get(&canister_pid)?;
+    let canister_type = CanisterChildren::try_get(&canister_pid)?;
 
     // send the request
     let q = Request::UpgradeCanister(UpgradeCanisterRequest {

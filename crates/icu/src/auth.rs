@@ -2,7 +2,7 @@ use crate::{
     Error,
     canister::CanisterType,
     ic::api::{canister_self, msg_caller},
-    memory::{CanisterState, ChildIndex, SubnetDirectory, SubnetRegistry},
+    memory::{CanisterChildren, CanisterDirectory, CanisterRegistry, CanisterState},
 };
 use candid::Principal;
 use std::pin::Pin;
@@ -135,7 +135,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        match SubnetRegistry::get(caller) {
+        match CanisterRegistry::get(caller) {
             Some(_) => Ok(()),
             None => Err(AuthError::NotApp(caller))?,
         }
@@ -147,7 +147,7 @@ pub fn is_app(caller: Principal) -> RuleResult {
 #[must_use]
 pub fn is_canister_type(caller: Principal, ty: CanisterType) -> RuleResult {
     Box::pin(async move {
-        SubnetDirectory::try_get(&ty)
+        CanisterDirectory::try_get(&ty)
             .map_err(|_| AuthError::NotCanisterType(caller, ty.clone()))?;
 
         Ok(())
@@ -158,7 +158,7 @@ pub fn is_canister_type(caller: Principal, ty: CanisterType) -> RuleResult {
 #[must_use]
 pub fn is_child(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        ChildIndex::get(&caller).ok_or(AuthError::NotChild(caller))?;
+        CanisterChildren::get(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })

@@ -13,13 +13,14 @@ use crate::{
     },
     log,
     memory::{
-        CanisterPool, CanisterState, SubnetDirectory, SubnetRegistry,
-        canister_state::CanisterParent, subnet_registry::CanisterStatus,
+        CanisterDirectory, CanisterPool, CanisterRegistry, CanisterState, canister::CanisterEntry,
     },
-    state::canister::CanisterRegistry,
+    state::canister::CanisterCatalog,
     utils::cycles::format_cycles,
 };
 use candid::{Principal, encode_args};
+
+const CYCLES: u128 = 5_000_000_000_000;
 
 ///
 /// CreateCanisterResult
@@ -31,35 +32,46 @@ pub struct CreateCanisterResult {
 }
 
 ///
-/// create_canister_full
+/// create_and_install_canister
 /// creates the canister, installs it, adds it to registries
 ///
-pub async fn create_canister_full(
+pub async fn create_and_install_canister(
     canister_type: &CanisterType,
-    parents: &[CanisterParent],
+    parents: &[CanisterEntry],
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
     if !CanisterState::is_root() {
         Err(InterfaceError::NotRoot)?;
     }
 
-    let CreateCanisterResult {
-        canister_pid,
-        cycles,
-    } = create_canister().await?;
+    //
+    // Phase 0: Check Pool
+    //
+    let (canister_pid, cycles) = if let Some((pid, entry)) = CanisterPool::pop_first() {
+        log!(Log::Ok, "⚡ reusing {pid} from pool ({entry:?})");
 
-    // Phase 1: insert as pending
-    register_pending_canister(canister_pid, canister_type, parents);
+        (pid, entry.cycles)
+    } else {
+        let CreateCanisterResult {
+            canister_pid,
+            cycles,
+        } = create_canister().await?;
+
+        (canister_pid, cycles)
+    };
+
+    // Phase 1: insert with Created status
+    register_created(canister_pid, canister_type, parents);
 
     // Phase 2: install wasm
-    install_canister(canister_type, canister_pid, parents, extra_arg).await?;
+    install_canister(canister_pid, canister_type, parents, extra_arg).await?;
 
-    // Phase 3: mark installed + cascade
-    mark_canister_installed(canister_type, canister_pid).await?;
+    // Phase 3: mark as installed + cascade
+    register_installed(canister_type, canister_pid).await?;
 
     log!(
         Log::Ok,
-        "⚡ create_canister_full: {} {} ({})",
+        "⚡ create_canister: {} ({}, {})",
         canister_pid,
         canister_type,
         format_cycles(cycles),
@@ -69,36 +81,10 @@ pub async fn create_canister_full(
 }
 
 ///
-/// create_canister_pool
-/// creates an empty canister and registers it with the CanisterPool
-///
-pub async fn create_canister_pool() -> Result<Principal, Error> {
-    if !CanisterState::is_root() {
-        Err(InterfaceError::NotRoot)?;
-    }
-
-    let CreateCanisterResult {
-        canister_pid,
-        cycles,
-    } = create_canister().await?;
-
-    log!(
-        Log::Ok,
-        "⚡ create_canister_pool: pid {} ({})",
-        canister_pid,
-        format_cycles(cycles)
-    );
-
-    CanisterPool::register(canister_pid, cycles);
-
-    Ok(canister_pid)
-}
-
-///
 /// get_controllers
 /// we get the hardcoded list from config, plus root
 ///
-fn get_controllers() -> Result<Vec<Principal>, Error> {
+pub fn get_controllers() -> Result<Vec<Principal>, Error> {
     let config = Config::try_get()?;
     let mut controllers = config.controllers.clone();
 
@@ -113,8 +99,7 @@ fn get_controllers() -> Result<Vec<Principal>, Error> {
 /// create_canister
 /// allocates PID + cycles + controllers
 ///
-async fn create_canister() -> Result<CreateCanisterResult, Error> {
-    let cycles = 5_000_000_000_000;
+pub(super) async fn create_canister() -> Result<CreateCanisterResult, Error> {
     let controllers = get_controllers()?;
     let settings = Some(CanisterSettings {
         controllers: Some(controllers),
@@ -123,7 +108,7 @@ async fn create_canister() -> Result<CreateCanisterResult, Error> {
     let cc_args = CreateCanisterArgs { settings };
 
     // create
-    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles)
+    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, CYCLES)
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?
@@ -131,7 +116,7 @@ async fn create_canister() -> Result<CreateCanisterResult, Error> {
 
     Ok(CreateCanisterResult {
         canister_pid,
-        cycles,
+        cycles: CYCLES,
     })
 }
 
@@ -139,10 +124,10 @@ async fn create_canister() -> Result<CreateCanisterResult, Error> {
 /// install_canister
 /// fetches wasm + encodes args + installs
 ///
-async fn install_canister(
-    canister_type: &CanisterType,
+pub(super) async fn install_canister(
     canister_pid: Principal,
-    parents: &[CanisterParent],
+    canister_type: &CanisterType,
+    parents: &[CanisterEntry],
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
     let bundle = StateBundle::all();
@@ -151,7 +136,7 @@ async fn install_canister(
         .map_err(InterfaceError::from)?;
 
     // fetch the canister by its type
-    let canister = CanisterRegistry::try_get(canister_type)?;
+    let canister = CanisterCatalog::try_get(canister_type)?;
     let bytes = canister.wasm;
 
     // install code
@@ -166,29 +151,29 @@ async fn install_canister(
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
 
-    // log wasm size
-    #[allow(clippy::cast_precision_loss)]
-    let bytes_fmt = bytes.len() as f64 / 1_000.0;
     log!(
         Log::Ok,
-        "⚡ install_canister: installed {bytes_fmt} KiB on {canister_pid} ({canister_type})"
+        "⚡ install_canister: {} ({}, {:2}KiB)",
+        canister_pid,
+        canister_type,
+        bytes.len() as f64 / 1_024.0,
     );
 
     Ok(())
 }
 
 ///
-/// register_pending_canister
+/// register_created
 ///
 /// Insert into SubnetRegistry immediately after creation,
 /// before install_code runs.
 ///
-fn register_pending_canister(
+pub(super) fn register_created(
     canister_pid: Principal,
     canister_type: &CanisterType,
-    parents: &[CanisterParent],
+    parents: &[CanisterEntry],
 ) {
-    SubnetRegistry::register_pending(
+    CanisterRegistry::create(
         canister_pid,
         canister_type,
         parents.last().map(|p| p.principal),
@@ -196,26 +181,23 @@ fn register_pending_canister(
 }
 
 ///
-/// mark_canister_installed
+/// register_installed
 ///
 /// Update SubnetRegistry entry from Pending → Installed,
 /// then update SubnetDirectory + cascade if needed.
 ///
-async fn mark_canister_installed(
+pub(super) async fn register_installed(
     canister_type: &CanisterType,
     canister_pid: Principal,
 ) -> Result<(), Error> {
+    let cfg = CanisterCatalog::try_get(canister_type)?;
+
     // flip to Installed
-    SubnetRegistry::set_status(canister_pid, CanisterStatus::Installed)?;
+    CanisterRegistry::install(canister_pid, cfg.module_hash())?;
 
     // if this type uses the directory, insert + cascade
-    let uses_directory = CanisterRegistry::try_get(canister_type)?
-        .attributes
-        .uses_directory();
-
-    if uses_directory {
-        SubnetDirectory::can_insert(canister_type)?;
-        SubnetDirectory::insert(canister_type.clone(), canister_pid)?;
+    if cfg.attributes.uses_directory {
+        CanisterDirectory::insert(canister_type.clone(), canister_pid)?;
 
         let bundle = StateBundle::subnet_directory();
         update_canister(&canister_pid, &bundle).await?;

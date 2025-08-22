@@ -16,7 +16,7 @@ macro_rules! icu_start {
         #[::icu::ic::init]
         fn init(
             bundle: ::icu::interface::state::StateBundle,
-            parents: Vec<::icu::memory::canister_state::CanisterParent>,
+            parents: Vec<::icu::memory::canister::CanisterEntry>,
             args: Option<Vec<u8>>,
         ) {
             ::icu::log!(::icu::Log::Info, "🚀 init: {}", $canister_type);
@@ -67,8 +67,8 @@ macro_rules! icu_start_root {
             ::icu::memory::CanisterState::set_type(&::icu::canister::CanisterType::Root).unwrap();
             __icu_shared_setup();
 
-            // register in SubnetRegistry
-            ::icu::memory::SubnetRegistry::init_root(::icu::ic::api::canister_self());
+            // register in CanisterRegistry
+            ::icu::memory::CanisterRegistry::init_root(::icu::ic::api::canister_self());
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::ic::futures::spawn(icu_install());
@@ -87,7 +87,7 @@ macro_rules! icu_start_root {
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::CycleTracker::start();
-            ::icu::state::canister::CanisterRegistry::import(CANISTERS);
+            ::icu::state::canister::CanisterCatalog::import(CANISTERS);
             icu_setup();
         }
 

@@ -55,4 +55,4 @@ impl FromStr for CanisterType {
     }
 }
 
-impl_storable_bounded!(CanisterType, 64, false);
+impl_storable_bounded!(CanisterType, 48, false);

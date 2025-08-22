@@ -4,10 +4,8 @@ use crate::{
     interface::{InterfaceError, ic::IcError},
     log,
     memory::{
-        app_state::{AppState, AppStateData},
-        canister_state::CanisterState,
-        child_index::ChildIndex,
-        subnet_directory::{SubnetDirectory, SubnetDirectoryView},
+        AppState, AppStateData, CanisterChildren, CanisterDirectory, CanisterDirectoryView,
+        CanisterState,
     },
 };
 use candid::{CandidType, Principal};
@@ -20,7 +18,7 @@ use serde::Deserialize;
 #[derive(CandidType, Debug, Default, Deserialize)]
 pub struct StateBundle {
     app_state: Option<AppStateData>,
-    subnet_directory: Option<SubnetDirectoryView>,
+    canister_directory: Option<CanisterDirectoryView>,
 }
 
 impl StateBundle {
@@ -28,7 +26,7 @@ impl StateBundle {
     pub fn all() -> Self {
         Self {
             app_state: Some(AppState::export()),
-            subnet_directory: Some(SubnetDirectory::export()),
+            canister_directory: Some(CanisterDirectory::export()),
         }
     }
 
@@ -43,14 +41,14 @@ impl StateBundle {
     #[must_use]
     pub fn subnet_directory() -> Self {
         Self {
-            subnet_directory: Some(SubnetDirectory::export()),
+            canister_directory: Some(CanisterDirectory::export()),
             ..Default::default()
         }
     }
 
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.app_state.is_none() && self.subnet_directory.is_none()
+        self.app_state.is_none() && self.canister_directory.is_none()
     }
 
     fn debug(&self) -> String {
@@ -59,7 +57,7 @@ impl StateBundle {
         if self.app_state.is_some() {
             debug_str.push('a');
         }
-        if self.subnet_directory.is_some() {
+        if self.canister_directory.is_some() {
             debug_str.push('s');
         }
 
@@ -72,8 +70,8 @@ pub fn save_state(bundle: &StateBundle) {
     if let Some(data) = &bundle.app_state {
         AppState::import(*data);
     }
-    if let Some(data) = &bundle.subnet_directory {
-        SubnetDirectory::import(data.clone());
+    if let Some(data) = &bundle.canister_directory {
+        CanisterDirectory::import(data.clone());
     }
 
     //   let debug_str = &bundle.debug();
@@ -83,7 +81,7 @@ pub fn save_state(bundle: &StateBundle) {
 
 // cascade
 pub async fn cascade(bundle: &StateBundle) -> Result<(), Error> {
-    for (pid, _) in ChildIndex::export() {
+    for (pid, _) in CanisterChildren::export() {
         cascade_canister(&pid, bundle).await?;
     }
 

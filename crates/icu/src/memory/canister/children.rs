@@ -3,94 +3,94 @@ use crate::{
     canister::CanisterType,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory,
-    memory::{CHILD_INDEX_MEMORY_ID, MemoryError},
+    memory::{CANISTER_CHILDREN_MEMORY_ID, MemoryError},
 };
 use candid::Principal;
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
 //
-// CHILD_INDEX
+// CANISTER_CHILDREN
 //
 
 thread_local! {
-    static CHILD_INDEX: RefCell<ChildIndexCore<VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(ChildIndexCore::new(BTreeMap::init(icu_register_memory!(
-            CHILD_INDEX_MEMORY_ID
+    static CANISTER_CHILDREN: RefCell<CanisterChildrenCore<VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(CanisterChildrenCore::new(BTreeMap::init(icu_register_memory!(
+            CANISTER_CHILDREN_MEMORY_ID
         ))));
 }
 
 ///
-/// ChildIndexError
+/// CanisterChildrenError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum ChildIndexError {
+pub enum CanisterChildrenError {
     #[error("canister not found: {0}")]
     CanisterNotFound(Principal),
 }
 
 ///
-/// ChildIndex
+/// CanisterChildren
 ///
 
-pub struct ChildIndex {}
+pub struct CanisterChildren {}
 
-impl ChildIndex {
+impl CanisterChildren {
     #[must_use]
     pub fn is_empty() -> bool {
-        CHILD_INDEX.with_borrow(ChildIndexCore::is_empty)
+        CANISTER_CHILDREN.with_borrow(CanisterChildrenCore::is_empty)
     }
 
     #[must_use]
     pub fn get(pid: &Principal) -> Option<CanisterType> {
-        CHILD_INDEX.with_borrow(|core| core.get(pid))
+        CANISTER_CHILDREN.with_borrow(|core| core.get(pid))
     }
 
     pub fn try_get(pid: &Principal) -> Result<CanisterType, Error> {
-        CHILD_INDEX.with_borrow(|core| core.try_get(pid))
+        CANISTER_CHILDREN.with_borrow(|core| core.try_get(pid))
     }
 
     #[must_use]
     pub fn get_by_type(ty: &CanisterType) -> Vec<Principal> {
-        CHILD_INDEX.with_borrow(|core| core.get_by_type(ty))
+        CANISTER_CHILDREN.with_borrow(|core| core.get_by_type(ty))
     }
 
     pub fn insert(pid: Principal, ty: CanisterType) {
-        CHILD_INDEX.with_borrow_mut(|core| {
+        CANISTER_CHILDREN.with_borrow_mut(|core| {
             core.insert(pid, ty);
         });
     }
 
     pub fn remove(pid: &Principal) {
-        CHILD_INDEX.with_borrow_mut(|core| {
+        CANISTER_CHILDREN.with_borrow_mut(|core| {
             core.remove(pid);
         });
     }
 
     pub fn clear() {
-        CHILD_INDEX.with_borrow_mut(|core| {
+        CANISTER_CHILDREN.with_borrow_mut(|core| {
             core.clear();
         });
     }
 
     #[must_use]
-    pub fn export() -> ChildIndexView {
-        CHILD_INDEX.with_borrow(ChildIndexCore::export)
+    pub fn export() -> CanisterChildrenView {
+        CANISTER_CHILDREN.with_borrow(CanisterChildrenCore::export)
     }
 }
 
 ///
-/// ChildIndexCore
+/// CanisterChildrenCore
 ///
 
-pub type ChildIndexView = HashMap<Principal, CanisterType>;
+pub type CanisterChildrenView = HashMap<Principal, CanisterType>;
 
-pub struct ChildIndexCore<M: Memory> {
+pub struct CanisterChildrenCore<M: Memory> {
     map: BTreeMap<Principal, CanisterType, M>,
 }
 
-impl<M: Memory> ChildIndexCore<M> {
+impl<M: Memory> CanisterChildrenCore<M> {
     pub const fn new(map: BTreeMap<Principal, CanisterType, M>) -> Self {
         Self { map }
     }
@@ -115,7 +115,9 @@ impl<M: Memory> ChildIndexCore<M> {
         if let Some(ty) = self.get(pid) {
             Ok(ty)
         } else {
-            Err(MemoryError::from(ChildIndexError::CanisterNotFound(*pid)))?
+            Err(MemoryError::from(CanisterChildrenError::CanisterNotFound(
+                *pid,
+            )))?
         }
     }
 
@@ -131,12 +133,12 @@ impl<M: Memory> ChildIndexCore<M> {
         self.map.clear();
     }
 
-    pub fn export(&self) -> ChildIndexView {
+    pub fn export(&self) -> CanisterChildrenView {
         self.map.iter_pairs().collect()
     }
 }
 
-impl<M: Memory> IntoIterator for ChildIndexCore<M> {
+impl<M: Memory> IntoIterator for CanisterChildrenCore<M> {
     type Item = (Principal, CanisterType);
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
@@ -154,9 +156,9 @@ mod tests {
     use super::*;
     use crate::ic::structures::DefaultMemoryImpl;
 
-    fn make_core() -> ChildIndexCore<DefaultMemoryImpl> {
+    fn make_core() -> CanisterChildrenCore<DefaultMemoryImpl> {
         let map = BTreeMap::init(DefaultMemoryImpl::default());
-        ChildIndexCore::new(map)
+        CanisterChildrenCore::new(map)
     }
 
     #[test]

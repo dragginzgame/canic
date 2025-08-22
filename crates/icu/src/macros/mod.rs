@@ -1,7 +1,6 @@
 pub mod build;
 pub mod endpoints;
 pub mod memory;
-pub mod root;
 pub mod start;
 
 // log

@@ -1,10 +1,10 @@
 use crate::{
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    icu_register_memory, impl_storable_unbounded,
+    icu_register_memory, impl_storable_candid_unbounded,
     memory::CANISTER_POOL_MEMORY_ID,
     utils::time::now_secs,
 };
-use candid::{CandidType, Nat, Principal};
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -29,16 +29,15 @@ pub enum CanisterPoolError {}
 
 ///
 /// CanisterPoolEntry
-/// cycles stored as a candid Nat because minicbor doesn't support u128
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterPoolEntry {
     pub created_at: u64,
-    pub cycles: Nat,
+    pub cycles: u128,
 }
 
-impl_storable_unbounded!(CanisterPoolEntry);
+impl_storable_candid_unbounded!(CanisterPoolEntry);
 
 ///
 /// CanisterPool
@@ -52,10 +51,20 @@ impl CanisterPool {
     pub fn register(pid: Principal, cycles: u128) {
         let entry = CanisterPoolEntry {
             created_at: now_secs(),
-            cycles: cycles.into(),
+            cycles,
         };
 
         CANISTER_POOL.with_borrow_mut(|core| core.insert(pid, entry));
+    }
+
+    #[must_use]
+    pub fn pop_first() -> Option<(Principal, CanisterPoolEntry)> {
+        CANISTER_POOL.with_borrow_mut(|core| core.pop_first())
+    }
+
+    #[must_use]
+    pub fn remove(pid: &Principal) -> Option<CanisterPoolEntry> {
+        CANISTER_POOL.with_borrow_mut(|core| core.remove(pid))
     }
 
     #[must_use]
@@ -79,6 +88,22 @@ impl<M: Memory> CanisterPoolCore<M> {
 
     pub fn insert(&mut self, pid: Principal, entry: CanisterPoolEntry) {
         self.map.insert(pid, entry);
+    }
+
+    // gets the oldest canister in the pool
+    pub fn pop_first(&mut self) -> Option<(Principal, CanisterPoolEntry)> {
+        self.map
+            .iter_pairs()
+            .min_by_key(|(_, entry)| entry.created_at)
+            .map(|(pid, _)| {
+                let entry = self.map.remove(&pid).expect("pool entry must exist");
+
+                (pid, entry)
+            })
+    }
+
+    pub fn remove(&mut self, pid: &Principal) -> Option<CanisterPoolEntry> {
+        self.map.remove(pid)
     }
 
     pub fn export(&self) -> CanisterPoolView {

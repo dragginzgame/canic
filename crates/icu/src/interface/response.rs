@@ -2,11 +2,11 @@ use crate::{
     Error,
     ic::api::{canister_cycle_balance, msg_caller},
     interface::{
-        ic::{create_canister_full, deposit_cycles, upgrade_canister},
+        ic::{create_and_install_canister, deposit_cycles, upgrade_canister},
         request::{CreateCanisterRequest, CyclesRequest, Request, UpgradeCanisterRequest},
     },
-    memory::canister_state::CanisterState,
-    state::canister::CanisterRegistry,
+    memory::CanisterState,
+    state::canister::CanisterCatalog,
 };
 use candid::{CandidType, Principal};
 use serde::Deserialize;
@@ -63,7 +63,8 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 // create_canister_response
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
     let new_canister_pid =
-        create_canister_full(&req.canister_type, &req.parents, req.extra_arg.clone()).await?;
+        create_and_install_canister(&req.canister_type, &req.parents, req.extra_arg.clone())
+            .await?;
 
     Ok(Response::CreateCanister(CreateCanisterResponse {
         new_canister_pid,
@@ -72,7 +73,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 
 // upgrade_canister_response
 async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
-    let canister = CanisterRegistry::try_get(&req.canister_type)?;
+    let canister = CanisterCatalog::try_get(&req.canister_type)?;
     upgrade_canister(req.canister_pid, canister.wasm).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))

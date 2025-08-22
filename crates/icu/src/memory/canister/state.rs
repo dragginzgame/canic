@@ -1,12 +1,9 @@
 use crate::{
     Error,
     canister::CanisterType,
-    ic::{
-        api::canister_self,
-        structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    },
+    ic::structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
-    memory::{CANISTER_STATE_MEMORY_ID, MemoryError},
+    memory::{CANISTER_STATE_MEMORY_ID, MemoryError, canister::CanisterEntry},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -45,31 +42,10 @@ pub enum CanisterStateError {
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CanisterStateData {
     pub canister_type: Option<CanisterType>,
-    pub parents: Vec<CanisterParent>,
+    pub parents: Vec<CanisterEntry>,
 }
 
 impl_storable_unbounded!(CanisterStateData);
-
-///
-/// CanisterParent
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-pub struct CanisterParent {
-    pub canister_type: CanisterType,
-    pub principal: Principal,
-}
-
-impl CanisterParent {
-    pub fn this() -> Result<Self, Error> {
-        let canister_type = CanisterState::try_get_type()?;
-
-        Ok(Self {
-            canister_type,
-            principal: canister_self(),
-        })
-    }
-}
 
 ///
 /// CanisterState
@@ -102,7 +78,7 @@ impl CanisterState {
     }
 
     #[must_use]
-    pub fn get_parents() -> Vec<CanisterParent> {
+    pub fn get_parents() -> Vec<CanisterEntry> {
         CANISTER_STATE.with_borrow(CanisterStateCore::get_parents)
     }
 
@@ -116,7 +92,7 @@ impl CanisterState {
         CANISTER_STATE.with_borrow(|core| core.has_parent_pid(parent_pid))
     }
 
-    pub fn set_parents(parents: Vec<CanisterParent>) {
+    pub fn set_parents(parents: Vec<CanisterEntry>) {
         CANISTER_STATE.with_borrow_mut(|core| core.set_parents(parents));
     }
 
@@ -170,7 +146,7 @@ impl<M: Memory> CanisterStateCore<M> {
         Ok(())
     }
 
-    pub fn get_parents(&self) -> Vec<CanisterParent> {
+    pub fn get_parents(&self) -> Vec<CanisterEntry> {
         self.cell.get().parents.clone()
     }
 
@@ -187,7 +163,7 @@ impl<M: Memory> CanisterStateCore<M> {
             .any(|p| &p.principal == parent_pid)
     }
 
-    pub fn set_parents(&mut self, parents: Vec<CanisterParent>) {
+    pub fn set_parents(&mut self, parents: Vec<CanisterEntry>) {
         let mut state = self.cell.get().clone();
         state.parents = parents;
         self.cell.set(state);
@@ -211,7 +187,7 @@ fn self_principal() -> Principal {
 
     #[cfg(not(test))]
     {
-        canister_self()
+        crate::ic::api::canister_self()
     }
 }
 
@@ -251,7 +227,7 @@ mod tests {
         // no parents means fallback to self
         assert_eq!(core.get_root_pid(), self_principal());
 
-        let parent = CanisterParent {
+        let parent = CanisterEntry {
             canister_type: CanisterType::new("foo"),
             principal: Principal::anonymous(),
         };
@@ -263,11 +239,11 @@ mod tests {
     #[test]
     fn test_set_and_get_parents() {
         let mut core = make_core();
-        let p1 = CanisterParent {
+        let p1 = CanisterEntry {
             canister_type: CanisterType::new("alpha"),
             principal: Principal::anonymous(),
         };
-        let p2 = CanisterParent {
+        let p2 = CanisterEntry {
             canister_type: CanisterType::new("beta"),
             principal: Principal::management_canister(),
         };
@@ -290,11 +266,11 @@ mod tests {
     #[test]
     fn test_get_parent_by_type_and_has_parent_pid() {
         let mut core = make_core();
-        let p1 = CanisterParent {
+        let p1 = CanisterEntry {
             canister_type: CanisterType::new("alpha"),
             principal: Principal::anonymous(),
         };
-        let p2 = CanisterParent {
+        let p2 = CanisterEntry {
             canister_type: CanisterType::new("beta"),
             principal: Principal::management_canister(),
         };
@@ -317,7 +293,7 @@ mod tests {
     fn test_export_and_import() {
         let mut core = make_core();
         core.set_type(&CanisterType::new("worker")).unwrap();
-        let parent = CanisterParent {
+        let parent = CanisterEntry {
             canister_type: CanisterType::new("p"),
             principal: Principal::anonymous(),
         };

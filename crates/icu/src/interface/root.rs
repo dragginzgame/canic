@@ -1,13 +1,13 @@
 use crate::{
-    Error, Log, interface::request::create_canister_request, log, memory::SubnetDirectory,
-    state::canister::CanisterRegistry,
+    Error, Log, interface::request::create_canister_request, log, memory::CanisterDirectory,
+    state::canister::CanisterCatalog,
 };
 use candid::Principal;
 
 // root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {
     // Top-up pass
-    for (ty, canister) in CanisterRegistry::export() {
+    for (ty, canister) in CanisterCatalog::export() {
         let Some(auto_create) = canister.attributes.auto_create else {
             continue;
         };
@@ -18,7 +18,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for (ty, entry) in SubnetDirectory::export() {
+    for (ty, entry) in CanisterDirectory::export() {
         let canisters = entry
             .canisters
             .iter()

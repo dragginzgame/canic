@@ -37,6 +37,11 @@ macro_rules! icu_register_memory {
     }};
 }
 
+///
+/// MiniCBOR Versions
+/// (much faster, doesn't support u128)
+///
+
 // impl_storable_bounded
 #[macro_export]
 macro_rules! impl_storable_bounded {
@@ -81,6 +86,65 @@ macro_rules! impl_storable_unbounded {
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
                 $crate::serialize::deserialize(&bytes).unwrap()
+            }
+        }
+    };
+}
+
+///
+/// CANDID VERSIONS
+///
+
+#[macro_export]
+macro_rules! impl_storable_candid_bounded {
+    ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
+        impl $crate::ic::structures::storable::Storable for $ident {
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Bounded {
+                    max_size: $max_size,
+                    is_fixed_size: $is_fixed_size,
+                };
+
+            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
+                let bytes = candid::Encode!(self).expect("Candid encode failed");
+                ::std::borrow::Cow::Owned(bytes)
+            }
+
+            fn into_bytes(self) -> Vec<u8> {
+                candid::Encode!(&self).expect("Candid encode failed")
+            }
+
+            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
+                candid::Decode!(&bytes, $ident).expect("Candid decode failed")
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_storable_candid_unbounded {
+    ($ident:ident) => {
+        impl $crate::ic::structures::storable::Storable for $ident {
+            const BOUND: $crate::ic::structures::storable::Bound =
+                $crate::ic::structures::storable::Bound::Unbounded;
+
+            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
+                use $crate::ic::candid::Encode;
+
+                let bytes = Encode!(self).expect("Candid encode failed");
+                ::std::borrow::Cow::Owned(bytes)
+            }
+
+            fn into_bytes(self) -> Vec<u8> {
+                use $crate::ic::candid::Encode;
+
+                Encode!(&self).expect("Candid encode failed")
+            }
+
+            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
+                use $crate::ic::candid::Decode;
+
+                Decode!(&bytes, $ident).expect("Candid decode failed")
             }
         }
     };

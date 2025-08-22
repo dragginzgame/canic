@@ -1,3 +1,5 @@
+pub mod root;
+
 // icu_endpoints
 #[macro_export]
 macro_rules! icu_endpoints {
@@ -26,7 +28,7 @@ macro_rules! icu_endpoints {
 
             let mut results = Vec::new();
 
-            for (child_pid, _) in $crate::memory::ChildIndex::export() {
+            for (child_pid, _) in $crate::memory::CanisterChildren::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
                     // Push the result (either Ok(resp) or Err(err)) into the vec
                     let result =
@@ -104,18 +106,18 @@ macro_rules! icu_endpoints {
         }
 
         #[::icu::ic::query]
+        fn icu_canister_children() -> ::icu::memory::CanisterChildrenView {
+            $crate::memory::CanisterChildren::export()
+        }
+
+        #[::icu::ic::query]
         fn icu_canister_state() -> ::icu::memory::CanisterStateData {
             $crate::memory::CanisterState::export()
         }
 
         #[::icu::ic::query]
-        fn icu_child_index() -> ::icu::memory::ChildIndexView {
-            $crate::memory::ChildIndex::export()
-        }
-
-        #[::icu::ic::query]
-        fn icu_subnet_directory() -> ::icu::memory::SubnetDirectoryView {
-            $crate::memory::SubnetDirectory::export()
+        fn icu_canister_directory() -> ::icu::memory::CanisterDirectoryView {
+            $crate::memory::CanisterDirectory::export()
         }
 
         #[::icu::ic::query]

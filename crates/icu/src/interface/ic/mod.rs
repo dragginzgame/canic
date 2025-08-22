@@ -1,6 +1,8 @@
 mod create;
+mod pool;
 
 pub use create::*;
+pub use pool::*;
 
 use crate::{
     Error, Log,
@@ -24,6 +26,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum IcError {
+    #[error("cycles overflow")]
+    CyclesOverflow,
+
     #[error("call rejected: {0}")]
     CallFailed(String),
 
@@ -74,6 +79,20 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     Ok(res)
 }
 
+// get_cycles
+async fn get_cycles(canister_pid: Principal) -> Result<u128, Error> {
+    let status = canister_status(canister_pid).await?;
+
+    let cycles: u128 = status
+        .cycles
+        .0
+        .try_into()
+        .map_err(|_| IcError::CyclesOverflow)
+        .map_err(InterfaceError::IcError)?;
+
+    Ok(cycles)
+}
+
 // deposit_cycles
 pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
     let args = DepositCyclesArgs {
@@ -88,18 +107,11 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
     Ok(())
 }
 
-// module_hash
-pub async fn module_hash(canister_id: Principal) -> Result<Option<Vec<u8>>, Error> {
-    let response = canister_status(canister_id).await?;
-
-    Ok(response.module_hash)
-}
-
 /// upgrade_canister
 pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
     // module_hash
-    let module_hash = module_hash(canister_pid).await?;
-    if module_hash == Some(get_wasm_hash(bytes)) {
+    let canister_status = canister_status(canister_pid).await?;
+    if canister_status.module_hash == Some(get_wasm_hash(bytes)) {
         Err(InterfaceError::IcError(IcError::WasmHashMatches))?;
     }
 

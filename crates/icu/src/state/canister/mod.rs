@@ -1,32 +1,39 @@
-mod canister_registry;
+mod canister_catalog;
 
-pub use canister_registry::*;
+pub use canister_catalog::*;
 
-use crate::canister::CanisterType;
+use crate::utils::wasm::get_wasm_hash;
 
 ///
-/// Canister
+/// CanisterConfig
 ///
 
 #[derive(Clone, Debug)]
-pub struct Canister {
-    pub attributes: Attributes,
+pub struct CanisterConfig {
+    pub attributes: CanisterAttributes,
     pub wasm: &'static [u8],
 }
 
+impl CanisterConfig {
+    #[must_use]
+    pub fn module_hash(&self) -> Vec<u8> {
+        get_wasm_hash(self.wasm)
+    }
+}
+
 ///
-/// CanisterView
+/// CanisterConfigView
 /// the front-facing version
 ///
 
 #[derive(Clone, Debug)]
-pub struct CanisterView {
-    pub attributes: Attributes,
+pub struct CanisterConfigView {
+    pub attributes: CanisterAttributes,
     pub wasm_size: usize,
 }
 
-impl From<&Canister> for CanisterView {
-    fn from(canister: &Canister) -> Self {
+impl From<&CanisterConfig> for CanisterConfigView {
+    fn from(canister: &CanisterConfig) -> Self {
         Self {
             attributes: canister.attributes.clone(),
             wasm_size: canister.wasm.len(),
@@ -35,53 +42,13 @@ impl From<&Canister> for CanisterView {
 }
 
 ///
-/// Attributes
+/// CanisterAttributes
 ///
 /// auto_create : number of canisters to create on root
 ///
 
 #[derive(Clone, Debug, Default)]
-pub struct Attributes {
+pub struct CanisterAttributes {
     pub auto_create: Option<u16>,
-    pub directory: DirectoryPolicy,
-}
-
-impl Attributes {
-    #[must_use]
-    pub const fn uses_directory(&self) -> bool {
-        self.directory.uses_directory()
-    }
-}
-
-///
-/// DirectoryPolicy
-///
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum DirectoryPolicy {
-    #[default]
-    None,
-    Limited(u16),
-    Unlimited,
-}
-
-impl DirectoryPolicy {
-    #[must_use]
-    pub const fn uses_directory(self) -> bool {
-        !matches!(self, Self::None)
-    }
-
-    #[must_use]
-    pub const fn is_unlimited(self) -> bool {
-        matches!(self, Self::Unlimited)
-    }
-
-    #[must_use]
-    pub const fn limit(self) -> Option<u16> {
-        if let Self::Limited(n) = self {
-            Some(n)
-        } else {
-            None
-        }
-    }
+    pub uses_directory: bool,
 }

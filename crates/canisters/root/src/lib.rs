@@ -4,11 +4,11 @@ use icu::{
     Error, TEST,
     canister::CanisterType,
     interface::{
-        ic::create_canister_pool, request::create_canister_request,
-        response::CreateCanisterResponse, root::root_create_canisters,
+        request::create_canister_request, response::CreateCanisterResponse,
+        root::root_create_canisters,
     },
     prelude::*,
-    state::canister::{Attributes, Canister, DirectoryPolicy},
+    state::canister::{CanisterAttributes, CanisterConfig},
 };
 
 //
@@ -26,12 +26,12 @@ async fn icu_install() {
 async fn icu_upgrade() {}
 
 // CANISTERS
-pub static CANISTERS: &[(&CanisterType, Canister)] = &[(
+pub static CANISTERS: &[(&CanisterType, CanisterConfig)] = &[(
     TEST,
-    Canister {
-        attributes: Attributes {
+    CanisterConfig {
+        attributes: CanisterAttributes {
             auto_create: Some(2),
-            directory: DirectoryPolicy::Limited(6),
+            uses_directory: false,
         },
         #[cfg(icu_github_ci)]
         wasm: &[],
@@ -48,12 +48,6 @@ pub static CANISTERS: &[(&CanisterType, Canister)] = &[(
 #[update]
 async fn create_test() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(TEST, None).await
-}
-
-// create_pool
-#[update]
-async fn create_pool() -> Result<Principal, Error> {
-    create_canister_pool().await
 }
 
 // end

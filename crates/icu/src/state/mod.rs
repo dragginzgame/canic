@@ -18,7 +18,7 @@ pub mod icrc {
 
 use crate::{
     ic::api::performance_counter,
-    state::{canister::CanisterRegistryError, delegation::DelegationRegistryError},
+    state::{canister::CanisterCatalogError, delegation::DelegationRegistryError},
 };
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -30,7 +30,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum StateError {
     #[error(transparent)]
-    CanisterRegistryError(#[from] CanisterRegistryError),
+    CanisterCatalogError(#[from] CanisterCatalogError),
 
     #[error(transparent)]
     DelegationRegistryError(#[from] DelegationRegistryError),
