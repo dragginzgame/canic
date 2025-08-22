@@ -43,14 +43,14 @@ macro_rules! icu_endpoints_root {
         ///
 
         #[update]
-        async fn icu_create_pool_canister() -> Result<Principal, Error> {
+        async fn icu_create_pool_canister() -> Result<Principal, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
             ::icu::interface::ic::create_pool_canister().await
         }
 
         #[update]
-        async fn icu_move_canister_to_pool(pid: Principal) -> Result<(), Error> {
+        async fn icu_move_canister_to_pool(pid: Principal) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
             ::icu::interface::ic::move_canister_to_pool(pid).await
