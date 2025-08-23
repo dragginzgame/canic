@@ -43,6 +43,9 @@ pub struct ConfigData {
     pub standards: Option<Standards>,
 
     #[serde(default)]
+    pub pool: CanisterPool,
+
+    #[serde(default)]
     pub cycle_tracker: bool,
 }
 
@@ -72,7 +75,7 @@ impl ConfigData {
 /// Canister
 ///
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Canister {
     pub auto_create: Option<u16>,
     #[serde(deserialize_with = "Cycles::from_config")]
@@ -84,7 +87,7 @@ pub struct Canister {
 ///
 /// CanisterTopup
 ///
-/// auto_topup     : default to false
+/// auto_topup : default to false
 ///
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +106,16 @@ impl Default for CanisterTopup {
             amount: Cycles::new(5 * TC),
         }
     }
+}
+
+///
+/// CanisterPool
+/// defaults to a minimum size of 0
+///
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct CanisterPool {
+    pub minimum_size: u8,
 }
 
 ///

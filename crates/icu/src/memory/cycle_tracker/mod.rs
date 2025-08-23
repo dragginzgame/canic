@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     ic::{
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-        timers::{TimerId, clear_timer, set_timer_interval},
+        timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     icu_register_memory,
     interface::ic::canister_cycle_balance,
@@ -47,16 +47,21 @@ impl CycleTracker {
     pub fn start() {
         TIMER.with_borrow_mut(|slot| {
             if slot.is_some() {
-                return; // already running
+                return;
             }
 
-            // track immediately
-            let _ = Self::track();
-
             // set a timer to track, and possibly top-up
-            let id = set_timer_interval(std::time::Duration::from_secs(TIMEOUT_SECS), || {
+            let id = set_timer(crate::CANISTER_INIT_DELAY, || {
+                // do first track
                 let _ = Self::track();
-                Self::check_auto_topup();
+
+                // now start the recurring interval
+                let interval_id =
+                    set_timer_interval(std::time::Duration::from_secs(TIMEOUT_SECS), || {
+                        let _ = Self::track();
+                    });
+
+                TIMER.with_borrow_mut(|slot| *slot = Some(interval_id));
             });
 
             *slot = Some(id);
@@ -77,6 +82,8 @@ impl CycleTracker {
         let ts = now_secs();
         let cycles = canister_cycle_balance().as_u128();
 
+        Self::check_auto_topup();
+
         TRACKER.with_borrow_mut(|core| core.track(ts, cycles))
     }
 
@@ -91,7 +98,7 @@ impl CycleTracker {
 
             if cycles < topup.threshold {
                 // fire and forget
-                ic_cdk::futures::spawn(async move {
+                crate::ic::futures::spawn(async move {
                     match cycles_request(topup.amount).await {
                         Ok(res) => log!(
                             Log::Ok,

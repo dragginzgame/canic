@@ -18,6 +18,7 @@ pub use Error as IcuError;
 
 use candid::CandidType;
 use serde::Deserialize;
+use std::time::Duration;
 use thiserror::Error as ThisError;
 use types::CanisterType;
 
@@ -28,8 +29,10 @@ use types::CanisterType;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
-/// CanisterType
+/// Constants
 ///
+
+pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
 
 pub const TEST: CanisterType = CanisterType::new("test");
 

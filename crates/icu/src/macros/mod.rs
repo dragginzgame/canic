@@ -25,11 +25,11 @@ macro_rules! log {
         };
 
         let msg = match $level {
-            $crate::Log::Ok => format!("\x1b[32mOK   \x1b[0m|{:^6}| {}", ty, msg),
-            $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{:^6}| {}", ty, msg),
-            $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{:^6}| {}", ty, msg),
-            $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{:^6}| {}", ty, msg),
-            $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{:^6}| {}", ty, msg),
+            $crate::Log::Ok => format!("\x1b[32mOK   \x1b[0m|{:^8}| {}", ty, msg),
+            $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{:^8}| {}", ty, msg),
+            $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{:^8}| {}", ty, msg),
+            $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{:^8}| {}", ty, msg),
+            $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{:^8}| {}", ty, msg),
         };
 
         $crate::ic::println!("{}", msg);

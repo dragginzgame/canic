@@ -3,6 +3,9 @@ controllers = [
     "unn7e-de5sw-3kw5b-bjyrh-qjhmf-25uhy-niapa-hgtov-qkwwx-lxqpn-gae", # rem
 ]
 
+[pool]
+minimum_size = 10
+
 [canisters.test]
 auto_create = 2
 initial_cycles = "6T"

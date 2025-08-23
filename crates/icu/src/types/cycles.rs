@@ -25,6 +25,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
     AddAssign,
     Clone,
     Copy,
+    Default,
     Debug,
     PartialEq,
     Eq,

@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.4.6] - CanisterPool Config
+- now the pool will always be created, but you can specify the minimum size
+- it will also create a maximum of 10 on any one check, spaced 30 mins apart
+
 ## [0.4.4] - Cycle Topup
 - moved the canister attribute stuff to the config file
 - CanisterCatalog is now WasmRegistry
