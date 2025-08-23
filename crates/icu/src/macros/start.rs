@@ -19,7 +19,7 @@ macro_rules! icu_start {
             parents: Vec<::icu::memory::canister::CanisterEntry>,
             args: Option<Vec<u8>>,
         ) {
-            ::icu::log!(::icu::Log::Info, "🚀 init: {}", $canister_type);
+            ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
             ::icu::interface::state::save_state(&bundle);

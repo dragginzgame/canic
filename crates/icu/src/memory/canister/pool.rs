@@ -65,7 +65,7 @@ impl CanisterPool {
     pub fn start() {
         TIMER.with_borrow_mut(|slot| {
             if slot.is_some() {
-                return; // already running
+                return;
             }
 
             // set a timer to track, and possibly top-up

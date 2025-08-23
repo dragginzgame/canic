@@ -29,7 +29,7 @@ pub async fn create_pool_canister() -> Result<Principal, Error> {
 
     log!(
         Log::Ok,
-        "💧 create_pool_canister: pid {canister_pid} ({POOL_CANISTER_CYCLES})",
+        "💧 create_pool_canister: {canister_pid} ({POOL_CANISTER_CYCLES})",
     );
 
     CanisterPool::register(canister_pid, POOL_CANISTER_CYCLES);
@@ -61,7 +61,7 @@ pub async fn move_canister_to_pool(canister_pid: Principal) -> Result<(), Error>
 
     log!(
         Log::Ok,
-        "💧 move_canister_to_pool: pid {canister_pid} (was {canister_type}) ({cycles})",
+        "💧 move_canister_to_pool: {canister_pid} (was {canister_type}) ({cycles})",
     );
 
     Ok(())

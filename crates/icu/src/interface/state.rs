@@ -1,12 +1,9 @@
 use crate::{
     Error, Log,
-    ic::{api::canister_self, call::Call},
+    ic::call::Call,
     interface::{InterfaceError, ic::IcError},
     log,
-    memory::{
-        AppState, AppStateData, CanisterChildren, CanisterDirectory, CanisterDirectoryView,
-        CanisterState,
-    },
+    memory::{AppState, AppStateData, CanisterChildren, CanisterDirectory, CanisterDirectoryView},
 };
 use candid::{CandidType, Principal};
 use serde::Deserialize;
@@ -90,14 +87,9 @@ pub async fn cascade(bundle: &StateBundle) -> Result<(), Error> {
 
 // cascade_canister
 pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
-    let canister_self = canister_self();
-    let canister_type = CanisterState::try_get_type()?;
     let debug_str = &bundle.debug();
 
-    log!(
-        Log::Info,
-        "💦 state.cascade [{debug_str}]: {canister_self} ({canister_type}) -> {pid}"
-    );
+    log!(Log::Info, "💦 state.cascade: [{debug_str}] -> {pid}");
 
     Call::unbounded_wait(*pid, "icu_state_cascade")
         .with_arg(bundle)
@@ -110,14 +102,9 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
 
 // update_canister
 pub async fn update_canister(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
-    let canister_self = canister_self();
-    let canister_type = CanisterState::try_get_type()?;
     let debug_str = &bundle.debug();
 
-    log!(
-        Log::Info,
-        "🔄 state.update [{debug_str}]: {canister_self} ({canister_type}) -> {pid}"
-    );
+    log!(Log::Info, "🔄 state.update: [{debug_str}] -> {pid}");
 
     Call::unbounded_wait(*pid, "icu_state_update")
         .with_arg(bundle)
