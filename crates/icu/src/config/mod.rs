@@ -1,11 +1,11 @@
-mod types;
+mod data;
 
-use crate::Error;
-use candid::Principal;
+use crate::{Error, types::CanisterType};
+use data::{Canister, ConfigDataError};
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
-pub use types::ConfigData;
+pub use data::ConfigData;
 
 //
 // CONFIG
@@ -27,11 +27,11 @@ pub enum ConfigError {
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
-    #[error("invalid principal: {0} ({1})")]
-    InvalidPrincipal(String, usize),
-
     #[error("config has not been initialized")]
     NotInitialized,
+
+    #[error(transparent)]
+    ConfigDataError(#[from] ConfigDataError),
 }
 
 ///
@@ -59,7 +59,7 @@ impl Config {
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
         // validate
-        Self::validate(&config)?;
+        config.validate().map_err(ConfigError::from)?;
 
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
@@ -72,16 +72,8 @@ impl Config {
         })
     }
 
-    fn validate(config: &ConfigData) -> Result<(), Error> {
-        if let Some(list) = &config.whitelist {
-            for (i, s) in list.principals.iter().enumerate() {
-                // Reject if invalid principal format
-                if Principal::from_text(s).is_err() {
-                    return Err(ConfigError::InvalidPrincipal(s.to_string(), i).into());
-                }
-            }
-        }
-
-        Ok(())
+    pub fn try_get_canister(ty: &CanisterType) -> Result<Canister, Error> {
+        let cfg = Self::try_get()?;
+        cfg.get_canister(ty)
     }
 }

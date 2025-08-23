@@ -1,12 +1,15 @@
 use crate::{
     Log,
+    config::Config,
     ic::{
-        api::canister_cycle_balance,
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
         timers::{TimerId, clear_timer, set_timer_interval},
     },
-    icu_register_memory, log,
-    memory::CYCLE_TRACKER_MEMORY_ID,
+    icu_register_memory,
+    interface::ic::canister_cycle_balance,
+    log,
+    memory::{CYCLE_TRACKER_MEMORY_ID, CanisterState},
+    types::Cycles,
     utils::time::now_secs,
 };
 use std::cell::RefCell;
@@ -25,7 +28,7 @@ thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-const TIMEOUT_SECS: u64 = 60 * 10; // 10 minutes
+const TIMEOUT_SECS: u64 = 10; // 10 minutes
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 10; // ~10 days
 const PURGE_INSERT_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 const MIN_SPACING_SECS: u64 = 30; // anti-spam safety
@@ -34,7 +37,7 @@ const MIN_SPACING_SECS: u64 = 30; // anti-spam safety
 /// CycleTracker
 ///
 
-pub type CycleTrackerView = Vec<(u64, u128)>;
+pub type CycleTrackerView = Vec<(u64, Cycles)>;
 
 pub struct CycleTracker;
 
@@ -47,12 +50,13 @@ impl CycleTracker {
                 return; // already running
             }
 
-            // Do one immediately
+            // track immediately
             let _ = Self::track();
-            //log!(Log::Ok, "cycle tracker starting");
 
+            // set a timer to track, and possibly top-up
             let id = set_timer_interval(std::time::Duration::from_secs(TIMEOUT_SECS), || {
                 let _ = Self::track();
+                Self::check_auto_topup();
             });
 
             *slot = Some(id);
@@ -71,9 +75,38 @@ impl CycleTracker {
     #[must_use]
     pub fn track() -> bool {
         let ts = now_secs();
-        let cycles = canister_cycle_balance();
+        let cycles = canister_cycle_balance().as_u128();
 
         TRACKER.with_borrow_mut(|core| core.track(ts, cycles))
+    }
+
+    pub fn check_auto_topup() {
+        use crate::interface::request::cycles_request;
+
+        if let Some(ty) = CanisterState::get_type()
+            && let Ok(canister) = Config::try_get_canister(&ty)
+            && let Some(topup) = canister.topup
+        {
+            let cycles = canister_cycle_balance();
+
+            if cycles < topup.threshold {
+                // fire and forget
+                ic_cdk::futures::spawn(async move {
+                    match cycles_request(topup.amount).await {
+                        Ok(res) => log!(
+                            Log::Ok,
+                            "💫 requested {}, topped up by {}, now {}",
+                            topup.amount,
+                            res.cycles_transferred,
+                            canister_cycle_balance()
+                        ),
+                        Err(e) => {
+                            log!(Log::Error, "💫 failed to request cycles: {e}");
+                        }
+                    }
+                });
+            }
+        }
     }
 
     #[must_use]
@@ -188,7 +221,7 @@ impl<M: Memory> CycleTrackerCore<M> {
     // export
     // export to an ordered vec view
     pub fn export(&self) -> CycleTrackerView {
-        self.map.iter_pairs().collect()
+        self.map.iter_pairs().map(|(t, c)| (t, c.into())).collect()
     }
 }
 

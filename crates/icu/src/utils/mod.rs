@@ -1,4 +1,3 @@
-pub mod cycles;
 pub mod instructions;
 pub mod rand;
 pub mod time;

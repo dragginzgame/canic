@@ -1,9 +1,9 @@
 use crate::{
     Error,
-    canister::CanisterType,
     ic::structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_STATE_MEMORY_ID, MemoryError, canister::CanisterEntry},
+    types::CanisterType,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -73,7 +73,7 @@ impl CanisterState {
         CANISTER_STATE.with_borrow(CanisterStateCore::get_root_pid)
     }
 
-    pub fn set_type(ty: &CanisterType) -> Result<(), Error> {
+    pub fn set_type(ty: CanisterType) -> Result<(), Error> {
         CANISTER_STATE.with_borrow_mut(|core| core.set_type(ty))
     }
 
@@ -138,9 +138,9 @@ impl<M: Memory> CanisterStateCore<M> {
             .map_or_else(self_principal, |p| p.principal)
     }
 
-    pub fn set_type(&mut self, ty: &CanisterType) -> Result<(), Error> {
+    pub fn set_type(&mut self, ty: CanisterType) -> Result<(), Error> {
         let mut state = self.cell.get().clone();
-        state.canister_type = Some(ty.clone());
+        state.canister_type = Some(ty);
         self.cell.set(state);
 
         Ok(())
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn test_set_type_and_get() {
         let mut core = make_core();
-        core.set_type(&CanisterType::new("worker")).unwrap();
+        core.set_type(CanisterType::new("worker")).unwrap();
         assert_eq!(core.get_type(), Some(CanisterType::new("worker")));
         assert_eq!(core.try_get_type().unwrap(), CanisterType::new("worker"));
     }
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn test_export_and_import() {
         let mut core = make_core();
-        core.set_type(&CanisterType::new("worker")).unwrap();
+        core.set_type(CanisterType::new("worker")).unwrap();
         let parent = CanisterEntry {
             canister_type: CanisterType::new("p"),
             principal: Principal::anonymous(),

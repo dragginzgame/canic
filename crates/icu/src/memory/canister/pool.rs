@@ -2,6 +2,7 @@ use crate::{
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_candid_unbounded,
     memory::CANISTER_POOL_MEMORY_ID,
+    types::Cycles,
     utils::time::now_secs,
 };
 use candid::{CandidType, Principal};
@@ -34,7 +35,7 @@ pub enum CanisterPoolError {}
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterPoolEntry {
     pub created_at: u64,
-    pub cycles: u128,
+    pub cycles: Cycles,
 }
 
 impl_storable_candid_unbounded!(CanisterPoolEntry);
@@ -48,7 +49,7 @@ pub type CanisterPoolView = Vec<(Principal, CanisterPoolEntry)>;
 pub struct CanisterPool;
 
 impl CanisterPool {
-    pub fn register(pid: Principal, cycles: u128) {
+    pub fn register(pid: Principal, cycles: Cycles) {
         let entry = CanisterPoolEntry {
             created_at: now_secs(),
             cycles,
@@ -59,7 +60,7 @@ impl CanisterPool {
 
     #[must_use]
     pub fn pop_first() -> Option<(Principal, CanisterPoolEntry)> {
-        CANISTER_POOL.with_borrow_mut(|core| core.pop_first())
+        CANISTER_POOL.with_borrow_mut(CanisterPoolCore::pop_first)
     }
 
     #[must_use]

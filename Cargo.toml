@@ -17,12 +17,7 @@ readme = "README.md"
 candid = { version = "0.10", default-features = false, features = ["value"] }
 criterion = "0.5"
 defer = "0.2"
-derive_more = { version = "2.0", default-features = false, features = [
-    "deref",
-    "deref_mut",
-    "display",
-    "into_iterator",
-] }
+derive_more = { version = "2.0", default-features = false, features = ["full"] }
 ic-cdk = "0.18.7"
 ic-cdk-timers = "0.12.2"
 ic-ledger-types = "0.15.0"
@@ -47,7 +42,11 @@ pedantic = { level = "allow", priority = -1 }
 nursery = { level = "allow", priority = -1 }
 
 # always warn
-must-use-candidate = "warn"
+must_use_candidate = "warn"
+redundant_clone = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+use_self = "warn"
 
 # always allow
 doc_markdown = "allow"

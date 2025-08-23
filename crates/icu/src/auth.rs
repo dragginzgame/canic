@@ -1,8 +1,8 @@
 use crate::{
     Error,
-    canister::CanisterType,
     ic::api::{canister_self, msg_caller},
     memory::{CanisterChildren, CanisterDirectory, CanisterRegistry, CanisterState},
+    types::CanisterType,
 };
 use candid::Principal;
 use std::pin::Pin;

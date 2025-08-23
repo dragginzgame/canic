@@ -64,7 +64,7 @@ macro_rules! icu_start_root {
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
             // setup
-            ::icu::memory::CanisterState::set_type(&::icu::canister::CanisterType::Root).unwrap();
+            ::icu::memory::CanisterState::set_type(::icu::types::CanisterType::ROOT).unwrap();
             __icu_shared_setup();
 
             // register in CanisterRegistry
@@ -87,7 +87,7 @@ macro_rules! icu_start_root {
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::CycleTracker::start();
-            ::icu::state::canister::CanisterCatalog::import(CANISTERS);
+            ::icu::state::wasm::WasmRegistry::import(WASMS);
             icu_setup();
         }
 

@@ -1,9 +1,9 @@
 use crate::{
     Error,
-    canister::CanisterType,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_REGISTRY_MEMORY_ID, MemoryError},
+    types::CanisterType,
     utils::time::now_secs,
 };
 use candid::{CandidType, Principal};
@@ -73,7 +73,7 @@ impl CanisterRegistry {
     /// Initialize the registry with the root canister marked as Installed.
     pub fn init_root(root_pid: Principal) {
         let entry = CanisterRegistryEntry {
-            canister_type: CanisterType::Root,
+            canister_type: CanisterType::ROOT,
             parent_pid: None,
             status: CanisterStatus::Installed,
             module_hash: None,

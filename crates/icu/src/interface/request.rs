@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    canister::CanisterType,
     ic::call::Call,
     interface::{
         InterfaceError,
@@ -8,6 +7,7 @@ use crate::{
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
     },
     memory::{CanisterChildren, CanisterState, canister::CanisterEntry},
+    types::{CanisterType, Cycles},
 };
 use candid::{CandidType, Principal, encode_one};
 use serde::Deserialize;
@@ -19,6 +19,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum RequestError {
+    #[error("this request is not allowed to be called on root")]
+    RootNotAllowed,
+
     #[error("invalid response type")]
     InvalidResponseType,
 }
@@ -62,7 +65,7 @@ pub struct UpgradeCanisterRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
-    pub cycles: u128,
+    pub cycles: Cycles,
 }
 
 ///
@@ -150,8 +153,12 @@ pub async fn upgrade_canister_request(
 }
 
 // cycles_request
-pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
+pub async fn cycles_request(cycles: Cycles) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
+
+    if CanisterState::is_root() {
+        return Err(InterfaceError::RequestError(RequestError::RootNotAllowed))?;
+    }
 
     match request(q).await? {
         Response::Cycles(res) => Ok(res),

@@ -1,23 +1,24 @@
 mod create;
 mod pool;
+mod upgrade;
 
 pub use create::*;
 pub use pool::*;
+pub use upgrade::*;
 
 use crate::{
-    Error, Log,
+    Error,
     ic::{
         call::{CallFailed, CandidDecodeFailed, Error as CallError},
         mgmt::{
             self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
-            InstallCodeArgs, UninstallCodeArgs, WasmModule, uninstall_code,
+            InstallCodeArgs, UninstallCodeArgs, WasmModule,
         },
     },
     interface::InterfaceError,
-    log,
-    utils::wasm::get_wasm_hash,
+    types::Cycles,
 };
-use candid::{Error as CandidError, Principal};
+use candid::{Error as CandidError, Principal, utils::ArgumentEncoder};
 use thiserror::Error as ThisError;
 
 ///
@@ -79,27 +80,19 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     Ok(res)
 }
 
-// get_cycles
-async fn get_cycles(canister_pid: Principal) -> Result<u128, Error> {
-    let status = canister_status(canister_pid).await?;
-
-    let cycles: u128 = status
-        .cycles
-        .0
-        .try_into()
-        .map_err(|_| IcError::CyclesOverflow)
-        .map_err(InterfaceError::IcError)?;
-
-    Ok(cycles)
+// canister_cycles_balance
+#[must_use]
+pub fn canister_cycle_balance() -> Cycles {
+    crate::ic::api::canister_cycle_balance().into()
 }
 
 // deposit_cycles
-pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
+pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(), Error> {
     let args = DepositCyclesArgs {
         canister_id: canister_pid,
     };
 
-    mgmt::deposit_cycles(&args, cycles)
+    mgmt::deposit_cycles(&args, cycles.as_u128())
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?;
@@ -107,46 +100,60 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
     Ok(())
 }
 
-/// upgrade_canister
-pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
-    // module_hash
-    let canister_status = canister_status(canister_pid).await?;
-    if canister_status.module_hash == Some(get_wasm_hash(bytes)) {
-        Err(InterfaceError::IcError(IcError::WasmHashMatches))?;
-    }
+// encode_args
+pub fn encode_args<T: ArgumentEncoder>(args: T) -> Result<Vec<u8>, Error> {
+    let encoded = candid::encode_args(args)
+        .map_err(IcError::from)
+        .map_err(InterfaceError::from)?;
 
-    // args
+    Ok(encoded)
+}
+
+// get_cycles
+// (an update call, don't use for local balances)
+async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
+    let status = canister_status(canister_pid).await?;
+
+    let cycles = status
+        .cycles
+        .try_into()
+        .map_err(|_| IcError::CyclesOverflow)
+        .map_err(InterfaceError::IcError)?;
+
+    Ok(cycles)
+}
+
+// install_code
+pub async fn install_code<T: ArgumentEncoder>(
+    mode: CanisterInstallMode,
+    canister_pid: Principal,
+    wasm: &[u8],
+    args: T,
+) -> Result<(), Error> {
+    let arg = encode_args(args)?;
+
     let install_args = InstallCodeArgs {
-        mode: CanisterInstallMode::Upgrade(None),
+        mode,
         canister_id: canister_pid,
-        wasm_module: WasmModule::from(bytes),
-        arg: vec![],
+        wasm_module: WasmModule::from(wasm),
+        arg,
     };
+
     mgmt::install_code(&install_args)
         .await
         .map_err(|e| IcError::CallFailed(e.to_string()))
         .map_err(InterfaceError::IcError)?;
 
-    // debug
-    #[allow(clippy::cast_precision_loss)]
-    let bytes_fmt = bytes.len() as f64 / 1_000.0;
-    log!(
-        Log::Ok,
-        "canister_upgrade: {} ({} KB) upgraded",
-        canister_pid,
-        bytes_fmt,
-    );
-
     Ok(())
 }
 
-// uninstall_canister
-pub async fn uninstall_canister(canister_pid: Principal) -> Result<(), Error> {
+// uninstall_code
+pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
     let args = UninstallCodeArgs {
         canister_id: canister_pid,
     };
 
-    uninstall_code(&args)
+    mgmt::uninstall_code(&args)
         .await
         .map_err(|e| IcError::CallFailed(e.to_string()))
         .map_err(InterfaceError::IcError)?;

@@ -1,9 +1,9 @@
 use crate::{
     Error,
-    canister::CanisterType,
     ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_DIRECTORY_MEMORY_ID, MemoryError},
+    types::CanisterType,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};

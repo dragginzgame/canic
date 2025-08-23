@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.4.2] - Cycle Topup
+- moved the canister attribute stuff to the config file
+- CanisterCatalog is now WasmRegistry
+- canisters now send an automatic topup request to root if they are configured to
+
 ## [0.4.0] - Canister Pool
 - Rewrote a lot of the canister states, now we have CanisterChildren, CanisterDirectory, CanisterRegistry
 - CanisterConfig -> CanisterCatalog(Type, Config)

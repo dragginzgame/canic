@@ -1,4 +1,4 @@
-pub mod canister;
+pub mod wasm;
 
 pub mod delegation {
     mod delegation_cache;
@@ -18,7 +18,7 @@ pub mod icrc {
 
 use crate::{
     ic::api::performance_counter,
-    state::{canister::CanisterCatalogError, delegation::DelegationRegistryError},
+    state::{delegation::DelegationRegistryError, wasm::WasmRegistryError},
 };
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -30,10 +30,10 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum StateError {
     #[error(transparent)]
-    CanisterCatalogError(#[from] CanisterCatalogError),
+    DelegationRegistryError(#[from] DelegationRegistryError),
 
     #[error(transparent)]
-    DelegationRegistryError(#[from] DelegationRegistryError),
+    WasmRegistryError(#[from] WasmRegistryError),
 }
 
 thread_local! {

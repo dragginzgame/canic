@@ -1,34 +1,39 @@
 use crate::{
     Error, Log,
-    canister::CanisterType,
     config::Config,
-    ic::mgmt::{
-        self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs, InstallCodeArgs,
-        WasmModule,
-    },
+    ic::mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
     interface::{
         InterfaceError,
-        ic::IcError,
+        ic::{IcError, install_code},
         state::{StateBundle, cascade, update_canister},
     },
     log,
     memory::{
         CanisterDirectory, CanisterPool, CanisterRegistry, CanisterState, canister::CanisterEntry,
     },
-    state::canister::CanisterCatalog,
-    utils::cycles::format_cycles,
+    state::wasm::WasmRegistry,
+    types::{CanisterType, Cycles},
 };
-use candid::{Principal, encode_args};
-
-const CYCLES: u128 = 5_000_000_000_000;
+use candid::Principal;
 
 ///
-/// CreateCanisterResult
+/// allocate_canister
+/// firstly looks in the pool to find a canister
 ///
+async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
+    // try pool first
+    if let Some((pid, entry)) = CanisterPool::pop_first() {
+        log!(Log::Ok, "⚡ reusing {pid} from pool ({entry:?})");
 
-pub struct CreateCanisterResult {
-    pub canister_pid: Principal,
-    pub cycles: u128,
+        return Ok((pid, entry.cycles));
+    }
+
+    // fallback: fresh canister
+    let canister = Config::try_get_canister(ty)?;
+    let cycles = canister.initial_cycles;
+    let pid = create_canister(cycles).await?;
+
+    Ok((pid, cycles))
 }
 
 ///
@@ -44,21 +49,8 @@ pub async fn create_and_install_canister(
         Err(InterfaceError::NotRoot)?;
     }
 
-    //
-    // Phase 0: Check Pool
-    //
-    let (canister_pid, cycles) = if let Some((pid, entry)) = CanisterPool::pop_first() {
-        log!(Log::Ok, "⚡ reusing {pid} from pool ({entry:?})");
-
-        (pid, entry.cycles)
-    } else {
-        let CreateCanisterResult {
-            canister_pid,
-            cycles,
-        } = create_canister().await?;
-
-        (canister_pid, cycles)
-    };
+    // Phase 0: allocate canister id + cycles
+    let (canister_pid, cycles) = allocate_canister(canister_type).await?;
 
     // Phase 1: insert with Created status
     register_created(canister_pid, canister_type, parents);
@@ -71,10 +63,7 @@ pub async fn create_and_install_canister(
 
     log!(
         Log::Ok,
-        "⚡ create_canister: {} ({}, {})",
-        canister_pid,
-        canister_type,
-        format_cycles(cycles),
+        "⚡ create_canister: {canister_pid} ({canister_type}, {cycles})",
     );
 
     Ok(canister_pid)
@@ -99,7 +88,7 @@ pub fn get_controllers() -> Result<Vec<Principal>, Error> {
 /// create_canister
 /// allocates PID + cycles + controllers
 ///
-pub(super) async fn create_canister() -> Result<CreateCanisterResult, Error> {
+pub(super) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> {
     let controllers = get_controllers()?;
     let settings = Some(CanisterSettings {
         controllers: Some(controllers),
@@ -108,16 +97,13 @@ pub(super) async fn create_canister() -> Result<CreateCanisterResult, Error> {
     let cc_args = CreateCanisterArgs { settings };
 
     // create
-    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, CYCLES)
+    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles.as_u128())
         .await
         .map_err(IcError::from)
         .map_err(InterfaceError::IcError)?
         .canister_id;
 
-    Ok(CreateCanisterResult {
-        canister_pid,
-        cycles: CYCLES,
-    })
+    Ok(canister_pid)
 }
 
 ///
@@ -130,33 +116,26 @@ pub(super) async fn install_canister(
     parents: &[CanisterEntry],
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
-    let bundle = StateBundle::all();
-    let arg = encode_args((bundle, parents, extra_arg))
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
-
     // fetch the canister by its type
-    let canister = CanisterCatalog::try_get(canister_type)?;
-    let bytes = canister.wasm;
+    let wasm = WasmRegistry::try_get(canister_type)?;
 
     // install code
-    let install_args = InstallCodeArgs {
-        mode: CanisterInstallMode::Install,
-        canister_id: canister_pid,
-        wasm_module: WasmModule::from(bytes),
-        arg,
-    };
-    mgmt::install_code(&install_args)
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+    let bundle = StateBundle::all();
+    let args = (bundle, parents, extra_arg);
+    install_code(
+        CanisterInstallMode::Install,
+        canister_pid,
+        wasm.bytes(),
+        args,
+    )
+    .await?;
 
     log!(
         Log::Ok,
-        "⚡ install_canister: {} ({}, {:2}KiB)",
+        "⚡ install_canister: {} ({}, {:.2}KiB)",
         canister_pid,
         canister_type,
-        bytes.len() as f64 / 1_024.0,
+        wasm.len() as f64 / 1_024.0,
     );
 
     Ok(())
@@ -190,13 +169,14 @@ pub(super) async fn register_installed(
     canister_type: &CanisterType,
     canister_pid: Principal,
 ) -> Result<(), Error> {
-    let cfg = CanisterCatalog::try_get(canister_type)?;
+    let canister = Config::try_get_canister(canister_type)?;
+    let wasm = WasmRegistry::try_get(canister_type)?;
 
     // flip to Installed
-    CanisterRegistry::install(canister_pid, cfg.module_hash())?;
+    CanisterRegistry::install(canister_pid, wasm.module_hash())?;
 
     // if this type uses the directory, insert + cascade
-    if cfg.attributes.uses_directory {
+    if canister.uses_directory {
         CanisterDirectory::insert(canister_type.clone(), canister_pid)?;
 
         let bundle = StateBundle::subnet_directory();

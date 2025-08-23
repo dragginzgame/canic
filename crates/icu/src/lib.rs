@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod canister;
 pub mod config;
 pub mod guard;
 pub mod ic;
@@ -8,6 +7,7 @@ pub mod macros;
 pub mod memory;
 pub mod serialize;
 pub mod state;
+pub mod types;
 pub mod utils;
 
 pub mod export {
@@ -17,9 +17,9 @@ pub mod export {
 pub use Error as IcuError;
 
 use candid::CandidType;
-use canister::CanisterType;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
+use types::CanisterType;
 
 ///
 /// Crate Version
@@ -27,7 +27,11 @@ use thiserror::Error as ThisError;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub static TEST: &CanisterType = &CanisterType::custom("test");
+///
+/// CanisterType
+///
+
+pub const TEST: CanisterType = CanisterType::new("test");
 
 ///
 /// Prelude
@@ -36,13 +40,13 @@ pub static TEST: &CanisterType = &CanisterType::custom("test");
 pub mod prelude {
     pub use crate::{
         Log, auth_require_all, auth_require_any,
-        canister::CanisterType,
         guard::{guard_query, guard_update},
         ic::{
             api::msg_caller, candid::CandidType, export_candid, init, principal::Principal, query,
             update,
         },
         icu_register_memory, icu_start, icu_start_root, log, perf, perf_start,
+        types::{CanisterType, Cycles},
     };
 }
 

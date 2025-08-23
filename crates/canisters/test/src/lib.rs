@@ -21,7 +21,7 @@ async fn icu_upgrade() {}
 // create_test
 #[update]
 async fn create_test() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(TEST, None).await
+    create_canister_request::<()>(&TEST, None).await
 }
 
 export_candid!();

@@ -4,7 +4,7 @@ pub mod pool;
 pub mod registry;
 pub mod state;
 
-use crate::{Error, canister::CanisterType, ic::api::canister_self, memory::CanisterState};
+use crate::{Error, ic::api::canister_self, memory::CanisterState, types::CanisterType};
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
