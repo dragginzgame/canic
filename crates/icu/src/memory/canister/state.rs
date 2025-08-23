@@ -73,7 +73,7 @@ impl CanisterState {
         CANISTER_STATE.with_borrow(CanisterStateCore::get_root_pid)
     }
 
-    pub fn set_type(ty: CanisterType) -> Result<(), Error> {
+    pub fn set_type(ty: &CanisterType) -> Result<(), Error> {
         CANISTER_STATE.with_borrow_mut(|core| core.set_type(ty))
     }
 
@@ -138,9 +138,11 @@ impl<M: Memory> CanisterStateCore<M> {
             .map_or_else(self_principal, |p| p.principal)
     }
 
-    pub fn set_type(&mut self, ty: CanisterType) -> Result<(), Error> {
+    // set_type
+    // pass by reference required as it's a const
+    pub fn set_type(&mut self, ty: &CanisterType) -> Result<(), Error> {
         let mut state = self.cell.get().clone();
-        state.canister_type = Some(ty);
+        state.canister_type = Some(ty.clone());
         self.cell.set(state);
 
         Ok(())
@@ -215,7 +217,7 @@ mod tests {
     #[test]
     fn test_set_type_and_get() {
         let mut core = make_core();
-        core.set_type(CanisterType::new("worker")).unwrap();
+        core.set_type(&CanisterType::new("worker")).unwrap();
         assert_eq!(core.get_type(), Some(CanisterType::new("worker")));
         assert_eq!(core.try_get_type().unwrap(), CanisterType::new("worker"));
     }
@@ -292,7 +294,7 @@ mod tests {
     #[test]
     fn test_export_and_import() {
         let mut core = make_core();
-        core.set_type(CanisterType::new("worker")).unwrap();
+        core.set_type(&CanisterType::new("worker")).unwrap();
         let parent = CanisterEntry {
             canister_type: CanisterType::new("p"),
             principal: Principal::anonymous(),

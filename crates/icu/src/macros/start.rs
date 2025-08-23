@@ -24,7 +24,7 @@ macro_rules! icu_start {
             // setup
             ::icu::interface::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
-            ::icu::memory::CanisterState::set_type($canister_type).unwrap();
+            ::icu::memory::CanisterState::set_type(&$canister_type).unwrap();
             __icu_shared_setup();
 
             let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -64,7 +64,7 @@ macro_rules! icu_start_root {
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
             // setup
-            ::icu::memory::CanisterState::set_type(::icu::types::CanisterType::ROOT).unwrap();
+            ::icu::memory::CanisterState::set_type(&::icu::types::CanisterType::ROOT).unwrap();
             __icu_shared_setup();
 
             // register in CanisterRegistry
