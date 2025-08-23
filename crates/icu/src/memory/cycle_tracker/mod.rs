@@ -28,7 +28,7 @@ thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-const TIMEOUT_SECS: u64 = 10; // 10 minutes
+const TIMEOUT_SECS: u64 = 60 * 10; // 10 minutes
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 10; // ~10 days
 const PURGE_INSERT_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 const MIN_SPACING_SECS: u64 = 30; // anti-spam safety
@@ -451,5 +451,75 @@ mod tests {
         for (ts, _) in tracker.export() {
             assert!(ts >= cutoff, "found entry {ts} older than cutoff {cutoff}");
         }
+    }
+
+    #[test]
+    fn test_purge_on_empty_tracker() {
+        let mut tracker = make_core();
+        let purged = tracker.purge_old(10_000);
+        assert_eq!(purged, 0);
+        assert!(tracker.is_empty());
+    }
+
+    #[test]
+    fn test_export_ordering() {
+        let mut tracker = make_core();
+
+        let base = 1000;
+        assert!(tracker.track(base, 1));
+        assert!(tracker.track(base + MIN_SPACING_SECS, 2));
+        assert!(tracker.track(base + 2 * MIN_SPACING_SECS, 3));
+
+        let exported = tracker.export();
+        let ts: Vec<u64> = exported.iter().map(|(t, _)| *t).collect();
+
+        assert_eq!(
+            ts,
+            vec![base, base + MIN_SPACING_SECS, base + 2 * MIN_SPACING_SECS]
+        );
+    }
+
+    #[test]
+    fn test_track_exact_spacing_repeated() {
+        let mut tracker = make_core();
+
+        let mut now = 0;
+        assert!(tracker.track(now, 1));
+
+        for i in 1..5 {
+            now += MIN_SPACING_SECS;
+            assert!(tracker.track(now, i as u128));
+        }
+
+        assert_eq!(tracker.map().len(), 5);
+    }
+
+    #[test]
+    fn test_large_timestamp_jump_triggers_purge() {
+        let mut tracker = make_core();
+        tracker.track(0, 1);
+        tracker.track(RETAIN_SECS * 2, 2);
+
+        // After inserting at RETAIN_SECS * 2, old entry should be purged
+        tracker.purge_old(RETAIN_SECS * 2);
+        let exported = tracker.export();
+
+        assert_eq!(exported.len(), 1);
+        assert_eq!(exported[0].0, RETAIN_SECS * 2);
+    }
+
+    #[test]
+    fn test_track_after_full_purge() {
+        let mut tracker = make_core();
+        tracker.track(0, 1);
+
+        // force purge far in future
+        tracker.purge_old(RETAIN_SECS * 10);
+        assert!(tracker.is_empty());
+
+        tracker.track(9999, 42);
+        assert_eq!(tracker.first_ts, Some(9999));
+        assert_eq!(tracker.last_ts, Some(9999));
+        assert_eq!(tracker.map().len(), 1);
     }
 }
