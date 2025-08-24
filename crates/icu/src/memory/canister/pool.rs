@@ -97,10 +97,10 @@ impl CanisterPool {
 
     #[must_use]
     pub fn check() -> bool {
-        let pool_size = CANISTER_POOL.with_borrow(|core| core.len());
+        let pool_size = CANISTER_POOL.with_borrow(CanisterPoolCore::len);
 
         if let Ok(canister) = Config::try_get() {
-            let min_size = canister.pool.minimum_size as u64;
+            let min_size = u64::from(canister.pool.minimum_size);
             if pool_size < min_size {
                 let mut missing = min_size - pool_size;
 

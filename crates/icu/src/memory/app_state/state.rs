@@ -93,7 +93,7 @@ impl AppState {
 /// AppStateData
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Serialize, PartialEq, Eq, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateData {
     mode: AppMode,
 }

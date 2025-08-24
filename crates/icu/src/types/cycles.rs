@@ -129,6 +129,7 @@ impl FromStr for Cycles {
 }
 
 // Implement Display so we can format nicely
+#[allow(clippy::cast_precision_loss)]
 impl Display for Cycles {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // default format in TeraCycles

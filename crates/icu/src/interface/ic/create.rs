@@ -110,6 +110,7 @@ pub(super) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
 /// install_canister
 /// fetches wasm + encodes args + installs
 ///
+#[allow(clippy::cast_precision_loss)]
 pub(super) async fn install_canister(
     canister_pid: Principal,
     canister_type: &CanisterType,

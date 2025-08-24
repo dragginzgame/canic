@@ -15,7 +15,7 @@ readme = "README.md"
 
 # ic cdk
 candid = { version = "0.10", default-features = false, features = ["value"] }
-criterion = "0.5"
+criterion = "0.7"
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
 ic-cdk = "0.18.7"

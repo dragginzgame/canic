@@ -27,7 +27,7 @@ thread_local! {
 /// CanisterStatus
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterStatus {
     Created,
     Installed,

@@ -487,6 +487,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_sign_loss)]
     fn test_track_exact_spacing_repeated() {
         let mut tracker = make_core();
 

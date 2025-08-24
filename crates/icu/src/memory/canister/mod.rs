@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// re-useable entry of type and principal
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterEntry {
     pub canister_type: CanisterType,
     pub principal: Principal,
