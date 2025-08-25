@@ -1,23 +1,9 @@
+pub mod delegation;
+pub mod icrc;
 pub mod wasm;
 
-pub mod delegation {
-    mod delegation_cache;
-    mod delegation_registry;
-
-    pub use delegation_cache::*;
-    pub use delegation_registry::*;
-}
-
-pub mod icrc {
-    mod icrc_10;
-    mod icrc_21;
-
-    pub use icrc_10::*;
-    pub use icrc_21::*;
-}
-
 use crate::{
-    ic::api::performance_counter,
+    cdk::api::performance_counter,
     state::{delegation::DelegationRegistryError, wasm::WasmRegistryError},
 };
 use std::cell::RefCell;

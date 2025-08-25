@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::structures::{
+    cdk::structures::{
         BTreeMap, DefaultMemoryImpl,
         memory::{MemoryId, VirtualMemory},
     },
@@ -77,11 +77,11 @@ impl MemoryRegistry {
 /// MemoryRegistryCore
 ///
 
-pub struct MemoryRegistryCore<M: crate::ic::structures::Memory> {
+pub struct MemoryRegistryCore<M: crate::cdk::structures::Memory> {
     map: BTreeMap<u8, MemoryRegistryEntry, M>,
 }
 
-impl<M: crate::ic::structures::Memory> MemoryRegistryCore<M> {
+impl<M: crate::cdk::structures::Memory> MemoryRegistryCore<M> {
     pub const fn new(map: BTreeMap<u8, MemoryRegistryEntry, M>) -> Self {
         Self { map }
     }
@@ -129,7 +129,7 @@ impl<M: crate::ic::structures::Memory> MemoryRegistryCore<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ic::structures::DefaultMemoryImpl;
+    use crate::cdk::structures::DefaultMemoryImpl;
 
     fn make_core() -> MemoryRegistryCore<DefaultMemoryImpl> {
         let map = BTreeMap::init(DefaultMemoryImpl::default());

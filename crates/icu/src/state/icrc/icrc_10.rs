@@ -1,4 +1,4 @@
-use crate::{config::Config, interface::icrc::Icrc10Standard};
+use crate::{config::Config, spec::icrc::icrc10::Icrc10Standard};
 
 //
 // ICRC 10

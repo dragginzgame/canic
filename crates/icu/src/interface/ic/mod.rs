@@ -1,71 +1,24 @@
-mod create;
-mod pool;
-mod upgrade;
+mod canister;
+mod cycles;
+mod helper;
+mod icp;
+mod sns;
 
-pub use create::*;
-pub use pool::*;
-pub use upgrade::*;
+pub use canister::*;
+pub use cycles::*;
+pub use helper::*;
+pub use icp::*;
+pub use sns::*;
 
 use crate::{
     Error,
-    ic::{
-        call::{CallFailed, CandidDecodeFailed, Error as CallError},
-        mgmt::{
-            self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
-            InstallCodeArgs, UninstallCodeArgs, WasmModule,
-        },
+    cdk::mgmt::{
+        self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
+        InstallCodeArgs, UninstallCodeArgs, WasmModule,
     },
-    interface::InterfaceError,
-    types::Cycles,
+    interface::prelude::*,
 };
-use candid::{Error as CandidError, Principal, utils::ArgumentEncoder};
-use thiserror::Error as ThisError;
-
-///
-/// IcError
-///
-
-#[derive(Debug, ThisError)]
-pub enum IcError {
-    #[error("cycles overflow")]
-    CyclesOverflow,
-
-    #[error("call rejected: {0}")]
-    CallFailed(String),
-
-    #[error("candid error: {0}")]
-    CandidError(String),
-
-    #[error("candid error: {0}")]
-    CandidDecodeFailed(String),
-
-    #[error("wasm hash matches")]
-    WasmHashMatches,
-}
-
-impl From<CallFailed> for IcError {
-    fn from(error: CallFailed) -> Self {
-        Self::CallFailed(error.to_string())
-    }
-}
-
-impl From<CandidError> for IcError {
-    fn from(error: CandidError) -> Self {
-        Self::CandidError(error.to_string())
-    }
-}
-
-impl From<CandidDecodeFailed> for IcError {
-    fn from(error: CandidDecodeFailed) -> Self {
-        Self::CandidDecodeFailed(error.to_string())
-    }
-}
-
-impl From<CallError> for IcError {
-    fn from(error: CallError) -> Self {
-        Self::CallFailed(error.to_string())
-    }
-}
+use candid::{Principal, utils::ArgumentEncoder};
 
 // canister_status
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
@@ -74,8 +27,7 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     };
     let res = mgmt::canister_status(&args)
         .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::from)?;
 
     Ok(res)
 }
@@ -83,7 +35,7 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 // canister_cycles_balance
 #[must_use]
 pub fn canister_cycle_balance() -> Cycles {
-    crate::ic::api::canister_cycle_balance().into()
+    crate::cdk::api::canister_cycle_balance().into()
 }
 
 // deposit_cycles
@@ -94,31 +46,27 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(
 
     mgmt::deposit_cycles(&args, cycles.as_u128())
         .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::from)?;
 
     Ok(())
 }
 
 // encode_args
 pub fn encode_args<T: ArgumentEncoder>(args: T) -> Result<Vec<u8>, Error> {
-    let encoded = candid::encode_args(args)
-        .map_err(IcError::from)
-        .map_err(InterfaceError::from)?;
+    let encoded = candid::encode_args(args).map_err(InterfaceError::from)?;
 
     Ok(encoded)
 }
 
 // get_cycles
 // (an update call, don't use for local balances)
-async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
+pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
 
     let cycles = status
         .cycles
         .try_into()
-        .map_err(|_| IcError::CyclesOverflow)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(|_| InterfaceError::CyclesOverflow)?;
 
     Ok(cycles)
 }
@@ -141,8 +89,7 @@ pub async fn install_code<T: ArgumentEncoder>(
 
     mgmt::install_code(&install_args)
         .await
-        .map_err(|e| IcError::CallFailed(e.to_string()))
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::CallError)?;
 
     Ok(())
 }
@@ -155,8 +102,7 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
 
     mgmt::uninstall_code(&args)
         .await
-        .map_err(|e| IcError::CallFailed(e.to_string()))
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::CallError)?;
 
     Ok(())
 }

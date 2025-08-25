@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_DIRECTORY_MEMORY_ID, MemoryError},
     types::CanisterType,
@@ -157,6 +157,6 @@ impl<M: Memory> CanisterDirectoryCore<M> {
     }
 
     pub fn export(&self) -> CanisterDirectoryView {
-        self.map.iter_pairs().collect()
+        self.map.to_vec()
     }
 }

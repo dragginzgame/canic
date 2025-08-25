@@ -20,7 +20,9 @@ ic-stable-structures = { workspace = true }
 ic_principal = { workspace = true }
 icrc-ledger-types = { workspace = true }
 minicbor-serde = { workspace = true }
+remain = { workspace = true }
 serde = { workspace = true }
+serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tinyrand = { workspace = true }

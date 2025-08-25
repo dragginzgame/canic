@@ -2,7 +2,7 @@
 
 use icu::{
     Error, TEST,
-    interface::{
+    ops::{
         request::create_canister_request, response::CreateCanisterResponse,
         root::root_create_canisters,
     },
@@ -40,6 +40,11 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[(
 #[update]
 async fn create_test() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&TEST, None).await
+}
+
+#[update]
+async fn get_icp_rate() -> Result<f64, Error> {
+    icu::interface::ic::get_icp_xdr_conversion_rate().await
 }
 
 // end

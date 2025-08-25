@@ -1,12 +1,12 @@
 use crate::{
     Error,
-    ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory,
     memory::{CANISTER_CHILDREN_MEMORY_ID, MemoryError},
     types::CanisterType,
 };
 use candid::Principal;
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 //
@@ -84,7 +84,7 @@ impl CanisterChildren {
 /// CanisterChildrenCore
 ///
 
-pub type CanisterChildrenView = HashMap<Principal, CanisterType>;
+pub type CanisterChildrenView = Vec<(Principal, CanisterType)>;
 
 pub struct CanisterChildrenCore<M: Memory> {
     map: BTreeMap<Principal, CanisterType, M>,
@@ -106,7 +106,7 @@ impl<M: Memory> CanisterChildrenCore<M> {
     #[must_use]
     pub fn get_by_type(&self, ty: &CanisterType) -> Vec<Principal> {
         self.map
-            .iter_pairs()
+            .view()
             .filter_map(|(p, t)| if t == *ty { Some(p) } else { None })
             .collect()
     }
@@ -134,16 +134,7 @@ impl<M: Memory> CanisterChildrenCore<M> {
     }
 
     pub fn export(&self) -> CanisterChildrenView {
-        self.map.iter_pairs().collect()
-    }
-}
-
-impl<M: Memory> IntoIterator for CanisterChildrenCore<M> {
-    type Item = (Principal, CanisterType);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.map.iter_pairs().collect::<Vec<_>>().into_iter()
+        self.map.to_vec()
     }
 }
 
@@ -154,7 +145,7 @@ impl<M: Memory> IntoIterator for CanisterChildrenCore<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ic::structures::DefaultMemoryImpl;
+    use crate::cdk::structures::DefaultMemoryImpl;
 
     fn make_core() -> CanisterChildrenCore<DefaultMemoryImpl> {
         let map = BTreeMap::init(DefaultMemoryImpl::default());
@@ -210,25 +201,6 @@ mod tests {
         assert!(!core.is_empty());
         core.clear();
         assert!(core.is_empty());
-    }
-
-    #[test]
-    fn test_export_and_iter() {
-        let mut core = make_core();
-        let p1 = Principal::from_slice(&[1]);
-        let p2 = Principal::from_slice(&[2]);
-
-        core.insert(p1, CanisterType::new("x"));
-        core.insert(p2, CanisterType::new("y"));
-
-        let exported = core.export();
-        assert_eq!(exported.get(&p1), Some(&CanisterType::new("x")));
-        assert_eq!(exported.get(&p2), Some(&CanisterType::new("y")));
-
-        // check IntoIterator impl
-        let pairs: Vec<_> = core.into_iter().collect();
-        assert!(pairs.contains(&(p1, CanisterType::new("x"))));
-        assert!(pairs.contains(&(p2, CanisterType::new("y"))));
     }
 
     #[test]

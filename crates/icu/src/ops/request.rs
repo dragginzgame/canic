@@ -1,16 +1,13 @@
 use crate::{
     Error,
-    ic::call::Call,
-    interface::{
-        InterfaceError,
-        ic::IcError,
+    cdk::call::Call,
+    memory::{CanisterChildren, CanisterState, canister::CanisterEntry},
+    ops::{
+        prelude::*,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
     },
-    memory::{CanisterChildren, CanisterState, canister::CanisterEntry},
-    types::{CanisterType, Cycles},
 };
-use candid::{CandidType, Principal, encode_one};
-use serde::Deserialize;
+use candid::encode_one;
 use thiserror::Error as ThisError;
 
 ///
@@ -80,13 +77,11 @@ async fn request(request: Request) -> Result<Response, Error> {
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
         .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::from)?;
 
     call_response
         .candid::<Result<Response, Error>>()
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?
+        .map_err(InterfaceError::from)?
 }
 
 // create_canister_request
@@ -98,11 +93,7 @@ where
     A: CandidType + Send + Sync,
 {
     let encoded = match extra {
-        Some(extra) => Some(
-            encode_one(extra)
-                .map_err(IcError::from)
-                .map_err(InterfaceError::from)?,
-        ),
+        Some(extra) => Some(encode_one(extra).map_err(InterfaceError::from)?),
         None => None,
     };
 
@@ -125,9 +116,7 @@ where
 
             Ok(res)
         }
-        _ => Err(InterfaceError::RequestError(
-            RequestError::InvalidResponseType,
-        ))?,
+        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
     }
 }
 
@@ -146,9 +135,7 @@ pub async fn upgrade_canister_request(
 
     match request(q).await? {
         Response::UpgradeCanister(res) => Ok(res),
-        _ => Err(InterfaceError::RequestError(
-            RequestError::InvalidResponseType,
-        ))?,
+        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
     }
 }
 
@@ -157,13 +144,11 @@ pub async fn cycles_request(cycles: Cycles) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
 
     if CanisterState::is_root() {
-        return Err(InterfaceError::RequestError(RequestError::RootNotAllowed))?;
+        return Err(OpsError::RequestError(RequestError::RootNotAllowed))?;
     }
 
     match request(q).await? {
         Response::Cycles(res) => Ok(res),
-        _ => Err(InterfaceError::RequestError(
-            RequestError::InvalidResponseType,
-        ))?,
+        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
     }
 }

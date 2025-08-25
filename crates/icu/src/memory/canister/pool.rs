@@ -1,14 +1,14 @@
 use crate::{
     Log,
-    config::Config,
-    ic::{
+    cdk::{
+        futures::spawn,
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
-    icu_register_memory, impl_storable_candid_unbounded,
-    interface::ic::create_pool_canister,
-    log,
+    config::Config,
+    icu_register_memory, impl_storable_candid_unbounded, log,
     memory::CANISTER_POOL_MEMORY_ID,
+    ops::pool::create_pool_canister,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -112,10 +112,10 @@ impl CanisterPool {
 
                 log!(
                     Log::Ok,
-                    "💧 canister pool low: size={pool_size}, min={min_size}, creating {missing}",
+                    "💧 canister pool low: size {pool_size}, min {min_size}, creating {missing}",
                 );
 
-                crate::ic::futures::spawn(async move {
+                spawn(async move {
                     for _ in 0..missing {
                         let _ = create_pool_canister().await;
                     }
@@ -180,14 +180,13 @@ impl<M: Memory> CanisterPoolCore<M> {
 
     // gets the oldest canister in the pool
     pub fn pop_first(&mut self) -> Option<(Principal, CanisterPoolEntry)> {
-        self.map
-            .iter_pairs()
-            .min_by_key(|(_, entry)| entry.created_at)
-            .map(|(pid, _)| {
-                let entry = self.map.remove(&pid).expect("pool entry must exist");
+        let min_pid = self
+            .map
+            .iter()
+            .min_by_key(|entry| entry.value().created_at)
+            .map(|entry| *entry.key())?;
 
-                (pid, entry)
-            })
+        self.map.remove(&min_pid).map(|entry| (min_pid, entry))
     }
 
     pub fn remove(&mut self, pid: &Principal) -> Option<CanisterPoolEntry> {
@@ -195,6 +194,6 @@ impl<M: Memory> CanisterPoolCore<M> {
     }
 
     pub fn export(&self) -> CanisterPoolView {
-        self.map.iter_pairs().collect()
+        self.map.to_vec()
     }
 }

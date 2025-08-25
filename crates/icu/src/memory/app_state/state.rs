@@ -1,6 +1,6 @@
 use crate::{
     Error, Log,
-    ic::structures::{DefaultMemoryImpl, Memory, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, Memory, cell::Cell, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded, log,
     memory::{APP_STATE_MEMORY_ID, MemoryError},
 };

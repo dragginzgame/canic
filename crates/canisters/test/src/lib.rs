@@ -2,7 +2,7 @@
 
 use icu::{
     Error, TEST,
-    interface::{request::create_canister_request, response::CreateCanisterResponse},
+    ops::{request::create_canister_request, response::CreateCanisterResponse},
     prelude::*,
 };
 

@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_REGISTRY_MEMORY_ID, MemoryError},
     types::CanisterType,
@@ -181,6 +181,6 @@ impl<M: Memory> CanisterRegistryCore<M> {
     }
 
     pub fn export(&self) -> CanisterRegistryView {
-        self.map.iter_pairs().collect()
+        self.map.to_vec()
     }
 }

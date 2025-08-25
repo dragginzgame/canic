@@ -1,14 +1,11 @@
 use crate::{
     Error, Log,
-    interface::{
-        InterfaceError,
-        ic::{create_canister, get_cycles, uninstall_code},
-    },
-    log,
+    interface::ic::{get_cycles, uninstall_code},
     memory::{CanisterPool, CanisterRegistry, CanisterState},
+    ops::canister::create_canister,
+    ops::prelude::*,
     types::{Cycles, TC},
 };
-use candid::Principal;
 
 ///
 /// Constants
@@ -22,14 +19,14 @@ const POOL_CANISTER_CYCLES: Cycles = Cycles::new(5 * TC);
 ///
 pub async fn create_pool_canister() -> Result<Principal, Error> {
     if !CanisterState::is_root() {
-        Err(InterfaceError::NotRoot)?;
+        Err(OpsError::NotRoot)?;
     }
 
     let canister_pid = create_canister(POOL_CANISTER_CYCLES).await?;
 
     log!(
         Log::Ok,
-        "💧 create_pool_canister: {canister_pid} ({POOL_CANISTER_CYCLES})",
+        "💧 create_pool: {canister_pid} ({POOL_CANISTER_CYCLES})",
     );
 
     CanisterPool::register(canister_pid, POOL_CANISTER_CYCLES);
@@ -42,7 +39,7 @@ pub async fn create_pool_canister() -> Result<Principal, Error> {
 ///
 pub async fn move_canister_to_pool(canister_pid: Principal) -> Result<(), Error> {
     if !CanisterState::is_root() {
-        Err(InterfaceError::NotRoot)?;
+        Err(OpsError::NotRoot)?;
     }
 
     // uninstall code

@@ -1,16 +1,16 @@
 use crate::{
     Error,
-    ic::api::msg_caller,
     interface::{
-        ic::{create_and_install_canister, deposit_cycles, upgrade_canister},
-        request::{CreateCanisterRequest, CyclesRequest, Request, UpgradeCanisterRequest},
+        ic::{deposit_cycles, upgrade_canister},
+        prelude::*,
     },
     memory::CanisterState,
+    ops::{
+        canister::create_and_install_canister,
+        request::{CreateCanisterRequest, CyclesRequest, Request, UpgradeCanisterRequest},
+    },
     state::wasm::WasmRegistry,
-    types::Cycles,
 };
-use candid::{CandidType, Principal};
-use serde::Deserialize;
 
 ///
 /// Response

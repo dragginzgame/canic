@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
     memory::{CANISTER_STATE_MEMORY_ID, MemoryError, canister::CanisterEntry},
     types::CanisterType,
@@ -189,7 +189,7 @@ fn self_principal() -> Principal {
 
     #[cfg(not(test))]
     {
-        crate::ic::api::canister_self()
+        crate::cdk::api::canister_self()
     }
 }
 
@@ -200,7 +200,7 @@ fn self_principal() -> Principal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ic::structures::DefaultMemoryImpl;
+    use crate::cdk::structures::DefaultMemoryImpl;
 
     fn make_core() -> CanisterStateCore<DefaultMemoryImpl> {
         let cell = Cell::init(DefaultMemoryImpl::default(), CanisterStateData::default());

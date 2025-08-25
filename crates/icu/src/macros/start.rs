@@ -13,31 +13,31 @@ macro_rules! __icu_load_config {
 #[macro_export]
 macro_rules! icu_start {
     ($canister_type:expr) => {
-        #[::icu::ic::init]
+        #[::icu::cdk::init]
         fn init(
-            bundle: ::icu::interface::state::StateBundle,
+            bundle: ::icu::ops::state::StateBundle,
             parents: Vec<::icu::memory::canister::CanisterEntry>,
             args: Option<Vec<u8>>,
         ) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
-            ::icu::interface::state::save_state(&bundle);
+            ::icu::ops::state::save_state(&bundle);
             ::icu::memory::CanisterState::set_parents(parents);
             ::icu::memory::CanisterState::set_type(&$canister_type).unwrap();
             __icu_shared_setup();
 
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_install(args));
+            let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::cdk::futures::spawn(icu_install(args));
             });
         }
 
-        #[::icu::ic::post_upgrade]
+        #[::icu::cdk::post_upgrade]
         fn post_upgrade() {
             __icu_shared_setup();
 
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_upgrade());
+            let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::cdk::futures::spawn(icu_upgrade());
             });
         }
 
@@ -54,9 +54,9 @@ macro_rules! icu_start {
 #[macro_export]
 macro_rules! icu_start_root {
     () => {
-        #[::icu::ic::init]
+        #[::icu::cdk::init]
         fn init() {
-            ::icu::ic::println!("");
+            ::icu::cdk::println!("");
             ::icu::log!(
                 ::icu::Log::Info,
                 "------------------------------------------------------------"
@@ -68,19 +68,19 @@ macro_rules! icu_start_root {
             __icu_shared_setup();
 
             // register in CanisterRegistry
-            ::icu::memory::CanisterRegistry::init_root(::icu::ic::api::canister_self());
+            ::icu::memory::CanisterRegistry::init_root(::icu::cdk::api::canister_self());
 
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_install());
+            let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::cdk::futures::spawn(icu_install());
             });
         }
 
-        #[::icu::ic::post_upgrade]
+        #[::icu::cdk::post_upgrade]
         fn post_upgrade() {
             __icu_shared_setup();
 
-            let _ = ::icu::ic::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::icu::ic::futures::spawn(icu_upgrade());
+            let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                ::icu::cdk::futures::spawn(icu_upgrade());
             });
         }
 

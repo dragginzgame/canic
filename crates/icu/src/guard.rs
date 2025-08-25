@@ -1,5 +1,5 @@
 use crate::{
-    ic::api::{is_controller, msg_caller},
+    cdk::api::{is_controller, msg_caller},
     memory::{AppState, app_state::AppMode},
 };
 use thiserror::Error as ThisError;

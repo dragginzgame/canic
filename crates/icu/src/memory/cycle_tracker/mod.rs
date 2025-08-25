@@ -1,10 +1,11 @@
 use crate::{
     Log,
-    config::Config,
-    ic::{
+    cdk::{
+        futures::spawn,
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
+    config::Config,
     icu_register_memory,
     interface::ic::canister_cycle_balance,
     log,
@@ -88,7 +89,7 @@ impl CycleTracker {
     }
 
     pub fn check_auto_topup() {
-        use crate::interface::request::cycles_request;
+        use crate::ops::request::cycles_request;
 
         if let Some(ty) = CanisterState::get_type()
             && let Ok(canister) = Config::try_get_canister(&ty)
@@ -98,7 +99,7 @@ impl CycleTracker {
 
             if cycles < topup.threshold {
                 // fire and forget
-                crate::ic::futures::spawn(async move {
+                spawn(async move {
                     match cycles_request(topup.amount).await {
                         Ok(res) => log!(
                             Log::Ok,
@@ -228,7 +229,7 @@ impl<M: Memory> CycleTrackerCore<M> {
     // export
     // export to an ordered vec view
     pub fn export(&self) -> CycleTrackerView {
-        self.map.iter_pairs().map(|(t, c)| (t, c.into())).collect()
+        self.map.view().map(|(t, c)| (t, c.into())).collect()
     }
 }
 
@@ -239,7 +240,7 @@ impl<M: Memory> CycleTrackerCore<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ic::structures::DefaultMemoryImpl;
+    use crate::cdk::structures::DefaultMemoryImpl;
 
     fn make_core() -> CycleTrackerCore<DefaultMemoryImpl> {
         let tree = BTreeMap::init(DefaultMemoryImpl::default());

@@ -1,12 +1,8 @@
 use crate::{
-    Error, Log,
-    ic::call::Call,
-    interface::{InterfaceError, ic::IcError},
-    log,
+    Error,
+    interface::prelude::*,
     memory::{AppState, AppStateData, CanisterChildren, CanisterDirectory, CanisterDirectoryView},
 };
-use candid::{CandidType, Principal};
-use serde::Deserialize;
 
 ///
 /// StateBundle
@@ -36,7 +32,7 @@ impl StateBundle {
     }
 
     #[must_use]
-    pub fn subnet_directory() -> Self {
+    pub fn canister_directory() -> Self {
         Self {
             canister_directory: Some(CanisterDirectory::export()),
             ..Default::default()
@@ -70,10 +66,6 @@ pub fn save_state(bundle: &StateBundle) {
     if let Some(data) = &bundle.canister_directory {
         CanisterDirectory::import(data.clone());
     }
-
-    //   let debug_str = &bundle.debug();
-
-    //log!(Log::Info, "state.save [{debug_str}]: saved bundle");
 }
 
 // cascade
@@ -94,8 +86,7 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
     Call::unbounded_wait(*pid, "icu_state_cascade")
         .with_arg(bundle)
         .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::from)?;
 
     Ok(())
 }
@@ -109,8 +100,7 @@ pub async fn update_canister(pid: &Principal, bundle: &StateBundle) -> Result<()
     Call::unbounded_wait(*pid, "icu_state_update")
         .with_arg(bundle)
         .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?;
+        .map_err(InterfaceError::from)?;
 
     Ok(())
 }

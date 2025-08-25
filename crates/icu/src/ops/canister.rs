@@ -1,20 +1,17 @@
 use crate::{
-    Error, Log,
+    Error,
+    cdk::mgmt::CanisterInstallMode,
     config::Config,
-    ic::mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
-    interface::{
-        InterfaceError,
-        ic::{IcError, install_code},
-        state::{StateBundle, cascade, update_canister},
-    },
-    log,
+    interface::{ic::install_code, prelude::*},
     memory::{
         CanisterDirectory, CanisterPool, CanisterRegistry, CanisterState, canister::CanisterEntry,
     },
+    ops::{
+        prelude::*,
+        state::{StateBundle, cascade, update_canister},
+    },
     state::wasm::WasmRegistry,
-    types::{CanisterType, Cycles},
 };
-use candid::Principal;
 
 ///
 /// allocate_canister
@@ -46,7 +43,7 @@ pub async fn create_and_install_canister(
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
     if !CanisterState::is_root() {
-        Err(InterfaceError::NotRoot)?;
+        Err(OpsError::NotRoot)?;
     }
 
     // Phase 0: allocate canister id + cycles
@@ -90,18 +87,9 @@ pub fn get_controllers() -> Result<Vec<Principal>, Error> {
 ///
 pub(super) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> {
     let controllers = get_controllers()?;
-    let settings = Some(CanisterSettings {
-        controllers: Some(controllers),
-        ..Default::default()
-    });
-    let cc_args = CreateCanisterArgs { settings };
 
     // create
-    let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles.as_u128())
-        .await
-        .map_err(IcError::from)
-        .map_err(InterfaceError::IcError)?
-        .canister_id;
+    let canister_pid = crate::interface::ic::create_canister(controllers, cycles).await?;
 
     Ok(canister_pid)
 }
@@ -180,7 +168,7 @@ pub(super) async fn register_installed(
     if canister.uses_directory {
         CanisterDirectory::insert(canister_type.clone(), canister_pid)?;
 
-        let bundle = StateBundle::subnet_directory();
+        let bundle = StateBundle::canister_directory();
         update_canister(&canister_pid, &bundle).await?;
         cascade(&bundle).await?;
     }

@@ -10,6 +10,17 @@ pub use data::ConfigData;
 //
 // CONFIG
 //
+// Even though a canister executes single‑threaded, there are a few practical reasons to favor Arc:
+// APIs & trait bounds: Lots of ecosystem code (caches, services, executors, middleware) takes
+// Arc<T> or requires Send + Sync. Rc<T> is neither Send nor Sync, so it won’t fit.
+//
+// Host-side tests & tools: Your crate likely builds for non‑wasm targets too (integration tests,
+// benches, local tooling). Those can be multi‑threaded; Arc “just works” across targets without
+// cfg gymnastics.
+//
+// Globals need Sync: If you ever move away from thread_local! or want to tuck the config behind
+// a global static, Rc can’t participate; Arc<T> is Sync (when T: Send + Sync).
+//
 
 thread_local! {
     static CONFIG: RefCell<Option<Arc<ConfigData>>> = const {  RefCell::new(None) };

@@ -33,7 +33,7 @@ macro_rules! icu_register_memory {
 
         // acquire memory_id → explicitly return VirtualMemory<DefaultMemoryImpl>
         $crate::memory::MEMORY_MANAGER
-            .with_borrow_mut(|mgr| mgr.get($crate::ic::structures::memory::MemoryId::new($id)))
+            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
 
@@ -46,9 +46,9 @@ macro_rules! icu_register_memory {
 #[macro_export]
 macro_rules! impl_storable_bounded {
     ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
-        impl $crate::ic::structures::storable::Storable for $ident {
-            const BOUND: $crate::ic::structures::storable::Bound =
-                $crate::ic::structures::storable::Bound::Bounded {
+        impl $crate::cdk::structures::storable::Storable for $ident {
+            const BOUND: $crate::cdk::structures::storable::Bound =
+                $crate::cdk::structures::storable::Bound::Bounded {
                     max_size: $max_size,
                     is_fixed_size: $is_fixed_size,
                 };
@@ -72,9 +72,9 @@ macro_rules! impl_storable_bounded {
 #[macro_export]
 macro_rules! impl_storable_unbounded {
     ($ident:ident) => {
-        impl $crate::ic::structures::storable::Storable for $ident {
-            const BOUND: $crate::ic::structures::storable::Bound =
-                $crate::ic::structures::storable::Bound::Unbounded;
+        impl $crate::cdk::structures::storable::Storable for $ident {
+            const BOUND: $crate::cdk::structures::storable::Bound =
+                $crate::cdk::structures::storable::Bound::Unbounded;
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
                 ::std::borrow::Cow::Owned($crate::serialize::serialize(self).unwrap())
@@ -124,25 +124,25 @@ macro_rules! impl_storable_candid_bounded {
 #[macro_export]
 macro_rules! impl_storable_candid_unbounded {
     ($ident:ident) => {
-        impl $crate::ic::structures::storable::Storable for $ident {
-            const BOUND: $crate::ic::structures::storable::Bound =
-                $crate::ic::structures::storable::Bound::Unbounded;
+        impl $crate::cdk::structures::storable::Storable for $ident {
+            const BOUND: $crate::cdk::structures::storable::Bound =
+                $crate::cdk::structures::storable::Bound::Unbounded;
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                use $crate::ic::candid::Encode;
+                use $crate::cdk::candid::Encode;
 
                 let bytes = Encode!(self).expect("Candid encode failed");
                 ::std::borrow::Cow::Owned(bytes)
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                use $crate::ic::candid::Encode;
+                use $crate::cdk::candid::Encode;
 
                 Encode!(&self).expect("Candid encode failed")
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                use $crate::ic::candid::Decode;
+                use $crate::cdk::candid::Decode;
 
                 Decode!(&bytes, $ident).expect("Candid decode failed")
             }

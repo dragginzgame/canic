@@ -15,7 +15,7 @@ pub use cycle_tracker::{CycleTracker, CycleTrackerView};
 pub use memory_registry::MemoryRegistry;
 
 use crate::{
-    ic::structures::{DefaultMemoryImpl, memory::MemoryManager},
+    cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
         app_state::AppStateError,
         canister::{

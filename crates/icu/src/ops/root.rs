@@ -1,8 +1,9 @@
 use crate::{
-    Error, Log, config::Config, interface::request::create_canister_request, log,
+    Error,
+    config::Config,
     memory::CanisterDirectory,
+    ops::{prelude::*, request::create_canister_request},
 };
-use candid::Principal;
 
 // root_create_canisters
 pub async fn root_create_canisters() -> Result<(), Error> {

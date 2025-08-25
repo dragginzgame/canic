@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    ic::api::{canister_self, msg_caller},
+    cdk::api::{canister_self, msg_caller},
     memory::{CanisterChildren, CanisterDirectory, CanisterRegistry, CanisterState},
     types::CanisterType,
 };
@@ -168,7 +168,7 @@ pub fn is_child(caller: Principal) -> RuleResult {
 #[must_use]
 pub fn is_controller(caller: Principal) -> RuleResult {
     Box::pin(async move {
-        if crate::ic::api::is_controller(&caller) {
+        if crate::cdk::api::is_controller(&caller) {
             Ok(())
         } else {
             Err(AuthError::NotController(caller).into())

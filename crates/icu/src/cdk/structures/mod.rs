@@ -7,3 +7,7 @@ pub mod memory {
 }
 
 pub use ic_stable_structures::*;
+
+pub mod icrc_ledger_types {
+    pub use icrc_ledger_types::*;
+}
