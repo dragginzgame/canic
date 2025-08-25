@@ -31,8 +31,7 @@ macro_rules! icu_endpoints {
             for (child_pid, _) in $crate::memory::CanisterChildren::export() {
                 if canister_id.is_none() || canister_id == Some(child_pid) {
                     // Push the result (either Ok(resp) or Err(err)) into the vec
-                    let result =
-                        $crate::ops::request::upgrade_canister_request(child_pid).await;
+                    let result = $crate::ops::request::upgrade_canister_request(child_pid).await;
                     results.push(result);
                 }
             }
@@ -73,10 +72,7 @@ macro_rules! icu_endpoints {
         #[::icu::cdk::query]
         async fn icrc21_canister_call_consent_message(
             req: ::icu::spec::icrc::icrc21::ConsentMessageRequest,
-        ) -> Result<
-            ::icu::spec::icrc::icrc21::ConsentMessage,
-            ::icu::spec::icrc::icrc21::Icrc21Error,
-        > {
+        ) -> ::icu::spec::icrc::icrc21::ConsentMessageResponse {
             $crate::state::icrc::Icrc21Registry::consent_message(req)
         }
 
