@@ -1,4 +1,6 @@
-use crate::spec::icrc::icrc21::{ConsentMessage, ConsentMessageRequest, ErrorInfo, Icrc21Error};
+use crate::spec::icrc::icrc21::{
+    ConsentMessage, ConsentMessageRequest, ConsentMessageResponse, ErrorInfo, Icrc21Error,
+};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 //
@@ -6,7 +8,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 //
 
 thread_local! {
-    static ICRC_21_REGISTRY: RefCell<HashMap<String, Icrc21ConsentHandlerFn>> = RefCell::new(HashMap::new());
+    static ICRC_21_REGISTRY: RefCell<HashMap<String, ConsentHandlerFn>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -14,7 +16,7 @@ thread_local! {
 /// this is what the user has to pass into icu
 ///
 
-pub type Icrc21ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessage + 'static>;
+pub type ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>;
 
 ///
 /// Icrc21Registry
@@ -32,7 +34,7 @@ impl Icrc21Registry {
 
     pub fn register<F>(method: &str, handler: F)
     where
-        F: Fn(ConsentMessageRequest) -> ConsentMessage + 'static,
+        F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
     {
         ICRC_21_REGISTRY.with_borrow_mut(|reg| {
             reg.insert(method.to_string(), Arc::new(handler));
@@ -46,18 +48,18 @@ impl Icrc21Registry {
         Self::register(method, move |req| {
             let message = generator(&req);
 
-            ConsentMessage::GenericDisplayMessage(message)
+            Ok(ConsentMessage::GenericDisplayMessage(message))
         });
     }
 
     #[must_use]
-    pub fn get_handler(method: &str) -> Option<Icrc21ConsentHandlerFn> {
+    pub fn get_handler(method: &str) -> Option<ConsentHandlerFn> {
         ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).cloned())
     }
 
-    pub fn consent_message(req: ConsentMessageRequest) -> Result<ConsentMessage, Icrc21Error> {
+    pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
         match Self::get_handler(&req.method) {
-            Some(handler) => Ok(handler(req)),
+            Some(handler) => handler(req),
             None => Err(Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
                 description: "No handler registered for this method.".to_string(),
             })),

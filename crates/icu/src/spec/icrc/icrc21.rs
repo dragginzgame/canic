@@ -1,7 +1,7 @@
 pub use crate::cdk::icrc_ledger_types::icrc21::{
     errors::{ErrorInfo, Icrc21Error},
     lib::ConsentMessageBuilder,
-    requests::ConsentMessageRequest,
+    requests::{ConsentMessageRequest, DisplayMessageType},
     responses::{ConsentInfo, ConsentMessage},
 };
 
