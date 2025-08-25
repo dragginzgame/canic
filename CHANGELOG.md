@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.2] - 2025-08-25
+- did a few patches to fix bugs
+
 ## [0.5.0] - Interface & Spec
 - ok now we're really getting into the IC frame of mind, started wrapping as much as we could and
 adding canister IDs to config
