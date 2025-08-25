@@ -1,12 +1,6 @@
 use crate::{
-    Error,
-    cdk::call::Call,
-    env::nns::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
-    interface::{ic::derive_subaccount, prelude::*},
-    spec::{
-        ic::cycles::{IcpXdrConversionRateResponse, NotifyTopUpArgs},
-        icrc::icrc1::Icrc1TransferArgs,
-    },
+    Error, cdk::call::Call, env::nns::CYCLES_MINTING_CANISTER, interface::prelude::*,
+    spec::ic::cycles::IcpXdrConversionRateResponse,
 };
 
 /// get_icp_xdr_conversion_rate

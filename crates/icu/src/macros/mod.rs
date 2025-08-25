@@ -36,23 +36,12 @@ macro_rules! log {
     }};
 }
 
-// debug
-// a debugger with a boolean switch
-#[macro_export]
-macro_rules! debug {
-    ($enabled:expr, $($arg:tt)*) => {
-        if $enabled {
-            ::icu::ic::println!($($arg)*);
-        }
-    };
-}
-
 // perf
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
         $crate::state::PERF_LAST.with(|last| {
-            let now = ::icu::ic::api::performance_counter(1);
+            let now = ::icu::cdk::api::performance_counter(1);
             let then = *last.borrow();
             let delta = now.saturating_sub(then);
             *last.borrow_mut() = now;
