@@ -162,5 +162,52 @@ macro_rules! icu_endpoints {
 
             $crate::state::delegation::DelegationRegistry::revoke_session_or_wallet(pid)
         }
+
+        //
+        // ICTS ENDPOINTS
+        //
+
+        #[::icu::cdk::query]
+        fn icts_name() -> String {
+            env!("CARGO_PKG_NAME").to_string()
+        }
+
+        #[::icu::cdk::query]
+        fn icts_version() -> String {
+            env!("CARGO_PKG_VERSION").to_string()
+        }
+
+        #[::icu::cdk::query]
+        fn icts_description() -> String {
+            env!("CARGO_PKG_DESCRIPTION").to_string()
+        }
+
+        #[::icu::cdk::query]
+        fn icts_metadata() -> Vec<(String, String)> {
+            vec![
+                ("name".to_string(), icts_name()),
+                ("version".to_string(), icts_version()),
+                ("description".to_string(), icts_description()),
+            ]
+        }
+
+        #[::icu::cdk::update]
+        async fn icts_canister_status()
+        -> Result<::icu::cdk::management_canister::CanisterStatusResult, String> {
+            use $crate::cdk::{
+                api::canister_self,
+                management_canister::{CanisterStatusArgs, canister_status},
+            };
+
+            if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
+                return Err("Unauthorized".to_string());
+            }
+
+            canister_status(&CanisterStatusArgs {
+                canister_id: canister_self(),
+            })
+            .await
+            .map_err(|e| e.to_string())
+        }
     };
 }
