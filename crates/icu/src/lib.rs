@@ -25,7 +25,7 @@ pub use Error as IcuError;
 
 pub mod prelude {
     pub use crate::{
-        Log, auth_require_all, auth_require_any,
+        Error as IcuError, Log, auth_require_all, auth_require_any,
         cdk::{
             api::msg_caller, candid::CandidType, export_candid, init, principal::Principal, query,
             update,
@@ -69,6 +69,9 @@ pub const TEST: CanisterType = CanisterType::new("test");
 #[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum Error {
     #[error("{0}")]
+    CustomError(String),
+
+    #[error("{0}")]
     AuthError(String),
 
     #[error("{0}")]
@@ -98,6 +101,13 @@ macro_rules! from_to_string {
             }
         }
     };
+}
+
+impl Error {
+    #[must_use]
+    pub fn custom(s: &str) -> Self {
+        Self::CustomError(s.to_string())
+    }
 }
 
 from_to_string!(auth::AuthError, AuthError);
