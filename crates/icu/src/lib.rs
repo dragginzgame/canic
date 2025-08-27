@@ -105,8 +105,8 @@ macro_rules! from_to_string {
 
 impl Error {
     #[must_use]
-    pub fn custom(s: &str) -> Self {
-        Self::CustomError(s.to_string())
+    pub fn custom<S: Into<String>>(s: S) -> Self {
+        Self::CustomError(s.into())
     }
 }
 
