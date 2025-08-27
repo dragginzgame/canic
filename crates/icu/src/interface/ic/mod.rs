@@ -25,9 +25,7 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     let args = CanisterStatusArgs {
         canister_id: canister_pid,
     };
-    let res = mgmt::canister_status(&args)
-        .await
-        .map_err(InterfaceError::from)?;
+    let res = mgmt::canister_status(&args).await?;
 
     Ok(res)
 }
@@ -44,16 +42,14 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(
         canister_id: canister_pid,
     };
 
-    mgmt::deposit_cycles(&args, cycles.as_u128())
-        .await
-        .map_err(InterfaceError::from)?;
+    mgmt::deposit_cycles(&args, cycles.as_u128()).await?;
 
     Ok(())
 }
 
 // encode_args
 pub fn encode_args<T: ArgumentEncoder>(args: T) -> Result<Vec<u8>, Error> {
-    let encoded = candid::encode_args(args).map_err(InterfaceError::from)?;
+    let encoded = candid::encode_args(args)?;
 
     Ok(encoded)
 }
@@ -87,9 +83,7 @@ pub async fn install_code<T: ArgumentEncoder>(
         arg,
     };
 
-    mgmt::install_code(&install_args)
-        .await
-        .map_err(InterfaceError::CallError)?;
+    mgmt::install_code(&install_args).await?;
 
     Ok(())
 }
@@ -100,9 +94,7 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
         canister_id: canister_pid,
     };
 
-    mgmt::uninstall_code(&args)
-        .await
-        .map_err(InterfaceError::CallError)?;
+    mgmt::uninstall_code(&args).await?;
 
     Ok(())
 }

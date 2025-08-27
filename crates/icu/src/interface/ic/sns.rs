@@ -53,10 +53,8 @@ pub async fn list_sns_neurons_for_principal_page(
 
     let res = Call::unbounded_wait(gov_canister, "list_neurons")
         .with_arg(list_neurons_arg)
-        .await
-        .map_err(InterfaceError::from)?
-        .candid::<ListNeuronsResponse>()
-        .map_err(InterfaceError::from)?;
+        .await?
+        .candid::<ListNeuronsResponse>()?;
 
     Ok(res)
 }

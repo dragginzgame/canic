@@ -85,8 +85,7 @@ pub async fn cascade_canister(pid: &Principal, bundle: &StateBundle) -> Result<(
 
     Call::unbounded_wait(*pid, "icu_state_cascade")
         .with_arg(bundle)
-        .await
-        .map_err(InterfaceError::from)?;
+        .await?;
 
     Ok(())
 }
@@ -99,8 +98,7 @@ pub async fn update_canister(pid: &Principal, bundle: &StateBundle) -> Result<()
 
     Call::unbounded_wait(*pid, "icu_state_update")
         .with_arg(bundle)
-        .await
-        .map_err(InterfaceError::from)?;
+        .await?;
 
     Ok(())
 }

@@ -36,7 +36,10 @@ pub mod prelude {
     };
 }
 
-use candid::CandidType;
+use crate::cdk::{
+    call::{CallFailed, CandidDecodeFailed, Error as CallError},
+    candid::{CandidType, Error as CandidError},
+};
 use serde::Deserialize;
 use std::time::Duration;
 use thiserror::Error as ThisError;
@@ -91,6 +94,21 @@ pub enum Error {
 
     #[error("{0}")]
     StateError(String),
+
+    //
+    // Common IC errors
+    //
+    #[error("call error: {0}")]
+    CallError(String),
+
+    #[error("call error: {0}")]
+    CallFailed(String),
+
+    #[error("candid error: {0}")]
+    CandidDecodeFailed(String),
+
+    #[error("candid error: {0}")]
+    CandidError(String),
 }
 
 macro_rules! from_to_string {
@@ -117,6 +135,11 @@ from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(memory::MemoryError, MemoryError);
 from_to_string!(ops::OpsError, OpsError);
 from_to_string!(state::StateError, StateError);
+
+from_to_string!(CallError, CallError);
+from_to_string!(CallFailed, CallFailed);
+from_to_string!(CandidError, CandidError);
+from_to_string!(CandidDecodeFailed, CandidDecodeFailed);
 
 ///
 /// Log

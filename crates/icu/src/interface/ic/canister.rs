@@ -25,8 +25,7 @@ pub async fn create_canister(
 
     // create
     let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles.as_u128())
-        .await
-        .map_err(InterfaceError::from)?
+        .await?
         .canister_id;
 
     Ok(canister_pid)

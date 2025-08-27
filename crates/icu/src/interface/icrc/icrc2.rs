@@ -28,10 +28,9 @@ pub async fn icrc2_allowance(
 
     let res = Call::unbounded_wait(ledger_pid, "icrc2_allowance")
         .with_args(&(args,))
-        .await
-        .map_err(InterfaceError::CallFailed)?;
+        .await?;
 
-    let allowance: Nat = res.candid().map_err(InterfaceError::CandidDecodeFailed)?;
+    let allowance: Nat = res.candid()?;
 
     Ok(allowance)
 }

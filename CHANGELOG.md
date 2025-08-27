@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.9] - 2025-08-27
+- call and candid errors now go into the top level error struct, saving lots of boilerplate code
+
 ## [0.5.3] - 2025-08-25
 - did a few patches to fix bugs
 - added ICTS standards to endpoints
