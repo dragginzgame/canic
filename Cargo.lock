@@ -564,7 +564,7 @@ dependencies = [
  "ic-cdk-executor",
  "ic-cdk-macros",
  "ic-error-types",
- "ic-management-canister-types 0.3.3",
+ "ic-management-canister-types",
  "ic0",
  "serde",
  "serde_bytes",
@@ -641,17 +641,6 @@ name = "ic-management-canister-types"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea7e5b8a0f7c3b320d9450ac950547db4f24a31601b5d398f9680b64427455d2"
-dependencies = [
- "candid",
- "serde",
- "serde_bytes",
-]
-
-[[package]]
-name = "ic-management-canister-types"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300adbb554ca7d6003f6080b978f5f53730d93cc9d6c8223199cbcfd166b7b42"
 dependencies = [
  "candid",
  "serde",
@@ -742,7 +731,7 @@ dependencies = [
  "ic-cdk",
  "ic-cdk-timers",
  "ic-ledger-types",
- "ic-management-canister-types 0.4.0",
+ "ic-management-canister-types",
  "ic-stable-structures 0.7.0",
  "ic_principal",
  "icrc-ledger-types",
