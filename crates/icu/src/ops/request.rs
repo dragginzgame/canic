@@ -76,12 +76,9 @@ async fn request(request: Request) -> Result<Response, Error> {
 
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
-        .await
-        .map_err(InterfaceError::from)?;
+        .await?;
 
-    call_response
-        .candid::<Result<Response, Error>>()
-        .map_err(InterfaceError::from)?
+    call_response.candid::<Result<Response, Error>>()?
 }
 
 // create_canister_request
@@ -93,7 +90,7 @@ where
     A: CandidType + Send + Sync,
 {
     let encoded = match extra {
-        Some(extra) => Some(encode_one(extra).map_err(InterfaceError::from)?),
+        Some(extra) => Some(encode_one(extra)?),
         None => None,
     };
 

@@ -14,9 +14,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum AuthError {
-    #[error("{0}")]
-    Custom(String),
-
     #[error("invalid error state - this should never happen")]
     InvalidState,
 
@@ -51,28 +48,21 @@ pub enum AuthError {
     NotWhitelisted(Principal),
 }
 
-impl AuthError {
-    #[must_use]
-    pub fn custom(s: &str) -> Self {
-        Self::Custom(s.to_string())
-    }
-}
-
 ///
 /// Rule
 ///
 
-pub type RuleFn =
+pub type AuthRuleFn =
     Box<dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + Sync>;
 
-pub type RuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 ///
 /// Auth Functions
 ///
 
 // require_all
-pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
+pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -87,7 +77,7 @@ pub async fn require_all(rules: Vec<RuleFn>) -> Result<(), Error> {
 }
 
 // require_any
-pub async fn require_any(rules: Vec<RuleFn>) -> Result<(), Error> {
+pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
     if rules.is_empty() {
@@ -133,7 +123,7 @@ macro_rules! auth_require_any {
 
 // is_app
 #[must_use]
-pub fn is_app(caller: Principal) -> RuleResult {
+pub fn is_app(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         match CanisterRegistry::get(caller) {
             Some(_) => Ok(()),
@@ -145,7 +135,7 @@ pub fn is_app(caller: Principal) -> RuleResult {
 // is_canister_type
 // check caller against the id of a specific canister path
 #[must_use]
-pub fn is_canister_type(caller: Principal, ty: CanisterType) -> RuleResult {
+pub fn is_canister_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
         CanisterDirectory::try_get(&ty)
             .map_err(|_| AuthError::NotCanisterType(caller, ty.clone()))?;
@@ -156,7 +146,7 @@ pub fn is_canister_type(caller: Principal, ty: CanisterType) -> RuleResult {
 
 // is_child
 #[must_use]
-pub fn is_child(caller: Principal) -> RuleResult {
+pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         CanisterChildren::get(&caller).ok_or(AuthError::NotChild(caller))?;
 
@@ -166,7 +156,7 @@ pub fn is_child(caller: Principal) -> RuleResult {
 
 // is_controller
 #[must_use]
-pub fn is_controller(caller: Principal) -> RuleResult {
+pub fn is_controller(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         if crate::cdk::api::is_controller(&caller) {
             Ok(())
@@ -178,7 +168,7 @@ pub fn is_controller(caller: Principal) -> RuleResult {
 
 // is_root
 #[must_use]
-pub fn is_root(caller: Principal) -> RuleResult {
+pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         let root_pid = CanisterState::get_root_pid();
 
@@ -192,7 +182,7 @@ pub fn is_root(caller: Principal) -> RuleResult {
 
 // is_parent
 #[must_use]
-pub fn is_parent(caller: Principal) -> RuleResult {
+pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         if CanisterState::has_parent_pid(&caller) {
             Ok(())
@@ -204,7 +194,7 @@ pub fn is_parent(caller: Principal) -> RuleResult {
 
 // is_principal
 #[must_use]
-pub fn is_principal(caller: Principal, expected: Principal) -> RuleResult {
+pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
     Box::pin(async move {
         if caller == expected {
             Ok(())
@@ -216,7 +206,7 @@ pub fn is_principal(caller: Principal, expected: Principal) -> RuleResult {
 
 // is_same_canister
 #[must_use]
-pub fn is_same_canister(caller: Principal) -> RuleResult {
+pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         if caller == canister_self() {
             Ok(())
@@ -230,7 +220,7 @@ pub fn is_same_canister(caller: Principal) -> RuleResult {
 // only on mainnet - only if the whitelist is active
 #[must_use]
 #[allow(unused_variables)]
-pub fn is_whitelisted(caller: Principal) -> RuleResult {
+pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         #[cfg(feature = "ic")]
         {

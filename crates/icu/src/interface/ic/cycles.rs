@@ -1,16 +1,14 @@
 use crate::{
-    Error, cdk::call::Call, env::nns::CYCLES_MINTING_CANISTER, interface::prelude::*,
+    Error, cdk::call::Call, env::nns::CYCLES_MINTING_CANISTER,
     spec::ic::cycles::IcpXdrConversionRateResponse,
 };
 
 /// get_icp_xdr_conversion_rate
 /// retrieved from the Cycles Minting Canister
 pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
-    let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate")
-        .await
-        .map_err(InterfaceError::from)?;
+    let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate").await?;
 
-    let rate_info: IcpXdrConversionRateResponse = res.candid().map_err(InterfaceError::from)?;
+    let rate_info: IcpXdrConversionRateResponse = res.candid()?;
 
     // Extract the conversion rate (ICP e8s per XDR)
     #[allow(clippy::cast_precision_loss)]

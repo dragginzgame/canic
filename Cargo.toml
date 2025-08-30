@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.89.0"
 edition = "2024"
-version = "0.5.5"
+version = "0.5.9"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Internet Computer Utilities"
 license = "MIT"
@@ -21,7 +21,7 @@ derive_more = { version = "2.0", default-features = false, features = ["full"] }
 ic-cdk = "0.18.7"
 ic-cdk-timers = "0.12.2"
 ic-ledger-types = "0.15.0"
-ic-management-canister-types = "0.4.0"
+ic-management-canister-types = "0.3.3"
 ic-stable-structures = "0.7.0"
 ic_principal = "0.1"
 icrc-ledger-types = "0.1.10"
