@@ -18,7 +18,7 @@ use crate::{
     },
     interface::prelude::*,
 };
-use candid::{Principal, utils::ArgumentEncoder};
+use candid::{Principal, encode_args, utils::ArgumentEncoder};
 
 // canister_status
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
@@ -45,13 +45,6 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(
     mgmt::deposit_cycles(&args, cycles.as_u128()).await?;
 
     Ok(())
-}
-
-// encode_args
-pub fn encode_args<T: ArgumentEncoder>(args: T) -> Result<Vec<u8>, Error> {
-    let encoded = candid::encode_args(args)?;
-
-    Ok(encoded)
 }
 
 // get_cycles

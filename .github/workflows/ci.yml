@@ -35,9 +35,18 @@ jobs:
       
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings
-      
+
       - name: Check formatting
-        run: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Build examples (default)
+        run: cargo build -p icu --examples
+
+      - name: Build examples (ic feature)
+        run: cargo build -p icu --examples --features ic
+
+      - name: Run doctests
+        run: cargo test --doc --workspace
 
   build:
     name: Build

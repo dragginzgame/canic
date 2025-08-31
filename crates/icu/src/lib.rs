@@ -1,3 +1,12 @@
+//! ICU crate utilities for multi-canister apps on the Internet Computer.
+//!
+//! Basic usage example (non-IC):
+//! ```
+//! use icu::IcuError;
+//! let e = IcuError::custom("oops");
+//! match e { icu::IcuError::CustomError(_) => (), _ => unreachable!() }
+//! ```
+
 pub mod auth;
 pub mod cdk;
 pub mod config;

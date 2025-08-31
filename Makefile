@@ -19,6 +19,7 @@ help:
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  clean            Clean build artifacts"
+	@echo "  examples         Build crate examples (with and without 'ic')"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  check-versioning Check versioning system setup"
@@ -76,6 +77,11 @@ fmt-check:
 clean:
 	cargo clean
 	rm -rf target/
+
+# Build examples
+examples:
+	cargo build -p icu --examples
+	cargo build -p icu --examples --features ic
 
 # Install development dependencies
 install-dev:

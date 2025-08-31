@@ -5,8 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
+## [0.6.0] - 2025-08-31
+- Added AGENTS.md with concise repository/contributor guidelines
+- Added PR template `.github/pull_request_template.md`
+- Introduced runnable examples under `crates/icu/examples/` and a doctest in `lib.rs`
+- Makefile: new `examples` target to build examples (default and `ic` feature)
+- CI: enforce `cargo fmt --check`, build examples, and run doctests
+- README: linked guidelines and examples for easier discovery
+
 ## [0.5.9] - 2025-08-27
 - call and candid errors now go into the top level error struct, saving lots of boilerplate code
+
 
 ## [0.5.3] - 2025-08-25
 - did a few patches to fix bugs

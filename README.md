@@ -12,3 +12,28 @@ ICU addresses common challenges in multi-canister architectures, including canis
 * 📄 License section
 
 ... rest to come ...
+
+## Contributing
+
+See Repository Guidelines in `AGENTS.md` for project structure, coding style, testing, and PR requirements. For versioning and releases, refer to `VERSIONING.md` and `RELEASE_GUIDE.md`.
+
+## Examples
+
+Example files:
+
+- [crates/icu/examples/auth_rules.rs](crates/icu/examples/auth_rules.rs) — basic auth rule composition
+- [crates/icu/examples/minimal_root.rs](crates/icu/examples/minimal_root.rs) — minimal root canister scaffold (use `--features ic`)
+- [crates/icu/examples/ops_create_canister.rs](crates/icu/examples/ops_create_canister.rs) — create-canister request flow (use `--features ic`)
+
+Build all examples:
+
+```bash
+make examples
+# or
+cargo build -p icu --examples
+cargo build -p icu --examples --features ic
+```
+
+Run a specific example (non-IC): `cargo run -p icu --example auth_rules`
+
+IC-specific examples compile with `--features ic` and are intended for canister contexts.

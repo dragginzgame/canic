@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.5.8"
+version = "0.6.0"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.5.8"
+version = "0.6.0"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.5.8"
+version = "0.6.0"
 dependencies = [
  "candid",
  "criterion",
