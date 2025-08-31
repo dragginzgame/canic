@@ -13,14 +13,14 @@
                 }
             ],
             "dependencies": [
-                "test"
+                "example"
             ]
         },
-        "test": {
+        "example": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/test/test.did",
-            "build": "bash -c 'scripts/app/build.sh test'",
-            "wasm": ".dfx/local/canisters/test/test.wasm",
+            "candid": ".dfx/local/canisters/example/example.did",
+            "build": "bash -c 'scripts/app/build.sh example'",
+            "wasm": ".dfx/local/canisters/example/example.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

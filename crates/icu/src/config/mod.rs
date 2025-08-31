@@ -1,3 +1,25 @@
+//! Global configuration loaded from a TOML file at build time via `icu_build!()`.
+//!
+//! Example schema (TOML):
+//!
+//! ```toml
+//! controllers = ["aaaaa-aa"]
+//!
+//! [pool]
+//! minimum_size = 10
+//!
+//! [canisters.example]
+//! initial_cycles = "6T"
+//! uses_directory = false
+//! topup.threshold = "10T"
+//! topup.amount = "5T"
+//!
+//! [standards]
+//! icrc21 = true
+//! ```
+//!
+//! Access the loaded configuration with `Config::try_get()`.
+
 mod data;
 
 use crate::{Error, types::CanisterType};
@@ -26,21 +48,22 @@ thread_local! {
     static CONFIG: RefCell<Option<Arc<ConfigData>>> = const {  RefCell::new(None) };
 }
 
-///
-/// ConfigError
-///
-
+/// Errors related to configuration lifecycle and parsing.
 #[derive(Debug, ThisError)]
 pub enum ConfigError {
+    /// Configuration has already been initialized; reinitialization is not allowed.
     #[error("config has already been initialized")]
     AlreadyInitialized,
 
+    /// TOML could not be parsed into the expected structure.
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
+    /// Configuration has not been initialized yet; call `icu_build!()` or `init_from_toml`.
     #[error("config has not been initialized")]
     NotInitialized,
 
+    /// Wrapper for data-level errors.
     #[error(transparent)]
     ConfigDataError(#[from] ConfigDataError),
 }
@@ -86,5 +109,19 @@ impl Config {
     pub fn try_get_canister(ty: &CanisterType) -> Result<Canister, Error> {
         let cfg = Self::try_get()?;
         cfg.get_canister(ty)
+    }
+
+    /// Check whether a principal is whitelisted according to the loaded config.
+    pub fn is_whitelisted(principal: &candid::Principal) -> Result<bool, Error> {
+        let cfg = Self::try_get()?;
+        Ok(cfg.is_whitelisted(principal))
+    }
+
+    /// Test-only: reset the global config so tests can reinitialize with a fresh TOML.
+    #[cfg(test)]
+    pub fn reset_for_tests() {
+        CONFIG.with(|cfg| {
+            *cfg.borrow_mut() = None;
+        });
     }
 }

@@ -1,4 +1,4 @@
-.PHONY: help version current tags patch minor major release test build check clippy fmt fmt-check clean check-versioning git-versions security-check all install-dev test-watch
+.PHONY: help version current tags patch minor major release test build check clippy fmt fmt-check clean check-versioning git-versions security-check all install-dev install-canister-deps test-watch
 
 # Default target
 help:
@@ -19,6 +19,8 @@ help:
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  clean            Clean build artifacts"
+	@echo "  examples         Build crate examples (with and without 'ic')"
+	@echo "  install-canister-deps  Install Wasm target and tools"
 	@echo "  examples         Build crate examples (with and without 'ic')"
 	@echo ""
 	@echo "Utilities:"
@@ -82,6 +84,12 @@ clean:
 examples:
 	cargo build -p icu --examples
 	cargo build -p icu --examples --features ic
+
+# Install Wasm target and candid tools
+install-canister-deps:
+	rustup toolchain install 1.89.0 || true
+	rustup target add wasm32-unknown-unknown
+	cargo install candid-extractor --locked || true
 
 # Install development dependencies
 install-dev:

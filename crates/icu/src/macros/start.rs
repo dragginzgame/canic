@@ -41,6 +41,7 @@ macro_rules! icu_start {
             });
         }
 
+        #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::CycleTracker::start();
@@ -84,6 +85,7 @@ macro_rules! icu_start_root {
             });
         }
 
+        #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::CanisterPool::start();

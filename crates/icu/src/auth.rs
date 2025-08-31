@@ -1,3 +1,8 @@
+//! Authorization helpers for canister-to-canister and user calls.
+//!
+//! Compose rule futures and enforce them with `require_all` or `require_any`.
+//! For ergonomics, prefer the macros `auth_require_all!` and `auth_require_any!`.
+
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
@@ -8,42 +13,50 @@ use candid::Principal;
 use std::pin::Pin;
 use thiserror::Error as ThisError;
 
-///
-/// AuthError
-///
-
+/// Errors returned by authorization rule checks.
 #[derive(Debug, ThisError)]
 pub enum AuthError {
+    /// Guardrail for unreachable states (should not be observed in practice).
     #[error("invalid error state - this should never happen")]
     InvalidState,
 
+    /// No rules were provided to an authorization check.
     #[error("one or more rules must be defined")]
     NoRulesDefined,
 
+    /// Caller is not an application canister registered on this subnet.
     #[error("caller '{0}' is not an application canister on this subnet")]
     NotApp(Principal),
 
+    /// Caller does not match the expected canister type.
     #[error("caller '{0}' does not match canister type '{1}'")]
     NotCanisterType(Principal, CanisterType),
 
+    /// Caller is not a child of the current canister.
     #[error("caller '{0}' is not a child of this canister")]
     NotChild(Principal),
 
+    /// Caller is not a controller of the current canister.
     #[error("caller '{0}' is not a controller of this canister")]
     NotController(Principal),
 
+    /// Caller is not the parent of the current canister.
     #[error("caller '{0}' is not the parent of this canister")]
     NotParent(Principal),
 
+    /// Caller principal does not equal the expected principal.
     #[error("expected caller principal '{1}' got '{0}'")]
     NotPrincipal(Principal, Principal),
 
+    /// Caller is not the root canister.
     #[error("caller '{0}' is not root")]
     NotRoot(Principal),
 
+    /// Caller is not the current canister (self).
     #[error("caller '{0}' is not the current canister")]
     NotSameCanister(Principal),
 
+    /// Caller is not present in the active whitelist.
     #[error("caller '{0}' is not on the whitelist")]
     NotWhitelisted(Principal),
 }
@@ -61,6 +74,17 @@ pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>
 /// Auth Functions
 ///
 
+/// Require that all provided rules pass for the current caller.
+///
+/// Returns the first failing rule error, or `AuthError::NoRulesDefined` if `rules` is empty.
+///
+/// Example (no_run):
+/// ```no_run
+/// use icu::auth;
+/// # async fn demo() -> Result<(), icu::IcuError> {
+/// let _ = auth::require_all(vec![]).await; // will error: NoRulesDefined
+/// # Ok(()) }
+/// ```
 // require_all
 pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
@@ -76,6 +100,17 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Require that any one of the provided rules passes for the current caller.
+///
+/// Returns the last failing rule error if none pass, or `AuthError::NoRulesDefined` if empty.
+///
+/// Example (no_run):
+/// ```no_run
+/// use icu::auth;
+/// # async fn demo() -> Result<(), icu::IcuError> {
+/// let _ = auth::require_any(vec![]).await; // will error: NoRulesDefined
+/// # Ok(()) }
+/// ```
 // require_any
 pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
@@ -225,12 +260,7 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
         #[cfg(feature = "ic")]
         {
             use crate::config::Config;
-
-            let config = Config::try_get()?;
-
-            if let Some(whitelist) = &config.whitelist
-                && !whitelist.principals.contains(&caller.to_string())
-            {
+            if !Config::is_whitelisted(&caller)? {
                 Err(AuthError::NotWhitelisted(caller))?;
             }
         }

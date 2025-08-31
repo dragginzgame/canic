@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 
 use icu::{
-    Error, TEST,
+    Error, EXAMPLE,
     ops::{request::create_canister_request, response::CreateCanisterResponse},
     prelude::*,
 };
@@ -10,7 +10,7 @@ use icu::{
 // ICU
 //
 
-icu_start!(TEST);
+icu_start!(EXAMPLE);
 
 const fn icu_setup() {}
 
@@ -18,10 +18,10 @@ async fn icu_install(_: Option<Vec<u8>>) {}
 
 async fn icu_upgrade() {}
 
-// create_test
+// create_example
 #[update]
-async fn create_test() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&TEST, None).await
+async fn create_example() -> Result<CreateCanisterResponse, Error> {
+    create_canister_request::<()>(&EXAMPLE, None).await
 }
 
 export_candid!();

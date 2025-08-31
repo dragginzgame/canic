@@ -7,6 +7,10 @@ mod canister {
     use icu::prelude::*;
     use icu::types::CanisterType;
 
+    // Note: In a real canister crate, add this to build.rs:
+    // fn main() { icu::icu_build!("../icu.toml"); }
+    // Examples cannot run build scripts, so this example omits it.
+
     // Set up a minimal root canister with default hooks.
     icu_start_root!();
 

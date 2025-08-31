@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 
 use icu::{
-    Error, TEST,
+    Error, EXAMPLE,
     ops::{
         request::create_canister_request, response::CreateCanisterResponse,
         root::root_create_canisters,
@@ -25,21 +25,21 @@ async fn icu_upgrade() {}
 
 // WASMS
 pub static WASMS: &[(CanisterType, &[u8])] = &[(
-    TEST,
+    EXAMPLE,
     #[cfg(icu_github_ci)]
     &[],
     #[cfg(not(icu_github_ci))]
-    include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    include_bytes!("../../../../.dfx/local/canisters/example/example.wasm.gz"),
 )];
 
 ///
 /// ENDPOINTS
 ///
 
-// create_test
+// create_example
 #[update]
-async fn create_test() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&TEST, None).await
+async fn create_example() -> Result<CreateCanisterResponse, Error> {
+    create_canister_request::<()>(&EXAMPLE, None).await
 }
 
 #[update]

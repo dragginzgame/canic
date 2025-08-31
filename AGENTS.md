@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - Workspace: Rust workspace in `Cargo.toml`; shared version/lints.
-- Crates: `crates/icu` (core library, benches), `crates/canisters/{root,test}` (IC canisters).
+- Crates: `crates/icu` (core library, benches), `crates/canisters/{root,example}` (IC canisters).
 - CI/CD: GitHub Actions in `.github/workflows/` for CI and tagged releases.
 - Scripts: Versioning, release, and checks in `scripts/app/`; env helpers in `scripts/env/`.
 - Artifacts: Build output in `target/` (ignored).
@@ -38,4 +38,3 @@
 - Tags are immutable; never modify historical tagged code. Bump via `scripts/app/version.sh`.
 - Prefer pinned git tags for consumers (see `INTEGRATION.md`).
 - Verify integrity with `make security-check` and inspect tags with `make git-versions`.
-

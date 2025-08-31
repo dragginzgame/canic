@@ -1,11 +1,11 @@
 [workspace]
-members = ["crates/canisters/root", "crates/canisters/test", "crates/icu"]
+members = ["crates/canisters/root", "crates/canisters/example", "crates/icu"]
 resolver = "2"
 
 [workspace.package]
 rust-version = "1.89.0"
 edition = "2024"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Internet Computer Utilities"
 license = "MIT"
@@ -69,6 +69,6 @@ wildcard_imports = "allow"
 opt-level = 1          # Small speed-up, less aggressive than release
 lto = false            # No link-time optimization in dev
 codegen-units = 16     # More parallelism for faster compile
-strip = "debuginfo"    # Remove debug sections from Wasm
-debug = false          # Don't embed debug info in code
+strip = "none"         # Keep symbols for easier debugging
+debug = true           # Embed debug info in code
 overflow-checks = true # Keep runtime overflow checks for safety

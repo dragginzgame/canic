@@ -16,7 +16,6 @@ pub mod interface;
 pub mod macros;
 pub mod memory;
 pub mod ops;
-pub mod serialize;
 pub mod spec;
 pub mod state;
 pub mod types;
@@ -70,7 +69,7 @@ pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
 /// Icu Canisters
 ///
 
-pub const TEST: CanisterType = CanisterType::new("test");
+pub const EXAMPLE: CanisterType = CanisterType::new("example");
 
 ///
 /// Error

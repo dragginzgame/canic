@@ -14,9 +14,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - CI: enforce `cargo fmt --check`, build examples, and run doctests
 - README: linked guidelines and examples for easier discovery
 
+## [0.6.1] - 2025-08-31
+- Docs: Added CONFIG.md (schema + loading), improved rustdocs for auth/config
+- Structure: Moved serialization to `utils/serialization.rs`; added `spec/` and `ops/` READMEs
+- CI: Pin MSRV (1.89.0) in workflows; add clippy `--all-features`
+- DX: `make install-canister-deps` for rustup target + candid-extractor
+- Examples: Fixed compile warnings, clarified minimal root example notes
+
 ## [0.5.9] - 2025-08-27
 - call and candid errors now go into the top level error struct, saving lots of boilerplate code
-
 
 ## [0.5.3] - 2025-08-25
 - did a few patches to fix bugs

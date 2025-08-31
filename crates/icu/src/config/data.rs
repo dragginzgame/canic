@@ -8,15 +8,14 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
-///
-/// ConfigDataError
-///
-
+/// Errors encountered while validating or querying configuration data.
 #[derive(Debug, ThisError)]
 pub enum ConfigDataError {
+    /// A principal string in the whitelist is invalid.
     #[error("invalid principal: {0} ({1})")]
     InvalidPrincipal(String, usize),
 
+    /// A referenced canister type does not exist in the configuration.
     #[error("canister not found: {0}")]
     CanisterNotFound(CanisterType),
 }
@@ -68,6 +67,20 @@ impl ConfigData {
         self.canisters.get(ty).cloned().ok_or_else(|| {
             ConfigError::ConfigDataError(ConfigDataError::CanisterNotFound(ty.clone())).into()
         })
+    }
+
+    /// Return true if the given principal is present in the whitelist.
+    #[must_use]
+    pub fn is_whitelisted(&self, principal: &Principal) -> bool {
+        self.whitelist
+            .as_ref()
+            .is_none_or(|w| w.principals.contains(&principal.to_string()))
+    }
+
+    /// Return whether ICRC-21 standard support is enabled.
+    #[must_use]
+    pub fn icrc21_enabled(&self) -> bool {
+        self.standards.as_ref().is_some_and(|s| s.icrc21)
     }
 }
 

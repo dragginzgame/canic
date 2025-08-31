@@ -6,7 +6,7 @@ controllers = [
 [pool]
 minimum_size = 10
 
-[canisters.test]
+[canisters.example]
 auto_create = 2
 initial_cycles = "6T"
 uses_directory = false

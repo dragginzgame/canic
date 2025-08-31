@@ -4,18 +4,42 @@
 
 ICU addresses common challenges in multi-canister architectures, including canister creation & upgrades, cross-canister state management, stable memory handling across upgrades, and establishing a clear canister hierarchy (with a **root** canister orchestrating child canisters). By using ICU, developers can focus on application logic rather than reinventing boilerplate for managing canister lifecycles and interactions.
 
-* ✨ Overview of what ICU is
-* 📦 Installation instructions
-* 🧩 Usage examples
-* 🧠 Architecture overview
-* 🤝 Contribution guidelines
-* 📄 License section
+## Quickstart
 
-... rest to come ...
+Add ICU to your workspace and wire a canister:
+
+1) In your canister crate `build.rs`:
+
+```rust
+fn main() { icu::icu_build!("../icu.toml"); }
+```
+
+2) In your canister `lib.rs`:
+
+```rust
+use icu::prelude::*;
+icu_start_root!(); // or icu_start!(icu::EXAMPLE)
+
+const fn icu_setup() {}
+async fn icu_install() {}
+async fn icu_upgrade() {}
+```
+
+See `crates/canisters/root` and `crates/canisters/example` for full patterns.
+
+MSRV: Rust 1.89.0 (pinned via `rust-toolchain.toml`).
 
 ## Contributing
 
 See Repository Guidelines in `AGENTS.md` for project structure, coding style, testing, and PR requirements. For versioning and releases, refer to `VERSIONING.md` and `RELEASE_GUIDE.md`.
+
+### Setup
+
+Install required toolchain components once:
+
+```bash
+make install-canister-deps
+```
 
 ## Examples
 
