@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 
 use icu::{
-    Error, EXAMPLE,
+    EXAMPLE, Error,
     ops::{
         request::create_canister_request, response::CreateCanisterResponse,
         root::root_create_canisters,
