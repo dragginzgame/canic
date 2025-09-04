@@ -9,17 +9,6 @@ use tinyrand::{Rand, Seeded, StdRand};
 pub static STD_RAND: LazyLock<Mutex<StdRand>> =
     LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
 
-fn with_rng<T>(f: impl FnOnce(&mut StdRand) -> T) -> T {
-    match STD_RAND.lock() {
-        Ok(mut guard) => f(&mut guard),
-        Err(poisoned) => {
-            // Recover the inner value and proceed.
-            let mut guard = poisoned.into_inner();
-            f(&mut guard)
-        }
-    }
-}
-
 // next_u8
 // (uses u16 because there is no next_u8)
 #[must_use]
@@ -30,25 +19,25 @@ pub fn next_u8() -> u8 {
 // next_u16
 #[must_use]
 pub fn next_u16() -> u16 {
-    with_rng(|rng| rng.next_u16())
+    STD_RAND.lock().expect("mutex").next_u16()
 }
 
 // next_u32
 #[must_use]
 pub fn next_u32() -> u32 {
-    with_rng(|rng| rng.next_u32())
+    STD_RAND.lock().expect("mutex").next_u32()
 }
 
 // next_64
 #[must_use]
 pub fn next_u64() -> u64 {
-    with_rng(|rng| rng.next_u64())
+    STD_RAND.lock().expect("mutex").next_u64()
 }
 
 // next_u128
 #[must_use]
 pub fn next_u128() -> u128 {
-    with_rng(|rng| rng.next_u128())
+    STD_RAND.lock().expect("mutex").next_u128()
 }
 
 //

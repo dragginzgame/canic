@@ -115,7 +115,6 @@ all: ensure-clean clean fmt-check clippy check test build
 # Build examples
 examples:
 	cargo build -p icu --examples
-	cargo build -p icu --examples --features ic
 
 # Install Wasm target and candid tools
 install-canister-deps:
