@@ -15,5 +15,5 @@ mod canister_demo {
 }
 
 fn main() {
-    println!("ops_create_canister example (use --features ic)");
+    println!("ops_create_canister example");
 }

@@ -5,7 +5,7 @@ use crate::{
 };
 use candid::Principal;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 /// Errors encountered while validating or querying configuration data.
@@ -33,7 +33,7 @@ pub struct ConfigData {
     pub controllers: Vec<Principal>,
 
     #[serde(default)]
-    pub canisters: HashMap<CanisterType, Canister>,
+    pub canisters: BTreeMap<CanisterType, Canister>,
 
     #[serde(default)]
     pub whitelist: Option<WhiteList>,
@@ -144,7 +144,7 @@ pub struct WhiteList {
     // a hashset as we constantly have to do lookups
     // strings because then we can validate and know if there are any bad ones
     #[serde(default)]
-    pub principals: HashSet<String>,
+    pub principals: BTreeSet<String>,
 }
 
 ///

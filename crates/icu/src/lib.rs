@@ -6,6 +6,7 @@
 //! let e = IcuError::custom("oops");
 //! match e { icu::IcuError::CustomError(_) => (), _ => unreachable!() }
 //! ```
+#![forbid(unsafe_code)]
 
 pub mod auth;
 pub mod cdk;
@@ -159,4 +160,28 @@ pub enum Log {
     Info,
     Warn,
     Error,
+}
+
+///
+/// expect_or_trap
+///
+
+#[inline]
+pub fn expect_or_trap<T, E: core::fmt::Display>(res: Result<T, E>, context: &str) -> T {
+    match res {
+        Ok(v) => v,
+        Err(e) => {
+            #[cfg(target_arch = "wasm32")]
+            {
+                // Log and trap inside the canister environment.
+                crate::log!(crate::Log::Error, "{}: {}", context, e);
+                crate::cdk::trap(&format!("{}: {}", context, e));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Native/testing: surface as panic with context.
+                panic!("{context}: {e}");
+            }
+        }
+    }
 }

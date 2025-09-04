@@ -63,7 +63,8 @@ impl DelegationSession {
 
     #[must_use]
     pub fn is_expired(&self) -> bool {
-        self.expires_at < now_secs()
+        // Consider expired at the exact expiration second
+        self.expires_at <= now_secs()
     }
 }
 
@@ -276,7 +277,7 @@ impl DelegationRegistry {
     }
 
     /// Removes all expired sessions from the registry.
-    fn cleanup() {
+    pub fn cleanup() {
         let before = Self::with(HashMap::len);
 
         // retain the ones not expired
@@ -416,6 +417,21 @@ mod tests {
 
         DELEGATION_REGISTRY.with_borrow_mut(|map| {
             map.insert(session, DelegationSession::new(wallet, now_secs() - 1))
+        });
+
+        let view = DelegationRegistry::get(session).unwrap();
+        assert!(view.is_expired);
+    }
+
+    #[test]
+    fn boundary_expiration_is_expired_at_exact_time() {
+        reset_state();
+        let wallet = dummy_pid(30);
+        let session = dummy_pid(31);
+
+        let now = now_secs();
+        DELEGATION_REGISTRY.with_borrow_mut(|map| {
+            map.insert(session, DelegationSession::new(wallet, now));
         });
 
         let view = DelegationRegistry::get(session).unwrap();

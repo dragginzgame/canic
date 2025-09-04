@@ -92,7 +92,6 @@ fmt-check:
 
 clean:
 	cargo clean
-	rm -rf target/
 
 # Planning summary
 plan:

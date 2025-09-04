@@ -1,36 +1,14 @@
 use crate::utils::time::now_nanos;
 use tinyrand::{Rand, Seeded, StdRand};
-
-// On wasm, avoid Mutex overhead/poisoning by using RefCell.
-// On native, keep a Mutex but handle PoisonError gracefully.
-
-#[cfg(target_arch = "wasm32")]
-use std::cell::RefCell as Cell;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Mutex as Cell;
-
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
 ///
 /// STD_RAND
 ///
 
-#[cfg(target_arch = "wasm32")]
-pub static STD_RAND: LazyLock<Cell<StdRand>> =
-    LazyLock::new(|| Cell::new(StdRand::seed(now_nanos())));
+pub static STD_RAND: LazyLock<Mutex<StdRand>> =
+    LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
 
-#[cfg(not(target_arch = "wasm32"))]
-pub static STD_RAND: LazyLock<Cell<StdRand>> =
-    LazyLock::new(|| Cell::new(StdRand::seed(now_nanos())));
-
-#[cfg(target_arch = "wasm32")]
-fn with_rng<T>(f: impl FnOnce(&mut StdRand) -> T) -> T {
-    // Single-threaded environment; borrow_mut should not panic under normal usage.
-    let mut_ref = &mut *STD_RAND.borrow_mut();
-    f(mut_ref)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn with_rng<T>(f: impl FnOnce(&mut StdRand) -> T) -> T {
     match STD_RAND.lock() {
         Ok(mut guard) => f(&mut guard),

@@ -30,5 +30,5 @@ mod canister {
 }
 
 fn main() {
-    println!("minimal_root example (use --features ic)");
+    println!("minimal_root example");
 }

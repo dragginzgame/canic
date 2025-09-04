@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.2] - 2025-09-04
+- State/Delegation: Fix session expiration boundary (now expired when `expires_at <= now`).
+- State/Delegation: Add admin endpoints
+  - `icu_delegation_list_all` (query): list all sessions (requires controller).
+  - `icu_delegation_list_by_wallet` (query): list sessions for a wallet (requires controller).
+  - `icu_delegation_cleanup` (update): remove expired sessions immediately (requires parent).
+- State/Delegation: Expose `DelegationRegistry::cleanup()` publicly; add boundary unit test.
+- RNG: Unify wasm32 and native RNG implementation to a single `LazyLock<Mutex<StdRand>>`.
+  - Fixes E0277 Sync error on wasm and ensures consistent behavior across targets.
+  - Maintains `with_rng` helper with poison recovery.
+
 All notable, and occasionally less notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)

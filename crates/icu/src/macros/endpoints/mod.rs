@@ -163,6 +163,23 @@ macro_rules! icu_endpoints {
             $crate::state::delegation::DelegationRegistry::revoke_session_or_wallet(pid)
         }
 
+        // List all delegation sessions (admin only)
+        #[::icu::cdk::query]
+        async fn icu_delegation_list_all()
+        -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            Ok($crate::state::delegation::DelegationRegistry::list_all_sessions())
+        }
+
+        // List sessions by wallet (admin only)
+        #[::icu::cdk::query]
+        async fn icu_delegation_list_by_wallet(
+            wallet_pid: Principal,
+        ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            Ok($crate::state::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
+        }
+
         //
         // ICTS ENDPOINTS
         //
