@@ -46,8 +46,8 @@ make install-canister-deps
 Example files:
 
 - [crates/icu/examples/auth_rules.rs](crates/icu/examples/auth_rules.rs) — basic auth rule composition
-- [crates/icu/examples/minimal_root.rs](crates/icu/examples/minimal_root.rs) — minimal root canister scaffold (use `--features ic`)
-- [crates/icu/examples/ops_create_canister.rs](crates/icu/examples/ops_create_canister.rs) — create-canister request flow (use `--features ic`)
+- [crates/icu/examples/minimal_root.rs](crates/icu/examples/minimal_root.rs) — minimal root canister scaffold
+- [crates/icu/examples/ops_create_canister.rs](crates/icu/examples/ops_create_canister.rs) — create-canister request flow
 
 Build all examples:
 
@@ -55,9 +55,8 @@ Build all examples:
 make examples
 # or
 cargo build -p icu --examples
-cargo build -p icu --examples --features ic
 ```
 
-Run a specific example (non-IC): `cargo run -p icu --example auth_rules`
+Run a specific example: `cargo run -p icu --example auth_rules`
 
-IC-specific examples compile with `--features ic` and are intended for canister contexts.
+Note: The `ic` cfg is used internally for tests/build tooling and is not a user-settable feature flag.

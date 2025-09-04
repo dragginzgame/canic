@@ -19,4 +19,3 @@ fn parse_minimal_config() {
     let cfg = icu::config::Config::try_get().expect("get config");
     assert!(cfg.icrc21_enabled());
 }
-

@@ -8,10 +8,10 @@ fn time_nanos() -> u128 {
         return ::ic_cdk::api::time() as u128;
     }
 
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("time went backwards")
-        .as_nanos()
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(d) => d.as_nanos(),
+        Err(_) => 0,
+    }
 }
 
 /// now_secs

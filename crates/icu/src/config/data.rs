@@ -89,6 +89,7 @@ impl ConfigData {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Canister {
     pub auto_create: Option<u16>,
     #[serde(deserialize_with = "Cycles::from_config")]
@@ -104,6 +105,7 @@ pub struct Canister {
 ///
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CanisterTopup {
     #[serde(deserialize_with = "Cycles::from_config")]
     pub threshold: Cycles,

@@ -5,7 +5,7 @@
 mod canister_demo {
     use icu::ops::request::create_canister_request;
     use icu::ops::response::CreateCanisterResponse;
-    use icu::{IcuError, EXAMPLE};
+    use icu::{EXAMPLE, IcuError};
 
     // Not a full canister; demonstrates the call site.
     #[allow(dead_code)]

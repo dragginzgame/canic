@@ -14,15 +14,23 @@ if [ $# -eq 0 ]; then
 fi
 CAN=$1
 
-#
-# Build Wasm
-#
+##
+## Build Wasm
+##
 
-mkdir -p $ROOT/.dfx/local/canisters/$CAN
-WASM_TARGET=$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm
+mkdir -p "$ROOT/.dfx/local/canisters/$CAN"
+WASM_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm"
 
-cargo build --target wasm32-unknown-unknown -p canister_$CAN
-cp -f $ROOT/target/wasm32-unknown-unknown/debug/canister_$CAN.wasm $WASM_TARGET
+# Support release builds via env RELEASE=1 (defaults to debug)
+PROFILE_FLAG=""
+PROFILE_DIR="debug"
+if [ "${RELEASE:-0}" = "1" ]; then
+    PROFILE_FLAG="--release"
+    PROFILE_DIR="release"
+fi
+
+cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
+cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
 
 # extract candid
 

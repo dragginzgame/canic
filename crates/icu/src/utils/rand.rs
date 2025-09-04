@@ -1,13 +1,46 @@
 use crate::utils::time::now_nanos;
-use std::sync::{LazyLock, Mutex};
 use tinyrand::{Rand, Seeded, StdRand};
+
+// On wasm, avoid Mutex overhead/poisoning by using RefCell.
+// On native, keep a Mutex but handle PoisonError gracefully.
+
+#[cfg(target_arch = "wasm32")]
+use std::cell::RefCell as Cell;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Mutex as Cell;
+
+use std::sync::LazyLock;
 
 ///
 /// STD_RAND
 ///
 
-pub static STD_RAND: LazyLock<Mutex<StdRand>> =
-    LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
+#[cfg(target_arch = "wasm32")]
+pub static STD_RAND: LazyLock<Cell<StdRand>> =
+    LazyLock::new(|| Cell::new(StdRand::seed(now_nanos())));
+
+#[cfg(not(target_arch = "wasm32"))]
+pub static STD_RAND: LazyLock<Cell<StdRand>> =
+    LazyLock::new(|| Cell::new(StdRand::seed(now_nanos())));
+
+#[cfg(target_arch = "wasm32")]
+fn with_rng<T>(f: impl FnOnce(&mut StdRand) -> T) -> T {
+    // Single-threaded environment; borrow_mut should not panic under normal usage.
+    let mut_ref = &mut *STD_RAND.borrow_mut();
+    f(mut_ref)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn with_rng<T>(f: impl FnOnce(&mut StdRand) -> T) -> T {
+    match STD_RAND.lock() {
+        Ok(mut guard) => f(&mut guard),
+        Err(poisoned) => {
+            // Recover the inner value and proceed.
+            let mut guard = poisoned.into_inner();
+            f(&mut guard)
+        }
+    }
+}
 
 // next_u8
 // (uses u16 because there is no next_u8)
@@ -19,25 +52,25 @@ pub fn next_u8() -> u8 {
 // next_u16
 #[must_use]
 pub fn next_u16() -> u16 {
-    STD_RAND.lock().expect("mutex").next_u16()
+    with_rng(|rng| rng.next_u16())
 }
 
 // next_u32
 #[must_use]
 pub fn next_u32() -> u32 {
-    STD_RAND.lock().expect("mutex").next_u32()
+    with_rng(|rng| rng.next_u32())
 }
 
 // next_64
 #[must_use]
 pub fn next_u64() -> u64 {
-    STD_RAND.lock().expect("mutex").next_u64()
+    with_rng(|rng| rng.next_u64())
 }
 
 // next_u128
 #[must_use]
 pub fn next_u128() -> u128 {
-    STD_RAND.lock().expect("mutex").next_u128()
+    with_rng(|rng| rng.next_u128())
 }
 
 //

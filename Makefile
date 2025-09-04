@@ -1,4 +1,13 @@
-.PHONY: help version current tags patch minor major release test build check clippy fmt fmt-check clean check-versioning git-versions security-check all install-dev install-canister-deps test-watch
+.PHONY: help version current tags patch minor major release \
+        test build check clippy fmt fmt-check clean plan install-dev \
+        test-watch all ensure-clean examples install-canister-deps
+
+# Check for clean git state
+ensure-clean:
+	@if ! git diff-index --quiet HEAD --; then \
+		echo "🚨 Working directory not clean! Please commit or stash your changes."; \
+		exit 1; \
+	fi
 
 # Default target
 help:
@@ -10,7 +19,7 @@ help:
 	@echo "  patch            Bump patch version (0.0.x)"
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
-	@echo "  release          Create a release with current version"
+	@echo "  release          CI-driven release (local target is no-op)"
 	@echo ""
 	@echo "Development:"
 	@echo "  test             Run all tests"
@@ -18,53 +27,58 @@ help:
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
+	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean build artifacts"
-	@echo "  examples         Build crate examples (with and without 'ic')"
-	@echo "  install-canister-deps  Install Wasm target and tools"
-	@echo "  examples         Build crate examples (with and without 'ic')"
+	@echo "  examples         Build crate examples"
+	@echo "  plan             Show the current project plan"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  check-versioning Check versioning system setup"
-	@echo "  git-versions     Check available git dependency versions"
-	@echo "  security-check   Check tag immutability and version integrity"
+	@echo "  install-dev      Install development dependencies"
+	@echo "  install-canister-deps  Install Wasm target and candid tools"
+	@echo "  test-watch       Run tests in watch mode"
+	@echo "  all              Run all checks, tests, and build"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make test        # Run tests"
 	@echo "  make build       # Build project"
 
-# Version management
+# Version management (always format first)
 version:
-	@./scripts/app/version.sh current
+	@scripts/app/version.sh current
 
 current:
-	@./scripts/app/version.sh current
+	@scripts/app/version.sh current
 
 tags:
-	@./scripts/app/version.sh tags
+	@git tag --sort=-version:refname | head -10
 
-patch:
-	@./scripts/app/version.sh patch
+patch: ensure-clean fmt
+	@scripts/app/version.sh patch
 
-minor:
-	@./scripts/app/version.sh minor
+minor: ensure-clean fmt
+	@scripts/app/version.sh minor
 
-major:
-	@./scripts/app/version.sh major
+major: ensure-clean fmt
+	@scripts/app/version.sh major
 
-release:
-	@./scripts/app/version.sh release
+release: ensure-clean
+	@echo "Release handled by CI on tag push"
 
 # Development commands
 test:
 	cargo test --workspace
+	@if [ -x scripts/app/test.sh ] && command -v dfx >/dev/null 2>&1; then \
+		echo "Running canister tests via scripts/app/test.sh"; \
+		bash scripts/app/test.sh; \
+	else \
+		echo "Skipping canister tests (dfx not installed or script missing)"; \
+	fi
 
-build:
+build: ensure-clean
 	cargo build --release --workspace
 
-
-
-check:
+check: fmt-check
 	cargo check --workspace
 
 clippy:
@@ -80,6 +94,25 @@ clean:
 	cargo clean
 	rm -rf target/
 
+# Planning summary
+plan:
+	@echo "=== PLAN.md ==="
+	@{ [ -f PLAN.md ] && sed -n '1,200p' PLAN.md; } || echo "No PLAN.md found."
+	@echo
+	@echo "=== .codex/plan.json ==="
+	@{ [ -f .codex/plan.json ] && sed -n '1,200p' .codex/plan.json; } || echo "No .codex/plan.json found."
+
+# Install development dependencies
+install-dev:
+	cargo install cargo-watch
+
+# Run tests in watch mode
+test-watch:
+	cargo watch -x test
+
+# Build and test everything
+all: ensure-clean clean fmt-check clippy check test build
+
 # Build examples
 examples:
 	cargo build -p icu --examples
@@ -90,26 +123,3 @@ install-canister-deps:
 	rustup toolchain install 1.89.0 || true
 	rustup target add wasm32-unknown-unknown
 	cargo install candid-extractor --locked || true
-
-# Install development dependencies
-install-dev:
-	cargo install cargo-watch
-
-# Run tests in watch mode
-test-watch:
-	cargo watch -x test
-
-# Check versioning system
-check-versioning:
-	@./scripts/app/check-versioning.sh
-
-# Check available git versions
-git-versions:
-	@./scripts/app/check-git-versions.sh
-
-# Security check for tag immutability
-security-check:
-	@./scripts/app/security-check.sh
-
-# Build and test everything
-all: clean check fmt-check clippy test build 

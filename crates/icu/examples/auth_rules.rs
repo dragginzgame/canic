@@ -8,4 +8,3 @@ fn main() {
     let _fut = icu::auth::is_same_canister(Principal::anonymous());
     println!("auth rules example compiled");
 }
-

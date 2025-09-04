@@ -1,9 +1,12 @@
 use minicbor_serde::{from_slice, to_vec};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
+///
 /// Serialize/Deserialize via MiniCBOR for efficient, no_std-friendly codecs.
+///
+
 #[derive(Debug, ThisError)]
 pub enum SerializeError {
     #[error("serialize error: {0}")]
@@ -28,4 +31,3 @@ where
     let t: T = from_slice(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))?;
     Ok(t)
 }
-
