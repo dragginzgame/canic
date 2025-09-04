@@ -1,6 +1,6 @@
 use crate::utils::time::now_nanos;
-use tinyrand::{Rand, Seeded, StdRand};
 use std::sync::{LazyLock, Mutex};
+use tinyrand::{Rand, Seeded, StdRand};
 
 ///
 /// STD_RAND
