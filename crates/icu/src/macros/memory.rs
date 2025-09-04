@@ -54,15 +54,15 @@ macro_rules! impl_storable_bounded {
                 };
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                ::std::borrow::Cow::Owned($crate::utils::serialization::serialize(self).unwrap())
+                ::std::borrow::Cow::Owned($crate::utils::cbor::serialize(self).unwrap())
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::serialization::serialize(&self).unwrap()
+                $crate::utils::cbor::serialize(&self).unwrap()
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::serialization::deserialize(&bytes).unwrap()
+                $crate::utils::cbor::deserialize(&bytes).unwrap()
             }
         }
     };
@@ -77,15 +77,15 @@ macro_rules! impl_storable_unbounded {
                 $crate::cdk::structures::storable::Bound::Unbounded;
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                ::std::borrow::Cow::Owned($crate::utils::serialization::serialize(self).unwrap())
+                ::std::borrow::Cow::Owned($crate::utils::cbor::serialize(self).unwrap())
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::serialization::serialize(&self).unwrap()
+                $crate::utils::cbor::serialize(&self).unwrap()
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::serialization::deserialize(&bytes).unwrap()
+                $crate::utils::cbor::deserialize(&bytes).unwrap()
             }
         }
     };

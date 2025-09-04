@@ -21,6 +21,7 @@ where
     T: Serialize,
 {
     let bytes = to_vec(t).map_err(|e| SerializeError::Serialize(e.to_string()))?;
+
     Ok(bytes)
 }
 
@@ -29,5 +30,6 @@ where
     T: DeserializeOwned,
 {
     let t: T = from_slice(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))?;
+
     Ok(t)
 }
