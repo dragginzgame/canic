@@ -1,6 +1,6 @@
-# Integration Guide
+# Integration Guide (Internal)
 
-This guide explains how to integrate ICU (Internet Computer Utilities) as a git dependency in your Rust projects.
+This guide explains how to integrate ICU (Internet Computer Utilities) as an internal git dependency in your Rust projects.
 
 ## Git Dependency Integration
 
@@ -8,17 +8,18 @@ This guide explains how to integrate ICU (Internet Computer Utilities) as a git 
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
+# Replace with your internal Git host/namespace and desired tag
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12", features = [] }
 ```
 
 ### With Features
 
 ```toml
 [dependencies]
-icu = { 
-    git = "https://github.com/dragginzgame/icu", 
-    tag = "v0.1.12", 
-    features = ["feature1", "feature2"] 
+icu = {
+    git = "ssh://git@your.git.host/your-group/icu.git",
+    tag = "v0.1.12",
+    features = ["feature1", "feature2"]
 }
 ```
 
@@ -26,14 +27,15 @@ icu = {
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", branch = "main", features = [] }
+# Using a branch for development within the private repo
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", branch = "main", features = [] }
 ```
 
 ### Workspace Integration
 
 ```toml
 [workspace.dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12", features = [] }
 
 [dependencies]
 icu = { workspace = true }
@@ -41,10 +43,10 @@ icu = { workspace = true }
 
 ## Available Versions
 
-To see all available versions:
+To see all available versions (private origin):
 
 ```bash
-git ls-remote --tags https://github.com/dragginzgame/icu | grep -o 'refs/tags/v.*' | sed 's/refs\/tags\///' | sort -V
+git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | grep -o 'refs/tags/v.*' | sed 's/refs\/tags\///' | sort -V
 ```
 
 ## Security Benefits
@@ -64,8 +66,8 @@ If you're migrating from a registry dependency:
 # Before (registry)
 icu = "0.1.12"
 
-# After (git dependency)
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12" }
+# After (internal git dependency)
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12" }
 ```
 
 ## Troubleshooting
@@ -74,9 +76,9 @@ icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12" }
 
 If you get a "tag not found" error:
 
-1. Check the tag exists: `git ls-remote --tags https://github.com/dragginzgame/icu`
+1. Check the tag exists: `git ls-remote --tags ssh://git@your.git.host/your-group/icu.git`
 2. Ensure the tag format is correct: `v0.1.12` (with the 'v' prefix)
-3. Verify the repository URL is correct
+3. Verify your access and the repository URL
 
 ### Build Issues
 

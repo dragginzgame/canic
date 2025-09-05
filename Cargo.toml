@@ -8,8 +8,9 @@ edition = "2024"
 version = "0.6.6"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Internet Computer Utilities"
-license = "MIT"
 readme = "README.md"
+license-file = "LICENSE"
+publish = false
 
 [workspace.dependencies]
 

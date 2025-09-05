@@ -3,6 +3,8 @@ name = "icu"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
+publish = false
+license-file = { workspace = true }
 
 [features]
 default = []

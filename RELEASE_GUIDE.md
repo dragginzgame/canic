@@ -2,20 +2,20 @@
 
 This guide covers the complete workflow for developing, versioning, and releasing ICU (Internet Computer Utilities), including how users can integrate it as a git dependency.
 
-## 🚀 Quick Start for Users
+## 🚀 Quick Start for Internal Users
 
 ### Integration as Git Dependency
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12", features = [] }
 ```
 
 ### Check Available Versions
 
 ```bash
 # From your project directory
-git ls-remote --tags https://github.com/dragginzgame/icu | grep "v0.1"
+git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | grep "v0.1"
 
 # Or use our helper script (if you have the repo cloned)
 make git-versions
@@ -207,10 +207,10 @@ make patch
 
 ```bash
 # Check if tag exists
-git ls-remote --tags https://github.com/dragginzgame/icu | grep v1.0.0
+git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | grep v1.0.0
 
 # Verify repository access
-git ls-remote https://github.com/dragginzgame/icu
+git ls-remote ssh://git@your.git.host/your-group/icu.git
 ```
 
 ## 📚 Integration Examples
@@ -219,7 +219,7 @@ git ls-remote https://github.com/dragginzgame/icu
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12", features = [] }
 ```
 
 ### With Features
@@ -227,7 +227,7 @@ icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features =
 ```toml
 [dependencies]
 icu = { 
-    git = "https://github.com/dragginzgame/icu", 
+    git = "ssh://git@your.git.host/your-group/icu.git", 
     tag = "v0.1.12", 
     features = ["feature1", "feature2"] 
 }
@@ -237,14 +237,14 @@ icu = {
 
 ```toml
 [dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", branch = "main", features = [] }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", branch = "main", features = [] }
 ```
 
 ### Workspace Integration
 
 ```toml
 [workspace.dependencies]
-icu = { git = "https://github.com/dragginzgame/icu", tag = "v0.1.12", features = [] }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.1.12", features = [] }
 
 [dependencies]
 icu = { workspace = true }
@@ -272,9 +272,9 @@ icu = { workspace = true }
 - [Versioning Guide](VERSIONING.md) - Detailed versioning information
 - [Integration Guide](INTEGRATION.md) - Complete integration documentation
 - [Changelog](CHANGELOG.md) - Version history and changes
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+\- Internal contribution process: see `AGENTS.md` and team runbooks
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/dragginzgame/icu/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/dragginzgame/icu/discussions) 
+- **Issues**: Use the internal issue tracker (Jira/GitHub Enterprise)
+- **Questions**: Contact the maintainers via the internal chat channel

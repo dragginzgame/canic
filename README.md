@@ -1,5 +1,7 @@
 # ✨ ICU – Internet Computer Utilities
 
+Internal Use Only — This repository is private and intended solely for use by authorized team members. Do not distribute or share outside the organization. For access or questions, contact the maintainers.
+
 **ICU** (Internet Computer Utilities) is a Rust framework that simplifies the development and management of multi-canister systems on the DFINITY **Internet Computer (IC)**. It provides a set of utilities and macros to coordinate multiple canisters (smart contracts) working together, making it easier to create complex canister-based dapps that scale across canister boundaries (even across multiple subnets).
 
 ICU addresses common challenges in multi-canister architectures, including canister creation & upgrades, cross-canister state management, stable memory handling across upgrades, and establishing a clear canister hierarchy (with a **root** canister orchestrating child canisters). By using ICU, developers can focus on application logic rather than reinventing boilerplate for managing canister lifecycles and interactions.
@@ -84,7 +86,7 @@ Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is 
 
 ## Contributing
 
-See Repository Guidelines in `AGENTS.md` for project structure, coding style, testing, and PR requirements. For versioning and releases, refer to `VERSIONING.md` and `RELEASE_GUIDE.md`.
+This is an internal project. External contributions are not accepted. For internal changes, follow the Repository Guidelines in `AGENTS.md` and use `VERSIONING.md` / `RELEASE_GUIDE.md` for tagging and release flow.
 
 ### Setup
 
@@ -113,3 +115,7 @@ cargo build -p icu --examples
 Run a specific example: `cargo run -p icu --example auth_rules`
 
 Note: The `ic` cfg is used internally for tests/build tooling and is not a user-settable feature flag.
+
+## Licensing
+
+Proprietary and Confidential. All rights reserved. See `LICENSE`.
