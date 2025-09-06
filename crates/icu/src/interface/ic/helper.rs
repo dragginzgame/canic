@@ -1,4 +1,4 @@
-use crate::{interface::prelude::*, utils::time::now_secs};
+use crate::{interface::prelude::*, types::Subaccount, utils::time::now_secs};
 use sha2::{Digest, Sha256};
 
 /// derive_subaccount
@@ -24,5 +24,5 @@ pub fn derive_subaccount_with(
     let mut sub = [0u8; 32];
     sub.copy_from_slice(&hash[..32]);
 
-    sub
+    Subaccount(sub)
 }

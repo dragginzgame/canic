@@ -5,8 +5,8 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-- Nothing yet.
+## [0.7.0] - Partition Registry
+- partition registry v1 added and tested
 
 ## [0.6.8] - 2025-09-05
 - Docs: Reduce/streamline documentation.

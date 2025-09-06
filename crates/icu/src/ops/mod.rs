@@ -17,7 +17,7 @@ pub mod prelude {
         interface::InterfaceError,
         log,
         ops::OpsError,
-        types::{Account, CanisterType, Cycles, Int, Nat, Principal, Subaccount},
+        types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},
     };
     pub use serde::{Deserialize, Serialize};
 }
