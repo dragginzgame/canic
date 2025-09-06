@@ -44,4 +44,3 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace --all-targets --verbose --locked
       - run: cargo build --release --workspace --locked
-      # Internal release only; crates are not published externally

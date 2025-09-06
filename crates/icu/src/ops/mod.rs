@@ -1,4 +1,5 @@
 pub mod canister;
+pub mod partition;
 pub mod pool;
 pub mod request;
 pub mod response;

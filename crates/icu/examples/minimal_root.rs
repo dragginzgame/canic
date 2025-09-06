@@ -4,8 +4,8 @@
 #[cfg(feature = "ic")]
 mod canister {
     #![allow(unexpected_cfgs)]
+    use candid::Principal;
     use icu::prelude::*;
-    use icu::types::CanisterType;
 
     // Note: In a real canister crate, add this to build.rs:
     // fn main() { icu::icu_build!("../icu.toml"); }
@@ -15,14 +15,16 @@ mod canister {
     icu_start_root!();
 
     const fn icu_setup() {}
+    #[allow(clippy::unused_async)]
     async fn icu_install() {}
+    #[allow(clippy::unused_async)]
     async fn icu_upgrade() {}
 
     // Minimal WASMS set required by the macro; empty in this example.
     pub static WASMS: &[(CanisterType, &[u8])] = &[];
 
     #[update]
-    async fn ping() -> String {
+    fn ping() -> String {
         "pong".to_string()
     }
 

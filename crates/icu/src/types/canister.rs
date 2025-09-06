@@ -4,10 +4,15 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 
+///
+/// CanisterType
+///
 /// A human-readable identifier for a canister role/type (e.g., "root", "example").
 ///
 /// Stored as `Cow<'static, str>` so known constants can be zero‑copy while
 /// dynamic values allocate only when needed.
+///
+
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
@@ -23,7 +28,7 @@ impl CanisterType {
     }
 
     #[must_use]
-    pub fn owned(s: String) -> Self {
+    pub const fn owned(s: String) -> Self {
         Self(Cow::Owned(s))
     }
 
@@ -59,6 +64,12 @@ impl From<&'static str> for CanisterType {
     }
 }
 
+impl From<&String> for CanisterType {
+    fn from(s: &String) -> Self {
+        Self(Cow::Owned(s.clone()))
+    }
+}
+
 impl From<String> for CanisterType {
     fn from(s: String) -> Self {
         Self(Cow::Owned(s))
@@ -83,7 +94,7 @@ impl Borrow<str> for CanisterType {
     }
 }
 
-impl_storable_bounded!(CanisterType, 48, false);
+impl_storable_bounded!(CanisterType, 64, false);
 
 #[cfg(test)]
 mod tests {

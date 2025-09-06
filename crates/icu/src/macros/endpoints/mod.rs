@@ -15,29 +15,9 @@ macro_rules! icu_endpoints {
             $crate::cdk::api::msg_cycles_accept(max_amount)
         }
 
-        // icu_canister_upgrade_children
-        // canister_id : None means upgrade all children
-        #[::icu::cdk::update]
-        async fn icu_canister_upgrade_children(
-            canister_id: Option<::candid::Principal>,
-        ) -> Result<
-            Vec<Result<::icu::ops::response::UpgradeCanisterResponse, ::icu::Error>>,
-            ::icu::Error,
-        > {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-
-            let mut results = Vec::new();
-
-            for (child_pid, _) in $crate::memory::CanisterChildren::export() {
-                if canister_id.is_none() || canister_id == Some(child_pid) {
-                    // Push the result (either Ok(resp) or Err(err)) into the vec
-                    let result = $crate::ops::request::upgrade_canister_request(child_pid).await;
-                    results.push(result);
-                }
-            }
-
-            Ok(results)
-        }
+        //
+        // ICU ENDPOINTS
+        //
 
         #[::icu::cdk::update]
         async fn icu_state_update(
@@ -96,7 +76,7 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU MEMORY HELPERS
+        // ICU MEMORY EXPORTS
         //
 
         #[::icu::cdk::query]
@@ -122,62 +102,6 @@ macro_rules! icu_endpoints {
         #[::icu::cdk::query]
         fn icu_cycle_tracker() -> ::icu::memory::CycleTrackerView {
             $crate::memory::CycleTracker::export()
-        }
-
-        //
-        // ICU DELEGATION ENDPOINTS
-        //
-
-        #[::icu::cdk::query]
-        async fn icu_delegation_get(
-            session_pid: Principal,
-        ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            $crate::state::delegation::DelegationRegistry::get(session_pid)
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_delegation_track(
-            session_pid: Principal,
-        ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            $crate::state::delegation::DelegationRegistry::track(msg_caller(), session_pid)
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_delegation_register(
-            args: ::icu::state::delegation::RegisterSessionArgs,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_whitelisted)?;
-
-            $crate::state::delegation::DelegationRegistry::register_session(msg_caller(), args)
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_delegation_revoke(pid: Principal) -> Result<(), ::icu::Error> {
-            use ::icu::auth::{is_parent, is_principal};
-
-            // make sure the caller == pid to revoke
-            // or a parent canister
-            let expected = pid;
-            $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
-
-            $crate::state::delegation::DelegationRegistry::revoke_session_or_wallet(pid)
-        }
-
-        // List all delegation sessions (admin only)
-        #[::icu::cdk::query]
-        async fn icu_delegation_list_all()
-        -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-            Ok($crate::state::delegation::DelegationRegistry::list_all_sessions())
-        }
-
-        // List sessions by wallet (admin only)
-        #[::icu::cdk::query]
-        async fn icu_delegation_list_by_wallet(
-            wallet_pid: Principal,
-        ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-            Ok($crate::state::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
         }
 
         //
@@ -225,6 +149,117 @@ macro_rules! icu_endpoints {
             })
             .await
             .map_err(|e| e.to_string())
+        }
+
+        //
+        // CFG-GATED ENDPOINTS
+        //
+
+        #[cfg(icu_capability_delegation)]
+        $crate::icu_endpoints_delegation!();
+
+        #[cfg(icu_capability_partition)]
+        $crate::icu_endpoints_partition!();
+    };
+}
+
+// icu_endpoints_delegation
+#[macro_export]
+macro_rules! icu_endpoints_delegation {
+    () => {
+        //
+        // ICU DELEGATION ENDPOINTS
+        //
+
+        #[::icu::cdk::query]
+        async fn icu_delegation_get(
+            session_pid: ::candid::Principal,
+        ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
+            $crate::state::delegation::DelegationRegistry::get(session_pid)
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_delegation_track(
+            session_pid: ::candid::Principal,
+        ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
+            $crate::state::delegation::DelegationRegistry::track(msg_caller(), session_pid)
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_delegation_register(
+            args: ::icu::state::delegation::RegisterSessionArgs,
+        ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_whitelisted)?;
+
+            $crate::state::delegation::DelegationRegistry::register_session(msg_caller(), args)
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_delegation_revoke(pid: ::candid::Principal) -> Result<(), ::icu::Error> {
+            use ::icu::auth::{is_parent, is_principal};
+
+            // make sure the caller == pid to revoke
+            // or a parent canister
+            let expected = pid;
+            $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
+
+            $crate::state::delegation::DelegationRegistry::revoke_session_or_wallet(pid)
+        }
+
+        // List all delegation sessions (admin only)
+        #[::icu::cdk::query]
+        async fn icu_delegation_list_all()
+        -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            Ok($crate::state::delegation::DelegationRegistry::list_all_sessions())
+        }
+
+        // List sessions by wallet (admin only)
+        #[::icu::cdk::query]
+        async fn icu_delegation_list_by_wallet(
+            wallet_pid: ::candid::Principal,
+        ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            Ok($crate::state::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
+        }
+    };
+}
+
+// icu_endpoints_partition
+#[macro_export]
+macro_rules! icu_endpoints_partition {
+    () => {
+        //
+        // ICU PARTITION ENDPOINTS
+        //
+
+        #[::icu::cdk::query]
+        fn icu_partition_registry() -> ::icu::memory::PartitionRegistryView {
+            $crate::memory::PartitionRegistry::export()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_partition_lookup(item: ::candid::Principal) -> Option<::candid::Principal> {
+            $crate::memory::PartitionRegistry::get_item_partition(&item)
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_partition_register(
+            pid: ::candid::Principal,
+            capacity: u32,
+        ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            $crate::memory::PartitionRegistry::register(pid, capacity);
+
+            Ok(())
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_partition_audit() -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+            $crate::memory::PartitionRegistry::audit_and_fix_counts();
+
+            Ok(())
         }
     };
 }

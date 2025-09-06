@@ -16,10 +16,7 @@ defer = { workspace = true }
 derive_more = { workspace = true }
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
-ic-ledger-types = { workspace = true }
-ic-management-canister-types = { workspace = true }
 ic-stable-structures = { workspace = true }
-ic_principal = { workspace = true }
 icrc-ledger-types = { workspace = true }
 minicbor-serde = { workspace = true }
 remain = { workspace = true }

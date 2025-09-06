@@ -7,6 +7,7 @@ pub use app_state::{AppState, AppStateData};
 pub use canister::{
     children::{CanisterChildren, CanisterChildrenView},
     directory::{CanisterDirectory, CanisterDirectoryView},
+    partition::{PartitionEntry, PartitionRegistry, PartitionRegistryView},
     pool::{CanisterPool, CanisterPoolView},
     registry::{CanisterRegistry, CanisterRegistryView},
     state::{CanisterState, CanisterStateData},
@@ -45,6 +46,8 @@ pub(crate) const CANISTER_DIRECTORY_MEMORY_ID: u8 = 4;
 // all
 pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 5;
 pub(crate) const CANISTER_CHILDREN_MEMORY_ID: u8 = 6;
+pub(crate) const PARTITION_REGISTRY_MEMORY_ID: u8 = 7;
+pub(crate) const PARTITION_ITEM_MAP_MEMORY_ID: u8 = 8;
 
 // trackers (all)
 pub(crate) const CYCLE_TRACKER_MEMORY_ID: u8 = 10;
@@ -86,4 +89,7 @@ pub enum MemoryError {
 
     #[error(transparent)]
     MemoryRegistryError(#[from] MemoryRegistryError),
+
+    #[error(transparent)]
+    PartitionRegistryError(#[from] canister::partition::PartitionRegistryError),
 }

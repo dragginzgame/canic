@@ -3,9 +3,11 @@
 
 #[cfg(feature = "ic")]
 mod canister_demo {
-    use icu::ops::request::create_canister_request;
-    use icu::ops::response::CreateCanisterResponse;
-    use icu::{EXAMPLE, IcuError};
+    use icu::{
+        IcuError,
+        canister::EXAMPLE,
+        ops::{request::create_canister_request, response::CreateCanisterResponse},
+    };
 
     // Not a full canister; demonstrates the call site.
     #[allow(dead_code)]

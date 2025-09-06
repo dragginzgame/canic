@@ -13,7 +13,9 @@
                 }
             ],
             "dependencies": [
-                "example"
+                "example",
+                "player",
+                "player_hub"
             ]
         },
         "example": {
@@ -27,6 +29,28 @@
                 {
                     "name": "candid:service"
                 }
+            ]
+        },
+        "player": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/player/player.did",
+            "build": "bash -c 'scripts/app/build.sh player'",
+            "wasm": ".dfx/local/canisters/player/player.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                { "name": "candid:service" }
+            ]
+        },
+        "player_hub": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/player_hub/player_hub.did",
+            "build": "bash -c 'scripts/app/build.sh player_hub'",
+            "wasm": ".dfx/local/canisters/player_hub/player_hub.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                { "name": "candid:service" }
             ]
         }
     },

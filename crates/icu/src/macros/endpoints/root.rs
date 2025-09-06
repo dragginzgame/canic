@@ -15,6 +15,18 @@ macro_rules! icu_endpoints_root {
             Ok(())
         }
 
+        // icu_canister_upgrade
+        #[::icu::cdk::update]
+        async fn icu_canister_upgrade(
+            canister_pid: ::candid::Principal,
+        ) -> Result<::icu::ops::response::UpgradeCanisterResponse, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            let res = $crate::ops::request::upgrade_canister_request(canister_pid).await?;
+
+            Ok(res)
+        }
+
         // icu_response
         // root's way to respond to a generic request from another canister
         // has to come from a direct child canister
@@ -24,7 +36,7 @@ macro_rules! icu_endpoints_root {
         ) -> Result<::icu::ops::response::Response, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_app)?;
 
-            let response = ::icu::ops::response::response(request).await?;
+            let response = $crate::ops::response::response(request).await?;
 
             Ok(response)
         }
@@ -35,7 +47,7 @@ macro_rules! icu_endpoints_root {
         async fn icu_canister_status(
             pid: Principal,
         ) -> Result<::icu::cdk::mgmt::CanisterStatusResult, ::icu::Error> {
-            ::icu::interface::ic::canister_status(pid).await
+            $crate::interface::ic::canister_status(pid).await
         }
 
         ///

@@ -32,7 +32,7 @@ macro_rules! log {
             $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{:^8}| {}", ty, msg),
         };
 
-        $crate::cdk::println!("{}", msg);
+        $crate::cdk::println!("{msg}");
     }};
 }
 

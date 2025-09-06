@@ -260,7 +260,9 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
         #[cfg(feature = "ic")]
         {
             use crate::config::Config;
-            if !Config::is_whitelisted(&caller)? {
+            let cfg = Config::try_get()?;
+
+            if !cfg.is_whitelisted(&caller) {
                 Err(AuthError::NotWhitelisted(caller))?;
             }
         }

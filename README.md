@@ -11,6 +11,7 @@ ICU addresses common challenges in multi-canister architectures, including canis
 - 🧩 Macros: `icu_start!` and `icu_start_root!` wire init/upgrade and expose a rich set of endpoints.
 - 🔐 Auth helpers: composable rules (`auth_require_any!`, `auth_require_all!`) for controllers, parents, children, etc.
 - 🧠 State: in-memory registries for delegation, ICRC standards, and WASM modules.
+- 🧩 Partitioning: generic partition registry to assign items (Principals) to child canisters with capacity limits.
 - 📦 WASM registry: ship and look up child canister WASMs by `CanisterType`.
 - ♻️ Upgrades: consistent state bundle cascade helpers between parent/children.
 - 🧪 Testing: unit tests across memory/state modules; CI enforces fmt/clippy.
@@ -72,6 +73,20 @@ Root canisters can import a static set of gzipped child canister WASMs and expos
 
 Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is in `crates/canisters/root/src/lib.rs`.
 
+## Partitioning 📦
+
+- Registry: assign items (`Principal`) to partition canisters with capacities.
+- Use `PartitionRegistry::register_or_update_partition(pid, capacity)` to add/resize partitions.
+- Assign items automatically with `ensure_item_assignment(&CanisterType::new("game_instance"), item, policy, parents, None)`.
+
+Policy example:
+
+```rust
+use icu::prelude::*;
+let policy = PartitionPolicy { initial_capacity: 100, max_partitions: 64, growth_threshold_bps: 8000 };
+let shard = ensure_item_assignment(&CanisterType::new("game_instance"), item_principal, policy, &parents, None).await?;
+```
+
 ## ICRC Support 📚
 
 - ICRC‑10: `icrc10_supported_standards()` returns the `(name, url)` pairs enabled by config.
@@ -119,3 +134,11 @@ Note: The `ic` cfg is used internally for tests/build tooling and is not a user-
 ## Licensing
 
 Proprietary and Confidential. All rights reserved. See `LICENSE`.
+
+## Module Guides
+
+### Spec
+
+- Purpose: Protocol and spec types for IC/ICRC/SNS.
+- Scope: Candid-friendly data structures only; no business logic.
+- Stability: Aim to keep types stable; document breaking changes in the changelog.

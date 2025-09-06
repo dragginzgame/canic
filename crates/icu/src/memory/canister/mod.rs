@@ -1,5 +1,6 @@
 pub mod children;
 pub mod directory;
+pub mod partition;
 pub mod pool;
 pub mod registry;
 pub mod state;

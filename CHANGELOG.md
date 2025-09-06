@@ -1,5 +1,39 @@
 # Changelog
 
+All notable, and occasionally less notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](http://keepachangelog.com/)
+and this project adheres to [Semantic Versioning](http://semver.org/).
+
+## [Unreleased]
+- Nothing yet.
+
+## [0.6.8] - 2025-09-05
+- Docs: Reduce/streamline documentation.
+- CI: Minor workflow tweaks.
+- removed re-exports of ic types as the versions will mess up downstream deps
+
+## [0.6.7] - 2025-09-05
+- CI: Workflow updates and cleanup.
+
+## [0.6.6] - 2025-09-04
+- Changed: Move `utils::serialization` to `utils::cbor`; introduce `SerializeError` and update imports.
+
+## [0.6.5] - 2025-09-04
+- Maintenance: Version bump; no functional changes.
+
+## [0.6.4] - 2025-09-04
+- CI: Fix pipeline stability issues.
+- Utils/Rand: Revert earlier RNG change; retain thread-safe tinyrand `StdRand` with `LazyLock<Mutex<...>>`.
+
+## [0.6.3] - 2025-09-04
+- Added: PartitionRegistry for item→partition assignment with capacities, retirement, audit/export.
+- Added: Partition endpoints (cfg-gated): `icu_partition_registry`, `icu_partition_lookup`, `icu_partition_register`, `icu_partition_audit`.
+- Added: Ops helpers for partitioning: `ensure_item_assignment`, `assign_with_config`, `assign_with_policy`, `plan_with_config`, and `PartitionPolicy`.
+- Added: Auto-registration of non-root canisters from config `partition` block during init/upgrade.
+- Changed: Config (`icu.toml`) supports per-canister `partition` block: `initial_capacity`, `max_partitions`, `growth_threshold_bps`.
+- Added: Delegation revoke endpoint `icu_delegation_revoke` and registry method `revoke_session_or_wallet`.
+
 ## [0.6.2] - 2025-09-04
 - State/Delegation: Fix session expiration boundary (now expired when `expires_at <= now`).
 - State/Delegation: Add admin endpoints
@@ -7,15 +41,6 @@
   - `icu_delegation_list_by_wallet` (query): list sessions for a wallet (requires controller).
   - `icu_delegation_cleanup` (update): remove expired sessions immediately (requires parent).
 - State/Delegation: Expose `DelegationRegistry::cleanup()` publicly; add boundary unit test.
-- RNG: Unify wasm32 and native RNG implementation to a single `LazyLock<Mutex<StdRand>>`.
-  - Fixes E0277 Sync error on wasm and ensures consistent behavior across targets.
-  - Maintains `with_rng` helper with poison recovery.
-
-All notable, and occasionally less notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
-and this project adheres to [Semantic Versioning](http://semver.org/).
-
 
 ## [0.6.0] - 2025-08-31
 - Added AGENTS.md with concise repository/contributor guidelines
@@ -191,7 +216,6 @@ it's also sent via canister create args
 - only one init_async now, we don't have a race condition with the init_setup
 
 ## [0.1.5]
-- not using candid Principal any more, switching to ic_principal and ic_ledger_types
 - added wrapper for BTreeSet from ic-stable-structures 0.6.9
 - adding in ic-management-canister-types
 

@@ -27,25 +27,25 @@ pub enum ConfigDataError {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigData {
+    #[serde(default)]
+    pub canisters: BTreeMap<CanisterType, Canister>,
+
     // controllers
     // a vec because we just append it to the controller arguments
     #[serde(default)]
     pub controllers: Vec<Principal>,
 
     #[serde(default)]
-    pub canisters: BTreeMap<CanisterType, Canister>,
-
-    #[serde(default)]
-    pub whitelist: Option<WhiteList>,
-
-    #[serde(default)]
-    pub standards: Option<Standards>,
+    pub cycle_tracker: bool,
 
     #[serde(default)]
     pub pool: CanisterPool,
 
     #[serde(default)]
-    pub cycle_tracker: bool,
+    pub standards: Option<Standards>,
+
+    #[serde(default)]
+    pub whitelist: Option<WhiteList>,
 }
 
 impl ConfigData {
@@ -63,7 +63,7 @@ impl ConfigData {
     }
 
     /// Lookup a canister config by type name (string).
-    pub fn get_canister(&self, ty: &CanisterType) -> Result<Canister, Error> {
+    pub fn try_get_canister(&self, ty: &CanisterType) -> Result<Canister, Error> {
         self.canisters.get(ty).cloned().ok_or_else(|| {
             ConfigError::ConfigDataError(ConfigDataError::CanisterNotFound(ty.clone())).into()
         })
@@ -92,10 +92,20 @@ impl ConfigData {
 #[serde(deny_unknown_fields)]
 pub struct Canister {
     pub auto_create: Option<u16>,
+
+    #[serde(default)]
+    pub delegation: bool,
+
     #[serde(deserialize_with = "Cycles::from_config")]
     pub initial_cycles: Cycles,
+
     pub topup: Option<CanisterTopup>,
+
+    #[serde(default)]
     pub uses_directory: bool,
+
+    #[serde(default)]
+    pub partition: Option<PartitionConfig>,
 }
 
 ///
@@ -156,4 +166,28 @@ pub struct WhiteList {
 pub struct Standards {
     #[serde(default)]
     pub icrc21: bool,
+}
+
+///
+/// PartitionConfig
+/// Optional configuration for partitioning and automatic growth.
+///
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct PartitionConfig {
+    // Initial capacity assigned to newly created partitions
+    pub initial_capacity: u32,
+    pub max_partitions: u32,
+    pub growth_threshold_bps: u32,
+}
+
+impl Default for PartitionConfig {
+    fn default() -> Self {
+        Self {
+            initial_capacity: 100,
+            max_partitions: 64,
+            growth_threshold_bps: 8000,
+        }
+    }
 }

@@ -1,25 +1,3 @@
-//! Global configuration loaded from a TOML file at build time via `icu_build!()`.
-//!
-//! Example schema (TOML):
-//!
-//! ```toml
-//! controllers = ["aaaaa-aa"]
-//!
-//! [pool]
-//! minimum_size = 10
-//!
-//! [canisters.example]
-//! initial_cycles = "6T"
-//! uses_directory = false
-//! topup.threshold = "10T"
-//! topup.amount = "5T"
-//!
-//! [standards]
-//! icrc21 = true
-//! ```
-//!
-//! Access the loaded configuration with `Config::try_get()`.
-
 mod data;
 
 use crate::{Error, types::CanisterType};
@@ -88,7 +66,8 @@ impl Config {
     }
 
     /// Initialize the global configuration from a TOML string.
-    pub fn init_from_toml(config_str: &str) -> Result<(), Error> {
+    /// return the config as it is read at build time
+    pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigData>, Error> {
         let config: ConfigData =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
@@ -100,21 +79,18 @@ impl Config {
             if borrow.is_some() {
                 return Err(ConfigError::AlreadyInitialized.into());
             }
-            *borrow = Some(Arc::new(config));
+            let arc = Arc::new(config);
+            *borrow = Some(arc.clone());
 
-            Ok(())
+            Ok(arc)
         })
     }
 
+    // try_get_canister
+    // helper function as its used everywhere
     pub fn try_get_canister(ty: &CanisterType) -> Result<Canister, Error> {
         let cfg = Self::try_get()?;
-        cfg.get_canister(ty)
-    }
-
-    /// Check whether a principal is whitelisted according to the loaded config.
-    pub fn is_whitelisted(principal: &candid::Principal) -> Result<bool, Error> {
-        let cfg = Self::try_get()?;
-        Ok(cfg.is_whitelisted(principal))
+        cfg.try_get_canister(ty)
     }
 
     /// Test-only: reset the global config so tests can reinitialize with a fresh TOML.

@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub mod auth;
+pub mod canister;
 pub mod cdk;
 pub mod config;
 pub mod env;
@@ -35,13 +36,10 @@ pub use Error as IcuError;
 pub mod prelude {
     pub use crate::{
         Error as IcuError, Log, auth_require_all, auth_require_any,
-        cdk::{
-            api::msg_caller, candid::CandidType, export_candid, init, principal::Principal, query,
-            update,
-        },
+        cdk::{api::msg_caller, candid::CandidType, export_candid, init, query, update},
         guard::{guard_query, guard_update},
         icu_register_memory, icu_start, icu_start_root, log, perf, perf_start,
-        types::{CanisterType, Cycles},
+        types::{CanisterType, Cycles, Principal},
     };
 }
 
@@ -52,7 +50,6 @@ use crate::cdk::{
 use serde::Deserialize;
 use std::time::Duration;
 use thiserror::Error as ThisError;
-use types::CanisterType;
 
 ///
 /// Crate Version
@@ -65,12 +62,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
-
-///
-/// Icu Canisters
-///
-
-pub const EXAMPLE: CanisterType = CanisterType::new("example");
 
 ///
 /// Error

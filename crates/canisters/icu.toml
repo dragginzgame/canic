@@ -1,17 +1,45 @@
-controllers = [
-    "bn6wo-xpofx-5va6n-knhsi-d26er-6oxej-a5m3i-i5yh7-h3il7-s65zr-lae", # gabriel
-    "unn7e-de5sw-3kw5b-bjyrh-qjhmf-25uhy-niapa-hgtov-qkwwx-lxqpn-gae", # rem
-]
+controllers = []
 
 [pool]
 minimum_size = 10
 
+#################### canisters
+
+#
+# example
+#
 [canisters.example]
-auto_create = 2
+auto_create = 1
 initial_cycles = "6T"
-uses_directory = false
 topup.threshold = "10T"
 topup.amount = "5T"
+
+#
+# player_hub
+# assigns new players to existing player canisters or creates new ones on demand
+#
+[canisters.player_hub]
+auto_create = 1
+initial_cycles = "6T"
+uses_directory = true
+topup.threshold = "10T"
+topup.amount = "5T"
+
+[canisters.player_hub.partition]
+initial_capacity = 100
+max_partitions = 64
+growth_threshold_bps = 8000 # 80%
+
+#
+# player
+# canisters host player sessions; capacity is managed at runtime via PartitionRegistry
+#
+[canisters.player]
+initial_cycles = "6T"
+topup.threshold = "10T"
+topup.amount = "5T"
+
+#####################################
 
 [standards]
 icrc21 = true

@@ -21,7 +21,9 @@
 - Formatting: `rustfmt` via `cargo fmt --all` before committing.
 - Linting: `cargo clippy --workspace -- -D warnings`; follow workspace lints in `Cargo.toml`.
 - Naming: snake_case for files/functions/modules; PascalCase for types/traits; constants in SCREAMING_SNAKE_CASE.
-- Organization: Prefer small modules under `crates/icu/src/`; document public APIs.
+- Organization: Prefer small modules under `crates/icu/src/`; document APIs.
+ - Formatting macros: prefer captured identifiers in the format string (e.g., `"{var}"`) over trailing single args (e.g., `"{}", var`). Be consistent: either capture all or pass all as arguments—do not mix styles within the same call.
+ - Non-identifier expressions: bind to a local before capture or use positional formatting (e.g., `"{}: {}"`). Apply this rule to `format!`, `println!`, `eprintln!`, `panic!`, `log!`, and similar macros.
 
 ## Testing Guidelines
 - Framework: `cargo test`; Criterion benches in `crates/icu/benches/`.
