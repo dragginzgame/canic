@@ -36,8 +36,8 @@ macro_rules! icu_build {
                 if canister_cfg.delegation {
                     println!("cargo:rustc-cfg=icu_capability_delegation");
                 }
-                if canister_cfg.partition.is_some() {
-                    println!("cargo:rustc-cfg=icu_capability_partition");
+                if canister_cfg.sharder.is_some() {
+                    println!("cargo:rustc-cfg=icu_capability_sharder");
                 }
             }
         }
@@ -78,7 +78,7 @@ macro_rules! __icu_build_internal {
         // declare the cfg names
         println!("cargo:rustc-check-cfg=cfg(icu_config)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_delegation)");
-        println!("cargo:rustc-check-cfg=cfg(icu_capability_partition)");
+        println!("cargo:rustc-check-cfg=cfg(icu_capability_sharder)");
         println!("cargo:rustc-check-cfg=cfg(icu_github_ci)");
         println!("cargo:rustc-cfg=icu_config");
 

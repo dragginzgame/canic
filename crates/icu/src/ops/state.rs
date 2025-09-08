@@ -40,6 +40,14 @@ impl StateBundle {
     }
 
     #[must_use]
+    pub fn with_canister_directory(view: CanisterDirectoryView) -> Self {
+        Self {
+            canister_directory: Some(view),
+            ..Default::default()
+        }
+    }
+
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.app_state.is_none() && self.canister_directory.is_none()
     }

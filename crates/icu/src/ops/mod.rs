@@ -1,9 +1,9 @@
 pub mod canister;
-pub mod partition;
 pub mod pool;
 pub mod request;
 pub mod response;
 pub mod root;
+pub mod shard;
 pub mod state;
 
 pub mod prelude {

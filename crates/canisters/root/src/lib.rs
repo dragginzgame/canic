@@ -2,8 +2,7 @@
 
 use candid::Principal;
 use icu::{
-    Error,
-    canister::{EXAMPLE, PLAYER, PLAYER_HUB},
+    Error, canister,
     ops::{
         request::create_canister_request, response::CreateCanisterResponse,
         root::root_create_canisters,
@@ -28,25 +27,32 @@ async fn icu_upgrade() {}
 // WASMS
 pub static WASMS: &[(CanisterType, &[u8])] = &[
     (
-        EXAMPLE,
+        canister::EXAMPLE,
         #[cfg(icu_github_ci)]
         &[],
         #[cfg(not(icu_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/example/example.wasm.gz"),
     ),
     (
-        PLAYER,
-        #[cfg(icu_github_ci)]
-        &[],
-        #[cfg(not(icu_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/player/player.wasm.gz"),
-    ),
-    (
-        PLAYER_HUB,
+        canister::PLAYER_HUB,
         #[cfg(icu_github_ci)]
         &[],
         #[cfg(not(icu_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/player_hub/player_hub.wasm.gz"),
+    ),
+    (
+        canister::GAME,
+        #[cfg(icu_github_ci)]
+        &[],
+        #[cfg(not(icu_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/game/game.wasm.gz"),
+    ),
+    (
+        canister::INSTANCE,
+        #[cfg(icu_github_ci)]
+        &[],
+        #[cfg(not(icu_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/instance/instance.wasm.gz"),
     ),
 ];
 
@@ -57,19 +63,7 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 // create_example (demo)
 #[update]
 async fn create_example() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&EXAMPLE, None).await
-}
-
-// create_player (demo)
-#[update]
-async fn create_player() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&PLAYER, None).await
-}
-
-// create_player_hub (demo)
-#[update]
-async fn create_player_hub() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&PLAYER_HUB, None).await
+    create_canister_request::<()>(&canister::EXAMPLE, None).await
 }
 
 #[update]

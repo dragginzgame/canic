@@ -25,16 +25,33 @@ uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[canisters.player_hub.partition]
-initial_capacity = 100
-max_partitions = 64
-growth_threshold_bps = 8000 # 80%
+[canisters.player_hub.sharder]
+
+[canisters.player_hub.sharder.pools.game]
+canister_type = "game"
+policy.initial_capacity = 100
+policy.max_shards = 64
+policy.growth_threshold_pct = 80
+
+[canisters.player_hub.sharder.pools.instance]
+canister_type = "instance"
+policy.initial_capacity = 100
+policy.max_shards = 64
+policy.growth_threshold_pct = 80
 
 #
-# player
-# canisters host player sessions; capacity is managed at runtime via PartitionRegistry
+# game
+# game-domain shard canisters
 #
-[canisters.player]
+[canisters.game]
+initial_cycles = "6T"
+topup.threshold = "10T"
+topup.amount = "5T"
+
+# instance
+# instance-domain shard canisters
+#
+[canisters.instance]
 initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"

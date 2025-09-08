@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.3] - Partition Registry v2
+- now you can configure multiple pools each with a different CanisterType
+
 ## [0.7.0] - Partition Registry
 - partition registry v1 added and tested
 
@@ -86,7 +89,7 @@ adding canister IDs to config
 - fixed patch script
 
 ## [0.3.7] - 2025-08-21
-- ic-stable-structures bumped to 0.7.1
+- ic-stable-structures bumped to 0.7.0
 - CanisterType in prelude
 - fixed auth race condition
 - added the CanisterPool structure to root only

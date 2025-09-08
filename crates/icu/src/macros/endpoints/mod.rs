@@ -96,7 +96,7 @@ macro_rules! icu_endpoints {
 
         #[::icu::cdk::query]
         fn icu_canister_directory() -> ::icu::memory::CanisterDirectoryView {
-            $crate::memory::CanisterDirectory::export()
+            $crate::memory::CanisterDirectory::current_view()
         }
 
         #[::icu::cdk::query]
@@ -158,8 +158,8 @@ macro_rules! icu_endpoints {
         #[cfg(icu_capability_delegation)]
         $crate::icu_endpoints_delegation!();
 
-        #[cfg(icu_capability_partition)]
-        $crate::icu_endpoints_partition!();
+        #[cfg(icu_capability_sharder)]
+        $crate::icu_endpoints_shard!();
     };
 }
 
@@ -225,39 +225,44 @@ macro_rules! icu_endpoints_delegation {
     };
 }
 
-// icu_endpoints_partition
+// icu_endpoints_shard
 #[macro_export]
-macro_rules! icu_endpoints_partition {
+macro_rules! icu_endpoints_shard {
     () => {
         //
-        // ICU PARTITION ENDPOINTS
+        // ICU SHARD ENDPOINTS
         //
 
         #[::icu::cdk::query]
-        fn icu_partition_registry() -> ::icu::memory::PartitionRegistryView {
-            $crate::memory::PartitionRegistry::export()
+        fn icu_shard_registry() -> ::icu::memory::CanisterShardRegistryView {
+            $crate::memory::CanisterShardRegistry::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_partition_lookup(item: ::candid::Principal) -> Option<::candid::Principal> {
-            $crate::memory::PartitionRegistry::get_item_partition(&item)
+        fn icu_shard_lookup_pool(
+            item: ::candid::Principal,
+            pool: String,
+        ) -> Option<::candid::Principal> {
+            let pool = ::icu::memory::PoolName(pool);
+            $crate::memory::CanisterShardRegistry::get_item_partition(&item, &pool)
         }
 
         #[::icu::cdk::update]
-        async fn icu_partition_register(
+        async fn icu_shard_register(
             pid: ::candid::Principal,
+            pool: String,
             capacity: u32,
         ) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
-            $crate::memory::PartitionRegistry::register(pid, capacity);
+            $crate::memory::CanisterShardRegistry::register(pid, ::icu::memory::PoolName(pool), capacity);
 
             Ok(())
         }
 
         #[::icu::cdk::update]
-        async fn icu_partition_audit() -> Result<(), ::icu::Error> {
+        async fn icu_shard_audit() -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
-            $crate::memory::PartitionRegistry::audit_and_fix_counts();
+            $crate::memory::CanisterShardRegistry::audit_and_fix_counts();
 
             Ok(())
         }

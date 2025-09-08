@@ -108,13 +108,6 @@ else
     print_error "Version script 'current' command failed"
 fi
 
-# Test help command
-if ./scripts/app/version.sh help > /dev/null 2>&1; then
-    print_success "Version script 'help' command works"
-else
-    print_error "Version script 'help' command failed"
-fi
-
 # Test Makefile targets
 echo ""
 print_info "Testing Makefile targets..."

@@ -23,7 +23,7 @@ Pin to a tag on your internal Git host:
 
 ```toml
 [dependencies]
-icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.6.6" }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.7.2" }
 ```
 
 List tags (internal origin):
@@ -35,4 +35,3 @@ git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | sed -n 's#.*re
 ## Notes
 - Use tags (vX.Y.Z), not branches, for builds.
 - For help, ping the maintainers in the internal channel.
-

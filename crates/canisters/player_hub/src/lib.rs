@@ -2,7 +2,8 @@
 
 use icu::{
     Error,
-    canister::{PLAYER, PLAYER_HUB},
+    canister::PLAYER_HUB,
+    ops::shard::{ShardPlan, assign_in_pool, plan_pool},
     prelude::*,
 };
 
@@ -25,18 +26,22 @@ const fn hub_name() -> &'static str {
     "icu:player_hub"
 }
 
-// Register a new player: assign to an existing player canister or create one on demand
+// Register a new player across both domains: game and instance
 #[update]
-async fn register_player(item: Principal) -> Result<Principal, Error> {
-    icu::ops::partition::assign_with_config(&PLAYER, &PLAYER_HUB, item).await
+async fn register_player(item: Principal) -> Result<(Principal, Principal), Error> {
+    let game = assign_in_pool(&PLAYER_HUB, "game", item).await?;
+    let instance = assign_in_pool(&PLAYER_HUB, "instance", item).await?;
+
+    Ok((game, instance))
 }
 
 #[query]
 /// Dry-run the player registration decision using config-driven policy.
-async fn plan_register_player(
-    item: Principal,
-) -> Result<icu::ops::partition::PartitionPlan, Error> {
-    icu::ops::partition::plan_with_config(&PLAYER_HUB, item)
+async fn plan_register_player(item: Principal) -> Result<(ShardPlan, ShardPlan), Error> {
+    let a = plan_pool(&PLAYER_HUB, "game", item)?;
+    let b = plan_pool(&PLAYER_HUB, "instance", item)?;
+
+    Ok((a, b))
 }
 
 export_candid!();

@@ -2,9 +2,9 @@
 
 ## Project Structure & Module Organization
 - Workspace: Rust workspace in `Cargo.toml`; shared version/lints.
-- Crates: `crates/icu` (core library, benches), `crates/canisters/{root,example}` (IC canisters).
-- CI/CD: GitHub Actions in `.github/workflows/` for CI and tagged releases.
-- Scripts: Versioning, release, and checks in `scripts/app/`; env helpers in `scripts/env/`.
+- Crates: `crates/icu` (core library, benches), `crates/canisters/{root,example,game,instance,player_hub}` (IC canisters).
+- CI/CD: If present, GitHub Actions live in `.github/workflows/` for CI and tagged releases.
+- Scripts: Versioning and checks in `scripts/app/`; env helpers in `scripts/env/`.
 - Artifacts: Build output in `target/` (ignored).
 
 ## Build, Test, and Development Commands
@@ -14,7 +14,7 @@
 - `make clippy`: Lint; warnings are denied.
 - `make fmt` / `make fmt-check`: Format or verify formatting.
 - Versioning: `make version`, `make tags`, `make patch|minor|major`, `make release`.
-- Utilities: `make security-check`, `make git-versions`, `make check-versioning`.
+- Utilities: `make examples`, `make install-canister-deps`, `make plan`.
 
 ## Coding Style & Naming Conventions
 - Language: Rust 2024 edition; keep code idiomatic and minimal.
@@ -39,4 +39,4 @@
 ## Security & Configuration Tips
 - Tags are immutable; never modify historical tagged code. Bump via `scripts/app/version.sh`.
 - Prefer pinned git tags for consumers (see `INTEGRATION.md`).
-- Verify integrity with `make security-check` and inspect tags with `make git-versions`.
+- Inspect tags with `git tag --sort=-version:refname` and verify integrity as part of your release process.

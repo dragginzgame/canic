@@ -11,7 +11,7 @@ ICU addresses common challenges in multi-canister architectures, including canis
 - 🧩 Macros: `icu_start!` and `icu_start_root!` wire init/upgrade and expose a rich set of endpoints.
 - 🔐 Auth helpers: composable rules (`auth_require_any!`, `auth_require_all!`) for controllers, parents, children, etc.
 - 🧠 State: in-memory registries for delegation, ICRC standards, and WASM modules.
-- 🧩 Partitioning: generic partition registry to assign items (Principals) to child canisters with capacity limits.
+- 🧩 Sharding: generic canister shard registry to assign items (Principals) to child canisters with capacity limits.
 - 📦 WASM registry: ship and look up child canister WASMs by `CanisterType`.
 - ♻️ Upgrades: consistent state bundle cascade helpers between parent/children.
 - 🧪 Testing: unit tests across memory/state modules; CI enforces fmt/clippy.
@@ -31,7 +31,8 @@ fn main() { icu::icu_build!("../icu.toml"); }
 
 ```rust
 use icu::prelude::*;
-icu_start_root!(); // or icu_start!(icu::EXAMPLE)
+use icu::canister::EXAMPLE;
+icu_start_root!(); // or icu_start!(EXAMPLE)
 
 const fn icu_setup() {}
 async fn icu_install() {}
@@ -73,18 +74,18 @@ Root canisters can import a static set of gzipped child canister WASMs and expos
 
 Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is in `crates/canisters/root/src/lib.rs`.
 
-## Partitioning 📦
+## Sharding 📦
 
-- Registry: assign items (`Principal`) to partition canisters with capacities.
-- Use `PartitionRegistry::register_or_update_partition(pid, capacity)` to add/resize partitions.
-- Assign items automatically with `ensure_item_assignment(&CanisterType::new("game_instance"), item, policy, parents, None)`.
+- Registry: assign items (`Principal`) to shard canisters with capacities.
+- Use `CanisterShardRegistry::register(pid, capacity)` to add/resize shards.
+- Assign items automatically with `icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item, policy, parents, None)`.
 
 Policy example:
 
 ```rust
 use icu::prelude::*;
-let policy = PartitionPolicy { initial_capacity: 100, max_partitions: 64, growth_threshold_bps: 8000 };
-let shard = ensure_item_assignment(&CanisterType::new("game_instance"), item_principal, policy, &parents, None).await?;
+let policy = icu::ops::shard::ShardPolicy { initial_capacity: 100, max_shards: 64, growth_threshold_pct: 80 };
+let shard = icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item_principal, policy, &parents, None).await?;
 ```
 
 ## ICRC Support 📚
@@ -136,6 +137,16 @@ Note: The `ic` cfg is used internally for tests/build tooling and is not a user-
 Proprietary and Confidential. All rights reserved. See `LICENSE`.
 
 ## Module Guides
+
+### Directory & Registry
+
+- Source of truth: `CanisterRegistry` (root-only) tracks type, parent, lifecycle, and module hash.
+- Directory is a read model generated from the registry on root and cascaded to children.
+- Writes:
+  - Root does not mutate the directory directly; it generates and cascades a full view.
+  - Children accept full re-imports; no partial insert/remove APIs exist.
+- Invariants:
+  - Root directory view equals generation from registry; children align after cascade.
 
 ### Spec
 

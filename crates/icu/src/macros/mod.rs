@@ -18,21 +18,30 @@ macro_rules! log {
 
     // Inner macro for actual logging logic to avoid code duplication
     (@inner $level:expr, $fmt:expr, $($arg:tt)*) => {{
-        let msg = format!($fmt, $($arg)*);  // Apply formatting with args
-        let ty = match $crate::memory::CanisterState::get_type() {
+        let message = format!($fmt, $($arg)*);  // Apply formatting with args
+        let ty_raw = match $crate::memory::CanisterState::get_type() {
             Some(ty) => ty.to_string(),
             None => "-".to_string(),
         };
 
-        let msg = match $level {
-            $crate::Log::Ok => format!("\x1b[32m OK  \x1b[0m|{:^8}| {}", ty, msg),
-            $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{:^8}| {}", ty, msg),
-            $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{:^8}| {}", ty, msg),
-            $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{:^8}| {}", ty, msg),
-            $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{:^8}| {}", ty, msg),
+        // Ellipsize long types to keep the pipe-aligned column centered
+        let ty_disp = $crate::utils::format::ellipsize_middle(
+            &ty_raw,
+            $crate::LOG_CANISTER_TYPE_ELLIPSIS_THRESHOLD,
+            4,
+            4,
+        );
+        let ty_col = format!("{:^width$}", ty_disp, width = $crate::LOG_CANISTER_TYPE_WIDTH);
+
+        let final_line = match $level {
+            $crate::Log::Ok => format!("\x1b[32m OK  \x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{ty_col}| {message}"),
         };
 
-        $crate::cdk::println!("{msg}");
+        $crate::cdk::println!("{final_line}");
     }};
 }
 

@@ -14,7 +14,8 @@
             ],
             "dependencies": [
                 "example",
-                "player",
+                "game",
+                "instance",
                 "player_hub"
             ]
         },
@@ -31,11 +32,22 @@
                 }
             ]
         },
-        "player": {
+        "game": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/player/player.did",
-            "build": "bash -c 'scripts/app/build.sh player'",
-            "wasm": ".dfx/local/canisters/player/player.wasm",
+            "candid": ".dfx/local/canisters/game/game.did",
+            "build": "bash -c 'scripts/app/build.sh game'",
+            "wasm": ".dfx/local/canisters/game/game.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                { "name": "candid:service" }
+            ]
+        },
+        "instance": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/instance/instance.did",
+            "build": "bash -c 'scripts/app/build.sh instance'",
+            "wasm": ".dfx/local/canisters/instance/instance.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

@@ -1,8 +1,8 @@
 pub mod children;
 pub mod directory;
-pub mod partition;
 pub mod pool;
 pub mod registry;
+pub mod shard;
 pub mod state;
 
 use crate::{Error, cdk::api::canister_self, memory::CanisterState, types::CanisterType};

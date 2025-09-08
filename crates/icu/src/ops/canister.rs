@@ -46,6 +46,11 @@ pub async fn create_and_install_canister(
         Err(OpsError::NotRoot)?;
     }
 
+    // Validate canister type and wasm presence up-front so the pool path
+    // cannot bypass config/wasm validation.
+    let _ = Config::try_get_canister(canister_type)?; // must exist in config
+    let _ = WasmRegistry::try_get(canister_type)?; // must have a wasm registered
+
     // Phase 0: allocate canister id + cycles
     let (canister_pid, cycles) = allocate_canister(canister_type).await?;
 
@@ -164,11 +169,10 @@ pub(super) async fn register_installed(
     // flip to Installed
     CanisterRegistry::install(canister_pid, wasm.module_hash())?;
 
-    // if this type uses the directory, insert + cascade
+    // if this type uses the directory, generate fresh view + cascade
     if canister.uses_directory {
-        CanisterDirectory::insert(canister_type.clone(), canister_pid)?;
-
-        let bundle = StateBundle::canister_directory();
+        let view = CanisterDirectory::generate_from_registry();
+        let bundle = StateBundle::with_canister_directory(view);
         update_canister(&canister_pid, &bundle).await?;
         cascade(&bundle).await?;
     }

@@ -1,8 +1,26 @@
+//! Canister Directory
+//!
+//! Purpose
+//! - Directory is a read-model of installed canisters grouped by `CanisterType`.
+//! - On root, the directory is not the source of truth and is generated from the
+//!   `CanisterRegistry` on demand.
+//! - On children, a local copy is stored to enable fast reads without cross-canister calls.
+//!
+//! Lifecycle
+//! - Root generates a fresh view from the registry and cascades it after installs/updates.
+//! - Children accept a full re-import of the directory view via the cascade endpoint.
+//! - There are no partial mutations: the only write API is `import(view)`.
+//!
+//! Invariants
+//! - Root directory view must equal `generate_from_registry()`.
+//! - Child directory view should align with root’s generated view after cascade.
+//!
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    config::Config,
     icu_register_memory, impl_storable_unbounded,
-    memory::{CANISTER_DIRECTORY_MEMORY_ID, MemoryError},
+    memory::{CANISTER_DIRECTORY_MEMORY_ID, CanisterRegistry, MemoryError},
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
@@ -67,14 +85,6 @@ impl CanisterDirectory {
         CANISTER_DIRECTORY.with_borrow(|core| core.try_get_singleton(ty))
     }
 
-    pub fn insert(ty: CanisterType, id: Principal) -> Result<(), Error> {
-        CANISTER_DIRECTORY.with_borrow_mut(|core| core.insert(ty, id))
-    }
-
-    pub fn remove(ty: &CanisterType, id: Principal) -> Result<(), Error> {
-        CANISTER_DIRECTORY.with_borrow_mut(|core| core.remove(ty, id))
-    }
-
     pub fn import(view: CanisterDirectoryView) {
         CANISTER_DIRECTORY.with_borrow_mut(|core| core.import(view));
     }
@@ -82,6 +92,43 @@ impl CanisterDirectory {
     #[must_use]
     pub fn export() -> CanisterDirectoryView {
         CANISTER_DIRECTORY.with_borrow(CanisterDirectoryCore::export)
+    }
+
+    /// Generate the directory view from the CanisterRegistry (root authoritative)
+    /// without relying on the stored directory state.
+    #[must_use]
+    pub fn generate_from_registry() -> CanisterDirectoryView {
+        use std::collections::BTreeMap as StdBTreeMap;
+
+        let mut map: StdBTreeMap<CanisterType, Vec<candid::Principal>> = StdBTreeMap::new();
+        for (pid, entry) in CanisterRegistry::export() {
+            if entry.status != super::registry::CanisterStatus::Installed {
+                continue;
+            }
+
+            // if it's in the config, and it uses the directory
+            if let Ok(canister_cfg) = Config::try_get_canister(&entry.canister_type)
+                && canister_cfg.uses_directory
+            {
+                map.entry(entry.canister_type.clone())
+                    .or_default()
+                    .push(pid);
+            }
+        }
+
+        map.into_iter()
+            .map(|(k, v)| (k, CanisterDirectoryEntry { canisters: v }))
+            .collect()
+    }
+
+    /// Current view: on root, generate from registry; on children, export local copy.
+    #[must_use]
+    pub fn current_view() -> CanisterDirectoryView {
+        if crate::memory::CanisterState::is_root() {
+            Self::generate_from_registry()
+        } else {
+            Self::export()
+        }
     }
 }
 

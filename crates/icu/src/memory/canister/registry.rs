@@ -1,3 +1,21 @@
+//! Canister Registry (root-authoritative)
+//!
+//! Purpose
+//! - Authoritative ledger of canisters managed by root: type, parent, lifecycle status,
+//!   and optional module hash.
+//! - Drives operational flows (create/install) and serves as the source for generating
+//!   the directory read-model.
+//!
+//! Lifecycle
+//! - `init_root` inserts root as Installed at startup.
+//! - `create(pid, ty, parent)` records a new canister as Created immediately after allocation.
+//! - `install(pid, module_hash)` flips to Installed once code is installed and records the hash.
+//! - `export()` is used by root to derive the directory view.
+//!
+//! Invariants
+//! - An Installed canister remains Installed (idempotent guard on `install`).
+//! - Every PID in the registry has an associated `CanisterType`.
+//!
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},

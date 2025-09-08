@@ -32,12 +32,6 @@ We provide a convenient script for managing versions: `scripts/app/version.sh`
 
 # Bump major version (0.9.3 -> 1.0.0)
 ./scripts/app/version.sh major
-
-# Create a release with current version
-./scripts/app/version.sh release
-
-# Create a release with specific version
-./scripts/app/version.sh release 1.0.0
 ```
 
 ### What the script does
@@ -124,17 +118,14 @@ All crates in the workspace share the same version. When you bump the version:
 
 ## Pre-release Versions
 
-For pre-releases (alpha, beta, rc), you can use the release command with a specific version:
+For pre-releases (alpha, beta, rc), set the desired pre-release version in `Cargo.toml` and create an annotated tag manually, then push tags to trigger CI:
 
 ```bash
-# Create alpha release
-./scripts/app/version.sh release 1.0.0-alpha.1
-
-# Create beta release
-./scripts/app/version.sh release 1.0.0-beta.1
-
-# Create release candidate
-./scripts/app/version.sh release 1.0.0-rc.1
+sed -i 's/^version = ".*"/version = "1.0.0-alpha.1"/' Cargo.toml
+git add Cargo.toml
+git commit -m "Bump version to 1.0.0-alpha.1"
+git tag -a v1.0.0-alpha.1 -m "Release 1.0.0-alpha.1"
+git push --follow-tags
 ```
 
 ## Troubleshooting
@@ -180,15 +171,11 @@ If GitHub release creation fails:
 
 ### Security Checks
 
-```bash
-# Check tag immutability and version integrity
-make security-check
+Enforce tag immutability and verify releases in your CI. Locally, you can inspect tags and their objects:
 
-# This will detect:
-# - Modified tags
-# - Unauthorized changes to tagged versions
-# - Force-pushed tags
-# - Broken or invalid tags
+```bash
+git tag --sort=-version:refname | head -20
+git show v1.0.0   # inspect annotated tag and commit
 ```
 
 ### What Happens When You Try to Modify a Tagged Version
@@ -209,7 +196,7 @@ make patch  # Creates v1.0.1
 4. **Create meaningful commit messages** for version bumps
 5. **Review the automated release** after pushing tags
 6. **Never modify existing tags** - always bump to a new version
-7. **Run security checks** regularly with `make security-check`
+7. **Verify tag integrity** regularly (no force-pushed or altered tags)
 
 ## Manual Version Management
 

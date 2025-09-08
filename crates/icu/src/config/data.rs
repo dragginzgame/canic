@@ -59,6 +59,19 @@ impl ConfigData {
             }
         }
 
+        // Validate sharder pool canister types reference defined canisters
+        for hub_cfg in self.canisters.values() {
+            if let Some(sharder) = &hub_cfg.sharder {
+                for pool_spec in sharder.pools.values() {
+                    if !self.canisters.contains_key(&pool_spec.canister_type) {
+                        return Err(ConfigDataError::CanisterNotFound(
+                            pool_spec.canister_type.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -105,7 +118,7 @@ pub struct Canister {
     pub uses_directory: bool,
 
     #[serde(default)]
-    pub partition: Option<PartitionConfig>,
+    pub sharder: Option<SharderConfig>,
 }
 
 ///
@@ -169,25 +182,47 @@ pub struct Standards {
 }
 
 ///
-/// PartitionConfig
-/// Optional configuration for partitioning and automatic growth.
+/// SharderConfig (parent hub)
+/// Contains named pools, each with a child canister type and policy.
+///
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SharderConfig {
+    #[serde(default)]
+    pub pools: BTreeMap<String, SharderPoolSpec>,
+}
+
+///
+/// SharderPoolSpec
+///
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SharderPoolSpec {
+    pub canister_type: CanisterType,
+    #[serde(default)]
+    pub policy: SharderPoolPolicy,
+}
+
+///
+/// SharderPoolPolicy
 ///
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct PartitionConfig {
-    // Initial capacity assigned to newly created partitions
+pub struct SharderPoolPolicy {
     pub initial_capacity: u32,
-    pub max_partitions: u32,
-    pub growth_threshold_bps: u32,
+    pub max_shards: u32,
+    pub growth_threshold_pct: u32,
 }
 
-impl Default for PartitionConfig {
+impl Default for SharderPoolPolicy {
     fn default() -> Self {
         Self {
             initial_capacity: 100,
-            max_partitions: 64,
-            growth_threshold_bps: 8000,
+            max_shards: 64,
+            growth_threshold_pct: 80,
         }
     }
 }

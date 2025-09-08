@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "crates/canisters/example",
-    "crates/canisters/player",
+    "crates/canisters/game",
+    "crates/canisters/instance",
     "crates/canisters/player_hub",
     "crates/canisters/root",
     "crates/icu",
@@ -46,8 +47,8 @@ toml = "0.9"
 # clippy
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
-pedantic = { level = "allow", priority = -1 }
-nursery = { level = "allow", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
 
 # always warn
 must_use_candidate = "warn"

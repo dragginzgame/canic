@@ -1,21 +1,22 @@
 #![allow(clippy::unused_async)]
 
-use icu::{canister::PLAYER, prelude::*};
+use icu::{canister::GAME, prelude::*};
 
 //
 // ICU
 //
 
-icu_start!(PLAYER);
+icu_start!(GAME);
 
 const fn icu_setup() {}
 async fn icu_install(_: Option<Vec<u8>>) {}
 async fn icu_upgrade() {}
 
-// Minimal player endpoint for visibility
+// Minimal endpoint for visibility
 #[query]
-const fn player_name() -> &'static str {
-    "icu:player"
+const fn name() -> &'static str {
+    "icu:game"
 }
 
 export_candid!();
+

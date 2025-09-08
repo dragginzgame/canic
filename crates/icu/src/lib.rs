@@ -64,6 +64,15 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
 
 ///
+/// Logging layout constants
+///
+/// Canister type column width and ellipsis threshold for log lines.
+/// If a type exceeds the threshold, it is rendered as first 4, '…', last 4
+/// to keep the log pipes aligned.
+pub const LOG_CANISTER_TYPE_WIDTH: usize = 9; // 4 + 1 + 4
+pub const LOG_CANISTER_TYPE_ELLIPSIS_THRESHOLD: usize = LOG_CANISTER_TYPE_WIDTH;
+
+///
 /// Error
 ///
 /// top level error should handle all sub-errors, but not expose the child candid types

@@ -12,10 +12,13 @@ make minor    # X.Y.Z -> X.(Y+1).0
 make major    # X.Y.Z -> (X+1).0.0
 ```
 
-Or explicitly:
+Or manually set a specific version and tag:
 
 ```bash
-./scripts/app/version.sh release 1.2.3
+sed -i 's/^version = ".*"/version = "1.2.3"/' Cargo.toml
+git add Cargo.toml
+git commit -m "Bump version to 1.2.3"
+git tag -a v1.2.3 -m "Release 1.2.3"
 ```
 
 ## Prepare & Verify
@@ -56,4 +59,3 @@ git tag --sort=-version:refname
 ## Notes
 - Tags are immutable; never modify existing tags.
 - For help, contact maintainers in the internal channel.
-
