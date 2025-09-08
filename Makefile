@@ -115,6 +115,7 @@ plan:
 # Install development dependencies
 install-dev:
 	cargo install cargo-watch
+	cargo install cargo-sort cargo-sort-derives --locked || true
 
 # Run tests in watch mode
 test-watch:

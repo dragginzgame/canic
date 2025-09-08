@@ -210,7 +210,7 @@ pub async fn ensure_item_assignment(
 /// Convenience: derive policy/capacity from icu.toml for the given hub and shard types.
 pub async fn ensure_item_assignment_from_pool(
     hub_type: &CanisterType,
-    pool_name: &str,
+    canister_type: &CanisterType,
     item: Principal,
 ) -> Result<Principal, Error> {
     // Hub defines pools
@@ -219,9 +219,11 @@ pub async fn ensure_item_assignment_from_pool(
         .and_then(|c| c.sharder)
         .ok_or_else(|| Error::custom("sharding disabled"))?;
 
-    let pool = cfg
+    // Find the pool entry that targets the requested canister type
+    let (pool_name, pool) = cfg
         .pools
-        .get(pool_name)
+        .iter()
+        .find(|(_, p)| &p.canister_type == canister_type)
         .ok_or_else(|| Error::custom("shard pool not found"))?;
 
     let policy = ShardPolicy {
@@ -232,7 +234,7 @@ pub async fn ensure_item_assignment_from_pool(
 
     ensure_item_assignment_internal(
         &pool.canister_type,
-        &PoolName::from(pool_name),
+        &PoolName::from(pool_name.as_str()),
         item,
         policy,
         pool.policy.initial_capacity,
@@ -244,10 +246,10 @@ pub async fn ensure_item_assignment_from_pool(
 /// Short alias: assign using config.
 pub async fn assign_in_pool(
     hub_type: &CanisterType,
-    pool_name: &str,
+    canister_type: &CanisterType,
     item: Principal,
 ) -> Result<Principal, Error> {
-    ensure_item_assignment_from_pool(hub_type, pool_name, item).await
+    ensure_item_assignment_from_pool(hub_type, canister_type, item).await
 }
 
 /// Short alias: assign with explicit policy/capacity.
@@ -272,11 +274,22 @@ pub async fn assign_with_policy(
 /// Dry-run (plan) using config: never creates; returns current metrics and decision.
 pub fn plan_pool(
     hub_type: &CanisterType,
-    pool_name: &str,
+    canister_type: &CanisterType,
     item: Principal,
 ) -> Result<ShardPlan, Error> {
     // Already assigned?
-    let pool = PoolName::from(pool_name);
+    // Resolve pool by canister type
+    let cfg = Config::try_get_canister(hub_type)
+        .ok()
+        .and_then(|c| c.sharder)
+        .ok_or_else(|| Error::custom("sharding disabled"))?;
+    let (pool_name, pool_cfg) = cfg
+        .pools
+        .iter()
+        .find(|(_, p)| &p.canister_type == canister_type)
+        .ok_or_else(|| Error::custom("shard pool not found"))?;
+
+    let pool = PoolName::from(pool_name.as_str());
     if let Some(pid) = CanisterShardRegistry::get_item_partition(&item, &pool) {
         return Ok(ShardPlan {
             state: ShardPlanState::AlreadyAssigned { pid },
@@ -299,14 +312,6 @@ pub fn plan_pool(
     }
 
     // Policy from config; require Some to consider sharding enabled
-    let cfg = Config::try_get_canister(hub_type)
-        .ok()
-        .and_then(|c| c.sharder)
-        .ok_or_else(|| Error::custom("sharding disabled"))?;
-    let pool_cfg = cfg
-        .pools
-        .get(pool_name)
-        .ok_or_else(|| Error::custom("shard pool not found"))?;
     let max_shards = pool_cfg.policy.max_shards;
     let growth_threshold_pct = pool_cfg.policy.growth_threshold_pct;
 

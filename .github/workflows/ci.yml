@@ -1,5 +1,12 @@
 name: CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -19,8 +26,8 @@ jobs:
           toolchain: 1.89.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: make fmt-check
+      - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
       - name: Build examples (default)
         run: cargo build -p icu --examples --locked
@@ -40,7 +47,7 @@ jobs:
           toolchain: 1.89.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: make fmt-check
+      - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
       - run: cargo build --release --workspace --locked

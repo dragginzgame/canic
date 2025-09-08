@@ -39,6 +39,6 @@ case "${1:-}" in
     echo "Bumped: $current → $new"
     ;;
   *)
-    echo "Usage: $0 {current|major|minor|patch|release}"
+    echo "Usage: $0 {current|major|minor|patch}"
     ;;
 esac

@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pre-commit: auto-format Rust code and proceed.
-# Note: This will stage all tracked formatting changes (git add -u).
-
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo not found; skipping rustfmt"
+# Skip if no staged Rust or Cargo files
+if ! git diff --cached --name-only --diff-filter=ACM | grep -E '\\.rs$|^Cargo\\.toml$|^Cargo\\.lock$' -q; then
   exit 0
 fi
 
-echo "Auto-formatting with cargo fmt..."
-if ! cargo fmt --all; then
-  echo "cargo fmt failed; aborting commit." >&2
-  exit 1
-fi
-
-# Stage only tracked files changed by formatting
+cargo fmt --all
+cargo sort -w || true
+cargo sort-derives || true
 git add -u
-
-echo "Formatting complete; proceeding with commit."
-exit 0

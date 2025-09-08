@@ -5,6 +5,17 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+- Changed: Shard helpers now use `CanisterType` instead of pool name.
+  - `assign_in_pool(hub_type, canister_type, item)`
+  - `plan_pool(hub_type, canister_type, item)`
+  - `ensure_item_assignment_from_pool(hub_type, canister_type, item)`
+  - Pools are resolved by matching `canister_type` in config; Player Hub call sites remain valid.
+- DX: Pre-commit hook auto-formats (`cargo fmt`) and sorts (`cargo sort`, `cargo sort-derives`), then stages changes.
+- CI: Add workflow `permissions` and `concurrency`; use `make fmt-check` and `make clippy` for consistency.
+- Makefile: `install-dev` installs `cargo-sort` and `cargo-sort-derives` to support hooks locally.
+- Scripts: Fix `scripts/app/version.sh` usage to remove non-implemented `release` subcommand.
+
 ## [0.7.3] - Partition Registry v2
 - now you can configure multiple pools each with a different CanisterType
 
