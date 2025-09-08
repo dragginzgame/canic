@@ -19,4 +19,3 @@ const fn name() -> &'static str {
 }
 
 export_candid!();
-

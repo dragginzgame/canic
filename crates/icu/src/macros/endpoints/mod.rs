@@ -254,7 +254,11 @@ macro_rules! icu_endpoints_shard {
             capacity: u32,
         ) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
-            $crate::memory::CanisterShardRegistry::register(pid, ::icu::memory::PoolName(pool), capacity);
+            $crate::memory::CanisterShardRegistry::register(
+                pid,
+                ::icu::memory::PoolName(pool),
+                capacity,
+            );
 
             Ok(())
         }
