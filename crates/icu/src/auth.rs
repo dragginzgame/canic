@@ -66,7 +66,7 @@ pub enum AuthError {
 }
 
 ///
-/// Rule
+/// AuthRule
 ///
 
 pub type AuthRuleFn =

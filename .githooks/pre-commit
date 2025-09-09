@@ -6,7 +6,18 @@ if ! git diff --cached --name-only --diff-filter=ACM | grep -E '\\.rs$|^Cargo\\.
   exit 0
 fi
 
+# Auto-format before checks
 cargo fmt --all
-cargo sort -w || true
-cargo sort-derives || true
-git add -u
+
+# Stage any formatting changes so they are included in the commit
+if ! git diff --quiet; then
+  echo "Formatting changed files; staging tracked updates..."
+  git add -u
+fi
+
+# Run checks
+cargo fmt --all -- --check
+cargo sort --check
+cargo sort-derives --check
+
+echo "Pre-commit checks passed."
