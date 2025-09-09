@@ -23,7 +23,7 @@ Pin to a tag on your internal Git host:
 
 ```toml
 [dependencies]
-icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.7.2" }
+icu = { git = "ssh://git@your.git.host/your-group/icu.git", tag = "v0.7.3" }
 ```
 
 List tags (internal origin):
@@ -35,3 +35,12 @@ git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | sed -n 's#.*re
 ## Notes
 - Use tags (vX.Y.Z), not branches, for builds.
 - For help, ping the maintainers in the internal channel.
+
+## Features
+- No feature flags are required for consumers. Do not enable `features = ["ic"]`.
+- The `ic` feature is an internal marker used for tests/examples and CI builds only.
+
+## Canister setup
+- In each canister crate, add the appropriate build macro (see README Quickstart):
+  - Root: `fn main() { icu::icu_build_root!("../icu.toml"); }`
+  - Non-root: `fn main() { icu::icu_build!("../icu.toml"); }`

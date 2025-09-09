@@ -13,7 +13,11 @@ use candid::Principal;
 use std::pin::Pin;
 use thiserror::Error as ThisError;
 
-/// Errors returned by authorization rule checks.
+///
+/// AuthError
+/// Errors returned by authorization rule checks
+///
+
 #[derive(Debug, ThisError)]
 pub enum AuthError {
     /// Guardrail for unreachable states (should not be observed in practice).

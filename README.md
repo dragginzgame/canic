@@ -23,6 +23,14 @@ Add ICU to your workspace and wire a canister:
 
 1) In your canister crate `build.rs`:
 
+For a root canister:
+
+```rust
+fn main() { icu::icu_build_root!("../icu.toml"); }
+```
+
+For a non-root canister (e.g., example, game, instance, player_hub):
+
 ```rust
 fn main() { icu::icu_build!("../icu.toml"); }
 ```
@@ -51,18 +59,19 @@ Short‑lived “delegation sessions” map a temporary session principal to a w
 - Expiry: Sessions are considered expired at the boundary (`expires_at <= now`).
 - Typical flow: 🧪 create session → 📡 track usage → 🔍 resolve wallet → ⏳ expire or ❌ revoke.
 
-Endpoints (provided by `icu_endpoints!`):
+Endpoints (provided by `icu_endpoints!` and enabled when delegation is turned on in config):
 
 - 📥 `icu_delegation_register(args)` (update): register a session for the caller wallet.
 - 👣 `icu_delegation_track(session_pid)` (update): record the calling canister as a requester.
 - 🔎 `icu_delegation_get(session_pid)` (query): fetch session view (includes `is_expired`).
-- 🧹 `icu_delegation_cleanup()` (update): remove expired sessions immediately. Auth: parent only.
+- 🧹 Cleanup: expired sessions are pruned automatically during registrations (every 1000 calls). There is no public cleanup endpoint.
 - 📜 `icu_delegation_list_all()` (query): list all sessions. Auth: controller only.
 - 🧭 `icu_delegation_list_by_wallet(wallet_pid)` (query): list sessions for a wallet. Auth: controller only.
 
 Notes:
 - Minimum duration: 60s ⏱️, Maximum: 24h 🕛 (configurable in code today).
 - Registry also exposes pure functions (e.g., `list_all_sessions`) used by these endpoints.
+- Delegation endpoints are cfg-gated. Enable per-canister by setting `delegation = true` in `icu.toml` under the relevant `[canisters.<name>]` entry so that `icu_build!` emits the feature.
 
 ## WASM Registry 📦
 
@@ -99,6 +108,8 @@ let shard = icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_ins
 - Lint: `make clippy` (warnings denied) • Format: `make fmt` / `make fmt-check`
 - Tests: `make test` (includes optional dfx flow if available)
 - Examples: `make examples` or `cargo build -p icu --examples`
+
+Some targets (e.g., `make build`, `make all`, and version bumps) enforce a clean git working tree.
 
 ## Contributing
 
