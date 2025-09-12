@@ -1,8 +1,17 @@
+use crate::interface::prelude::*;
+
 pub use icrc_ledger_types::icrc21::{
     errors::{ErrorInfo, Icrc21Error},
     lib::ConsentMessageBuilder,
-    requests::{ConsentMessageRequest, DisplayMessageType},
+    requests::{
+        ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
+    },
     responses::{ConsentInfo, ConsentMessage},
 };
 
-pub type ConsentMessageResponse = Result<ConsentMessage, Icrc21Error>;
+// Add your custom ConsentMessageResponse type
+#[derive(CandidType, Deserialize)]
+pub enum ConsentMessageResponse {
+    Ok(ConsentInfo),
+    Err(Icrc21Error),
+}
