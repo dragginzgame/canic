@@ -188,10 +188,26 @@ macro_rules! icu_endpoints_delegation {
         #[::icu::cdk::update]
         async fn icu_delegation_register(
             args: ::icu::state::delegation::RegisterSessionArgs,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_whitelisted)?;
+        ) -> ::icu::state::delegation::DelegationSessionView {
+            $crate::auth_require_any!(::icu::auth::is_whitelisted);
 
-            $crate::state::delegation::DelegationRegistry::register_session(msg_caller(), args)
+            let wallet = msg_caller();
+
+            // Register the session - trap on failure
+            if let Err(e) = $crate::state::delegation::DelegationRegistry::register_session(
+                wallet,
+                args.clone(),
+            ) {
+                ic_cdk::trap(&format!("Failed to register session: {:?}", e));
+            }
+
+            // Return the delegation details directly
+            ::icu::state::delegation::DelegationSessionView {
+                session_pid: args.session_pid,
+                wallet_pid: wallet,
+                expires_at: $crate::utils::time::now_secs() + args.duration_secs,
+                is_expired: false,
+            }
         }
 
         #[::icu::cdk::update]
