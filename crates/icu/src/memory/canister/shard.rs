@@ -313,8 +313,8 @@ impl CanisterShardRegistry {
     #[must_use]
     pub fn ensure_item_migrated(item: Principal, pool: &PoolName) -> Option<Principal> {
         let current = Self::get_item_partition(&item, pool)?;
-        let valid = SHARD_REGISTRY
-            .with_borrow(|core| core.get(&current).is_some_and(|e| e.has_capacity()));
+        let valid =
+            SHARD_REGISTRY.with_borrow(|core| core.get(&current).is_some_and(|e| e.has_capacity()));
         if !valid {
             return Self::assign_item_best_effort(item, pool);
         }
