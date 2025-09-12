@@ -213,31 +213,14 @@ pub async fn ensure_item_assignment_from_pool(
     canister_type: &CanisterType,
     item: Principal,
 ) -> Result<Principal, Error> {
-    // Hub defines pools
-    let cfg = Config::try_get_canister(hub_type)
-        .ok()
-        .and_then(|c| c.sharder)
-        .ok_or_else(|| Error::custom("sharding disabled"))?;
-
-    // Find the pool entry that targets the requested canister type
-    let (pool_name, pool) = cfg
-        .pools
-        .iter()
-        .find(|(_, p)| &p.canister_type == canister_type)
-        .ok_or_else(|| Error::custom("shard pool not found"))?;
-
-    let policy = ShardPolicy {
-        initial_capacity: pool.policy.initial_capacity,
-        max_shards: pool.policy.max_shards,
-        growth_threshold_pct: pool.policy.growth_threshold_pct,
-    };
+    let spec = get_pool_spec_for_child(hub_type, canister_type)?;
 
     ensure_item_assignment_internal(
-        &pool.canister_type,
-        &PoolName::from(pool_name.as_str()),
+        &spec.canister_type,
+        &spec.pool_name,
         item,
-        policy,
-        pool.policy.initial_capacity,
+        spec.policy,
+        spec.policy.initial_capacity,
         None,
     )
     .await
@@ -271,25 +254,183 @@ pub async fn assign_with_policy(
     .await
 }
 
+// ---- Lifecycle helpers: drain, rebalance, decommission ----
+
+struct PoolSpec {
+    pool_name: PoolName,
+    canister_type: CanisterType,
+    policy: ShardPolicy,
+}
+
+fn get_pool_spec(hub_type: &CanisterType, pool_name: &str) -> Result<PoolSpec, Error> {
+    let cfg = Config::try_get_canister(hub_type)
+        .ok()
+        .and_then(|c| c.sharder)
+        .ok_or_else(|| Error::custom("sharding disabled"))?;
+
+    let pool_cfg = cfg
+        .pools
+        .get(pool_name)
+        .ok_or_else(|| Error::custom("shard pool not found"))?;
+
+    Ok(PoolSpec {
+        pool_name: PoolName::from(pool_name),
+        canister_type: pool_cfg.canister_type.clone(),
+        policy: ShardPolicy {
+            initial_capacity: pool_cfg.policy.initial_capacity,
+            max_shards: pool_cfg.policy.max_shards,
+            growth_threshold_pct: pool_cfg.policy.growth_threshold_pct,
+        },
+    })
+}
+
+fn get_pool_spec_for_child(
+    hub_type: &CanisterType,
+    child_type: &CanisterType,
+) -> Result<PoolSpec, Error> {
+    let cfg = Config::try_get_canister(hub_type)
+        .ok()
+        .and_then(|c| c.sharder)
+        .ok_or_else(|| Error::custom("sharding disabled"))?;
+
+    let (pool_name, pool_cfg) = cfg
+        .pools
+        .iter()
+        .find(|(_, p)| &p.canister_type == child_type)
+        .ok_or_else(|| Error::custom("shard pool not found"))?;
+
+    Ok(PoolSpec {
+        pool_name: PoolName::from(pool_name.as_str()),
+        canister_type: pool_cfg.canister_type.clone(),
+        policy: ShardPolicy {
+            initial_capacity: pool_cfg.policy.initial_capacity,
+            max_shards: pool_cfg.policy.max_shards,
+            growth_threshold_pct: pool_cfg.policy.growth_threshold_pct,
+        },
+    })
+}
+
+/// Drain up to `limit` items from `shard_pid` to other shards in the same pool,
+/// creating a new shard if none are available to receive.
+///
+/// Note: this updates only the assignment registry; it does not migrate
+/// application data/state between shards. Coordinate data moves separately.
+pub async fn drain_shard(
+    hub_type: &CanisterType,
+    pool_name: &str,
+    shard_pid: Principal,
+    limit: u32,
+) -> Result<u32, Error> {
+    let spec = get_pool_spec(hub_type, pool_name)?;
+    let items = CanisterShardRegistry::items_for_shard(&spec.pool_name, shard_pid);
+    let mut moved = 0u32;
+
+    for item in items.into_iter().take(limit as usize) {
+        // Try to assign to any shard except the source
+        if CanisterShardRegistry::assign_item_best_effort_excluding(
+            item,
+            &spec.pool_name,
+            shard_pid,
+        )
+        .is_some()
+        {
+            moved = moved.saturating_add(1);
+            continue;
+        }
+
+        // No existing capacity: create a new shard canister and assign to it
+        crate::log!(
+            crate::Log::Info,
+            "💎 shard: drain creating receiver for item={item} from={from}",
+            from = shard_pid
+        );
+
+        let response = create_canister_request::<Vec<u8>>(&spec.canister_type, None).await?;
+        let new_pid = response.new_canister_pid;
+        CanisterShardRegistry::register(
+            new_pid,
+            spec.pool_name.clone(),
+            spec.policy.initial_capacity,
+        );
+
+        CanisterShardRegistry::assign_item_to_partition(item, &spec.pool_name, new_pid)?;
+        moved = moved.saturating_add(1);
+    }
+
+    Ok(moved)
+}
+
+/// Rebalance a pool by moving up to `limit` items from the most loaded shard(s)
+/// to the least loaded ones; does not create new shards.
+///
+/// Note: this changes assignments only; migrate application data separately.
+pub fn rebalance_pool(pool_name: &str, limit: u32) -> Result<u32, Error> {
+    let pool = PoolName::from(pool_name);
+    let mut moved = 0u32;
+
+    for _ in 0..limit {
+        // Snapshot registry for this iteration
+        let view = CanisterShardRegistry::export();
+        let mut candidates: Vec<(Principal, u64, u32)> = view
+            .iter()
+            .filter(|(_, e)| e.pool.as_ref() == Some(&pool))
+            .map(|(pid, e)| (*pid, e.load_bps(), e.count))
+            .collect();
+
+        if candidates.len() < 2 {
+            break; // nothing to balance
+        }
+
+        candidates.sort_by_key(|(_, load, count)| (*load, *count));
+        let receiver = candidates.first().copied();
+        let donor = candidates.last().copied();
+
+        let (recv_pid, recv_load, _recv_count, donor_pid, donor_load, _donor_count) =
+            match (receiver, donor) {
+                (Some(r), Some(d)) if r.0 != d.0 && d.2 > 0 => (r.0, r.1, r.2, d.0, d.1, d.2),
+                _ => break,
+            };
+
+        // Stop when loads are already balanced or inverted; prevents oscillation.
+        if donor_load <= recv_load {
+            break;
+        }
+
+        // Pick one item from donor and move to receiver
+        let items = CanisterShardRegistry::items_for_shard(&pool, donor_pid);
+        let Some(item) = items.first().copied() else {
+            break;
+        };
+        if let Err(e) = CanisterShardRegistry::assign_item_to_partition(item, &pool, recv_pid) {
+            crate::log!(
+                crate::Log::Warn,
+                "💎 shard: rebalance failed for item={item}: {e}"
+            );
+            break;
+        }
+        moved = moved.saturating_add(1);
+    }
+
+    Ok(moved)
+}
+
+/// Decommission a shard from a pool (must be empty).
+///
+/// Note: this does not delete the canister; it removes the shard from
+/// the registry after verifying it holds no assignments.
+pub fn decommission_shard(shard_pid: Principal) -> Result<(), Error> {
+    CanisterShardRegistry::remove_shard(shard_pid)
+}
+
 /// Dry-run (plan) using config: never creates; returns current metrics and decision.
 pub fn plan_pool(
     hub_type: &CanisterType,
     canister_type: &CanisterType,
     item: Principal,
 ) -> Result<ShardPlan, Error> {
-    // Already assigned?
-    // Resolve pool by canister type
-    let cfg = Config::try_get_canister(hub_type)
-        .ok()
-        .and_then(|c| c.sharder)
-        .ok_or_else(|| Error::custom("sharding disabled"))?;
-    let (pool_name, pool_cfg) = cfg
-        .pools
-        .iter()
-        .find(|(_, p)| &p.canister_type == canister_type)
-        .ok_or_else(|| Error::custom("shard pool not found"))?;
-
-    let pool = PoolName::from(pool_name.as_str());
+    // Already assigned? Resolve pool by child type via shared helper
+    let spec = get_pool_spec_for_child(hub_type, canister_type)?;
+    let pool = spec.pool_name.clone();
     if let Some(pid) = CanisterShardRegistry::get_item_partition(&item, &pool) {
         return Ok(ShardPlan {
             state: ShardPlanState::AlreadyAssigned { pid },
@@ -311,9 +452,9 @@ pub fn plan_pool(
         });
     }
 
-    // Policy from config; require Some to consider sharding enabled
-    let max_shards = pool_cfg.policy.max_shards;
-    let growth_threshold_pct = pool_cfg.policy.growth_threshold_pct;
+    // Policy from config
+    let max_shards = spec.policy.max_shards;
+    let growth_threshold_pct = spec.policy.growth_threshold_pct;
 
     // Metrics and decision
     let metrics = metrics_for_pool(&pool);
@@ -366,6 +507,10 @@ pub fn auto_register_from_config() {
 
     // Auto-register cannot infer a pool; no-op.
 }
+
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {
@@ -426,5 +571,45 @@ mod tests {
         let m = metrics_for_pool(&pool);
         assert_eq!(m.total_capacity, 0);
         assert!(ensure_can_create(&m, &policy).is_ok());
+    }
+
+    #[test]
+    fn rebalance_moves_from_heavy_to_light() {
+        // Setup: two shards in same pool, one heavy, one empty
+        let pool = PoolName::from("pool_rebalance");
+        let a = Principal::from_slice(&[201]);
+        let b = Principal::from_slice(&[202]);
+        crate::memory::canister::shard::CanisterShardRegistry::register(a, pool.clone(), 4);
+        crate::memory::canister::shard::CanisterShardRegistry::register(b, pool.clone(), 4);
+
+        // Put 3 items on A
+        for i in 1..=3u8 {
+            let it = Principal::from_slice(&[50 + i]);
+            crate::memory::canister::shard::CanisterShardRegistry::assign_item_to_partition(
+                it, &pool, a,
+            )
+            .unwrap();
+        }
+
+        // Rebalance one move
+        let moved = rebalance_pool("pool_rebalance", 1).unwrap();
+        assert_eq!(moved, 1);
+
+        // Verify counts closer
+        let view = crate::memory::canister::shard::CanisterShardRegistry::export();
+        let mut ca = 0u32;
+        let mut cb = 0u32;
+        for (pid, e) in view {
+            if e.pool.as_ref() == Some(&pool) {
+                if pid == a {
+                    ca = e.count;
+                }
+                if pid == b {
+                    cb = e.count;
+                }
+            }
+        }
+        assert_eq!(ca, 2);
+        assert_eq!(cb, 1);
     }
 }

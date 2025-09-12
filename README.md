@@ -89,6 +89,15 @@ Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is 
 - Use `CanisterShardRegistry::register(pid, capacity)` to add/resize shards.
 - Assign items automatically with `icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item, policy, parents, None)`.
 
+Lifecycle/admin endpoints (controller only; when sharder is enabled for the canister):
+- `icu_shard_drain(pool, shard_pid, max_moves)` – migrate up to N items off a shard; creates a receiver if needed.
+- `icu_shard_rebalance(pool, max_moves)` – move items from most‑loaded to least‑loaded shards; does not create new shards.
+- `icu_shard_decommission(shard_pid)` – remove an empty shard from the registry.
+
+Note: These operations update the assignment registry only. They do not move
+application data/state between shards. Your application should orchestrate data
+migration before/after changing assignments.
+
 Policy example:
 
 ```rust
@@ -130,6 +139,7 @@ Example files:
 - [crates/icu/examples/auth_rules.rs](crates/icu/examples/auth_rules.rs) — basic auth rule composition
 - [crates/icu/examples/minimal_root.rs](crates/icu/examples/minimal_root.rs) — minimal root canister scaffold
 - [crates/icu/examples/ops_create_canister.rs](crates/icu/examples/ops_create_canister.rs) — create-canister request flow
+ - [crates/icu/examples/shard_lifecycle.rs](crates/icu/examples/shard_lifecycle.rs) — simulate shard register/assign, rebalance, drain, and decommission
 
 Build all examples:
 

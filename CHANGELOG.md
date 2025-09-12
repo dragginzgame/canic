@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+- Added: Shard lifecycle controls
+  - Ops: `drain_shard`, `rebalance_pool` (non‑oscillating), `decommission_shard`.
+  - Endpoints (controller‑only): `icu_shard_drain`, `icu_shard_rebalance`, `icu_shard_decommission`.
+  - Registry helpers: list items per shard, exclude‑assign, remove empty shard.
+  - Example: `shard_lifecycle` demonstrates rebalance, drain, decommission.
+- Changed: Sharding code cleanup
+  - Centralized pool spec lookup via shared helper.
+  - `ShardEntry` exposes `has_capacity` and `load_bps`; callers reuse instead of duplicating math.
+  - Rebalance stops when donor load ≤ receiver load to avoid oscillation.
+- Docs: Clarify that lifecycle ops update only the assignment registry; application data migration is separate.
 - Changed: Shard helpers now use `CanisterType` instead of pool name.
   - `assign_in_pool(hub_type, canister_type, item)`
   - `plan_pool(hub_type, canister_type, item)`

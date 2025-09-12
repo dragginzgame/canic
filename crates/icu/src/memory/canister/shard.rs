@@ -128,6 +128,18 @@ impl ShardEntry {
             count: self.count,
         }
     }
+
+    /// Return true if this shard has remaining capacity.
+    #[must_use]
+    pub fn has_capacity(&self) -> bool {
+        self.metrics().has_capacity()
+    }
+
+    /// Load as basis points (0..=10000). Zero capacity is treated as max load.
+    #[must_use]
+    pub fn load_bps(&self) -> u64 {
+        self.metrics().load_bps()
+    }
 }
 
 // Allow sufficient headroom for serde encoding overhead
@@ -142,6 +154,65 @@ pub type CanisterShardRegistryView = Vec<(Principal, ShardEntry)>;
 pub struct CanisterShardRegistry;
 
 impl CanisterShardRegistry {
+    #[inline]
+    fn item_key(item: Principal, pool: &PoolName) -> ItemKey {
+        ItemKey {
+            item,
+            pool: pool.clone(),
+        }
+    }
+    /// List items currently assigned to a specific shard within a pool.
+    #[must_use]
+    pub fn items_for_shard(pool: &PoolName, shard_pid: Principal) -> Vec<Principal> {
+        let mut items = Vec::new();
+        SHARD_ITEM_MAP.with_borrow(|map| {
+            for (key, part) in map.view() {
+                if part == shard_pid && key.pool == *pool {
+                    items.push(key.item);
+                }
+            }
+        });
+        items
+    }
+
+    /// Remove a shard from the registry. Requires it to be empty (count == 0).
+    pub fn remove_shard(shard_pid: Principal) -> Result<(), Error> {
+        SHARD_REGISTRY.with_borrow_mut(|core| {
+            let Some(entry) = core.get(&shard_pid) else {
+                return Ok(()); // already gone
+            };
+            if entry.count != 0 {
+                return Err(MemoryError::from(ShardRegistryError::ShardFull(shard_pid)).into());
+            }
+            core.remove(&shard_pid);
+            Ok(())
+        })
+    }
+
+    /// Best-effort assignment excluding a specific shard (e.g., when draining it).
+    #[must_use]
+    pub fn assign_item_best_effort_excluding(
+        item: Principal,
+        pool: &PoolName,
+        exclude: Principal,
+    ) -> Option<Principal> {
+        // Already assigned to a valid shard different from exclude? keep it
+        if let Some(current) = Self::get_item_partition(&item, pool)
+            && current != exclude
+        {
+            let valid = SHARD_REGISTRY
+                .with_borrow(|core| core.get(&current).is_some_and(|e| e.has_capacity()));
+            if valid {
+                return Some(current);
+            }
+        }
+
+        // Pick a candidate excluding the provided shard
+        let pid = SHARD_REGISTRY
+            .with_borrow(|core| core.pick_least_loaded_of_pool_excluding(pool, &exclude))?;
+        Self::assign_item_to_partition(item, pool, pid).ok()?;
+        Some(pid)
+    }
     pub fn register(shard_pid: Principal, pool: PoolName, capacity: u32) {
         SHARD_REGISTRY.with_borrow_mut(|core| {
             core.upsert(shard_pid, pool, capacity);
@@ -183,7 +254,7 @@ impl CanisterShardRegistry {
         if entry.pool.as_ref() != Some(pool) {
             return Err(MemoryError::from(ShardRegistryError::ShardNotFound(shard_pid)).into());
         }
-        if !entry.metrics().has_capacity() {
+        if !entry.has_capacity() {
             return Err(MemoryError::from(ShardRegistryError::ShardFull(shard_pid)).into());
         }
 
@@ -195,10 +266,7 @@ impl CanisterShardRegistry {
         }
 
         // Insert mapping and increment count
-        let key = ItemKey {
-            item,
-            pool: pool.clone(),
-        };
+        let key = Self::item_key(item, pool);
         SHARD_ITEM_MAP.with_borrow_mut(|map| {
             map.insert(key, shard_pid);
         });
@@ -210,10 +278,7 @@ impl CanisterShardRegistry {
 
     /// Release an item from its shard (decrement count) for the given type.
     pub fn release_item(item: &Principal, pool: &PoolName) -> Result<(), Error> {
-        let key = ItemKey {
-            item: *item,
-            pool: pool.clone(),
-        };
+        let key = Self::item_key(*item, pool);
         let pid = SHARD_ITEM_MAP
             .with_borrow(|map| map.get(&key))
             .ok_or_else(|| MemoryError::from(ShardRegistryError::ItemNotFound(*item)))?;
@@ -234,10 +299,7 @@ impl CanisterShardRegistry {
 
     #[must_use]
     pub fn get_item_partition(item: &Principal, pool: &PoolName) -> Option<Principal> {
-        let key = ItemKey {
-            item: *item,
-            pool: pool.clone(),
-        };
+        let key = Self::item_key(*item, pool);
         SHARD_ITEM_MAP.with_borrow(|map| map.get(&key))
     }
 
@@ -251,10 +313,8 @@ impl CanisterShardRegistry {
     #[must_use]
     pub fn ensure_item_migrated(item: Principal, pool: &PoolName) -> Option<Principal> {
         let current = Self::get_item_partition(&item, pool)?;
-        let valid = SHARD_REGISTRY.with_borrow(|core| {
-            core.get(&current)
-                .is_some_and(|e| e.metrics().has_capacity())
-        });
+        let valid = SHARD_REGISTRY
+            .with_borrow(|core| core.get(&current).is_some_and(|e| e.has_capacity()));
         if !valid {
             return Self::assign_item_best_effort(item, pool);
         }
@@ -335,6 +395,10 @@ impl<M: Memory> CanisterShardRegistryCore<M> {
         self.partitions.insert(pid, entry);
     }
 
+    fn remove(&mut self, pid: &Principal) -> Option<ShardEntry> {
+        self.partitions.remove(pid)
+    }
+
     fn upsert(&mut self, pid: Principal, pool: PoolName, capacity: u32) {
         let mut entry = self.get(&pid).unwrap_or_default();
         let is_new = entry.capacity == 0 && entry.count == 0 && entry.created_at_secs == 0;
@@ -356,14 +420,24 @@ impl<M: Memory> CanisterShardRegistryCore<M> {
     fn pick_least_loaded_of_pool(&self, pool: &PoolName) -> Option<Principal> {
         self.partitions
             .iter()
+            .filter(|e| e.value().has_capacity() && e.value().pool.as_ref() == Some(pool))
+            .min_by_key(|e| (e.value().load_bps(), e.value().count))
+            .map(|e| *e.key())
+    }
+
+    fn pick_least_loaded_of_pool_excluding(
+        &self,
+        pool: &PoolName,
+        exclude: &Principal,
+    ) -> Option<Principal> {
+        self.partitions
+            .iter()
             .filter(|e| {
-                let m = e.value().metrics();
-                m.has_capacity() && e.value().pool.as_ref() == Some(pool)
+                e.value().has_capacity()
+                    && e.value().pool.as_ref() == Some(pool)
+                    && e.key() != exclude
             })
-            .min_by_key(|e| {
-                let m = e.value().metrics();
-                (m.load_bps(), m.count)
-            })
+            .min_by_key(|e| (e.value().load_bps(), e.value().count))
             .map(|e| *e.key())
     }
 }
@@ -472,5 +546,46 @@ mod tests {
             .unwrap()
             .1;
         assert_eq!(e.count, 2);
+    }
+
+    #[test]
+    fn list_items_for_shard_and_remove() {
+        clear_all();
+        let pool = PoolName::from("bravo");
+        let shard = Principal::from_slice(&[5]);
+        CanisterShardRegistry::register(shard, pool.clone(), 3);
+
+        let a = Principal::from_slice(&[100]);
+        let b = Principal::from_slice(&[101]);
+        CanisterShardRegistry::assign_item_to_partition(a, &pool, shard).unwrap();
+        CanisterShardRegistry::assign_item_to_partition(b, &pool, shard).unwrap();
+
+        let items = CanisterShardRegistry::items_for_shard(&pool, shard);
+        assert_eq!(items.len(), 2);
+        assert!(items.contains(&a) && items.contains(&b));
+
+        // cannot remove while non-empty
+        assert!(CanisterShardRegistry::remove_shard(shard).is_err());
+
+        // release items then remove
+        CanisterShardRegistry::release_item(&a, &pool).unwrap();
+        CanisterShardRegistry::release_item(&b, &pool).unwrap();
+        assert!(CanisterShardRegistry::remove_shard(shard).is_ok());
+    }
+
+    #[test]
+    fn best_effort_excluding_picks_other() {
+        clear_all();
+        let pool = PoolName::from("charlie");
+        let a = Principal::from_slice(&[11]);
+        let b = Principal::from_slice(&[12]);
+        CanisterShardRegistry::register(a, pool.clone(), 2);
+        CanisterShardRegistry::register(b, pool.clone(), 2);
+
+        let it = Principal::from_slice(&[200]);
+        // Exclude a → should pick b
+        let picked = CanisterShardRegistry::assign_item_best_effort_excluding(it, &pool, a)
+            .expect("should assign");
+        assert_eq!(picked, b);
     }
 }

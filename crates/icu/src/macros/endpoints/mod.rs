@@ -211,6 +211,7 @@ macro_rules! icu_endpoints_delegation {
         async fn icu_delegation_list_all()
         -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
+
             Ok($crate::state::delegation::DelegationRegistry::list_all_sessions())
         }
 
@@ -220,6 +221,7 @@ macro_rules! icu_endpoints_delegation {
             wallet_pid: ::candid::Principal,
         ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
+
             Ok($crate::state::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
         }
     };
@@ -269,6 +271,39 @@ macro_rules! icu_endpoints_shard {
             $crate::memory::CanisterShardRegistry::audit_and_fix_counts();
 
             Ok(())
+        }
+
+        // Drain items from a shard (admin only). Optionally limited by max_moves.
+        #[::icu::cdk::update]
+        async fn icu_shard_drain(
+            pool: String,
+            shard_pid: ::candid::Principal,
+            max_moves: u32,
+        ) -> Result<u32, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            let hub_type = ::icu::memory::CanisterState::get_type()
+                .ok_or_else(|| ::icu::Error::custom("unknown canister type"))?;
+
+            $crate::ops::shard::drain_shard(&hub_type, &pool, shard_pid, max_moves).await
+        }
+
+        // Rebalance a pool across existing shards (admin only).
+        #[::icu::cdk::update]
+        async fn icu_shard_rebalance(pool: String, max_moves: u32) -> Result<u32, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            $crate::ops::shard::rebalance_pool(&pool, max_moves)
+        }
+
+        // Decommission an empty shard (admin only).
+        #[::icu::cdk::update]
+        async fn icu_shard_decommission(
+            shard_pid: ::candid::Principal,
+        ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            $crate::ops::shard::decommission_shard(shard_pid)
         }
     };
 }
