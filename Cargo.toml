@@ -22,7 +22,7 @@ publish = false
 [workspace.dependencies]
 
 # ic cdk
-candid = { version = "0.10.17", default-features = false }
+candid = { version = "0.10", default-features = false }
 criterion = "0.7"
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
