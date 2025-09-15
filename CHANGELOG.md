@@ -16,11 +16,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - `ShardEntry` exposes `has_capacity` and `load_bps`; callers reuse instead of duplicating math.
   - Rebalance stops when donor load ≤ receiver load to avoid oscillation.
 - Docs: Clarify that lifecycle ops update only the assignment registry; application data migration is separate.
-- Changed: Shard helpers now use `CanisterType` instead of pool name.
-  - `assign_in_pool(hub_type, canister_type, item)`
-  - `plan_pool(hub_type, canister_type, item)`
-  - `ensure_item_assignment_from_pool(hub_type, canister_type, item)`
-  - Pools are resolved by matching `canister_type` in config; Player Hub call sites remain valid.
+- Changed: Shard helpers now take explicit pool names (strings) to avoid ambiguity when multiple pools share the same child `CanisterType`.
+  - `assign_in_pool(hub_type, pool_name, item)`
+  - `plan_pool(hub_type, pool_name, item)`
+  - `ensure_item_assignment_for_pool(hub_type, pool_name, item)`
+  - New convenience wrappers for hubs: `assign_for_self(pool_name, item)` and `plan_for_self(pool_name, item)`.
 - DX: Pre-commit hook auto-formats (`cargo fmt`) and sorts (`cargo sort`, `cargo sort-derives`), then stages changes.
 - CI: Add workflow `permissions` and `concurrency`; use `make fmt-check` and `make clippy` for consistency.
 - Makefile: `install-dev` installs `cargo-sort` and `cargo-sort-derives` to support hooks locally.

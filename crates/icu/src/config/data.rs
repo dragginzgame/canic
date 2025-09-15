@@ -182,7 +182,7 @@ pub struct Standards {
 }
 
 ///
-/// SharderConfig (parent hub)
+/// SharderConfig
 /// Contains named pools, each with a child canister type and policy.
 ///
 

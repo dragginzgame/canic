@@ -131,13 +131,13 @@ impl ShardEntry {
 
     /// Return true if this shard has remaining capacity.
     #[must_use]
-    pub fn has_capacity(&self) -> bool {
+    pub const fn has_capacity(&self) -> bool {
         self.metrics().has_capacity()
     }
 
     /// Load as basis points (0..=10000). Zero capacity is treated as max load.
     #[must_use]
-    pub fn load_bps(&self) -> u64 {
+    pub const fn load_bps(&self) -> u64 {
         self.metrics().load_bps()
     }
 }

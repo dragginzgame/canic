@@ -10,7 +10,7 @@ use candid::Principal;
 use icu::memory::canister::shard::CanisterShardRegistry;
 use icu::memory::canister::shard::PoolName;
 
-fn p(id: u8) -> Principal {
+const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id])
 }
 

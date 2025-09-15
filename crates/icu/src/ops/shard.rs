@@ -207,13 +207,13 @@ pub async fn ensure_item_assignment(
     .await
 }
 
-/// Convenience: derive policy/capacity from icu.toml for the given hub and shard types.
-pub async fn ensure_item_assignment_from_pool(
+/// Convenience: derive policy/capacity from icu.toml for the given hub and pool name.
+pub async fn ensure_item_assignment_for_pool(
     hub_type: &CanisterType,
-    canister_type: &CanisterType,
+    pool_name: &str,
     item: Principal,
 ) -> Result<Principal, Error> {
-    let spec = get_pool_spec_for_child(hub_type, canister_type)?;
+    let spec = get_pool_spec(hub_type, pool_name)?;
 
     ensure_item_assignment_internal(
         &spec.canister_type,
@@ -226,13 +226,19 @@ pub async fn ensure_item_assignment_from_pool(
     .await
 }
 
-/// Short alias: assign using config.
+/// Short alias: assign using config and explicit pool name.
 pub async fn assign_in_pool(
     hub_type: &CanisterType,
-    canister_type: &CanisterType,
+    pool_name: &str,
     item: Principal,
 ) -> Result<Principal, Error> {
-    ensure_item_assignment_from_pool(hub_type, canister_type, item).await
+    ensure_item_assignment_for_pool(hub_type, pool_name, item).await
+}
+
+/// Convenience for hubs: infer hub type and assign by pool name.
+pub async fn assign_for_self(pool_name: &str, item: Principal) -> Result<Principal, Error> {
+    let hub_type = crate::memory::CanisterState::try_get_type()?;
+    assign_in_pool(&hub_type, pool_name, item).await
 }
 
 /// Short alias: assign with explicit policy/capacity.
@@ -284,31 +290,7 @@ fn get_pool_spec(hub_type: &CanisterType, pool_name: &str) -> Result<PoolSpec, E
     })
 }
 
-fn get_pool_spec_for_child(
-    hub_type: &CanisterType,
-    child_type: &CanisterType,
-) -> Result<PoolSpec, Error> {
-    let cfg = Config::try_get_canister(hub_type)
-        .ok()
-        .and_then(|c| c.sharder)
-        .ok_or_else(|| Error::custom("sharding disabled"))?;
-
-    let (pool_name, pool_cfg) = cfg
-        .pools
-        .iter()
-        .find(|(_, p)| &p.canister_type == child_type)
-        .ok_or_else(|| Error::custom("shard pool not found"))?;
-
-    Ok(PoolSpec {
-        pool_name: PoolName::from(pool_name.as_str()),
-        canister_type: pool_cfg.canister_type.clone(),
-        policy: ShardPolicy {
-            initial_capacity: pool_cfg.policy.initial_capacity,
-            max_shards: pool_cfg.policy.max_shards,
-            growth_threshold_pct: pool_cfg.policy.growth_threshold_pct,
-        },
-    })
-}
+// No child-type-based resolver: multiple pools may target the same canister type.
 
 /// Drain up to `limit` items from `shard_pid` to other shards in the same pool,
 /// creating a new shard if none are available to receive.
@@ -425,11 +407,11 @@ pub fn decommission_shard(shard_pid: Principal) -> Result<(), Error> {
 /// Dry-run (plan) using config: never creates; returns current metrics and decision.
 pub fn plan_pool(
     hub_type: &CanisterType,
-    canister_type: &CanisterType,
+    pool_name: &str,
     item: Principal,
 ) -> Result<ShardPlan, Error> {
-    // Already assigned? Resolve pool by child type via shared helper
-    let spec = get_pool_spec_for_child(hub_type, canister_type)?;
+    // Resolve pool by explicit name
+    let spec = get_pool_spec(hub_type, pool_name)?;
     let pool = spec.pool_name.clone();
     if let Some(pid) = CanisterShardRegistry::get_item_partition(&item, &pool) {
         return Ok(ShardPlan {
@@ -490,6 +472,12 @@ pub fn plan_pool(
         total_capacity: metrics.total_capacity,
         total_used: metrics.total_used,
     })
+}
+
+/// Convenience: plan using this canister's type and a pool name.
+pub fn plan_for_self(pool_name: &str, item: Principal) -> Result<ShardPlan, Error> {
+    let hub_type = crate::memory::CanisterState::try_get_type()?;
+    plan_pool(&hub_type, pool_name, item)
 }
 
 /// auto_register_from_config

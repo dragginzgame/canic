@@ -2,8 +2,8 @@
 
 use icu::{
     Error,
-    canister::{GAME, INSTANCE, PLAYER_HUB},
-    ops::shard::{ShardPlan, assign_in_pool, plan_pool},
+    canister::PLAYER_HUB,
+    ops::shard::{ShardPlan, assign_for_self, plan_for_self},
     prelude::*,
 };
 
@@ -28,18 +28,18 @@ const fn hub_name() -> &'static str {
 
 // Register a new player across both domains: game and instance
 #[update]
-async fn register_player(item: Principal) -> Result<(Principal, Principal), Error> {
-    let game = assign_in_pool(&PLAYER_HUB, &GAME, item).await?;
-    let instance = assign_in_pool(&PLAYER_HUB, &INSTANCE, item).await?;
+async fn register_player(pid: Principal) -> Result<(Principal, Principal), Error> {
+    let game = assign_for_self("game", pid).await?;
+    let instance = assign_for_self("instance", pid).await?;
 
     Ok((game, instance))
 }
 
 #[query]
 /// Dry-run the player registration decision using config-driven policy.
-async fn plan_register_player(item: Principal) -> Result<(ShardPlan, ShardPlan), Error> {
-    let a = plan_pool(&PLAYER_HUB, &GAME, item)?;
-    let b = plan_pool(&PLAYER_HUB, &INSTANCE, item)?;
+async fn plan_register_player(pid: Principal) -> Result<(ShardPlan, ShardPlan), Error> {
+    let a = plan_for_self("game", pid)?;
+    let b = plan_for_self("instance", pid)?;
 
     Ok((a, b))
 }
