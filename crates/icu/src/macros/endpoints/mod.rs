@@ -202,12 +202,12 @@ macro_rules! icu_endpoints_delegation {
             }
 
             // Return the delegation details directly
-            ::icu::state::delegation::DelegationSessionView {
+            Ok(::icu::state::delegation::DelegationSessionView {
                 session_pid: args.session_pid,
                 wallet_pid: wallet,
                 expires_at: $crate::utils::time::now_secs() + args.duration_secs,
                 is_expired: false,
-            }
+            })
         }
 
         #[::icu::cdk::update]
