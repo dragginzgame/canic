@@ -189,7 +189,7 @@ macro_rules! icu_endpoints_delegation {
         async fn icu_delegation_register(
             args: ::icu::state::delegation::RegisterSessionArgs,
         ) -> ::icu::state::delegation::DelegationSessionView {
-            $crate::auth_require_any!(::icu::auth::is_whitelisted);
+            $crate::auth_require_any!(::icu::auth::is_whitelisted)?;
 
             let wallet = msg_caller();
 
