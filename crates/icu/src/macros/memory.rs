@@ -18,16 +18,6 @@ macro_rules! icu_register_memory {
                 err
             );
         }
-        /*
-         else {
-            $crate::log!(
-                $crate::Log::Info,
-                "💾 icu_register_memory registered {} @ {}",
-                path,
-                $id
-            );
-        }
-        */
 
         result.unwrap();
 
