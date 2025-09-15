@@ -4,7 +4,7 @@ macro_rules! icu_build {
         $crate::__icu_build_internal! {
             $file,
             |cfg_str, cfg_path, cfg| {
-                use icu::types::CanisterType;
+                use icu::{log, Log, types::CanisterType};
                 use std::path::PathBuf;
 
                 // Infer canister name from directory structure: .../canisters/<name>/...
@@ -23,22 +23,24 @@ macro_rules! icu_build {
                         .expect("cannot infer canister name; place crate under canisters/<name>/ or set CARGO_BIN_NAME")
                 };
 
-                // Canister Lookup — mandatory!
+                // Canister Lookup
                 let dir = canister_dir.clone();
-                let canister_cfg = cfg
-                    .try_get_canister(&dir.clone().into())
-                    .unwrap_or_else(|_| panic!(
-                        "canister '{canister_dir}' not found in ICU config. \
-                        Add it under [canisters] in your config TOML.",
-                    ));
+                if let Ok(canister_cfg) = cfg.try_get_canister(&dir.clone().into()) {
+                    // canister capabilities
+                    if canister_cfg.delegation {
+                        println!("cargo:rustc-cfg=icu_capability_delegation");
+                    }
+                    if canister_cfg.sharder.is_some() {
+                        println!("cargo:rustc-cfg=icu_capability_sharder");
+                    }
+                } else {
+                    log!(
+                        Log::Warn,
+                        "⚠️ canister '{dir}' not found in ICU config. \
+                        Add it under [canisters] in your config TOML."
+                    );
+                }
 
-                // canister capabilities
-                if canister_cfg.delegation {
-                    println!("cargo:rustc-cfg=icu_capability_delegation");
-                }
-                if canister_cfg.sharder.is_some() {
-                    println!("cargo:rustc-cfg=icu_capability_sharder");
-                }
             }
         }
     }};
