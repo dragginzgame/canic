@@ -1,8 +1,5 @@
 use crate::impl_storable_bounded;
-use candid::{
-    CandidType,
-    types::{Serializer, Type},
-};
+use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, str::FromStr};
@@ -16,7 +13,9 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 /// dynamic values allocate only when needed.
 ///
 
-#[derive(Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash)]
+#[derive(
+    CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
+)]
 #[serde(transparent)]
 pub struct CanisterType(pub Cow<'static, str>);
 
@@ -48,16 +47,6 @@ impl CanisterType {
     #[must_use]
     pub fn into_string(self) -> String {
         self.0.into_owned()
-    }
-}
-
-impl CandidType for CanisterType {
-    fn _ty() -> Type {
-        <String as CandidType>::_ty()
-    }
-
-    fn idl_serialize<S: Serializer>(&self, serializer: S) -> Result<(), S::Error> {
-        self.0.as_ref().idl_serialize(serializer)
     }
 }
 

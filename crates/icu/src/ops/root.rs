@@ -21,7 +21,8 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for (ty, entry) in CanisterDirectory::export() {
+    let export = CanisterDirectory::export();
+    for (ty, entry) in export.entries {
         let canisters = entry
             .canisters
             .iter()

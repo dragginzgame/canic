@@ -67,7 +67,10 @@ impl_storable_unbounded!(CanisterDirectoryEntry);
 /// CanisterDirectory
 ///
 
-pub type CanisterDirectoryView = Vec<(CanisterType, CanisterDirectoryEntry)>;
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+pub struct CanisterDirectoryView {
+    pub entries: Vec<(CanisterType, CanisterDirectoryEntry)>,
+}
 
 pub struct CanisterDirectory;
 
@@ -85,13 +88,15 @@ impl CanisterDirectory {
         CANISTER_DIRECTORY.with_borrow(|core| core.try_get_singleton(ty))
     }
 
-    pub fn import(view: CanisterDirectoryView) {
-        CANISTER_DIRECTORY.with_borrow_mut(|core| core.import(view));
-    }
-
     #[must_use]
     pub fn export() -> CanisterDirectoryView {
-        CANISTER_DIRECTORY.with_borrow(CanisterDirectoryCore::export)
+        CanisterDirectoryView {
+            entries: CANISTER_DIRECTORY.with_borrow(CanisterDirectoryCore::export),
+        }
+    }
+
+    pub fn import(view: CanisterDirectoryView) {
+        CANISTER_DIRECTORY.with_borrow_mut(|core| core.import(view.entries));
     }
 
     /// Generate the directory view from the CanisterRegistry (root authoritative)
@@ -100,13 +105,12 @@ impl CanisterDirectory {
     pub fn generate_from_registry() -> CanisterDirectoryView {
         use std::collections::BTreeMap as StdBTreeMap;
 
-        let mut map: StdBTreeMap<CanisterType, Vec<candid::Principal>> = StdBTreeMap::new();
+        let mut map: StdBTreeMap<CanisterType, Vec<Principal>> = StdBTreeMap::new();
         for (pid, entry) in CanisterRegistry::export() {
             if entry.status != super::registry::CanisterStatus::Installed {
                 continue;
             }
 
-            // if it's in the config, and it uses the directory
             if let Ok(canister_cfg) = Config::try_get_canister(&entry.canister_type)
                 && canister_cfg.uses_directory
             {
@@ -116,9 +120,12 @@ impl CanisterDirectory {
             }
         }
 
-        map.into_iter()
-            .map(|(k, v)| (k, CanisterDirectoryEntry { canisters: v }))
-            .collect()
+        CanisterDirectoryView {
+            entries: map
+                .into_iter()
+                .map(|(k, v)| (k, CanisterDirectoryEntry { canisters: v }))
+                .collect(),
+        }
     }
 
     /// Current view: on root, generate from registry; on children, export local copy.
@@ -196,14 +203,14 @@ impl<M: Memory> CanisterDirectoryCore<M> {
         Ok(())
     }
 
-    pub fn import(&mut self, view: CanisterDirectoryView) {
+    pub fn import(&mut self, entries: Vec<(CanisterType, CanisterDirectoryEntry)>) {
         self.map.clear();
-        for (k, v) in view {
-            self.map.insert(k.clone(), v);
+        for (k, v) in entries {
+            self.map.insert(k, v);
         }
     }
 
-    pub fn export(&self) -> CanisterDirectoryView {
+    pub fn export(&self) -> Vec<(CanisterType, CanisterDirectoryEntry)> {
         self.map.to_vec()
     }
 }
