@@ -63,6 +63,7 @@ impl Icrc21Registry {
         ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).cloned())
     }
 
+    #[must_use]
     pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
         match Self::get_handler(&req.method) {
             Some(handler) => handler(req),

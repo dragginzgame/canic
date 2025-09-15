@@ -9,7 +9,10 @@ pub use icrc_ledger_types::icrc21::{
     responses::{ConsentInfo, ConsentMessage},
 };
 
-// Add your custom ConsentMessageResponse type
+///
+/// ConsentMessageResponse
+///
+
 #[derive(CandidType, Deserialize)]
 pub enum ConsentMessageResponse {
     Ok(ConsentInfo),
