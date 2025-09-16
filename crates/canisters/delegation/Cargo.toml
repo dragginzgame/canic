@@ -1,5 +1,5 @@
 [package]
-name = "canister_example"
+name = "canister_delegation"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -18,4 +18,3 @@ icu = { workspace = true }
 
 [lints]
 workspace = true
-

@@ -127,7 +127,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_example"
+name = "canister_blank"
 version = "0.8.0"
 dependencies = [
  "candid",
@@ -136,25 +136,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_game"
-version = "0.8.0"
-dependencies = [
- "candid",
- "ic-cdk",
- "icu",
-]
-
-[[package]]
-name = "canister_instance"
-version = "0.8.0"
-dependencies = [
- "candid",
- "ic-cdk",
- "icu",
-]
-
-[[package]]
-name = "canister_player_hub"
+name = "canister_delegation"
 version = "0.8.0"
 dependencies = [
  "candid",
@@ -164,6 +146,24 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
+version = "0.8.0"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "icu",
+]
+
+[[package]]
+name = "canister_shard"
+version = "0.8.0"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "icu",
+]
+
+[[package]]
+name = "canister_sharder"
 version = "0.8.0"
 dependencies = [
  "candid",

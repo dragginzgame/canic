@@ -13,17 +13,17 @@
                 }
             ],
             "dependencies": [
-                "example",
-                "game",
-                "instance",
-                "player_hub"
+                "blank",
+                "delegation",
+                "sharder",
+                "shard"
             ]
         },
-        "example": {
+        "blank": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/example/example.did",
-            "build": "bash -c 'scripts/app/build.sh example'",
-            "wasm": ".dfx/local/canisters/example/example.wasm",
+            "candid": ".dfx/local/canisters/blank/blank.did",
+            "build": "bash -c 'scripts/app/build.sh blank'",
+            "wasm": ".dfx/local/canisters/blank/blank.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
@@ -32,37 +32,43 @@
                 }
             ]
         },
-        "game": {
+        "delegation": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/game/game.did",
-            "build": "bash -c 'scripts/app/build.sh game'",
-            "wasm": ".dfx/local/canisters/game/game.wasm",
+            "candid": ".dfx/local/canisters/delegation/delegation.did",
+            "build": "bash -c 'scripts/app/build.sh delegation'",
+            "wasm": ".dfx/local/canisters/delegation/delegation.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
-                { "name": "candid:service" }
+                {
+                    "name": "candid:service"
+                }
             ]
         },
-        "instance": {
+        "sharder": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/instance/instance.did",
-            "build": "bash -c 'scripts/app/build.sh instance'",
-            "wasm": ".dfx/local/canisters/instance/instance.wasm",
+            "candid": ".dfx/local/canisters/sharder/sharder.did",
+            "build": "bash -c 'scripts/app/build.sh sharder'",
+            "wasm": ".dfx/local/canisters/sharder/sharder.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
-                { "name": "candid:service" }
+                {
+                    "name": "candid:service"
+                }
             ]
         },
-        "player_hub": {
+        "shard": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/player_hub/player_hub.did",
-            "build": "bash -c 'scripts/app/build.sh player_hub'",
-            "wasm": ".dfx/local/canisters/player_hub/player_hub.wasm",
+            "candid": ".dfx/local/canisters/shard/shard.did",
+            "build": "bash -c 'scripts/app/build.sh shard'",
+            "wasm": ".dfx/local/canisters/shard/shard.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
-                { "name": "candid:service" }
+                {
+                    "name": "candid:service"
+                }
             ]
         }
     },

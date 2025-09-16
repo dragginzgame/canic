@@ -1,5 +1,5 @@
 [package]
-name = "canister_player_hub"
+name = "canister_blank"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

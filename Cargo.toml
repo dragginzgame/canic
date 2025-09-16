@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "crates/canisters/example",
-    "crates/canisters/game",
-    "crates/canisters/instance",
-    "crates/canisters/player_hub",
+    "crates/canisters/blank",
+    "crates/canisters/delegation",
+    "crates/canisters/sharder",
+    "crates/canisters/shard",
     "crates/canisters/root",
     "crates/icu",
 ]

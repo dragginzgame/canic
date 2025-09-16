@@ -4,14 +4,15 @@ use crate::{
     state::{
         StateError,
         delegation::{
-            DelegationRegistry, DelegationRegistryError, DelegationSession, DelegationSessionView,
-            RegisterSessionArgs,
+            DelegationRegistryError, DelegationSession, DelegationSessionView, RegisterSessionArgs,
         },
     },
     utils::time::now_secs,
 };
 use candid::Principal;
 use std::time::Duration;
+
+pub use crate::state::delegation::DelegationRegistry;
 
 //
 // Delegation Registry (Ops Layer)

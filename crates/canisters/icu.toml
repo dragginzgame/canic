@@ -5,54 +5,51 @@ minimum_size = 10
 
 #################### canisters
 
-#
-# example
-#
-[canisters.example]
+# ----------------------------------
+# blank
+# ----------------------------------
+[canisters.blank]
 auto_create = 1
 initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-#
-# player_hub
-# assigns new players to existing player canisters or creates new ones on demand
-#
-[canisters.player_hub]
+
+# ----------------------------------
+# delegation
+# ----------------------------------
+[canisters.delegation]
+auto_create = 1
+uses_directory = true
+delegation = true
+initial_cycles = "5T"
+topup.amount = "5T"
+topup.threshold = "10T"
+
+
+# ----------------------------------
+# sharder
+# ----------------------------------
+[canisters.sharder]
 auto_create = 1
 initial_cycles = "6T"
 uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[canisters.player_hub.sharder]
+[canisters.sharder.sharder]
 
-[canisters.player_hub.sharder.pools.game]
-canister_type = "game"
+[canisters.sharder.sharder.pools.shards]
+canister_type = "shard"
 policy.initial_capacity = 100
 policy.max_shards = 64
 policy.growth_threshold_pct = 80
 
-[canisters.player_hub.sharder.pools.instance]
-canister_type = "instance"
-policy.initial_capacity = 100
-policy.max_shards = 64
-policy.growth_threshold_pct = 80
 
-#
-# game
-# game-domain shard canisters
-#
-[canisters.game]
-initial_cycles = "6T"
-topup.threshold = "10T"
-topup.amount = "5T"
-
-#
-# instance
-# instance-domain shard canisters
-#
-[canisters.instance]
+# ----------------------------------
+# shard
+# ----------------------------------
+[canisters.shard]
 initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"

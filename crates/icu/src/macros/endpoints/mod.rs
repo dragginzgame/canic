@@ -175,14 +175,14 @@ macro_rules! icu_endpoints_delegation {
         async fn icu_delegation_get(
             session_pid: ::candid::Principal,
         ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            ::icu::ops::delegation::DelegationRegistry::get_view(session_pid)
+            $crate::ops::delegation::DelegationRegistry::get_view(session_pid)
         }
 
         #[::icu::cdk::update]
         async fn icu_delegation_track(
             session_pid: ::candid::Principal,
         ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            ::icu::ops::delegation::DelegationRegistry::track(msg_caller(), session_pid)
+            $crate::ops::delegation::DelegationRegistry::track(msg_caller(), session_pid)
         }
 
         #[::icu::cdk::update]
@@ -193,8 +193,8 @@ macro_rules! icu_endpoints_delegation {
 
             let wallet = msg_caller();
 
-            ::icu::ops::delegation::DelegationRegistry::register_session(wallet, args.clone())?;
-            ::icu::ops::delegation::DelegationRegistry::get_view(args.session_pid)
+            $crate::ops::delegation::DelegationRegistry::register_session(wallet, args.clone())?;
+            $crate::ops::delegation::DelegationRegistry::get_view(args.session_pid)
         }
 
         #[::icu::cdk::update]
@@ -206,7 +206,7 @@ macro_rules! icu_endpoints_delegation {
             let expected = pid;
             $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
 
-            ::icu::ops::delegation::DelegationRegistry::revoke(pid)
+            $crate::ops::delegation::DelegationRegistry::revoke(pid)
         }
 
         // List all delegation sessions (admin only)
@@ -215,7 +215,7 @@ macro_rules! icu_endpoints_delegation {
         -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            Ok(::icu::ops::delegation::DelegationRegistry::list_all_sessions())
+            Ok($crate::ops::delegation::DelegationRegistry::list_all_sessions())
         }
 
         // List sessions by wallet (admin only)
@@ -225,7 +225,7 @@ macro_rules! icu_endpoints_delegation {
         ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            Ok(::icu::ops::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
+            Ok($crate::ops::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
         }
     };
 }

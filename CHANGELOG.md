@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.8.1] - 2025-09-16
+- fixed the broken candid/serde deps
+- fixed the broken delegation macro code
+- renamed the crates to what they actually are/do (blank, sharder, delegation)
+
 ## [0.8.0] - Delegation Layering Overhaul
 - Changed: Rebuilt `state::delegation` as pure in-memory registries (`cache.rs`,
 `registry.rs`) with focused unit tests.
