@@ -159,6 +159,7 @@ pub(super) fn register_created(
 /// Update SubnetRegistry entry from Pending → Installed,
 /// then update SubnetDirectory + cascade if needed.
 ///
+
 pub(super) async fn register_installed(
     canister_type: &CanisterType,
     canister_pid: Principal,

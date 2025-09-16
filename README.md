@@ -63,7 +63,7 @@ Endpoints (provided by `icu_endpoints!` and enabled when delegation is turned on
 
 - 📥 `icu_delegation_register(args)` (update): register a session for the caller wallet.
 - 👣 `icu_delegation_track(session_pid)` (update): record the calling canister as a requester.
-- 🔎 `icu_delegation_get(session_pid)` (query): fetch session view (includes `is_expired`).
+- 🔎 `icu_delegation_get(session_pid)` (query): fetch session view (`expires_at` can be compared to the current time to determine expiry).
 - 🧹 Cleanup: expired sessions are pruned automatically during registrations (every 1000 calls). There is no public cleanup endpoint.
 - 📜 `icu_delegation_list_all()` (query): list all sessions. Auth: controller only.
 - 🧭 `icu_delegation_list_by_wallet(wallet_pid)` (query): list sessions for a wallet. Auth: controller only.
@@ -89,10 +89,13 @@ Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is 
 - Use `CanisterShardRegistry::register(pid, capacity)` to add/resize shards.
 - Assign items automatically with `icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item, policy, parents, None)`.
 
-Lifecycle/admin endpoints (controller only; when sharder is enabled for the canister):
-- `icu_shard_drain(pool, shard_pid, max_moves)` – migrate up to N items off a shard; creates a receiver if needed.
-- `icu_shard_rebalance(pool, max_moves)` – move items from most‑loaded to least‑loaded shards; does not create new shards.
-- `icu_shard_decommission(shard_pid)` – remove an empty shard from the registry.
+Admin endpoints (controller only; when sharder is enabled): use a single command endpoint
+`icu_shard_admin(cmd: icu::ops::shard::AdminCommand) -> icu::ops::shard::AdminResult` where `AdminCommand` can be:
+- `Register { pid, pool, capacity }`
+- `Audit`
+- `Drain { pool, shard_pid, max_moves }`
+- `Rebalance { pool, max_moves }`
+- `Decommission { shard_pid }`
 
 Note: These operations update the assignment registry only. They do not move
 application data/state between shards. Your application should orchestrate data
@@ -174,3 +177,6 @@ Proprietary and Confidential. All rights reserved. See `LICENSE`.
 - Purpose: Protocol and spec types for IC/ICRC/SNS.
 - Scope: Candid-friendly data structures only; no business logic.
 - Stability: Aim to keep types stable; document breaking changes in the changelog.
+Queries (controller only):
+- `icu_shard_registry() -> Result<CanisterShardRegistryView, IcuError>`
+- `icu_shard_lookup(item, pool) -> Result<Option<Principal>, IcuError>`

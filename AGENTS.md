@@ -1,42 +1,152 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-- Workspace: Rust workspace in `Cargo.toml`; shared version/lints.
-- Crates: `crates/icu` (core library, benches), `crates/canisters/{root,example,game,instance,player_hub}` (IC canisters).
-- CI/CD: If present, GitHub Actions live in `.github/workflows/` for CI and tagged releases.
-- Scripts: Versioning and checks in `scripts/app/`; env helpers in `scripts/env/`.
-- Artifacts: Build output in `target/` (ignored).
+This guide describes how **agents** (contributors, CI, maintainers) should interact with the codebase.
+It expands on `README.md` with **workflow rules**, **layering conventions**, and **coding guidelines**.
 
-## Build, Test, and Development Commands
-- `make test`: Run all tests (`cargo test --workspace`).
-- `make build`: Release build for all crates.
-- `make check`: Type-check without building.
-- `make clippy`: Lint; warnings are denied.
-- `make fmt` / `make fmt-check`: Format or verify formatting.
-- Versioning: `make version`, `make tags`, `make patch|minor|major`, `make release`.
-- Utilities: `make examples`, `make install-canister-deps`, `make plan`.
+---
 
-## Coding Style & Naming Conventions
-- Language: Rust 2024 edition; keep code idiomatic and minimal.
-- Formatting: `rustfmt` via `cargo fmt --all` before committing.
-- Linting: `cargo clippy --workspace -- -D warnings`; follow workspace lints in `Cargo.toml`.
-- Naming: snake_case for files/functions/modules; PascalCase for types/traits; constants in SCREAMING_SNAKE_CASE.
-- Organization: Prefer small modules under `crates/icu/src/`; document APIs.
- - Formatting macros: prefer captured identifiers in the format string (e.g., `"{var}"`) over trailing single args (e.g., `"{}", var`). Be consistent: either capture all or pass all as arguments—do not mix styles within the same call.
- - Non-identifier expressions: bind to a local before capture or use positional formatting (e.g., `"{}: {}"`). Apply this rule to `format!`, `println!`, `eprintln!`, `panic!`, `log!`, and similar macros.
+## 📑 Table of Contents
+1. [Workflow](#-workflow)
+2. [Project Structure](#-project-structure)
+3. [Module Layering](#-module-layering)
+4. [Coding Style](#-coding-style)
+5. [Testing](#-testing)
+6. [Security & Auth](#-security--auth)
+7. [Design Principles](#-design-principles)
+8. [Checklist](#-agent-checklist)
 
-## Testing Guidelines
-- Framework: `cargo test`; Criterion benches in `crates/icu/benches/`.
-- Placement: Co-locate unit tests with modules; use `tests/` for integration when needed.
-- Naming: Snake_case test names (e.g., `handles_error_case`).
-- Local run: Ensure `make test`, `make clippy`, and `make fmt-check` pass before PR.
+---
 
-## Commit & Pull Request Guidelines
-- Commits: Short, imperative subject (e.g., "Add ledger helpers"); group related changes. Version bumps are handled by scripts.
-- PRs: Clear description, link issues, list changes; call out breaking changes. Update `CHANGELOG.md` under `[Unreleased]` for user-facing changes.
-- CI: PRs must pass tests, clippy, and formatting checks.
+## 🚀 Workflow
 
-## Security & Configuration Tips
-- Tags are immutable; never modify historical tagged code. Bump via `scripts/app/version.sh`.
-- Prefer pinned git tags for consumers (see `INTEGRATION.md`).
-- Inspect tags with `git tag --sort=-version:refname` and verify integrity as part of your release process.
+### Core Commands
+- **Format**: `cargo fmt --all` (must run before commit/PR).
+- **Lint**: `make clippy` (`cargo clippy --workspace -- -D warnings`).
+- **Test**: `make test` (`cargo test --workspace`).
+- **Build**: `make build` for release builds.
+- **Check**: `make check` for type-check only.
+
+✅ PRs must pass `make fmt-check`, `make clippy`, and `make test`.
+
+### Versioning & Release
+- Scripts in `scripts/app/` handle bumps and tags.
+- Use `make patch|minor|major` → `make release`.
+- Tags are immutable. Never alter historical tags.
+
+---
+
+## 📦 Project Structure
+
+```
+crates/
+├─ icu/                 # Core library (shared)
+└─ canisters/           # Internet Computer canisters
+   ├─ root/
+   ├─ example/
+   ├─ game/
+   ├─ instance/
+   └─ player_hub/
+scripts/                # Build, versioning, env helpers
+.github/workflows/      # CI/CD pipelines
+target/                 # Build output (ignored)
+```
+
+
+---
+
+## 🧩 Module Layering
+
+We separate responsibilities into **three main layers**:
+
+### `memory/`
+- Stable storage across canister upgrades.
+- Wraps IC stable memory (`BTreeMap`).
+- Example: `memory/shard.rs` (persistent shard registry).
+
+### `state/`
+- Volatile in-memory state (cleared on upgrade).
+- Caches, delegation sessions, authentication.
+- Example: `state/delegation.rs` (ephemeral delegation sessions).
+
+### `ops/`
+- Business logic layer above `memory/` and `state/`.
+- Responsible for:
+  - Applying pool/shard policies.
+  - Creating new canisters via management API.
+  - Logging, cleanup cadence, authorization.
+- Example: `ops/shard.rs` orchestrates shard lifecycle.
+
+### `endpoints/`
+- Public IC endpoints defined via macros (`icu_endpoints_*`).
+- Must call **`ops/` only**, never touch `memory/` or `state/` directly.
+- Admin operations are grouped into a single update call per domain (e.g., `shard_admin`, `delegation_admin`).
+
+---
+
+## 🛠️ Coding Style
+
+- **Edition**: Rust 2024.
+- **Naming**:
+  - `snake_case` for modules/functions.
+  - `PascalCase` for types/traits.
+  - `SCREAMING_SNAKE_CASE` for constants.
+- **Formatting**:
+  - Run `cargo fmt --all` before commit.
+  - Formatting macros (format!/println!/eprintln!/panic!/log!/etc.):
+    - Prefer captured identifiers inside the format string over trailing single args.
+      ```rust
+      // Preferred
+      log!(Log::Info, "cleaned up sessions, before: {before}, after: {after}");
+      // Avoid mixing styles in the same call
+      ```
+    - For non-identifier expressions, bind to a local first or use positional formatting.
+      ```rust
+      let count = items.len();
+      log!(Log::Info, "moved {count} items");
+      // or
+      log!(Log::Info, "moved {} items", items.len());
+      ```
+- **Linting**: `cargo clippy --workspace -- -D warnings`.
+
+---
+
+## 🧪 Testing
+
+- Unit tests live with modules (`#[cfg(test)]`).
+- Integration tests in `tests/` when cross-crate.
+- Dummy principals for stability:
+  ```rust
+  fn p(id: u8) -> Principal {
+      Principal::from_slice(&[id; 29])
+  }
+  ```
+ - Test names: snake_case (e.g., `assign_and_get_tenant`, `expired_session_cleanup`).
+- Ensure `make test` passes before PR.
+
+---
+
+## 🧭 Design Principles
+
+- Separation of concerns
+  - `memory/` → stable storage
+  - `state/` → volatile runtime state
+  - `ops/` → orchestration, policy, logging
+  - `endpoints/` → IC boundary
+- Predictable lifecycles
+  - Shards: register → assign → rebalance → drain → decommission
+  - Delegation: register → track → revoke → cleanup
+- Minimal public APIs
+  - `memory/` and `state/` expose only essentials
+  - `ops/` is the sole entrypoint for canister endpoints
+
+---
+
+## ✅ Agent Checklist
+
+Before merging:
+- Run `make fmt-check`
+- Run `make clippy`
+- Run `make test`
+- Update `CHANGELOG.md` if user‑facing
+- Group admin endpoints under a single `*_admin` update call
+- Respect layering: endpoints → ops → state/memory

@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "canister_example"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "canister_game"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "canister_instance"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "canister_player_hub"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.7.17"
+version = "0.7.18"
 dependencies = [
  "candid",
  "criterion",
@@ -785,9 +785,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "indexmap"
-version = "2.11.1"
+version = "2.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "206a8042aec68fa4a62e8d3f7aa4ceb508177d9324faf261e1959e495b7a1921"
+checksum = "92119844f513ffa41556430369ab02c295a3578af21cf945caa3e9e0c2481ac3"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -905,9 +905,9 @@ dependencies = [
 
 [[package]]
 name = "minicbor-serde"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bbf243b8cc68a7a76473b14328d3546fb002ae3d069227794520e9181003de9"
+checksum = "546cc904f35809921fa57016a84c97e68d9d27c012e87b9dadc28c233705f783"
 dependencies = [
  "minicbor 2.1.1",
  "serde",

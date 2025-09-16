@@ -175,14 +175,14 @@ macro_rules! icu_endpoints_delegation {
         async fn icu_delegation_get(
             session_pid: ::candid::Principal,
         ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            $crate::state::delegation::DelegationRegistry::get(session_pid)
+            ::icu::ops::delegation::DelegationRegistry::get_view(session_pid)
         }
 
         #[::icu::cdk::update]
         async fn icu_delegation_track(
             session_pid: ::candid::Principal,
         ) -> Result<::icu::state::delegation::DelegationSessionView, ::icu::Error> {
-            $crate::state::delegation::DelegationRegistry::track(msg_caller(), session_pid)
+            ::icu::ops::delegation::DelegationRegistry::track(msg_caller(), session_pid)
         }
 
         #[::icu::cdk::update]
@@ -193,21 +193,8 @@ macro_rules! icu_endpoints_delegation {
 
             let wallet = msg_caller();
 
-            // Register the session - trap on failure
-            if let Err(e) = $crate::state::delegation::DelegationRegistry::register_session(
-                wallet,
-                args.clone(),
-            ) {
-                ic_cdk::trap(&format!("Failed to register session: {:?}", e));
-            }
-
-            // Return the delegation details directly
-            Ok(::icu::state::delegation::DelegationSessionView {
-                session_pid: args.session_pid,
-                wallet_pid: wallet,
-                expires_at: $crate::utils::time::now_secs() + args.duration_secs,
-                is_expired: false,
-            })
+            ::icu::ops::delegation::DelegationRegistry::register_session(wallet, args.clone())?;
+            ::icu::ops::delegation::DelegationRegistry::get_view(args.session_pid)
         }
 
         #[::icu::cdk::update]
@@ -219,7 +206,7 @@ macro_rules! icu_endpoints_delegation {
             let expected = pid;
             $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
 
-            $crate::state::delegation::DelegationRegistry::revoke_session_or_wallet(pid)
+            ::icu::ops::delegation::DelegationRegistry::revoke(pid)
         }
 
         // List all delegation sessions (admin only)
@@ -228,7 +215,7 @@ macro_rules! icu_endpoints_delegation {
         -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            Ok($crate::state::delegation::DelegationRegistry::list_all_sessions())
+            Ok(::icu::ops::delegation::DelegationRegistry::list_all_sessions())
         }
 
         // List sessions by wallet (admin only)
@@ -238,7 +225,7 @@ macro_rules! icu_endpoints_delegation {
         ) -> Result<Vec<::icu::state::delegation::DelegationSessionView>, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            Ok($crate::state::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
+            Ok(::icu::ops::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
         }
     };
 }
@@ -251,75 +238,31 @@ macro_rules! icu_endpoints_shard {
         // ICU SHARD ENDPOINTS
         //
 
+        // icu_shard_registry
         #[::icu::cdk::query]
-        fn icu_shard_registry() -> ::icu::memory::CanisterShardRegistryView {
-            $crate::memory::CanisterShardRegistry::export()
+        async fn icu_shard_registry() -> Result<::icu::memory::ShardRegistryView, ::icu::Error> {
+            Ok($crate::ops::shard::export_registry())
         }
 
+        // icu_shard_lookup
+        // can be called by any principal
         #[::icu::cdk::query]
-        fn icu_shard_lookup_pool(
-            item: ::candid::Principal,
+        async fn icu_shard_lookup(
             pool: String,
-        ) -> Option<::candid::Principal> {
-            let pool = ::icu::memory::PoolName(pool);
-            $crate::memory::CanisterShardRegistry::get_item_partition(&item, &pool)
+            tenant_pid: ::candid::Principal,
+        ) -> Result<Option<::candid::Principal>, ::icu::Error> {
+            Ok($crate::ops::shard::lookup_tenant(&pool, tenant_pid))
         }
 
+        // icu_shard_admin
+        // combined admin endpoint for shard lifecycle operations (controller only).
         #[::icu::cdk::update]
-        async fn icu_shard_register(
-            pid: ::candid::Principal,
-            pool: String,
-            capacity: u32,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-            $crate::memory::CanisterShardRegistry::register(
-                pid,
-                ::icu::memory::PoolName(pool),
-                capacity,
-            );
-
-            Ok(())
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_shard_audit() -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-            $crate::memory::CanisterShardRegistry::audit_and_fix_counts();
-
-            Ok(())
-        }
-
-        // Drain items from a shard (admin only). Optionally limited by max_moves.
-        #[::icu::cdk::update]
-        async fn icu_shard_drain(
-            pool: String,
-            shard_pid: ::candid::Principal,
-            max_moves: u32,
-        ) -> Result<u32, ::icu::Error> {
+        async fn icu_shard_admin(
+            cmd: ::icu::ops::shard::admin::AdminCommand,
+        ) -> Result<::icu::ops::shard::admin::AdminResult, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            let hub_type = ::icu::memory::CanisterState::get_type()
-                .ok_or_else(|| ::icu::Error::custom("unknown canister type"))?;
-
-            $crate::ops::shard::drain_shard(&hub_type, &pool, shard_pid, max_moves).await
-        }
-
-        // Rebalance a pool across existing shards (admin only).
-        #[::icu::cdk::update]
-        async fn icu_shard_rebalance(pool: String, max_moves: u32) -> Result<u32, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-
-            $crate::ops::shard::rebalance_pool(&pool, max_moves)
-        }
-
-        // Decommission an empty shard (admin only).
-        #[::icu::cdk::update]
-        async fn icu_shard_decommission(
-            shard_pid: ::candid::Principal,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-
-            $crate::ops::shard::decommission_shard(shard_pid)
+            $crate::ops::shard::admin::admin_command(cmd).await
         }
     };
 }

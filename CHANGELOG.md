@@ -5,26 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-- Added: Shard lifecycle controls
-  - Ops: `drain_shard`, `rebalance_pool` (non‑oscillating), `decommission_shard`.
-  - Endpoints (controller‑only): `icu_shard_drain`, `icu_shard_rebalance`, `icu_shard_decommission`.
-  - Registry helpers: list items per shard, exclude‑assign, remove empty shard.
-  - Example: `shard_lifecycle` demonstrates rebalance, drain, decommission.
-- Changed: Sharding code cleanup
-  - Centralized pool spec lookup via shared helper.
-  - `ShardEntry` exposes `has_capacity` and `load_bps`; callers reuse instead of duplicating math.
-  - Rebalance stops when donor load ≤ receiver load to avoid oscillation.
-- Docs: Clarify that lifecycle ops update only the assignment registry; application data migration is separate.
-- Changed: Shard helpers now take explicit pool names (strings) to avoid ambiguity when multiple pools share the same child `CanisterType`.
-  - `assign_in_pool(hub_type, pool_name, item)`
-  - `plan_pool(hub_type, pool_name, item)`
-  - `ensure_item_assignment_for_pool(hub_type, pool_name, item)`
-  - New convenience wrappers for hubs: `assign_for_self(pool_name, item)` and `plan_for_self(pool_name, item)`.
-- DX: Pre-commit hook auto-formats (`cargo fmt`) and sorts (`cargo sort`, `cargo sort-derives`), then stages changes.
-- CI: Add workflow `permissions` and `concurrency`; use `make fmt-check` and `make clippy` for consistency.
-- Makefile: `install-dev` installs `cargo-sort` and `cargo-sort-derives` to support hooks locally.
-- Scripts: Fix `scripts/app/version.sh` usage to remove non-implemented `release` subcommand.
+## [0.8.0] - Delegation Layering Overhaul
+- Changed: Rebuilt `state::delegation` as pure in-memory registries (`cache.rs`,
+`registry.rs`) with focused unit tests.
+- Added: `ops::delegation::DelegationRegistry` now owns session policy, cleanup cadence,
+requester tracking, and exposes view/list helpers.
+- Changed: Delegation endpoints route through the ops layer, returning proper `Result<…>` and logging policy decisions.
+- Added: `DelegationRegistry::track` deduplicates requesting canisters and records them
+with audit logs; new coverage test ensures idempotency.
+- Docs: README notes the leaner `DelegationSessionView` (caller infers expiry from
+`expires_at`).
 
 ## [0.7.3] - Partition Registry v2
 - now you can configure multiple pools each with a different CanisterType

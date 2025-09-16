@@ -1,7 +1,7 @@
 use crate::{
     Error,
     config::Config,
-    memory::CanisterDirectory,
+    memory::CanisterRegistry,
     ops::{prelude::*, request::create_canister_request},
 };
 
@@ -21,16 +21,14 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    let export = CanisterDirectory::export();
-    for (ty, entry) in export.entries {
-        let canisters = entry
-            .canisters
-            .iter()
-            .map(Principal::to_text)
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        log!(Log::Info, "🥫 {ty}: {canisters}");
+    for (pid, entry) in CanisterRegistry::export() {
+        log!(
+            Log::Info,
+            "🥫 {} ({}) [{}]",
+            entry.canister_type,
+            pid,
+            entry.status,
+        );
     }
 
     Ok(())

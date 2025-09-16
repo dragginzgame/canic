@@ -16,6 +16,7 @@
 //! - An Installed canister remains Installed (idempotent guard on `install`).
 //! - Every PID in the registry has an associated `CanisterType`.
 //!
+
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
@@ -25,6 +26,7 @@ use crate::{
     utils::time::now_secs,
 };
 use candid::{CandidType, Principal};
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -45,7 +47,7 @@ thread_local! {
 /// CanisterStatus
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 pub enum CanisterStatus {
     Created,
     Installed,

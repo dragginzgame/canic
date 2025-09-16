@@ -1,4 +1,5 @@
 pub mod canister;
+pub mod delegation;
 pub mod pool;
 pub mod request;
 pub mod response;
@@ -22,7 +23,6 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::interface::InterfaceError;
 use thiserror::Error as ThisError;
 
 ///
@@ -35,8 +35,11 @@ pub enum OpsError {
     NotRoot,
 
     #[error(transparent)]
-    InterfaceError(#[from] InterfaceError),
+    DelegationError(#[from] delegation::DelegationError),
 
     #[error(transparent)]
     RequestError(#[from] request::RequestError),
+
+    #[error(transparent)]
+    ShardError(#[from] shard::ShardError),
 }
