@@ -8,16 +8,25 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
-/// Errors encountered while validating or querying configuration data.
+///
+/// ConfigDataError
+///
+
 #[derive(Debug, ThisError)]
 pub enum ConfigDataError {
-    /// A principal string in the whitelist is invalid.
     #[error("invalid principal: {0} ({1})")]
     InvalidPrincipal(String, usize),
 
-    /// A referenced canister type does not exist in the configuration.
     #[error("canister not found: {0}")]
     CanisterNotFound(CanisterType),
+}
+
+mod defaults {
+    use super::Cycles;
+
+    pub const fn initial_cycles() -> Cycles {
+        Cycles::new(5_000_000_000_000)
+    }
 }
 
 ///
@@ -101,7 +110,7 @@ impl ConfigData {
 /// Canister
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canister {
     #[serde(default)]
@@ -110,7 +119,10 @@ pub struct Canister {
     #[serde(default)]
     pub delegation: bool,
 
-    #[serde(default, deserialize_with = "Cycles::from_config")]
+    #[serde(
+        default = "defaults::initial_cycles",
+        deserialize_with = "Cycles::from_config"
+    )]
     pub initial_cycles: Cycles,
 
     #[serde(default)]
@@ -121,19 +133,6 @@ pub struct Canister {
 
     #[serde(default)]
     pub sharder: Option<SharderConfig>,
-}
-
-impl Default for Canister {
-    fn default() -> Self {
-        Self {
-            auto_create: None,
-            delegation: false,
-            initial_cycles: 5_000_000_000_000.into(),
-            topup: None,
-            uses_directory: false,
-            sharder: None,
-        }
-    }
 }
 
 ///
