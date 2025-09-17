@@ -128,7 +128,7 @@ impl Default for Canister {
         Self {
             auto_create: None,
             delegation: false,
-            initial_cycles: 5_000_000_000.into(),
+            initial_cycles: 5_000_000_000_000.into(),
             topup: None,
             uses_directory: false,
             sharder: None,
