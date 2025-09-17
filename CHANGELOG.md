@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.8.6] - 2025-09-17
+- added icu_config endpoint for controllers
+
 ## [0.8.4] - 2025-09-17
 - made initial_cycles default to 5T
 

@@ -86,6 +86,14 @@ impl Config {
         })
     }
 
+    /// Return the current config as a TOML string.
+    pub fn to_toml() -> Result<String, Error> {
+        let cfg = Self::try_get()?;
+
+        toml::to_string_pretty(&*cfg)
+            .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())
+    }
+
     // try_get_canister
     // helper function as its used everywhere
     pub fn try_get_canister(ty: &CanisterType) -> Result<Canister, Error> {

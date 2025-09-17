@@ -4,7 +4,7 @@ use crate::{
     types::{CanisterType, Cycles, TC},
 };
 use candid::Principal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
@@ -24,7 +24,7 @@ pub enum ConfigDataError {
 /// ConfigData
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigData {
     #[serde(default)]
@@ -101,7 +101,7 @@ impl ConfigData {
 /// Canister
 ///
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canister {
     #[serde(default)]
@@ -142,7 +142,7 @@ impl Default for Canister {
 /// auto_topup : default to false
 ///
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterTopup {
     #[serde(deserialize_with = "Cycles::from_config")]
@@ -166,7 +166,7 @@ impl Default for CanisterTopup {
 /// defaults to a minimum size of 0
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CanisterPool {
     pub minimum_size: u8,
 }
@@ -175,7 +175,7 @@ pub struct CanisterPool {
 /// Whitelist
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WhiteList {
     // principals
@@ -189,7 +189,7 @@ pub struct WhiteList {
 /// Standards
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Standards {
     #[serde(default)]
@@ -201,7 +201,7 @@ pub struct Standards {
 /// Contains named pools, each with a child canister type and policy.
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SharderConfig {
     #[serde(default)]
@@ -212,7 +212,7 @@ pub struct SharderConfig {
 /// SharderPoolSpec
 ///
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SharderPoolSpec {
     pub canister_type: CanisterType,
@@ -224,7 +224,7 @@ pub struct SharderPoolSpec {
 /// SharderPoolPolicy
 ///
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct SharderPoolPolicy {
     pub initial_capacity: u32,
