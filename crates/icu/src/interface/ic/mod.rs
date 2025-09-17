@@ -37,12 +37,12 @@ pub fn canister_cycle_balance() -> Cycles {
 }
 
 // deposit_cycles
-pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(), Error> {
+pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
     let args = DepositCyclesArgs {
         canister_id: canister_pid,
     };
 
-    mgmt::deposit_cycles(&args, cycles.as_u128()).await?;
+    mgmt::deposit_cycles(&args, cycles).await?;
 
     Ok(())
 }
@@ -51,11 +51,7 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: Cycles) -> Result<(
 // (an update call, don't use for local balances)
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
-
-    let cycles = status
-        .cycles
-        .try_into()
-        .map_err(|_| InterfaceError::CyclesOverflow)?;
+    let cycles: Cycles = status.cycles.into();
 
     Ok(cycles)
 }

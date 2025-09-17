@@ -11,7 +11,7 @@ use crate::{
 /// Constants
 ///
 
-const POOL_CANISTER_CYCLES: Cycles = Cycles::new(5 * TC);
+const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 
 ///
 /// create_pool_canister
@@ -22,14 +22,12 @@ pub async fn create_pool_canister() -> Result<Principal, Error> {
         Err(OpsError::NotRoot)?;
     }
 
-    let canister_pid = create_canister(POOL_CANISTER_CYCLES).await?;
+    let cycles = Cycles::new(POOL_CANISTER_CYCLES);
+    let canister_pid = create_canister(cycles.clone()).await?;
 
-    log!(
-        Log::Ok,
-        "💧 create_pool: {canister_pid} ({POOL_CANISTER_CYCLES})",
-    );
+    log!(Log::Ok, "💧 create_pool: {canister_pid} ({cycles})",);
 
-    CanisterPool::register(canister_pid, POOL_CANISTER_CYCLES);
+    CanisterPool::register(canister_pid, cycles);
 
     Ok(canister_pid)
 }
@@ -54,7 +52,7 @@ pub async fn move_canister_to_pool(canister_pid: Principal) -> Result<(), Error>
 
     // register to Pool
     let cycles = get_cycles(canister_pid).await?;
-    CanisterPool::register(canister_pid, cycles);
+    CanisterPool::register(canister_pid, cycles.clone());
 
     log!(
         Log::Ok,

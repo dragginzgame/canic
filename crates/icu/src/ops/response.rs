@@ -46,7 +46,7 @@ pub struct UpgradeCanisterResponse {}
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesResponse {
-    pub cycles_transferred: Cycles,
+    pub cycles_transferred: u128,
 }
 
 // response

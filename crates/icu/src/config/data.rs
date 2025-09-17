@@ -23,8 +23,7 @@ pub enum ConfigDataError {
 
 mod defaults {
     use super::Cycles;
-
-    pub const fn initial_cycles() -> Cycles {
+    pub fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
     }
 }

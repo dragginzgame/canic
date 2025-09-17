@@ -28,7 +28,7 @@ async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Err
     // fallback: fresh canister
     let canister = Config::try_get_canister(ty)?;
     let cycles = canister.initial_cycles;
-    let pid = create_canister(cycles).await?;
+    let pid = create_canister(cycles.clone()).await?;
 
     Ok((pid, cycles))
 }

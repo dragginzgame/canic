@@ -62,7 +62,7 @@ pub struct UpgradeCanisterRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
-    pub cycles: Cycles,
+    pub cycles: u128,
 }
 
 ///
@@ -137,7 +137,7 @@ pub async fn upgrade_canister_request(
 }
 
 // cycles_request
-pub async fn cycles_request(cycles: Cycles) -> Result<CyclesResponse, Error> {
+pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
 
     if CanisterState::is_root() {

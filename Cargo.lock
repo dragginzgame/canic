@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "canister_delegation"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "canister_sharder"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "candid",
  "criterion",
@@ -768,6 +768,7 @@ dependencies = [
  "ic-stable-structures 0.7.0",
  "icrc-ledger-types",
  "minicbor-serde",
+ "num-traits",
  "remain",
  "serde",
  "serde_bytes",

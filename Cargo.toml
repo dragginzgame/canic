@@ -37,6 +37,7 @@ icu = { path = "crates/icu" }
 # third party
 minicbor-serde = { version = "0.6", features = ["alloc"] }
 remain = "0.2"
+num-traits = "0.2"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 sha2 = "0.10"

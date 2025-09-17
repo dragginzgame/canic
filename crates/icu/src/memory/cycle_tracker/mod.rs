@@ -81,7 +81,7 @@ impl CycleTracker {
     #[must_use]
     pub fn track() -> bool {
         let ts = now_secs();
-        let cycles = canister_cycle_balance().as_u128();
+        let cycles = canister_cycle_balance().to_u128();
 
         Self::check_auto_topup();
 
@@ -100,7 +100,7 @@ impl CycleTracker {
             if cycles < topup.threshold {
                 // fire and forget
                 spawn(async move {
-                    match cycles_request(topup.amount).await {
+                    match cycles_request(topup.amount.to_u128()).await {
                         Ok(res) => log!(
                             Log::Ok,
                             "💫 requested {}, topped up by {}, now {}",
