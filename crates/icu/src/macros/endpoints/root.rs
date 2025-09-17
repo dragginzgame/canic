@@ -81,5 +81,16 @@ macro_rules! icu_endpoints_root {
         fn icu_canister_registry() -> ::icu::memory::CanisterRegistryView {
             $crate::memory::CanisterRegistry::export()
         }
+
+        //
+        // STATE ENDPOINTS
+        //
+
+        #[::icu::cdk::query]
+        async fn icu_config() -> Result<String, ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
+            $crate::config::Config::to_toml()
+        }
     };
 }

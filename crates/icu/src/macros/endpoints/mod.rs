@@ -105,17 +105,6 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU CONFIG ENDPOINTS
-        //
-
-        #[::icu::cdk::query]
-        async fn icu_config() -> Result<String, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-
-            $crate::config::Config::to_toml()
-        }
-
-        //
         // ICTS ENDPOINTS
         //
 

@@ -1,3 +1,4 @@
+use crate::utils::cbor::u128_as_str;
 use candid::{CandidType, Nat};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use serde::{Deserialize, Serialize};
@@ -38,7 +39,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
     Sub,
     Hash,
 )]
-pub struct Cycles(u128);
+pub struct Cycles(#[serde(with = "u128_as_str")] u128);
 
 impl Cycles {
     #[must_use]
