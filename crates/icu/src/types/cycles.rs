@@ -1,8 +1,11 @@
 use candid::{CandidType, Nat};
-use derive_more::{Add, AddAssign, Display, Sub, SubAssign};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 ///
 /// Constants
@@ -26,7 +29,6 @@ pub const QC: u128 = 1_000_000_000_000_000;
     Default,
     Debug,
     Deserialize,
-    Display,
     PartialEq,
     Eq,
     Hash,
@@ -66,6 +68,14 @@ impl Cycles {
             Helper::Str(s) => s.parse::<Self>().map_err(serde::de::Error::custom),
             Helper::Num(n) => Ok(Self::new(n)),
         }
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+impl Display for Cycles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // default format in TeraCycles
+        write!(f, "{:.3} TC", self.to_u128() as f64 / 1_000_000_000_000f64)
     }
 }
 
