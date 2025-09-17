@@ -101,17 +101,19 @@ impl ConfigData {
 /// Canister
 ///
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canister {
+    #[serde(default)]
     pub auto_create: Option<u16>,
 
     #[serde(default)]
     pub delegation: bool,
 
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(default, deserialize_with = "Cycles::from_config")]
     pub initial_cycles: Cycles,
 
+    #[serde(default)]
     pub topup: Option<CanisterTopup>,
 
     #[serde(default)]
@@ -119,6 +121,19 @@ pub struct Canister {
 
     #[serde(default)]
     pub sharder: Option<SharderConfig>,
+}
+
+impl Default for Canister {
+    fn default() -> Self {
+        Self {
+            auto_create: None,
+            delegation: false,
+            initial_cycles: 5_000_000_000.into(),
+            topup: None,
+            uses_directory: false,
+            sharder: None,
+        }
+    }
 }
 
 ///

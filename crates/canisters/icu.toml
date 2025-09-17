@@ -22,7 +22,6 @@ topup.amount = "5T"
 auto_create = 1
 uses_directory = true
 delegation = true
-initial_cycles = "5T"
 topup.amount = "5T"
 topup.threshold = "10T"
 
@@ -32,7 +31,6 @@ topup.threshold = "10T"
 # ----------------------------------
 [canisters.sharder]
 auto_create = 1
-initial_cycles = "6T"
 uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
