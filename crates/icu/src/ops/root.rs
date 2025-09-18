@@ -1,8 +1,11 @@
 use crate::{
     Error,
     config::Config,
-    memory::CanisterRegistry,
-    ops::{prelude::*, request::create_canister_request},
+    memory::SubnetRegistry,
+    ops::{
+        prelude::*,
+        request::{CreateCanisterParent, create_canister_request},
+    },
 };
 
 // root_create_canisters
@@ -11,23 +14,19 @@ pub async fn root_create_canisters() -> Result<(), Error> {
 
     // Top-up pass
     for (ty, canister) in &cfg.canisters {
-        let Some(auto_create) = canister.auto_create else {
-            continue;
+        if canister.auto_create {
+            create_canister_request::<()>(ty, CreateCanisterParent::Root, None).await?;
         };
-
-        for _ in 0..auto_create {
-            create_canister_request::<()>(ty, None).await?;
-        }
     }
 
     // Report pass
-    for (pid, entry) in CanisterRegistry::export() {
+    for (pid, canister) in SubnetRegistry::export() {
         log!(
             Log::Info,
             "🥫 {} ({}) [{}]",
-            entry.canister_type,
+            canister.ty,
             pid,
-            entry.status,
+            canister.status
         );
     }
 

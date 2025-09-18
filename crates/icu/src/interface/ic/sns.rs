@@ -18,7 +18,6 @@ pub async fn list_sns_neurons_for_principal(
 
     loop {
         let page = list_sns_neurons_for_principal_page(sns, owner, PAGE_SIZE, last.clone()).await?;
-
         if page.neurons.is_empty() {
             break;
         }

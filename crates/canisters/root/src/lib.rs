@@ -4,7 +4,8 @@ use candid::Principal;
 use icu::{
     Error, canister,
     ops::{
-        request::create_canister_request, response::CreateCanisterResponse,
+        request::{CreateCanisterParent, create_canister_request},
+        response::CreateCanisterResponse,
         root::root_create_canisters,
     },
     prelude::*,
@@ -63,7 +64,7 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&canister::BLANK, None).await
+    create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::Caller, None).await
 }
 
 // end

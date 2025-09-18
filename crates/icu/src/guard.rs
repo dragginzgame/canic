@@ -1,6 +1,6 @@
 use crate::{
     cdk::api::{is_controller, msg_caller},
-    memory::{AppState, app_state::AppMode},
+    memory::{AppState, app::AppMode},
 };
 use thiserror::Error as ThisError;
 

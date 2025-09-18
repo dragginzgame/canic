@@ -6,7 +6,7 @@
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
-    memory::{CanisterChildren, CanisterDirectory, CanisterRegistry, CanisterState},
+    memory::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
     types::CanisterType,
 };
 use candid::Principal;
@@ -164,7 +164,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match CanisterRegistry::get(caller) {
+        match SubnetRegistry::get(caller) {
             Some(_) => Ok(()),
             None => Err(AuthError::NotApp(caller))?,
         }
@@ -176,7 +176,7 @@ pub fn is_app(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_canister_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        CanisterDirectory::try_get(&ty)
+        SubnetDirectory::try_get(&ty)
             .map_err(|_| AuthError::NotCanisterType(caller, ty.clone()))?;
 
         Ok(())
@@ -187,7 +187,7 @@ pub fn is_canister_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        CanisterChildren::get(&caller).ok_or(AuthError::NotChild(caller))?;
+        SubnetChildren::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -209,7 +209,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = CanisterState::get_root_pid();
+        let root_pid = SubnetDirectory::try_get_root()?;
 
         if caller == root_pid {
             Ok(())
@@ -223,7 +223,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        if CanisterState::has_parent_pid(&caller) {
+        if SubnetParents::find_by_pid(&caller).is_some() {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?

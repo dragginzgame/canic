@@ -6,13 +6,16 @@ mod canister_demo {
     use icu::{
         IcuError,
         canister::BLANK,
-        ops::{request::create_canister_request, response::CreateCanisterResponse},
+        ops::{
+            request::{CreateCanisterParent, create_canister_request},
+            response::CreateCanisterResponse,
+        },
     };
 
     // Not a full canister; demonstrates the call site.
     #[allow(dead_code)]
     async fn create_example_canister() -> Result<CreateCanisterResponse, IcuError> {
-        create_canister_request::<()>(&BLANK, None).await
+        create_canister_request::<()>(&BLANK, CreateCanisterParent::Root, None).await
     }
 }
 

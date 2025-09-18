@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static MEMORY_REGISTRY: RefCell<MemoryRegistryCore<VirtualMemory<DefaultMemoryImpl>>> =
+    static MEMORY_REGISTRY: RefCell<MemoryRegistryCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(MemoryRegistryCore::new(BTreeMap::init(
             MEMORY_MANAGER.with_borrow(|this| {
                 this.get(MemoryId::new(MEMORY_REGISTRY_MEMORY_ID))

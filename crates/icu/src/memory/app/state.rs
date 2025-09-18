@@ -15,7 +15,7 @@ use thiserror::Error as ThisError;
 //
 
 thread_local! {
-    pub static APP_STATE: RefCell<AppStateCore<VirtualMemory<DefaultMemoryImpl>>> =
+    static APP_STATE: RefCell<AppStateCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(AppStateCore::new(Cell::init(
             icu_register_memory!(APP_STATE_MEMORY_ID),
             AppStateData::default(),

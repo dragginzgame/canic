@@ -16,31 +16,6 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU ENDPOINTS
-        //
-
-        #[::icu::cdk::update]
-        async fn icu_state_update(
-            bundle: ::icu::ops::state::StateBundle,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_parent)?;
-
-            $crate::ops::state::save_state(&bundle);
-
-            Ok(())
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_state_cascade(
-            bundle: ::icu::ops::state::StateBundle,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_parent)?;
-
-            $crate::ops::state::save_state(&bundle);
-            $crate::ops::state::cascade(&bundle).await
-        }
-
-        //
         // ICRC ENDPOINTS
         //
 
@@ -85,23 +60,32 @@ macro_rules! icu_endpoints {
         }
 
         #[::icu::cdk::query]
-        fn icu_canister_children() -> ::icu::memory::CanisterChildrenView {
-            $crate::memory::CanisterChildren::export()
-        }
-
-        #[::icu::cdk::query]
         fn icu_canister_state() -> ::icu::memory::CanisterStateData {
             $crate::memory::CanisterState::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_canister_directory() -> ::icu::memory::CanisterDirectoryView {
-            $crate::memory::CanisterDirectory::current_view()
+        fn icu_cycle_tracker() -> ::icu::memory::CycleTrackerView {
+            $crate::memory::CycleTracker::export()
+        }
+
+        //
+        // ICU SUBNET VIEW
+        //
+
+        #[::icu::cdk::query]
+        fn icu_subnet_children() -> ::icu::memory::SubnetChildrenView {
+            $crate::memory::SubnetView::children()
         }
 
         #[::icu::cdk::query]
-        fn icu_cycle_tracker() -> ::icu::memory::CycleTrackerView {
-            $crate::memory::CycleTracker::export()
+        fn icu_subnet_directory() -> ::icu::memory::SubnetDirectoryView {
+            $crate::memory::SubnetView::directory()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_parents() -> ::icu::memory::SubnetParentsView {
+            $crate::memory::SubnetView::parents()
         }
 
         //
@@ -258,11 +242,11 @@ macro_rules! icu_endpoints_shard {
         // combined admin endpoint for shard lifecycle operations (controller only).
         #[::icu::cdk::update]
         async fn icu_shard_admin(
-            cmd: ::icu::ops::shard::admin::AdminCommand,
-        ) -> Result<::icu::ops::shard::admin::AdminResult, ::icu::Error> {
+            cmd: ::icu::ops::shard::AdminCommand,
+        ) -> Result<::icu::ops::shard::AdminResult, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            $crate::ops::shard::admin::admin_command(cmd).await
+            $crate::ops::shard::admin_command(cmd).await
         }
     };
 }

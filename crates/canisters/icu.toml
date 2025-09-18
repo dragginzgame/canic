@@ -9,7 +9,7 @@ minimum_size = 10
 # blank
 # ----------------------------------
 [canisters.blank]
-auto_create = 1
+auto_create = true
 initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"
@@ -19,7 +19,7 @@ topup.amount = "5T"
 # delegation
 # ----------------------------------
 [canisters.delegation]
-auto_create = 1
+auto_create = true
 uses_directory = true
 delegation = true
 topup.amount = "5T"
@@ -30,7 +30,7 @@ topup.threshold = "10T"
 # sharder
 # ----------------------------------
 [canisters.sharder]
-auto_create = 1
+auto_create = true
 uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"

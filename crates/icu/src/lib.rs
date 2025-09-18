@@ -28,6 +28,7 @@ pub mod export {
 }
 
 pub use Error as IcuError;
+pub use thiserror::Error as ThisError;
 
 ///
 /// Prelude
@@ -49,7 +50,6 @@ use crate::cdk::{
 };
 use serde::Deserialize;
 use std::time::Duration;
-use thiserror::Error as ThisError;
 
 ///
 /// Crate Version

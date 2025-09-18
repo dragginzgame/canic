@@ -3,7 +3,10 @@
 use icu::{
     Error,
     canister::BLANK,
-    ops::{request::create_canister_request, response::CreateCanisterResponse},
+    ops::{
+        request::{CreateCanisterParent, create_canister_request},
+        response::CreateCanisterResponse,
+    },
     prelude::*,
 };
 
@@ -17,10 +20,10 @@ const fn icu_setup() {}
 async fn icu_install(_: Option<Vec<u8>>) {}
 async fn icu_upgrade() {}
 
-// create_example
+// create_blank
 #[update]
-async fn create_example() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&BLANK, None).await
+async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+    create_canister_request::<()>(&BLANK, CreateCanisterParent::Caller, None).await
 }
 
 export_candid!();

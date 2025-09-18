@@ -15,14 +15,13 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // CANISTER_POOL
 //
 
 thread_local! {
-    pub static CANISTER_POOL: RefCell<CanisterPoolCore<VirtualMemory<DefaultMemoryImpl>>> =
+    static CANISTER_POOL: RefCell<CanisterPoolCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(CanisterPoolCore::new(BTreeMap::init(
             icu_register_memory!(CANISTER_POOL_MEMORY_ID),
         )));
@@ -31,13 +30,6 @@ thread_local! {
 }
 
 const POOL_CHECK_TIMER: u64 = 30 * 60; // 30 mins
-
-///
-/// CanisterPoolError
-///
-
-#[derive(Debug, ThisError)]
-pub enum CanisterPoolError {}
 
 ///
 /// CanisterPoolEntry
@@ -96,19 +88,15 @@ impl CanisterPool {
     }
 
     #[must_use]
-    pub fn check() -> bool {
+    pub fn check() -> u64 {
         let pool_size = CANISTER_POOL.with_borrow(CanisterPoolCore::len);
 
         if let Ok(canister) = Config::try_get() {
             let min_size = u64::from(canister.pool.minimum_size);
             if pool_size < min_size {
-                let mut missing = min_size - pool_size;
-
                 // Safety valve: never create more than 10 at once.
                 // This avoids a "thundering herd" if the pool is empty and min_size is large.
-                if missing > 10 {
-                    missing = 10;
-                }
+                let missing = (min_size - pool_size).min(10);
 
                 log!(
                     Log::Ok,
@@ -121,11 +109,11 @@ impl CanisterPool {
                     }
                 });
 
-                return true;
+                return missing;
             }
         }
 
-        false
+        0
     }
 
     pub fn register(pid: Principal, cycles: Cycles) {

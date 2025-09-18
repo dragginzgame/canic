@@ -52,7 +52,8 @@ macro_rules! icu_build_root {
         $crate::__icu_build_internal! {
             $file,
             |_cfg_str, _cfg_path, _cfg| {
-                // root build has no per-canister lookup
+                // Mark this build as the root canister
+                println!("cargo:rustc-cfg=icu_root");
             }
         }
     }};
@@ -78,11 +79,12 @@ macro_rules! __icu_build_internal {
             .expect("Invalid ICU config");
 
         // declare the cfg names
-        println!("cargo:rustc-check-cfg=cfg(icu_config)");
+        println!("cargo:rustc-check-cfg=cfg(icu)");  // marker
         println!("cargo:rustc-check-cfg=cfg(icu_capability_delegation)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_sharder)");
         println!("cargo:rustc-check-cfg=cfg(icu_github_ci)");
-        println!("cargo:rustc-cfg=icu_config");
+        println!("cargo:rustc-check-cfg=cfg(icu_root)");
+        println!("cargo:rustc-cfg=icu");
 
         // Auto-enable the cfg when running under GitHub Actions.
         if std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true") {

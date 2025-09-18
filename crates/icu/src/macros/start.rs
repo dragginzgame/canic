@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! __icu_load_config {
     () => {
-        #[cfg(icu_config)]
+        #[cfg(icu)]
         {
             let config_str = include_str!(env!("ICU_CONFIG_PATH"));
             $crate::expect_or_trap(
@@ -17,16 +17,11 @@ macro_rules! __icu_load_config {
 macro_rules! icu_start {
     ($canister_type:expr) => {
         #[::icu::cdk::init]
-        fn init(
-            bundle: ::icu::ops::state::StateBundle,
-            parents: Vec<::icu::memory::canister::CanisterEntry>,
-            args: Option<Vec<u8>>,
-        ) {
+        fn init(bundle: ::icu::ops::sync::SyncBundle, args: Option<Vec<u8>>) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
-            ::icu::ops::state::save_state(&bundle);
-            ::icu::memory::CanisterState::set_parents(parents);
+            ::icu::ops::sync::save_state(&bundle);
             $crate::expect_or_trap(
                 ::icu::memory::CanisterState::set_type(&$canister_type),
                 "set canister type",
@@ -55,6 +50,7 @@ macro_rules! icu_start {
         }
 
         ::icu::icu_endpoints!();
+        ::icu::icu_endpoints_nonroot!();
     };
 }
 
@@ -77,8 +73,8 @@ macro_rules! icu_start_root {
             );
             __icu_shared_setup();
 
-            // register in CanisterRegistry
-            ::icu::memory::CanisterRegistry::init_root(::icu::cdk::api::canister_self());
+            // register
+            ::icu::memory::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
 
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::cdk::futures::spawn(icu_install());

@@ -1,5 +1,6 @@
 pub mod ic;
 pub mod icrc;
+pub mod nns;
 pub mod sns;
 
 pub mod prelude {

@@ -1,5 +1,9 @@
 use crate::spec::prelude::*;
 
+///
+/// ListNeurons
+///
+
 #[derive(CandidType, Deserialize)]
 pub struct ListNeurons {
     pub of_principal: Option<Principal>,
@@ -7,15 +11,27 @@ pub struct ListNeurons {
     pub start_page_at: Option<NeuronId>,
 }
 
+///
+/// NeuronId
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct NeuronId {
     pub id: ByteBuf,
 }
 
+///
+/// ListNeuronsResponse
+///
+
 #[derive(CandidType, Deserialize)]
 pub struct ListNeuronsResponse {
     pub neurons: Vec<Neuron>,
 }
+
+///
+/// Neuron
+///
 
 #[derive(CandidType, Deserialize)]
 pub struct Neuron {

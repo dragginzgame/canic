@@ -5,7 +5,7 @@ pub mod request;
 pub mod response;
 pub mod root;
 pub mod shard;
-pub mod state;
+pub mod sync;
 
 pub mod prelude {
     pub use crate::{
@@ -23,7 +23,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use thiserror::Error as ThisError;
+use crate::ThisError;
 
 ///
 /// OpsError

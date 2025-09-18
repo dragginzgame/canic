@@ -113,7 +113,7 @@ impl ConfigData {
 #[serde(deny_unknown_fields)]
 pub struct Canister {
     #[serde(default)]
-    pub auto_create: Option<u16>,
+    pub auto_create: bool,
 
     #[serde(default)]
     pub delegation: bool,
