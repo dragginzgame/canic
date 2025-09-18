@@ -71,7 +71,7 @@ pub fn get_controllers() -> Result<Vec<Principal>, Error> {
     let mut controllers = config.controllers.clone();
 
     // push root
-    let root_pid = SubnetDirectory::try_get_root()?;
+    let root_pid = SubnetDirectory::try_get_root()?.pid;
     controllers.push(root_pid);
 
     Ok(controllers)

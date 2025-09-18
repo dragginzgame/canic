@@ -209,7 +209,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = SubnetDirectory::try_get_root()?;
+        let root_pid = SubnetDirectory::try_get_root()?.pid;
 
         if caller == root_pid {
             Ok(())

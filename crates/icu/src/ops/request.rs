@@ -49,11 +49,12 @@ pub struct CreateCanisterRequest {
 /// CreateCanisterParent
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Copy)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
     Caller,
     Canister(Principal),
+    Directory(CanisterType),
 }
 
 ///
@@ -83,7 +84,7 @@ pub struct CyclesRequest {
 // request
 // sends the request to root::icu_response
 async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = SubnetDirectory::try_get_root()?;
+    let root_pid = SubnetDirectory::try_get_root()?.pid;
 
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)

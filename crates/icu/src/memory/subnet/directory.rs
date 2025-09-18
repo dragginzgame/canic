@@ -22,7 +22,6 @@ use crate::{
     memory::{CanisterEntry, MemoryError, SUBNET_DIRECTORY_MEMORY_ID, subnet::SubnetError},
     types::CanisterType,
 };
-use candid::Principal;
 use std::cell::RefCell;
 
 //
@@ -54,10 +53,8 @@ impl SubnetDirectory {
         Self::get(ty).ok_or_else(|| MemoryError::from(SubnetError::TypeNotFound(ty.clone())).into())
     }
 
-    pub fn try_get_root() -> Result<Principal, Error> {
-        let root = Self::try_get(&CanisterType::ROOT)?;
-
-        Ok(root.pid)
+    pub fn try_get_root() -> Result<CanisterEntry, Error> {
+        Self::try_get(&CanisterType::ROOT)
     }
 
     /// Export current state
