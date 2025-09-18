@@ -5,6 +5,7 @@ use crate::{
     },
     icu_register_memory,
     memory::{CanisterEntry, MemoryError, SUBNET_CHILDREN_MEMORY_ID, subnet::SubnetError},
+    types::CanisterType,
 };
 use candid::Principal;
 use std::cell::RefCell;
@@ -33,6 +34,12 @@ impl SubnetChildren {
     #[must_use]
     pub fn find_by_pid(pid: &Principal) -> Option<CanisterEntry> {
         SUBNET_CHILDREN.with_borrow(|core| core.find_by_pid(pid))
+    }
+
+    /// Lookup a child by type
+    #[must_use]
+    pub fn find_by_type(ty: &CanisterType) -> Vec<CanisterEntry> {
+        SUBNET_CHILDREN.with_borrow(|core| core.find_by_type(ty))
     }
 
     /// Same as `find_by_pid` but returns a typed error
@@ -69,6 +76,23 @@ impl<M: Memory> SubnetChildrenCore<M> {
         self.0.get(pid)
     }
 
+    /// Lookup by Type
+    pub fn find_by_type(&self, ty: &CanisterType) -> Vec<CanisterEntry> {
+        self.0
+            .iter()
+            .filter_map(|entry| {
+                let value = entry.value();
+                if value.ty == *ty { Some(value) } else { None }
+            })
+            .collect()
+    }
+
+    pub fn find_first_by_type(&self, ty: &CanisterType) -> Option<CanisterEntry> {
+        self.0.iter().find_map(|entry| {
+            let value = entry.value();
+            if value.ty == *ty { Some(value) } else { None }
+        })
+    }
     /// Insert or update
     pub fn insert(&mut self, pid: Principal, entry: CanisterEntry) {
         self.0.insert(pid, entry);
