@@ -32,7 +32,7 @@ impl ShardMetrics {
         let utilization = if entry.capacity == 0 {
             0
         } else {
-            ((entry.count as u64 * 100) / entry.capacity as u64).min(100) as u32
+            ((u64::from(entry.count) * 100) / u64::from(entry.capacity)).min(100) as u32
         };
 
         Self {

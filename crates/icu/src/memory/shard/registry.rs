@@ -39,7 +39,7 @@ impl ShardRegistry {
     // ------------------------
 
     pub fn clear() {
-        Self::with_mut(|s| s.clear());
+        Self::with_mut(ShardCore::clear);
     }
 
     #[must_use]
@@ -81,7 +81,7 @@ impl ShardRegistry {
     pub fn assign(pool: &str, tenant: Principal, shard: Principal) -> Result<(), Error> {
         // check shard exists + capacity
         let mut entry = Self::with(|s| s.get_entry(&shard))
-            .ok_or(MemoryError::from(ShardRegistryError::ShardNotFound(shard)))?;
+            .ok_or_else(|| MemoryError::from(ShardRegistryError::ShardNotFound(shard)))?;
 
         if entry.pool != pool {
             Err(MemoryError::from(ShardRegistryError::ShardNotFound(shard)))?;
@@ -92,11 +92,11 @@ impl ShardRegistry {
 
         // replace existing assignment if different
         if let Some(current) = Self::with(|s| s.get_assignment(&ShardKey::new(pool, tenant))) {
-            if current != shard {
-                Self::release(pool, tenant)?;
-            } else {
+            if current == shard {
                 return Ok(()); // already assigned
             }
+
+            Self::release(pool, tenant)?;
         }
 
         Self::with_mut(|s| s.insert_assignment(ShardKey::new(pool, tenant), shard));
@@ -175,6 +175,6 @@ impl ShardRegistry {
 
     #[must_use]
     pub fn export() -> ShardRegistryView {
-        Self::with(|s| s.all_entries())
+        Self::with(ShardCore::all_entries)
     }
 }

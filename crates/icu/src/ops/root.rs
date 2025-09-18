@@ -16,7 +16,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     for (ty, canister) in &cfg.canisters {
         if canister.auto_create {
             create_canister_request::<()>(ty, CreateCanisterParent::Root, None).await?;
-        };
+        }
     }
 
     // Report pass

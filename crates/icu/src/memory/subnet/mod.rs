@@ -125,7 +125,7 @@ pub mod test {
         let bytes = Encode!(&entry).unwrap();
 
         assert!(
-            bytes.len() as u32 <= CanisterEntry::STORABLE_MAX_SIZE,
+            bytes.len() <= CanisterEntry::STORABLE_MAX_SIZE as usize,
             "Size {} exceeded bound: {} bytes",
             CanisterEntry::STORABLE_MAX_SIZE,
             bytes.len()

@@ -362,7 +362,7 @@ pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardPlan, E
 
     let (_, policy) = get_pool_policy(pool)?;
     match ensure_can_create(&metrics, &policy) {
-        Ok(_) => Ok(ShardPlan {
+        Ok(()) => Ok(ShardPlan {
             state: ShardPlanState::CreateAllowed,
             utilization_pct: metrics.utilization_pct,
             active_count: metrics.active_count,
