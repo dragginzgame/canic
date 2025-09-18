@@ -5,10 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.9.2] - 2025-09-17
+## [0.9.3] - 2025-09-17
 - split off Subnet Views, fixed the bug where state wasn't cascading
 - added find_by_type for parent
 - added CreateCanisterParent::Directory
+- added SubnetChildren::find_by_type and find_first_by_type
 
 ## [0.8.6] - 2025-09-17
 - added icu_config endpoint for controllers

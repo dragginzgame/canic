@@ -42,6 +42,12 @@ impl SubnetChildren {
         SUBNET_CHILDREN.with_borrow(|core| core.find_by_type(ty))
     }
 
+    /// Lookup a child by type
+    #[must_use]
+    pub fn find_first_by_type(ty: &CanisterType) -> Option<CanisterEntry> {
+        SUBNET_CHILDREN.with_borrow(|core| core.find_first_by_type(ty))
+    }
+
     /// Same as `find_by_pid` but returns a typed error
     pub fn try_find_by_pid(pid: &Principal) -> Result<CanisterEntry, Error> {
         Self::find_by_pid(pid)
