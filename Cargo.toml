@@ -12,7 +12,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.89.0"
 edition = "2024"
-version = "0.9.4"
+version = "0.9.5"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Internet Computer Utilities"
 readme = "README.md"
