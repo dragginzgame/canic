@@ -104,6 +104,17 @@ fmt-check:
 clean:
 	cargo clean
 
+# Security and versioning checks
+security-check:
+	@echo "Security checks are enforced via GitHub settings:"
+	@echo "- Enable Protected Tags for pattern 'v*' (Settings → Tags)"
+	@echo "- Restrict who can create tags and disable force pushes"
+	@echo "- Require PR + CI on 'main' via branch protection"
+	@echo "This target is informational only; no local script runs."
+
+check-versioning: security-check
+	bash scripts/ci/security-check.sh
+
 # Planning summary
 plan:
 	@echo "=== PLAN.md ==="
