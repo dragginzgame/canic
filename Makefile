@@ -102,17 +102,27 @@ release: ensure-clean
 	@echo "Release handled by CI on tag push"
 
 #
-# Development commands
+# Tests
 #
 
-test: ensure-hooks
+test: test-unit test-canisters
+
+test-unit:
 	cargo test --workspace
-	@if [ -x scripts/app/test.sh ] && command -v dfx >/dev/null 2>&1; then \
-		echo "Running canister tests via scripts/app/test.sh"; \
-		bash scripts/app/test.sh; \
+
+test-canisters:
+	@if command -v dfx >/dev/null 2>&1; then \
+		( dfx canister create --all -qq ); \
+		( dfx build --all ); \
+		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
+		( dfx canister install root --mode=reinstall -y ); \
 	else \
-		echo "Skipping canister tests (dfx not installed or script missing)"; \
+		echo "Skipping canister tests (dfx not installed)"; \
 	fi
+
+#
+# Development commands
+#
 
 build: ensure-clean ensure-hooks
 	cargo build --release --workspace
