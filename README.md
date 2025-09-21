@@ -49,7 +49,7 @@ async fn icu_upgrade() {}
 
 See `crates/canisters/root` and `crates/canisters/example` for full patterns.
 
-MSRV: Rust 1.89.0 (pinned via `rust-toolchain.toml`).
+MSRV: Rust 1.90.0 (pinned via `rust-toolchain.toml`).
 
 ## Delegation Sessions 🔑
 

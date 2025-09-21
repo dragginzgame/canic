@@ -34,7 +34,7 @@ async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Err
 ///
 pub async fn create_and_install_canister(
     canister_type: &CanisterType,
-    parent: Principal,
+    parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
     // Validate canister type and wasm presence up-front so the pool path
@@ -46,7 +46,7 @@ pub async fn create_and_install_canister(
     let (canister_pid, cycles) = allocate_canister(canister_type).await?;
 
     // Phase 1: insert with Created status
-    register_created(canister_pid, canister_type, parent);
+    register_created(canister_pid, canister_type, parent_pid);
 
     // Phase 2: install wasm
     install_canister(canister_pid, canister_type, extra_arg).await?;

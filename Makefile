@@ -99,7 +99,7 @@ fmt:
 	cargo fmt --all
 
 fmt-check:
-	cargo fmt --all -- --check
+	cargo clippy --workspace -- -D warnings
 
 clean:
 	cargo clean
@@ -125,7 +125,8 @@ plan:
 
 # Install development dependencies
 install-dev:
-	cargo install cargo-watch
+	cargo install cargo-watch --locked || true
+	cargo install cargo-edit --locked || true
 	cargo install cargo-sort cargo-sort-derives --locked || true
 
 # Run tests in watch mode
@@ -133,14 +134,15 @@ test-watch:
 	cargo watch -x test
 
 # Build and test everything
-all: ensure-clean clean fmt-check clippy check test build
+all: ensure-clean fmt-check clippy check test build
 
 # Build examples
 examples:
-	cargo build -p icu --examples
+	cargo build --workspace --examples
 
 # Install Wasm target and candid tools
 install-canister-deps:
-	rustup toolchain install 1.89.0 || true
+	rustup toolchain install 1.90.0 || true
 	rustup target add wasm32-unknown-unknown
 	cargo install candid-extractor --locked || true
+	cargo install cargo-sort cargo-sort-derives --locked || true

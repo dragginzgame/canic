@@ -65,7 +65,7 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 
 // create_canister_response
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
-    // Look up parents
+    // Look up parent
     let parent_pid = match &req.parent {
         CreateCanisterParent::Root => SubnetDirectory::try_get_root()?.pid,
         CreateCanisterParent::Caller => msg_caller(),
