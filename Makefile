@@ -47,10 +47,7 @@ help:
 
 # Version management (always format first)
 version:
-	@scripts/app/version.sh current
-
-current:
-	@scripts/app/version.sh current
+	cargo get workspace.package.version
 
 tags:
 	@git tag --sort=-version:refname | head -10
@@ -67,7 +64,29 @@ major: ensure-clean fmt
 release: ensure-clean
 	@echo "Release handled by CI on tag push"
 
+#
+# Installing
+#
+
+# Install Rust development tooling
+install-dev:
+	cargo install cargo-watch --locked || true
+	cargo install cargo-edit --locked || true
+	cargo install cargo-get cargo-sort cargo-sort-derives --locked || true
+
+# Install wasm target + candid tools
+install-canister-deps:
+	rustup toolchain install 1.90.0 || true
+	rustup target add wasm32-unknown-unknown
+	cargo install candid-extractor --locked || true
+
+# Install everything (dev + canister deps)
+install-all: install-dev install-canister-deps
+	@echo "✅ All development and canister dependencies installed"
+
+#
 # Development commands
+#
 
 # Build canister tests (via dfx) first, then run cargo tests. This ensures any
 # wasm/canister artifacts used by tests are built before Rust tests execute.
@@ -123,12 +142,6 @@ plan:
 	@echo "=== .codex/plan.json ==="
 	@{ [ -f .codex/plan.json ] && sed -n '1,200p' .codex/plan.json; } || echo "No .codex/plan.json found."
 
-# Install development dependencies
-install-dev:
-	cargo install cargo-watch --locked || true
-	cargo install cargo-edit --locked || true
-	cargo install cargo-sort cargo-sort-derives --locked || true
-
 # Run tests in watch mode
 test-watch:
 	cargo watch -x test
@@ -140,9 +153,3 @@ all: ensure-clean fmt-check clippy check test build
 examples:
 	cargo build --workspace --examples
 
-# Install Wasm target and candid tools
-install-canister-deps:
-	rustup toolchain install 1.90.0 || true
-	rustup target add wasm32-unknown-unknown
-	cargo install candid-extractor --locked || true
-	cargo install cargo-sort cargo-sort-derives --locked || true
