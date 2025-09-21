@@ -1,6 +1,7 @@
 .PHONY: help version current tags patch minor major release \
-        test test-unit test-canisters build check clippy fmt fmt-check clean plan install-dev \
-        test-watch all ensure-clean examples install-canister-deps
+        test build check clippy fmt fmt-check clean install-dev \
+        test-watch all ensure-clean security-check check-versioning \
+        ensure-hooks install-hooks
 
 # Check for clean git state
 ensure-clean:
@@ -13,6 +14,12 @@ ensure-clean:
 help:
 	@echo "Available commands:"
 	@echo ""
+	@echo "Setup / Installation:"
+	@echo "  install-all      Install both dev and canister dependencies"
+	@echo "  install-dev      Install Rust development dependencies"
+	@echo "  install-canister-deps  Install Wasm target + candid tools"
+	@echo "  install-hooks    Configure git hooks"
+	@echo ""
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
@@ -22,32 +29,62 @@ help:
 	@echo "  release          CI-driven release (local target is no-op)"
 	@echo ""
 	@echo "Development:"
-	@echo "  test             Build canister tests (dfx) then run cargo tests"
-	@echo "  test-unit        Run Rust unit/integration tests (cargo only)"
-	@echo "  test-canisters   Build/install test canisters via scripts/app/test.sh (requires dfx)"
+	@echo "  test             Run all tests"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean build artifacts"
-	@echo "  examples         Build crate examples"
-	@echo "  plan             Show the current project plan"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  install-dev      Install development dependencies"
-	@echo "  install-canister-deps  Install Wasm target and candid tools"
 	@echo "  test-watch       Run tests in watch mode"
 	@echo "  all              Run all checks, tests, and build"
+	@echo "  security-check   Verify GitHub Protected Tags (informational)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make test        # Run tests"
 	@echo "  make build       # Build project"
 
+#
+# Installing
+#
+
+# Install everything (dev + canister deps)
+install-all: install-dev install-canister-deps install-hooks
+	@echo "✅ All development and canister dependencies installed"
+
+# Install Rust development tooling
+install-dev:
+	cargo install cargo-watch --locked || true
+	cargo install cargo-edit --locked || true
+	cargo install cargo-get cargo-sort cargo-sort-derives --locked || true
+
+# Install wasm target + candid tools
+install-canister-deps:
+	rustup toolchain install 1.90.0 || true
+	rustup target add wasm32-unknown-unknown
+	cargo install candid-extractor --locked || true
+
+
+# Optional explicit install target (idempotent)
+install-hooks ensure-hooks:
+	@if [ -d .git ]; then \
+		git config --local core.hooksPath .githooks || true; \
+		chmod +x .githooks/* 2>/dev/null || true; \
+		echo "✅ Git hooks configured (core.hooksPath -> .githooks)"; \
+	else \
+		echo "⚠️  Not a git repo, skipping hooks setup"; \
+	fi
+
+
+#
 # Version management (always format first)
+#
+
 version:
-	cargo get workspace.package.version
+	@cargo get workspace.package.version
 
 tags:
 	@git tag --sort=-version:refname | head -10
@@ -65,63 +102,36 @@ release: ensure-clean
 	@echo "Release handled by CI on tag push"
 
 #
-# Installing
-#
-
-# Install Rust development tooling
-install-dev:
-	cargo install cargo-watch --locked || true
-	cargo install cargo-edit --locked || true
-	cargo install cargo-get cargo-sort cargo-sort-derives --locked || true
-
-# Install wasm target + candid tools
-install-canister-deps:
-	rustup toolchain install 1.90.0 || true
-	rustup target add wasm32-unknown-unknown
-	cargo install candid-extractor --locked || true
-
-# Install everything (dev + canister deps)
-install-all: install-dev install-canister-deps
-	@echo "✅ All development and canister dependencies installed"
-
-#
 # Development commands
 #
 
-# Build canister tests (via dfx) first, then run cargo tests. This ensures any
-# wasm/canister artifacts used by tests are built before Rust tests execute.
-test: test-canisters test-unit
-
-test-unit:
+test: ensure-hooks
 	cargo test --workspace
-
-test-canisters:
-	@if command -v dfx >/dev/null 2>&1; then \
-		dfx canister create --all -qq; \
-		dfx build --all; \
-		dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 || true; \
-		dfx canister install root --mode=reinstall -y; \
+	@if [ -x scripts/app/test.sh ] && command -v dfx >/dev/null 2>&1; then \
+		echo "Running canister tests via scripts/app/test.sh"; \
+		bash scripts/app/test.sh; \
 	else \
-		echo "Skipping canister tests (dfx not installed)"; \
+		echo "Skipping canister tests (dfx not installed or script missing)"; \
 	fi
 
-build: ensure-clean
+build: ensure-clean ensure-hooks
 	cargo build --release --workspace
 
-check: fmt-check test-canisters
+check: ensure-hooks fmt-check
 	cargo check --workspace
 
-clippy:
+clippy: ensure-hooks
 	cargo clippy --workspace -- -D warnings
 
-fmt:
+fmt: ensure-hooks
 	cargo fmt --all
 
-fmt-check:
-	cargo clippy --workspace -- -D warnings
+fmt-check: ensure-hooks
+	cargo fmt --all -- --check
 
 clean:
 	cargo clean
+
 
 # Security and versioning checks
 security-check:
@@ -134,22 +144,9 @@ security-check:
 check-versioning: security-check
 	bash scripts/ci/security-check.sh
 
-# Planning summary
-plan:
-	@echo "=== PLAN.md ==="
-	@{ [ -f PLAN.md ] && sed -n '1,200p' PLAN.md; } || echo "No PLAN.md found."
-	@echo
-	@echo "=== .codex/plan.json ==="
-	@{ [ -f .codex/plan.json ] && sed -n '1,200p' .codex/plan.json; } || echo "No .codex/plan.json found."
-
 # Run tests in watch mode
 test-watch:
 	cargo watch -x test
 
 # Build and test everything
-all: ensure-clean fmt-check clippy check test build
-
-# Build examples
-examples:
-	cargo build --workspace --examples
-
+all: ensure-clean ensure-hooks clean fmt-check clippy check test build
