@@ -196,7 +196,7 @@ impl<M: Memory> CycleTrackerCore<M> {
             self.insert_count += 1;
 
             // purge every Nth insert
-            if self.insert_count % PURGE_INSERT_INTERVAL == 0 {
+            if self.insert_count.is_multiple_of(PURGE_INSERT_INTERVAL) {
                 self.purge_old(now);
             }
 
@@ -436,7 +436,7 @@ mod tests {
 
         // At this point, purge should have been called once
         // → Entries older than RETAIN_SECS may be gone, but at least 1 purge happened
-        assert!(tracker.insert_count % PURGE_INSERT_INTERVAL == 0);
+        assert!(tracker.insert_count.is_multiple_of(PURGE_INSERT_INTERVAL));
         assert!(tracker.map().len() as u64 <= PURGE_INSERT_INTERVAL);
     }
 

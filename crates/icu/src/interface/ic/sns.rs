@@ -27,7 +27,7 @@ pub async fn list_sns_neurons_for_principal(
 
         out.extend(page.neurons.into_iter());
 
-        if out.len() % PAGE_SIZE as usize != 0 {
+        if !out.len().is_multiple_of(PAGE_SIZE as usize) {
             break; // fewer than requested on this page ⇒ done
         }
     }
