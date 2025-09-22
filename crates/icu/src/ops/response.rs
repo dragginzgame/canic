@@ -1,13 +1,10 @@
 use crate::{
     Error,
-    interface::{
-        ic::{deposit_cycles, upgrade_canister},
-        prelude::*,
-    },
+    interface::ic::{deposit_cycles, upgrade_canister},
     memory::SubnetRegistry,
     ops::{
-        OpsError,
         canister::create_and_install_canister,
+        prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request,
             UpgradeCanisterRequest,

@@ -28,7 +28,7 @@ macro_rules! log {
     // Inner logic
     (@inner $level:expr, $fmt:expr, $($arg:tt)*) => {{
         let message = format!($fmt, $($arg)*);
-        let ty_raw = match $crate::memory::CanisterState::get() {
+        let ty_raw = match $crate::memory::CanisterState::get_entry() {
             Some(entry) => entry.ty.to_string(),
             None => "-".to_string(),
         };

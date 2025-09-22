@@ -1,11 +1,11 @@
 use crate::{
     Error, ThisError,
-    interface::prelude::*,
     memory::{
         AppState, AppStateData, CanisterEntry, CanisterState,
         subnet::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
     },
     ops::OpsError,
+    ops::prelude::*,
 };
 
 ///
@@ -68,12 +68,13 @@ pub struct TopologyBundle {
 }
 
 impl TopologyBundle {
-    #[must_use]
-    pub fn root() -> Self {
-        Self {
+    pub fn root() -> Result<Self, Error> {
+        let root_parent = CanisterState::try_get_entry()?;
+
+        Ok(Self {
             descendants: SubnetRegistry::export(), // entire tree
-            parents: vec![],
-        }
+            parents: vec![root_parent],
+        })
     }
 }
 
@@ -95,7 +96,7 @@ impl SyncBundle {
         Ok(Self {
             app_state: Some(AppStateBundle::root()),
             directory: Some(DirectoryBundle::root()),
-            topology: Some(TopologyBundle::root()),
+            topology: Some(TopologyBundle::root()?),
         })
     }
 
@@ -123,13 +124,14 @@ impl SyncBundle {
             .cloned()
             .collect();
 
-        // Extend parents: base parents + parent entry (if present)
+        // Start with whatever ancestors the parent already had
         let mut new_parents = base
             .topology
             .as_ref()
             .map(|t| t.parents.clone())
             .unwrap_or_default();
 
+        // Add the parent itself into the lineage
         if let Some(parent_entry) = all_descendants
             .iter()
             .find(|e| e.pid == parent_pid)
@@ -172,7 +174,7 @@ pub async fn root_cascade() -> Result<(), Error> {
             }),
         };
 
-        send_bundle(&child.pid, &child_bundle, "icu_sync_cascade", "cascade").await?;
+        send_bundle(&child.pid, &child_bundle).await?;
     }
 
     Ok(())
@@ -181,19 +183,24 @@ pub async fn root_cascade() -> Result<(), Error> {
 /// Cascade from a child: trim bundle to subtree and forward.
 pub async fn cascade_children(bundle: &SyncBundle) -> Result<(), Error> {
     OpsError::deny_root()?; // safeguard
-
     let self_pid = canister_self();
 
-    // Ensure we have topology data to work from
     let topo = bundle
         .topology
         .as_ref()
         .ok_or_else(|| OpsError::from(SyncError::MissingTopology))?;
 
-    for child in SubnetChildren::export() {
-        let child_bundle = SyncBundle::for_child(self_pid, child.pid, &topo.descendants, bundle);
+    // derive direct children from bundle.descendants
+    let direct_children: Vec<_> = topo
+        .descendants
+        .iter()
+        .filter(|e| e.parent_pid == Some(self_pid))
+        .cloned()
+        .collect();
 
-        send_bundle(&child.pid, &child_bundle, "icu_sync_cascade", "cascade").await?;
+    for child in direct_children {
+        let child_bundle = SyncBundle::for_child(self_pid, child.pid, &topo.descendants, bundle);
+        send_bundle(&child.pid, &child_bundle).await?;
     }
 
     Ok(())
@@ -204,19 +211,28 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
     let self_pid = canister_self();
 
-    // App state
     if let Some(app) = &bundle.app_state {
         AppState::import(app.app_state);
+        log!(Log::Info, "sync.save_state: app_state imported");
     }
 
-    // Directory
     if let Some(dir) = &bundle.directory {
+        let n = dir.subnet_directory.len();
         SubnetDirectory::import(dir.subnet_directory.clone());
+        log!(
+            Log::Info,
+            "sync.save_state: directory imported ({n} entries)",
+        );
     }
 
-    // Topology
     if let Some(top) = &bundle.topology {
-        // Find our entry
+        log!(
+            Log::Info,
+            "sync.save_state: topology received (descendants={}, parents={})",
+            top.descendants.len(),
+            top.parents.len()
+        );
+
         let self_entry = top
             .descendants
             .iter()
@@ -224,15 +240,15 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
             .cloned()
             .ok_or_else(|| OpsError::from(SyncError::CanisterNotFound(self_pid)))?;
 
-        // Update CanisterState
-        CanisterState::set_entry(self_entry.clone());
+        CanisterState::set_entry(self_entry);
 
-        // Extend parents
-        let mut new_parents = top.parents.clone();
-        new_parents.push(self_entry);
-        SubnetParents::import(new_parents);
+        SubnetParents::import(top.parents.clone());
+        log!(
+            Log::Info,
+            "sync.save_state: parents imported ({} entries)",
+            top.parents.len()
+        );
 
-        // Derive children
         let direct_children: Vec<_> = top
             .descendants
             .iter()
@@ -240,7 +256,12 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
             .cloned()
             .collect();
 
+        let m = direct_children.len();
         SubnetChildren::import(direct_children);
+        log!(
+            Log::Info,
+            "sync.save_state: children imported ({m} entries)",
+        );
     }
 
     Ok(())
@@ -262,14 +283,8 @@ fn is_in_subtree(root_pid: Principal, entry: &CanisterEntry, all: &[CanisterEntr
 }
 
 /// Low-level bundle sender.
-async fn send_bundle(
-    pid: &Principal,
-    bundle: &SyncBundle,
-    method: &str,
-    label: &str,
-) -> Result<(), Error> {
-    log!(Log::Info, "💦 state.{label}: -> {pid}");
-    Call::unbounded_wait(*pid, method).with_arg(bundle).await?;
+async fn send_bundle(pid: &Principal, bundle: &SyncBundle) -> Result<(), Error> {
+    log!(Log::Info, "💦 state.cascade: -> {pid}");
 
-    Ok(())
+    call_and_decode::<Result<(), Error>>(*pid, "icu_sync_cascade", bundle).await?
 }

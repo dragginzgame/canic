@@ -239,6 +239,11 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
+        // Root is always considered a parent
+        if caller == CanisterState::try_get_root_pid()? {
+            return Ok(());
+        }
+
         if SubnetParents::find_by_pid(&caller).is_some() {
             Ok(())
         } else {

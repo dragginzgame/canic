@@ -15,7 +15,7 @@ pub mod prelude {
             call::Call,
             candid::CandidType,
         },
-        interface::InterfaceError,
+        interface::{InterfaceError, ic::call_and_decode},
         log,
         ops::OpsError,
         types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},

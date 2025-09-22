@@ -134,15 +134,23 @@ impl SubnetRegistry {
         let mut stack = vec![pid];
 
         while let Some(current) = stack.pop() {
+            if let Ok(entry) = Self::try_get(current) {
+                // ensure self + every node encountered is included
+                if !result.iter().any(|e: &CanisterEntry| e.pid == entry.pid) {
+                    result.push(entry.clone());
+                }
+            }
+
             let children: Vec<CanisterEntry> = Self::export()
                 .into_iter()
                 .filter(|e| e.parent_pid == Some(current))
                 .collect();
 
             for child in &children {
-                result.push(child.clone());
                 stack.push(child.pid);
             }
+
+            result.extend(children);
         }
 
         result

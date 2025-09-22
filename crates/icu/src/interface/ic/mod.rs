@@ -18,7 +18,7 @@ use crate::{
     },
     interface::prelude::*,
 };
-use candid::{Principal, encode_args, utils::ArgumentEncoder};
+use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
 // canister_status
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
@@ -54,6 +54,21 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let cycles: Cycles = status.cycles.into();
 
     Ok(cycles)
+}
+
+/// call_and_decode
+/// Generic helper for calls that return `Result<T, Error>`
+pub async fn call_and_decode<T: candid::CandidType + for<'de> candid::Deserialize<'de>>(
+    pid: Principal,
+    method: &str,
+    arg: &impl candid::CandidType,
+) -> Result<T, Error> {
+    let response = Call::unbounded_wait(pid, method)
+        .with_arg(arg)
+        .await
+        .map_err(Error::from)?;
+
+    decode_one(&response).map_err(Error::from)
 }
 
 // install_code

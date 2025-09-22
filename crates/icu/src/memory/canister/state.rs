@@ -41,13 +41,13 @@ pub struct CanisterState;
 impl CanisterState {
     /// Get the current entry
     #[must_use]
-    pub fn get() -> Option<CanisterEntry> {
+    pub fn get_entry() -> Option<CanisterEntry> {
         CANISTER_STATE.with_borrow(|cell| cell.get().entry.clone())
     }
 
     /// Try to get the current entry, or error if missing
-    pub fn try_get() -> Result<CanisterEntry, Error> {
-        Self::get().ok_or_else(|| MemoryError::from(CanisterStateError::EntryNotSet).into())
+    pub fn try_get_entry() -> Result<CanisterEntry, Error> {
+        Self::get_entry().ok_or_else(|| MemoryError::from(CanisterStateError::EntryNotSet).into())
     }
 
     /// Set the current entry (replace existing)
@@ -62,7 +62,7 @@ impl CanisterState {
     /// Check if this canister is the root
     #[must_use]
     pub fn is_root() -> bool {
-        Self::get().is_some_and(|e| e.ty == CanisterType::ROOT)
+        Self::get_entry().is_some_and(|e| e.ty == CanisterType::ROOT)
     }
 
     /// Export current state

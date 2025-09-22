@@ -1,157 +1,122 @@
 use crate::{
     Error,
-    cdk::mgmt::CanisterInstallMode,
+    cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     interface::{ic::install_code, prelude::*},
-    memory::{CanisterPool, subnet::SubnetRegistry},
+    memory::{CanisterPool, CanisterStateData, subnet::SubnetRegistry},
     ops::sync::root_cascade,
     state::wasm::WasmRegistry,
 };
+use candid::Principal;
 
-///
-/// allocate_canister
-/// firstly looks in the pool to find a canister
-///
-async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
-    // try pool first
+//
+// HIGH-LEVEL FLOW
+//
+
+/// Create + install a new canister of given type under parent.
+/// Handles allocation, registry updates, wasm install, and root cascade.
+pub async fn create_and_install_canister(
+    ty: &CanisterType,
+    parent: Principal,
+    extra_arg: Option<Vec<u8>>,
+) -> Result<Principal, Error> {
+    // Validate type + wasm availability up-front
+    Config::try_get_canister(ty)?; // must exist in config
+    WasmRegistry::try_get(ty)?; // must have wasm
+
+    // Phase 0: allocate PID + cycles
+    let (pid, cycles) = allocate_canister(ty).await?;
+
+    // Phase 1: mark Created in registry
+    SubnetRegistry::create(pid, ty, parent);
+
+    // Phase 2: install wasm + flip to Installed
+    install_canister(pid, ty, extra_arg).await?;
+
+    log!(Log::Ok, "⚡ create_canister: {pid} ({ty}, {cycles})");
+
+    // Phase 3: cascade updated state from root
+    root_cascade().await?;
+
+    Ok(pid)
+}
+
+//
+// PHASE 0: Allocation
+//
+
+/// Allocate a canister ID + cycles, preferring the pool.
+/// Returns (pid, cycles).
+pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
+    // Try pool first
     if let Some((pid, entry)) = CanisterPool::pop_first() {
         log!(Log::Ok, "⚡ reusing {pid} from pool ({entry:?})");
-
         return Ok((pid, entry.cycles));
     }
 
-    // fallback: fresh canister
-    let canister = Config::try_get_canister(ty)?;
-    let cycles = canister.initial_cycles;
-    let pid = create_canister(cycles.clone()).await?;
+    // Fallback: create new
+    let config = Config::try_get_canister(ty)?;
+    let pid = raw_create_canister(config.initial_cycles.clone()).await?;
 
-    Ok((pid, cycles))
+    Ok((pid, config.initial_cycles))
 }
 
-///
-/// create_and_install_canister
-/// creates the canister, installs it, adds it to registries
-///
-pub async fn create_and_install_canister(
-    canister_type: &CanisterType,
-    parent_pid: Principal,
-    extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, Error> {
-    // Validate canister type and wasm presence up-front so the pool path
-    // cannot bypass config/wasm validation.
-    let _ = Config::try_get_canister(canister_type)?; // must exist in config
-    let _ = WasmRegistry::try_get(canister_type)?; // must have a wasm registered
+//
+// PHASE 1: Creation
+//
 
-    // Phase 0: allocate canister id + cycles
-    let (canister_pid, cycles) = allocate_canister(canister_type).await?;
+/// Create a fresh canister on IC with given cycles + controllers.
+pub async fn raw_create_canister(cycles: Cycles) -> Result<Principal, Error> {
+    let controllers = get_controllers()?;
 
-    // Phase 1: insert with Created status
-    register_created(canister_pid, canister_type, parent_pid);
-
-    // Phase 2: install wasm
-    install_canister(canister_pid, canister_type, extra_arg).await?;
-
-    // Phase 3: mark as installed + cascade
-    register_installed(canister_pid, canister_type).await?;
-
-    log!(
-        Log::Ok,
-        "⚡ create_canister: {canister_pid} ({canister_type}, {cycles})",
-    );
-
-    Ok(canister_pid)
+    crate::interface::ic::create_canister(controllers, cycles).await
 }
 
-///
-/// get_controllers
-/// we get the hardcoded list from config, plus root
-///
-pub fn get_controllers() -> Result<Vec<Principal>, Error> {
-    let config = Config::try_get()?;
-    let mut controllers = config.controllers.clone();
-
-    // we are on root, so push it
-    controllers.push(canister_self());
+/// Get list of controllers: hardcoded from config plus root.
+fn get_controllers() -> Result<Vec<Principal>, Error> {
+    let mut controllers = Config::try_get()?.controllers.clone();
+    controllers.push(canister_self()); // root always controls
 
     Ok(controllers)
 }
 
-///
-/// create_canister
-/// allocates PID + cycles + controllers
-///
-pub(super) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> {
-    let controllers = get_controllers()?;
+//
+// PHASE 2: Installation
+//
 
-    // create
-    let canister_pid = crate::interface::ic::create_canister(controllers, cycles).await?;
-
-    Ok(canister_pid)
-}
-
-///
-/// register_created
-///
-/// Insert into SubnetRegistry immediately after creation,
-/// before install_code runs.
-///
-pub(super) fn register_created(
-    canister_pid: Principal,
-    canister_type: &CanisterType,
-    parent_pid: Principal,
-) {
-    SubnetRegistry::create(canister_pid, canister_type, parent_pid);
-}
-
-///
-/// register_installed
-///
-/// Update SubnetRegistry entry from Pending → Installed,
-/// then update SubnetDirectory + cascade if needed.
-///
-
-pub(super) async fn register_installed(
-    canister_pid: Principal,
-    canister_type: &CanisterType,
-) -> Result<(), Error> {
-    let wasm = WasmRegistry::try_get(canister_type)?;
-
-    // flip to Installed
-    SubnetRegistry::install(canister_pid, wasm.module_hash())?;
-
-    // full cascade afterwards, we can always optimise this
-    root_cascade().await?;
-
-    Ok(())
-}
-
-///
-/// install_canister
-/// fetches wasm + encodes args + installs
-///
-#[allow(clippy::cast_precision_loss)]
-pub(super) async fn install_canister(
-    canister_pid: Principal,
-    canister_type: &CanisterType,
+/// Install code + initial state into a new canister.
+async fn install_canister(
+    pid: Principal,
+    ty: &CanisterType,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
-    // fetch the canister by its type
-    let wasm = WasmRegistry::try_get(canister_type)?;
+    // Fetch wasm
+    let wasm = WasmRegistry::try_get(ty)?;
 
-    // install code
+    // Canister entry from registry
+    let entry = SubnetRegistry::try_get(pid)?;
+
+    // Construct initial state
+    let state = CanisterStateData {
+        entry: Some(entry),
+        root_pid: Some(canister_self()),
+    };
+
+    // Install code
     install_code(
         CanisterInstallMode::Install,
-        canister_pid,
+        pid,
         wasm.bytes(),
-        (extra_arg,),
+        (state, extra_arg),
     )
     .await?;
 
+    // Flip registry to Installed
+    SubnetRegistry::install(pid, wasm.module_hash())?;
+
     log!(
         Log::Ok,
-        "⚡ install_canister: {} ({}, {:.2}KiB)",
-        canister_pid,
-        canister_type,
+        "⚡ install_canister: {pid} ({ty}, {:.2}KiB)",
         wasm.len() as f64 / 1_024.0,
     );
 

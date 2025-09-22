@@ -17,11 +17,11 @@ macro_rules! __icu_load_config {
 macro_rules! icu_start {
     ($canister_type:expr) => {
         #[::icu::cdk::init]
-        fn init(args: Option<Vec<u8>>) {
+        fn init(state: ::icu::memory::CanisterStateData, args: Option<Vec<u8>>) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
-            ::icu::memory::CanisterState::set_root_pid(::icu::cdk::api::msg_caller());
+            ::icu::memory::CanisterState::import(state);
             __icu_shared_setup();
 
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {

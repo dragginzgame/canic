@@ -10,13 +10,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   introducing explicit create/install/descendant helpers and making it the canonical topology source.
 - Changed: Replaced `memory::CanisterState` with a stable `Cell` that tracks the active entry and
   root PID, powering `OpsError::require_root`/`deny_root`, auth checks, and cycle auto top-ups.
-- Changed: Introduced cascading `ops::sync::SyncBundle`s so root exports app state, directory, and
-  topology snapshots after installs or `icu_app` updates, and children rehydrate their local views
-  before forwarding to descendants.
+- Changed: Introduced cascading `ops::sync::SyncBundle`s so root ships full topology/directory
+  snapshots after installs and app-state-only sweeps from `icu_app`, letting children rehydrate
+  local views before forwarding to their descendants.
 - Changed: Refreshed `auth` guards (`is_app`, `is_parent`, `is_root`, etc.) to read from the new
   registry/state snapshots, yielding clearer errors and consistent enforcement across endpoints.
 - Changed: Hardened canister provisioning by validating config + wasm up-front, recording `Created`
   entries pre-install, and cascading immediately after `Installed` to keep every node in sync.
+- Changed: `icu_start!` now seeds non-root canisters with a `CanisterStateData` snapshot (instead of
+  a `SyncBundle`) while root initialisation writes its own registry entry before scheduling install;
+  update any custom init glue to pass the new arguments.
+- Added: Non-root query endpoints `icu_subnet_children`, `icu_subnet_directory`, and
+  `icu_subnet_parents` expose the replicated topology snapshots imported from cascades.
+- Changed: Root endpoints tighten auth (`icu_app` requires a controller, `icu_response` is limited
+  to registered apps) and drop the manual `icu_sync_root_cascade`/`icu_sync_update` helpers in
+  favour of the new automatic cascade flow.
+- Changed: Removed the `SubnetView` facade—modules now call `SubnetRegistry`, `SubnetDirectory`,
+  `SubnetChildren`, and `SubnetParents` directly, so import paths need updating during integration.
 
 ## [0.9.15] - 2025-09-21
 - made SubnetDirectory + co into zero sized handles so root can return different versions

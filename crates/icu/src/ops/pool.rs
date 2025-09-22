@@ -2,8 +2,7 @@ use crate::{
     Error, Log,
     interface::ic::{get_cycles, uninstall_code},
     memory::{CanisterPool, subnet::SubnetRegistry},
-    ops::canister::create_canister,
-    ops::prelude::*,
+    ops::{canister::raw_create_canister, prelude::*},
     types::{Cycles, TC},
 };
 
@@ -21,7 +20,7 @@ pub async fn create_pool_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
-    let canister_pid = create_canister(cycles.clone()).await?;
+    let canister_pid = raw_create_canister(cycles.clone()).await?;
 
     log!(Log::Ok, "💧 create_pool: {canister_pid} ({cycles})",);
 
