@@ -7,6 +7,7 @@ pub mod shard;
 pub mod subnet;
 pub mod types;
 
+pub use memory_registry::*;
 pub use types::*;
 
 use crate::{
@@ -14,7 +15,6 @@ use crate::{
     memory::{
         app::AppStateError,
         canister::{CanisterRootError, CanisterState, CanisterStateError},
-        memory_registry::{MemoryRegistry, MemoryRegistryError},
         shard::ShardRegistryError,
         subnet::SubnetError,
     },
