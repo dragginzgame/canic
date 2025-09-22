@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "canister_delegation"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "canister_sharder"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -732,9 +732,9 @@ dependencies = [
 
 [[package]]
 name = "icrc-ledger-types"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87c31beeee0e5ab964861a3d5ea2b5ed7b688b2b22400367a832b1fcf0db1fa4"
+checksum = "0a328670dc13ca5d3adadc8befb0882d0608533da4367ddc08280482a280e545"
 dependencies = [
  "base32",
  "candid",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.9.13"
+version = "0.9.14"
 dependencies = [
  "candid",
  "criterion",
