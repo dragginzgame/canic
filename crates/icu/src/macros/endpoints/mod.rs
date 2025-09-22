@@ -55,18 +55,18 @@ macro_rules! icu_endpoints {
         //
 
         #[::icu::cdk::query]
-        fn icu_app_state() -> ::icu::memory::AppStateData {
-            $crate::memory::AppState::export()
+        fn icu_app_state() -> ::icu::memory::app::AppStateData {
+            $crate::memory::app::AppState::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_canister_state() -> ::icu::memory::CanisterStateData {
-            $crate::memory::CanisterState::export()
+        fn icu_canister_state() -> ::icu::memory::canister::CanisterStateData {
+            $crate::memory::canister::CanisterState::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_cycle_tracker() -> ::icu::memory::CycleTrackerView {
-            $crate::memory::CycleTracker::export()
+        fn icu_cycle_tracker() -> ::icu::memory::cycle::CycleTrackerView {
+            $crate::memory::cycle::CycleTracker::export()
         }
 
         //
@@ -205,7 +205,8 @@ macro_rules! icu_endpoints_shard {
 
         // icu_shard_registry
         #[::icu::cdk::query]
-        async fn icu_shard_registry() -> Result<::icu::memory::ShardRegistryView, ::icu::Error> {
+        async fn icu_shard_registry()
+        -> Result<::icu::memory::shard::ShardRegistryView, ::icu::Error> {
             Ok($crate::ops::shard::export_registry())
         }
 

@@ -23,7 +23,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, memory::CanisterState};
+use crate::{ThisError, memory::canister::CanisterState};
 
 ///
 /// OpsError

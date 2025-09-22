@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     log,
     memory::{
-        CanisterState,
+        canister::CanisterState,
         shard::{PoolMetrics, ShardRegistry, ShardRegistryView},
     },
     ops::{
@@ -166,7 +166,7 @@ const fn ensure_can_create(metrics: &PoolMetrics, policy: &ShardPolicy) -> Resul
 }
 
 fn get_pool_policy(pool: &str) -> Result<(CanisterType, ShardPolicy), Error> {
-    let hub_type = CanisterState::try_get_entry()?.ty;
+    let hub_type = CanisterState::try_get_view()?.ty;
 
     let cfg = Config::try_get_canister(&hub_type)
         .ok()

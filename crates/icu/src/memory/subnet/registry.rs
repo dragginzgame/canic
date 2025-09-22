@@ -4,7 +4,8 @@ use crate::{
     config::Config,
     icu_register_memory,
     memory::{
-        CanisterEntry, CanisterStatus, MemoryError, SUBNET_REGISTRY_MEMORY_ID, subnet::SubnetError,
+        CanisterEntry, CanisterStatus, CanisterView, MemoryError, SUBNET_REGISTRY_MEMORY_ID,
+        subnet::SubnetError,
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -115,7 +116,13 @@ impl SubnetRegistry {
     }
 
     #[must_use]
-    pub fn subnet_directory() -> Vec<CanisterEntry> {
+    pub fn export_views() -> Vec<CanisterView> {
+        SUBNET_REGISTRY
+            .with_borrow(|map| map.iter().map(|e| CanisterView::from(e.value())).collect())
+    }
+
+    #[must_use]
+    pub fn subnet_directory() -> Vec<CanisterView> {
         Self::export()
             .into_iter()
             .filter(|e| e.status == CanisterStatus::Installed)
@@ -125,25 +132,27 @@ impl SubnetRegistry {
                         .map(|cfg| cfg.uses_directory)
                         .unwrap_or(false)
             })
+            .map(CanisterView::from)
             .collect()
     }
 
     #[must_use]
-    pub fn descendants(pid: Principal) -> Vec<CanisterEntry> {
+    pub fn descendants(pid: Principal) -> Vec<CanisterView> {
         let mut result = Vec::new();
         let mut stack = vec![pid];
 
         while let Some(current) = stack.pop() {
             if let Ok(entry) = Self::try_get(current) {
-                // ensure self + every node encountered is included
-                if !result.iter().any(|e: &CanisterEntry| e.pid == entry.pid) {
-                    result.push(entry.clone());
+                let view: CanisterView = entry.into();
+                if !result.iter().any(|e: &CanisterView| e.pid == view.pid) {
+                    result.push(view);
                 }
             }
 
-            let children: Vec<CanisterEntry> = Self::export()
+            let children: Vec<CanisterView> = Self::export()
                 .into_iter()
                 .filter(|e| e.parent_pid == Some(current))
+                .map(Into::into)
                 .collect();
 
             for child in &children {

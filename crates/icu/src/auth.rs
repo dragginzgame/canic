@@ -7,7 +7,7 @@ use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
     memory::{
-        CanisterState,
+        canister::CanisterRoot,
         subnet::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
     },
     types::CanisterType,
@@ -225,7 +225,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = CanisterState::try_get_root_pid()?;
+        let root_pid = CanisterRoot::try_get()?;
 
         if caller == root_pid {
             Ok(())
@@ -240,7 +240,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         // Root is always considered a parent
-        if caller == CanisterState::try_get_root_pid()? {
+        if caller == CanisterRoot::try_get()? {
             return Ok(());
         }
 

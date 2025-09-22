@@ -7,7 +7,7 @@ use crate::{
     },
     config::Config,
     icu_register_memory, impl_storable_candid_unbounded, log,
-    memory::CANISTER_POOL_MEMORY_ID,
+    memory::ROOT_CANISTER_POOL_MEMORY_ID,
     ops::pool::create_pool_canister,
     types::Cycles,
     utils::time::now_secs,
@@ -23,7 +23,7 @@ use std::cell::RefCell;
 thread_local! {
     static CANISTER_POOL: RefCell<CanisterPoolCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(CanisterPoolCore::new(BTreeMap::init(
-            icu_register_memory!(CANISTER_POOL_MEMORY_ID),
+            icu_register_memory!(ROOT_CANISTER_POOL_MEMORY_ID),
         )));
 
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };

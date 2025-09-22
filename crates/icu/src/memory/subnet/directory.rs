@@ -22,14 +22,14 @@ use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     icu_register_memory,
-    memory::{CanisterEntry, MemoryError, SUBNET_DIRECTORY_MEMORY_ID, subnet::SubnetError},
+    memory::{CanisterView, MemoryError, SUBNET_DIRECTORY_MEMORY_ID, subnet::SubnetError},
     types::CanisterType,
 };
 use std::cell::RefCell;
 
 // thread_local
 thread_local! {
-    static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterType, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
+    static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterType, CanisterView, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(icu_register_memory!(SUBNET_DIRECTORY_MEMORY_ID)));
 }
 
@@ -41,15 +41,15 @@ pub struct SubnetDirectory;
 
 impl SubnetDirectory {
     #[must_use]
-    pub fn get(ty: &CanisterType) -> Option<CanisterEntry> {
+    pub fn get(ty: &CanisterType) -> Option<CanisterView> {
         SUBNET_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    pub fn try_get(ty: &CanisterType) -> Result<CanisterEntry, Error> {
+    pub fn try_get(ty: &CanisterType) -> Result<CanisterView, Error> {
         Self::get(ty).ok_or_else(|| MemoryError::from(SubnetError::TypeNotFound(ty.clone())).into())
     }
 
-    pub fn import(view: Vec<CanisterEntry>) {
+    pub fn import(view: Vec<CanisterView>) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for entry in view {
@@ -59,7 +59,7 @@ impl SubnetDirectory {
     }
 
     #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
+    pub fn export() -> Vec<CanisterView> {
         SUBNET_DIRECTORY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 }

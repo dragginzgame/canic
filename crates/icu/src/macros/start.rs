@@ -17,11 +17,12 @@ macro_rules! __icu_load_config {
 macro_rules! icu_start {
     ($canister_type:expr) => {
         #[::icu::cdk::init]
-        fn init(state: ::icu::memory::CanisterStateData, args: Option<Vec<u8>>) {
+        fn init(state: ::icu::memory::canister::CanisterStateData, args: Option<Vec<u8>>) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
-            ::icu::memory::CanisterState::import(state);
+            ::icu::memory::canister::CanisterState::import(state);
+            ::icu::memory::canister::CanisterRoot::set(::icu::cdk::api::msg_caller());
             __icu_shared_setup();
 
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -41,7 +42,7 @@ macro_rules! icu_start {
         #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
-            ::icu::memory::CycleTracker::start();
+            ::icu::memory::cycle::CycleTracker::start();
             icu_setup();
         }
 
@@ -63,9 +64,10 @@ macro_rules! icu_start_root {
             ::icu::log!(::icu::Log::Info, "🏁 init: root");
 
             // register
-            let state = ::icu::memory::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
-            ::icu::memory::CanisterState::set_root_pid(::icu::cdk::api::canister_self());
-            ::icu::memory::CanisterState::set_entry(state);
+            let entry =
+                ::icu::memory::subnet::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
+            ::icu::memory::canister::CanisterRoot::set(::icu::cdk::api::canister_self());
+            ::icu::memory::canister::CanisterState::set_view(entry.into());
 
             // setup
             __icu_shared_setup();
@@ -87,8 +89,8 @@ macro_rules! icu_start_root {
         #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
-            ::icu::memory::CanisterPool::start();
-            ::icu::memory::CycleTracker::start();
+            ::icu::memory::root::CanisterPool::start();
+            ::icu::memory::cycle::CycleTracker::start();
             ::icu::state::wasm::WasmRegistry::import(WASMS);
             icu_setup();
         }

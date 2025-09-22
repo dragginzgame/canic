@@ -9,7 +9,7 @@ macro_rules! icu_endpoints_root {
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            ::icu::memory::AppState::command(cmd)?;
+            ::icu::memory::app::AppState::command(cmd)?;
 
             let bundle = ::icu::ops::sync::SyncBundle::with_app_state()?;
             ::icu::ops::sync::cascade_children(&bundle).await?;
@@ -58,7 +58,7 @@ macro_rules! icu_endpoints_root {
 
         #[::icu::cdk::query]
         fn icu_subnet_registry() -> Vec<::icu::memory::CanisterEntry> {
-            $crate::memory::SubnetRegistry::export()
+            $crate::memory::subnet::SubnetRegistry::export()
         }
 
         //
@@ -84,8 +84,8 @@ macro_rules! icu_endpoints_root {
         //
 
         #[::icu::cdk::query]
-        fn icu_canister_pool() -> ::icu::memory::CanisterPoolView {
-            $crate::memory::CanisterPool::export()
+        fn icu_canister_pool() -> ::icu::memory::root::CanisterPoolView {
+            $crate::memory::root::CanisterPool::export()
         }
 
         //
@@ -110,17 +110,17 @@ macro_rules! icu_endpoints_nonroot {
         //
 
         #[::icu::cdk::query]
-        fn icu_subnet_children() -> Vec<::icu::memory::CanisterEntry> {
+        fn icu_subnet_children() -> Vec<::icu::memory::CanisterView> {
             $crate::memory::subnet::SubnetChildren::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_subnet_directory() -> Vec<::icu::memory::CanisterEntry> {
+        fn icu_subnet_directory() -> Vec<::icu::memory::CanisterView> {
             $crate::memory::subnet::SubnetDirectory::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_subnet_parents() -> Vec<::icu::memory::CanisterEntry> {
+        fn icu_subnet_parents() -> Vec<::icu::memory::CanisterView> {
             $crate::memory::subnet::SubnetParents::export()
         }
 

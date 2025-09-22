@@ -1,7 +1,9 @@
 use crate::{
     Error, ThisError,
     memory::{
-        AppState, AppStateData, CanisterEntry, CanisterState,
+        CanisterView,
+        app::{AppState, AppStateData},
+        canister::CanisterState,
         subnet::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
     },
     ops::OpsError,
@@ -45,7 +47,7 @@ impl AppStateBundle {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct DirectoryBundle {
-    pub subnet_directory: Vec<CanisterEntry>,
+    pub subnet_directory: Vec<CanisterView>,
 }
 
 impl DirectoryBundle {
@@ -63,16 +65,16 @@ impl DirectoryBundle {
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologyBundle {
-    pub descendants: Vec<CanisterEntry>,
-    pub parents: Vec<CanisterEntry>,
+    pub descendants: Vec<CanisterView>,
+    pub parents: Vec<CanisterView>,
 }
 
 impl TopologyBundle {
     pub fn root() -> Result<Self, Error> {
-        let root_parent = CanisterState::try_get_entry()?;
+        let root_parent = CanisterState::try_get_view()?;
 
         Ok(Self {
-            descendants: SubnetRegistry::export(), // entire tree
+            descendants: SubnetRegistry::export_views(), // entire tree
             parents: vec![root_parent],
         })
     }
@@ -114,7 +116,7 @@ impl SyncBundle {
     pub fn for_child(
         parent_pid: Principal,
         child_pid: Principal,
-        all_descendants: &[CanisterEntry],
+        all_descendants: &[CanisterView],
         base: &Self,
     ) -> Self {
         // Trim descendants to child's subtree
@@ -170,7 +172,7 @@ pub async fn root_cascade() -> Result<(), Error> {
             directory: Some(directory.clone()),
             topology: Some(TopologyBundle {
                 descendants: SubnetRegistry::descendants(child.pid),
-                parents: vec![SubnetRegistry::try_get(root_pid)?],
+                parents: vec![CanisterState::try_get_view()?],
             }),
         };
 
@@ -213,26 +215,13 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
 
     if let Some(app) = &bundle.app_state {
         AppState::import(app.app_state);
-        log!(Log::Info, "sync.save_state: app_state imported");
     }
 
     if let Some(dir) = &bundle.directory {
-        let n = dir.subnet_directory.len();
         SubnetDirectory::import(dir.subnet_directory.clone());
-        log!(
-            Log::Info,
-            "sync.save_state: directory imported ({n} entries)",
-        );
     }
 
     if let Some(top) = &bundle.topology {
-        log!(
-            Log::Info,
-            "sync.save_state: topology received (descendants={}, parents={})",
-            top.descendants.len(),
-            top.parents.len()
-        );
-
         let self_entry = top
             .descendants
             .iter()
@@ -240,14 +229,9 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
             .cloned()
             .ok_or_else(|| OpsError::from(SyncError::CanisterNotFound(self_pid)))?;
 
-        CanisterState::set_entry(self_entry);
+        CanisterState::set_view(self_entry);
 
         SubnetParents::import(top.parents.clone());
-        log!(
-            Log::Info,
-            "sync.save_state: parents imported ({} entries)",
-            top.parents.len()
-        );
 
         let direct_children: Vec<_> = top
             .descendants
@@ -256,19 +240,14 @@ pub fn save_state(bundle: &SyncBundle) -> Result<(), Error> {
             .cloned()
             .collect();
 
-        let m = direct_children.len();
         SubnetChildren::import(direct_children);
-        log!(
-            Log::Info,
-            "sync.save_state: children imported ({m} entries)",
-        );
     }
 
     Ok(())
 }
 
 /// Check if `entry` is part of the subtree rooted at `root_pid`.
-fn is_in_subtree(root_pid: Principal, entry: &CanisterEntry, all: &[CanisterEntry]) -> bool {
+fn is_in_subtree(root_pid: Principal, entry: &CanisterView, all: &[CanisterView]) -> bool {
     let mut current = entry.parent_pid;
 
     while let Some(pid) = current {
