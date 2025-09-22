@@ -1,7 +1,7 @@
 use crate::{
     Error,
     config::Config,
-    memory::SubnetRegistry,
+    memory::subnet::SubnetRegistry,
     ops::{
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},

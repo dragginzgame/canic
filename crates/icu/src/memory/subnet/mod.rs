@@ -25,30 +25,30 @@ pub struct SubnetView;
 
 impl SubnetView {
     #[must_use]
-    pub fn directory() -> SubnetDirectoryView {
+    pub fn directory() -> SubnetDirectory {
         if crate::memory::CanisterState::is_root() {
-            SubnetRegistry::subnet_directory()
-        } else {
-            SubnetDirectory::export()
+            let _ = SubnetRegistry::subnet_directory();
         }
+
+        SubnetDirectory
     }
 
     #[must_use]
-    pub fn children() -> SubnetChildrenView {
+    pub fn children() -> SubnetChildren {
         if crate::memory::CanisterState::is_root() {
-            SubnetRegistry::subnet_children(canister_self())
-        } else {
-            SubnetChildren::export()
+            let _ = SubnetRegistry::subnet_children(canister_self());
         }
+
+        SubnetChildren
     }
 
     #[must_use]
-    pub fn parents() -> SubnetParentsView {
+    pub fn parents() -> SubnetParents {
         if crate::memory::CanisterState::is_root() {
-            SubnetRegistry::subnet_parents(canister_self())
-        } else {
-            SubnetParents::export()
+            let _ = SubnetRegistry::subnet_parents(canister_self());
         }
+
+        SubnetParents
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Memory, Vec as StableVec, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, Vec as StableVec, memory::VirtualMemory},
     icu_register_memory,
     memory::{CanisterEntry, SUBNET_PARENTS_MEMORY_ID},
     types::CanisterType,
@@ -7,81 +7,59 @@ use crate::{
 use candid::Principal;
 use std::cell::RefCell;
 
+// thread_local
 thread_local! {
-    static SUBNET_PARENTS: RefCell<SubnetParentsCore<VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(SubnetParentsCore::new(
-            StableVec::init(icu_register_memory!(SUBNET_PARENTS_MEMORY_ID)),
-        ));
+    static SUBNET_PARENTS: RefCell<
+        StableVec<CanisterEntry, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(
+        StableVec::init(icu_register_memory!(SUBNET_PARENTS_MEMORY_ID)),
+    );
 }
-
-///
-/// SubnetParentsView
-/// view of all subnet parents
-///
-
-pub type SubnetParentsView = Vec<CanisterEntry>;
 
 ///
 /// SubnetParents
 ///
+/// Public API for accessing parents
+///
+/// This is a zero-sized handle; the actual state lives in `SUBNET_PARENTS`.
+///
 
+pub type SubnetParentsView = Vec<CanisterEntry>;
+
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SubnetParents;
 
 impl SubnetParents {
-    /// Lookup by canister principal
+    /// Lookup a parent by canister principal
     #[must_use]
-    pub fn find_by_pid(pid: &Principal) -> Option<CanisterEntry> {
-        SUBNET_PARENTS.with_borrow(|core| core.find_by_pid(pid))
+    pub fn find_by_pid(&self, pid: &Principal) -> Option<CanisterEntry> {
+        SUBNET_PARENTS.with_borrow(|vec| vec.iter().find(|p| &p.pid == pid))
     }
 
-    /// Lookup by canister type
+    /// Lookup a parent by canister type
     #[must_use]
-    pub fn find_by_type(ty: &CanisterType) -> Option<CanisterEntry> {
-        SUBNET_PARENTS.with_borrow(|core| core.find_by_type(ty))
+    pub fn find_by_type(&self, ty: &CanisterType) -> Option<CanisterEntry> {
+        SUBNET_PARENTS.with_borrow(|vec| vec.iter().find(|p| &p.ty == ty))
     }
 
     /// Export current state
-    pub(super) fn export() -> SubnetParentsView {
-        SUBNET_PARENTS.with_borrow(SubnetParentsCore::export)
-    }
-
-    /// Import state (replace existing entries)
-    pub fn import(data: SubnetParentsView) {
-        SUBNET_PARENTS.with_borrow_mut(|core| core.import(data));
-    }
-}
-
-///
-/// SubnetParentsCore
-///
-
-pub struct SubnetParentsCore<M: Memory>(StableVec<CanisterEntry, M>);
-
-impl<M: Memory> SubnetParentsCore<M> {
-    pub const fn new(parents: StableVec<CanisterEntry, M>) -> Self {
-        Self(parents)
-    }
-
-    /// Find by pid
-    pub fn find_by_pid(&self, pid: &Principal) -> Option<CanisterEntry> {
-        self.0.iter().find(|p| &p.pid == pid)
-    }
-
-    /// Find by type
-    pub fn find_by_type(&self, ty: &CanisterType) -> Option<CanisterEntry> {
-        self.0.iter().find(|p| &p.ty == ty)
-    }
-
-    /// Export all entries
+    #[must_use]
     pub fn export(&self) -> SubnetParentsView {
-        self.0.iter().collect()
+        SUBNET_PARENTS.with_borrow(|vec| vec.iter().collect())
     }
 
-    /// Replace all entries
-    pub fn import(&mut self, data: SubnetParentsView) {
-        self.0.clear();
-        for entry in data {
-            self.0.push(&entry);
-        }
+    /// Import state (replace everything)
+    pub fn import(&self, data: SubnetParentsView) {
+        SUBNET_PARENTS.with_borrow_mut(|vec| {
+            vec.clear();
+            for entry in data {
+                vec.push(&entry);
+            }
+        });
+    }
+
+    /// Clear all parents
+    pub fn clear(&self) {
+        SUBNET_PARENTS.with_borrow_mut(|vec| vec.clear());
     }
 }

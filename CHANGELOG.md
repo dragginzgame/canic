@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.15] - 2025-09-21
+- made SubnetDirectory + co into zero sized handles so root can return different versions
+
 ## [0.9.11] - 2025-09-21
 - added ICRC-103 to standards
 - fixed a few nasty bugs in the canister pools

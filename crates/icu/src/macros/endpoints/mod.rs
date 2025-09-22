@@ -75,17 +75,17 @@ macro_rules! icu_endpoints {
 
         #[::icu::cdk::query]
         fn icu_subnet_children() -> ::icu::memory::SubnetChildrenView {
-            $crate::memory::SubnetView::children()
+            $crate::memory::SubnetView::children().export()
         }
 
         #[::icu::cdk::query]
         fn icu_subnet_directory() -> ::icu::memory::SubnetDirectoryView {
-            $crate::memory::SubnetView::directory()
+            $crate::memory::SubnetView::directory().export()
         }
 
         #[::icu::cdk::query]
         fn icu_subnet_parents() -> ::icu::memory::SubnetParentsView {
-            $crate::memory::SubnetView::parents()
+            $crate::memory::SubnetView::parents().export()
         }
 
         //

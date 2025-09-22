@@ -4,7 +4,7 @@ use crate::{
         ic::{deposit_cycles, upgrade_canister},
         prelude::*,
     },
-    memory::{CanisterState, SubnetDirectory},
+    memory::{CanisterState, SubnetView},
     ops::{
         canister::create_and_install_canister,
         request::{
@@ -69,9 +69,9 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 
     // Look up parent
     let parent_pid = match &req.parent {
-        CreateCanisterParent::Root => SubnetDirectory::try_get_root()?.pid,
+        CreateCanisterParent::Root => SubnetView::directory().try_get_root()?.pid,
         CreateCanisterParent::Caller => msg_caller(),
-        CreateCanisterParent::Directory(ty) => SubnetDirectory::try_get(ty)?.pid,
+        CreateCanisterParent::Directory(ty) => SubnetView::directory().try_get(ty)?.pid,
         CreateCanisterParent::Canister(pid) => *pid,
     };
 

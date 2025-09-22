@@ -74,7 +74,7 @@ macro_rules! icu_start_root {
             __icu_shared_setup();
 
             // register
-            ::icu::memory::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
+            ::icu::memory::subnet::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
 
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                 ::icu::cdk::futures::spawn(icu_install());

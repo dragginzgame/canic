@@ -2,8 +2,8 @@ use crate::{
     Error,
     interface::prelude::*,
     memory::{
-        AppState, AppStateData, SubnetChildren, SubnetChildrenView, SubnetDirectory,
-        SubnetDirectoryView, SubnetParents, SubnetParentsView, SubnetView,
+        AppState, AppStateData, SubnetChildrenView, SubnetDirectoryView, SubnetParentsView,
+        SubnetView,
     },
 };
 
@@ -24,9 +24,9 @@ impl SyncBundle {
     pub fn all() -> Self {
         Self {
             app_state: Some(AppState::export()),
-            subnet_children: Some(SubnetView::children()),
-            subnet_directory: Some(SubnetView::directory()),
-            subnet_parents: Some(SubnetView::parents()),
+            subnet_children: Some(SubnetView::children().export()),
+            subnet_directory: Some(SubnetView::directory().export()),
+            subnet_parents: Some(SubnetView::parents().export()),
         }
     }
 
@@ -99,19 +99,19 @@ pub fn save_state(bundle: &SyncBundle) {
         AppState::import(*data);
     }
     if let Some(data) = &bundle.subnet_children {
-        SubnetChildren::import(data.clone());
+        SubnetView::children().import(data.clone());
     }
     if let Some(data) = &bundle.subnet_directory {
-        SubnetDirectory::import(data.clone());
+        SubnetView::directory().import(data.clone());
     }
     if let Some(data) = &bundle.subnet_parents {
-        SubnetParents::import(data.clone());
+        SubnetView::parents().import(data.clone());
     }
 }
 
 /// propagate state to all children
 pub async fn cascade_children(bundle: &SyncBundle) -> Result<(), Error> {
-    for canister in SubnetView::children() {
+    for canister in SubnetView::children().export() {
         send_bundle(&canister.pid, bundle, "icu_sync_cascade", "cascade").await?;
     }
 

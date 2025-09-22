@@ -23,8 +23,11 @@ use crate::{
     config::Config,
     icu_register_memory,
     memory::{
-        CanisterEntry, CanisterStatus, MemoryError, SUBNET_REGISTRY_MEMORY_ID, SubnetChildrenView,
-        SubnetDirectory, SubnetDirectoryView, SubnetParentsView, subnet::SubnetError,
+        CanisterEntry, CanisterStatus, MemoryError, SUBNET_REGISTRY_MEMORY_ID,
+        subnet::{
+            SubnetChildren, SubnetChildrenView, SubnetDirectory, SubnetDirectoryView, SubnetError,
+            SubnetParents,
+        },
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -76,9 +79,6 @@ impl SubnetRegistry {
         };
 
         SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(pid, entry));
-
-        // make sure the directory is up to date
-        SubnetDirectory::import(Self::subnet_directory());
     }
 
     #[must_use]
@@ -134,8 +134,15 @@ impl SubnetRegistry {
     /// Views
     ///
 
+    /// Build a directory view from the registry, refresh the global cache,
+    /// and return a handle for querying it.
+    ///
+    /// On root, this derives the view from the registry; on children, it
+    /// just refreshes the cached projection.
+    ///
+    /// Returns a zero-sized handle; the data lives in thread-local storage.
     #[must_use]
-    pub fn subnet_directory() -> SubnetDirectoryView {
+    pub fn subnet_directory() -> SubnetDirectory {
         use std::collections::BTreeMap as StdBTreeMap;
 
         let mut map: StdBTreeMap<CanisterType, CanisterEntry> = StdBTreeMap::new();
@@ -145,60 +152,72 @@ impl SubnetRegistry {
                 continue;
             }
 
-            // Always include root explicitly
             if entry.ty == CanisterType::ROOT {
                 map.insert(CanisterType::ROOT, entry);
                 continue;
             }
 
-            if let Ok(canister_cfg) = Config::try_get_canister(&entry.ty)
-                && canister_cfg.uses_directory
+            if Config::try_get_canister(&entry.ty)
+                .map(|cfg| cfg.uses_directory)
+                .unwrap_or(false)
             {
                 map.insert(entry.ty.clone(), entry);
             }
         }
 
-        map.into_iter().collect()
+        let view: SubnetDirectoryView = map.into_iter().collect();
+
+        let dir = SubnetDirectory; // zero-sized handle
+        dir.import(view); // refresh global cache
+
+        dir
     }
 
+    /// Children of a canister.
+    ///
+    /// Builds a view of all children for the given `pid`, refreshes the
+    /// global cache, and returns a handle for querying them.
     #[must_use]
-    pub fn subnet_children(pid: Principal) -> SubnetChildrenView {
-        Self::export()
+    pub fn subnet_children(pid: Principal) -> SubnetChildren {
+        let view: SubnetChildrenView = Self::export()
             .into_iter()
-            .filter_map(|(_, e)| {
-                if e.parent_pid == Some(pid) {
-                    Some(e)
-                } else {
-                    None
-                }
-            })
-            .collect()
+            .filter_map(|(_, e)| (e.parent_pid == Some(pid)).then_some(e))
+            .collect();
+
+        let children = SubnetChildren;
+        children.import(view);
+
+        children
     }
 
+    /// Parents of a canister.
+    ///
+    /// Walks the parent chain for the given `pid`, refreshes the
+    /// global cache, and returns a handle for querying it.
     #[must_use]
-    pub fn subnet_parents(pid: Principal) -> SubnetParentsView {
+    pub fn subnet_parents(pid: Principal) -> SubnetParents {
         let mut result = Vec::new();
         let mut current = Some(pid);
 
         while let Some(child_pid) = current {
-            // look up this entry
             if let Some(entry) = Self::get(child_pid)
                 && let Some(parent_pid) = entry.parent_pid
+                && let Some(parent_entry) = Self::get(parent_pid)
             {
-                // push parent entry into result
-                if let Some(parent_entry) = Self::get(parent_pid) {
-                    result.push(parent_entry.clone());
-                    current = Some(parent_pid);
-                    continue;
-                }
+                result.push(parent_entry.clone());
+                current = Some(parent_pid);
+
+                continue;
             }
-            // no parent (either root or missing) → stop
             current = None;
         }
 
-        // optionally reverse so root is first
         result.reverse();
-        result
+
+        let parents = SubnetParents; // zero-sized handle
+        parents.import(result); // refresh global cache
+
+        parents
     }
 }
 

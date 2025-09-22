@@ -13,9 +13,8 @@ pub use cycle::{CycleTracker, CycleTrackerView};
 pub use memory_registry::MemoryRegistry;
 pub use shard::{ShardRegistry, ShardRegistryError, ShardRegistryView};
 pub use subnet::{
-    CanisterEntry, CanisterStatus, SubnetChildren, SubnetChildrenView, SubnetDirectory,
-    SubnetDirectoryView, SubnetError, SubnetParents, SubnetParentsView, SubnetRegistry,
-    SubnetRegistryView, SubnetView,
+    CanisterEntry, CanisterStatus, SubnetChildrenView, SubnetDirectoryView, SubnetError,
+    SubnetParentsView, SubnetRegistry, SubnetRegistryView, SubnetView,
 };
 
 use crate::{

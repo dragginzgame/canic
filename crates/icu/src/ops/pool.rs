@@ -1,7 +1,7 @@
 use crate::{
     Error, Log,
     interface::ic::{get_cycles, uninstall_code},
-    memory::{CanisterPool, CanisterState, SubnetRegistry},
+    memory::{CanisterPool, CanisterState, subnet::SubnetRegistry},
     ops::canister::create_canister,
     ops::prelude::*,
     types::{Cycles, TC},
