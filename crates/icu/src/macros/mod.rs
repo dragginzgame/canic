@@ -6,25 +6,32 @@ pub mod start;
 // log
 #[macro_export]
 macro_rules! log {
+    // Explicit level, no args
     ($level:expr, $fmt:expr) => {{
-        // Pass an empty set of arguments to @inner
         $crate::log!(@inner $level, $fmt,);
     }};
 
-    // Match when additional arguments are provided
+    // Explicit level, with args
     ($level:expr, $fmt:expr, $($arg:tt)*) => {{
         $crate::log!(@inner $level, $fmt, $($arg)*);
     }};
 
-    // Inner macro for actual logging logic to avoid code duplication
+    // No level given, default to Info
+    ($fmt:expr) => {{
+        $crate::log!(@inner $crate::Log::Info, $fmt,);
+    }};
+    ($fmt:expr, $($arg:tt)*) => {{
+        $crate::log!(@inner $crate::Log::Info, $fmt, $($arg)*);
+    }};
+
+
+    // Inner logic
     (@inner $level:expr, $fmt:expr, $($arg:tt)*) => {{
-        let message = format!($fmt, $($arg)*);  // Apply formatting with args
+        let message = format!($fmt, $($arg)*);
         let ty_raw = match $crate::memory::CanisterState::get_type() {
             Some(ty) => ty.to_string(),
             None => "-".to_string(),
         };
-
-        // Ellipsize long types to keep the pipe-aligned column centered
         let ty_disp = $crate::utils::format::ellipsize_middle(
             &ty_raw,
             $crate::LOG_CANISTER_TYPE_ELLIPSIS_THRESHOLD,
