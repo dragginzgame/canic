@@ -18,10 +18,10 @@ macro_rules! log {
 
     // No level given, default to Info
     ($fmt:expr) => {{
-        $crate::log!(@inner $crate::Log::Info, $fmt,);
+        $crate::log!(@inner $crate::Log::Debug, $fmt,);
     }};
     ($fmt:expr, $($arg:tt)*) => {{
-        $crate::log!(@inner $crate::Log::Info, $fmt, $($arg)*);
+        $crate::log!(@inner $crate::Log::Debug, $fmt, $($arg)*);
     }};
 
 
@@ -45,7 +45,8 @@ macro_rules! log {
             $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{ty_col}| {message}"),
             $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{ty_col}| {message}"),
             $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Error => format!("\x1b[31mERR  \x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Error => format!("\x1b[31mERROR\x1b[0m|{ty_col}| {message}"),
+            $crate::Log::Debug => format!("DEBUG|{ty_col}| {message}"),
         };
 
         $crate::cdk::println!("{final_line}");

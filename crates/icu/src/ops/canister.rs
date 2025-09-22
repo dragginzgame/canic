@@ -4,7 +4,7 @@ use crate::{
     config::Config,
     interface::{ic::install_code, prelude::*},
     memory::{
-        AppState, CanisterPool,
+        CanisterPool,
         subnet::{SubnetRegistry, SubnetView},
     },
     ops::sync::{SyncBundle, cascade_children},
@@ -118,19 +118,14 @@ pub(super) async fn register_installed(
     canister_pid: Principal,
     canister_type: &CanisterType,
 ) -> Result<(), Error> {
-    let canister = Config::try_get_canister(canister_type)?;
     let wasm = WasmRegistry::try_get(canister_type)?;
 
     // flip to Installed
     SubnetRegistry::install(canister_pid, wasm.module_hash())?;
 
-    // if the subnet directory has changed, we need to do a full cascade
-    if canister.uses_directory {
-        let sd = SubnetView::directory().export();
-        let bundle = SyncBundle::default().with_subnet_directory(sd);
-
-        cascade_children(&bundle).await?;
-    }
+    // full cascade afterwards, we can always optimise this
+    let bundle = SyncBundle::all();
+    cascade_children(&bundle).await?;
 
     Ok(())
 }
@@ -147,18 +142,7 @@ pub(super) async fn install_canister(
 ) -> Result<(), Error> {
     // fetch the canister by its type
     let wasm = WasmRegistry::try_get(canister_type)?;
-
-    // create the bundle as we're on root
-    let ast = AppState::export();
-    let sc = SubnetRegistry::subnet_children(canister_pid).export();
-    let sd = SubnetRegistry::subnet_directory().export();
-    let sp = SubnetRegistry::subnet_parents(canister_pid).export();
-
-    let bundle = SyncBundle::default()
-        .with_app_state(ast)
-        .with_subnet_children(sc)
-        .with_subnet_directory(sd.clone())
-        .with_subnet_parents(sp);
+    let bundle = SyncBundle::all();
 
     // install code
     let args = (bundle, extra_arg);

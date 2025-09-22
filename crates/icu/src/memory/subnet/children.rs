@@ -17,14 +17,14 @@ thread_local! {
     );
 }
 
-pub type SubnetChildrenView = Vec<CanisterEntry>;
-
 ///
 /// SubnetChildren
 ///
 /// Public API for accessing children
 /// This is a zero-sized handle; the actual state lives in `SUBNET_CHILDREN`.
 ///
+
+pub type SubnetChildrenView = Vec<CanisterEntry>;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SubnetChildren;

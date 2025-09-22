@@ -65,8 +65,6 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 
 // create_canister_response
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
-    crate::log!("here {req:?}");
-
     // Look up parent
     let parent_pid = match &req.parent {
         CreateCanisterParent::Root => SubnetView::directory().try_get_root()?.pid,
@@ -74,8 +72,6 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         CreateCanisterParent::Directory(ty) => SubnetView::directory().try_get(ty)?.pid,
         CreateCanisterParent::Canister(pid) => *pid,
     };
-
-    crate::log!("here2");
 
     let new_canister_pid =
         create_and_install_canister(&req.canister_type, parent_pid, req.extra_arg.clone()).await?;

@@ -160,6 +160,7 @@ pub enum Log {
     Info,
     Warn,
     Error,
+    Debug,
 }
 
 ///
