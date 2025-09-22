@@ -103,9 +103,10 @@ release: ensure-clean
 
 #
 # Tests
+# create the canisters first, or the unit tests will fail
 #
 
-test: test-unit test-canisters
+test: test-canisters test-unit
 
 test-unit:
 	cargo test --workspace

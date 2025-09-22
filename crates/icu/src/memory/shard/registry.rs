@@ -114,20 +114,17 @@ impl ShardRegistry {
     /// Try to assign tenant to any available shard in the pool.
     #[must_use]
     pub fn assign_best_effort(pool: &str, tenant: Principal) -> Option<Principal> {
-        // if already assigned and shard is usable, return it
-        if let Some(pid) = Self::tenant_shard(pool, tenant)
-            && Self::export()
-                .iter()
-                .any(|(p, e)| *p == pid && e.pool == pool && e.count < e.capacity)
-        {
-            return Some(pid);
-        }
+        Self::assign_best_effort_internal(pool, tenant, None)
+    }
 
-        // find least-loaded candidate shard
-        let candidate = Self::peek_best_effort(pool)?;
-        Self::assign(pool, tenant, candidate).ok()?;
-
-        Some(candidate)
+    /// Try to assign tenant to any available shard, excluding a specific shard.
+    #[must_use]
+    pub fn assign_best_effort_excluding(
+        pool: &str,
+        tenant: Principal,
+        exclude: Principal,
+    ) -> Option<Principal> {
+        Self::assign_best_effort_internal(pool, tenant, Some(exclude))
     }
 
     pub fn release(pool: &str, tenant: Principal) -> Result<(), Error> {
@@ -150,11 +147,18 @@ impl ShardRegistry {
     /// Look at the least loaded shard in a pool (without assignment).
     #[must_use]
     pub fn peek_best_effort(pool: &str) -> Option<Principal> {
-        Self::export()
+        let snapshot = Self::export();
+        Self::candidate_order(&snapshot, pool, None)
             .into_iter()
-            .filter(|(_, e)| e.pool == pool && e.count < e.capacity)
-            .min_by_key(|(_, e)| (e.load_bps().unwrap_or(u64::MAX), e.count, e.created_at_secs))
-            .map(|(pid, _)| pid)
+            .next()
+    }
+
+    #[must_use]
+    pub fn peek_best_effort_excluding(pool: &str, exclude: Principal) -> Option<Principal> {
+        let snapshot = Self::export();
+        Self::candidate_order(&snapshot, pool, Some(&exclude))
+            .into_iter()
+            .next()
     }
 
     #[must_use]
@@ -176,5 +180,105 @@ impl ShardRegistry {
     #[must_use]
     pub fn export() -> ShardRegistryView {
         Self::with(ShardCore::all_entries)
+    }
+
+    fn assign_best_effort_internal(
+        pool: &str,
+        tenant: Principal,
+        exclude: Option<Principal>,
+    ) -> Option<Principal> {
+        let snapshot = Self::export();
+        let exclude_ref = exclude.as_ref();
+
+        if let Some(pid) = Self::tenant_shard(pool, tenant)
+            && exclude_ref.is_none_or(|ex| *ex != pid)
+            && snapshot
+                .iter()
+                .any(|(p, e)| *p == pid && e.pool == pool && e.count < e.capacity)
+        {
+            return Some(pid);
+        }
+
+        let candidates = Self::candidate_order(&snapshot, pool, exclude_ref);
+
+        candidates
+            .into_iter()
+            .find(|&candidate| Self::assign(pool, tenant, candidate).is_ok())
+    }
+
+    fn candidate_order(
+        snapshot: &[(Principal, ShardEntry)],
+        pool: &str,
+        exclude: Option<&Principal>,
+    ) -> Vec<Principal> {
+        let mut candidates: Vec<(Principal, (u64, u32, u64))> = snapshot
+            .iter()
+            .filter_map(|(pid, entry)| {
+                if entry.pool == pool && entry.count < entry.capacity && (exclude != Some(pid)) {
+                    Some((
+                        *pid,
+                        (
+                            entry.load_bps().unwrap_or(u64::MAX),
+                            entry.count,
+                            entry.created_at_secs,
+                        ),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        candidates.sort_by_key(|(_, key)| *key);
+
+        candidates.into_iter().map(|(pid, _)| pid).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    const POOL: &str = "pool";
+
+    #[test]
+    fn assign_best_effort_excluding_skips_donor() {
+        ShardRegistry::clear();
+
+        let donor = p(1);
+        let other = p(2);
+        let tenant = p(99);
+
+        ShardRegistry::create(donor, POOL, &CanisterType::new("donor"), 2);
+        ShardRegistry::create(other, POOL, &CanisterType::new("other"), 2);
+        ShardRegistry::assign(POOL, tenant, donor).unwrap();
+
+        let reassigned = ShardRegistry::assign_best_effort_excluding(POOL, tenant, donor);
+        assert_eq!(reassigned, Some(other));
+        assert_eq!(ShardRegistry::tenant_shard(POOL, tenant), Some(other));
+
+        let donor_entry = ShardRegistry::with(|s| s.get_entry(&donor)).unwrap();
+        assert_eq!(donor_entry.count, 0);
+        let other_entry = ShardRegistry::with(|s| s.get_entry(&other)).unwrap();
+        assert_eq!(other_entry.count, 1);
+    }
+
+    #[test]
+    fn assign_best_effort_excluding_returns_none_when_no_alternative() {
+        ShardRegistry::clear();
+
+        let donor = p(3);
+        let tenant = p(4);
+
+        ShardRegistry::create(donor, POOL, &CanisterType::new("solo"), 2);
+        ShardRegistry::assign(POOL, tenant, donor).unwrap();
+
+        let reassigned = ShardRegistry::assign_best_effort_excluding(POOL, tenant, donor);
+        assert!(reassigned.is_none());
+        assert_eq!(ShardRegistry::tenant_shard(POOL, tenant), Some(donor));
     }
 }

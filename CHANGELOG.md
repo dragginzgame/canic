@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.11] - 2025-09-21
+- added ICRC-103 to standards
+- fixed a few nasty bugs in the canister pools
+
 ## [0.9.3] - 2025-09-17
 - split off Subnet Views, fixed the bug where state wasn't cascading
 - added find_by_type for parent

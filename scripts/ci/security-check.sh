@@ -87,7 +87,7 @@ if [ -d "$ROOT/.github/workflows" ]; then
     else
         print_warning "CI workflow not found"
     fi
-    
+
     if [ -f "$ROOT/.github/workflows/release.yml" ]; then
         print_success "Release workflow exists"
     else
@@ -138,14 +138,14 @@ fi
 # Check if we're in a git repository
 if git rev-parse --git-dir > /dev/null 2>&1; then
     print_success "Git repository detected"
-    
+
     # Check for existing tags
     tag_count=$(git tag | wc -l)
     if [ "$tag_count" -gt 0 ]; then
         print_info "Found $tag_count existing git tags"
         latest_tag=$(git tag --sort=-version:refname | head -n1)
         print_info "Latest tag: $latest_tag"
-        
+
         # Check tag integrity
         print_info "Checking tag integrity..."
         for tag in $(git tag); do
@@ -161,7 +161,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
                 print_error "✗ $tag (broken tag)"
             fi
         done
-        
+
         # Check if current HEAD matches any tag
         current_commit=$(git rev-parse HEAD)
         matching_tags=$(git tag --points-at HEAD)
@@ -184,4 +184,4 @@ echo "  1. Update CHANGELOG.md with your changes"
 echo "  2. Run 'make patch' (or minor/major) to bump version"
 echo "  3. Run 'git push --follow-tags' to create a release"
 echo ""
-print_info "For more information, see VERSIONING.md" 
+print_info "For more information, see VERSIONING.md"

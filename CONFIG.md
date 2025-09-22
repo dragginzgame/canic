@@ -37,7 +37,7 @@ icrc21 = true
   - `initial_cycles: string` – required (e.g., "6T").
   - `topup.threshold: string`, `topup.amount: string` – optional; defaults to 10T/5T.
   - `uses_directory: bool` – optional.
-  - `auto_create: u16` – optional; pre-create N children for this type (root only).
+  - `auto_create: bool` – optional; create this canister under root at init
   - `delegation: bool` – optional; enable delegation endpoints for this canister type.
   - `sharder` – optional; only for hub-like parents that assign items to shard pools:
     - `pools.<name>.canister_type: string` – child canister type.

@@ -33,8 +33,8 @@ pub enum AuthError {
     NotApp(Principal),
 
     /// Caller does not match the expected canister type.
-    #[error("caller '{0}' does not match canister type '{1}'")]
-    NotCanisterType(Principal, CanisterType),
+    #[error("caller '{0}' does not match the subnet directory's canister type '{1}'")]
+    NotDirectoryType(Principal, CanisterType),
 
     /// Caller is not a child of the current canister.
     #[error("caller '{0}' is not a child of this canister")]
@@ -78,6 +78,9 @@ pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>
 /// Auth Functions
 ///
 
+///
+/// require_all
+///
 /// Require that all provided rules pass for the current caller.
 ///
 /// Returns the first failing rule error, or `AuthError::NoRulesDefined` if `rules` is empty.
@@ -89,7 +92,7 @@ pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>
 /// let _ = auth::require_all(vec![]).await; // will error: NoRulesDefined
 /// # Ok(()) }
 /// ```
-// require_all
+///
 pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
@@ -104,6 +107,9 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     Ok(())
 }
 
+///
+/// require_any
+///
 /// Require that any one of the provided rules passes for the current caller.
 ///
 /// Returns the last failing rule error if none pass, or `AuthError::NoRulesDefined` if empty.
@@ -115,7 +121,7 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
 /// let _ = auth::require_any(vec![]).await; // will error: NoRulesDefined
 /// # Ok(()) }
 /// ```
-// require_any
+///
 pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
@@ -171,15 +177,22 @@ pub fn is_app(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_canister_type
-// check caller against the id of a specific canister path
-#[must_use]
-pub fn is_canister_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
-    Box::pin(async move {
-        SubnetDirectory::try_get(&ty)
-            .map_err(|_| AuthError::NotCanisterType(caller, ty.clone()))?;
+///
+/// is_directory_type
+/// check caller against the SubnetDirectory only
+///
 
-        Ok(())
+#[must_use]
+pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
+    Box::pin(async move {
+        let canister = SubnetDirectory::try_get(&ty)
+            .map_err(|_| AuthError::NotDirectoryType(caller, ty.clone()))?;
+
+        if canister.pid == caller {
+            Ok(())
+        } else {
+            Err(AuthError::NotDirectoryType(caller, ty.clone()))?
+        }
     })
 }
 

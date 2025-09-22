@@ -248,6 +248,7 @@ pub async fn assign_with_policy(
 
     let fallback = ShardRegistry::assign_best_effort(pool, tenant)
         .ok_or_else(|| Error::custom("no shard available after creation"))?;
+
     Ok(fallback)
 }
 
@@ -259,22 +260,31 @@ pub async fn drain_shard(pool: &str, shard_pid: Principal, limit: u32) -> Result
     let mut moved = 0;
 
     for tenant in tenants.into_iter().take(limit as usize) {
-        if ShardRegistry::assign_best_effort(pool, tenant).is_some() {
-            log!(Log::Info, "🚰 drained tenant={tenant} shard={shard_pid}");
+        if let Some(new_pid) = ShardRegistry::assign_best_effort_excluding(pool, tenant, shard_pid)
+        {
+            log!(
+                Log::Info,
+                "🚰 drained tenant={tenant} donor={shard_pid} → shard={new_pid}"
+            );
             moved += 1;
             continue;
         }
+
+        // No shard available → create one if policy allows
+        let metrics = ShardRegistry::metrics(pool);
+        ensure_can_create(&metrics, &policy).map_err(OpsError::ShardError)?;
 
         let response =
             create_canister_request::<Vec<u8>>(&canister_type, CreateCanisterParent::Caller, None)
                 .await?;
         let new_pid = response.new_canister_pid;
+
         ShardRegistry::create(new_pid, pool, &canister_type, policy.initial_capacity);
         ShardRegistry::assign_direct(pool, tenant, new_pid)?;
 
         log!(
             Log::Ok,
-            "✨ created new shard={new_pid} draining={shard_pid}"
+            "✨ created shard={new_pid} draining donor={shard_pid}"
         );
         moved += 1;
     }
@@ -333,6 +343,7 @@ pub fn rebalance_pool(pool: &str, limit: u32) -> Result<u32, Error> {
 pub fn decommission_shard(shard_pid: Principal) -> Result<(), Error> {
     ShardRegistry::remove(shard_pid)?;
     log!(Log::Ok, "🗑️ decommissioned shard={shard_pid}");
+
     Ok(())
 }
 

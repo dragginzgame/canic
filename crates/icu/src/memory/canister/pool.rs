@@ -104,8 +104,15 @@ impl CanisterPool {
                 );
 
                 spawn(async move {
-                    for _ in 0..missing {
-                        let _ = create_pool_canister().await;
+                    for i in 0..missing {
+                        match create_pool_canister().await {
+                            Ok(_) => {
+                                log!(Log::Ok, "✨ pool canister created ({}/{missing})", i + 1);
+                            }
+                            Err(e) => {
+                                log!(Log::Warn, "⚠️ failed to create pool canister: {e:?}");
+                            }
+                        }
                     }
                 });
 

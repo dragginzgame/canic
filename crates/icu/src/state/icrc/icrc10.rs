@@ -9,12 +9,17 @@ pub const ICRC_10_SUPPORTED_STANDARDS: &[(Icrc10Standard, &str, &str)] = &[
     (
         Icrc10Standard::Icrc10,
         "ICRC-10",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10/ICRC-10.md",
+        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10",
     ),
     (
         Icrc10Standard::Icrc21,
         "ICRC-21",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21/ICRC-21.md",
+        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21",
+    ),
+    (
+        Icrc10Standard::Icrc103,
+        "ICRC-103",
+        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-103",
     ),
 ];
 
@@ -35,6 +40,9 @@ impl Icrc10Registry {
         if let Some(standards) = &config.standards {
             if standards.icrc21 {
                 supported.push(Icrc10Standard::Icrc21);
+            }
+            if standards.icrc103 {
+                supported.push(Icrc10Standard::Icrc103);
             }
 
             // if standards.

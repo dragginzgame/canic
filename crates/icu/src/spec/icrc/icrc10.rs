@@ -8,8 +8,9 @@ use serde::Deserialize;
 
 #[derive(Clone, Copy, Debug, Display, Eq, Hash, PartialEq)]
 pub enum Icrc10Standard {
-    Icrc10,
-    Icrc21,
+    Icrc10,  // supported standards
+    Icrc21,  // human readable representation of canister call
+    Icrc103, // enhanced allowance query mechanism
 }
 
 ///

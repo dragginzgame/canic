@@ -10,7 +10,7 @@ macro_rules! icu_endpoints {
         //
 
         // ic_cycles_accept
-        #[::icu::cdk::query]
+        #[::icu::cdk::update]
         fn ic_cycles_accept(max_amount: u128) -> u128 {
             $crate::cdk::api::msg_cycles_accept(max_amount)
         }
