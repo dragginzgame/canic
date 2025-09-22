@@ -75,6 +75,8 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         CreateCanisterParent::Canister(pid) => *pid,
     };
 
+    crate::log!("here2");
+
     let new_canister_pid =
         create_and_install_canister(&req.canister_type, parent_pid, req.extra_arg.clone()).await?;
 
