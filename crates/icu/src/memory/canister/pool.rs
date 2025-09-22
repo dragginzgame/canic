@@ -110,7 +110,7 @@ impl CanisterPool {
                                 log!(Log::Ok, "✨ pool canister created ({}/{missing})", i + 1);
                             }
                             Err(e) => {
-                                log!(Log::Warn, "⚠️ failed to create pool canister: {e:?}");
+                                log!(Log::Warn, "⚠️  failed to create pool canister: {e:?}");
                             }
                         }
                     }

@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    cdk::structures::{BTreeMap as StableBTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     icu_register_memory,
     memory::{CanisterEntry, MemoryError, SUBNET_CHILDREN_MEMORY_ID, subnet::SubnetError},
     types::CanisterType,
@@ -11,9 +11,9 @@ use std::cell::RefCell;
 // thread_local
 thread_local! {
     static SUBNET_CHILDREN: RefCell<
-        StableBTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>
+        BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBTreeMap::init(icu_register_memory!(SUBNET_CHILDREN_MEMORY_ID)),
+        BTreeMap::init(icu_register_memory!(SUBNET_CHILDREN_MEMORY_ID)),
     );
 }
 
@@ -24,27 +24,25 @@ thread_local! {
 /// This is a zero-sized handle; the actual state lives in `SUBNET_CHILDREN`.
 ///
 
-pub type SubnetChildrenView = Vec<CanisterEntry>;
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SubnetChildren;
 
 impl SubnetChildren {
     /// Lookup a child by principal
     #[must_use]
-    pub fn find_by_pid(&self, pid: &Principal) -> Option<CanisterEntry> {
+    pub fn find_by_pid(pid: &Principal) -> Option<CanisterEntry> {
         SUBNET_CHILDREN.with_borrow(|map| map.get(pid))
     }
 
     /// Same as `find_by_pid` but returns a typed error
-    pub fn try_find_by_pid(&self, pid: &Principal) -> Result<CanisterEntry, Error> {
-        self.find_by_pid(pid)
+    pub fn try_find_by_pid(pid: &Principal) -> Result<CanisterEntry, Error> {
+        Self::find_by_pid(pid)
             .ok_or_else(|| MemoryError::from(SubnetError::PrincipalNotFound(*pid)).into())
     }
 
     /// Lookup all children of a given type
     #[must_use]
-    pub fn find_by_type(&self, ty: &CanisterType) -> Vec<CanisterEntry> {
+    pub fn find_by_type(ty: &CanisterType) -> Vec<CanisterEntry> {
         SUBNET_CHILDREN.with_borrow(|map| {
             map.iter()
                 .filter_map(|e| {
@@ -57,7 +55,7 @@ impl SubnetChildren {
 
     /// Lookup the first child of a given type
     #[must_use]
-    pub fn find_first_by_type(&self, ty: &CanisterType) -> Option<CanisterEntry> {
+    pub fn find_first_by_type(ty: &CanisterType) -> Option<CanisterEntry> {
         SUBNET_CHILDREN.with_borrow(|map| {
             map.iter().find_map(|e| {
                 let value = e.value();
@@ -67,7 +65,7 @@ impl SubnetChildren {
     }
 
     /// Insert or update a child
-    pub fn insert(&self, pid: Principal, entry: CanisterEntry) {
+    pub fn insert(pid: Principal, entry: CanisterEntry) {
         SUBNET_CHILDREN.with_borrow_mut(|map| {
             map.insert(pid, entry);
         });
@@ -81,18 +79,18 @@ impl SubnetChildren {
     }
 
     /// Clear all children
-    pub fn clear(&self) {
-        SUBNET_CHILDREN.with_borrow_mut(|map| map.clear());
+    pub fn clear() {
+        SUBNET_CHILDREN.with_borrow_mut(BTreeMap::clear);
     }
 
     /// Export state
     #[must_use]
-    pub fn export(&self) -> SubnetChildrenView {
+    pub fn export() -> Vec<CanisterEntry> {
         SUBNET_CHILDREN.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
     /// Import state (replace everything)
-    pub fn import(&self, data: SubnetChildrenView) {
+    pub fn import(data: Vec<CanisterEntry>) {
         SUBNET_CHILDREN.with_borrow_mut(|map| {
             map.clear();
             for entry in data {

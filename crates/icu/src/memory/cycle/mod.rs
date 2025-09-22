@@ -91,8 +91,8 @@ impl CycleTracker {
     pub fn check_auto_topup() {
         use crate::ops::request::cycles_request;
 
-        if let Some(ty) = CanisterState::get_type()
-            && let Ok(canister) = Config::try_get_canister(&ty)
+        if let Some(entry) = CanisterState::get()
+            && let Ok(canister) = Config::try_get_canister(&entry.ty)
             && let Some(topup) = canister.topup
         {
             let cycles = canister_cycle_balance();

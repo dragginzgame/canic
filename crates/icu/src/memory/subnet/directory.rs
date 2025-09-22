@@ -37,36 +37,29 @@ thread_local! {
 /// SubnetDirectory
 ///
 
-pub type SubnetDirectoryView = Vec<(CanisterType, CanisterEntry)>;
-
 pub struct SubnetDirectory;
 
 impl SubnetDirectory {
     #[must_use]
-    pub fn get(&self, ty: &CanisterType) -> Option<CanisterEntry> {
+    pub fn get(ty: &CanisterType) -> Option<CanisterEntry> {
         SUBNET_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    pub fn try_get(&self, ty: &CanisterType) -> Result<CanisterEntry, Error> {
-        self.get(ty)
-            .ok_or_else(|| MemoryError::from(SubnetError::TypeNotFound(ty.clone())).into())
+    pub fn try_get(ty: &CanisterType) -> Result<CanisterEntry, Error> {
+        Self::get(ty).ok_or_else(|| MemoryError::from(SubnetError::TypeNotFound(ty.clone())).into())
     }
 
-    pub fn try_get_root(&self) -> Result<CanisterEntry, Error> {
-        self.try_get(&CanisterType::ROOT)
-    }
-
-    pub fn import(&self, view: SubnetDirectoryView) {
+    pub fn import(view: Vec<CanisterEntry>) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (ty, entry) in view {
-                map.insert(ty, entry);
+            for entry in view {
+                map.insert(entry.ty.clone(), entry);
             }
         });
     }
 
     #[must_use]
-    pub fn export(&self) -> SubnetDirectoryView {
-        SUBNET_DIRECTORY.with_borrow(|map| map.to_vec())
+    pub fn export() -> Vec<CanisterEntry> {
+        SUBNET_DIRECTORY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 }

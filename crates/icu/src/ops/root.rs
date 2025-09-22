@@ -20,12 +20,12 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for (pid, canister) in SubnetRegistry::export() {
+    for canister in SubnetRegistry::export() {
         log!(
             Log::Info,
             "🥫 {} ({}) [{}]",
             canister.ty,
-            pid,
+            canister.pid,
             canister.status
         );
     }

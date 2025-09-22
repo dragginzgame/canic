@@ -23,7 +23,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::ThisError;
+use crate::{ThisError, memory::CanisterState};
 
 ///
 /// OpsError
@@ -31,8 +31,13 @@ use crate::ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum OpsError {
-    #[error("this function can only be called from the root canister")]
+    /// Raised when a function requires root context, but was called from a child.
+    #[error("operation must be called from the root canister")]
     NotRoot,
+
+    /// Raised when a function must not be called from root.
+    #[error("operation cannot be called from the root canister")]
+    IsRoot,
 
     #[error(transparent)]
     DelegationError(#[from] delegation::DelegationError),
@@ -42,4 +47,27 @@ pub enum OpsError {
 
     #[error(transparent)]
     ShardError(#[from] shard::ShardError),
+
+    #[error(transparent)]
+    SyncError(#[from] sync::SyncError),
+}
+
+impl OpsError {
+    /// Ensure the caller is the root canister.
+    pub fn require_root() -> Result<(), Self> {
+        if CanisterState::is_root() {
+            Ok(())
+        } else {
+            Err(Self::NotRoot)
+        }
+    }
+
+    /// Ensure the caller is not the root canister.
+    pub fn deny_root() -> Result<(), Self> {
+        if CanisterState::is_root() {
+            Err(Self::IsRoot)
+        } else {
+            Ok(())
+        }
+    }
 }

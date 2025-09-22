@@ -1,5 +1,5 @@
 use crate::{
-    Error, Log,
+    Error, Log, ThisError,
     config::Config,
     log,
     memory::{
@@ -14,7 +14,6 @@ use crate::{
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
 
 //
 // OPS / SHARD
@@ -167,7 +166,7 @@ const fn ensure_can_create(metrics: &PoolMetrics, policy: &ShardPolicy) -> Resul
 }
 
 fn get_pool_policy(pool: &str) -> Result<(CanisterType, ShardPolicy), Error> {
-    let hub_type = CanisterState::try_get_type()?;
+    let hub_type = CanisterState::try_get()?.ty;
 
     let cfg = Config::try_get_canister(&hub_type)
         .ok()

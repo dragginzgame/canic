@@ -3,11 +3,8 @@ use crate::{
     cdk::mgmt::CanisterInstallMode,
     config::Config,
     interface::{ic::install_code, prelude::*},
-    memory::{
-        CanisterPool,
-        subnet::{SubnetRegistry, SubnetView},
-    },
-    ops::sync::{SyncBundle, cascade_children},
+    memory::{CanisterPool, subnet::SubnetRegistry},
+    ops::sync::root_cascade,
     state::wasm::WasmRegistry,
 };
 
@@ -73,9 +70,8 @@ pub fn get_controllers() -> Result<Vec<Principal>, Error> {
     let config = Config::try_get()?;
     let mut controllers = config.controllers.clone();
 
-    // push root
-    let root_pid = SubnetView::directory().try_get_root()?.pid;
-    controllers.push(root_pid);
+    // we are on root, so push it
+    controllers.push(canister_self());
 
     Ok(controllers)
 }
@@ -124,8 +120,7 @@ pub(super) async fn register_installed(
     SubnetRegistry::install(canister_pid, wasm.module_hash())?;
 
     // full cascade afterwards, we can always optimise this
-    let bundle = SyncBundle::all();
-    cascade_children(&bundle).await?;
+    root_cascade().await?;
 
     Ok(())
 }
@@ -142,15 +137,13 @@ pub(super) async fn install_canister(
 ) -> Result<(), Error> {
     // fetch the canister by its type
     let wasm = WasmRegistry::try_get(canister_type)?;
-    let bundle = SyncBundle::all();
 
     // install code
-    let args = (bundle, extra_arg);
     install_code(
         CanisterInstallMode::Install,
         canister_pid,
         wasm.bytes(),
-        args,
+        (extra_arg,),
     )
     .await?;
 

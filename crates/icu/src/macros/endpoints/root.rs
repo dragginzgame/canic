@@ -7,9 +7,11 @@ macro_rules! icu_endpoints_root {
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::cdk::update]
         async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_controller)?;
+
             ::icu::memory::AppState::command(cmd)?;
 
-            let bundle = ::icu::ops::sync::SyncBundle::app_state();
+            let bundle = ::icu::ops::sync::SyncBundle::with_app_state()?;
             ::icu::ops::sync::cascade_children(&bundle).await?;
 
             Ok(())
@@ -34,7 +36,7 @@ macro_rules! icu_endpoints_root {
         async fn icu_response(
             request: ::icu::ops::request::Request,
         ) -> Result<::icu::ops::response::Response, ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_root, ::icu::auth::is_app)?;
+            $crate::auth_require_any!(::icu::auth::is_app)?;
 
             let response = $crate::ops::response::response(request).await?;
 
@@ -51,16 +53,12 @@ macro_rules! icu_endpoints_root {
         }
 
         //
-        // SYNC ENDPOINTS
+        // SUBNET ENDPOINTS
         //
 
-        #[::icu::cdk::update]
-        async fn icu_sync_root_cascade(
-            bundle: ::icu::ops::sync::SyncBundle,
-        ) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_controller)?;
-
-            $crate::ops::sync::cascade_children(&bundle).await
+        #[::icu::cdk::query]
+        fn icu_subnet_registry() -> Vec<::icu::memory::CanisterEntry> {
+            $crate::memory::SubnetRegistry::export()
         }
 
         //
@@ -90,11 +88,6 @@ macro_rules! icu_endpoints_root {
             $crate::memory::CanisterPool::export()
         }
 
-        #[::icu::cdk::query]
-        fn icu_subnet_registry() -> ::icu::memory::SubnetRegistryView {
-            $crate::memory::SubnetRegistry::export()
-        }
-
         //
         // STATE ENDPOINTS
         //
@@ -113,6 +106,25 @@ macro_rules! icu_endpoints_root {
 macro_rules! icu_endpoints_nonroot {
     () => {
         //
+        // ICU SUBNET VIEW
+        //
+
+        #[::icu::cdk::query]
+        fn icu_subnet_children() -> Vec<::icu::memory::CanisterEntry> {
+            $crate::memory::subnet::SubnetChildren::export()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_directory() -> Vec<::icu::memory::CanisterEntry> {
+            $crate::memory::subnet::SubnetDirectory::export()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_parents() -> Vec<::icu::memory::CanisterEntry> {
+            $crate::memory::subnet::SubnetParents::export()
+        }
+
+        //
         // SYNC ENDPOINTS
         //
 
@@ -122,17 +134,8 @@ macro_rules! icu_endpoints_nonroot {
         ) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_parent)?;
 
-            $crate::ops::sync::save_state(&bundle);
+            $crate::ops::sync::save_state(&bundle)?;
             $crate::ops::sync::cascade_children(&bundle).await
-        }
-
-        #[::icu::cdk::update]
-        async fn icu_sync_update(bundle: ::icu::ops::sync::SyncBundle) -> Result<(), ::icu::Error> {
-            $crate::auth_require_any!(::icu::auth::is_parent)?;
-
-            $crate::ops::sync::save_state(&bundle);
-
-            Ok(())
         }
     };
 }

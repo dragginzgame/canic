@@ -6,7 +6,10 @@
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
-    memory::{SubnetView, subnet::SubnetRegistry},
+    memory::{
+        CanisterState,
+        subnet::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
+    },
     types::CanisterType,
 };
 use candid::Principal;
@@ -185,8 +188,7 @@ pub fn is_app(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let canister = SubnetView::directory()
-            .try_get(&ty)
+        let canister = SubnetDirectory::try_get(&ty)
             .map_err(|_| AuthError::NotDirectoryType(caller, ty.clone()))?;
 
         if canister.pid == caller {
@@ -201,9 +203,7 @@ pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult 
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        SubnetView::children()
-            .find_by_pid(&caller)
-            .ok_or(AuthError::NotChild(caller))?;
+        SubnetChildren::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -225,7 +225,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = SubnetView::directory().try_get_root()?.pid;
+        let root_pid = CanisterState::try_get_root_pid()?;
 
         if caller == root_pid {
             Ok(())
@@ -239,7 +239,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        if SubnetView::parents().find_by_pid(&caller).is_some() {
+        if SubnetParents::find_by_pid(&caller).is_some() {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?

@@ -1,7 +1,7 @@
 use crate::{
     Error,
     cdk::call::Call,
-    memory::{CanisterState, subnet::SubnetView},
+    memory::{CanisterState, subnet::SubnetChildren},
     ops::{
         prelude::*,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
@@ -84,7 +84,7 @@ pub struct CyclesRequest {
 // request
 // sends the request to root::icu_response
 async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = SubnetView::directory().try_get_root()?.pid;
+    let root_pid = CanisterState::try_get_root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, "icu_response")
         .with_arg(&request)
@@ -125,7 +125,7 @@ pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
-    let canister = SubnetView::children().try_find_by_pid(&canister_pid)?;
+    let canister = SubnetChildren::try_find_by_pid(&canister_pid)?;
 
     // send the request
     let q = Request::UpgradeCanister(UpgradeCanisterRequest {

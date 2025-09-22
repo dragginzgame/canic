@@ -12,10 +12,7 @@ pub use canister::{
 pub use cycle::{CycleTracker, CycleTrackerView};
 pub use memory_registry::MemoryRegistry;
 pub use shard::{ShardRegistry, ShardRegistryError, ShardRegistryView};
-pub use subnet::{
-    CanisterEntry, CanisterStatus, SubnetChildrenView, SubnetDirectoryView, SubnetError,
-    SubnetParentsView, SubnetRegistry, SubnetRegistryView, SubnetView,
-};
+pub use subnet::{CanisterEntry, CanisterStatus, SubnetDirectory, SubnetError, SubnetRegistry};
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},

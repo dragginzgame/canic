@@ -1,119 +1,110 @@
 use crate::{
     Error,
-    cdk::structures::{Cell, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{Cell, DefaultMemoryImpl, memory::VirtualMemory},
     icu_register_memory, impl_storable_unbounded,
-    memory::{CANISTER_STATE_MEMORY_ID, MemoryError},
+    memory::{CANISTER_STATE_MEMORY_ID, CanisterEntry, MemoryError},
     types::CanisterType,
 };
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-//
-// CANISTER_STATE
-//
-
+// thread local
 thread_local! {
-    static CANISTER_STATE: RefCell<CanisterStateCore<VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(CanisterStateCore::new(Cell::init(
+    static CANISTER_STATE: RefCell<Cell<CanisterStateData, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(Cell::init(
             icu_register_memory!(CANISTER_STATE_MEMORY_ID),
-            CanisterStateData::default(),
-        )));
+            CanisterStateData::default(), // start empty
+        ));
 }
 
-///
-/// CanisterStateError
-///
+//
+// CanisterStateError
+//
 
 #[derive(Debug, ThisError)]
 pub enum CanisterStateError {
-    #[error("canister type has not been set")]
-    TypeNotSet,
+    #[error("canister entry has not been set")]
+    EntryNotSet,
+
+    #[error("root pid has not been set")]
+    RootNotSet,
+}
+
+//
+// API
+//
+
+pub struct CanisterState;
+
+impl CanisterState {
+    /// Get the current entry
+    #[must_use]
+    pub fn get() -> Option<CanisterEntry> {
+        CANISTER_STATE.with_borrow(|cell| cell.get().entry.clone())
+    }
+
+    /// Try to get the current entry, or error if missing
+    pub fn try_get() -> Result<CanisterEntry, Error> {
+        Self::get().ok_or_else(|| MemoryError::from(CanisterStateError::EntryNotSet).into())
+    }
+
+    /// Set the current entry (replace existing)
+    pub fn set_entry(entry: CanisterEntry) {
+        CANISTER_STATE.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            state.entry = Some(entry);
+            cell.set(state);
+        });
+    }
+
+    /// Check if this canister is the root
+    #[must_use]
+    pub fn is_root() -> bool {
+        Self::get().is_some_and(|e| e.ty == CanisterType::ROOT)
+    }
+
+    /// Export current state
+    #[must_use]
+    pub fn export() -> CanisterStateData {
+        CANISTER_STATE.with_borrow(|cell| cell.get().clone())
+    }
+
+    /// Import state (replace existing)
+    pub fn import(data: CanisterStateData) {
+        CANISTER_STATE.with_borrow_mut(|cell| cell.set(data));
+    }
+
+    /// Set root_pid
+    pub fn set_root_pid(pid: Principal) {
+        CANISTER_STATE.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            state.root_pid = Some(pid);
+            cell.set(state);
+        });
+    }
+
+    /// Get root_pid
+    #[must_use]
+    pub fn get_root_pid() -> Option<Principal> {
+        CANISTER_STATE.with_borrow(|cell| cell.get().root_pid)
+    }
+
+    /// Try to get root_pid
+    pub fn try_get_root_pid() -> Result<Principal, Error> {
+        Self::get_root_pid().ok_or_else(|| MemoryError::from(CanisterStateError::RootNotSet).into())
+    }
 }
 
 ///
 /// CanisterStateData
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct CanisterStateData {
-    pub canister_type: Option<CanisterType>,
+    pub entry: Option<CanisterEntry>,
+    pub root_pid: Option<Principal>,
 }
 
 impl_storable_unbounded!(CanisterStateData);
-
-///
-/// CanisterState
-///
-
-pub struct CanisterState;
-
-impl CanisterState {
-    #[must_use]
-    pub fn get_type() -> Option<CanisterType> {
-        CANISTER_STATE.with_borrow(CanisterStateCore::get_type)
-    }
-
-    pub fn try_get_type() -> Result<CanisterType, Error> {
-        Self::get_type().ok_or_else(|| MemoryError::from(CanisterStateError::TypeNotSet).into())
-    }
-
-    pub fn set_type(ty: &CanisterType) -> Result<(), Error> {
-        CANISTER_STATE.with_borrow_mut(|core| core.set_type(ty))
-    }
-
-    #[must_use]
-    pub fn is_root() -> bool {
-        CANISTER_STATE.with_borrow(|core| core.get_type() == Some(CanisterType::ROOT))
-    }
-
-    /// Export full state snapshot
-    #[must_use]
-    pub fn export() -> CanisterStateData {
-        CANISTER_STATE.with_borrow(CanisterStateCore::export)
-    }
-
-    /// Import full state snapshot (replace existing)
-    pub fn import(data: CanisterStateData) {
-        CANISTER_STATE.with_borrow_mut(|core| core.import(data));
-    }
-}
-
-///
-/// CanisterStateCore
-///
-
-pub struct CanisterStateCore<M: Memory> {
-    cell: Cell<CanisterStateData, M>,
-}
-
-impl<M: Memory> CanisterStateCore<M> {
-    pub const fn new(cell: Cell<CanisterStateData, M>) -> Self {
-        Self { cell }
-    }
-
-    pub fn get_type(&self) -> Option<CanisterType> {
-        self.cell.get().canister_type.clone()
-    }
-
-    // set_type
-    // pass by reference required as it's a const
-    pub fn set_type(&mut self, ty: &CanisterType) -> Result<(), Error> {
-        let mut state = self.cell.get().clone();
-        state.canister_type = Some(ty.clone());
-        self.cell.set(state);
-
-        Ok(())
-    }
-
-    /// Export current state data
-    pub fn export(&self) -> CanisterStateData {
-        self.cell.get().clone()
-    }
-
-    /// Import state data (replace existing)
-    pub fn import(&mut self, data: CanisterStateData) {
-        self.cell.set(data);
-    }
-}

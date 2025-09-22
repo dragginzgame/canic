@@ -5,6 +5,19 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.0] - 2025-09-22
+- Changed: Rebuilt `memory::subnet::SubnetRegistry` on top of a thread-local stable `BTreeMap`,
+  introducing explicit create/install/descendant helpers and making it the canonical topology source.
+- Changed: Replaced `memory::CanisterState` with a stable `Cell` that tracks the active entry and
+  root PID, powering `OpsError::require_root`/`deny_root`, auth checks, and cycle auto top-ups.
+- Changed: Introduced cascading `ops::sync::SyncBundle`s so root exports app state, directory, and
+  topology snapshots after installs or `icu_app` updates, and children rehydrate their local views
+  before forwarding to descendants.
+- Changed: Refreshed `auth` guards (`is_app`, `is_parent`, `is_root`, etc.) to read from the new
+  registry/state snapshots, yielding clearer errors and consistent enforcement across endpoints.
+- Changed: Hardened canister provisioning by validating config + wasm up-front, recording `Created`
+  entries pre-install, and cascading immediately after `Installed` to keep every node in sync.
+
 ## [0.9.15] - 2025-09-21
 - made SubnetDirectory + co into zero sized handles so root can return different versions
 

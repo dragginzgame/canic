@@ -1,51 +1,21 @@
-//! Canister Registry (root-authoritative)
-//!
-//! Purpose
-//! - Authoritative ledger of canisters managed by root: type, parent, lifecycle status,
-//!   and optional module hash.
-//! - Drives operational flows (create/install) and serves as the source for generating
-//!   the directory read-model.
-//!
-//! Lifecycle
-//! - `init_root` inserts root as Installed at startup.
-//! - `create(pid, ty, parent)` records a new canister as Created immediately after allocation.
-//! - `install(pid, module_hash)` flips to Installed once code is installed and records the hash.
-//! - `export()` is used by root to derive the directory view.
-//!
-//! Invariants
-//! - An Installed canister remains Installed (idempotent guard on `install`).
-//! - Every PID in the registry has an associated `CanisterType`.
-//!
-
 use crate::{
-    Error,
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    Error, ThisError,
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     config::Config,
     icu_register_memory,
     memory::{
-        CanisterEntry, CanisterStatus, MemoryError, SUBNET_REGISTRY_MEMORY_ID,
-        subnet::{
-            SubnetChildren, SubnetChildrenView, SubnetDirectory, SubnetDirectoryView, SubnetError,
-            SubnetParents,
-        },
+        CanisterEntry, CanisterStatus, MemoryError, SUBNET_REGISTRY_MEMORY_ID, subnet::SubnetError,
     },
     types::CanisterType,
     utils::time::now_secs,
 };
 use candid::Principal;
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
-//
-// SUBNET_REGISTRY
-// (root-only)
-//
-
+// thread local
 thread_local! {
-    static SUBNET_REGISTRY: RefCell<SubnetRegistryCore<VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(SubnetRegistryCore::new(BTreeMap::init(
-            icu_register_memory!(SUBNET_REGISTRY_MEMORY_ID),
-        )));
+    static SUBNET_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(icu_register_memory!(SUBNET_REGISTRY_MEMORY_ID)));
 }
 
 ///
@@ -62,13 +32,11 @@ pub enum SubnetRegistryError {
 /// SubnetRegistry
 ///
 
-pub type SubnetRegistryView = Vec<(Principal, CanisterEntry)>;
-
 pub struct SubnetRegistry;
 
 impl SubnetRegistry {
-    /// Initialize the registry with the root canister marked as Installed.
-    pub fn init_root(pid: Principal) {
+    #[must_use]
+    pub fn init_root(pid: Principal) -> CanisterEntry {
         let entry = CanisterEntry {
             pid,
             ty: CanisterType::ROOT,
@@ -78,16 +46,28 @@ impl SubnetRegistry {
             created_at: now_secs(),
         };
 
-        SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(pid, entry));
+        SUBNET_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry.clone()));
+
+        entry
     }
 
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterEntry> {
-        SUBNET_REGISTRY.with_borrow(|core| core.get(pid))
+        SUBNET_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
     pub fn try_get(pid: Principal) -> Result<CanisterEntry, Error> {
-        SUBNET_REGISTRY.with_borrow(|core| core.try_get(pid))
+        Self::get(pid).ok_or_else(|| MemoryError::from(SubnetError::PrincipalNotFound(pid)).into())
+    }
+
+    /// Look up a canister by its type.
+    pub fn try_get_type(ty: &CanisterType) -> Result<CanisterEntry, Error> {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            map.iter()
+                .map(|e| e.value())
+                .find(|entry| &entry.ty == ty)
+                .ok_or_else(|| MemoryError::from(SubnetError::TypeNotFound(ty.clone())).into())
+        })
     }
 
     pub fn create(pid: Principal, ty: &CanisterType, parent_pid: Principal) {
@@ -100,12 +80,15 @@ impl SubnetRegistry {
             created_at: now_secs(),
         };
 
-        SUBNET_REGISTRY.with_borrow_mut(|core| core.insert(pid, entry));
+        SUBNET_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry));
     }
 
     pub fn install(pid: Principal, module_hash: Vec<u8>) -> Result<(), Error> {
-        SUBNET_REGISTRY.with_borrow_mut(|core| {
-            let entry = core.try_get(pid)?; // clone for guard check
+        SUBNET_REGISTRY.with_borrow_mut(|map| {
+            let entry = map
+                .get(&pid)
+                .ok_or_else(|| MemoryError::from(SubnetError::PrincipalNotFound(pid)))?;
+
             if entry.status == CanisterStatus::Installed {
                 return Err(MemoryError::from(SubnetError::from(
                     SubnetRegistryError::AlreadyInstalled(pid),
@@ -113,160 +96,60 @@ impl SubnetRegistry {
                 .into());
             }
 
-            core.update(pid, |e| {
-                e.status = CanisterStatus::Installed;
-                e.module_hash = Some(module_hash.clone());
-            })
+            let mut updated = entry;
+            updated.status = CanisterStatus::Installed;
+            updated.module_hash = Some(module_hash);
+            map.insert(pid, updated);
+            Ok(())
         })
     }
 
     #[must_use]
     pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
-        SUBNET_REGISTRY.with_borrow_mut(|core| core.remove(pid))
+        SUBNET_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
     #[must_use]
-    pub fn export() -> SubnetRegistryView {
-        SUBNET_REGISTRY.with_borrow(SubnetRegistryCore::export)
+    pub fn export() -> Vec<CanisterEntry> {
+        SUBNET_REGISTRY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
-    ///
-    /// Views
-    ///
-
-    /// Build a directory view from the registry, refresh the global cache,
-    /// and return a handle for querying it.
-    ///
-    /// On root, this derives the view from the registry; on children, it
-    /// just refreshes the cached projection.
-    ///
-    /// Returns a zero-sized handle; the data lives in thread-local storage.
     #[must_use]
-    pub fn subnet_directory() -> SubnetDirectory {
-        use std::collections::BTreeMap as StdBTreeMap;
-
-        let mut map: StdBTreeMap<CanisterType, CanisterEntry> = StdBTreeMap::new();
-
-        for (_, entry) in Self::export() {
-            if entry.status != CanisterStatus::Installed {
-                continue;
-            }
-
-            if entry.ty == CanisterType::ROOT {
-                map.insert(CanisterType::ROOT, entry);
-                continue;
-            }
-
-            if Config::try_get_canister(&entry.ty)
-                .map(|cfg| cfg.uses_directory)
-                .unwrap_or(false)
-            {
-                map.insert(entry.ty.clone(), entry);
-            }
-        }
-
-        let view: SubnetDirectoryView = map.into_iter().collect();
-
-        let dir = SubnetDirectory; // zero-sized handle
-        dir.import(view); // refresh global cache
-
-        dir
-    }
-
-    /// Children of a canister.
-    ///
-    /// Builds a view of all children for the given `pid`, refreshes the
-    /// global cache, and returns a handle for querying them.
-    #[must_use]
-    pub fn subnet_children(pid: Principal) -> SubnetChildren {
-        let view: SubnetChildrenView = Self::export()
+    pub fn subnet_directory() -> Vec<CanisterEntry> {
+        Self::export()
             .into_iter()
-            .filter_map(|(_, e)| (e.parent_pid == Some(pid)).then_some(e))
-            .collect();
-
-        let children = SubnetChildren;
-        children.import(view);
-
-        children
+            .filter(|e| e.status == CanisterStatus::Installed)
+            .filter(|e| {
+                e.ty == CanisterType::ROOT
+                    || Config::try_get_canister(&e.ty)
+                        .map(|cfg| cfg.uses_directory)
+                        .unwrap_or(false)
+            })
+            .collect()
     }
 
-    /// Parents of a canister.
-    ///
-    /// Walks the parent chain for the given `pid`, refreshes the
-    /// global cache, and returns a handle for querying it.
     #[must_use]
-    pub fn subnet_parents(pid: Principal) -> SubnetParents {
+    pub fn descendants(pid: Principal) -> Vec<CanisterEntry> {
         let mut result = Vec::new();
-        let mut current = Some(pid);
+        let mut stack = vec![pid];
 
-        while let Some(child_pid) = current {
-            if let Some(entry) = Self::get(child_pid)
-                && let Some(parent_pid) = entry.parent_pid
-                && let Some(parent_entry) = Self::get(parent_pid)
-            {
-                result.push(parent_entry.clone());
-                current = Some(parent_pid);
+        while let Some(current) = stack.pop() {
+            let children: Vec<CanisterEntry> = Self::export()
+                .into_iter()
+                .filter(|e| e.parent_pid == Some(current))
+                .collect();
 
-                continue;
+            for child in &children {
+                result.push(child.clone());
+                stack.push(child.pid);
             }
-            current = None;
         }
 
-        result.reverse();
-
-        let parents = SubnetParents; // zero-sized handle
-        parents.import(result); // refresh global cache
-
-        parents
-    }
-}
-
-///
-/// SubnetRegistryCore
-///
-
-pub struct SubnetRegistryCore<M: Memory> {
-    map: BTreeMap<Principal, CanisterEntry, M>,
-}
-
-impl<M: Memory> SubnetRegistryCore<M> {
-    pub const fn new(map: BTreeMap<Principal, CanisterEntry, M>) -> Self {
-        Self { map }
+        result
     }
 
-    pub fn get(&self, pid: Principal) -> Option<CanisterEntry> {
-        self.map.get(&pid)
-    }
-
-    pub fn try_get(&self, pid: Principal) -> Result<CanisterEntry, Error> {
-        self.get(pid)
-            .ok_or_else(|| MemoryError::from(SubnetError::PrincipalNotFound(pid)).into())
-    }
-
-    pub fn insert(&mut self, pid: Principal, entry: CanisterEntry) {
-        self.map.insert(pid, entry);
-    }
-
-    pub fn remove(&mut self, pid: &Principal) -> Option<CanisterEntry> {
-        self.map.remove(pid)
-    }
-
-    /// Generic update helper: mutate entry in place if it exists
-    pub fn update<F>(&mut self, pid: Principal, f: F) -> Result<(), Error>
-    where
-        F: FnOnce(&mut CanisterEntry),
-    {
-        match self.map.get(&pid) {
-            Some(mut entry) => {
-                f(&mut entry);
-                self.map.insert(pid, entry);
-                Ok(())
-            }
-            None => Err(MemoryError::from(SubnetError::PrincipalNotFound(pid)).into()),
-        }
-    }
-
-    pub fn export(&self) -> SubnetRegistryView {
-        self.map.to_vec()
+    #[cfg(test)]
+    pub fn clear_for_tests() {
+        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 }

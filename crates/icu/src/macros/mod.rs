@@ -28,8 +28,8 @@ macro_rules! log {
     // Inner logic
     (@inner $level:expr, $fmt:expr, $($arg:tt)*) => {{
         let message = format!($fmt, $($arg)*);
-        let ty_raw = match $crate::memory::CanisterState::get_type() {
-            Some(ty) => ty.to_string(),
+        let ty_raw = match $crate::memory::CanisterState::get() {
+            Some(entry) => entry.ty.to_string(),
             None => "-".to_string(),
         };
         let ty_disp = $crate::utils::format::ellipsize_middle(

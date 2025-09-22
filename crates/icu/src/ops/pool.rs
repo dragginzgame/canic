@@ -1,7 +1,7 @@
 use crate::{
     Error, Log,
     interface::ic::{get_cycles, uninstall_code},
-    memory::{CanisterPool, CanisterState, subnet::SubnetRegistry},
+    memory::{CanisterPool, subnet::SubnetRegistry},
     ops::canister::create_canister,
     ops::prelude::*,
     types::{Cycles, TC},
@@ -18,9 +18,7 @@ const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 /// creates an empty canister and registers it with the CanisterPool
 ///
 pub async fn create_pool_canister() -> Result<Principal, Error> {
-    if !CanisterState::is_root() {
-        Err(OpsError::NotRoot)?;
-    }
+    OpsError::require_root()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
     let canister_pid = create_canister(cycles.clone()).await?;
@@ -36,9 +34,7 @@ pub async fn create_pool_canister() -> Result<Principal, Error> {
 /// move_canister_to_pool
 ///
 pub async fn move_canister_to_pool(canister_pid: Principal) -> Result<(), Error> {
-    if !CanisterState::is_root() {
-        Err(OpsError::NotRoot)?;
-    }
+    OpsError::require_root()?;
 
     // uninstall code
     uninstall_code(canister_pid).await?;

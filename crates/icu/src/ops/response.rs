@@ -4,8 +4,9 @@ use crate::{
         ic::{deposit_cycles, upgrade_canister},
         prelude::*,
     },
-    memory::{CanisterState, SubnetView},
+    memory::SubnetRegistry,
     ops::{
+        OpsError,
         canister::create_and_install_canister,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request,
@@ -54,7 +55,7 @@ pub struct CyclesResponse {
 
 // response
 pub async fn response(req: Request) -> Result<Response, Error> {
-    assert!(CanisterState::is_root(), "only root can run this code");
+    OpsError::require_root()?;
 
     match req {
         Request::CreateCanister(req) => create_canister_response(&req).await,
@@ -67,9 +68,9 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
     // Look up parent
     let parent_pid = match &req.parent {
-        CreateCanisterParent::Root => SubnetView::directory().try_get_root()?.pid,
+        CreateCanisterParent::Root => canister_self(),
         CreateCanisterParent::Caller => msg_caller(),
-        CreateCanisterParent::Directory(ty) => SubnetView::directory().try_get(ty)?.pid,
+        CreateCanisterParent::Directory(ty) => SubnetRegistry::try_get_type(ty)?.pid,
         CreateCanisterParent::Canister(pid) => *pid,
     };
 

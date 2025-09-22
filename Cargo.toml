@@ -30,7 +30,7 @@ ic-cdk = "0.18.7"
 ic-cdk-timers = "0.12.2"
 ic-ledger-types = "0.15"
 ic-management-canister-types = "0.3.3"
-ic-stable-structures = "0.7.0"
+ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.10"
 icu = { path = "crates/icu" }
 
