@@ -2,7 +2,7 @@
 // Run with `cargo run --example minimal_root`.
 
 use icu::{
-    IcuError,
+    Error,
     config::Config,
     memory::{
         canister::{CanisterRoot, CanisterState},
@@ -15,11 +15,11 @@ use icu::{
 const SHARD_WASM: &[u8] = b"\0asm\x01\0\0\0";
 static WASMS: &[(CanisterType, &[u8])] = &[(CanisterType::new("demo_shard"), SHARD_WASM)];
 
-fn main() -> Result<(), IcuError> {
+fn main() -> Result<(), Error> {
     bootstrap_root_demo()
 }
 
-fn bootstrap_root_demo() -> Result<(), IcuError> {
+fn bootstrap_root_demo() -> Result<(), Error> {
     let root = principal(1);
     let config_toml = format!(
         r#"

@@ -1,16 +1,48 @@
+use std::{env, fs, io, path::PathBuf};
+
 use candid::{Decode, Principal, encode_one};
 use icu::memory::{CanisterEntry, CanisterStatus};
 use icu::types::CanisterType;
 use pocket_ic::PocketIc;
 
-///
-/// WASMS
-///
+const ROOT_WASM_ENV: &str = "ICU_ROOT_WASM";
+const ROOT_WASM_RELATIVE: &str = "../../../../.dfx/local/canisters/root/root.wasm.gz";
 
-const ROOT_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/root/root.wasm.gz");
+fn load_root_wasm() -> Option<Vec<u8>> {
+    if cfg!(icu_github_ci) {
+        return None;
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let default_path = manifest_dir.join(ROOT_WASM_RELATIVE);
+
+    let mut candidates = env::var(ROOT_WASM_ENV)
+        .ok()
+        .map(PathBuf::from)
+        .into_iter()
+        .collect::<Vec<_>>();
+    candidates.push(default_path);
+
+    for path in candidates {
+        match fs::read(&path) {
+            Ok(bytes) => return Some(bytes),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+            Err(err) => panic!("failed to read root wasm at {}: {}", path.display(), err),
+        }
+    }
+
+    None
+}
 
 #[test]
 fn root_auto_creates_expected_canisters() {
+    let Some(root_wasm) = load_root_wasm() else {
+        eprintln!(
+            "skipping root_auto_creates_expected_canisters — run `make test` to build canisters or set {ROOT_WASM_ENV}"
+        );
+        return;
+    };
+
     let pic = PocketIc::new();
 
     // Create root canister with an anonymous controller
@@ -20,12 +52,7 @@ fn root_auto_creates_expected_canisters() {
     pic.add_cycles(root_id, 100_000_000_000_000);
 
     // Install root WASM
-    pic.install_canister(
-        root_id,
-        ROOT_WASM.to_vec(),
-        vec![],
-        Some(Principal::anonymous()),
-    );
+    pic.install_canister(root_id, root_wasm, vec![], Some(Principal::anonymous()));
 
     // Timers queue `icu_install`, so tick Pocket IC until it drains
     for _ in 0..100 {
