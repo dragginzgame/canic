@@ -1,7 +1,7 @@
 use candid::{CandidType, Nat};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::cast::ToPrimitive;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
     fmt::{self, Display},
     str::FromStr,
@@ -55,7 +55,7 @@ impl Cycles {
     // accepts the short hand 10T format or a number
     pub fn from_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
         #[serde(untagged)]

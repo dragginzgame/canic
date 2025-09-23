@@ -1,36 +1,60 @@
-// Example: minimal root canister scaffold.
-// Compile with `--features ic` to include the canister module.
+// Example: bootstrap the pieces that `icu_start_root!()` wires together.
+// Run with `cargo run --example minimal_root`.
 
-#[cfg(feature = "ic")]
-mod canister {
-    #![allow(unexpected_cfgs)]
-    use candid::Principal;
-    use icu::prelude::*;
+use icu::{
+    IcuError,
+    config::Config,
+    memory::{
+        canister::{CanisterRoot, CanisterState},
+        subnet::SubnetRegistry,
+    },
+    state::wasm::WasmRegistry,
+    types::{CanisterType, Principal},
+};
 
-    // Note: In a real canister crate, add this to build.rs:
-    // fn main() { icu::icu_build!("../icu.toml"); }
-    // Examples cannot run build scripts, so this example omits it.
+const SHARD_WASM: &[u8] = b"\0asm\x01\0\0\0";
+static WASMS: &[(CanisterType, &[u8])] = &[(CanisterType::new("demo_shard"), SHARD_WASM)];
 
-    // Set up a minimal root canister with default hooks.
-    icu_start_root!();
-
-    const fn icu_setup() {}
-    #[allow(clippy::unused_async)]
-    async fn icu_install() {}
-    #[allow(clippy::unused_async)]
-    async fn icu_upgrade() {}
-
-    // Minimal WASMS set required by the macro; empty in this example.
-    pub static WASMS: &[(CanisterType, &[u8])] = &[];
-
-    #[update]
-    fn ping() -> String {
-        "pong".to_string()
-    }
-
-    export_candid!();
+fn main() -> Result<(), IcuError> {
+    bootstrap_root_demo()
 }
 
-fn main() {
-    println!("minimal_root example");
+fn bootstrap_root_demo() -> Result<(), IcuError> {
+    let root = principal(1);
+    let config_toml = format!(
+        r#"
+controllers = ["{controller}"]
+
+[canisters.demo_shard]
+auto_create = true
+uses_directory = true
+"#,
+        controller = root.to_text(),
+    );
+
+    Config::init_from_toml(&config_toml)?;
+
+    let root_entry = SubnetRegistry::init_root(root);
+    CanisterRoot::set(root);
+    CanisterState::set_view(root_entry.into());
+
+    WasmRegistry::import(WASMS);
+
+    let shard_type = CanisterType::new("demo_shard");
+    let shard_pid = principal(2);
+    SubnetRegistry::create(shard_pid, &shard_type, root);
+    let wasm = WasmRegistry::try_get(&shard_type)?;
+    SubnetRegistry::install(shard_pid, wasm.module_hash())?;
+
+    println!("root pid: {}", root.to_text());
+    println!("registered types:");
+    for view in SubnetRegistry::directory() {
+        println!("  {ty} -> {pid}", ty = view.ty, pid = view.pid.to_text());
+    }
+
+    Ok(())
+}
+
+const fn principal(id: u8) -> Principal {
+    Principal::from_slice(&[id; 29])
 }
