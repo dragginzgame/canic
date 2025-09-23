@@ -88,14 +88,6 @@ pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>
 ///
 /// Returns the first failing rule error, or `AuthError::NoRulesDefined` if `rules` is empty.
 ///
-/// Example (no_run):
-/// ```no_run
-/// use icu::auth;
-/// # async fn demo() -> Result<(), icu::IcuError> {
-/// let _ = auth::require_all(vec![]).await; // will error: NoRulesDefined
-/// # Ok(()) }
-/// ```
-///
 pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
@@ -116,14 +108,6 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
 /// Require that any one of the provided rules passes for the current caller.
 ///
 /// Returns the last failing rule error if none pass, or `AuthError::NoRulesDefined` if empty.
-///
-/// Example (no_run):
-/// ```no_run
-/// use icu::auth;
-/// # async fn demo() -> Result<(), icu::IcuError> {
-/// let _ = auth::require_any(vec![]).await; // will error: NoRulesDefined
-/// # Ok(()) }
-/// ```
 ///
 pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
@@ -240,7 +224,8 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         // Root is always considered a parent
-        if caller == CanisterRoot::try_get()? {
+        let root_pid = CanisterRoot::try_get()?;
+        if caller == root_pid {
             return Ok(());
         }
 

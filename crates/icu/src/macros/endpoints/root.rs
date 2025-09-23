@@ -12,7 +12,7 @@ macro_rules! icu_endpoints_root {
             ::icu::memory::app::AppState::command(cmd)?;
 
             let bundle = ::icu::ops::sync::SyncBundle::with_app_state()?;
-            ::icu::ops::sync::cascade_children(&bundle).await?;
+            ::icu::ops::sync::root_cascade().await?;
 
             Ok(())
         }

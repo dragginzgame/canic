@@ -136,33 +136,68 @@ impl SubnetRegistry {
             .collect()
     }
 
+    /// Return the full parent chain for a given PID,
+    /// starting with the root-most parent and ending with the given canister.
     #[must_use]
-    pub fn descendants(pid: Principal) -> Vec<CanisterView> {
+    pub fn parents(pid: Principal) -> Vec<CanisterView> {
         let mut result = Vec::new();
-        let mut stack = vec![pid];
+        let mut current = Some(pid);
 
-        while let Some(current) = stack.pop() {
-            if let Ok(entry) = Self::try_get(current) {
-                let view: CanisterView = entry.into();
-                if !result.iter().any(|e: &CanisterView| e.pid == view.pid) {
-                    result.push(view);
-                }
+        while let Some(p) = current {
+            if let Ok(entry) = Self::try_get(p) {
+                let view: CanisterView = entry.clone().into();
+                result.push(view);
+                current = entry.parent_pid;
+            } else {
+                break; // orphaned, stop here
             }
+        }
 
+        result.reverse();
+        result
+    }
+
+    /// Return the subtree rooted at `pid`:
+    /// the original canister (if found) plus all its descendants.
+    #[must_use]
+    pub fn subtree(pid: Principal) -> Vec<CanisterView> {
+        let mut result = vec![];
+
+        if let Ok(entry) = Self::try_get(pid) {
+            result.push(entry.into());
+        }
+
+        let mut stack = vec![pid];
+        while let Some(current) = stack.pop() {
             let children: Vec<CanisterView> = Self::export()
                 .into_iter()
                 .filter(|e| e.parent_pid == Some(current))
                 .map(Into::into)
                 .collect();
 
-            for child in &children {
-                stack.push(child.pid);
-            }
-
+            stack.extend(children.iter().map(|c| c.pid));
             result.extend(children);
         }
 
         result
+    }
+
+    /// Return true if `entry` is part of the subtree rooted at `root_pid`.
+    #[must_use]
+    pub fn is_in_subtree(root_pid: Principal, entry: &CanisterView, all: &[CanisterView]) -> bool {
+        if entry.pid == root_pid {
+            return true;
+        }
+
+        let mut current = entry.parent_pid;
+        while let Some(pid) = current {
+            if pid == root_pid {
+                return true;
+            }
+            current = all.iter().find(|e| e.pid == pid).and_then(|e| e.parent_pid);
+        }
+
+        false
     }
 
     #[cfg(test)]

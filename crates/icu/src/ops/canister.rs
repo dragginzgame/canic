@@ -51,6 +51,7 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles),
     // Try pool first
     if let Some((pid, entry)) = CanisterPool::pop_first() {
         log!(Log::Ok, "⚡ reusing {pid} from pool ({entry:?})");
+
         return Ok((pid, entry.cycles));
     }
 
@@ -85,6 +86,7 @@ fn get_controllers() -> Result<Vec<Principal>, Error> {
 //
 
 /// Install code + initial state into a new canister.
+#[allow(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,
     ty: &CanisterType,
@@ -98,13 +100,14 @@ async fn install_canister(
 
     // Construct initial state
     let view: CanisterView = canister_entry.into();
+    let parents: Vec<CanisterView> = SubnetRegistry::parents(pid);
 
     // Install code
     install_code(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),
-        (view, extra_arg),
+        (view, parents, extra_arg),
     )
     .await?;
 

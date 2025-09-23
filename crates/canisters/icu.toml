@@ -1,7 +1,7 @@
 controllers = []
 
 [pool]
-minimum_size = 10
+minimum_size = 3
 
 #################### canisters
 

@@ -5,10 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.10.1] - 2025-09-22
+## [0.10.3] - 2025-09-22
 - big rewrite of memory:: with new CanisterView and CanisterEntry.  root is now authorative on
 everything and only syncs what it needs to
-
 
 ## [0.9.15] - 2025-09-21
 - made SubnetDirectory + co into zero sized handles so root can return different versions
@@ -21,7 +20,7 @@ everything and only syncs what it needs to
 - split off Subnet Views, fixed the bug where state wasn't cascading
 - added find_by_type for parent
 - added CreateCanisterParent::Directory
-- added SubnetChildren::find_by_type and find_first_by_type
+- added SubnetChildren::find_by_type and find_first_by_typeit ca
 
 ## [0.8.6] - 2025-09-17
 - added icu_config endpoint for controllers

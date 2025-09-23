@@ -17,11 +17,16 @@ macro_rules! __icu_load_config {
 macro_rules! icu_start {
     ($canister_type:expr) => {
         #[::icu::cdk::init]
-        fn init(state: ::icu::memory::canister::CanisterStateData, args: Option<Vec<u8>>) {
+        fn init(
+            state: ::icu::memory::canister::CanisterStateData,
+            parents: Vec<::icu::memory::CanisterView>,
+            args: Option<Vec<u8>>,
+        ) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
             ::icu::memory::canister::CanisterState::import(state);
+            ::icu::memory::subnet::SubnetParents::import(parents);
             ::icu::memory::canister::CanisterRoot::set(::icu::cdk::api::msg_caller());
             __icu_shared_setup();
 
