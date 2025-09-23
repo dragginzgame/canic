@@ -13,6 +13,9 @@ candid = { workspace = true }
 ic-cdk = { workspace = true }
 icu = { workspace = true }
 
+[dev-dependencies]
+pocket-ic = { workspace = true }
+
 [build-dependencies]
 icu = { workspace = true }
 

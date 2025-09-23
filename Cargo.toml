@@ -33,6 +33,7 @@ ic-management-canister-types = "0.3.3"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.10"
 icu = { path = "crates/icu" }
+pocket-ic = "10.0"
 
 # third party
 minicbor-serde = { version = "0.6", features = ["alloc"] }
