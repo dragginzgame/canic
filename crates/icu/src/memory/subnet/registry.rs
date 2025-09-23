@@ -111,19 +111,20 @@ impl SubnetRegistry {
     }
 
     #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
+    pub fn all() -> Vec<CanisterEntry> {
         SUBNET_REGISTRY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
     #[must_use]
-    pub fn export_views() -> Vec<CanisterView> {
+    pub fn all_views() -> Vec<CanisterView> {
         SUBNET_REGISTRY
             .with_borrow(|map| map.iter().map(|e| CanisterView::from(e.value())).collect())
     }
 
+    /// Returns the contents of the Subnet Directory
     #[must_use]
-    pub fn subnet_directory() -> Vec<CanisterView> {
-        Self::export()
+    pub fn directory() -> Vec<CanisterView> {
+        Self::all()
             .into_iter()
             .filter(|e| e.status == CanisterStatus::Installed)
             .filter(|e| {
@@ -157,6 +158,19 @@ impl SubnetRegistry {
         result
     }
 
+    /// Return the direct children of the given `pid`.
+    ///
+    /// This only returns canisters whose `parent_pid` is exactly `pid`
+    /// (one level down). It does not recurse into grandchildren.
+    #[must_use]
+    pub fn children(pid: Principal) -> Vec<CanisterView> {
+        Self::all()
+            .into_iter()
+            .filter(|e| e.parent_pid == Some(pid))
+            .map(Into::into)
+            .collect()
+    }
+
     /// Return the subtree rooted at `pid`:
     /// the original canister (if found) plus all its descendants.
     #[must_use]
@@ -169,7 +183,7 @@ impl SubnetRegistry {
 
         let mut stack = vec![pid];
         while let Some(current) = stack.pop() {
-            let children: Vec<CanisterView> = Self::export()
+            let children: Vec<CanisterView> = Self::all()
                 .into_iter()
                 .filter(|e| e.parent_pid == Some(current))
                 .map(Into::into)

@@ -11,8 +11,8 @@ macro_rules! icu_endpoints_root {
 
             ::icu::memory::app::AppState::command(cmd)?;
 
-            let bundle = ::icu::ops::sync::SyncBundle::with_app_state()?;
-            ::icu::ops::sync::root_cascade().await?;
+            let bundle = ::icu::ops::sync::state::StateBundle::root();
+            ::icu::ops::sync::state::root_cascade(bundle).await?;
 
             Ok(())
         }
@@ -54,11 +54,27 @@ macro_rules! icu_endpoints_root {
 
         //
         // SUBNET ENDPOINTS
+        // (on root, these views are returned by the registry)
         //
 
         #[::icu::cdk::query]
         fn icu_subnet_registry() -> Vec<::icu::memory::CanisterEntry> {
-            $crate::memory::subnet::SubnetRegistry::export()
+            $crate::memory::subnet::SubnetRegistry::all()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_children() -> Vec<::icu::memory::CanisterView> {
+            $crate::memory::subnet::SubnetRegistry::children(::icu::cdk::api::canister_self())
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_directory() -> Vec<::icu::memory::CanisterView> {
+            $crate::memory::subnet::SubnetRegistry::directory()
+        }
+
+        #[::icu::cdk::query]
+        fn icu_subnet_parents() -> Vec<::icu::memory::CanisterView> {
+            $crate::memory::subnet::SubnetRegistry::parents(::icu::cdk::api::canister_self())
         }
 
         //
@@ -129,13 +145,23 @@ macro_rules! icu_endpoints_nonroot {
         //
 
         #[::icu::cdk::update]
-        async fn icu_sync_cascade(
-            bundle: ::icu::ops::sync::SyncBundle,
+        async fn icu_sync_state(
+            bundle: ::icu::ops::sync::state::StateBundle,
         ) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_parent)?;
 
-            $crate::ops::sync::save_state(&bundle)?;
-            $crate::ops::sync::cascade_children(&bundle).await
+            $crate::ops::sync::state::save_state(&bundle)?;
+            $crate::ops::sync::state::cascade_children(&bundle).await
+        }
+
+        #[::icu::cdk::update]
+        async fn icu_sync_topology(
+            bundle: ::icu::ops::sync::topology::TopologyBundle,
+        ) -> Result<(), ::icu::Error> {
+            $crate::auth_require_any!(::icu::auth::is_parent)?;
+
+            $crate::ops::sync::topology::save_state(&bundle)?;
+            $crate::ops::sync::topology::cascade_children(&bundle).await
         }
     };
 }

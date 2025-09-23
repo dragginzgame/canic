@@ -4,7 +4,7 @@ use crate::{
     config::Config,
     interface::{ic::install_code, prelude::*},
     memory::{CanisterView, root::CanisterPool, subnet::SubnetRegistry},
-    ops::sync::root_cascade,
+    ops::sync::topology::root_cascade,
     state::wasm::WasmRegistry,
 };
 use candid::Principal;
@@ -68,17 +68,10 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles),
 
 /// Create a fresh canister on IC with given cycles + controllers.
 pub async fn raw_create_canister(cycles: Cycles) -> Result<Principal, Error> {
-    let controllers = get_controllers()?;
-
-    crate::interface::ic::create_canister(controllers, cycles).await
-}
-
-/// Get list of controllers: hardcoded from config plus root.
-fn get_controllers() -> Result<Vec<Principal>, Error> {
     let mut controllers = Config::try_get()?.controllers.clone();
     controllers.push(canister_self()); // root always controls
 
-    Ok(controllers)
+    crate::interface::ic::create_canister(controllers, cycles).await
 }
 
 //
