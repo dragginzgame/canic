@@ -58,10 +58,10 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 
 /// call_and_decode
 /// Generic helper for calls that return `Result<T, Error>`
-pub async fn call_and_decode<T: candid::CandidType + for<'de> candid::Deserialize<'de>>(
+pub async fn call_and_decode<T: CandidType + for<'de> candid::Deserialize<'de>>(
     pid: Principal,
     method: &str,
-    arg: &impl candid::CandidType,
+    arg: impl CandidType,
 ) -> Result<T, Error> {
     let response = Call::unbounded_wait(pid, method)
         .with_arg(arg)

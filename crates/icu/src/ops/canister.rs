@@ -50,7 +50,12 @@ pub async fn create_and_install_canister(
 pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
     // Try pool first
     if let Some((pid, entry)) = CanisterPool::pop_first() {
-        log!(Log::Ok, "⚡ reusing {} from pool ({})", pid, entry.cycles);
+        log!(
+            Log::Ok,
+            "⚡ allocate_canister: reusing {} from pool ({})",
+            pid,
+            entry.cycles
+        );
 
         return Ok((pid, entry.cycles));
     }

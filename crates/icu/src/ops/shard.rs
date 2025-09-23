@@ -243,7 +243,7 @@ pub async fn assign_with_policy(
     let pid = response.new_canister_pid;
 
     ShardRegistry::create(pid, pool, canister_type, policy.initial_capacity);
-    log!(Log::Ok, "✨ created shard={pid} pool={pool}");
+    log!(Log::Ok, "✨ sharder.create: {pid} pool={pool}");
 
     let fallback = ShardRegistry::assign_best_effort(pool, tenant)
         .ok_or_else(|| Error::custom("no shard available after creation"))?;
@@ -283,7 +283,7 @@ pub async fn drain_shard(pool: &str, shard_pid: Principal, limit: u32) -> Result
 
         log!(
             Log::Ok,
-            "✨ created shard={new_pid} draining donor={shard_pid}"
+            "✨ sharder.create: {new_pid} draining donor={shard_pid}"
         );
         moved += 1;
     }

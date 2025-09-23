@@ -26,14 +26,15 @@ impl StateBundle {
     }
 
     /// Compact debug string (`a..`) showing which sections are present.
-    fn debug(&self) -> String {
+    #[allow(clippy::iter_on_single_items)]
+    fn debug(self) -> String {
         [if self.app_state.is_some() { 'a' } else { '.' }]
             .iter()
             .collect()
     }
 
     /// Whether the bundle is "empty" (nothing to sync).
-    const fn is_empty(&self) -> bool {
+    const fn is_empty(self) -> bool {
         self.app_state.is_none()
     }
 }
