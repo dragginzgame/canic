@@ -47,7 +47,7 @@ macro_rules! icu_start {
         #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
-            ::icu::memory::cycle::CycleTracker::start();
+            ::icu::memory::cycles::CycleTracker::start();
             icu_setup();
         }
 
@@ -95,7 +95,7 @@ macro_rules! icu_start_root {
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
             ::icu::memory::root::CanisterPool::start();
-            ::icu::memory::cycle::CycleTracker::start();
+            ::icu::memory::cycles::CycleTracker::start();
             ::icu::state::wasm::WasmRegistry::import(WASMS);
             icu_setup();
         }

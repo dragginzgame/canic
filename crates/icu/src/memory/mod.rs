@@ -1,6 +1,6 @@
 pub mod app;
 pub mod canister;
-pub mod cycle;
+pub mod cycles;
 pub mod memory_registry;
 pub mod root;
 pub mod shard;

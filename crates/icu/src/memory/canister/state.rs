@@ -19,9 +19,9 @@ thread_local! {
         ));
 }
 
-//
-// CanisterStateError
-//
+///
+/// CanisterStateError
+///
 
 #[derive(Debug, ThisError)]
 pub enum CanisterStateError {
@@ -29,9 +29,9 @@ pub enum CanisterStateError {
     ViewNotSet,
 }
 
-//
-// API
-//
+///
+/// CanisterState
+///
 
 pub struct CanisterState;
 

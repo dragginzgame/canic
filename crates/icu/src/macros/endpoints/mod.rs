@@ -65,8 +65,8 @@ macro_rules! icu_endpoints {
         }
 
         #[::icu::cdk::query]
-        fn icu_cycle_tracker() -> ::icu::memory::cycle::CycleTrackerView {
-            $crate::memory::cycle::CycleTracker::export()
+        fn icu_cycle_tracker() -> ::icu::memory::cycles::CycleTrackerView {
+            $crate::memory::cycles::CycleTracker::export()
         }
 
         //
