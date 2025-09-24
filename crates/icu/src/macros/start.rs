@@ -94,9 +94,11 @@ macro_rules! icu_start_root {
         #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
+            ::icu::memory::registry::force_init_all_tls();
             ::icu::memory::root::CanisterPool::start();
             ::icu::memory::cycles::CycleTracker::start();
             ::icu::state::wasm::WasmRegistry::import(WASMS);
+
             icu_setup();
         }
 

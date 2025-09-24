@@ -6,7 +6,7 @@ use crate::{
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::Config,
-    icu_register_memory, impl_storable_unbounded, log,
+    icu_memory, impl_storable_unbounded, log,
     memory::ROOT_CANISTER_POOL_MEMORY_ID,
     ops::pool::create_pool_canister,
     types::Cycles,
@@ -16,11 +16,11 @@ use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-// thread local
+// CANISTER_POOL
 thread_local! {
     static CANISTER_POOL: RefCell<BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(
-            icu_register_memory!(ROOT_CANISTER_POOL_MEMORY_ID),
+            icu_memory!(CanisterPool, ROOT_CANISTER_POOL_MEMORY_ID),
         ));
 
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };

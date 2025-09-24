@@ -1,6 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Vec as StableVec, memory::VirtualMemory},
-    icu_register_memory,
+    icu_memory,
     memory::{CanisterView, SUBNET_PARENTS_MEMORY_ID},
     types::CanisterType,
 };
@@ -12,7 +12,7 @@ thread_local! {
     static SUBNET_PARENTS: RefCell<
         StableVec<CanisterView, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableVec::init(icu_register_memory!(SUBNET_PARENTS_MEMORY_ID)),
+        StableVec::init(icu_memory!(SubnetParents, SUBNET_PARENTS_MEMORY_ID)),
     );
 }
 

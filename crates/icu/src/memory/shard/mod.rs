@@ -6,7 +6,7 @@ pub use registry::*;
 
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    icu_register_memory, impl_storable_bounded,
+    icu_memory, impl_storable_bounded,
     memory::{SHARD_REGISTRY_MEMORY_ID, SHARD_TENANT_MAP_MEMORY_ID},
     types::CanisterType,
 };
@@ -22,8 +22,8 @@ use thiserror::Error as ThisError;
 thread_local! {
     static SHARD_CORE: RefCell<ShardCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardCore::new(
-            BTreeMap::init(icu_register_memory!(SHARD_REGISTRY_MEMORY_ID)),
-            BTreeMap::init(icu_register_memory!(SHARD_TENANT_MAP_MEMORY_ID)),
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_REGISTRY_MEMORY_ID)),
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_TENANT_MAP_MEMORY_ID)),
         )
     );
 }

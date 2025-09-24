@@ -1,6 +1,4 @@
 //! ICU crate utilities for multi-canister apps on the Internet Computer.
-#![forbid(unsafe_code)]
-
 pub mod auth;
 pub mod canister;
 pub mod cdk;
@@ -17,6 +15,7 @@ pub mod types;
 pub mod utils;
 
 pub mod export {
+    pub use ctor;
     pub use defer;
 }
 
@@ -31,7 +30,7 @@ pub mod prelude {
         Error as IcuError, Log, auth_require_all, auth_require_any,
         cdk::{api::msg_caller, candid::CandidType, export_candid, init, query, update},
         guard::{guard_query, guard_update},
-        icu_register_memory, icu_start, icu_start_root, log, perf, perf_start,
+        icu_memory, icu_start, icu_start_root, log, perf, perf_start,
         types::{CanisterType, Cycles, Principal},
     };
 }
@@ -41,7 +40,7 @@ use crate::cdk::{
     candid::{CandidType, Error as CandidError},
 };
 use serde::Deserialize;
-use std::time::Duration;
+use std::{ops::RangeInclusive, time::Duration};
 
 ///
 /// Crate Version
@@ -54,6 +53,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
+
+/// ICU is only allowed to use memory IDs in this inclusive range.
+pub const ICU_MEMORY_MIN: u8 = 0;
+pub const ICU_MEMORY_MAX: u8 = 20;
+pub const ICU_MEMORY_RANGE: RangeInclusive<u8> = ICU_MEMORY_MIN..=ICU_MEMORY_MAX;
 
 ///
 /// Logging layout constants

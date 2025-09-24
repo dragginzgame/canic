@@ -1,26 +1,53 @@
 #[macro_export]
-macro_rules! icu_register_memory {
-    ($id:expr) => {{
-        let path = concat!(module_path!(), "::", line!()).to_string();
-
-        // check the registry with logging
-        let result = $crate::memory::MemoryRegistry::register($id, &path);
-
-        if let Err(ref err) = result {
-            $crate::log!(
-                $crate::Log::Error,
-                "❌ icu_register_memory failed for {} @ {}: {}",
-                path,
-                $id,
-                err
-            );
+macro_rules! thread_local_register {
+    // match: vis static NAME: TYPE = INIT;
+    ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
+        thread_local! {
+            $vis static $name: $ty = $init;
         }
 
-        result.unwrap();
+        // Each declaration registers itself into TLS_REGISTRARS
+        #[$crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor)]
+        fn __ctor() {
+            $crate::memory::registry::TLS_REGISTRARS.with(|v| {
+                v.borrow_mut().push(|| {
+                    $name.with(|_| {});
+                });
+            });
+        }
+    };
+}
 
-        // acquire memory_id → explicitly return VirtualMemory<DefaultMemoryImpl>
+#[macro_export]
+macro_rules! icu_memory {
+    ($label:ident, $id:expr) => {{
+        const ID: u8 = $id;
+
+        // Compile-time guards
+        #[cfg(icu_internal)]
+        const _: () = assert!(
+            ID >= $crate::ICU_MEMORY_MIN && ID <= $crate::ICU_MEMORY_MAX,
+            "ICU IDs must be within ICU_MEMORY_RANGE"
+        );
+
+        #[cfg(not(icu_internal))]
+        const _: () = assert!(
+            ID < $crate::ICU_MEMORY_MIN || ID > $crate::ICU_MEMORY_MAX,
+            "Non-ICU crates must not use ICU_MEMORY_RANGE"
+        );
+
+        // Enqueue this registration for later
+        $crate::memory::registry::PENDING_REGISTRATIONS.with(|q| {
+            q.borrow_mut().push((
+                ID,
+                env!("CARGO_PKG_NAME"),
+                concat!(module_path!(), "::", line!()),
+            ));
+        });
+
+        // Return the stable memory handle immediately
         $crate::memory::MEMORY_MANAGER
-            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
+            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new(ID)))
     }};
 }
 

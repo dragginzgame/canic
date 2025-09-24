@@ -23,6 +23,7 @@ publish = false
 
 # ic cdk
 candid = { version = "0.10", default-features = false }
+ctor = "0.5"
 criterion = "0.7"
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }

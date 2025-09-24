@@ -21,7 +21,7 @@
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    icu_register_memory,
+    icu_memory,
     memory::{CanisterView, MemoryError, SUBNET_DIRECTORY_MEMORY_ID, subnet::SubnetError},
     types::CanisterType,
 };
@@ -30,7 +30,7 @@ use std::cell::RefCell;
 // thread_local
 thread_local! {
     static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterType, CanisterView, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(icu_register_memory!(SUBNET_DIRECTORY_MEMORY_ID)));
+        RefCell::new(BTreeMap::init(icu_memory!(SubnetDirectory, SUBNET_DIRECTORY_MEMORY_ID)));
 }
 
 ///

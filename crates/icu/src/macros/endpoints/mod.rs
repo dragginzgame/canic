@@ -51,7 +51,16 @@ macro_rules! icu_endpoints {
         }
 
         //
-        // ICU MEMORY EXPORTS
+        // ICU MEMORY REGISTRY EXPORTS
+        //
+
+        #[::icu::cdk::query]
+        fn icu_memory_registry() -> ::icu::memory::registry::MemoryRegistryView {
+            $crate::memory::registry::MemoryRegistry::export()
+        }
+
+        //
+        // ICU MEMORY STATE EXPORTS
         //
 
         #[::icu::cdk::query]

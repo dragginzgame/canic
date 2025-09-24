@@ -1,13 +1,13 @@
 pub mod app;
 pub mod canister;
 pub mod cycles;
-pub mod memory_registry;
+pub mod registry;
 pub mod root;
 pub mod shard;
 pub mod subnet;
 pub mod types;
 
-pub use memory_registry::*;
+pub use registry::{MemoryRegistry, MemoryRegistryError};
 pub use types::*;
 
 use crate::{
@@ -56,6 +56,7 @@ thread_local! {
     ///
     /// Define MEMORY_MANAGER thread-locally for the entire scope
     ///
+
     pub static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
         RefCell::new(MemoryManager::init(
             DefaultMemoryImpl::default()
@@ -68,6 +69,10 @@ thread_local! {
 
 #[derive(Debug, ThisError)]
 pub enum MemoryError {
+    // top level registry error
+    #[error(transparent)]
+    MemoryRegistryError(#[from] MemoryRegistryError),
+
     #[error(transparent)]
     AppStateError(#[from] AppStateError),
 
@@ -76,9 +81,6 @@ pub enum MemoryError {
 
     #[error(transparent)]
     CanisterStateError(#[from] CanisterStateError),
-
-    #[error(transparent)]
-    MemoryRegistryError(#[from] MemoryRegistryError),
 
     #[error(transparent)]
     ShardRegistryError(#[from] ShardRegistryError),

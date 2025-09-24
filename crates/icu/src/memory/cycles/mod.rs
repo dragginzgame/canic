@@ -6,22 +6,28 @@ use crate::{
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::Config,
-    icu_register_memory,
+    icu_memory,
     interface::ic::canister_cycle_balance,
     log,
     memory::{CYCLE_TRACKER_MEMORY_ID, CanisterState},
+    thread_local_register,
     types::Cycles,
     utils::time::now_secs,
 };
 use std::cell::RefCell;
 
-// thread_local
-thread_local! {
-    static TRACKER: RefCell<CycleTracker> =
-        RefCell::new(CycleTracker::new(BTreeMap::init(
-            icu_register_memory!(CYCLE_TRACKER_MEMORY_ID),
-        )));
+//
+// CYCLE_TRACKER
+//
 
+thread_local_register! {
+    static CYCLE_TRACKER: RefCell<CycleTracker> =
+        RefCell::new(CycleTracker::new(BTreeMap::init(
+            icu_memory!(CycleTracker, CYCLE_TRACKER_MEMORY_ID),
+        )));
+}
+
+thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
@@ -54,7 +60,7 @@ impl CycleTracker {
 
     #[must_use]
     pub fn len() -> u64 {
-        TRACKER.with_borrow(|t| t.map.len())
+        CYCLE_TRACKER.with_borrow(|t| t.map.len())
     }
 
     /// Start recurring tracking every X seconds
@@ -96,7 +102,7 @@ impl CycleTracker {
 
         Self::check_auto_topup();
 
-        TRACKER.with_borrow_mut(|t| t.insert(ts, cycles))
+        CYCLE_TRACKER.with_borrow_mut(|t| t.insert(ts, cycles))
     }
 
     pub fn check_auto_topup() {
@@ -128,11 +134,11 @@ impl CycleTracker {
     #[must_use]
     pub fn purge_old() -> usize {
         let ts = now_secs();
-        TRACKER.with_borrow_mut(|t| t.purge(ts))
+        CYCLE_TRACKER.with_borrow_mut(|t| t.purge(ts))
     }
 
     pub fn clear() {
-        TRACKER.with_borrow_mut(|t| {
+        CYCLE_TRACKER.with_borrow_mut(|t| {
             t.map.clear();
             t.insert_count = 0;
         });
@@ -140,7 +146,7 @@ impl CycleTracker {
 
     #[must_use]
     pub fn export() -> CycleTrackerView {
-        TRACKER.with_borrow(Self::view)
+        CYCLE_TRACKER.with_borrow(Self::view)
     }
 
     // --- internal state methods ---
