@@ -26,7 +26,7 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     for path in candidates {
         match fs::read(&path) {
             Ok(bytes) => return Some(bytes),
-            Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
             Err(err) => panic!("failed to read root wasm at {}: {}", path.display(), err),
         }
     }

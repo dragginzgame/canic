@@ -64,20 +64,6 @@ impl SubnetChildren {
         })
     }
 
-    /// Insert or update a child
-    pub fn insert(pid: Principal, entry: CanisterView) {
-        SUBNET_CHILDREN.with_borrow_mut(|map| {
-            map.insert(pid, entry);
-        });
-    }
-
-    /// Remove a child
-    pub fn remove(&self, pid: &Principal) {
-        SUBNET_CHILDREN.with_borrow_mut(|map| {
-            map.remove(pid);
-        });
-    }
-
     /// Clear all children
     pub fn clear() {
         SUBNET_CHILDREN.with_borrow_mut(BTreeMap::clear);

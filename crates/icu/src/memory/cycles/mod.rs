@@ -140,7 +140,7 @@ impl CycleTracker {
 
     #[must_use]
     pub fn export() -> CycleTrackerView {
-        TRACKER.with_borrow(|t| t.view())
+        TRACKER.with_borrow(Self::view)
     }
 
     // --- internal state methods ---

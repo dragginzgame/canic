@@ -55,9 +55,4 @@ impl SubnetParents {
             }
         });
     }
-
-    /// Clear all parents
-    pub fn clear() {
-        SUBNET_PARENTS.with_borrow_mut(StableVec::clear);
-    }
 }
