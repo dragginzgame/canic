@@ -227,8 +227,8 @@ impl MemoryRegistry {
 
     /// Register an ID, enforcing crate’s allowed range.
     fn register(id: u8, crate_name: &str, label: &str) -> Result<(), Error> {
-        // Normalize once; use this everywhere.
-        let crate_key = crate_name.trim().to_string();
+        // convert to string once
+        let crate_key = crate_name.to_string();
 
         // immutable borrow first: check ranges and existing registry entry
         let allowed = MEMORY_RANGES
@@ -270,8 +270,8 @@ impl MemoryRegistry {
             )))?;
         }
 
-        // Normalize once; use this everywhere.
-        let crate_key = crate_name.trim().to_string();
+        // convert to string once; use this everywhere.
+        let crate_key = crate_name.to_string();
 
         // immutable borrow first
         let conflict = MEMORY_RANGES.with_borrow(|ranges| {

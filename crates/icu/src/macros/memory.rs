@@ -17,72 +17,42 @@ macro_rules! thread_local_memory {
     };
 }
 
+///
+/// Declare a stable memory handle for a specific ID, tied to the current crate.
+/// - Enqueues the registration (`defer_register`) so it will be validated later.
+/// - Returns the `VirtualMemory` handle immediately so you can use it in
+///   `Cell`, `BTreeMap`, etc.
+///
 #[macro_export]
 macro_rules! icu_memory {
     ($label:ident, $id:expr) => {{
-        // Enqueue this registration for later
+        // Enqueue this memory ID registration for later processing during
+        // `force_init_all_tls()`. The crate key is always derived from
+        // `CARGO_PKG_NAME`, so all memory for a crate lives under one namespace.
         $crate::memory::registry::defer_register(
             $id,
             env!("CARGO_PKG_NAME"),
             concat!(module_path!(), "::", stringify!($label)),
         );
 
-        // Return the stable memory handle immediately
+        // Return the stable memory handle immediately so it can be wrapped in
+        // higher-level data structures (BTreeMap, Cell, Vec, etc.).
         $crate::memory::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
 
 ///
-/// MiniCBOR Versions
-/// (much faster, doesn't support u128)
+/// Reserve a contiguous block of memory IDs for the current crate.
+/// - Enqueues the reservation (`defer_reserve_range`) so it will be validated later.
+/// - Uses the crate name (`CARGO_PKG_NAME`) as the registry key, matching `icu_memory!`.
 ///
-
-// impl_storable_bounded
 #[macro_export]
-macro_rules! impl_storable_bounded {
-    ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
-        impl $crate::cdk::structures::storable::Storable for $ident {
-            const BOUND: $crate::cdk::structures::storable::Bound =
-                $crate::cdk::structures::storable::Bound::Bounded {
-                    max_size: $max_size,
-                    is_fixed_size: $is_fixed_size,
-                };
-
-            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                ::std::borrow::Cow::Owned($crate::utils::cbor::serialize(self).unwrap())
-            }
-
-            fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::cbor::serialize(&self).unwrap()
-            }
-
-            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::cbor::deserialize(&bytes).unwrap()
-            }
-        }
-    };
-}
-
-// impl_storable_unbounded
-#[macro_export]
-macro_rules! impl_storable_unbounded {
-    ($ident:ident) => {
-        impl $crate::cdk::structures::storable::Storable for $ident {
-            const BOUND: $crate::cdk::structures::storable::Bound =
-                $crate::cdk::structures::storable::Bound::Unbounded;
-
-            fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                ::std::borrow::Cow::Owned($crate::utils::cbor::serialize(self).unwrap())
-            }
-
-            fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::cbor::serialize(&self).unwrap()
-            }
-
-            fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::cbor::deserialize(&bytes).unwrap()
-            }
-        }
-    };
+macro_rules! icu_memory_range {
+    ($start:expr, $end:expr) => {{
+        // Enqueue this range reservation. The actual check/insert happens in
+        // `force_init_all_tls()`. This guarantees the reservation is made
+        // before any memory IDs from this range are registered.
+        $crate::memory::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
+    }};
 }

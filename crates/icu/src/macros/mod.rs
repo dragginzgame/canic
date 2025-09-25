@@ -2,6 +2,7 @@ pub mod build;
 pub mod endpoints;
 pub mod memory;
 pub mod start;
+pub mod storable;
 
 // eager_init
 #[macro_export]
