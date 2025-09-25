@@ -3,7 +3,7 @@ use crate::{
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     interface::{ic::install_code, prelude::*},
-    memory::{CanisterView, root::CanisterPool, subnet::SubnetRegistry},
+    memory::{CanisterView, root::CanisterPool, state::CanisterStateData, subnet::SubnetRegistry},
     ops::sync::topology::root_cascade,
     state::wasm::WasmRegistry,
 };
@@ -97,7 +97,10 @@ async fn install_canister(
     let canister_entry = SubnetRegistry::try_get(pid)?;
 
     // Construct initial state
-    let view: CanisterView = canister_entry.into();
+    // the view is the smaller version of the CanisterEntry
+    let state = CanisterStateData {
+        view: Some(canister_entry.into()),
+    };
     let parents: Vec<CanisterView> = SubnetRegistry::parents(pid);
 
     // Install code
@@ -105,7 +108,7 @@ async fn install_canister(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),
-        (view, parents, extra_arg),
+        (state, parents, extra_arg),
     )
     .await?;
 
