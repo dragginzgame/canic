@@ -18,7 +18,9 @@ pub mod export {
     pub mod ctor {
         pub use ::ctor::*;
     }
-    pub use defer;
+    pub mod defer {
+        pub use ::defer::*;
+    }
 }
 
 pub use thiserror::Error as ThisError;
