@@ -90,6 +90,28 @@ pub fn force_init_all_tls() {
             MemoryRegistry::register(id, crate_name, label).unwrap();
         }
     });
+
+    // summary logs: one per range
+    MEMORY_RANGES.with_borrow(|ranges| {
+        MEMORY_REGISTRY.with_borrow(|registry| {
+            for entry in ranges.iter() {
+                let crate_name = entry.key();
+                let range = entry.value();
+
+                let count = registry.iter().filter(|e| range.contains(*e.key())).count();
+
+                log!(
+                    Log::Info,
+                    "💾 memory.range: {} [{}-{}] ({}/{} used)",
+                    crate_name,
+                    range.start,
+                    range.end,
+                    count,
+                    range.end - range.start,
+                );
+            }
+        });
+    });
 }
 
 ///
@@ -208,8 +230,6 @@ impl MemoryRegistry {
             map.insert(id, MemoryRegistryEntry::new(label));
         });
 
-        log!(Log::Info, "💾 memory.register: {id} ({label}@{crate_name})");
-
         Ok(())
     }
 
@@ -259,11 +279,6 @@ impl MemoryRegistry {
         MEMORY_RANGES.with_borrow_mut(|ranges| {
             let range = MemoryRange::new(start, end, crate_name);
             ranges.insert(crate_name.to_string(), range);
-
-            log!(
-                Log::Info,
-                "💾 memory.reserve_range: `{crate_name}`: {start} → {end}",
-            );
         });
 
         Ok(())
