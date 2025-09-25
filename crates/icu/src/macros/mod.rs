@@ -3,6 +3,17 @@ pub mod endpoints;
 pub mod memory;
 pub mod start;
 
+// eager_init
+#[macro_export]
+macro_rules! eager_init {
+    ($body:block) => {
+        #[ $crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor) ]
+        fn __icu_eager_init() {
+            $body
+        }
+    };
+}
+
 // log
 #[macro_export]
 macro_rules! log {

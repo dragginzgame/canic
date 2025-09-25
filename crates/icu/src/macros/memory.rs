@@ -7,14 +7,13 @@ macro_rules! thread_local_memory {
         }
 
         // Each declaration registers itself into TLS_INITIALIZERS
-        #[$crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor)]
-        fn __ctor() {
+        $crate::eager_init!({
             $crate::memory::registry::TLS_INITIALIZERS.with(|v| {
                 v.borrow_mut().push(|| {
                     $name.with(|_| {});
                 });
             });
-        }
+        });
     };
 }
 
