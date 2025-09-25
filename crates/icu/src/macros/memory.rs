@@ -21,20 +21,16 @@ macro_rules! thread_local_memory {
 #[macro_export]
 macro_rules! icu_memory {
     ($label:ident, $id:expr) => {{
-        const ID: u8 = $id;
-
         // Enqueue this registration for later
-        $crate::memory::registry::TLS_PENDING_REGISTRATIONS.with(|q| {
-            q.borrow_mut().push((
-                ID,
-                env!("CARGO_PKG_NAME"),
-                concat!(module_path!(), "::", stringify!($label)),
-            ));
-        });
+        $crate::memory::registry::defer_register(
+            $id,
+            env!("CARGO_PKG_NAME"),
+            concat!(module_path!(), "::", stringify!($label)),
+        );
 
         // Return the stable memory handle immediately
         $crate::memory::MEMORY_MANAGER
-            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new(ID)))
+            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
 
