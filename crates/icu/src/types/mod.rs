@@ -1,9 +1,11 @@
 mod canister;
 mod cycles;
+mod string;
 mod wasm;
 
 pub use canister::*;
 pub use cycles::*;
+pub use string::*;
 pub use wasm::*;
 
 //

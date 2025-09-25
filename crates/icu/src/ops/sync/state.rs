@@ -1,7 +1,7 @@
 use crate::{
     Error,
     memory::{
-        app::{AppState, AppStateData},
+        state::{AppState, AppStateData, SubnetState, SubnetStateData},
         subnet::{SubnetChildren, SubnetRegistry},
     },
     ops::{OpsError, prelude::*},
@@ -15,6 +15,7 @@ use crate::{
 #[derive(CandidType, Copy, Clone, Debug, Default, Deserialize)]
 pub struct StateBundle {
     pub app_state: Option<AppStateData>,
+    pub subnet_state: Option<SubnetStateData>,
 }
 
 impl StateBundle {
@@ -22,15 +23,22 @@ impl StateBundle {
     pub fn root() -> Self {
         Self {
             app_state: Some(AppState::export()),
+            subnet_state: Some(SubnetState::export()),
         }
     }
 
     /// Compact debug string (`a..`) showing which sections are present.
-    #[allow(clippy::iter_on_single_items)]
     fn debug(self) -> String {
-        [if self.app_state.is_some() { 'a' } else { '.' }]
-            .iter()
-            .collect()
+        [
+            if self.app_state.is_some() { 'a' } else { '.' },
+            if self.subnet_state.is_some() {
+                's'
+            } else {
+                '.'
+            },
+        ]
+        .iter()
+        .collect()
     }
 
     /// Whether the bundle is "empty" (nothing to sync).
@@ -88,9 +96,11 @@ pub async fn cascade_children(bundle: &StateBundle) -> Result<(), Error> {
 pub fn save_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
-    // directory
     if let Some(state) = bundle.app_state {
         AppState::import(state);
+    }
+    if let Some(state) = bundle.subnet_state {
+        SubnetState::import(state);
     }
 
     Ok(())

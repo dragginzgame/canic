@@ -2,7 +2,7 @@ use crate::{
     Error,
     memory::{
         CanisterView,
-        canister::CanisterState,
+        state::CanisterState,
         subnet::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetRegistry},
     },
     ops::{OpsError, prelude::*, sync::SyncError},

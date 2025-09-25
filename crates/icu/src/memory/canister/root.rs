@@ -1,18 +1,19 @@
 use crate::{
     Error,
     cdk::structures::{Cell, DefaultMemoryImpl, memory::VirtualMemory},
-    icu_register_memory,
-    memory::{CANISTER_ROOT_MEMORY_ID, MemoryError},
+    icu_memory,
+    memory::{MemoryError, id::canister::CANISTER_ROOT_ID},
+    thread_local_memory,
 };
 use candid::Principal;
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-// Thread-local storage for root PID
-thread_local! {
+// CANISTER_ROOT
+thread_local_memory! {
     static CANISTER_ROOT: RefCell<Cell<Option<Principal>, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            icu_register_memory!(CANISTER_ROOT_MEMORY_ID),
+            icu_memory!(CanisterRoot, CANISTER_ROOT_ID),
             None, // start empty
         ));
 }

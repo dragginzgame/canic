@@ -4,10 +4,7 @@
 use icu::{
     Error,
     config::Config,
-    memory::{
-        canister::{CanisterRoot, CanisterState},
-        subnet::SubnetRegistry,
-    },
+    memory::{canister::CanisterRoot, state::CanisterState, subnet::SubnetRegistry},
     state::wasm::WasmRegistry,
     types::{CanisterType, Principal},
 };
