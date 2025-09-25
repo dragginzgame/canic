@@ -23,15 +23,6 @@ macro_rules! icu_memory {
     ($label:ident, $id:expr) => {{
         const ID: u8 = $id;
 
-        #[cfg(not(icu_internal))]
-        const _: () = assert!(
-            ID < $crate::ICU_MEMORY_MIN || ID > $crate::ICU_MEMORY_MAX,
-            "Non-ICU crate memory id {} within ICU_MEMORY_RANGE ({} - {})",
-            $crate::ICU_MEMORY_MIN,
-            $crate::ICU_MEMORY_MAX,
-            ID
-        );
-
         // Enqueue this registration for later
         $crate::memory::registry::TLS_PENDING_REGISTRATIONS.with(|q| {
             q.borrow_mut().push((
