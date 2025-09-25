@@ -2,7 +2,8 @@ use crate::{
     Error,
     cdk::structures::{Cell, DefaultMemoryImpl, memory::VirtualMemory},
     icu_memory, impl_storable_unbounded,
-    memory::{CANISTER_STATE_MEMORY_ID, CanisterView, MemoryError},
+    memory::{CanisterView, MemoryError, id::state::CANISTER_STATE_ID},
+    thread_local_memory,
     types::CanisterType,
 };
 use candid::CandidType;
@@ -11,10 +12,10 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 // CANISTER_STATE
-thread_local! {
+thread_local_memory! {
     static CANISTER_STATE: RefCell<Cell<CanisterStateData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            icu_memory!(CanisterState, CANISTER_STATE_MEMORY_ID),
+            icu_memory!(CanisterState, CANISTER_STATE_ID),
             CanisterStateData::default(),
         ));
 }

@@ -7,7 +7,8 @@ pub use registry::*;
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_memory, impl_storable_bounded,
-    memory::{SHARD_REGISTRY_MEMORY_ID, SHARD_TENANT_MAP_MEMORY_ID},
+    memory::id::capability::{SHARD_REGISTRY_ID, SHARD_TENANTS_ID},
+    thread_local_memory,
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
@@ -15,15 +16,12 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-//
-// THREAD LOCAL CORE
-//
-
-thread_local! {
+// (this i) SHARD_CORE
+thread_local_memory! {
     static SHARD_CORE: RefCell<ShardCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardCore::new(
-            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_REGISTRY_MEMORY_ID)),
-            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_TENANT_MAP_MEMORY_ID)),
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_REGISTRY_ID)),
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_TENANTS_ID)),
         )
     );
 }

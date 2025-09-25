@@ -1,15 +1,15 @@
 #[macro_export]
-macro_rules! thread_local_register {
+macro_rules! thread_local_memory {
     // match: vis static NAME: TYPE = INIT;
     ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
         thread_local! {
             $vis static $name: $ty = $init;
         }
 
-        // Each declaration registers itself into TLS_REGISTRARS
+        // Each declaration registers itself into TLS_INITIALIZERS
         #[$crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor)]
         fn __ctor() {
-            $crate::memory::registry::TLS_REGISTRARS.with(|v| {
+            $crate::memory::registry::TLS_INITIALIZERS.with(|v| {
                 v.borrow_mut().push(|| {
                     $name.with(|_| {});
                 });
@@ -23,25 +23,21 @@ macro_rules! icu_memory {
     ($label:ident, $id:expr) => {{
         const ID: u8 = $id;
 
-        // Compile-time guards
-        #[cfg(icu_internal)]
-        const _: () = assert!(
-            ID >= $crate::ICU_MEMORY_MIN && ID <= $crate::ICU_MEMORY_MAX,
-            "ICU IDs must be within ICU_MEMORY_RANGE"
-        );
-
         #[cfg(not(icu_internal))]
         const _: () = assert!(
             ID < $crate::ICU_MEMORY_MIN || ID > $crate::ICU_MEMORY_MAX,
-            "Non-ICU crates must not use ICU_MEMORY_RANGE"
+            "Non-ICU crate memory id {} within ICU_MEMORY_RANGE ({} - {})",
+            $crate::ICU_MEMORY_MIN,
+            $crate::ICU_MEMORY_MAX,
+            ID
         );
 
         // Enqueue this registration for later
-        $crate::memory::registry::PENDING_REGISTRATIONS.with(|q| {
+        $crate::memory::registry::TLS_PENDING_REGISTRATIONS.with(|q| {
             q.borrow_mut().push((
                 ID,
                 env!("CARGO_PKG_NAME"),
-                concat!(module_path!(), "::", line!()),
+                concat!(module_path!(), "::", stringify!($label)),
             ));
         });
 

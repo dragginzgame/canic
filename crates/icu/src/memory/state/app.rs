@@ -2,7 +2,8 @@ use crate::{
     Error, Log,
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     icu_memory, impl_storable_bounded, log,
-    memory::{APP_STATE_MEMORY_ID, MemoryError},
+    memory::{MemoryError, id::state::APP_STATE_ID},
+    thread_local_memory,
 };
 use candid::CandidType;
 use derive_more::Display;
@@ -11,10 +12,10 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 // APP_STATE
-thread_local! {
+thread_local_memory! {
     static APP_STATE: RefCell<Cell<AppStateData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            icu_memory!(AppState, APP_STATE_MEMORY_ID),
+            icu_memory!(AppState, APP_STATE_ID),
             AppStateData::default(),
         ));
 }

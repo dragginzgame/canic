@@ -40,7 +40,7 @@ use crate::cdk::{
     candid::{CandidType, Error as CandidError},
 };
 use serde::Deserialize;
-use std::{ops::RangeInclusive, time::Duration};
+use std::time::Duration;
 
 ///
 /// Crate Version
@@ -54,12 +54,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
 
-/// ICU is only allowed to use memory IDs in this inclusive range.
-pub const ICU_MEMORY_MIN: u8 = 0;
-pub const ICU_MEMORY_MAX: u8 = 20;
-pub const ICU_MEMORY_RANGE: RangeInclusive<u8> = ICU_MEMORY_MIN..=ICU_MEMORY_MAX;
-
-///
 /// Logging layout constants
 ///
 /// Canister type column width and ellipsis threshold for log lines.

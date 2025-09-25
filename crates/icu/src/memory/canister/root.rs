@@ -2,17 +2,18 @@ use crate::{
     Error,
     cdk::structures::{Cell, DefaultMemoryImpl, memory::VirtualMemory},
     icu_memory,
-    memory::{CANISTER_ROOT_MEMORY_ID, MemoryError},
+    memory::{MemoryError, id::canister::CANISTER_ROOT_ID},
+    thread_local_memory,
 };
 use candid::Principal;
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 // CANISTER_ROOT
-thread_local! {
+thread_local_memory! {
     static CANISTER_ROOT: RefCell<Cell<Option<Principal>, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            icu_memory!(CanisterRoot, CANISTER_ROOT_MEMORY_ID),
+            icu_memory!(CanisterRoot, CANISTER_ROOT_ID),
             None, // start empty
         ));
 }

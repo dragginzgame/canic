@@ -6,10 +6,10 @@ macro_rules! icu_endpoints_root {
         // modify app-level state
         // @todo eventually this will cascade down from an orchestrator canister
         #[::icu::cdk::update]
-        async fn icu_app(cmd: ::icu::memory::app::AppCommand) -> Result<(), ::icu::Error> {
+        async fn icu_app(cmd: ::icu::memory::state::AppCommand) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            ::icu::memory::app::AppState::command(cmd)?;
+            ::icu::memory::state::AppState::command(cmd)?;
 
             let bundle = ::icu::ops::sync::state::StateBundle::root();
             ::icu::ops::sync::state::root_cascade(bundle).await?;

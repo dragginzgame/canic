@@ -24,6 +24,7 @@ use std::convert::TryFrom;
 )]
 pub struct BoundedString<const N: u32>(pub String);
 
+#[allow(clippy::cast_possible_truncation)]
 impl<const N: u32> BoundedString<N> {
     #[must_use]
     pub fn new(s: impl Into<String>) -> Self {
@@ -45,12 +46,14 @@ impl<const N: u32> AsRef<str> for BoundedString<N> {
     }
 }
 
+pub type BoundedString8 = BoundedString<8>;
 pub type BoundedString16 = BoundedString<16>;
 pub type BoundedString32 = BoundedString<32>;
 pub type BoundedString64 = BoundedString<64>;
 pub type BoundedString128 = BoundedString<128>;
 pub type BoundedString256 = BoundedString<256>;
 
+impl_storable_bounded!(BoundedString8, 8, false);
 impl_storable_bounded!(BoundedString16, 16, false);
 impl_storable_bounded!(BoundedString32, 32, false);
 impl_storable_bounded!(BoundedString64, 64, false);
@@ -67,6 +70,7 @@ impl<const N: u32> From<BoundedString<N>> for String {
 impl<const N: u32> TryFrom<String> for BoundedString<N> {
     type Error = String;
 
+    #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.len() as u32 <= N {
             Ok(Self(value))
@@ -79,6 +83,7 @@ impl<const N: u32> TryFrom<String> for BoundedString<N> {
 impl<const N: u32> TryFrom<&str> for BoundedString<N> {
     type Error = String;
 
+    #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() as u32 <= N {
             Ok(Self(value.to_string()))

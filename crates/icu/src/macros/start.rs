@@ -18,14 +18,14 @@ macro_rules! icu_start {
     ($canister_type:expr) => {
         #[::icu::cdk::init]
         fn init(
-            state: ::icu::memory::canister::CanisterStateData,
+            state: ::icu::memory::state::CanisterStateData,
             parents: Vec<::icu::memory::CanisterView>,
             args: Option<Vec<u8>>,
         ) {
             ::icu::log!(::icu::Log::Info, "🏁 init: {}", $canister_type);
 
             // setup
-            ::icu::memory::canister::CanisterState::import(state);
+            ::icu::memory::state::CanisterState::import(state);
             ::icu::memory::subnet::SubnetParents::import(parents);
             ::icu::memory::canister::CanisterRoot::set(::icu::cdk::api::msg_caller());
             __icu_shared_setup();
@@ -47,7 +47,7 @@ macro_rules! icu_start {
         #[allow(unexpected_cfgs)]
         fn __icu_shared_setup() {
             ::icu::__icu_load_config!();
-            ::icu::memory::cycles::CycleTracker::start();
+            ::icu::memory::canister::CycleTracker::start();
             icu_setup();
         }
 
@@ -72,7 +72,7 @@ macro_rules! icu_start_root {
             let entry =
                 ::icu::memory::subnet::SubnetRegistry::init_root(::icu::cdk::api::canister_self());
             ::icu::memory::canister::CanisterRoot::set(::icu::cdk::api::canister_self());
-            ::icu::memory::canister::CanisterState::set_view(entry.into());
+            ::icu::memory::state::CanisterState::set_view(entry.into());
 
             // setup
             __icu_shared_setup();
@@ -96,7 +96,7 @@ macro_rules! icu_start_root {
             ::icu::__icu_load_config!();
             ::icu::memory::registry::force_init_all_tls();
             ::icu::memory::root::CanisterPool::start();
-            ::icu::memory::cycles::CycleTracker::start();
+            ::icu::memory::canister::CycleTracker::start();
             ::icu::state::wasm::WasmRegistry::import(WASMS);
 
             icu_setup();

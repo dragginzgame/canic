@@ -9,8 +9,8 @@ use crate::{
     icu_memory,
     interface::ic::canister_cycle_balance,
     log,
-    memory::{CYCLE_TRACKER_MEMORY_ID, CanisterState},
-    thread_local_register,
+    memory::{id::canister::CYCLE_TRACKER_ID, state::CanisterState},
+    thread_local_memory,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -20,10 +20,10 @@ use std::cell::RefCell;
 // CYCLE_TRACKER
 //
 
-thread_local_register! {
+thread_local_memory! {
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(BTreeMap::init(
-            icu_memory!(CycleTracker, CYCLE_TRACKER_MEMORY_ID),
+            icu_memory!(CycleTracker, CYCLE_TRACKER_ID),
         )));
 }
 

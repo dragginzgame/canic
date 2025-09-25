@@ -1,9 +1,8 @@
-pub mod app;
 pub mod canister;
-pub mod cycles;
 pub mod registry;
 pub mod root;
 pub mod shard;
+pub mod state;
 pub mod subnet;
 pub mod types;
 
@@ -13,39 +12,72 @@ pub use types::*;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
-        app::AppStateError,
-        canister::{CanisterRootError, CanisterState, CanisterStateError},
+        canister::CanisterRootError,
         shard::ShardRegistryError,
+        state::{AppStateError, CanisterStateError},
         subnet::SubnetError,
     },
 };
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-//
-// MEMORY_IDs
-//
+///
+/// Reserved for the registry system itself
+///
 
-pub(crate) const MEMORY_REGISTRY_MEMORY_ID: u8 = 0;
+pub(crate) const MEMORY_REGISTRY_ID: u8 = 0;
+pub(crate) const MEMORY_RANGES_ID: u8 = 1;
 
-// root-only
-pub(crate) const ROOT_CANISTER_POOL_MEMORY_ID: u8 = 1;
-pub(crate) const SUBNET_REGISTRY_MEMORY_ID: u8 = 2;
+///
+/// ICU is only allowed to allocate within this inclusive range.
+/// Keep small but with room for future expansion.
+///
 
-// root-authoritative (cascaded to subnet)
-pub(crate) const APP_STATE_MEMORY_ID: u8 = 5;
-pub(crate) const SUBNET_CHILDREN_MEMORY_ID: u8 = 6;
-pub(crate) const SUBNET_DIRECTORY_MEMORY_ID: u8 = 7;
-pub(crate) const SUBNET_PARENTS_MEMORY_ID: u8 = 8;
+pub(crate) const ICU_MEMORY_MIN: u8 = 5;
+pub(crate) const ICU_MEMORY_MAX: u8 = 30;
 
-// all
-pub(crate) const CANISTER_STATE_MEMORY_ID: u8 = 10;
-pub(crate) const CANISTER_ROOT_MEMORY_ID: u8 = 11;
-pub(crate) const SHARD_REGISTRY_MEMORY_ID: u8 = 12;
-pub(crate) const SHARD_TENANT_MAP_MEMORY_ID: u8 = 13;
+///
+/// ICU Memory IDs (5-30)
+///
 
-// trackers (all)
-pub(crate) const CYCLE_TRACKER_MEMORY_ID: u8 = 15;
+pub(crate) mod id {
+    // icu network states
+    // should remain just three, app -> subnet -> canister
+    pub mod state {
+        pub const APP_STATE_ID: u8 = 5;
+        pub const SUBNET_STATE_ID: u8 = 6;
+        pub const CANISTER_STATE_ID: u8 = 7;
+    }
+
+    // subnet
+    // registry is root-authoritative, the others are cascaded views
+    pub mod subnet {
+        pub const SUBNET_REGISTRY_ID: u8 = 8;
+        pub const SUBNET_CHILDREN_ID: u8 = 9;
+        pub const SUBNET_DIRECTORY_ID: u8 = 10;
+        pub const SUBNET_PARENTS_ID: u8 = 11;
+    }
+
+    // root
+    // various structures handled solely by root
+    pub mod root {
+        pub const CANISTER_POOL_ID: u8 = 15;
+    }
+
+    // canister
+    // every canister has these structures
+    pub mod canister {
+        pub const CANISTER_ROOT_ID: u8 = 18;
+        pub const CYCLE_TRACKER_ID: u8 = 19;
+    }
+
+    // capability
+    // canisters can optionally have these
+    pub mod capability {
+        pub const SHARD_REGISTRY_ID: u8 = 24;
+        pub const SHARD_TENANTS_ID: u8 = 25;
+    }
+}
 
 //
 // MEMORY_MANAGER

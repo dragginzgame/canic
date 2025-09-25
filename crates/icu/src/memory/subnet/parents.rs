@@ -1,18 +1,19 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Vec as StableVec, memory::VirtualMemory},
     icu_memory,
-    memory::{CanisterView, SUBNET_PARENTS_MEMORY_ID},
+    memory::{CanisterView, id::subnet::SUBNET_PARENTS_ID},
+    thread_local_memory,
     types::CanisterType,
 };
 use candid::Principal;
 use std::cell::RefCell;
 
-// thread_local
-thread_local! {
+// SUBNET_PARENTS
+thread_local_memory! {
     static SUBNET_PARENTS: RefCell<
         StableVec<CanisterView, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableVec::init(icu_memory!(SubnetParents, SUBNET_PARENTS_MEMORY_ID)),
+        StableVec::init(icu_memory!(SubnetParents, SUBNET_PARENTS_ID)),
     );
 }
 

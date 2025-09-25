@@ -60,22 +60,31 @@ macro_rules! icu_endpoints {
         }
 
         //
+        // ICU MEMORY CANISTER ENDPOINTS
+        //
+
+        #[::icu::cdk::query]
+        fn icu_cycle_tracker() -> ::icu::memory::canister::CycleTrackerView {
+            $crate::memory::canister::CycleTracker::export()
+        }
+
+        //
         // ICU MEMORY STATE EXPORTS
         //
 
         #[::icu::cdk::query]
-        fn icu_app_state() -> ::icu::memory::app::AppStateData {
-            $crate::memory::app::AppState::export()
+        fn icu_app_state() -> ::icu::memory::state::AppStateData {
+            $crate::memory::state::AppState::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_canister_state() -> ::icu::memory::canister::CanisterStateData {
-            $crate::memory::canister::CanisterState::export()
+        fn icu_subnet_state() -> ::icu::memory::state::SubnetStateData {
+            $crate::memory::state::SubnetState::export()
         }
 
         #[::icu::cdk::query]
-        fn icu_cycle_tracker() -> ::icu::memory::cycles::CycleTrackerView {
-            $crate::memory::cycles::CycleTracker::export()
+        fn icu_canister_state() -> ::icu::memory::state::CanisterStateData {
+            $crate::memory::state::CanisterState::export()
         }
 
         //
