@@ -5,6 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.11.0] - 2025-09-25 - Memory Ranges
+- now you can register a Memory Range for an application.  For instance, icu is limited between 0-4 for the Memory
+Registry and 5-30 for icu-native memories.
+- added BoundedString8 -> 256 as stable memory types
+- AppState and CanisterState moved to memory::state.  Added SubnetState as the layer in between
+
 ## [0.10.5] - 2025-09-23
 - split Topology and State syncs so they can be done independently, no point syncing state if topology
 is wrong

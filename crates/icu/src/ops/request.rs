@@ -1,10 +1,7 @@
 use crate::{
     Error,
     cdk::call::Call,
-    memory::{
-        canister::{CanisterRoot, CanisterState},
-        subnet::SubnetChildren,
-    },
+    memory::{canister::CanisterRoot, state::CanisterState, subnet::SubnetChildren},
     ops::{
         prelude::*,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},

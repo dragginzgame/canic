@@ -3,8 +3,8 @@ use crate::{
     config::Config,
     log,
     memory::{
-        canister::CanisterState,
         shard::{PoolMetrics, ShardRegistry, ShardRegistryView},
+        state::CanisterState,
     },
     ops::{
         OpsError,

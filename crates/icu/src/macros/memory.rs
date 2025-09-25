@@ -1,26 +1,40 @@
 #[macro_export]
-macro_rules! icu_register_memory {
-    ($id:expr) => {{
-        let path = concat!(module_path!(), "::", line!()).to_string();
-
-        // check the registry with logging
-        let result = $crate::memory::MemoryRegistry::register($id, &path);
-
-        if let Err(ref err) = result {
-            $crate::log!(
-                $crate::Log::Error,
-                "❌ icu_register_memory failed for {} @ {}: {}",
-                path,
-                $id,
-                err
-            );
+macro_rules! thread_local_memory {
+    // match: vis static NAME: TYPE = INIT;
+    ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
+        thread_local! {
+            $vis static $name: $ty = $init;
         }
 
-        result.unwrap();
+        // Each declaration registers itself into TLS_INITIALIZERS
+        #[$crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor)]
+        fn __ctor() {
+            $crate::memory::registry::TLS_INITIALIZERS.with(|v| {
+                v.borrow_mut().push(|| {
+                    $name.with(|_| {});
+                });
+            });
+        }
+    };
+}
 
-        // acquire memory_id → explicitly return VirtualMemory<DefaultMemoryImpl>
+#[macro_export]
+macro_rules! icu_memory {
+    ($label:ident, $id:expr) => {{
+        const ID: u8 = $id;
+
+        // Enqueue this registration for later
+        $crate::memory::registry::TLS_PENDING_REGISTRATIONS.with(|q| {
+            q.borrow_mut().push((
+                ID,
+                env!("CARGO_PKG_NAME"),
+                concat!(module_path!(), "::", stringify!($label)),
+            ));
+        });
+
+        // Return the stable memory handle immediately
         $crate::memory::MEMORY_MANAGER
-            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
+            .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new(ID)))
     }};
 }
 

@@ -6,9 +6,10 @@ use crate::{
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::Config,
-    icu_register_memory, impl_storable_unbounded, log,
-    memory::ROOT_CANISTER_POOL_MEMORY_ID,
+    icu_memory, impl_storable_unbounded, log,
+    memory::id::root::CANISTER_POOL_ID,
     ops::pool::create_pool_canister,
+    thread_local_memory,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -16,13 +17,15 @@ use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-// thread local
-thread_local! {
+// CANISTER_POOL
+thread_local_memory! {
     static CANISTER_POOL: RefCell<BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(
-            icu_register_memory!(ROOT_CANISTER_POOL_MEMORY_ID),
+            icu_memory!(CanisterPool, CANISTER_POOL_ID),
         ));
+}
 
+thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
@@ -148,12 +151,12 @@ impl CanisterPool {
     /// Export the pool as a vector of (Principal, Entry).
     #[must_use]
     pub fn export() -> CanisterPoolView {
-        CANISTER_POOL.with_borrow(|map| map.to_vec())
+        CANISTER_POOL.with_borrow(BTreeMap::to_vec)
     }
 
     /// Clear the pool (mainly for tests).
     pub fn clear() {
-        CANISTER_POOL.with_borrow_mut(|map| map.clear());
+        CANISTER_POOL.with_borrow_mut(BTreeMap::clear);
     }
 
     /// Return the current pool size.

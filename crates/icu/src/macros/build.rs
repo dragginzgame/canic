@@ -79,11 +79,13 @@ macro_rules! __icu_build_internal {
             .expect("Invalid ICU config");
 
         // declare the cfg names
-        println!("cargo:rustc-check-cfg=cfg(icu)");  // marker
+        println!("cargo:rustc-check-cfg=cfg(icu)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_delegation)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_sharder)");
         println!("cargo:rustc-check-cfg=cfg(icu_github_ci)");
         println!("cargo:rustc-check-cfg=cfg(icu_root)");
+
+        // everything gets the icu marker
         println!("cargo:rustc-cfg=icu");
 
         // Auto-enable the cfg when running under GitHub Actions.
