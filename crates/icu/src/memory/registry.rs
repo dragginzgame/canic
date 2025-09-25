@@ -60,9 +60,28 @@ thread_local! {
 // which validates and inserts them into the global MemoryRegistry.
 //
 thread_local! {
-    pub static TLS_PENDING_REGISTRATIONS: RefCell<Vec<(u8, &'static str, &'static str)>> = const {
+    static TLS_PENDING_REGISTRATIONS: RefCell<Vec<(u8, &'static str, &'static str)>> = const {
         RefCell::new(Vec::new())
     };
+}
+
+pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
+    TLS_PENDING_REGISTRATIONS.with(|q| {
+        q.borrow_mut().push((id, crate_name, label));
+    });
+}
+
+//
+// TLS_PENDING_RANGES
+//
+thread_local! {
+    pub static TLS_PENDING_RANGES: RefCell<Vec<(&'static str, u8, u8)>> = const {
+        RefCell::new(Vec::new())
+    };
+}
+
+pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
+    TLS_PENDING_RANGES.with(|q| q.borrow_mut().push((crate_name, start, end)));
 }
 
 ///
@@ -79,12 +98,18 @@ pub fn force_init_all_tls() {
     });
 
     // reserve internal icu range
-    MemoryRegistry::reserve_range(ICU_MEMORY_MIN, ICU_MEMORY_MAX, "icu").unwrap();
+    MemoryRegistry::reserve_range("icu", ICU_MEMORY_MIN, ICU_MEMORY_MAX).unwrap();
 
-    // sort the queue, and drain it to register
+    // FIRST: flush all pending ranges
+    TLS_PENDING_RANGES.with(|q| {
+        for (crate_name, start, end) in q.borrow_mut().drain(..) {
+            MemoryRegistry::reserve_range(crate_name, start, end).unwrap();
+        }
+    });
+
+    // THEN: flush all pending registrations
     TLS_PENDING_REGISTRATIONS.with(|q| {
         let mut regs = q.borrow_mut();
-
         regs.sort_by_key(|(id, _, _)| *id);
         for (id, crate_name, label) in regs.drain(..) {
             MemoryRegistry::register(id, crate_name, label).unwrap();
@@ -102,12 +127,12 @@ pub fn force_init_all_tls() {
 
                 log!(
                     Log::Info,
-                    "💾 memory.range: {} [{}-{}] ({}/{} used)",
+                    "💾 memory.range: {} [{}-{}] ({}/{} slots used)",
                     crate_name,
                     range.start,
                     range.end,
                     count,
-                    range.end - range.start,
+                    range.end - range.start + 1,
                 );
             }
         });
@@ -123,6 +148,9 @@ pub enum MemoryRegistryError {
     #[error("ID {0} is already registered with type {1}, tried to register type {2}")]
     AlreadyRegistered(u8, String, String),
 
+    #[error("crate `{0}` already has a reserved range")]
+    DuplicateRange(String),
+
     #[error("crate `{0}` attempted to register ID {1}, but it is outside its allowed ranges")]
     OutOfRange(String, u8),
 
@@ -136,19 +164,19 @@ pub enum MemoryRegistryError {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRange {
+    pub crate_key: BoundedString64,
     pub start: u8,
     pub end: u8,
-    pub crate_name: BoundedString64,
     pub created_at: u64,
 }
 
 impl MemoryRange {
     #[must_use]
-    pub fn new(start: u8, end: u8, crate_name: &str) -> Self {
+    pub fn new(crate_key: &str, start: u8, end: u8) -> Self {
         Self {
+            crate_key: BoundedString64::new(crate_key),
             start,
             end,
-            crate_name: BoundedString64::new(crate_name),
             created_at: now_secs(),
         }
     }
@@ -198,17 +226,17 @@ impl MemoryRegistry {
     }
 
     /// Register an ID, enforcing crate’s allowed range.
-    pub fn register(id: u8, crate_name: &str, label: &str) -> Result<(), Error> {
+    fn register(id: u8, crate_name: &str, label: &str) -> Result<(), Error> {
+        // Normalize once; use this everywhere.
+        let crate_key = crate_name.trim().to_string();
+
         // immutable borrow first: check ranges and existing registry entry
-        let allowed = MEMORY_RANGES.with_borrow(|ranges| {
-            ranges
-                .get(&crate_name.to_string())
-                .is_some_and(|r| r.contains(id))
-        });
+        let allowed = MEMORY_RANGES
+            .with_borrow(|ranges| ranges.get(&crate_key).is_some_and(|r| r.contains(id)));
+
         if !allowed {
             return Err(MemoryError::from(MemoryRegistryError::OutOfRange(
-                crate_name.to_string(),
-                id,
+                crate_key, id,
             )))?;
         }
 
@@ -234,7 +262,7 @@ impl MemoryRegistry {
     }
 
     /// Reserve a block of memory IDs for a crate.
-    pub fn reserve_range(start: u8, end: u8, crate_name: &str) -> Result<(), Error> {
+    fn reserve_range(crate_name: &str, start: u8, end: u8) -> Result<(), Error> {
         if start > end {
             return Err(MemoryError::from(MemoryRegistryError::OutOfRange(
                 crate_name.to_string(),
@@ -242,14 +270,13 @@ impl MemoryRegistry {
             )))?;
         }
 
+        // Normalize once; use this everywhere.
+        let crate_key = crate_name.trim().to_string();
+
         // immutable borrow first
         let conflict = MEMORY_RANGES.with_borrow(|ranges| {
-            if ranges.contains_key(&crate_name.to_string()) {
-                return Some(MemoryRegistryError::AlreadyRegistered(
-                    start,
-                    crate_name.to_string(),
-                    "range already exists".to_string(),
-                ));
+            if ranges.contains_key(&crate_key) {
+                return Some(MemoryRegistryError::DuplicateRange(crate_key.clone()));
             }
 
             for entry in ranges.iter() {
@@ -258,7 +285,7 @@ impl MemoryRegistry {
 
                 if !(end < other_range.start || start > other_range.end) {
                     return Some(MemoryRegistryError::Overlap(
-                        crate_name.to_string(),
+                        crate_key.clone(),
                         start,
                         end,
                         other_crate.clone(),
@@ -277,21 +304,11 @@ impl MemoryRegistry {
 
         // now borrow mutably once for insertion
         MEMORY_RANGES.with_borrow_mut(|ranges| {
-            let range = MemoryRange::new(start, end, crate_name);
+            let range = MemoryRange::new(crate_name, start, end);
             ranges.insert(crate_name.to_string(), range);
         });
 
         Ok(())
-    }
-
-    #[must_use]
-    pub fn export_ranges() -> Vec<(String, MemoryRange)> {
-        MEMORY_RANGES.with_borrow(|ranges| {
-            ranges
-                .iter()
-                .map(|e| (e.key().clone(), e.value()))
-                .collect()
-        })
     }
 
     #[must_use]
@@ -304,6 +321,16 @@ impl MemoryRegistry {
         MEMORY_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (*entry.key(), entry.value()))
+                .collect()
+        })
+    }
+
+    #[must_use]
+    pub fn export_ranges() -> Vec<(String, MemoryRange)> {
+        MEMORY_RANGES.with_borrow(|ranges| {
+            ranges
+                .iter()
+                .map(|e| (e.key().clone(), e.value()))
                 .collect()
         })
     }

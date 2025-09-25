@@ -15,12 +15,8 @@ pub mod types;
 pub mod utils;
 
 pub mod export {
-    pub mod ctor {
-        pub use ::ctor::*;
-    }
-    pub mod defer {
-        pub use ::defer::*;
-    }
+    pub use ::ctor;
+    pub use ::defer;
 }
 
 pub use thiserror::Error as ThisError;
