@@ -29,6 +29,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, ThisError)]
 pub enum ShardError {
+    #[error("tenant '{0}' not found")]
+    TenantNotFound(Principal),
+
     #[error("shard cap reached")]
     ShardCapReached,
 
@@ -195,6 +198,13 @@ fn get_pool_policy(pool: &str) -> Result<(CanisterType, ShardPolicy), Error> {
 #[must_use]
 pub fn lookup_tenant(pool: &str, tenant_pid: Principal) -> Option<Principal> {
     ShardRegistry::tenant_shard(pool, tenant_pid)
+}
+
+pub fn try_lookup_tenant(pool: &str, tenant_pid: Principal) -> Result<Principal, Error> {
+    let tenant = ShardRegistry::tenant_shard(pool, tenant_pid)
+        .ok_or(OpsError::from(ShardError::TenantNotFound(tenant_pid)))?;
+
+    Ok(tenant)
 }
 
 #[must_use]

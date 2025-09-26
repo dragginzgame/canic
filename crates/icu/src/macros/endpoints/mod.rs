@@ -234,8 +234,8 @@ macro_rules! icu_endpoints_shard {
         async fn icu_shard_lookup(
             pool: String,
             tenant_pid: ::candid::Principal,
-        ) -> Result<Option<::candid::Principal>, ::icu::Error> {
-            Ok($crate::ops::shard::lookup_tenant(&pool, tenant_pid))
+        ) -> Result<::candid::Principal, ::icu::Error> {
+            $crate::ops::shard::try_lookup_tenant(&pool, tenant_pid)
         }
 
         // icu_shard_admin
