@@ -6,9 +6,8 @@ pub use registry::*;
 
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    icu_memory, impl_storable_bounded,
+    icu_eager_static, icu_memory, impl_storable_bounded,
     memory::id::capability::{SHARD_REGISTRY_ID, SHARD_TENANTS_ID},
-    thread_local_memory,
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
@@ -17,7 +16,7 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 // (this i) SHARD_CORE
-thread_local_memory! {
+icu_eager_static! {
     static SHARD_CORE: RefCell<ShardCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardCore::new(
             BTreeMap::init(icu_memory!(ShardRegistry, SHARD_REGISTRY_ID)),

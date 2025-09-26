@@ -1,22 +1,3 @@
-#[macro_export]
-macro_rules! thread_local_memory {
-    // match: vis static NAME: TYPE = INIT;
-    ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
-        thread_local! {
-            $vis static $name: $ty = $init;
-        }
-
-        // Each declaration registers itself into TLS_INITIALIZERS
-        $crate::eager_init!({
-            $crate::memory::registry::TLS_INITIALIZERS.with(|v| {
-                v.borrow_mut().push(|| {
-                    $name.with(|_| {});
-                });
-            });
-        });
-    };
-}
-
 ///
 /// Declare a stable memory handle for a specific ID, tied to the current crate.
 /// - Enqueues the registration (`defer_register`) so it will be validated later.

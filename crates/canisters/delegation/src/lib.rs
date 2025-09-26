@@ -8,7 +8,7 @@ use icu::{canister::DELEGATION, prelude::*};
 
 icu_start!(DELEGATION);
 
-const fn icu_setup() {}
+async fn icu_setup() {}
 async fn icu_install(_: Option<Vec<u8>>) {}
 async fn icu_upgrade() {}
 

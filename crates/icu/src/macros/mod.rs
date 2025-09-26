@@ -3,6 +3,7 @@ pub mod endpoints;
 pub mod memory;
 pub mod start;
 pub mod storable;
+pub mod thread;
 
 // eager_init
 #[macro_export]
@@ -42,7 +43,7 @@ macro_rules! log {
         let message = format!($fmt, $($arg)*);
         let ty_raw = match $crate::memory::state::CanisterState::get_view() {
             Some(entry) => entry.ty.to_string(),
-            None => "-".to_string(),
+            None => "...".to_string(),
         };
         let ty_disp = $crate::utils::format::ellipsize_middle(
             &ty_raw,

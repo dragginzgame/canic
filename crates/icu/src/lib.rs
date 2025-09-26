@@ -3,6 +3,7 @@ pub mod auth;
 pub mod canister;
 pub mod cdk;
 pub mod config;
+pub mod eager;
 pub mod env;
 pub mod guard;
 pub mod interface;

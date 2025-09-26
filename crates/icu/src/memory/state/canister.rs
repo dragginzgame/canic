@@ -1,9 +1,8 @@
 use crate::{
     Error,
     cdk::structures::{Cell, DefaultMemoryImpl, memory::VirtualMemory},
-    icu_memory, impl_storable_unbounded,
+    icu_eager_static, icu_memory, impl_storable_unbounded,
     memory::{CanisterView, MemoryError, id::state::CANISTER_STATE_ID},
-    thread_local_memory,
     types::CanisterType,
 };
 use candid::CandidType;
@@ -11,8 +10,11 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
+//
 // CANISTER_STATE
-thread_local_memory! {
+//
+
+icu_eager_static! {
     static CANISTER_STATE: RefCell<Cell<CanisterStateData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             icu_memory!(CanisterState, CANISTER_STATE_ID),
