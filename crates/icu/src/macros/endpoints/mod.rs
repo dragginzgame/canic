@@ -228,10 +228,10 @@ macro_rules! icu_endpoints_shard {
             Ok($crate::ops::shard::export_registry())
         }
 
-        // icu_shard_lookup
+        // icu_shard_lookup_tenant
         // can be called by any principal
         #[::icu::cdk::query]
-        async fn icu_shard_lookup(
+        async fn icu_shard_lookup_tenant(
             pool: String,
             tenant_pid: ::candid::Principal,
         ) -> Result<::candid::Principal, ::icu::Error> {
