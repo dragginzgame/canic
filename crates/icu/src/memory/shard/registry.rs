@@ -14,9 +14,9 @@ use candid::Principal;
 /// ShardRegistry
 ///
 
-pub type ShardRegistryView = Vec<(Principal, ShardEntry)>;
-
 pub struct ShardRegistry;
+
+pub type ShardRegistryView = Vec<(Principal, ShardEntry)>;
 
 impl ShardRegistry {
     // Helpers to access the core

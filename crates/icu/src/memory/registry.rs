@@ -38,77 +38,59 @@ thread_local! {
 }
 
 //
-// TLS_INITIALIZERS
+// PENDING_REGISTRATIONS
 //
-// Holds a list of closures that, when called, will "touch" each thread_local!
-// static and force its initialization. This ensures that every TLS value
-// that calls `icu_memory!` has actually executed and enqueued its
-// registration, instead of lazily initializing much later at first use.
-//
-thread_local! {
-    pub static TLS_INITIALIZERS: RefCell<Vec<fn()>> = const {
-        RefCell::new(Vec::new())
-    };
-}
-
-//
-// TLS_PENDING_REGISTRATIONS
-//
-// Queue of memory registrations produced during TLS initialization via
-// `icu_memory!`. Each entry is (id, crate_name, label).
+// Queue of memory registrations produced during TLS initialization
+// Each entry is (id, crate_name, label).
 // These are deferred until `flush_pending_registrations()` is called,
 // which validates and inserts them into the global MemoryRegistry.
 //
+
 thread_local! {
-    static TLS_PENDING_REGISTRATIONS: RefCell<Vec<(u8, &'static str, &'static str)>> = const {
+    static PENDING_REGISTRATIONS: RefCell<Vec<(u8, &'static str, &'static str)>> = const {
         RefCell::new(Vec::new())
     };
 }
 
 pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
-    TLS_PENDING_REGISTRATIONS.with(|q| {
+    PENDING_REGISTRATIONS.with(|q| {
         q.borrow_mut().push((id, crate_name, label));
     });
 }
 
 //
-// TLS_PENDING_RANGES
+// PENDING_RANGES
 //
+
 thread_local! {
-    pub static TLS_PENDING_RANGES: RefCell<Vec<(&'static str, u8, u8)>> = const {
+    pub static PENDING_RANGES: RefCell<Vec<(&'static str, u8, u8)>> = const {
         RefCell::new(Vec::new())
     };
 }
 
 pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
-    TLS_PENDING_RANGES.with(|q| q.borrow_mut().push((crate_name, start, end)));
+    PENDING_RANGES.with(|q| q.borrow_mut().push((crate_name, start, end)));
 }
 
+/// Initialize all registered memory segments.
 ///
-/// Called during `canister_init` / `post_upgrade` to process all deferred registrations.
+/// This should be called once during `init` or `post_upgrade`
+/// to populate the global `MemoryRegistry`.
 ///
-/// Panics if any registration fails.
-///
-
-pub fn force_init_all_tls() {
-    TLS_INITIALIZERS.with(|v| {
-        for f in v.borrow().iter() {
-            f(); // forces init
-        }
-    });
-
+/// Panics if called more than once or if duplicate memory IDs exis
+pub fn init_memory() {
     // reserve internal icu range
     MemoryRegistry::reserve_range("icu", ICU_MEMORY_MIN, ICU_MEMORY_MAX).unwrap();
 
     // FIRST: flush all pending ranges
-    TLS_PENDING_RANGES.with(|q| {
+    PENDING_RANGES.with(|q| {
         for (crate_name, start, end) in q.borrow_mut().drain(..) {
             MemoryRegistry::reserve_range(crate_name, start, end).unwrap();
         }
     });
 
     // THEN: flush all pending registrations
-    TLS_PENDING_REGISTRATIONS.with(|q| {
+    PENDING_REGISTRATIONS.with(|q| {
         let mut regs = q.borrow_mut();
         regs.sort_by_key(|(id, _, _)| *id);
         for (id, crate_name, label) in regs.drain(..) {
@@ -156,6 +138,9 @@ pub enum MemoryRegistryError {
 
     #[error("crate `{0}` range {1}-{2} overlaps with crate `{3}` range {4}-{5}")]
     Overlap(String, u8, u8, String, u8, u8),
+
+    #[error("crate `{0}` has not reserved any memory range")]
+    NoRange(String),
 }
 
 ///
@@ -231,13 +216,19 @@ impl MemoryRegistry {
         let crate_key = crate_name.to_string();
 
         // immutable borrow first: check ranges and existing registry entry
-        let allowed = MEMORY_RANGES
-            .with_borrow(|ranges| ranges.get(&crate_key).is_some_and(|r| r.contains(id)));
-
-        if !allowed {
-            return Err(MemoryError::from(MemoryRegistryError::OutOfRange(
-                crate_key, id,
-            )))?;
+        let range = MEMORY_RANGES.with_borrow(|ranges| ranges.get(&crate_key));
+        match range {
+            None => {
+                return Err(MemoryError::from(MemoryRegistryError::NoRange(crate_key)))?;
+            }
+            Some(r) if !r.contains(id) => {
+                return Err(MemoryError::from(MemoryRegistryError::OutOfRange(
+                    crate_key, id,
+                )))?;
+            }
+            Some(_) => {
+                // OK, continue
+            }
         }
 
         // check already registered

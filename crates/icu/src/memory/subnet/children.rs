@@ -1,16 +1,18 @@
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    icu_memory,
+    icu_eager_static, icu_memory,
     memory::{CanisterView, MemoryError, id::subnet::SUBNET_CHILDREN_ID, subnet::SubnetError},
-    thread_local_memory,
     types::CanisterType,
 };
 use candid::Principal;
 use std::cell::RefCell;
 
+//
 // SUBNET_CHILDREN
-thread_local_memory! {
+//
+
+icu_eager_static! {
     static SUBNET_CHILDREN: RefCell<
         BTreeMap<Principal, CanisterView, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(

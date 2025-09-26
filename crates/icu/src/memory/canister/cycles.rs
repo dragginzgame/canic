@@ -6,11 +6,10 @@ use crate::{
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::Config,
-    icu_memory,
+    icu_eager_static, icu_memory,
     interface::ic::canister_cycle_balance,
     log,
     memory::{id::canister::CYCLE_TRACKER_ID, state::CanisterState},
-    thread_local_memory,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -20,7 +19,7 @@ use std::cell::RefCell;
 // CYCLE_TRACKER
 //
 
-thread_local_memory! {
+icu_eager_static! {
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(BTreeMap::init(
             icu_memory!(CycleTracker, CYCLE_TRACKER_ID),

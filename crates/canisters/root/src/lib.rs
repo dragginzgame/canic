@@ -17,7 +17,7 @@ use icu::{
 
 icu_start_root!();
 
-const fn icu_setup() {}
+async fn icu_setup() {}
 
 async fn icu_install() {
     root_create_canisters().await.unwrap();

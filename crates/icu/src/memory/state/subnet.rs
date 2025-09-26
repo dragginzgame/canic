@@ -1,16 +1,18 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    icu_memory, impl_storable_bounded,
+    icu_eager_static, icu_memory, impl_storable_bounded,
     memory::id::state::SUBNET_STATE_ID,
-    thread_local_memory,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
+//
 // SUBNET_STATE
-thread_local_memory! {
+//
+
+icu_eager_static! {
     static SUBNET_STATE: RefCell<Cell<SubnetStateData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             icu_memory!(SubnetState, SUBNET_STATE_ID),
