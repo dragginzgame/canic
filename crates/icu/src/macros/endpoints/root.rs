@@ -118,7 +118,7 @@ macro_rules! icu_endpoints_root {
 macro_rules! icu_endpoints_nonroot {
     () => {
         //
-        // ICU SUBNET VIEW
+        // SUBNET VIEW
         //
 
         #[::icu::cdk::query]

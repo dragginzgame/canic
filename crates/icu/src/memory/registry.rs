@@ -77,7 +77,7 @@ pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
 /// This should be called once during `init` or `post_upgrade`
 /// to populate the global `MemoryRegistry`.
 ///
-/// Panics if called more than once or if duplicate memory IDs exis
+/// Panics if called more than once or if duplicate memory IDs exist
 pub fn init_memory() {
     // reserve internal icu range
     MemoryRegistry::reserve_range("icu", ICU_MEMORY_MIN, ICU_MEMORY_MAX).unwrap();
@@ -100,12 +100,16 @@ pub fn init_memory() {
 
     // summary logs: one per range
     MEMORY_RANGES.with_borrow(|ranges| {
-        MEMORY_REGISTRY.with_borrow(|registry| {
-            for entry in ranges.iter() {
+        MEMORY_REGISTRY.with_borrow(|reg| {
+            // get range entries
+            let mut entries: Vec<_> = ranges.iter().collect();
+            entries.sort_by_key(|entry| entry.value().start);
+
+            for entry in entries {
                 let crate_name = entry.key();
                 let range = entry.value();
 
-                let count = registry.iter().filter(|e| range.contains(*e.key())).count();
+                let count = reg.iter().filter(|e| range.contains(*e.key())).count();
 
                 log!(
                     Log::Info,
