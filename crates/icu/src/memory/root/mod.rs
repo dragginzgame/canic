@@ -1,3 +1,3 @@
-pub mod canister_pool;
+pub mod canister_reserve;
 
-pub use canister_pool::*;
+pub use canister_reserve::*;

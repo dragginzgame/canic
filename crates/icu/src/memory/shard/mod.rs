@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
-// (this i) SHARD_CORE
+//
+// (this i) SHARD CORE
+//
+
 icu_eager_static! {
     static SHARD_CORE: RefCell<ShardCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardCore::new(

@@ -47,7 +47,7 @@ pub struct ConfigData {
     pub cycle_tracker: bool,
 
     #[serde(default)]
-    pub pool: CanisterPool,
+    pub reserve: CanisterReserve,
 
     #[serde(default)]
     pub standards: Option<Standards>,
@@ -63,19 +63,6 @@ impl ConfigData {
                 // Reject if invalid principal format
                 if Principal::from_text(s).is_err() {
                     return Err(ConfigDataError::InvalidPrincipal(s.to_string(), i));
-                }
-            }
-        }
-
-        // Validate sharder pool canister types reference defined canisters
-        for hub_cfg in self.canisters.values() {
-            if let Some(sharder) = &hub_cfg.sharder {
-                for pool_spec in sharder.pools.values() {
-                    if !self.canisters.contains_key(&pool_spec.canister_type) {
-                        return Err(ConfigDataError::CanisterNotFound(
-                            pool_spec.canister_type.clone(),
-                        ));
-                    }
                 }
             }
         }
@@ -131,7 +118,10 @@ pub struct Canister {
     pub uses_directory: bool,
 
     #[serde(default)]
-    pub sharder: Option<SharderConfig>,
+    pub elastic: Option<ElasticConfig>,
+
+    #[serde(default)]
+    pub sharding: Option<ShardingConfig>,
 }
 
 ///
@@ -160,12 +150,12 @@ impl Default for CanisterTopup {
 }
 
 ///
-/// CanisterPool
+/// CanisterReserve
 /// defaults to a minimum size of 0
 ///
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct CanisterPool {
+pub struct CanisterReserve {
     pub minimum_size: u8,
 }
 
@@ -198,42 +188,109 @@ pub struct Standards {
 }
 
 ///
-/// SharderConfig
-/// Contains named pools, each with a child canister type and policy.
+/// ElasticConfig
+/// (stateless, elastic)
+///
+/// * Organizes canisters into **worker groups** (e.g. "oracle").
+/// * Workers are interchangeable and handle transient tasks (no tenant assignment).
+/// * Scaling is about throughput, not capacity.
+/// * Hence: `WorkerManager → pools → WorkerSpec → WorkerPolicy`.
 ///
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SharderConfig {
+pub struct ElasticConfig {
     #[serde(default)]
-    pub pools: BTreeMap<String, SharderPoolSpec>,
+    pub pools: BTreeMap<String, ElasticPool>,
 }
 
 ///
-/// SharderPoolSpec
+/// ElasticPool
+/// One stateless worker group (e.g. "oracle").
 ///
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SharderPoolSpec {
+pub struct ElasticPool {
     pub canister_type: CanisterType,
+
     #[serde(default)]
-    pub policy: SharderPoolPolicy,
+    pub policy: ElasticPoolPolicy,
 }
 
 ///
-/// SharderPoolPolicy
+/// ElasticPoolPolicy
 ///
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct SharderPoolPolicy {
+pub struct ElasticPoolPolicy {
+    /// Minimum number of worker canisters to keep alive
+    pub min_workers: u32,
+
+    /// Maximum number of worker canisters to allow
+    pub max_workers: u32,
+
+    /// When average load % exceeds this, spawn a new worker
+    pub scale_up_threshold_pct: u32,
+
+    /// When average load % drops below this, retire a worker
+    pub scale_down_threshold_pct: u32,
+}
+
+impl Default for ElasticPoolPolicy {
+    fn default() -> Self {
+        Self {
+            min_workers: 1,
+            max_workers: 32,
+            scale_up_threshold_pct: 75,
+            scale_down_threshold_pct: 25,
+        }
+    }
+}
+
+///
+/// ShardingConfig
+/// (stateful, partitioned)
+///
+/// * Organizes canisters into named **pools**.
+/// * Each pool manages a set of **shards**, and each shard owns a partition of state.
+/// * Tenants are assigned to shards and stay there.
+/// * Hence: `ShardManager → pools → ShardPoolSpec → ShardPoolPolicy`.
+///
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShardingConfig {
+    #[serde(default)]
+    pub pools: BTreeMap<String, ShardPool>,
+}
+
+///
+/// ShardPool
+///
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShardPool {
+    pub canister_type: CanisterType,
+    #[serde(default)]
+    pub policy: ShardPoolPolicy,
+}
+
+///
+/// ShardPoolPolicy
+///
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ShardPoolPolicy {
     pub initial_capacity: u32,
     pub max_shards: u32,
     pub growth_threshold_pct: u32,
 }
 
-impl Default for SharderPoolPolicy {
+impl Default for ShardPoolPolicy {
     fn default() -> Self {
         Self {
             initial_capacity: 100,

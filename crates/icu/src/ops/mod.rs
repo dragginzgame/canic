@@ -1,7 +1,8 @@
 pub mod canister;
 pub mod delegation;
-pub mod pool;
+pub mod elastic;
 pub mod request;
+pub mod reserve;
 pub mod response;
 pub mod root;
 pub mod shard;
@@ -23,7 +24,11 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, memory::state::CanisterState};
+use crate::{
+    Error, ThisError,
+    config::{Config, data::Canister as CanisterConfig},
+    memory::state::CanisterState,
+};
 
 ///
 /// OpsError
@@ -41,6 +46,9 @@ pub enum OpsError {
 
     #[error(transparent)]
     DelegationError(#[from] delegation::DelegationError),
+
+    #[error(transparent)]
+    ElasticError(#[from] elastic::ElasticError),
 
     #[error(transparent)]
     RequestError(#[from] request::RequestError),
@@ -70,4 +78,12 @@ impl OpsError {
             Ok(())
         }
     }
+}
+
+// cfg_current_canister
+pub fn cfg_current_canister() -> Result<CanisterConfig, Error> {
+    let this_ty = CanisterState::try_get_view()?.ty;
+    let cfg = Config::try_get_canister(&this_ty)?;
+
+    Ok(cfg)
 }

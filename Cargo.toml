@@ -2,7 +2,9 @@
 members = [
     "crates/canisters/blank",
     "crates/canisters/delegation",
-    "crates/canisters/sharder",
+    "crates/canisters/elastic_hub",
+    "crates/canisters/elastic",
+    "crates/canisters/shard_hub",
     "crates/canisters/shard",
     "crates/canisters/root",
     "crates/icu",
@@ -51,8 +53,8 @@ toml = "0.9"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
-pedantic = { level = "allow", priority = -1 }
-nursery = { level = "allow", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
 
 # always warn
 missing_const_for_fn = "warn"

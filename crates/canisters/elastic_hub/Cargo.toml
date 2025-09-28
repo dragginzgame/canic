@@ -1,0 +1,20 @@
+[package]
+name = "canister_elastic_hub"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+icu = { workspace = true }
+
+[build-dependencies]
+icu = { workspace = true }
+
+[lints]
+workspace = true

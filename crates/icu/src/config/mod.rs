@@ -1,4 +1,4 @@
-mod data;
+pub mod data;
 
 use crate::{Error, types::CanisterType};
 use data::{Canister, ConfigDataError};
