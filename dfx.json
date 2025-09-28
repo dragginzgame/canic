@@ -15,8 +15,8 @@
             "dependencies": [
                 "blank",
                 "delegation",
-                "sharder",
-                "shard"
+                "elastic_hub",
+                "shard_hub"
             ]
         },
         "blank": {
@@ -45,17 +45,49 @@
                 }
             ]
         },
-        "sharder": {
+        "elastic_hub": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/sharder/sharder.did",
-            "build": "bash -c 'scripts/app/build.sh sharder'",
-            "wasm": ".dfx/local/canisters/sharder/sharder.wasm",
+            "candid": ".dfx/local/canisters/elastic_hub/elastic_hub.did",
+            "build": "bash -c 'scripts/app/build.sh elastic_hub'",
+            "wasm": ".dfx/local/canisters/elastic_hub/elastic_hub.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
                 {
                     "name": "candid:service"
                 }
+            ],
+            "dependencies": [
+                "elastic"
+            ]
+        },
+        "elastic": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/elastic/elastic.did",
+            "build": "bash -c 'scripts/app/build.sh elastic'",
+            "wasm": ".dfx/local/canisters/elastic/elastic.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
+            ]
+        },
+        "shard_hub": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/shard_hub/shard_hub.did",
+            "build": "bash -c 'scripts/app/build.sh shard_hub'",
+            "wasm": ".dfx/local/canisters/shard_hub/shard_hub.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
+            ],
+            "dependencies": [
+                "shard"
             ]
         },
         "shard": {

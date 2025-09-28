@@ -1,5 +1,5 @@
 [package]
-name = "canister_sharder"
+name = "canister_shard_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

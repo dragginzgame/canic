@@ -1,6 +1,6 @@
 controllers = []
 
-[pool]
+[reserve]
 minimum_size = 3
 
 #################### canisters
@@ -10,13 +10,12 @@ minimum_size = 3
 # ----------------------------------
 [canisters.blank]
 auto_create = true
-initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"
 
 
 # ----------------------------------
-# delegation
+# Delegation
 # ----------------------------------
 [canisters.delegation]
 auto_create = true
@@ -26,31 +25,42 @@ topup.amount = "5T"
 topup.threshold = "10T"
 
 
-# ----------------------------------
-# sharder
-# ----------------------------------
-[canisters.sharder]
+# ---------------------------
+# Elastic
+# ---------------------------
+[canisters.elastic_hub]
 auto_create = true
 uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[canisters.sharder.sharder]
+[canisters.elastic_hub.elastic.pools.workers]
+canister_type = "elastic"
 
-[canisters.sharder.sharder.pools.shards]
+[canisters.elastic]
+topup.threshold = "10T"
+topup.amount = "5T"
+
+
+# ---------------------------
+# Sharding
+# ---------------------------
+[canisters.shard_hub]
+auto_create = true
+uses_directory = true
+topup.threshold = "10T"
+topup.amount = "5T"
+
+[canisters.shard_hub.sharding.pools.shards]
 canister_type = "shard"
 policy.initial_capacity = 100
 policy.max_shards = 64
 policy.growth_threshold_pct = 80
 
-
-# ----------------------------------
-# shard
-# ----------------------------------
 [canisters.shard]
-initial_cycles = "6T"
 topup.threshold = "10T"
 topup.amount = "5T"
+
 
 #####################################
 

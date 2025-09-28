@@ -42,11 +42,25 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
         include_bytes!("../../../../.dfx/local/canisters/delegation/delegation.wasm.gz"),
     ),
     (
-        canister::SHARDER,
+        canister::ELASTIC_HUB,
         #[cfg(icu_github_ci)]
         &[],
         #[cfg(not(icu_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/sharder/sharder.wasm.gz"),
+        include_bytes!("../../../../.dfx/local/canisters/elastic_hub/elastic_hub.wasm.gz"),
+    ),
+    (
+        canister::ELASTIC,
+        #[cfg(icu_github_ci)]
+        &[],
+        #[cfg(not(icu_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/elastic/elastic.wasm.gz"),
+    ),
+    (
+        canister::SHARD_HUB,
+        #[cfg(icu_github_ci)]
+        &[],
+        #[cfg(not(icu_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz"),
     ),
     (
         canister::SHARD,

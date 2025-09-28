@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.12.0] - 2025-09-28 - Elastic Canisters
+- so now in addition to Sharding you have Elastic which spins up and down a pool of canisters based
+on available resources
+- memory ranges nicely ordered
+
 ## [0.11.0] - 2025-09-25 - Memory Ranges
 - now you can register a Memory Range for an application.  For instance, icu is limited between 0-4 for the Memory
 Registry and 5-30 for icu-native memories.

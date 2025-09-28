@@ -3,7 +3,9 @@ use crate::{
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     interface::{ic::install_code, prelude::*},
-    memory::{CanisterView, root::CanisterPool, state::CanisterStateData, subnet::SubnetRegistry},
+    memory::{
+        CanisterView, root::CanisterReserve, state::CanisterStateData, subnet::SubnetRegistry,
+    },
     ops::sync::topology::root_cascade,
     state::wasm::WasmRegistry,
 };
@@ -49,7 +51,7 @@ pub async fn create_and_install_canister(
 /// Returns (pid, cycles).
 pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
     // Try pool first
-    if let Some((pid, entry)) = CanisterPool::pop_first() {
+    if let Some((pid, entry)) = CanisterReserve::pop_first() {
         log!(
             Log::Ok,
             "⚡ allocate_canister: reusing {} from pool ({})",

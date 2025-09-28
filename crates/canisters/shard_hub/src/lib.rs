@@ -2,7 +2,7 @@
 
 use icu::{
     Error,
-    canister::SHARDER,
+    canister::SHARD_HUB,
     ops::shard::{ShardPlan, assign_to_pool, plan_assign_to_pool},
     prelude::*,
 };
@@ -11,7 +11,7 @@ use icu::{
 // ICU
 //
 
-icu_start!(SHARDER);
+icu_start!(SHARD_HUB);
 
 async fn icu_setup() {}
 async fn icu_install(_: Option<Vec<u8>>) {}

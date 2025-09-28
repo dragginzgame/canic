@@ -7,8 +7,8 @@ use crate::{
     },
     config::Config,
     icu_eager_static, icu_memory, impl_storable_unbounded, log,
-    memory::id::root::CANISTER_POOL_ID,
-    ops::pool::create_pool_canister,
+    memory::id::root::CANISTER_RESERVE_ID,
+    ops::reserve::create_reserve_canister,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -17,13 +17,13 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 //
-// CANISTER_POOL
+// CANISTER_RESERVE
 //
 
 icu_eager_static! {
-    static CANISTER_POOL: RefCell<BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>> =
+    static CANISTER_RESERVE: RefCell<BTreeMap<Principal, CanisterReserveEntry, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(
-            icu_memory!(CanisterPool, CANISTER_POOL_ID),
+            icu_memory!(CanisterReserve, CANISTER_RESERVE_ID),
         ));
 }
 
@@ -31,29 +31,29 @@ thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-const POOL_CHECK_TIMER: u64 = 30 * 60; // 30 mins
+const RESERVE_CHECK_TIMER: u64 = 30 * 60; // 30 mins
 
 ///
-/// CanisterPoolEntry
+/// CanisterReserveEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolEntry {
+pub struct CanisterReserveEntry {
     pub created_at: u64,
     pub cycles: Cycles,
 }
 
-impl_storable_unbounded!(CanisterPoolEntry);
+impl_storable_unbounded!(CanisterReserveEntry);
 
 ///
-/// CanisterPool
+/// CanisterReserve
 ///
 
-pub struct CanisterPool;
+pub struct CanisterReserve;
 
-pub type CanisterPoolView = Vec<(Principal, CanisterPoolEntry)>;
+pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
 
-impl CanisterPool {
+impl CanisterReserve {
     /// Start recurring tracking every 30 minutes
     /// Safe to call multiple times: only one loop will run.
     pub fn start() {
@@ -66,7 +66,7 @@ impl CanisterPool {
                 let _ = Self::check();
 
                 let interval_id =
-                    set_timer_interval(std::time::Duration::from_secs(POOL_CHECK_TIMER), || {
+                    set_timer_interval(std::time::Duration::from_secs(RESERVE_CHECK_TIMER), || {
                         let _ = Self::check();
                     });
 
@@ -86,29 +86,31 @@ impl CanisterPool {
         });
     }
 
-    /// Check the pool size and create new canisters if required.
+    /// Check the reserve size and create new canisters if required.
     #[must_use]
     pub fn check() -> u64 {
-        let pool_size = CANISTER_POOL.with_borrow(|map| map.len());
+        let reserve_size = CANISTER_RESERVE.with_borrow(|map| map.len());
 
         if let Ok(cfg) = Config::try_get() {
-            let min_size = u64::from(cfg.pool.minimum_size);
-            if pool_size < min_size {
+            let min_size = u64::from(cfg.reserve.minimum_size);
+            if reserve_size < min_size {
                 // Safety valve: never create more than 10 at once.
-                let missing = (min_size - pool_size).min(10);
+                let missing = (min_size - reserve_size).min(10);
 
                 log!(
                     Log::Ok,
-                    "💧 canister pool low: size {pool_size}, min {min_size}, creating {missing}"
+                    "💧 canister reserve low: size {reserve_size}, min {min_size}, creating {missing}"
                 );
 
                 spawn(async move {
                     for i in 0..missing {
-                        match create_pool_canister().await {
+                        match create_reserve_canister().await {
                             Ok(_) => {
-                                log!(Log::Ok, "✨ pool canister created ({}/{missing})", i + 1);
+                                log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1);
                             }
-                            Err(e) => log!(Log::Warn, "⚠️  failed to create pool canister: {e:?}"),
+                            Err(e) => {
+                                log!(Log::Warn, "⚠️  failed to create reserve canister: {e:?}");
+                            }
                         }
                     }
                 });
@@ -120,22 +122,22 @@ impl CanisterPool {
         0
     }
 
-    /// Register a canister into the pool.
+    /// Register a canister into the reserve.
     pub fn register(pid: Principal, cycles: Cycles) {
-        let entry = CanisterPoolEntry {
+        let entry = CanisterReserveEntry {
             created_at: now_secs(),
             cycles,
         };
 
-        CANISTER_POOL.with_borrow_mut(|map| {
+        CANISTER_RESERVE.with_borrow_mut(|map| {
             map.insert(pid, entry);
         });
     }
 
-    /// Pop the oldest canister from the pool.
+    /// Pop the oldest canister from the reserve.
     #[must_use]
-    pub fn pop_first() -> Option<(Principal, CanisterPoolEntry)> {
-        CANISTER_POOL.with_borrow_mut(|map| {
+    pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
+        CANISTER_RESERVE.with_borrow_mut(|map| {
             let min_pid = map
                 .iter()
                 .min_by_key(|entry| entry.value().created_at)
@@ -144,33 +146,33 @@ impl CanisterPool {
         })
     }
 
-    /// Remove a specific canister from the pool.
+    /// Remove a specific canister from the reserve.
     #[must_use]
-    pub fn remove(pid: &Principal) -> Option<CanisterPoolEntry> {
-        CANISTER_POOL.with_borrow_mut(|map| map.remove(pid))
+    pub fn remove(pid: &Principal) -> Option<CanisterReserveEntry> {
+        CANISTER_RESERVE.with_borrow_mut(|map| map.remove(pid))
     }
 
-    /// Export the pool as a vector of (Principal, Entry).
+    /// Export the reserve as a vector of (Principal, Entry).
     #[must_use]
-    pub fn export() -> CanisterPoolView {
-        CANISTER_POOL.with_borrow(BTreeMap::to_vec)
+    pub fn export() -> CanisterReserveView {
+        CANISTER_RESERVE.with_borrow(BTreeMap::to_vec)
     }
 
-    /// Clear the pool (mainly for tests).
+    /// Clear the reserve (mainly for tests).
     pub fn clear() {
-        CANISTER_POOL.with_borrow_mut(BTreeMap::clear);
+        CANISTER_RESERVE.with_borrow_mut(BTreeMap::clear);
     }
 
-    /// Return the current pool size.
+    /// Return the current reserve size.
     #[must_use]
     pub fn len() -> u64 {
-        CANISTER_POOL.with_borrow(|map| map.len())
+        CANISTER_RESERVE.with_borrow(|map| map.len())
     }
 
-    /// Return whether the pool is empty.
+    /// Return whether the reserve is empty.
     #[must_use]
     pub fn is_empty() -> bool {
-        CANISTER_POOL.with_borrow(|map| map.is_empty())
+        CANISTER_RESERVE.with_borrow(|map| map.is_empty())
     }
 }
 
@@ -189,15 +191,15 @@ mod tests {
 
     #[test]
     fn register_and_export() {
-        CanisterPool::clear();
+        CanisterReserve::clear();
 
         let p1 = pid(1);
         let p2 = pid(2);
 
-        CanisterPool::register(p1, 100u128.into());
-        CanisterPool::register(p2, 200u128.into());
+        CanisterReserve::register(p1, 100u128.into());
+        CanisterReserve::register(p2, 200u128.into());
 
-        let view = CanisterPool::export();
+        let view = CanisterReserve::export();
         assert_eq!(view.len(), 2);
 
         let entry1 = view.iter().find(|(id, _)| *id == p1).unwrap();
@@ -209,31 +211,31 @@ mod tests {
 
     #[test]
     fn remove_specific_pid() {
-        CanisterPool::clear();
+        CanisterReserve::clear();
 
         let p1 = pid(1);
         let p2 = pid(2);
 
-        CanisterPool::register(p1, 123u128.into());
-        CanisterPool::register(p2, 456u128.into());
+        CanisterReserve::register(p1, 123u128.into());
+        CanisterReserve::register(p2, 456u128.into());
 
-        let removed = CanisterPool::remove(&p1).unwrap();
+        let removed = CanisterReserve::remove(&p1).unwrap();
         assert_eq!(removed.cycles, 123u128.into());
 
         // only p2 should remain
-        let view = CanisterPool::export();
+        let view = CanisterReserve::export();
         assert_eq!(view.len(), 1);
         assert_eq!(view[0].0, p2);
     }
 
     #[test]
-    fn clear_resets_pool() {
-        CanisterPool::clear();
+    fn clear_resets_reserve() {
+        CanisterReserve::clear();
 
-        CanisterPool::register(pid(1), 10u128.into());
-        assert!(!CanisterPool::is_empty());
+        CanisterReserve::register(pid(1), 10u128.into());
+        assert!(!CanisterReserve::is_empty());
 
-        CanisterPool::clear();
-        assert!(CanisterPool::is_empty());
+        CanisterReserve::clear();
+        assert!(CanisterReserve::is_empty());
     }
 }

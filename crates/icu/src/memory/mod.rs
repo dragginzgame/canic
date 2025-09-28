@@ -1,4 +1,5 @@
 pub mod canister;
+pub mod elastic;
 pub mod registry;
 pub mod root;
 pub mod shard;
@@ -13,6 +14,7 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
         canister::CanisterRootError,
+        elastic::ElasticRegistryError,
         shard::ShardRegistryError,
         state::{AppStateError, CanisterStateError},
         subnet::SubnetError,
@@ -61,7 +63,7 @@ pub(crate) mod id {
     // root
     // various structures handled solely by root
     pub mod root {
-        pub const CANISTER_POOL_ID: u8 = 15;
+        pub const CANISTER_RESERVE_ID: u8 = 15;
     }
 
     // canister
@@ -76,6 +78,7 @@ pub(crate) mod id {
     pub mod capability {
         pub const SHARD_REGISTRY_ID: u8 = 24;
         pub const SHARD_TENANTS_ID: u8 = 25;
+        pub const ELASTIC_REGISTRY_ID: u8 = 26;
     }
 }
 
@@ -113,6 +116,9 @@ pub enum MemoryError {
 
     #[error(transparent)]
     CanisterStateError(#[from] CanisterStateError),
+
+    #[error(transparent)]
+    ElasticRegistryError(#[from] ElasticRegistryError),
 
     #[error(transparent)]
     ShardRegistryError(#[from] ShardRegistryError),

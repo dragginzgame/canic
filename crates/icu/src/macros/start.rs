@@ -97,7 +97,7 @@ macro_rules! icu_start_root {
 
             // services
             ::icu::memory::canister::CycleTracker::start();
-            ::icu::memory::root::CanisterPool::start();
+            ::icu::memory::root::CanisterReserve::start();
 
             // timers
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
@@ -124,7 +124,7 @@ macro_rules! icu_start_root {
 
             // services
             ::icu::memory::canister::CycleTracker::start();
-            ::icu::memory::root::CanisterPool::start();
+            ::icu::memory::root::CanisterReserve::start();
 
             // timers
             let _ = ::icu::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {

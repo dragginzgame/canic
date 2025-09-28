@@ -78,26 +78,26 @@ macro_rules! icu_endpoints_root {
         }
 
         //
-        // POOL ENDPOINTS
+        // RESERVE ENDPOINTS
         //
 
         #[::icu::cdk::query]
-        fn icu_pool_list() -> ::icu::memory::root::CanisterPoolView {
-            $crate::memory::root::CanisterPool::export()
+        fn icu_reserve_list() -> ::icu::memory::root::CanisterReserveView {
+            $crate::memory::root::CanisterReserve::export()
         }
 
         #[update]
-        async fn icu_pool_create_canister() -> Result<Principal, ::icu::Error> {
+        async fn icu_reserve_create_canister() -> Result<Principal, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            ::icu::ops::pool::create_pool_canister().await
+            ::icu::ops::reserve::create_reserve_canister().await
         }
 
         #[update]
-        async fn icu_pool_move_canister(pid: Principal) -> Result<(), ::icu::Error> {
+        async fn icu_reserve_move_canister(pid: Principal) -> Result<(), ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            ::icu::ops::pool::move_canister_to_pool(pid).await
+            ::icu::ops::reserve::move_canister_to_reserve(pid).await
         }
 
         //

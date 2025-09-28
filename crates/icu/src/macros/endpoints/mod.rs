@@ -141,7 +141,10 @@ macro_rules! icu_endpoints {
         #[cfg(icu_capability_delegation)]
         $crate::icu_endpoints_delegation!();
 
-        #[cfg(icu_capability_sharder)]
+        #[cfg(icu_capability_elastic)]
+        $crate::icu_endpoints_elastic!();
+
+        #[cfg(icu_capability_sharding)]
         $crate::icu_endpoints_shard!();
     };
 }
@@ -213,14 +216,23 @@ macro_rules! icu_endpoints_delegation {
     };
 }
 
+// icu_endpoints_elastic
+#[macro_export]
+macro_rules! icu_endpoints_elastic {
+    () => {
+        // icu_elastic_registry
+        #[::icu::cdk::query]
+        async fn icu_elastic_registry()
+        -> Result<::icu::memory::elastic::ElasticRegistryView, ::icu::Error> {
+            Ok($crate::ops::elastic::export_registry())
+        }
+    };
+}
+
 // icu_endpoints_shard
 #[macro_export]
 macro_rules! icu_endpoints_shard {
     () => {
-        //
-        // ICU SHARD ENDPOINTS
-        //
-
         // icu_shard_registry
         #[::icu::cdk::query]
         async fn icu_shard_registry()
