@@ -30,8 +30,8 @@ macro_rules! icu_build {
                     if canister_cfg.delegation {
                         println!("cargo:rustc-cfg=icu_capability_delegation");
                     }
-                    if canister_cfg.elastic.is_some() {
-                        println!("cargo:rustc-cfg=icu_capability_elastic");
+                    if canister_cfg.scaling.is_some() {
+                        println!("cargo:rustc-cfg=icu_capability_scaling");
                     }
                     if canister_cfg.sharding.is_some() {
                         println!("cargo:rustc-cfg=icu_capability_sharding");
@@ -84,7 +84,7 @@ macro_rules! __icu_build_internal {
         // declare the cfg names
         println!("cargo:rustc-check-cfg=cfg(icu)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_delegation)");
-        println!("cargo:rustc-check-cfg=cfg(icu_capability_elastic)");
+        println!("cargo:rustc-check-cfg=cfg(icu_capability_scaling)");
         println!("cargo:rustc-check-cfg=cfg(icu_capability_sharding)");
         println!("cargo:rustc-check-cfg=cfg(icu_github_ci)");
         println!("cargo:rustc-check-cfg=cfg(icu_root)");

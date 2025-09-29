@@ -76,7 +76,7 @@ fn root_auto_creates_expected_canisters() {
         (CanisterType::ROOT, None),
         (icu::canister::BLANK, Some(root_id)),
         (icu::canister::DELEGATION, Some(root_id)),
-        (icu::canister::ELASTIC_HUB, Some(root_id)),
+        (icu::canister::SCALE_HUB, Some(root_id)),
         (icu::canister::SHARD_HUB, Some(root_id)),
     ];
 

@@ -1,5 +1,5 @@
 use crate::{
-    memory::shard::{ShardEntry, ShardRegistry, ShardRegistryView},
+    memory::sharding::{ShardEntry, ShardingRegistry, ShardingRegistryView},
     types::CanisterType,
 };
 
@@ -48,10 +48,10 @@ impl ShardMetrics {
     }
 }
 
-impl ShardRegistry {
+impl ShardingRegistry {
     #[must_use]
     pub fn metrics(pool: &str) -> PoolMetrics {
-        let view: ShardRegistryView = Self::export();
+        let view: ShardingRegistryView = Self::export();
         let mut active = 0;
         let mut cap = 0;
         let mut used = 0;
@@ -131,19 +131,19 @@ mod tests {
 
     #[test]
     fn pool_metrics_computation() {
-        ShardRegistry::clear();
-        ShardRegistry::create(p(1), "poolA", &CanisterType::new("alpha"), 10);
-        ShardRegistry::create(p(2), "poolA", &CanisterType::new("alpha"), 20);
+        ShardingRegistry::clear();
+        ShardingRegistry::create(p(1), "poolA", &CanisterType::new("alpha"), 10);
+        ShardingRegistry::create(p(2), "poolA", &CanisterType::new("alpha"), 20);
 
         // Simulate usage: assign 3 tenants to shard 1, 10 tenants to shard 2
         for i in 0..3 {
-            ShardRegistry::assign("poolA", p(10 + i), p(1)).unwrap();
+            ShardingRegistry::assign("poolA", p(10 + i), p(1)).unwrap();
         }
         for i in 0..10 {
-            ShardRegistry::assign("poolA", p(20 + i), p(2)).unwrap();
+            ShardingRegistry::assign("poolA", p(20 + i), p(2)).unwrap();
         }
 
-        let m = ShardRegistry::metrics("poolA");
+        let m = ShardingRegistry::metrics("poolA");
 
         assert_eq!(m.active_count, 2);
         assert_eq!(m.total_capacity, 30);
@@ -153,20 +153,20 @@ mod tests {
 
     #[test]
     fn last_created_at_for_type_picks_latest() {
-        ShardRegistry::clear();
+        ShardingRegistry::clear();
         let ty = CanisterType::new("alpha");
 
-        ShardRegistry::create(p(1), "poolA", &ty, 5);
+        ShardingRegistry::create(p(1), "poolA", &ty, 5);
         std::thread::sleep(std::time::Duration::from_millis(5)); // ensure clock moves
-        ShardRegistry::create(p(2), "poolA", &ty, 5);
+        ShardingRegistry::create(p(2), "poolA", &ty, 5);
 
-        let t = ShardRegistry::last_created_at_for_type(&ty);
+        let t = ShardingRegistry::last_created_at_for_type(&ty);
         assert!(t > 0);
     }
 
     #[test]
     fn shard_metrics_none_for_missing_shard() {
-        ShardRegistry::clear();
-        assert!(ShardRegistry::shard_metrics(&p(99)).is_none());
+        ShardingRegistry::clear();
+        assert!(ShardingRegistry::shard_metrics(&p(99)).is_none());
     }
 }

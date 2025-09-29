@@ -7,7 +7,7 @@ pub use registry::*;
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     icu_eager_static, icu_memory, impl_storable_bounded,
-    memory::id::capability::{SHARD_REGISTRY_ID, SHARD_TENANTS_ID},
+    memory::id::capability::{SHARDING_REGISTRY_ID, SHARDING_TENANTS_ID},
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
@@ -16,24 +16,24 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 //
-// (this i) SHARD CORE
+// (this i) SHARDing CORE
 //
 
 icu_eager_static! {
-    static SHARD_CORE: RefCell<ShardCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
-        ShardCore::new(
-            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_REGISTRY_ID)),
-            BTreeMap::init(icu_memory!(ShardRegistry, SHARD_TENANTS_ID)),
+    static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
+        ShardingCore::new(
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARDING_REGISTRY_ID)),
+            BTreeMap::init(icu_memory!(ShardRegistry, SHARDING_TENANTS_ID)),
         )
     );
 }
 
 ///
-/// ShardRegistryError
+/// ShardingRegistryError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum ShardRegistryError {
+pub enum ShardingRegistryError {
     #[error("shard not found: {0}")]
     ShardNotFound(Principal),
 
@@ -106,16 +106,16 @@ impl ShardEntry {
 impl_storable_bounded!(ShardEntry, ShardEntry::STORABLE_MAX_SIZE, false);
 
 ///
-/// ShardCore
+/// ShardingCore
 /// Registry + assignments
 ///
 
-pub struct ShardCore<M: Memory> {
+pub struct ShardingCore<M: Memory> {
     registry: BTreeMap<Principal, ShardEntry, M>,
     assignments: BTreeMap<ShardKey, Principal, M>,
 }
 
-impl<M: Memory> ShardCore<M> {
+impl<M: Memory> ShardingCore<M> {
     pub const fn new(
         registry: BTreeMap<Principal, ShardEntry, M>,
         assignments: BTreeMap<ShardKey, Principal, M>,
@@ -133,10 +133,10 @@ impl<M: Memory> ShardCore<M> {
         self.registry.insert(pid, entry);
     }
 
-    pub fn remove_entry(&mut self, pid: &Principal) -> Result<(), ShardRegistryError> {
+    pub fn remove_entry(&mut self, pid: &Principal) -> Result<(), ShardingRegistryError> {
         self.registry
             .remove(pid)
-            .ok_or(ShardRegistryError::ShardNotFound(*pid))?;
+            .ok_or(ShardingRegistryError::ShardNotFound(*pid))?;
 
         Ok(())
     }
@@ -159,10 +159,13 @@ impl<M: Memory> ShardCore<M> {
         self.assignments.insert(key, shard);
     }
 
-    pub fn remove_assignment(&mut self, key: &ShardKey) -> Result<Principal, ShardRegistryError> {
+    pub fn remove_assignment(
+        &mut self,
+        key: &ShardKey,
+    ) -> Result<Principal, ShardingRegistryError> {
         self.assignments
             .remove(key)
-            .ok_or(ShardRegistryError::TenantNotFound(key.tenant_pid))
+            .ok_or(ShardingRegistryError::TenantNotFound(key.tenant_pid))
     }
 
     pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
@@ -176,11 +179,11 @@ impl<M: Memory> ShardCore<M> {
             .collect()
     }
 
-    pub fn increment_count(&mut self, pid: Principal) -> Result<(), ShardRegistryError> {
+    pub fn increment_count(&mut self, pid: Principal) -> Result<(), ShardingRegistryError> {
         let mut entry = self
             .registry
             .get(&pid)
-            .ok_or(ShardRegistryError::ShardNotFound(pid))?;
+            .ok_or(ShardingRegistryError::ShardNotFound(pid))?;
 
         entry.count = entry.count.saturating_add(1);
         self.registry.insert(pid, entry);
@@ -188,11 +191,11 @@ impl<M: Memory> ShardCore<M> {
         Ok(())
     }
 
-    pub fn decrement_count(&mut self, pid: Principal) -> Result<(), ShardRegistryError> {
+    pub fn decrement_count(&mut self, pid: Principal) -> Result<(), ShardingRegistryError> {
         let mut entry = self
             .registry
             .get(&pid)
-            .ok_or(ShardRegistryError::ShardNotFound(pid))?;
+            .ok_or(ShardingRegistryError::ShardNotFound(pid))?;
 
         entry.count = entry.count.saturating_sub(1);
         self.registry.insert(pid, entry);

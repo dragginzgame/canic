@@ -15,7 +15,7 @@
             "dependencies": [
                 "blank",
                 "delegation",
-                "elastic_hub",
+                "scale_hub",
                 "shard_hub"
             ]
         },
@@ -45,11 +45,11 @@
                 }
             ]
         },
-        "elastic_hub": {
+        "scale_hub": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/elastic_hub/elastic_hub.did",
-            "build": "bash -c 'scripts/app/build.sh elastic_hub'",
-            "wasm": ".dfx/local/canisters/elastic_hub/elastic_hub.wasm",
+            "candid": ".dfx/local/canisters/scale_hub/scale_hub.did",
+            "build": "bash -c 'scripts/app/build.sh scale_hub'",
+            "wasm": ".dfx/local/canisters/scale_hub/scale_hub.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
@@ -58,14 +58,14 @@
                 }
             ],
             "dependencies": [
-                "elastic"
+                "scale"
             ]
         },
-        "elastic": {
+        "scale": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/elastic/elastic.did",
-            "build": "bash -c 'scripts/app/build.sh elastic'",
-            "wasm": ".dfx/local/canisters/elastic/elastic.wasm",
+            "candid": ".dfx/local/canisters/scale/scale.did",
+            "build": "bash -c 'scripts/app/build.sh scale'",
+            "wasm": ".dfx/local/canisters/scale/scale.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

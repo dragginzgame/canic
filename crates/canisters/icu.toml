@@ -26,18 +26,18 @@ topup.threshold = "10T"
 
 
 # ---------------------------
-# Elastic
+# Scaling
 # ---------------------------
-[canisters.elastic_hub]
+[canisters.scale_hub]
 auto_create = true
 uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[canisters.elastic_hub.elastic.pools.workers]
-canister_type = "elastic"
+[canisters.scale_hub.scaling.pools.workers]
+canister_type = "scale"
 
-[canisters.elastic]
+[canisters.scale]
 topup.threshold = "10T"
 topup.amount = "5T"
 

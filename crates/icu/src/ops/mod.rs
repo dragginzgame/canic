@@ -1,11 +1,11 @@
 pub mod canister;
 pub mod delegation;
-pub mod elastic;
 pub mod request;
 pub mod reserve;
 pub mod response;
 pub mod root;
-pub mod shard;
+pub mod scaling;
+pub mod sharding;
 pub mod sync;
 
 pub mod prelude {
@@ -48,13 +48,13 @@ pub enum OpsError {
     DelegationError(#[from] delegation::DelegationError),
 
     #[error(transparent)]
-    ElasticError(#[from] elastic::ElasticError),
-
-    #[error(transparent)]
     RequestError(#[from] request::RequestError),
 
     #[error(transparent)]
-    ShardError(#[from] shard::ShardError),
+    ScalingError(#[from] scaling::ScalingError),
+
+    #[error(transparent)]
+    ShardingError(#[from] sharding::ShardingError),
 
     #[error(transparent)]
     SyncError(#[from] sync::SyncError),

@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     log,
     memory::{
-        shard::{PoolMetrics, ShardRegistry, ShardRegistryView},
+        sharding::{PoolMetrics, ShardingRegistry, ShardingRegistryView},
         state::CanisterState,
     },
     ops::{
@@ -16,9 +16,9 @@ use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
 //
-// OPS / SHARD
+// OPS / SHARDING
 //
-// Policy + orchestration layer on top of `ShardRegistry`.
+// Policy + orchestration layer on top of `ShardingRegistry`.
 // Handles creation, draining, rebalancing, and dry-run planning.
 //
 
@@ -26,9 +26,13 @@ use serde::{Deserialize, Serialize};
 // Errors
 // -----------------------------------------------------------------------------
 
-/// Errors for shard operations (policy / orchestration layer).
+///
+/// ShardingError
+/// Errors for sharding operations (policy / orchestration layer).
+///
+
 #[derive(Debug, ThisError)]
-pub enum ShardError {
+pub enum ShardingError {
     #[error("shard cap reached")]
     ShardCapReached,
 
@@ -49,27 +53,39 @@ pub enum ShardError {
 // Policy types
 // -----------------------------------------------------------------------------
 
+///
+/// ShardingPolicy
 /// Policy for managing shards in a pool.
+///
+
 #[derive(Clone, Copy, Debug)]
-pub struct ShardPolicy {
+pub struct ShardingPolicy {
     pub initial_capacity: u32,
     pub max_shards: u32,
     pub growth_threshold_pct: u32,
 }
 
+///
+/// ShardingPlan
 /// Dry-run planning output for assigning a tenant to a shard.
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardPlan {
-    pub state: ShardPlanState,
+pub struct ShardingPlan {
+    pub state: ShardingPlanState,
     pub utilization_pct: u32,
     pub active_count: u32,
     pub total_capacity: u64,
     pub total_used: u64,
 }
 
+///
+/// ShardingPlanState
 /// State of a planned shard assignment.
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum ShardPlanState {
+pub enum ShardingPlanState {
     AlreadyAssigned { pid: Principal },
     UseExisting { pid: Principal },
     CreateAllowed,
@@ -80,7 +96,11 @@ pub enum ShardPlanState {
 // Admin API
 // -----------------------------------------------------------------------------
 
+///
+/// AdminCommand
 /// Administrative shard operations, combined under a single endpoint.
+///
+
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminCommand {
     Assign {
@@ -102,7 +122,11 @@ pub enum AdminCommand {
     },
 }
 
+///
+/// AdminResult
 /// Result of an admin command.
+///
+
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminResult {
     Ok,
@@ -117,7 +141,7 @@ pub async fn admin_command(cmd: AdminCommand) -> Result<AdminResult, Error> {
             pool,
             shard_pid,
         } => {
-            ShardRegistry::assign(&pool, pid, shard_pid)?;
+            ShardingRegistry::assign(&pool, pid, shard_pid)?;
             Ok(AdminResult::Ok)
         }
         AdminCommand::Drain {
@@ -144,32 +168,35 @@ pub async fn admin_command(cmd: AdminCommand) -> Result<AdminResult, Error> {
 // -----------------------------------------------------------------------------
 
 /// Check whether a pool can create a new shard under the given policy.
-const fn ensure_can_create(metrics: &PoolMetrics, policy: &ShardPolicy) -> Result<(), ShardError> {
+const fn ensure_can_create(
+    metrics: &PoolMetrics,
+    policy: &ShardingPolicy,
+) -> Result<(), ShardingError> {
     if metrics.active_count >= policy.max_shards {
-        return Err(ShardError::ShardCapReached);
+        return Err(ShardingError::ShardCapReached);
     }
     if metrics.utilization_pct < policy.growth_threshold_pct && metrics.total_capacity > 0 {
-        return Err(ShardError::BelowGrowthThreshold);
+        return Err(ShardingError::BelowGrowthThreshold);
     }
     Ok(())
 }
 
 /// Lookup the config for a shard pool on the current canister.
-fn get_shard_pool_cfg(pool: &str) -> Result<(CanisterType, ShardPolicy), Error> {
+fn get_shard_pool_cfg(pool: &str) -> Result<(CanisterType, ShardingPolicy), Error> {
     let this_ty = CanisterState::try_get_view()?.ty;
 
     let sharding_cfg = Config::try_get_canister(&this_ty)?
         .sharding
-        .ok_or(OpsError::ShardError(ShardError::ShardingDisabled))?;
+        .ok_or(OpsError::ShardingError(ShardingError::ShardingDisabled))?;
 
     let pool_cfg = sharding_cfg
         .pools
         .get(pool)
-        .ok_or(OpsError::ShardError(ShardError::PoolNotFound))?;
+        .ok_or(OpsError::ShardingError(ShardingError::PoolNotFound))?;
 
     Ok((
         pool_cfg.canister_type.clone(),
-        ShardPolicy {
+        ShardingPolicy {
             initial_capacity: pool_cfg.policy.initial_capacity,
             max_shards: pool_cfg.policy.max_shards,
             growth_threshold_pct: pool_cfg.policy.growth_threshold_pct,
@@ -184,19 +211,19 @@ fn get_shard_pool_cfg(pool: &str) -> Result<(CanisterType, ShardPolicy), Error> 
 /// Lookup the shard assigned to a tenant (if any).
 #[must_use]
 pub fn lookup_tenant(pool: &str, tenant_pid: Principal) -> Option<Principal> {
-    ShardRegistry::tenant_shard(pool, tenant_pid)
+    ShardingRegistry::tenant_shard(pool, tenant_pid)
 }
 
 /// Lookup the shard assigned to a tenant, returning an error if none.
 pub fn try_lookup_tenant(pool: &str, tenant_pid: Principal) -> Result<Principal, Error> {
     lookup_tenant(pool, tenant_pid)
-        .ok_or_else(|| OpsError::from(ShardError::TenantNotFound(tenant_pid)).into())
+        .ok_or_else(|| OpsError::from(ShardingError::TenantNotFound(tenant_pid)).into())
 }
 
 /// Export the full shard registry view.
 #[must_use]
-pub fn export_registry() -> ShardRegistryView {
-    ShardRegistry::export()
+pub fn export_registry() -> ShardingRegistryView {
+    ShardingRegistry::export()
 }
 
 /// Assign a tenant to a pool using config-driven policy.
@@ -211,11 +238,11 @@ pub async fn assign_with_policy(
     canister_type: &CanisterType,
     pool: &str,
     tenant: Principal,
-    policy: ShardPolicy,
+    policy: ShardingPolicy,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
     // Already assigned?
-    if let Some(pid) = ShardRegistry::tenant_shard(pool, tenant) {
+    if let Some(pid) = ShardingRegistry::tenant_shard(pool, tenant) {
         log!(
             Log::Info,
             "📦 tenant={tenant} already shard={pid} pool={pool}"
@@ -224,7 +251,7 @@ pub async fn assign_with_policy(
     }
 
     // Try existing shards
-    if let Some(pid) = ShardRegistry::assign_best_effort(pool, tenant) {
+    if let Some(pid) = ShardingRegistry::assign_best_effort(pool, tenant) {
         log!(
             Log::Info,
             "📦 tenant={tenant} assigned shard={pid} pool={pool}"
@@ -233,19 +260,19 @@ pub async fn assign_with_policy(
     }
 
     // Maybe create new shard
-    let metrics = ShardRegistry::metrics(pool);
-    ensure_can_create(&metrics, &policy).map_err(OpsError::ShardError)?;
+    let metrics = ShardingRegistry::metrics(pool);
+    ensure_can_create(&metrics, &policy).map_err(OpsError::ShardingError)?;
 
     let response =
         create_canister_request::<Vec<u8>>(canister_type, CreateCanisterParent::Caller, extra_arg)
             .await?;
     let pid = response.new_canister_pid;
 
-    ShardRegistry::create(pid, pool, canister_type, policy.initial_capacity);
+    ShardingRegistry::create(pid, pool, canister_type, policy.initial_capacity);
     log!(Log::Ok, "✨ sharder.create: {pid} pool={pool}");
 
     // Assign again (should now succeed)
-    let fallback = ShardRegistry::assign_best_effort(pool, tenant)
+    let fallback = ShardingRegistry::assign_best_effort(pool, tenant)
         .ok_or_else(|| Error::custom("no shard available after creation"))?;
 
     Ok(fallback)
@@ -255,11 +282,12 @@ pub async fn assign_with_policy(
 /// Creates new shards if none available.
 pub async fn drain_shard(pool: &str, shard_pid: Principal, limit: u32) -> Result<u32, Error> {
     let (canister_type, policy) = get_shard_pool_cfg(pool)?;
-    let tenants = ShardRegistry::tenants_in_shard(pool, shard_pid);
+    let tenants = ShardingRegistry::tenants_in_shard(pool, shard_pid);
     let mut moved = 0;
 
     for tenant in tenants.into_iter().take(limit as usize) {
-        if let Some(new_pid) = ShardRegistry::assign_best_effort_excluding(pool, tenant, shard_pid)
+        if let Some(new_pid) =
+            ShardingRegistry::assign_best_effort_excluding(pool, tenant, shard_pid)
         {
             log!(
                 Log::Info,
@@ -270,16 +298,16 @@ pub async fn drain_shard(pool: &str, shard_pid: Principal, limit: u32) -> Result
         }
 
         // No shard available → create one if policy allows
-        let metrics = ShardRegistry::metrics(pool);
-        ensure_can_create(&metrics, &policy).map_err(OpsError::ShardError)?;
+        let metrics = ShardingRegistry::metrics(pool);
+        ensure_can_create(&metrics, &policy).map_err(OpsError::ShardingError)?;
 
         let response =
             create_canister_request::<Vec<u8>>(&canister_type, CreateCanisterParent::Caller, None)
                 .await?;
         let new_pid = response.new_canister_pid;
 
-        ShardRegistry::create(new_pid, pool, &canister_type, policy.initial_capacity);
-        ShardRegistry::assign_direct(pool, tenant, new_pid)?;
+        ShardingRegistry::create(new_pid, pool, &canister_type, policy.initial_capacity);
+        ShardingRegistry::assign_direct(pool, tenant, new_pid)?;
 
         log!(
             Log::Ok,
@@ -296,7 +324,7 @@ pub fn rebalance_pool(pool: &str, limit: u32) -> Result<u32, Error> {
     let mut moved = 0;
 
     for _ in 0..limit {
-        let view = ShardRegistry::export();
+        let view = ShardingRegistry::export();
         let mut candidates: Vec<(Principal, u64, u32, u64)> = view
             .into_iter()
             .filter(|(_, e)| e.pool == pool)
@@ -322,10 +350,10 @@ pub fn rebalance_pool(pool: &str, limit: u32) -> Result<u32, Error> {
             break;
         }
 
-        if let Some(tenant) = ShardRegistry::tenants_in_shard(pool, donor_pid)
+        if let Some(tenant) = ShardingRegistry::tenants_in_shard(pool, donor_pid)
             .first()
             .copied()
-            && ShardRegistry::assign_direct(pool, tenant, recv_pid).is_ok()
+            && ShardingRegistry::assign_direct(pool, tenant, recv_pid).is_ok()
         {
             log!(
                 Log::Info,
@@ -340,18 +368,18 @@ pub fn rebalance_pool(pool: &str, limit: u32) -> Result<u32, Error> {
 
 /// Decommission an empty shard (remove from registry).
 pub fn decommission_shard(shard_pid: Principal) -> Result<(), Error> {
-    ShardRegistry::remove(shard_pid)?;
+    ShardingRegistry::remove(shard_pid)?;
     log!(Log::Ok, "🗑️ decommissioned shard={shard_pid}");
     Ok(())
 }
 
 /// Dry-run plan for assigning a tenant to a shard (never creates).
-pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardPlan, Error> {
-    let metrics = ShardRegistry::metrics(pool);
+pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardingPlan, Error> {
+    let metrics = ShardingRegistry::metrics(pool);
 
-    if let Some(pid) = ShardRegistry::tenant_shard(pool, tenant) {
-        return Ok(ShardPlan {
-            state: ShardPlanState::AlreadyAssigned { pid },
+    if let Some(pid) = ShardingRegistry::tenant_shard(pool, tenant) {
+        return Ok(ShardingPlan {
+            state: ShardingPlanState::AlreadyAssigned { pid },
             utilization_pct: metrics.utilization_pct,
             active_count: metrics.active_count,
             total_capacity: metrics.total_capacity,
@@ -359,9 +387,9 @@ pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardPlan, E
         });
     }
 
-    if let Some(pid) = ShardRegistry::peek_best_effort(pool) {
-        return Ok(ShardPlan {
-            state: ShardPlanState::UseExisting { pid },
+    if let Some(pid) = ShardingRegistry::peek_best_effort(pool) {
+        return Ok(ShardingPlan {
+            state: ShardingPlanState::UseExisting { pid },
             utilization_pct: metrics.utilization_pct,
             active_count: metrics.active_count,
             total_capacity: metrics.total_capacity,
@@ -371,15 +399,15 @@ pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardPlan, E
 
     let (_, policy) = get_shard_pool_cfg(pool)?;
     match ensure_can_create(&metrics, &policy) {
-        Ok(()) => Ok(ShardPlan {
-            state: ShardPlanState::CreateAllowed,
+        Ok(()) => Ok(ShardingPlan {
+            state: ShardingPlanState::CreateAllowed,
             utilization_pct: metrics.utilization_pct,
             active_count: metrics.active_count,
             total_capacity: metrics.total_capacity,
             total_used: metrics.total_used,
         }),
-        Err(e) => Ok(ShardPlan {
-            state: ShardPlanState::CreateBlocked {
+        Err(e) => Ok(ShardingPlan {
+            state: ShardingPlanState::CreateBlocked {
                 reason: e.to_string(),
             },
             utilization_pct: metrics.utilization_pct,

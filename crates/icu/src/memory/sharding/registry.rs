@@ -3,7 +3,7 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     memory::{
         MemoryError,
-        shard::{SHARD_CORE, ShardCore, ShardEntry, ShardKey, ShardRegistryError},
+        sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore, ShardingRegistryError},
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -11,27 +11,27 @@ use crate::{
 use candid::Principal;
 
 ///
-/// ShardRegistry
+/// ShardingRegistry
 ///
 
-pub struct ShardRegistry;
+pub struct ShardingRegistry;
 
-pub type ShardRegistryView = Vec<(Principal, ShardEntry)>;
+pub type ShardingRegistryView = Vec<(Principal, ShardEntry)>;
 
-impl ShardRegistry {
+impl ShardingRegistry {
     // Helpers to access the core
     pub(crate) fn with<F, R>(f: F) -> R
     where
-        F: FnOnce(&ShardCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
     {
-        SHARD_CORE.with_borrow(f)
+        SHARDING_CORE.with_borrow(f)
     }
 
     pub(crate) fn with_mut<F, R>(f: F) -> R
     where
-        F: FnOnce(&mut ShardCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&mut ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
     {
-        SHARD_CORE.with_borrow_mut(f)
+        SHARDING_CORE.with_borrow_mut(f)
     }
 
     // ------------------------
@@ -39,7 +39,7 @@ impl ShardRegistry {
     // ------------------------
 
     pub fn clear() {
-        Self::with_mut(ShardCore::clear);
+        Self::with_mut(ShardingCore::clear);
     }
 
     #[must_use]
@@ -66,7 +66,9 @@ impl ShardRegistry {
         if let Some(e) = entry
             && e.count > 0
         {
-            Err(MemoryError::from(ShardRegistryError::ShardFull(shard_pid)))?;
+            Err(MemoryError::from(ShardingRegistryError::ShardFull(
+                shard_pid,
+            )))?;
         }
 
         Self::with_mut(|s| s.remove_entry(&shard_pid)).map_err(MemoryError::from)?;
@@ -81,13 +83,15 @@ impl ShardRegistry {
     pub fn assign(pool: &str, tenant: Principal, shard: Principal) -> Result<(), Error> {
         // check shard exists + capacity
         let mut entry = Self::with(|s| s.get_entry(&shard))
-            .ok_or_else(|| MemoryError::from(ShardRegistryError::ShardNotFound(shard)))?;
+            .ok_or_else(|| MemoryError::from(ShardingRegistryError::ShardNotFound(shard)))?;
 
         if entry.pool != pool {
-            Err(MemoryError::from(ShardRegistryError::ShardNotFound(shard)))?;
+            Err(MemoryError::from(ShardingRegistryError::ShardNotFound(
+                shard,
+            )))?;
         }
         if entry.count >= entry.capacity {
-            Err(MemoryError::from(ShardRegistryError::ShardFull(shard)))?;
+            Err(MemoryError::from(ShardingRegistryError::ShardFull(shard)))?;
         }
 
         // replace existing assignment if different
@@ -178,8 +182,8 @@ impl ShardRegistry {
     }
 
     #[must_use]
-    pub fn export() -> ShardRegistryView {
-        Self::with(ShardCore::all_entries)
+    pub fn export() -> ShardingRegistryView {
+        Self::with(ShardingCore::all_entries)
     }
 
     fn assign_best_effort_internal(
@@ -247,38 +251,38 @@ mod tests {
 
     #[test]
     fn assign_best_effort_excluding_skips_donor() {
-        ShardRegistry::clear();
+        ShardingRegistry::clear();
 
         let donor = p(1);
         let other = p(2);
         let tenant = p(99);
 
-        ShardRegistry::create(donor, POOL, &CanisterType::new("donor"), 2);
-        ShardRegistry::create(other, POOL, &CanisterType::new("other"), 2);
-        ShardRegistry::assign(POOL, tenant, donor).unwrap();
+        ShardingRegistry::create(donor, POOL, &CanisterType::new("donor"), 2);
+        ShardingRegistry::create(other, POOL, &CanisterType::new("other"), 2);
+        ShardingRegistry::assign(POOL, tenant, donor).unwrap();
 
-        let reassigned = ShardRegistry::assign_best_effort_excluding(POOL, tenant, donor);
+        let reassigned = ShardingRegistry::assign_best_effort_excluding(POOL, tenant, donor);
         assert_eq!(reassigned, Some(other));
-        assert_eq!(ShardRegistry::tenant_shard(POOL, tenant), Some(other));
+        assert_eq!(ShardingRegistry::tenant_shard(POOL, tenant), Some(other));
 
-        let donor_entry = ShardRegistry::with(|s| s.get_entry(&donor)).unwrap();
+        let donor_entry = ShardingRegistry::with(|s| s.get_entry(&donor)).unwrap();
         assert_eq!(donor_entry.count, 0);
-        let other_entry = ShardRegistry::with(|s| s.get_entry(&other)).unwrap();
+        let other_entry = ShardingRegistry::with(|s| s.get_entry(&other)).unwrap();
         assert_eq!(other_entry.count, 1);
     }
 
     #[test]
     fn assign_best_effort_excluding_returns_none_when_no_alternative() {
-        ShardRegistry::clear();
+        ShardingRegistry::clear();
 
         let donor = p(3);
         let tenant = p(4);
 
-        ShardRegistry::create(donor, POOL, &CanisterType::new("solo"), 2);
-        ShardRegistry::assign(POOL, tenant, donor).unwrap();
+        ShardingRegistry::create(donor, POOL, &CanisterType::new("solo"), 2);
+        ShardingRegistry::assign(POOL, tenant, donor).unwrap();
 
-        let reassigned = ShardRegistry::assign_best_effort_excluding(POOL, tenant, donor);
+        let reassigned = ShardingRegistry::assign_best_effort_excluding(POOL, tenant, donor);
         assert!(reassigned.is_none());
-        assert_eq!(ShardRegistry::tenant_shard(POOL, tenant), Some(donor));
+        assert_eq!(ShardingRegistry::tenant_shard(POOL, tenant), Some(donor));
     }
 }

@@ -22,7 +22,7 @@ pub async fn create_reserve_canister() -> Result<Principal, Error> {
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
     let canister_pid = raw_create_canister(cycles.clone()).await?;
 
-    log!(Log::Ok, "🪶 create_reserve: {canister_pid} ({cycles})",);
+    log!(Log::Ok, "🪶  create_reserve: {canister_pid} ({cycles})",);
 
     CanisterReserve::register(canister_pid, cycles);
 
@@ -51,7 +51,7 @@ pub async fn move_canister_to_reserve(canister_pid: Principal) -> Result<(), Err
 
     log!(
         Log::Ok,
-        "🪶 move_canister_to_reserve: {canister_pid} (was {canister_type}) ({cycles})",
+        "🪶  move_canister_to_reserve: {canister_pid} (was {canister_type}) ({cycles})",
     );
 
     Ok(())

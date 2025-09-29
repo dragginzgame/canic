@@ -2,8 +2,8 @@
 members = [
     "crates/canisters/blank",
     "crates/canisters/delegation",
-    "crates/canisters/elastic_hub",
-    "crates/canisters/elastic",
+    "crates/canisters/scale_hub",
+    "crates/canisters/scale",
     "crates/canisters/shard_hub",
     "crates/canisters/shard",
     "crates/canisters/root",
