@@ -1,5 +1,5 @@
 [package]
-name = "canister_elastic_hub"
+name = "canister_scale_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

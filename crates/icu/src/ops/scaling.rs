@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
-    config::data::ElasticPool,
-    memory::elastic::{ElasticEntry, ElasticRegistry, ElasticRegistryView},
+    config::data::ScalePool,
+    memory::scaling::{ScalingRegistry, ScalingRegistryView, WorkerEntry},
     ops::{
         OpsError, cfg_current_canister,
         request::{CreateCanisterParent, create_canister_request},
@@ -11,9 +11,9 @@ use crate::{
 use candid::Principal;
 
 //
-// OPS / ELASTIC
+// OPS / SCALING
 //
-// Policy + orchestration layer on top of `ElasticRegistry`.
+// Policy + orchestration layer on top of `ScalingRegistry`.
 // Handles creation, draining, rebalancing, and dry-run planning.
 //
 
@@ -21,15 +21,17 @@ use candid::Principal;
 // Errors
 // -----------------------------------------------------------------------------
 
-/// Errors for elastic operations (policy / orchestration layer).
-#[derive(Debug, ThisError)]
-pub enum ElasticError {
-    /// This hub canister does not have elastic capability enabled.
-    #[error("elastic capability disabled for this canister")]
-    ElasticDisabled,
+///
+/// ScalingError
+/// Errors for scaling operations (policy / orchestration layer).
+///
 
-    /// A requested pool name does not exist in config.
-    #[error("elastic pool '{0}' not found")]
+#[derive(Debug, ThisError)]
+pub enum ScalingError {
+    #[error("scaling capability disabled for this canister")]
+    ScalingDisabled,
+
+    #[error("scaling pool '{0}' not found")]
     PoolNotFound(String),
 }
 
@@ -37,9 +39,13 @@ pub enum ElasticError {
 // Planning
 // -----------------------------------------------------------------------------
 
-/// Result of a dry-run policy evaluation for scaling an elastic pool.
+///
+/// ScalingPlan
+/// Result of a dry-run policy evaluation for scaling a pool.
+///
+
 #[derive(Clone, Debug)]
-pub struct ElasticPlan {
+pub struct ScalingPlan {
     /// Whether a new worker should be spawned.
     pub should_spawn: bool,
     /// Explanation / debug string for the decision.
@@ -50,20 +56,18 @@ pub struct ElasticPlan {
 // Internal helpers
 // -----------------------------------------------------------------------------
 
-/// Look up the config for a given elastic pool on the *current canister*.
-///
-/// Returns a cloned [`ElasticPool`] on success, or a wrapped [`ElasticError`].
-fn get_elastic_pool_cfg(pool: &str) -> Result<ElasticPool, Error> {
+/// Look up the config for a given pool on the *current canister*.
+fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
     let cfg = cfg_current_canister()?;
 
-    let elastic_cfg = cfg
-        .elastic
-        .ok_or_else(|| OpsError::from(ElasticError::ElasticDisabled))?;
+    let scale_cfg = cfg
+        .scaling
+        .ok_or_else(|| OpsError::from(ScalingError::ScalingDisabled))?;
 
-    let pool_cfg = elastic_cfg
+    let pool_cfg = scale_cfg
         .pools
         .get(pool)
-        .ok_or_else(|| OpsError::from(ElasticError::PoolNotFound(pool.to_string())))?;
+        .ok_or_else(|| OpsError::from(ScalingError::PoolNotFound(pool.to_string())))?;
 
     Ok(pool_cfg.clone())
 }
@@ -72,21 +76,16 @@ fn get_elastic_pool_cfg(pool: &str) -> Result<ElasticPool, Error> {
 // Public API
 // -----------------------------------------------------------------------------
 
-/// Export a snapshot of the current elastic registry state.
+/// Export a snapshot of the current registry state.
 #[must_use]
-pub fn export_registry() -> ElasticRegistryView {
-    ElasticRegistry::export()
+pub fn export_registry() -> ScalingRegistryView {
+    ScalingRegistry::export()
 }
 
-/// Create a new elastic worker canister in the given pool and register it.
-///
-/// This:
-/// 1. Reads the [`ElasticPool`] config from the current canister.
-/// 2. Creates a canister of the configured type.
-/// 3. Inserts it into the [`ElasticRegistry`] with initial metadata.
+/// Create a new worker canister in the given pool and register it.
 pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
     // 1. Look up pool config
-    let pool_cfg = get_elastic_pool_cfg(pool)?;
+    let pool_cfg = get_scaling_pool_cfg(pool)?;
     let ty = pool_cfg.canister_type.clone();
 
     // 2. Create the canister
@@ -95,13 +94,14 @@ pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
         .new_canister_pid;
 
     // 3. Register in memory
-    let entry = ElasticEntry {
+    let entry = WorkerEntry {
         pool: pool.to_string(),
         canister_type: ty,
         created_at_secs: now_secs(),
         // load_bps: 0 by default (no load yet)
     };
-    ElasticRegistry::insert(pid, entry);
+
+    ScalingRegistry::insert(pid, entry);
 
     Ok(pid)
 }
@@ -109,10 +109,10 @@ pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
 /// Dry-run the scaling policy for a pool without creating a canister.
 ///
 /// For now this is a stub that always recommends scaling up. Later, it should
-/// evaluate thresholds from [`ElasticPool.policy`] and current registry load.
-pub fn plan_create_worker(pool: &str) -> Result<ElasticPlan, Error> {
-    // Ensure pool exists + elastic capability enabled (mirrors create_worker).
-    let pool_cfg = get_elastic_pool_cfg(pool)?;
+/// evaluate thresholds from [`ScalePool.policy`] and current registry load.
+pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
+    // Ensure pool exists + capability enabled (mirrors create_worker).
+    let pool_cfg = get_scaling_pool_cfg(pool)?;
 
     // TODO: fold in policy thresholds + registry state
     let should_spawn = true;
@@ -121,7 +121,7 @@ pub fn plan_create_worker(pool: &str) -> Result<ElasticPlan, Error> {
         pool_cfg.canister_type
     );
 
-    Ok(ElasticPlan {
+    Ok(ScalingPlan {
         should_spawn,
         reason,
     })

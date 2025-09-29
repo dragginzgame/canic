@@ -3,7 +3,7 @@
 use icu::{
     Error,
     canister::SHARD_HUB,
-    ops::shard::{ShardPlan, assign_to_pool, plan_assign_to_pool},
+    ops::sharding::{ShardingPlan, assign_to_pool, plan_assign_to_pool},
     prelude::*,
 };
 
@@ -30,7 +30,7 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 
 /// Dry-run the player registration decision using config-driven policy.
 #[query]
-async fn plan_register_principal(pid: Principal) -> Result<ShardPlan, Error> {
+async fn plan_register_principal(pid: Principal) -> Result<ShardingPlan, Error> {
     let plan = plan_assign_to_pool("shards", pid)?;
 
     Ok(plan)

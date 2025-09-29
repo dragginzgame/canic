@@ -118,7 +118,7 @@ pub struct Canister {
     pub uses_directory: bool,
 
     #[serde(default)]
-    pub elastic: Option<ElasticConfig>,
+    pub scaling: Option<ScalingConfig>,
 
     #[serde(default)]
     pub sharding: Option<ShardingConfig>,
@@ -188,8 +188,8 @@ pub struct Standards {
 }
 
 ///
-/// ElasticConfig
-/// (stateless, elastic)
+/// ScalingConfig
+/// (stateless, scaling)
 ///
 /// * Organizes canisters into **worker groups** (e.g. "oracle").
 /// * Workers are interchangeable and handle transient tasks (no tenant assignment).
@@ -199,32 +199,32 @@ pub struct Standards {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ElasticConfig {
+pub struct ScalingConfig {
     #[serde(default)]
-    pub pools: BTreeMap<String, ElasticPool>,
+    pub pools: BTreeMap<String, ScalePool>,
 }
 
 ///
-/// ElasticPool
+/// ScalePool
 /// One stateless worker group (e.g. "oracle").
 ///
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ElasticPool {
+pub struct ScalePool {
     pub canister_type: CanisterType,
 
     #[serde(default)]
-    pub policy: ElasticPoolPolicy,
+    pub policy: ScalePoolPolicy,
 }
 
 ///
-/// ElasticPoolPolicy
+/// ScalePoolPolicy
 ///
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ElasticPoolPolicy {
+pub struct ScalePoolPolicy {
     /// Minimum number of worker canisters to keep alive
     pub min_workers: u32,
 
@@ -238,7 +238,7 @@ pub struct ElasticPoolPolicy {
     pub scale_down_threshold_pct: u32,
 }
 
-impl Default for ElasticPoolPolicy {
+impl Default for ScalePoolPolicy {
     fn default() -> Self {
         Self {
             min_workers: 1,

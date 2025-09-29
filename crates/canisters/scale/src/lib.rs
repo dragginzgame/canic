@@ -1,12 +1,12 @@
 #![allow(clippy::unused_async)]
 
-use icu::{canister::ELASTIC, prelude::*};
+use icu::{canister::SCALE, prelude::*};
 
 //
 // ICU
 //
 
-icu_start!(ELASTIC);
+icu_start!(SCALE);
 
 async fn icu_setup() {}
 async fn icu_install(_: Option<Vec<u8>>) {}

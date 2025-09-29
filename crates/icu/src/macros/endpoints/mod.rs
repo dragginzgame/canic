@@ -141,11 +141,11 @@ macro_rules! icu_endpoints {
         #[cfg(icu_capability_delegation)]
         $crate::icu_endpoints_delegation!();
 
-        #[cfg(icu_capability_elastic)]
-        $crate::icu_endpoints_elastic!();
+        #[cfg(icu_capability_scaling)]
+        $crate::icu_endpoints_scaling!();
 
         #[cfg(icu_capability_sharding)]
-        $crate::icu_endpoints_shard!();
+        $crate::icu_endpoints_sharding!();
     };
 }
 
@@ -216,28 +216,28 @@ macro_rules! icu_endpoints_delegation {
     };
 }
 
-// icu_endpoints_elastic
+// icu_endpoints_scaling
 #[macro_export]
-macro_rules! icu_endpoints_elastic {
+macro_rules! icu_endpoints_scaling {
     () => {
-        // icu_elastic_registry
+        // icu_scale_registry
         #[::icu::cdk::query]
-        async fn icu_elastic_registry()
-        -> Result<::icu::memory::elastic::ElasticRegistryView, ::icu::Error> {
-            Ok($crate::ops::elastic::export_registry())
+        async fn icu_scale_registry()
+        -> Result<::icu::memory::scaling::ScalingRegistryView, ::icu::Error> {
+            Ok($crate::ops::scaling::export_registry())
         }
     };
 }
 
-// icu_endpoints_shard
+// icu_endpoints_sharding
 #[macro_export]
-macro_rules! icu_endpoints_shard {
+macro_rules! icu_endpoints_sharding {
     () => {
         // icu_shard_registry
         #[::icu::cdk::query]
         async fn icu_shard_registry()
-        -> Result<::icu::memory::shard::ShardRegistryView, ::icu::Error> {
-            Ok($crate::ops::shard::export_registry())
+        -> Result<::icu::memory::sharding::ShardingRegistryView, ::icu::Error> {
+            Ok($crate::ops::sharding::export_registry())
         }
 
         // icu_shard_lookup_tenant
@@ -247,18 +247,18 @@ macro_rules! icu_endpoints_shard {
             pool: String,
             tenant_pid: ::candid::Principal,
         ) -> Result<::candid::Principal, ::icu::Error> {
-            $crate::ops::shard::try_lookup_tenant(&pool, tenant_pid)
+            $crate::ops::sharding::try_lookup_tenant(&pool, tenant_pid)
         }
 
         // icu_shard_admin
         // combined admin endpoint for shard lifecycle operations (controller only).
         #[::icu::cdk::update]
         async fn icu_shard_admin(
-            cmd: ::icu::ops::shard::AdminCommand,
-        ) -> Result<::icu::ops::shard::AdminResult, ::icu::Error> {
+            cmd: ::icu::ops::sharding::AdminCommand,
+        ) -> Result<::icu::ops::sharding::AdminResult, ::icu::Error> {
             $crate::auth_require_any!(::icu::auth::is_controller)?;
 
-            $crate::ops::shard::admin_command(cmd).await
+            $crate::ops::sharding::admin_command(cmd).await
         }
     };
 }
