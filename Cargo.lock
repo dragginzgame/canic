@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "canister_delegation"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "icu"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "candid",
  "criterion",
