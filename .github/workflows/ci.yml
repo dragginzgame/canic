@@ -30,9 +30,9 @@ jobs:
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
       - name: Build examples (default)
-        run: cargo build -p icu --examples --locked
+        run: cargo build -p canic --examples --locked
       - name: Build examples (ic feature)
-        run: cargo build -p icu --examples --features ic --locked
+        run: cargo build -p canic --examples --features ic --locked
 
   release:
     if: startsWith(github.ref, 'refs/tags/')

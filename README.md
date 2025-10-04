@@ -1,5 +1,9 @@
 # ✨ Canic – Internet Computer Utilities
 
+[![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
+[![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Canic is a Rust toolkit for orchestrating Internet Computer (IC) canisters at scale. It packages the battle-tested patterns from large multi-canister deployments into a reusable crate: lifecycle macros, stable-memory helpers, orchestration ops, and endpoint bundles that keep your boundary layer thin while enforcing clean layering inside the canister graph.
 
 The crate was historically known as **ICU** (Internet Computer Utilities). All core APIs have been renamed to **Canic** for the crates.io release; compatibility shims remain where practical so existing projects can migrate gradually.
@@ -147,4 +151,3 @@ Canic is the successor to the internal ICU toolkit. The repository is in the pro
 ## License
 
 Proprietary and confidential. See `LICENSE` for details.
-
