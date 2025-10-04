@@ -1,15 +1,15 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use icu::memory::{CanisterEntry, CanisterStatus};
-use icu::types::CanisterType;
+use canic::memory::{CanisterEntry, CanisterStatus};
+use canic::types::CanisterType;
 use pocket_ic::PocketIc;
 
-const ROOT_WASM_ENV: &str = "ICU_ROOT_WASM";
+const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 const ROOT_WASM_RELATIVE: &str = "../../../../.dfx/local/canisters/root/root.wasm.gz";
 
 fn load_root_wasm() -> Option<Vec<u8>> {
-    if cfg!(icu_github_ci) {
+    if cfg!(canic_github_ci) {
         return None;
     }
 
@@ -54,7 +54,7 @@ fn root_auto_creates_expected_canisters() {
     // Install root WASM
     pic.install_canister(root_id, root_wasm, vec![], Some(Principal::anonymous()));
 
-    // Timers queue `icu_install`, so tick Pocket IC until it drains
+    // Timers queue `canic_install`, so tick Pocket IC until it drains
     for _ in 0..100 {
         pic.tick();
     }
@@ -64,7 +64,7 @@ fn root_auto_creates_expected_canisters() {
         .query_call(
             root_id,
             Principal::anonymous(),
-            "icu_subnet_registry",
+            "canic_subnet_registry",
             encode_one(()).unwrap(),
         )
         .expect("query registry");
@@ -74,10 +74,10 @@ fn root_auto_creates_expected_canisters() {
 
     let expected = [
         (CanisterType::ROOT, None),
-        (icu::canister::BLANK, Some(root_id)),
-        (icu::canister::DELEGATION, Some(root_id)),
-        (icu::canister::SCALE_HUB, Some(root_id)),
-        (icu::canister::SHARD_HUB, Some(root_id)),
+        (canic::canister::BLANK, Some(root_id)),
+        (canic::canister::DELEGATION, Some(root_id)),
+        (canic::canister::SCALE_HUB, Some(root_id)),
+        (canic::canister::SHARD_HUB, Some(root_id)),
     ];
 
     for (ty, parent) in expected {

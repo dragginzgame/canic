@@ -7,19 +7,22 @@ members = [
     "crates/canisters/shard_hub",
     "crates/canisters/shard",
     "crates/canisters/root",
-    "crates/icu",
+    "crates/canic",
 ]
 resolver = "2"
 
 [workspace.package]
+name = "canic"
 rust-version = "1.90.0"
 edition = "2024"
-version = "0.12.1"
+version = "0.1.0"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
-description = "Internet Computer Utilities"
+description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
+keywords = ["internet-computer", "canister", "dfinity", "icp", "management"]
+categories = ["wasm", "blockchain", "distributed-systems"]
 readme = "README.md"
 license-file = "LICENSE"
-publish = false
+publish = true
 
 [workspace.dependencies]
 
@@ -35,7 +38,7 @@ ic-ledger-types = "0.15"
 ic-management-canister-types = "0.3.3"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.10"
-icu = { path = "crates/icu" }
+canic = { path = "crates/canic" }
 pocket-ic = "10.0"
 
 # third party

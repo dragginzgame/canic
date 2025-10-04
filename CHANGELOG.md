@@ -5,6 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+############################ canic ####################################
+
+## [0.1.0] - 2025-10-04 - Published!
+- renamed to canic (like mechanic) because icu was taken by a unicode library on crates.io
+- publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.
+
+#######################################################################
+
 ## [0.12.0] - 2025-09-28 - Elastic Canisters
 - so now in addition to Sharding you have Elastic which spins up and down a pool of canisters based
 on available resources
@@ -89,7 +97,7 @@ with audit logs; new coverage test ensures idempotency.
 - Added: Partition endpoints (cfg-gated): `icu_partition_registry`, `icu_partition_lookup`, `icu_partition_register`, `icu_partition_audit`.
 - Added: Ops helpers for partitioning: `ensure_item_assignment`, `assign_with_config`, `assign_with_policy`, `plan_with_config`, and `PartitionPolicy`.
 - Added: Auto-registration of non-root canisters from config `partition` block during init/upgrade.
-- Changed: Config (`icu.toml`) supports per-canister `partition` block: `initial_capacity`, `max_partitions`, `growth_threshold_bps`.
+- Changed: Config (`canic.toml`) supports per-canister `partition` block: `initial_capacity`, `max_partitions`, `growth_threshold_bps`.
 - Added: Delegation revoke endpoint `icu_delegation_revoke` and registry method `revoke_session_or_wallet`.
 
 ## [0.6.2] - 2025-09-04
@@ -197,10 +205,10 @@ possible security issues
 
 ## [0.2.8] - CANISTERS
 - now canisters are stored in a constant slice and made the import procedure much easier
-- icu_setup() before icu_install() and icu_upgrade()
+- canic_setup() before canic_install() and canic_upgrade()
 
-## [0.2.5] - icu_init + icu_startup
-- split these functions, now post_upgrade calls icu_startup in addition to icu_init
+## [0.2.5] - icu_init + canic_startup
+- split these functions, now post_upgrade calls canic_startup in addition to icu_init
 
 ## [0.2.3] - Toko Time Really
 - use this for toko
@@ -279,7 +287,7 @@ it's also sent via canister create args
 
 ## [0.1.4]
 - refactored into two crates, just so I have a test crate to play with
-- updated icu_start! so it takes another optional argument to pass to the init function
+- updated canic_start! so it takes another optional argument to pass to the init function
 - added a timer for init_async so we dont call it from the macro
 - auth rules working, now with support for custom auth rules
 

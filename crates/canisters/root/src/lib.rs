@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 
 use candid::Principal;
-use icu::{
+use canic::{
     Error, canister,
     ops::{
         request::{CreateCanisterParent, create_canister_request},
@@ -15,58 +15,58 @@ use icu::{
 // ICU
 //
 
-icu_start_root!();
+canic_start_root!();
 
-async fn icu_setup() {}
+async fn canic_setup() {}
 
-async fn icu_install() {
+async fn canic_install() {
     root_create_canisters().await.unwrap();
 }
 
-async fn icu_upgrade() {}
+async fn canic_upgrade() {}
 
 // WASMS
 pub static WASMS: &[(CanisterType, &[u8])] = &[
     (
         canister::BLANK,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz"),
     ),
     (
         canister::DELEGATION,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/delegation/delegation.wasm.gz"),
     ),
     (
         canister::SCALE_HUB,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/scale_hub/scale_hub.wasm.gz"),
     ),
     (
         canister::SCALE,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/scale/scale.wasm.gz"),
     ),
     (
         canister::SHARD_HUB,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz"),
     ),
     (
         canister::SHARD,
-        #[cfg(icu_github_ci)]
+        #[cfg(canic_github_ci)]
         &[],
-        #[cfg(not(icu_github_ci))]
+        #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz"),
     ),
 ];
@@ -74,6 +74,12 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 ///
 /// ENDPOINTS
 ///
+
+// delete_me
+#[query(composite)]
+async fn delete_me() -> Result<Option<Principal>, Error> {
+    canic::interface::ic::get_current_subnet_pid().await
+}
 
 // create_blank
 #[update]

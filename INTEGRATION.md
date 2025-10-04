@@ -42,5 +42,5 @@ git ls-remote --tags ssh://git@your.git.host/your-group/icu.git | sed -n 's#.*re
 
 ## Canister setup
 - In each canister crate, add the appropriate build macro (see README Quickstart):
-  - Root: `fn main() { icu::icu_build_root!("../icu.toml"); }`
-  - Non-root: `fn main() { icu::icu_build!("../icu.toml"); }`
+  - Root: `fn main() { canic::canic_build_root!("../canic.toml"); }`
+  - Non-root: `fn main() { canic::canic_build!("../canic.toml"); }`

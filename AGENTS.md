@@ -106,6 +106,16 @@ We separate responsibilities into **three main layers**:
       // or
       log!(Log::Info, "moved {} items", items.len());
       ```
+  - Comment/layout baseline: use banner separators for major sections and keep a blank
+    line between doc comments and the item they describe, e.g.
+    ```rust
+    // -----------------------------------------------------------------------------
+    // Section Title
+    // -----------------------------------------------------------------------------
+
+    /// Explains what Foo does.
+    struct Foo;
+    ```
 - **Linting**: `cargo clippy --workspace -- -D warnings`.
 
 ---
