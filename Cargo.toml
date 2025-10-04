@@ -22,7 +22,7 @@ description = "Canic — a canister orchestration and management toolkit for the
 repository = "https://github.com/dragginzgame/canic"
 homepage = "https://github.com/dragginzgame/canic"
 keywords = ["internet-computer", "canister", "dfinity", "icp", "management"]
-categories = ["wasm", "blockchain", "distributed-systems"]
+categories = ["configuration", "wasm"]
 readme = "README.md"
 publish = true
 
