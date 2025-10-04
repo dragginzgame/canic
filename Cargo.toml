@@ -16,12 +16,14 @@ name = "canic"
 rust-version = "1.90.0"
 edition = "2024"
 version = "0.1.0"
+license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
+repository = "https://github.com/dragginzgame/canic"
+homepage = "https://github.com/dragginzgame/canic"
 keywords = ["internet-computer", "canister", "dfinity", "icp", "management"]
 categories = ["wasm", "blockchain", "distributed-systems"]
 readme = "README.md"
-license-file = "LICENSE"
 publish = true
 
 [workspace.dependencies]
