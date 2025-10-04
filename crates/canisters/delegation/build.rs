@@ -1,3 +1,3 @@
 fn main() {
-    icu::icu_build!("../icu.toml");
+    canic::canic_build!("../canic.toml");
 }

@@ -1,16 +1,16 @@
 #![allow(clippy::unused_async)]
 
-use icu::{Error, canister::SCALE_HUB, ops, prelude::*};
+use canic::{Error, canister::SCALE_HUB, ops, prelude::*};
 
 //
 // ICU
 //
 
-icu_start!(SCALE_HUB);
+canic_start!(SCALE_HUB);
 
-async fn icu_setup() {}
-async fn icu_install(_: Option<Vec<u8>>) {}
-async fn icu_upgrade() {}
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
 
 //
 // ENDPOINTS

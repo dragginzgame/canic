@@ -1,17 +1,17 @@
-# ICU Configuration
+# Canic Configuration
 
-This document defines the TOML schema used by ICU and how it is loaded at build time.
+This document defines the TOML schema consumed by Canic and how it is loaded at build time. Legacy ICU-compatible cfg/env hooks remain for downstream crates that have not migrated yet.
 
 ## How It Loads
 
 - Add the macro call to your canister crate’s `build.rs`:
-  - Root canister: `fn main() { icu::icu_build_root!("../icu.toml"); }`
-  - Non‑root canister: `fn main() { icu::icu_build!("../icu.toml"); }`
-- The macro validates the TOML, sets `ICU_CONFIG_PATH` (absolute), and enables the `icu_config` cfg.
-- At runtime, ICU embeds the TOML via `include_str!(env!("ICU_CONFIG_PATH"))`, so deployments do not need to ship extra files.
-- In CI (when `GITHUB_ACTIONS=true`), a build cfg `icu_github_ci` is emitted; some example includes use this to avoid bundling local WASMs.
+  - Root canister: `fn main() { canic::canic_build_root!("../canic.toml"); }`
+  - Non‑root canister: `fn main() { canic::canic_build!("../canic.toml"); }`
+- The macro validates the TOML, sets `CANIC_CONFIG_PATH` (absolute), and enables the `canic` cfg marker (plus legacy `icu`).
+- At runtime, Canic embeds the TOML via `include_str!(env!("CANIC_CONFIG_PATH"))`, so deployments do not need to ship extra files. For backward compatibility the `ICU_CONFIG_PATH` environment variable is exported with the same value.
+- In CI (when `GITHUB_ACTIONS=true`), build cfgs `canic_github_ci` and `icu_github_ci` are emitted; some example includes use this to avoid bundling local WASMs.
 
-## Minimal Example (icu.toml)
+## Minimal Example (canic.toml)
 
 ```toml
 controllers = ["aaaaa-aa"]
@@ -54,14 +54,14 @@ Validation rules
 
 ## Access at Runtime
 
-- `icu::config::Config::try_get()` – returns `Arc<ConfigData>`.
+- `canic::config::Config::try_get()` – returns `Arc<ConfigData>`.
 - `Config::try_get_canister(&CanisterType)` – fetch a canister’s settings.
 - `ConfigData::is_whitelisted(&Principal)` – helper for auth checks.
 
 Example
 ```rust
-use icu::config::Config;
-use icu::types::CanisterType;
+use canic::config::Config;
+use canic::types::CanisterType;
 use candid::Principal;
 
 let cfg = Config::try_get()?; // Arc<ConfigData>

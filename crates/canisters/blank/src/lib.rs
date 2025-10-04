@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 
-use icu::{
+use canic::{
     Error,
     canister::BLANK,
     ops::{
@@ -14,11 +14,11 @@ use icu::{
 // ICU
 //
 
-icu_start!(BLANK);
+canic_start!(BLANK);
 
-async fn icu_setup() {}
-async fn icu_install(_: Option<Vec<u8>>) {}
-async fn icu_upgrade() {}
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
 
 // create_blank
 #[update]

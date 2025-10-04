@@ -1,182 +1,150 @@
-# ✨ ICU – Internet Computer Utilities
+# ✨ Canic – Internet Computer Utilities
 
-Internal Use Only — This repository is private and intended solely for use by authorized team members. Do not distribute or share outside the organization. For access or questions, contact the maintainers.
+Canic is a Rust toolkit for orchestrating Internet Computer (IC) canisters at scale. It packages the battle-tested patterns from large multi-canister deployments into a reusable crate: lifecycle macros, stable-memory helpers, orchestration ops, and endpoint bundles that keep your boundary layer thin while enforcing clean layering inside the canister graph.
 
-**ICU** (Internet Computer Utilities) is a Rust framework that simplifies the development and management of multi-canister systems on the DFINITY **Internet Computer (IC)**. It provides a set of utilities and macros to coordinate multiple canisters (smart contracts) working together, making it easier to create complex canister-based dapps that scale across canister boundaries (even across multiple subnets).
+The crate was historically known as **ICU** (Internet Computer Utilities). All core APIs have been renamed to **Canic** for the crates.io release; compatibility shims remain where practical so existing projects can migrate gradually.
 
-ICU addresses common challenges in multi-canister architectures, including canister creation & upgrades, cross-canister state management, stable memory handling across upgrades, and establishing a clear canister hierarchy (with a **root** canister orchestrating child canisters). By using ICU, developers can focus on application logic rather than reinventing boilerplate for managing canister lifecycles and interactions.
+## Highlights
 
-## Features
+- 🧩 **Bootstrap macros** – `canic_start!`, `canic_start_root!`, `canic_build!`, and `canic_build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
+- 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
+- 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
+- 🗃️ **Stable memory ergonomics** – `canic_memory!`, `canic_memory_range!`, and `canic_eager_static!` manage IC stable structures safely across upgrades.
+- 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
+- ♻️ **Lifecycle helpers** – shard policies, reserve pools, delegation sessions, and sync cascades keep fleets healthy.
+- 🧪 **Ready for CI** – Rust 2024 edition, MSRV 1.90, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
-- 🧩 Macros: `icu_start!` and `icu_start_root!` wire init/upgrade and expose a rich set of endpoints.
-- 🔐 Auth helpers: composable rules (`auth_require_any!`, `auth_require_all!`) for controllers, parents, children, etc.
-- 🧠 State: in-memory registries for delegation, ICRC standards, and WASM modules.
-- 🧩 Sharding: generic canister shard registry to assign items (Principals) to child canisters with capacity limits.
-- 📦 WASM registry: ship and look up child canister WASMs by `CanisterType`.
-- ♻️ Upgrades: consistent state bundle cascade helpers between parent/children.
-- 🧪 Testing: unit tests across memory/state modules; CI enforces fmt/clippy.
-- 📈 Perf logs: `perf!` macros using `performance_counter(1)` for instruction deltas.
+## Getting Started
 
-## Quickstart
+### 1. Install
 
-Add ICU to your workspace and wire a canister:
-
-1) In your canister crate `build.rs`:
-
-For a root canister:
-
-```rust
-fn main() { icu::icu_build_root!("../icu.toml"); }
-```
-
-For a non-root canister (e.g., example, game, instance, player_hub):
-
-```rust
-fn main() { icu::icu_build!("../icu.toml"); }
-```
-
-2) In your canister `lib.rs`:
-
-```rust
-use icu::prelude::*;
-use icu::canister::EXAMPLE;
-icu_start_root!(); // or icu_start!(EXAMPLE)
-
-const fn icu_setup() {}
-async fn icu_install() {}
-async fn icu_upgrade() {}
-```
-
-See `crates/canisters/root` and `crates/canisters/example` for full patterns.
-
-MSRV: Rust 1.90.0 (pinned via `rust-toolchain.toml`).
-
-## Delegation Sessions 🔑
-
-Short‑lived “delegation sessions” map a temporary session principal to a wallet principal. Useful for frontends delegating limited permissions to canisters.
-
-- Types: `DelegationSession { wallet_pid, expires_at, requesting_canisters }` and `DelegationSessionView` (read model).
-- Expiry: Sessions are considered expired at the boundary (`expires_at <= now`).
-- Typical flow: 🧪 create session → 📡 track usage → 🔍 resolve wallet → ⏳ expire or ❌ revoke.
-
-Endpoints (provided by `icu_endpoints!` and enabled when delegation is turned on in config):
-
-- 📥 `icu_delegation_register(args)` (update): register a session for the caller wallet.
-- 👣 `icu_delegation_track(session_pid)` (update): record the calling canister as a requester.
-- 🔎 `icu_delegation_get(session_pid)` (query): fetch session view (`expires_at` can be compared to the current time to determine expiry).
-- 🧹 Cleanup: expired sessions are pruned automatically during registrations (every 1000 calls). There is no public cleanup endpoint.
-- 📜 `icu_delegation_list_all()` (query): list all sessions. Auth: controller only.
-- 🧭 `icu_delegation_list_by_wallet(wallet_pid)` (query): list sessions for a wallet. Auth: controller only.
-
-Notes:
-- Minimum duration: 60s ⏱️, Maximum: 24h 🕛 (configurable in code today).
-- Registry also exposes pure functions (e.g., `list_all_sessions`) used by these endpoints.
-- Delegation endpoints are cfg-gated. Enable per-canister by setting `delegation = true` in `icu.toml` under the relevant `[canisters.<name>]` entry so that `icu_build!` emits the feature.
-
-## WASM Registry 📦
-
-Root canisters can import a static set of gzipped child canister WASMs and expose them by `CanisterType`.
-
-- Import: `WasmRegistry::import(WASMS)` runs during `icu_start_root!()` setup.
-- Lookup: `WasmRegistry::try_get(&CanisterType)` returns a `WasmModule` with bytes and module hash.
-- Usage: `ops::canister` fetches the module to `install_code` and stores the module hash in the registry.
-
-Tip: add your WASMs to the `WASMS` slice in the root canister crate. Example is in `crates/canisters/root/src/lib.rs`.
-
-## Sharding 📦
-
-- Registry: assign items (`Principal`) to shard canisters with capacities.
-- Use `CanisterShardRegistry::register(pid, capacity)` to add/resize shards.
-- Assign items automatically with `icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item, policy, parents, None)`.
-
-Admin endpoints (controller only; when sharder is enabled): use a single command endpoint
-`icu_shard_admin(cmd: icu::ops::shard::AdminCommand) -> icu::ops::shard::AdminResult` where `AdminCommand` can be:
-- `Register { pid, pool, capacity }`
-- `Audit`
-- `Drain { pool, shard_pid, max_moves }`
-- `Rebalance { pool, max_moves }`
-- `Decommission { shard_pid }`
-
-Note: These operations update the assignment registry only. They do not move
-application data/state between shards. Your application should orchestrate data
-migration before/after changing assignments.
-
-Policy example:
-
-```rust
-use icu::prelude::*;
-let policy = icu::ops::shard::ShardPolicy { initial_capacity: 100, max_shards: 64, growth_threshold_pct: 80 };
-let shard = icu::ops::shard::ensure_item_assignment(&CanisterType::new("game_instance_shard"), item_principal, policy, &parents, None).await?;
-```
-
-## ICRC Support 📚
-
-- ICRC‑10: `icrc10_supported_standards()` returns the `(name, url)` pairs enabled by config.
-- ICRC‑21: Register consent message handlers via `Icrc21Registry::register` or `register_static_with`, then call `icrc21_canister_call_consent_message`.
-
-## Dev UX 🛠️
-
-- Run all checks: `make all`
-- Lint: `make clippy` (warnings denied) • Format: `make fmt` / `make fmt-check`
-- Tests: `make test` (includes optional dfx flow if available)
-- Examples: `make examples` or `cargo build -p icu --examples`
-
-Some targets (e.g., `make build`, `make all`, and version bumps) enforce a clean git working tree.
-
-## Contributing
-
-This is an internal project. External contributions are not accepted. For internal changes, follow the Repository Guidelines in `AGENTS.md` and use `VERSIONING.md` / `RELEASE_GUIDE.md` for tagging and release flow.
-
-### Setup
-
-Install required toolchain components once:
+Inside your workspace:
 
 ```bash
-make install-canister-deps
+cargo add canic
 ```
+
+Or reference the workspace path if you pulled the repository directly.
+
+### 2. Configure `build.rs`
+
+Every canister crate should declare a config file (default name: `canic.toml`). Use one of the provided build macros:
+
+```rust
+// Root canister build.rs
+fn main() {
+    canic::canic_build_root!("../canic.toml");
+}
+```
+
+```rust
+// Non-root canister build.rs
+fn main() {
+    canic::canic_build!("../canic.toml");
+}
+```
+
+The macro validates the TOML during compilation, emits the right `cfg` flags (e.g. `canic_capability_delegation`), and exposes the canonical config path via `CANIC_CONFIG_PATH`.
+
+### 3. Bootstrap your canister
+
+In `lib.rs`:
+
+```rust
+use canic::prelude::*;
+use canic::canister::EXAMPLE;
+
+canic_start!(EXAMPLE); // or canic_start_root!() for the orchestrator canister
+
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
+```
+
+See `crates/canisters/root` and `crates/canisters/example` for end-to-end patterns, including WASM registries and endpoint exports.
+
+### 4. Define your topology
+
+Populate `canic.toml` with canister metadata, capabilities, and auth lists. The schema is documented in `CONFIG.md`.
+
+## Layered Architecture
+
+Canic enforces clear separation between storage, transient state, orchestration logic, and public endpoints:
+
+- `memory/` – stable data backed by `ic-stable-structures` (e.g. shard registries, reserve pools).
+- `state/` – volatile caches and session stores that reset on upgrade.
+- `ops/` – business logic tying state + memory together (sharding policies, delegation flows, reserve management).
+- `endpoints/` – macro-generated IC entrypoints that delegate to `ops/` and keep boundary code minimal.
+
+Endpoints must call into `ops/`; they should never touch `memory/` or `state/` directly.
+
+## Capabilities & Endpoints
+
+### Delegation Sessions 🔑
+
+Enabled via `delegation = true` in `canic.toml`. When active, `canic_endpoints_delegation!()` (included automatically) exports:
+
+- `icu_delegation_register(args)` – register a session for the caller wallet (update).
+- `icu_delegation_track(session_pid)` – record a requesting canister (update).
+- `icu_delegation_get(session_pid)` – fetch session metadata (query).
+- `icu_delegation_list_all()` / `icu_delegation_list_by_wallet(pid)` – controller-only admin views.
+- `icu_delegation_revoke(pid)` – parent-or-self revocation (update).
+
+Sessions auto-clean during registrations; no manual cleanup endpoint is exposed.
+
+### Sharding 📦
+
+`canic::ops::shard` assigns tenants to shard canisters according to a `ShardPolicy` (initial capacity, max shards, growth thresholds). Admin work flows through a single controller-only endpoint:
+
+```rust
+icu_sharding_admin(cmd: canic::ops::sharding::AdminCommand)
+    -> Result<canic::ops::sharding::AdminResult, canic::Error>
+```
+
+Command variants cover register, audit, drain, rebalance, and decommission flows. Your application is responsible for data migration around these moves.
+
+### Scaling & Reserve Pools ⚖️
+
+- `canic_endpoints_scaling!()` exposes `icu_scaling_registry()` for controller insight.
+- Root canisters manage spare capacity through `canic::ops::reserve` and the `icu_reserve_*` endpoints.
+
+### ICRC Support 📚
+
+The base endpoint bundle includes:
+
+- `icrc10_supported_standards()`
+- `icrc21_canister_call_consent_message(request)`
+
+Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
+
+## Tooling & DX
+
+- Format: `cargo fmt --all`
+- Lint: `make clippy`
+- Test: `make test`
+- Build release WASMs: `make build`
+- Run the example suite: `make examples` or `cargo build -p canic --examples`
+
+`rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 
 ## Examples
 
-Example files:
+Explore the runnable examples under `crates/canic/examples/`:
 
-- [crates/icu/examples/auth_rules.rs](crates/icu/examples/auth_rules.rs) — basic auth rule composition
-- [crates/icu/examples/minimal_root.rs](crates/icu/examples/minimal_root.rs) — minimal root canister scaffold
-- [crates/icu/examples/ops_create_canister.rs](crates/icu/examples/ops_create_canister.rs) — create-canister request flow
- - [crates/icu/examples/shard_lifecycle.rs](crates/icu/examples/shard_lifecycle.rs) — simulate shard register/assign, rebalance, drain, and decommission
-
-Build all examples:
+- `auth_rules.rs` – compose guard policies.
+- `minimal_root.rs` – bootstrap a bare-bones orchestrator.
+- `ops_create_canister.rs` – walk through the create-canister flow.
+- `shard_lifecycle.rs` – simulate register/assign/drain/rebalance operations.
 
 ```bash
-make examples
-# or
-cargo build -p icu --examples
+cargo run -p canic --example auth_rules
 ```
 
-Run a specific example: `cargo run -p icu --example auth_rules`
+## Project Status & Contributing
 
-Note: The `ic` cfg is used internally for tests/build tooling and is not a user-settable feature flag.
+Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `VERSIONING.md`, and `RELEASE_GUIDE.md` for workflow expectations.
 
-## Licensing
+## License
 
-Proprietary and Confidential. All rights reserved. See `LICENSE`.
+Proprietary and confidential. See `LICENSE` for details.
 
-## Module Guides
-
-### Directory & Registry
-
-- Source of truth: `CanisterRegistry` (root-only) tracks type, parent, lifecycle, and module hash.
-- Directory is a read model generated from the registry on root and cascaded to children.
-- Writes:
-  - Root does not mutate the directory directly; it generates and cascades a full view.
-  - Children accept full re-imports; no partial insert/remove APIs exist.
-- Invariants:
-  - Root directory view equals generation from registry; children align after cascade.
-
-### Spec
-
-- Purpose: Protocol and spec types for IC/ICRC/SNS.
-- Scope: Candid-friendly data structures only; no business logic.
-- Stability: Aim to keep types stable; document breaking changes in the changelog.
-Queries (controller only):
-- `icu_shard_registry() -> Result<CanisterShardRegistryView, IcuError>`
-- `icu_shard_lookup(item, pool) -> Result<Option<Principal>, IcuError>`

@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 
-use icu::{
+use canic::{
     Error,
     canister::SHARD_HUB,
     ops::sharding::{ShardingPlan, assign_to_pool, plan_assign_to_pool},
@@ -8,14 +8,14 @@ use icu::{
 };
 
 //
-// ICU
+// CANIC
 //
 
-icu_start!(SHARD_HUB);
+canic_start!(SHARD_HUB);
 
-async fn icu_setup() {}
-async fn icu_install(_: Option<Vec<u8>>) {}
-async fn icu_upgrade() {}
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
 
 //
 // ENDPOINTS

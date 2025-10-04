@@ -11,10 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
-icu = { workspace = true }
+canic = { workspace = true }
 
 [build-dependencies]
-icu = { workspace = true }
+canic = { workspace = true }
 
 [lints]
 workspace = true
