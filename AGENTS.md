@@ -38,17 +38,24 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 ## 📦 Project Structure
 
 ```
+assets/                 # Shared documentation media (README logo, etc.)
 crates/
-├─ icu/                 # Core library (shared)
-└─ canisters/           # Internet Computer canisters
-   ├─ root/
-   ├─ example/
-   ├─ game/
-   ├─ instance/
-   └─ player_hub/
-scripts/                # Build, versioning, env helpers
+├─ canic/              # Core library crate (macros, memory/state, ops, auth)
+└─ canisters/          # Reference Internet Computer canisters
+   ├─ root/            # Orchestrator wiring the full stack
+   ├─ shard/           # Shard canister implementation
+   ├─ shard_hub/       # Shard pool coordinator
+   ├─ scale/           # Scaling worker example
+   ├─ scale_hub/       # Scaling coordinator example
+   ├─ delegation/      # Delegation/session flows
+   └─ blank/           # Minimal test canister
+scripts/                # Build, versioning, and environment helpers
 .github/workflows/      # CI/CD pipelines
+dfx.json                # Local canister topology for dfx
+Makefile                # Convenience targets (`make fmt`, `make test`, ...)
 target/                 # Build output (ignored)
+AGENTS.md, CONFIG.md, VERSIONING.md, RELEASE_GUIDE.md
+                       # Contributor and release documentation
 ```
 
 
@@ -77,7 +84,7 @@ We separate responsibilities into **three main layers**:
 - Example: `ops/shard.rs` orchestrates shard lifecycle.
 
 ### `endpoints/`
-- Public IC endpoints defined via macros (`icu_endpoints_*`).
+- Public IC endpoints defined via macros (`canic_endpoints_*`).
 - Must call **`ops/` only**, never touch `memory/` or `state/` directly.
 - Admin operations are grouped into a single update call per domain (e.g., `shard_admin`, `delegation_admin`).
 

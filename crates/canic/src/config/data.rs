@@ -44,9 +44,6 @@ pub struct ConfigData {
     pub controllers: Vec<Principal>,
 
     #[serde(default)]
-    pub cycle_tracker: bool,
-
-    #[serde(default)]
     pub reserve: CanisterReserve,
 
     #[serde(default)]
