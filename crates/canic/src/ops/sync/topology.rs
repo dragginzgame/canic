@@ -14,7 +14,11 @@ use crate::{
     ops::{OpsError, prelude::*, sync::SyncError},
 };
 
-/// Snapshot describing a canister’s view of the topology.
+///
+/// TopologyBundle
+/// Snapshot describing a canister’s view of the topology
+///
+
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologyBundle {
     pub subtree: Vec<CanisterSummary>,

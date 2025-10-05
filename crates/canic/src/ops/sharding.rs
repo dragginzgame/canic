@@ -22,7 +22,11 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
-/// Errors produced by sharding operations (policy / orchestration layer).
+///
+/// ShardingError
+/// Errors produced by sharding operations (policy / orchestration layer)
+///
+
 #[derive(Debug, ThisError)]
 pub enum ShardingError {
     #[error("shard cap reached")]
@@ -47,7 +51,11 @@ impl From<ShardingError> for Error {
     }
 }
 
-/// Policy thresholds derived from configuration for managing a shard pool.
+///
+/// ShardingPolicy
+/// Policy thresholds derived from configuration for managing a shard pool
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct ShardingPolicy {
     pub initial_capacity: u32,
@@ -55,7 +63,11 @@ pub struct ShardingPolicy {
     pub growth_threshold_pct: u32,
 }
 
-/// Dry-run planning output for assigning a tenant to a shard.
+///
+/// ShardingPlan
+/// Dry-run planning output for assigning a tenant to a shard
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ShardingPlan {
     pub state: ShardingPlanState,
@@ -65,7 +77,11 @@ pub struct ShardingPlan {
     pub total_used: u64,
 }
 
-/// State of a dry-run shard assignment.
+///
+/// ShardingPlanState
+/// State of a dry-run shard assignment
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum ShardingPlanState {
     AlreadyAssigned { pid: Principal },
@@ -74,7 +90,9 @@ pub enum ShardingPlanState {
     CreateBlocked { reason: String },
 }
 
+///
 /// Administrative shard operations, grouped under a single endpoint.
+///
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminCommand {
     Assign {
@@ -96,7 +114,11 @@ pub enum AdminCommand {
     },
 }
 
+///
+/// AdminCommand
 /// Result of executing an [`AdminCommand`].
+///
+
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminResult {
     Ok,

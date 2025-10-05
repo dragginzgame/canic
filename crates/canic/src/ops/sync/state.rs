@@ -12,7 +12,11 @@ use crate::{
     ops::{OpsError, prelude::*},
 };
 
-/// Snapshot of mutable state sections that can be propagated to peers.
+///
+/// StateBundle
+/// Snapshot of mutable state sections that can be propagated to peers
+///
+
 #[derive(CandidType, Copy, Clone, Debug, Default, Deserialize)]
 pub struct StateBundle {
     pub app_state: Option<AppStateData>,

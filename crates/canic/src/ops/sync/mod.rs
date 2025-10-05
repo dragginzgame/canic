@@ -6,7 +6,11 @@ pub mod topology;
 use crate::{Error, ThisError, ops::OpsError};
 use candid::Principal;
 
-/// Errors raised during synchronization.
+///
+/// SyncError
+/// Errors raised during synchronization
+///
+
 #[derive(Debug, ThisError)]
 pub enum SyncError {
     #[error("canister not found")]

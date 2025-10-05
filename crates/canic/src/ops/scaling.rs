@@ -19,7 +19,7 @@ use candid::Principal;
 
 ///
 /// ScalingError
-/// Errors raised by scaling operations (policy / orchestration layer).
+/// Errors raised by scaling operations (policy / orchestration layer)
 ///
 
 #[derive(Debug, ThisError)]
@@ -37,7 +37,11 @@ impl From<ScalingError> for Error {
     }
 }
 
-/// Result of a dry-run evaluation for scaling decisions.
+///
+/// ScalingPlan
+/// Result of a dry-run evaluation for scaling decisions
+///
+
 #[derive(Clone, Debug)]
 pub struct ScalingPlan {
     /// Whether a new worker should be spawned.

@@ -30,7 +30,11 @@ thread_local! {
     static CALL_COUNT: std::cell::RefCell<u64> = const { std::cell::RefCell::new(0) };
 }
 
-/// Errors produced by the delegation ops layer.
+///
+/// DelegationError
+/// Errors produced by the delegation ops layer
+///
+
 #[derive(Debug, thiserror::Error)]
 pub enum DelegationError {
     #[error("session length must be at least {0} seconds")]
