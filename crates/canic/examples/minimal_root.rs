@@ -10,9 +10,9 @@ mod canister {
     // Set up a minimal root canister with default hooks.
     canic_start_root!();
 
-    const fn icu_setup() {}
-    async fn icu_install() {}
-    async fn icu_upgrade() {}
+    async fn canic_setup() {}
+    async fn canic_install() {}
+    async fn canic_upgrade() {}
 
     // Minimal WASMS set required by the macro; empty in this example.
     pub static WASMS: &[(CanisterType, &[u8])] = &[];
