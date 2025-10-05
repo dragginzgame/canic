@@ -1,3 +1,11 @@
+//! Public macro entry points used across Canic.
+//!
+//! The submodules host build-time helpers (`build`), canister lifecycle
+//! scaffolding (`start`), memory registry shortcuts (`memory`), thread-local
+//! eager initializers (`thread`), and endpoint generators (`endpoints`). This
+//! top-level module exposes lightweight instrumentation macros shared across
+//! those layers.
+
 pub mod build;
 pub mod endpoints;
 pub mod memory;
@@ -5,7 +13,12 @@ pub mod start;
 pub mod storable;
 pub mod thread;
 
-// eager_init
+/// Run `$body` during process start-up using `ctor`.
+///
+/// The macro expands to a `ctor` hook so eager TLS initializers can register
+/// their work before any canister lifecycle hooks execute. Prefer wrapping
+/// the body in a separate function for larger initializers to keep the hook
+/// simple.
 #[macro_export]
 macro_rules! eager_init {
     ($body:block) => {
@@ -16,7 +29,11 @@ macro_rules! eager_init {
     };
 }
 
-// log
+/// Emit a structured log line with consistent coloring and headers.
+///
+/// Accepts an optional [`Log`](crate::Log) level followed by a format string
+/// and arguments, mirroring `format!`. When the level is omitted the macro
+/// defaults to [`Log::Debug`](crate::Log::Debug).
 #[macro_export]
 macro_rules! log {
     // Explicit level, no args
@@ -66,7 +83,12 @@ macro_rules! log {
     }};
 }
 
-// perf
+/// Log elapsed instruction counts since the last `perf!` invocation.
+///
+/// Records the delta in instructions between calls and emits a
+/// [`Log::Perf`](crate::Log::Perf)
+/// entry with the provided label (any tokens accepted by `format!`). Use this
+/// to highlight hot paths in long-running maintenance tasks.
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
@@ -91,7 +113,13 @@ macro_rules! perf {
     }};
 }
 
-// perf_start
+/// Record a single-call instruction counter snapshot when the surrounding
+/// scope exits.
+///
+/// Expands to a `defer!` guard that logs the total instructions consumed in
+/// the enclosing scope, tagged as [`Log::Perf`](crate::Log::Perf). Pair this
+/// with manual checkpoints logged via [`macro@perf`] to track both cumulative and incremental
+/// usage.
 #[macro_export]
 macro_rules! perf_start {
     () => {

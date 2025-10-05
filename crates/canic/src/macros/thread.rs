@@ -1,3 +1,9 @@
+/// Declare a thread-local static and schedule an eager initialization touch.
+///
+/// Expands to a `thread_local!` block and ensures the TLS slot is accessed
+/// during the eager-init phase so subsequent calls observe a fully
+/// initialized value. Use this for caches that must exist before canister
+/// entry points run.
 #[macro_export]
 macro_rules! eager_static {
     // match: vis static NAME: TYPE = INIT;

@@ -1,7 +1,11 @@
-//
-// PUBLIC MACROS
-//
+//! Macros used to bootstrap Canic canisters.
 
+/// Configure lifecycle hooks for non-root Canic canisters.
+///
+/// This macro wires up `init` and `post_upgrade` entry points that bootstrap
+/// configuration, memory, timers, and eager TLS state before deferring to the
+/// user-provided `canic_setup`, `canic_install`, and `canic_upgrade`
+/// functions. It also exposes the standard Canic endpoint suites.
 #[macro_export]
 macro_rules! canic_start {
     ($canister_type:expr) => {
@@ -66,6 +70,11 @@ macro_rules! canic_start {
     };
 }
 
+/// Configure lifecycle hooks for the root Canic orchestrator canister.
+///
+/// Similar to [`macro@canic_start`] but tailored to the root environment: it
+/// initializes the global subnet registry, root-only capabilities, and
+/// exports root-specific endpoints.
 #[macro_export]
 macro_rules! canic_start_root {
     () => {
@@ -155,10 +164,11 @@ macro_rules! canic_start_root {
     };
 }
 
-///
-/// PRIVATE MACROS
-///
+//
+// Private helpers
+//
 
+/// Load the embedded configuration during init and upgrade hooks.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_load_config {

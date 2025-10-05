@@ -1,3 +1,11 @@
+//! Build-script helpers that embed and validate `canic.toml`.
+
+/// Embed the shared Canic configuration into a canister crate's build script.
+///
+/// Reads the provided TOML file (relative to the workspace root), validates it
+/// using [`Config`](crate::config::Config), exposes relevant `cfg` flags, and
+/// sets `CANIC_CONFIG_PATH` for later use by `include_str!`. Canister crates
+/// typically invoke this from `build.rs`.
 #[macro_export]
 macro_rules! canic_build {
     ($file:expr) => {{
@@ -49,6 +57,10 @@ macro_rules! canic_build {
     }};
 }
 
+/// Embed the shared configuration for the root orchestrator canister.
+///
+/// Performs the same validation as [`macro@canic_build`] and also marks the
+/// build with the `canic_root` cfg.
 #[macro_export]
 macro_rules! canic_build_root {
     ($file:expr) => {{
@@ -62,7 +74,8 @@ macro_rules! canic_build_root {
     }};
 }
 
-// Internal helper — not exported
+/// Internal helper shared by [`macro@canic_build`] and
+/// [`macro@canic_build_root`].
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_build_internal {

@@ -1,4 +1,4 @@
-// canic_endpoints_root
+/// Generate the endpoint surface for the root orchestrator canister.
 #[macro_export]
 macro_rules! canic_endpoints_root {
     () => {
@@ -122,7 +122,7 @@ macro_rules! canic_endpoints_root {
     };
 }
 
-// canic_endpoints_nonroot
+/// Generate the endpoint surface for non-root canisters.
 #[macro_export]
 macro_rules! canic_endpoints_nonroot {
     () => {
