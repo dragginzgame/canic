@@ -1,9 +1,13 @@
-///
-/// MiniCBOR Versions
-/// (much faster, doesn't support u128)
-///
+//! Derive `ic-stable-structures` storage traits using Mini CBOR serialization.
+//!
+//! The helper macros below wire types into the Canister Development Kit's
+//! `Storable` trait by delegating to Canic's MiniCBOR helpers. The bounded
+//! variant requires callers to specify a maximum serialized size and whether
+//! the size is fixed; the unbounded variant is suitable for archival data
+//! that can grow, at the cost of larger metadata cells.
 
-// impl_storable_bounded
+/// Implement [`Storable`](ic_stable_structures::storable::Storable) with a
+/// bounded size guarantee.
 #[macro_export]
 macro_rules! impl_storable_bounded {
     ($ident:ident, $max_size:expr, $is_fixed_size:expr) => {
@@ -29,7 +33,8 @@ macro_rules! impl_storable_bounded {
     };
 }
 
-// impl_storable_unbounded
+/// Implement [`Storable`](ic_stable_structures::storable::Storable) without a
+/// size bound.
 #[macro_export]
 macro_rules! impl_storable_unbounded {
     ($ident:ident) => {

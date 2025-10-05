@@ -1,33 +1,31 @@
+/// Declare a stable-memory slot backed by the Canic memory registry.
 ///
-/// Declare a stable memory handle for a specific ID, tied to the current crate.
-/// - Enqueues the registration (`defer_register`) so it will be validated later.
-/// - Returns the `VirtualMemory` handle immediately so you can use it in
-///   `Cell`, `BTreeMap`, etc.
-///
+/// The macro enqueues a registration for later validation (during
+/// `force_init_all_tls`) and immediately returns the
+/// [`VirtualMemory`](crate::cdk::structures::memory::VirtualMemory)
+/// handle so callers can wrap it in `Cell`, `BTreeMap`, and other structures.
+/// Memory IDs are automatically namespaced per crate via `CARGO_PKG_NAME`.
 #[macro_export]
 macro_rules! ic_memory {
     ($label:ident, $id:expr) => {{
-        // Enqueue this memory ID registration for later processing during
-        // `force_init_all_tls()`. The crate key is always derived from
-        // `CARGO_PKG_NAME`, so all memory for a crate lives under one namespace.
+        // Enqueue this memory ID registration for deferred validation.
+        // All memory for a crate lives under the `CARGO_PKG_NAME` namespace.
         $crate::memory::registry::defer_register(
             $id,
             env!("CARGO_PKG_NAME"),
             concat!(module_path!(), "::", stringify!($label)),
         );
 
-        // Return the stable memory handle immediately so it can be wrapped in
-        // higher-level data structures (BTreeMap, Cell, Vec, etc.).
+        // Return the stable memory handle immediately for further wrapping.
         $crate::memory::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
 
+/// Reserve a contiguous block of stable-memory IDs for the current crate.
 ///
-/// Reserve a contiguous block of memory IDs for the current crate.
-/// - Enqueues the reservation (`defer_reserve_range`) so it will be validated later.
-/// - Uses the crate name (`CARGO_PKG_NAME`) as the registry key, matching `ic_memory!`.
-///
+/// Stores the range request for validation during eager TLS initialization.
+/// The reservation shares the crate namespace used by [`macro@ic_memory`].
 #[macro_export]
 macro_rules! ic_memory_range {
     ($start:expr, $end:expr) => {{
