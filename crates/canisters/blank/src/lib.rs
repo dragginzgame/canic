@@ -1,3 +1,8 @@
+//!
+//! Blank demo canister used in tests to exercise provisioning flows.
+//! Lives in `crates/canisters` solely as a showcase for ops helpers.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::{

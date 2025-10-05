@@ -1,3 +1,8 @@
+//!
+//! Shard hub demo canister coordinating shard assignments for testing.
+//! Ships in `crates/canisters` solely to showcase sharding functionality.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::{

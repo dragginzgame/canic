@@ -1,3 +1,8 @@
+//!
+//! Delegation demo canister exercising session-related flows for testing.
+//! Part of the showcase canisters that live under `crates/canisters`.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::{canister::DELEGATION, prelude::*};

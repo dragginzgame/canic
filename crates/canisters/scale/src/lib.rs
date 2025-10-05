@@ -1,3 +1,8 @@
+//!
+//! Scaling worker demo canister used to exercise the ops scaling helpers.
+//! Part of the `crates/canisters` showcase suite.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::{canister::SCALE, prelude::*};
