@@ -17,7 +17,11 @@ use crate::{
 use candid::encode_one;
 use thiserror::Error as ThisError;
 
-/// Errors produced during request dispatch or response handling.
+///
+/// RequestError
+/// Errors produced during request dispatch or response handling
+///
+
 #[derive(Debug, ThisError)]
 pub enum RequestError {
     #[error("this request is not allowed to be called on root")]
@@ -27,7 +31,11 @@ pub enum RequestError {
     InvalidResponseType,
 }
 
+///
+/// Request
 /// Root-directed orchestration commands.
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
     CreateCanister(CreateCanisterRequest),
@@ -35,7 +43,11 @@ pub enum Request {
     Cycles(CyclesRequest),
 }
 
-/// Payload for [`Request::CreateCanister`].
+///
+/// CreateCanisterRequest
+/// Payload for [`Request::CreateCanister`]
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
     pub canister_type: CanisterType,
@@ -43,7 +55,11 @@ pub struct CreateCanisterRequest {
     pub extra_arg: Option<Vec<u8>>,
 }
 
-/// Parent-location choices for a new canister.
+///
+/// CreateCanisterParent
+/// Parent-location choices for a new canister
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
@@ -52,14 +68,22 @@ pub enum CreateCanisterParent {
     Directory(CanisterType),
 }
 
-/// Payload for [`Request::UpgradeCanister`].
+///
+/// UpgradeCanisterRequest
+/// Payload for [`Request::UpgradeCanister`]
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
     pub canister_type: CanisterType,
 }
 
-/// Payload for [`Request::Cycles`].
+///
+/// CyclesRequest
+/// Payload for [`Request::Cycles`]
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
     pub cycles: u128,

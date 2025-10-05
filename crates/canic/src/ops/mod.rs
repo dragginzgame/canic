@@ -40,7 +40,11 @@ use crate::{
     memory::state::CanisterState,
 };
 
-/// Error envelope shared across operations submodules.
+///
+/// OpsError
+/// Error envelope shared across operations submodules
+///
+
 #[derive(Debug, ThisError)]
 pub enum OpsError {
     /// Raised when a function requires root context, but was called from a child.

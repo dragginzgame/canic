@@ -25,7 +25,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 ## 📁 Repository Layout
 
 - `crates/canic/` – core library crate with macros, memory/state layers, ops, and auth utilities.
-  -     `src/cdk` - the IC CDK with a few changes (docs coming soon)
+  - `src/cdk` - the IC CDK with a few changes (docs coming soon)
   - 🧩 `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
   - 🧠 `src/memory/` – stable storage abstractions and registries.
   - ⚡ `src/state/` – volatile runtime state caches.

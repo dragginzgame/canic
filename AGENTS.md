@@ -113,14 +113,17 @@ We separate responsibilities into **three main layers**:
       // or
       log!(Log::Info, "moved {} items", items.len());
       ```
-  - Comment/layout baseline: use banner separators for major sections and keep a blank
-    line between doc comments and the item they describe, e.g.
+  - Comment/layout baseline: use banner separators for major sections.
+  - Doc comments on types (`struct`, `enum`, etc.) must be wrapped with empty doc lines for visual padding and stay directly adjacent to the item:
     ```rust
     // -----------------------------------------------------------------------------
     // Section Title
     // -----------------------------------------------------------------------------
 
-    /// Explains what Foo does.
+    ///
+    /// Foo
+    /// Describes the Foo type
+    ///
     struct Foo;
     ```
 - **Linting**: `cargo clippy --workspace -- -D warnings`.
