@@ -1,3 +1,9 @@
+//! Topology synchronization helpers.
+//!
+//! Captures subsets of the canister graph (subtree, parents, directory) and
+//! propagates them down the hierarchy so every node maintains an up-to-date
+//! view of its surroundings.
+
 use crate::{
     Error,
     memory::{
@@ -8,11 +14,7 @@ use crate::{
     ops::{OpsError, prelude::*, sync::SyncError},
 };
 
-///
-/// TopologyBundle
-/// any time the subnet topology changes we sync this
-///
-
+/// Snapshot describing a canister’s view of the topology.
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologyBundle {
     pub subtree: Vec<CanisterSummary>,
@@ -21,6 +23,7 @@ pub struct TopologyBundle {
 }
 
 impl TopologyBundle {
+    /// Construct a bundle rooted at the actual root canister.
     pub fn root() -> Result<Self, Error> {
         let root_summary = CanisterState::try_get_canister()?;
         let root_pid = root_summary.pid;
@@ -88,7 +91,7 @@ pub async fn root_cascade() -> Result<(), Error> {
     Ok(())
 }
 
-/// Cascade from a child: trim bundle to subtree and forward.
+/// Cascade from a child: trim bundle to the child’s subtree and forward.
 pub async fn cascade_children(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
     let self_pid = canister_self();
@@ -102,7 +105,7 @@ pub async fn cascade_children(bundle: &TopologyBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Save state locally on a child canister.
+/// Save topology state locally on a child canister.
 pub fn save_state(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
@@ -134,7 +137,7 @@ pub fn save_state(bundle: &TopologyBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Low-level bundle sender.
+/// Low-level bundle sender used by cascade helpers.
 async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
     let debug = bundle.debug();
     log!(Log::Info, "💦 sync.topology: [{debug}] -> {pid}");

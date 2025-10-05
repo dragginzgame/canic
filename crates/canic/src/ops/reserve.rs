@@ -1,3 +1,10 @@
+//! Lifecycle helpers for the shared reserve pool.
+//!
+//! The root canister maintains an inventory of empty canisters that can be
+//! handed out quickly when scaling. These helpers create new reserve
+//! canisters, top them up with cycles, and reclaim existing canisters into the
+//! pool.
+
 use crate::{
     Error, Log,
     interface::ic::get_cycles,
@@ -9,16 +16,10 @@ use crate::{
     types::{Cycles, TC},
 };
 
-///
-/// Constants
-///
-
+/// Default cycle balance for freshly created reserve canisters (5 T cycles).
 const RESERVE_CANISTER_CYCLES: u128 = 5 * TC;
 
-///
-/// create_reserve_canister
-/// creates an empty canister and registers it with the CanisterReserve
-///
+/// Create an empty reserve canister controlled by root.
 pub async fn create_reserve_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
@@ -32,9 +33,7 @@ pub async fn create_reserve_canister() -> Result<Principal, Error> {
     Ok(canister_pid)
 }
 
-///
-/// move_canister_to_reserve
-///
+/// Move an existing canister into the reserve pool after uninstalling it.
 pub async fn move_canister_to_reserve(canister_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 

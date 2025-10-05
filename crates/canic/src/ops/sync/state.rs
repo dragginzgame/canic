@@ -1,3 +1,8 @@
+//! State synchronization routines shared by root and child canisters.
+//!
+//! Bundles snapshot portions of `AppState` and `SubnetState`, ships them across
+//! the topology, and replays them on recipients.
+
 use crate::{
     Error,
     memory::{
@@ -7,11 +12,7 @@ use crate::{
     ops::{OpsError, prelude::*},
 };
 
-///
-/// StateBundle
-/// this can be made up of multiple optional parts
-///
-
+/// Snapshot of mutable state sections that can be propagated to peers.
 #[derive(CandidType, Copy, Clone, Debug, Default, Deserialize)]
 pub struct StateBundle {
     pub app_state: Option<AppStateData>,
@@ -19,6 +20,7 @@ pub struct StateBundle {
 }
 
 impl StateBundle {
+    /// Construct a bundle containing the root canister’s full state view.
     #[must_use]
     pub fn root() -> Self {
         Self {
@@ -47,10 +49,8 @@ impl StateBundle {
     }
 }
 
-///
 /// Cascade from root: distribute the state bundle to direct children.
-/// If the bundle is empty, do nothing.
-///
+/// No-op when the bundle is empty.
 pub async fn root_cascade(bundle: StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
@@ -70,10 +70,8 @@ pub async fn root_cascade(bundle: StateBundle) -> Result<(), Error> {
     Ok(())
 }
 
-///
-/// Cascade from a child: forward the bundle down to direct children.
-/// If the bundle is empty, do nothing.
-///
+/// Cascade from a child: forward the bundle to direct children.
+/// No-op when the bundle is empty.
 pub async fn cascade_children(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
@@ -106,9 +104,7 @@ pub fn save_state(bundle: &StateBundle) -> Result<(), Error> {
     Ok(())
 }
 
-///
 /// Low-level bundle sender.
-///
 async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let debug = bundle.debug();
     log!(Log::Info, "💦 sync.state: [{debug}] -> {pid}");

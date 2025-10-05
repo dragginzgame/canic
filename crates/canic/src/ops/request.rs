@@ -1,3 +1,10 @@
+//! Helpers that build requests routed through the root canister.
+//!
+//! Non-root canisters submit orchestration requests to root using the
+//! `canic_response` endpoint. This module owns the request envelope and
+//! high-level helpers for creating new canisters, triggering upgrades, or
+//! moving cycles between principals.
+
 use crate::{
     Error,
     cdk::call::Call,
@@ -10,10 +17,7 @@ use crate::{
 use candid::encode_one;
 use thiserror::Error as ThisError;
 
-///
-/// RequestError
-///
-
+/// Errors produced during request dispatch or response handling.
 #[derive(Debug, ThisError)]
 pub enum RequestError {
     #[error("this request is not allowed to be called on root")]
@@ -23,10 +27,7 @@ pub enum RequestError {
     InvalidResponseType,
 }
 
-///
-/// Request
-///
-
+/// Root-directed orchestration commands.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
     CreateCanister(CreateCanisterRequest),
@@ -34,10 +35,7 @@ pub enum Request {
     Cycles(CyclesRequest),
 }
 
-///
-/// CreateCanisterRequest
-///
-
+/// Payload for [`Request::CreateCanister`].
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
     pub canister_type: CanisterType,
@@ -45,10 +43,7 @@ pub struct CreateCanisterRequest {
     pub extra_arg: Option<Vec<u8>>,
 }
 
-///
-/// CreateCanisterParent
-///
-
+/// Parent-location choices for a new canister.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
@@ -57,32 +52,20 @@ pub enum CreateCanisterParent {
     Directory(CanisterType),
 }
 
-///
-/// UpgradeCanisterRequest
-/// upgrades canister_pid with the canister's wasm
-///
-
+/// Payload for [`Request::UpgradeCanister`].
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
     pub canister_type: CanisterType,
 }
 
-///
-/// CyclesRequest
-///
-
+/// Payload for [`Request::Cycles`].
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
     pub cycles: u128,
 }
 
-///
-/// REQUEST
-///
-
-// request
-// sends the request to root::canic_response
+/// Send a request to the root canister and decode its response.
 async fn request(request: Request) -> Result<Response, Error> {
     let root_pid = CanisterContext::try_get_root_pid()?;
 
@@ -93,7 +76,7 @@ async fn request(request: Request) -> Result<Response, Error> {
     call_response.candid::<Result<Response, Error>>()?
 }
 
-// create_canister_request
+/// Ask root to create and install a canister of the given type.
 pub async fn create_canister_request<A>(
     canister_type: &CanisterType,
     parent: CreateCanisterParent,
@@ -120,7 +103,7 @@ where
     }
 }
 
-// upgrade_canister_request
+/// Ask root to upgrade a child canister to its latest registered WASM.
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
@@ -139,7 +122,7 @@ pub async fn upgrade_canister_request(
     }
 }
 
-// cycles_request
+/// Request a cycle transfer from root to the current canister.
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
 

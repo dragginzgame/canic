@@ -1,3 +1,9 @@
+//! Provisioning helpers for creating, installing, and tearing down canisters.
+//!
+//! These routines bundle the multi-phase orchestration that root performs when
+//! scaling out the topology: reserving cycles, recording registry state,
+//! installing WASM modules, and cascading state updates to descendants.
+
 use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
@@ -18,12 +24,13 @@ use candid::Principal;
 // HIGH-LEVEL FLOW
 //
 
-/// Create + install a new canister of given type under parent.
-/// Phases:
-///   0. Allocate PID + cycles
-///   1. Mark Created in registry
-///   2. Install wasm + flip to Installed
-///   3. Cascade updated state from root
+/// Create and install a new canister of the requested type beneath `parent`.
+///
+/// The helper performs the following phases:
+/// 1. Allocate a canister ID and cycles (preferring the reserve pool).
+/// 2. Mark the canister as created in [`SubnetTopology`].
+/// 3. Install the WASM module and flip the registry entry to "Installed".
+/// 4. Cascade updated topology/state from root so children stay in sync.
 pub async fn create_and_install_canister(
     ty: &CanisterType,
     parent: Principal,
@@ -50,11 +57,11 @@ pub async fn create_and_install_canister(
     Ok(pid)
 }
 
-/// Uninstall + delete an existing canister.
-/// Phases:
-///   0. Uninstall wasm code
-///   1. Remove entry from registry
-///   2. Cascade updated state from root
+/// Uninstall and delete an existing canister, returning its recorded type.
+///
+/// After uninstalling the WASM code, the node is removed from
+/// [`SubnetTopology`] and a root cascade is triggered so descendants learn
+/// about the removal.
 pub async fn uninstall_and_delete_canister(canister_pid: Principal) -> Result<String, Error> {
     // uninstall code
     uninstall_code(canister_pid).await?;
@@ -81,8 +88,7 @@ pub async fn uninstall_and_delete_canister(canister_pid: Principal) -> Result<St
 // PHASE 0: Allocation
 //
 
-/// Allocate a canister ID + cycles, preferring the pool.
-/// Returns (pid, cycles).
+/// Allocate a canister ID and cycle balance, preferring the shared reserve.
 pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles), Error> {
     // Try pool first
     if let Some((pid, entry)) = CanisterReserve::pop_first() {
@@ -107,7 +113,7 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<(Principal, Cycles),
 // PHASE 1: Creation
 //
 
-/// Create a fresh canister on IC with given cycles + controllers.
+/// Create a fresh canister on the IC with the configured controllers.
 pub async fn raw_create_canister(cycles: Cycles) -> Result<Principal, Error> {
     let mut controllers = Config::try_get()?.controllers.clone();
     controllers.push(canister_self()); // root always controls
@@ -119,7 +125,7 @@ pub async fn raw_create_canister(cycles: Cycles) -> Result<Principal, Error> {
 // PHASE 2: Installation
 //
 
-/// Install code + initial state into a new canister.
+/// Install code and initial state into a new canister.
 #[allow(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,

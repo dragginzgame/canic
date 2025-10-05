@@ -1,3 +1,10 @@
+//! Root-side handlers that fulfil orchestration requests.
+//!
+//! The root canister exposes `canic_response`, which accepts a
+//! [`Request`](crate::ops::request::Request) and returns a [`Response`]. This
+//! module contains the implementations for create/upgrade/cycle flows plus the
+//! corresponding response payloads.
+
 use crate::{
     Error,
     interface::ic::{deposit_cycles, upgrade_canister},
@@ -13,11 +20,7 @@ use crate::{
     state::wasm::WasmRegistry,
 };
 
-///
-/// Response
-/// the root canister is the only one with the response() endpoint
-///
-
+/// Response payloads produced by root for orchestration requests.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Response {
     CreateCanister(CreateCanisterResponse),
@@ -25,32 +28,23 @@ pub enum Response {
     Cycles(CyclesResponse),
 }
 
-///
-/// CreateCanisterResponse
-///
-
+/// Result of creating and installing a new canister.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
 
-///
-/// UpgradeCanisterResponse
-///
-
+/// Result of an upgrade request (currently empty, reserved for metadata).
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterResponse {}
 
-///
-/// CyclesResponse
-///
-
+/// Result of transferring cycles to a child canister.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }
 
-// response
+/// Handle a root-bound orchestration request and produce a [`Response`].
 pub async fn response(req: Request) -> Result<Response, Error> {
     OpsError::require_root()?;
 
