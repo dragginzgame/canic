@@ -1,3 +1,9 @@
+//! Root-specific orchestration flows.
+//!
+//! The root canister can pre-create canisters configured with `auto_create`
+//! and emit a topology report. These helpers bundle that logic so the
+//! lifecycle macros can trigger it during installation.
+
 use crate::{
     Error,
     config::Config,
@@ -8,7 +14,7 @@ use crate::{
     },
 };
 
-// root_create_canisters
+/// Ensure all auto-create canisters exist and log the current topology.
 pub async fn root_create_canisters() -> Result<(), Error> {
     let cfg = Config::try_get()?;
 

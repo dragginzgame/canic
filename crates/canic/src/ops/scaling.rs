@@ -1,3 +1,10 @@
+//! Policy layer for scaling worker pools.
+//!
+//! Scaling builds on top of [`ScalingRegistry`] and the configuration entries
+//! under `[canisters.<type>.sharder]`. The helpers in this module apply policy
+//! decisions, create new workers when necessary, and surface registry
+//! snapshots for diagnostics.
+
 use crate::{
     Error, ThisError,
     config::data::ScalePool,
@@ -10,20 +17,9 @@ use crate::{
 };
 use candid::Principal;
 
-//
-// OPS / SCALING
-//
-// Policy + orchestration layer on top of `ScalingRegistry`.
-// Handles creation, draining, rebalancing, and dry-run planning.
-//
-
-// -----------------------------------------------------------------------------
-// Errors
-// -----------------------------------------------------------------------------
-
 ///
 /// ScalingError
-/// Errors for scaling operations (policy / orchestration layer).
+/// Errors raised by scaling operations (policy / orchestration layer).
 ///
 
 #[derive(Debug, ThisError)]
@@ -41,15 +37,7 @@ impl From<ScalingError> for Error {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Planning
-// -----------------------------------------------------------------------------
-
-///
-/// ScalingPlan
-/// Result of a dry-run policy evaluation for scaling a pool.
-///
-
+/// Result of a dry-run evaluation for scaling decisions.
 #[derive(Clone, Debug)]
 pub struct ScalingPlan {
     /// Whether a new worker should be spawned.
@@ -57,10 +45,6 @@ pub struct ScalingPlan {
     /// Explanation / debug string for the decision.
     pub reason: String,
 }
-
-// -----------------------------------------------------------------------------
-// Internal helpers
-// -----------------------------------------------------------------------------
 
 /// Look up the config for a given pool on the *current canister*.
 fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
@@ -75,10 +59,6 @@ fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
 
     Ok(pool_cfg.clone())
 }
-
-// -----------------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------------
 
 /// Export a snapshot of the current registry state.
 #[must_use]
@@ -113,7 +93,7 @@ pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
 /// Dry-run the scaling policy for a pool without creating a canister.
 ///
 /// For now this is a stub that always recommends scaling up. Later, it should
-/// evaluate thresholds from [`ScalePool.policy`] and current registry load.
+/// evaluate thresholds from [`ScalePool::policy`] and current registry load.
 pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
     // Ensure pool exists + capability enabled (mirrors create_worker).
     let pool_cfg = get_scaling_pool_cfg(pool)?;

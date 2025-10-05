@@ -1,3 +1,9 @@
+//! Business-logic wrapper around the delegation registry.
+//!
+//! Extends the raw [`state::delegation::DelegationRegistry`] with duration
+//! constraints, logging, cleanup cadence, and helper accessors used by the
+//! endpoint layer.
+
 use crate::{
     Error, Log, log,
     ops::OpsError,
@@ -10,24 +16,6 @@ use candid::Principal;
 use std::time::Duration;
 
 pub use crate::state::delegation::DelegationRegistry;
-
-//
-// Delegation Registry (Ops Layer)
-//
-// Purpose:
-// --------
-// Provides business logic for delegation session management.
-// Builds on the raw state layer (`state::delegation::DelegationRegistry`).
-//
-// Responsibilities:
-// -----------------
-// * Enforce session policies (min/max duration)
-// * Provide read-only session views
-// * Resolve wallet principals from valid sessions
-// * Revoke sessions or all sessions from a wallet
-// * Periodically clean up expired sessions
-// * Log all operations
-//
 
 /// Maximum allowed session lifetime (24h).
 const MAX_EXPIRATION: Duration = Duration::from_secs(24 * 60 * 60);
@@ -42,10 +30,7 @@ thread_local! {
     static CALL_COUNT: std::cell::RefCell<u64> = const { std::cell::RefCell::new(0) };
 }
 
-///
-/// DelegationError
-///
-
+/// Errors produced by the delegation ops layer.
 #[derive(Debug, thiserror::Error)]
 pub enum DelegationError {
     #[error("session length must be at least {0} seconds")]

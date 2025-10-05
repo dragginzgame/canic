@@ -1,3 +1,12 @@
+//! Business-logic helpers that sit between endpoint handlers and the state
+//! layer.
+//!
+//! The ops layer orchestrates multi-step workflows such as provisioning new
+//! canisters, delegating sessions, running scaling/sharding policies, and
+//! synchronizing topology snapshots. Endpoint macros call into these modules so
+//! the public surface remains thin while policy, logging, and validation live
+//! here.
+
 pub mod canister;
 pub mod delegation;
 pub mod request;
@@ -8,6 +17,7 @@ pub mod scaling;
 pub mod sharding;
 pub mod sync;
 
+/// Common imports for ops submodules and consumers.
 pub mod prelude {
     pub use crate::{
         Log,
@@ -30,10 +40,7 @@ use crate::{
     memory::state::CanisterState,
 };
 
-///
-/// OpsError
-///
-
+/// Error envelope shared across operations submodules.
 #[derive(Debug, ThisError)]
 pub enum OpsError {
     /// Raised when a function requires root context, but was called from a child.
@@ -80,7 +87,7 @@ impl OpsError {
     }
 }
 
-// cfg_current_canister
+/// Fetch the configuration record for the currently executing canister.
 pub fn cfg_current_canister() -> Result<CanisterConfig, Error> {
     let this_ty = CanisterState::try_get_canister()?.ty;
     let cfg = Config::try_get_canister(&this_ty)?;

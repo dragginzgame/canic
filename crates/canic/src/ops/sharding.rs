@@ -1,3 +1,10 @@
+//! Policy layer for sharding tenant workloads across pools.
+//!
+//! Sharding orchestrates maintained shard registries, enforcing config-driven
+//! policies around capacity, growth thresholds, and tenant assignment. This
+//! module wraps [`ShardingRegistry`] to provide admin commands, dry-run
+//! planners, and helper flows for assigning, draining, or rebalancing shards.
+
 use crate::{
     Error, Log, ThisError,
     config::Config,
@@ -15,22 +22,7 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
-//
-// OPS / SHARDING
-//
-// Policy + orchestration layer on top of `ShardingRegistry`.
-// Handles creation, draining, rebalancing, and dry-run planning.
-//
-
-// -----------------------------------------------------------------------------
-// Errors
-// -----------------------------------------------------------------------------
-
-///
-/// ShardingError
-/// Errors for sharding operations (policy / orchestration layer).
-///
-
+/// Errors produced by sharding operations (policy / orchestration layer).
 #[derive(Debug, ThisError)]
 pub enum ShardingError {
     #[error("shard cap reached")]
@@ -55,15 +47,7 @@ impl From<ShardingError> for Error {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Policy types
-// -----------------------------------------------------------------------------
-
-///
-/// ShardingPolicy
-/// Policy for managing shards in a pool.
-///
-
+/// Policy thresholds derived from configuration for managing a shard pool.
 #[derive(Clone, Copy, Debug)]
 pub struct ShardingPolicy {
     pub initial_capacity: u32,
@@ -71,11 +55,7 @@ pub struct ShardingPolicy {
     pub growth_threshold_pct: u32,
 }
 
-///
-/// ShardingPlan
 /// Dry-run planning output for assigning a tenant to a shard.
-///
-
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ShardingPlan {
     pub state: ShardingPlanState,
@@ -85,11 +65,7 @@ pub struct ShardingPlan {
     pub total_used: u64,
 }
 
-///
-/// ShardingPlanState
-/// State of a planned shard assignment.
-///
-
+/// State of a dry-run shard assignment.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum ShardingPlanState {
     AlreadyAssigned { pid: Principal },
@@ -98,15 +74,7 @@ pub enum ShardingPlanState {
     CreateBlocked { reason: String },
 }
 
-// -----------------------------------------------------------------------------
-// Admin API
-// -----------------------------------------------------------------------------
-
-///
-/// AdminCommand
-/// Administrative shard operations, combined under a single endpoint.
-///
-
+/// Administrative shard operations, grouped under a single endpoint.
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminCommand {
     Assign {
@@ -128,11 +96,7 @@ pub enum AdminCommand {
     },
 }
 
-///
-/// AdminResult
-/// Result of an admin command.
-///
-
+/// Result of executing an [`AdminCommand`].
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminResult {
     Ok,
@@ -168,10 +132,6 @@ pub async fn admin_command(cmd: AdminCommand) -> Result<AdminResult, Error> {
         }
     }
 }
-
-// -----------------------------------------------------------------------------
-// Internal helpers
-// -----------------------------------------------------------------------------
 
 /// Check whether a pool can create a new shard under the given policy.
 const fn ensure_can_create(
@@ -210,10 +170,6 @@ fn get_shard_pool_cfg(pool: &str) -> Result<(CanisterType, ShardingPolicy), Erro
         },
     ))
 }
-
-// -----------------------------------------------------------------------------
-// Core API
-// -----------------------------------------------------------------------------
 
 /// Lookup the shard assigned to a tenant (if any).
 #[must_use]
