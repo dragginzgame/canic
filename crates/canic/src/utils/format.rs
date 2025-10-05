@@ -1,9 +1,13 @@
+//!
+//! Small formatting helpers shared across logs and UI responses.
+//!
+
 ///
-/// Ellipsize a string in the middle if its visible character count exceeds `threshold`.
+/// Ellipsize a string in the middle when it exceeds the `threshold`.
 ///
-/// Produces: first `head` chars, a single Unicode ellipsis '…', then last `tail` chars.
-/// Returns the original string if it does not exceed the threshold, or if `head + 1 + tail`
-/// is not less than the threshold.
+/// Produces: first `head` chars, a Unicode ellipsis '…', then last `tail` chars.
+/// Returns the original string if it does not exceed the threshold, or if the
+/// requested head/tail slice would not shorten it.
 ///
 #[must_use]
 pub fn ellipsize_middle(s: &str, threshold: usize, head: usize, tail: usize) -> String {

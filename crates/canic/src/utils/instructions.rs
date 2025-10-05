@@ -1,7 +1,10 @@
-///
-/// Instructions
-///
+//!
+//! Helpers for formatting raw instruction counts into friendly strings.
+//!
 
+///
+/// Format an instruction count using engineering suffixes (K/M/B/T).
+///
 #[must_use]
 #[allow(clippy::cast_precision_loss)]
 pub fn format_instructions(n: u64) -> String {
