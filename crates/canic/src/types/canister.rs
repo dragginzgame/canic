@@ -1,3 +1,9 @@
+//!
+//! Strongly-typed identifiers representing canister roles within the project.
+//! Provides string-backed wrappers with storage traits and helpers for config
+//! parsing while avoiding repeated `Cow` boilerplate around the codebase.
+//!
+
 use crate::impl_storable_bounded;
 use candid::CandidType;
 use derive_more::Display;

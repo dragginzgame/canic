@@ -1,3 +1,10 @@
+//!
+//! Cycle-denominated helpers covering human-friendly parsing, config shorthands,
+//! and arithmetic wrappers used by ops modules.
+//! The constants offer readable units (K/M/B/T/Q) while `Cycles` wraps `Nat`
+//! with derived math traits and serde helpers.
+//!
+
 use candid::{CandidType, Nat};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::cast::ToPrimitive;
@@ -9,6 +16,7 @@ use std::{
 
 ///
 /// Constants
+/// Cycle unit shorthands for configs and logs
 ///
 
 pub const KC: u128 = 1_000;
@@ -19,6 +27,8 @@ pub const QC: u128 = 1_000_000_000_000_000;
 
 ///
 /// Cycles
+/// Thin wrapper around `Nat` that carries helper traits and serializers for
+/// arithmetic on cycle balances.
 ///
 
 #[derive(
