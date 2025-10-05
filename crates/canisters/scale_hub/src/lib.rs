@@ -1,3 +1,8 @@
+//!
+//! Scaling hub demo canister showcasing pool orchestration endpoints.
+//! Exists under `crates/canisters` strictly for test and example flows.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::{Error, canister::SCALE_HUB, ops, prelude::*};

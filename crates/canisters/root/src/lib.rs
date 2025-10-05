@@ -1,3 +1,8 @@
+//!
+//! Root demo canister that orchestrates the other sample canisters for tests.
+//! Lives in `crates/canisters` purely to showcase cross-canister workflows.
+//!
+
 #![allow(clippy::unused_async)]
 
 use candid::Principal;
