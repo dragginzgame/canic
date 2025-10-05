@@ -1,7 +1,9 @@
 //! Authorization helpers for canister-to-canister and user calls.
 //!
-//! Compose rule futures and enforce them with `require_all` or `require_any`.
-//! For ergonomics, prefer the macros `auth_require_all!` and `auth_require_any!`.
+//! Compose rule futures and enforce them with [`require_all`] or
+//! [`require_any`]. For ergonomics, prefer the macros [`auth_require_all!`]
+//! and [`auth_require_any!`], which accept async closures or functions that
+//! return [`AuthRuleResult`].
 
 use crate::{
     Error,
@@ -16,10 +18,10 @@ use candid::Principal;
 use std::pin::Pin;
 use thiserror::Error as ThisError;
 
+/// Error returned by authorization rule checks.
 ///
-/// AuthError
-/// Errors returned by authorization rule checks
-///
+/// Each variant captures the principal that failed a rule (where relevant),
+/// making it easy to emit actionable diagnostics in logs.
 
 #[derive(Debug, ThisError)]
 pub enum AuthError {
@@ -68,26 +70,17 @@ pub enum AuthError {
     NotWhitelisted(Principal),
 }
 
-///
-/// AuthRule
-///
-
+/// Callable issuing an authorization decision for a given caller.
 pub type AuthRuleFn =
     Box<dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + Sync>;
 
+/// Future produced by an [`AuthRuleFn`].
 pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
-///
-/// Auth Functions
-///
-
-///
-/// require_all
-///
 /// Require that all provided rules pass for the current caller.
 ///
-/// Returns the first failing rule error, or `AuthError::NoRulesDefined` if `rules` is empty.
-///
+/// Returns the first failing rule error, or [`AuthError::NoRulesDefined`] if
+/// `rules` is empty.
 pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
@@ -102,13 +95,10 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     Ok(())
 }
 
-///
-/// require_any
-///
 /// Require that any one of the provided rules passes for the current caller.
 ///
-/// Returns the last failing rule error if none pass, or `AuthError::NoRulesDefined` if empty.
-///
+/// Returns the last failing rule error if none pass, or
+/// [`AuthError::NoRulesDefined`] if `rules` is empty.
 pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     let caller = msg_caller();
 
@@ -127,10 +117,10 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     Err(last_error.unwrap_or_else(|| AuthError::InvalidState.into()))
 }
 
+/// Enforce that every supplied rule future succeeds for the current caller.
 ///
-/// RULE MACROS
-///
-
+/// This is a convenience wrapper around [`require_all`], allowing guard
+/// checks to stay in expression position within async endpoints.
 #[macro_export]
 macro_rules! auth_require_all {
     ($($f:expr),* $(,)?) => {{
@@ -140,6 +130,10 @@ macro_rules! auth_require_all {
     }};
 }
 
+/// Enforce that at least one supplied rule future succeeds for the current
+/// caller.
+///
+/// See [`auth_require_all!`] for details on accepted rule shapes.
 #[macro_export]
 macro_rules! auth_require_any {
     ($($f:expr),* $(,)?) => {{
@@ -149,11 +143,12 @@ macro_rules! auth_require_any {
     }};
 }
 
-///
-/// RULE FUNCTIONS
-///
+// -----------------------------------------------------------------------------
+// Rule functions
+// -----------------------------------------------------------------------------
 
-// is_app
+/// Require that the caller is registered as an application canister on this
+/// subnet.
 #[must_use]
 pub fn is_app(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -164,11 +159,7 @@ pub fn is_app(caller: Principal) -> AuthRuleResult {
     })
 }
 
-///
-/// is_directory_type
-/// check caller against the SubnetDirectory only
-///
-
+/// Ensure the caller matches the directory entry recorded for `ty`.
 #[must_use]
 pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
@@ -183,7 +174,7 @@ pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult 
     })
 }
 
-// is_child
+/// Require that the caller is a direct child of the current canister.
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -193,7 +184,7 @@ pub fn is_child(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_controller
+/// Require that the caller controls the current canister.
 #[must_use]
 pub fn is_controller(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -205,7 +196,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_root
+/// Require that the caller equals the configured root canister.
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -219,7 +210,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_parent
+/// Require that the caller is the root or a registered parent canister.
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -237,7 +228,7 @@ pub fn is_parent(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_principal
+/// Require that the caller equals the provided `expected` principal.
 #[must_use]
 pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -249,7 +240,7 @@ pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
     })
 }
 
-// is_same_canister
+/// Require that the caller is the currently executing canister.
 #[must_use]
 pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -261,8 +252,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     })
 }
 
-// is_whitelisted
-// only on mainnet - only if the whitelist is active
+/// Require that the caller appears in the active whitelist (IC deployments).
 #[must_use]
 #[allow(unused_variables)]
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
