@@ -1,3 +1,9 @@
+//!
+//! Bounded string wrappers that integrate with stable structures and enforce
+//! maximum lengths at construction time. These appear in configs and memory
+//! tables where size caps matter.
+//!
+
 use crate::impl_storable_bounded;
 use candid::CandidType;
 use derive_more::{Deref, DerefMut, Display};
@@ -6,6 +12,9 @@ use std::convert::TryFrom;
 
 ///
 /// BoundedString
+///
+/// String wrapper enforcing a compile-time maximum length, with serde and
+/// storage trait implementations.
 ///
 
 #[derive(

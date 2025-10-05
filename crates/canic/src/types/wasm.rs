@@ -1,7 +1,13 @@
+//!
+//! Lightweight wrapper for statically embedded WASM modules, providing helper
+//! methods for hashing and metadata used by registry components.
+//!
+
 use crate::utils::wasm::get_wasm_hash;
 
 ///
 /// WasmModule
+/// Holds a reference to embedded WASM bytes and exposes helper inspectors.
 ///
 
 #[derive(Clone, Debug)]
