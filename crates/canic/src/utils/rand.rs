@@ -1,40 +1,54 @@
+//!
+//! Randomness helpers built atop `tinyrand`, seeded with wall-clock time.
+//! Provides a shared RNG for tests and lightweight sampling (non-cryptographic).
+//!
+
 use crate::utils::time::now_nanos;
 use std::sync::{LazyLock, Mutex};
 use tinyrand::{Rand, Seeded, StdRand};
 
 ///
-/// STD_RAND
+/// Global RNG protected by a mutex, seeded from `now_nanos()`.
 ///
 
 pub static STD_RAND: LazyLock<Mutex<StdRand>> =
     LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
 
-// next_u8
-// (uses u16 because there is no next_u8)
+///
+/// Produce an 8-bit random value (samples from `next_u16`).
+///
 #[must_use]
 pub fn next_u8() -> u8 {
     (next_u16() & 0xFF) as u8
 }
 
-// next_u16
+///
+/// Produce a 16-bit random value from the shared RNG.
+///
 #[must_use]
 pub fn next_u16() -> u16 {
     STD_RAND.lock().expect("mutex").next_u16()
 }
 
-// next_u32
+///
+/// Produce a 32-bit random value from the shared RNG.
+///
 #[must_use]
 pub fn next_u32() -> u32 {
     STD_RAND.lock().expect("mutex").next_u32()
 }
 
-// next_64
+///
+/// Produce a 64-bit random value from the shared RNG.
+///
 #[must_use]
 pub fn next_u64() -> u64 {
     STD_RAND.lock().expect("mutex").next_u64()
 }
 
-// next_u128
+///
+/// Produce a 128-bit random value from the shared RNG.
+///
 #[must_use]
 pub fn next_u128() -> u128 {
     STD_RAND.lock().expect("mutex").next_u128()
