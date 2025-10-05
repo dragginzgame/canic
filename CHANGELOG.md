@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.1.1] - 2025-10-05
+- new logo and README.  Got Codex to check all the documentation to make sure it's more up-to-date.
+- removed a load of outdated documentation
+
 ## [0.1.0] - 2025-10-04 - Published!
 - renamed to canic (like mechanic) because icu was taken by a unicode library on crates.io
 - publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.

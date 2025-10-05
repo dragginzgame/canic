@@ -12,7 +12,6 @@ members = [
 resolver = "2"
 
 [workspace.package]
-name = "canic"
 rust-version = "1.90.0"
 edition = "2024"
 version = "0.1.0"
