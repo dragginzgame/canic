@@ -3,8 +3,10 @@ use crate::{
     spec::icrc::icrc2::AllowanceArgs,
 };
 
+///
 /// icp_icrc2_allowance
-/// wrapper using the ICP_LEDGER_CANISTER
+/// Convenience helper targeting the ICP ledger canister.
+///
 pub async fn icp_icrc2_allowance(
     account: impl Into<Account>,
     spender: impl Into<Account>,
@@ -14,7 +16,7 @@ pub async fn icp_icrc2_allowance(
 
 ///
 /// icrc2_allowance
-/// this is generic for any ICRC-2 ledger (ICP, ckBTC, ckETH, SNS ledgers, etc.).
+/// Generic ICRC-2 allowance lookup for any compatible ledger.
 ///
 pub async fn icrc2_allowance(
     ledger_pid: Principal,

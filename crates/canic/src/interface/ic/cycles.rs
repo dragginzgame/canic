@@ -3,8 +3,10 @@ use crate::{
     spec::ic::cycles::IcpXdrConversionRateResponse,
 };
 
+///
 /// get_icp_xdr_conversion_rate
-/// retrieved from the Cycles Minting Canister
+/// Fetch the ICP↔︎XDR conversion rate from the Cycles Minting Canister.
+///
 pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
     let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate").await?;
 

@@ -1,3 +1,6 @@
+//! ck Interfaces
+//! Convenience bindings for ck-token ledgers deployed by the IC team.
+
 use crate::{
     Error, env,
     interface::{icrc::icrc2::icrc2_allowance, prelude::*},
@@ -5,6 +8,7 @@ use crate::{
 
 ///
 /// CkToken
+/// Enumerates supported ck-ledger canisters with helper methods.
 ///
 
 #[derive(Clone, Copy, Debug)]
@@ -36,7 +40,10 @@ impl CkToken {
     }
 }
 
+///
 /// ck_icrc2_allowance
+/// Retrieve the remaining allowance for a spender on a ck-ledger.
+///
 pub async fn ck_icrc2_allowance(
     token: CkToken,
     account: impl Into<Account>,

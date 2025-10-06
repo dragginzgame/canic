@@ -1,3 +1,6 @@
+//! IC Interfaces
+//! Thin wrappers around the management canister and network-specific helpers.
+
 mod canister;
 mod cycles;
 mod helper;
