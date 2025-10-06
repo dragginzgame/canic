@@ -24,22 +24,26 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 ## 📁 Repository Layout
 
-- `crates/canic/` – core library crate with macros, memory/state layers, ops, and auth utilities.
-  - `src/cdk` - the IC CDK with a few changes (docs coming soon)
-  - 🧩 `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
-  - 🧠 `src/memory/` – stable storage abstractions and registries.
-  - ⚡ `src/state/` – volatile runtime state caches.
-  - 🔧 `src/ops/` – orchestration/business logic bridging memory and state.
-  - 🛡️ `src/auth.rs` & `src/guard.rs` – reusable authorization guards.
-  - 📦 `examples/`, `tests/`, `benches/` – runnable samples, integration tests, and benchmarking harnesses.
-  - 🏗️ `build.rs` – ensures configs/macros wire up at compile time.
-- `crates/canisters/` – reference canisters used for integration tests and examples:
-  - `root/` orchestrator canister wiring the full stack.
-  - `shard/`, `shard_hub/` shard lifecycle pair for pool management.
-  - `scale/`, `scale_hub/` scaling agents demonstrating reserve orchestration.
-  - `delegation/` auth delegation flows.
-  - `blank/` minimal canister used in tests.
-- `scripts/` – automation helpers (`app/` for versioning, `ci/` for workflows, `env/` bootstrap scripts).
+- `crates/canic/` – core library crate with orchestration primitives and macros.
+  - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
+  - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
+  - `src/config/` – configuration loaders, validators, and schema helpers.
+  - `src/env/` – IC mainnet configuration (canister IDs, SNSs etc.)
+  - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
+  - `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
+  - `src/memory/` – stable storage abstractions and registries built on `ic-stable-structures`.
+  - `src/ops/` – orchestration/business logic bridging memory and state layers.
+  - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
+  - `src/state/` – volatile runtime state caches and registries.
+  - `src/types/` - shared domain types
+  - `src/utils/` – time helpers, wasm utilities, etc.
+- `crates/canisters/` – reference canisters that exercise the library end to end:
+  - `root/` orchestrator tying together shards, scaling, and delegation flows.
+  - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
+  - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
+  - `delegation/` – delegation/session flows used in tests.
+  - `blank/` – minimal canister template.
+- `scripts/` – build, release, and environment helpers (`app/`, `ci/`, `env/`).
 
 ## Getting Started
 

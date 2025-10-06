@@ -7,7 +7,7 @@ use thiserror::Error as ThisError;
 ///
 /// GuardError
 ///
-/// The guard functions require a String to be returned, not an Error
+/// The IC guard functions require a String to be returned, not an Error
 ///
 
 #[derive(Debug, ThisError)]

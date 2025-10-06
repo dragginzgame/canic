@@ -22,7 +22,7 @@ macro_rules! canic_start {
             ::canic::__canic_load_config!();
 
             // tls
-            ::canic::eager::init_eager_tls(); // ⚠️ MUST precede init_memory
+            ::canic::runtime::init_eager_tls(); // ⚠️ MUST precede init_memory
 
             // memory
             ::canic::memory::registry::init_memory();
@@ -30,7 +30,7 @@ macro_rules! canic_start {
             ::canic::memory::state::CanisterState::import(state);
             ::canic::memory::topology::SubnetParents::import(parents);
 
-            // CYCLES
+            // cycles
             ::canic::memory::capability::cycles::CycleTracker::start();
 
             // timers
@@ -51,7 +51,7 @@ macro_rules! canic_start {
             ::canic::__canic_load_config!();
 
             // tls
-            ::canic::eager::init_eager_tls(); // ⚠️ MUST precede init_memory
+            ::canic::runtime::init_eager_tls(); // ⚠️ MUST precede init_memory
 
             // cycles
             ::canic::memory::capability::cycles::CycleTracker::start();
@@ -92,7 +92,7 @@ macro_rules! canic_start_root {
             ::canic::__canic_load_config!();
 
             // tls
-            ::canic::eager::init_eager_tls();
+            ::canic::runtime::init_eager_tls();
 
             // memory
             ::canic::memory::registry::init_memory();
@@ -138,7 +138,7 @@ macro_rules! canic_start_root {
             ::canic::__canic_load_config!();
 
             // tls
-            ::canic::eager::init_eager_tls();
+            ::canic::runtime::init_eager_tls();
 
             // state
             ::canic::state::wasm::WasmRegistry::import(WASMS);

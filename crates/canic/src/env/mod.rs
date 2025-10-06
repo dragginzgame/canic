@@ -1,3 +1,5 @@
+//! Environment constants grouped by domain (ck, NNS, SNS).
+
 #[macro_use]
 mod macros;
 

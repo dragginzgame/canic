@@ -1,7 +1,5 @@
-//
-// List of Chain Fusion (ck) Canisters
-// https://dashboard.internetcomputer.org/chain-fusion
-//
+//! List of Chain Fusion (ck) canisters.
+//! Source: https://dashboard.internetcomputer.org/chain-fusion
 
 static_canisters! {
 
@@ -10,7 +8,7 @@ static_canisters! {
     //
 
     BTC_MAINNET_CANISTER = "ghsi2-tqaaa-aaaan-aaaca-cai";
-    EVM_RPC_CANITER = "7hfb6-caaaa-aaaar-qadga-cai";
+    EVM_RPC_CANISTER = "7hfb6-caaaa-aaaar-qadga-cai";
     SOL_RPC_CANISTER = "tghme-zyaaa-aaaar-qarca-cai";
 
     // ckBTC

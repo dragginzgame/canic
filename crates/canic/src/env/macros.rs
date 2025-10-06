@@ -1,3 +1,5 @@
+//! Internal macro to expose static `Principal` handles for known canisters.
+
 macro_rules! static_canisters {
     ($($name:ident = $id:expr;)*) => {
         $(

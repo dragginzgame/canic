@@ -136,6 +136,7 @@ impl DelegationRegistry {
             }
             session.requesting_canisters.push(requester);
             Self::insert(session_pid, session.clone());
+
             log!(
                 Log::Info,
                 "👣 tracked delegation requester={requester} session={session_pid}"
