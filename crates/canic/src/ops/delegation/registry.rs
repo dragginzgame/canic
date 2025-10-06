@@ -26,6 +26,9 @@ const MIN_EXPIRATION: Duration = Duration::from_secs(60);
 /// Run cleanup every N calls to `register_session`.
 const CLEANUP_THRESHOLD: u64 = 1000;
 
+/// Maximum number of requesters remembered per delegation session.
+const MAX_TRACKED_REQUESTERS: usize = 32;
+
 thread_local! {
     static CALL_COUNT: std::cell::RefCell<u64> = const { std::cell::RefCell::new(0) };
 }
@@ -127,6 +130,10 @@ impl DelegationRegistry {
         }
 
         if !session.requesting_canisters.contains(&requester) {
+            if session.requesting_canisters.len() >= MAX_TRACKED_REQUESTERS {
+                let drop_count = session.requesting_canisters.len() + 1 - MAX_TRACKED_REQUESTERS;
+                session.requesting_canisters.drain(0..drop_count);
+            }
             session.requesting_canisters.push(requester);
             Self::insert(session_pid, session.clone());
             log!(
@@ -141,19 +148,13 @@ impl DelegationRegistry {
     /// List all sessions as lightweight views.
     #[must_use]
     pub fn list_all_sessions() -> Vec<DelegationSessionView> {
-        Self::list_all()
-            .into_iter()
-            .map(|(pid, session)| (pid, &session).into())
-            .collect()
+        Self::collect_views(|_, _| true)
     }
 
     /// List sessions owned by a specific wallet.
     #[must_use]
     pub fn list_sessions_by_wallet(wallet_pid: Principal) -> Vec<DelegationSessionView> {
-        Self::list_by_wallet(&wallet_pid)
-            .into_iter()
-            .map(|(pid, session)| (pid, &session).into())
-            .collect()
+        Self::collect_views(|_, session| session.wallet_pid == wallet_pid)
     }
 
     /// Revoke a session by ID, or all sessions from a wallet.
@@ -165,9 +166,9 @@ impl DelegationRegistry {
         }
 
         // Otherwise, treat as wallet principal.
-        let before = Self::list_all().len();
+        let before = Self::count();
         Self::retain(|_, s| s.wallet_pid != pid);
-        let after = Self::list_all().len();
+        let after = Self::count();
 
         if after < before {
             log!(Log::Info, "🗑️ revoked all sessions for wallet={pid}");
@@ -189,14 +190,33 @@ impl DelegationRegistry {
 
     /// Remove expired sessions immediately.
     pub fn cleanup() {
-        let before = Self::list_all().len();
+        let before = Self::count();
         Self::retain(|_, s| s.expires_at > now_secs());
-        let after = Self::list_all().len();
+        let after = Self::count();
 
         log!(
             Log::Info,
             "🧹 cleaned up sessions, before={before}, after={after}"
         );
+    }
+
+    fn collect_views<F>(mut filter: F) -> Vec<DelegationSessionView>
+    where
+        F: FnMut(&Principal, &DelegationSession) -> bool,
+    {
+        Self::with(|map| {
+            let mut views = Vec::with_capacity(map.len());
+            for (pid, session) in map {
+                if filter(pid, session) {
+                    views.push(DelegationSessionView {
+                        session_pid: *pid,
+                        wallet_pid: session.wallet_pid,
+                        expires_at: session.expires_at,
+                    });
+                }
+            }
+            views
+        })
     }
 }
 
@@ -345,5 +365,36 @@ mod tests {
         DelegationRegistry::track(requester, session).unwrap();
         let stored_again = StateDelegationRegistry::get(&session).unwrap();
         assert_eq!(stored_again.requesting_canisters.len(), 1);
+    }
+
+    #[test]
+    fn track_trims_requester_history_when_full() {
+        reset();
+        let wallet = pid(50);
+        let session = pid(51);
+
+        DelegationRegistry::register_session(
+            wallet,
+            RegisterSessionArgs {
+                session_pid: session,
+                duration_secs: 120,
+            },
+        )
+        .unwrap();
+
+        #[allow(clippy::cast_possible_truncation)]
+        for n in 0..(MAX_TRACKED_REQUESTERS + 5) {
+            let requester = pid(60 + n as u8);
+            DelegationRegistry::track(requester, session).unwrap();
+        }
+
+        let stored = StateDelegationRegistry::get(&session).unwrap();
+        assert_eq!(stored.requesting_canisters.len(), MAX_TRACKED_REQUESTERS);
+
+        let expected_first = pid(60 + 5); // oldest entries trimmed
+        assert_eq!(
+            stored.requesting_canisters.first().copied(),
+            Some(expected_first)
+        );
     }
 }

@@ -1,8 +1,8 @@
-//! Macros that generate public IC endpoints for Canic canisters.
+// Macros that generate public IC endpoints for Canic canisters.
 
 pub mod root;
 
-/// Expose the shared query and update handlers used by all Canic canisters.
+// Expose the shared query and update handlers used by all Canic canisters.
 #[macro_export]
 macro_rules! canic_endpoints {
     () => {
@@ -158,7 +158,8 @@ macro_rules! canic_endpoints {
     };
 }
 
-/// Add delegation-specific endpoints when the capability is enabled.
+// Add delegation-specific endpoints when the capability is enabled.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints_delegation {
     () => {
@@ -225,7 +226,8 @@ macro_rules! canic_endpoints_delegation {
     };
 }
 
-/// Add scaling registry endpoints when the capability is enabled.
+// Add scaling registry endpoints when the capability is enabled.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints_scaling {
     () => {
@@ -238,7 +240,8 @@ macro_rules! canic_endpoints_scaling {
     };
 }
 
-/// Add sharding endpoints when the capability is enabled.
+// Add sharding endpoints when the capability is enabled.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints_sharding {
     () => {

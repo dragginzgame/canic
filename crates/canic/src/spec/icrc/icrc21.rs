@@ -11,6 +11,7 @@ pub use icrc_ledger_types::icrc21::{
 
 ///
 /// ConsentMessageResponse
+/// Wrapper capturing the ok/error variants from an ICRC-21 consent request.
 ///
 
 #[derive(CandidType, Deserialize)]
