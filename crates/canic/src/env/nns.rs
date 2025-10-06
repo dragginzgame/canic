@@ -1,7 +1,5 @@
-//
-// List of System Canisters
-// https://internetcomputer.org/docs/references/system-canisters/
-//
+//! List of NNS/system canisters.
+//! Source: https://internetcomputer.org/docs/references/system-canisters/
 
 static_canisters! {
 

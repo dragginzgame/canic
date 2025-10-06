@@ -18,7 +18,7 @@ const fn p(id: u8) -> Principal {
 }
 
 fn main() {
-    canic::eager::init_eager_tls();
+    canic::runtime::init_eager_tls();
     canic::memory::registry::init_memory();
     ShardingRegistry::clear();
 

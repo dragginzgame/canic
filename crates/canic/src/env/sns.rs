@@ -1,3 +1,5 @@
+//! Preconfigured SNS deployments and helpers for looking up their canisters.
+
 use crate::{Error, env::EnvError};
 use candid::Principal;
 use thiserror::Error as ThisError;
@@ -8,7 +10,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum SnsError {
-    #[error("invalid principal: {0} ({0})")]
+    #[error("invalid principal: {0} ({1})")]
     InvalidPrincipal(String, String),
 }
 

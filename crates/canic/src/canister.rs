@@ -1,3 +1,6 @@
+//! Canonical `CanisterType` constants. Downstream ICU implementations can use
+//! this pattern as a reference when wiring their own type catalogs.
+
 use crate::types::CanisterType;
 
 pub const BLANK: CanisterType = CanisterType::new("blank");

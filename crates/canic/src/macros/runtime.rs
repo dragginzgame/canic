@@ -13,7 +13,7 @@ macro_rules! eager_static {
         }
 
         $crate::eager_init!({
-            $crate::eager::CANIC_EAGER_TLS.with(|v| {
+            $crate::runtime::CANIC_EAGER_TLS.with(|v| {
                 v.borrow_mut().push(|| {
                     $name.with(|_| {}); // force one touch
                 });
