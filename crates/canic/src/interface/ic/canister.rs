@@ -11,7 +11,7 @@ use crate::{
 
 ///
 /// create_canister
-/// allocates PID + cycles + controllers
+/// Provision a new canister with controllers and an optional cycle balance.
 ///
 pub async fn create_canister(
     controllers: Vec<Principal>,
@@ -31,7 +31,10 @@ pub async fn create_canister(
     Ok(canister_pid)
 }
 
+///
 /// upgrade_canister
+/// Install the provided wasm when it differs from the current module hash.
+///
 pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
     // module_hash
     let canister_status = canister_status(canister_pid).await?;

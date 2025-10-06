@@ -1,3 +1,6 @@
+//! Interface Helpers
+//! Aggregates thin wrappers around external canisters (IC, ck-tokens, ICRC).
+
 pub mod ck;
 pub mod ic;
 pub mod icrc;
@@ -22,6 +25,7 @@ use thiserror::Error as ThisError;
 
 ///
 /// InterfaceError
+/// Shared result type for interface helpers.
 ///
 
 #[derive(Debug, ThisError)]

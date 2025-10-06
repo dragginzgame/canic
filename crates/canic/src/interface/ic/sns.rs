@@ -6,7 +6,10 @@ use crate::{
     spec::sns::{ListNeurons, ListNeuronsResponse, Neuron, NeuronId},
 };
 
-/// Convenience: page through all results and return every neuron for `owner`.
+///
+/// list_sns_neurons_for_principal
+/// Page through SNS governance and collect every neuron for `owner`.
+///
 pub async fn list_sns_neurons_for_principal(
     sns: SnsType,
     owner: Principal,
@@ -35,7 +38,10 @@ pub async fn list_sns_neurons_for_principal(
     Ok(out)
 }
 
+///
+/// list_sns_neurons_for_principal_page
 /// Fetch a single page of neurons owned by `owner` from a given SNS.
+///
 pub async fn list_sns_neurons_for_principal_page(
     sns: SnsType,
     owner: Principal,
