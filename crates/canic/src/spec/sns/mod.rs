@@ -1,7 +1,12 @@
+//!
+//! SNS governance candid bindings kept in a single spot with uniform naming.
+//!
+
 use crate::spec::prelude::*;
 
 ///
 /// ListNeurons
+/// Request payload for SNS `list_neurons` with optional principal filtering.
 ///
 
 #[derive(CandidType, Deserialize)]
@@ -13,6 +18,7 @@ pub struct ListNeurons {
 
 ///
 /// NeuronId
+/// Wrapper around the raw bytes identifying an SNS neuron.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
@@ -22,6 +28,7 @@ pub struct NeuronId {
 
 ///
 /// ListNeuronsResponse
+/// Response payload containing the returned SNS neurons.
 ///
 
 #[derive(CandidType, Deserialize)]
@@ -31,6 +38,7 @@ pub struct ListNeuronsResponse {
 
 ///
 /// Neuron
+/// Simplified view of an SNS neuron record used in ops modules.
 ///
 
 #[derive(CandidType, Deserialize)]
