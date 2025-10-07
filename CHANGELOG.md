@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.1.4] - 2025-10-07
 - added ops::delegation::sync_session_with_source to stop repeated code in toko
+- added debug! macro that always does Log::Debug and has a conditional first argument
 
 ## [0.1.3] - 2025-10-05
 - new logo and README.  Got Codex to check all the documentation to make sure it's more up-to-date.
