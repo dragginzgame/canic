@@ -11,7 +11,7 @@ use std::cell::RefCell;
 
 thread_local! {
     /// Registry of closures that force eager initialization of TLS statics.
-    pub static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
+    pub(crate) static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
         RefCell::new(Vec::new())
     };
 }
@@ -21,6 +21,7 @@ pub fn init_eager_tls() {
     // Drain into a temporary Vec so we don't hold the borrow
     // while invoking the closures.
     let funcs: Vec<_> = CANIC_EAGER_TLS.with(|v| v.borrow().clone());
+
     for f in funcs {
         f();
     }
