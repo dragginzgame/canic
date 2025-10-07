@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
-## [0.1.1] - 2025-10-05
+## [0.1.4] - 2025-10-07
+- added ops::delegation::sync_session_with_source to stop repeated code in toko
+
+## [0.1.3] - 2025-10-05
 - new logo and README.  Got Codex to check all the documentation to make sure it's more up-to-date.
 - removed a load of outdated documentation
 
@@ -15,10 +18,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - renamed to canic (like mechanic) because icu was taken by a unicode library on crates.io
 - publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.
 
-#######################################################################
+############################ icu ######################################
 
-## [0.12.0] - 2025-09-28 - Elastic Canisters
-- so now in addition to Sharding you have Elastic which spins up and down a pool of canisters based
+## [0.12.0] - 2025-09-28 - Scaling Canisters
+- so now in addition to Sharding you have Scaling which spins up and down a pool of canisters based
 on available resources
 - memory ranges nicely ordered
 
