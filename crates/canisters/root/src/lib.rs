@@ -80,9 +80,9 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 /// ENDPOINTS
 ///
 
-// delete_me
+// get_current_subnet_pid
 #[query(composite)]
-async fn delete_me() -> Result<Option<Principal>, Error> {
+async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
     canic::interface::ic::get_current_subnet_pid().await
 }
 

@@ -96,13 +96,18 @@ macro_rules! canic_start_root {
 
             // memory
             ::canic::memory::registry::init_memory();
+
+            // memory topology
             let entry = ::canic::memory::topology::SubnetTopology::init_root(
                 ::canic::cdk::api::canister_self(),
             );
+            ::canic::memory::state::CanisterState::set_canister(entry.into());
+
+            // memory context
+            // set the canister context root_pid to self
             ::canic::memory::context::CanisterContext::set_root_pid(
                 ::canic::cdk::api::canister_self(),
             );
-            ::canic::memory::state::CanisterState::set_canister(entry.into());
 
             // state
             ::canic::state::wasm::WasmRegistry::import(WASMS);
@@ -118,10 +123,14 @@ macro_rules! canic_start_root {
                 ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
                     ::canic::cdk::futures::spawn(async move {
                         //
-                        // GET SUBNET
+                        // get the current subnet_pid and set it in the SubnetContext
                         //
-                        //     let res = ::canic::interface::ic::get_current_subnet().await;
-                        //     panic!("{res:?}");
+                        if let Some(subnet_pid) = ::canic::interface::ic::get_current_subnet_pid()
+                            .await
+                            .unwrap()
+                        {
+                            ::canic::memory::context::SubnetContext::set_subnet_pid(subnet_pid);
+                        }
 
                         canic_setup().await;
                         canic_install().await;

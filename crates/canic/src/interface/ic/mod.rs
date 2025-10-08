@@ -26,7 +26,8 @@ use crate::{
     },
     env::nns::NNS_REGISTRY_CANISTER,
     interface::prelude::*,
-    spec::nns::GetSubnetForCanisterResponse,
+    log,
+    spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
@@ -77,19 +78,18 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 /// Queries the NNS registry for the subnet that this canister belongs to.
 #[allow(clippy::unused_async)]
 pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
-    match get_network() {
-        Some(Network::Ic) => {
-            let subnet_id = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-                .with_arg(canister_self())
-                .await?
-                .candid::<GetSubnetForCanisterResponse>()?
-                .subnet_id;
+    let request = GetSubnetForCanisterRequest::new(msg_caller());
 
-            Ok(Some(subnet_id))
-        }
+    let subnet_id = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
+        .with_arg(request)
+        .await?
+        .candid::<GetSubnetForCanisterResponse>()?
+        .map_err(Error::CallFailed)?
+        .subnet_id;
 
-        _ => Ok(None), // network not set → treat as "no subnet"
-    }
+    log!("[GET_SUBNET] found subnet_id {subnet_id:?}");
+
+    Ok(subnet_id)
 }
 
 //

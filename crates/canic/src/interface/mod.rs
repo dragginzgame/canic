@@ -30,9 +30,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum InterfaceError {
-    #[error("cycles overflow")]
-    CyclesOverflow,
-
     #[error("wasm hash matches")]
     WasmHashMatches,
 }

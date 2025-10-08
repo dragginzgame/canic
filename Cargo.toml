@@ -2,11 +2,11 @@
 members = [
     "crates/canisters/blank",
     "crates/canisters/delegation",
-    "crates/canisters/scale_hub",
-    "crates/canisters/scale",
-    "crates/canisters/shard_hub",
-    "crates/canisters/shard",
     "crates/canisters/root",
+    "crates/canisters/scale",
+    "crates/canisters/scale_hub",
+    "crates/canisters/shard",
+    "crates/canisters/shard_hub",
     "crates/canic",
 ]
 resolver = "2"
