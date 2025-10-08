@@ -34,7 +34,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // Canic CANISTER HELPERS
+        // CANISTER HELPERS
         //
 
         #[::canic::cdk::query]
@@ -53,7 +53,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // Canic MEMORY REGISTRY EXPORTS
+        // MEMORY REGISTRY EXPORTS
         //
 
         #[::canic::cdk::query]
@@ -62,7 +62,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // Canic MEMORY CONTEXT EXPORTS
+        // MEMORY CONTEXT EXPORTS
         //
 
         #[::canic::cdk::query]
@@ -90,7 +90,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // Canic CAPABILITY ENDPOINTS
+        // CAPABILITY ENDPOINTS
         //
 
         // canic_cycle_tracker
@@ -164,7 +164,7 @@ macro_rules! canic_endpoints {
 macro_rules! canic_endpoints_delegation {
     () => {
         //
-        // Canic DELEGATION ENDPOINTS
+        // DELEGATION ENDPOINTS
         //
 
         #[::canic::cdk::query]
