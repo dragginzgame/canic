@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.1.7] - 2025-10-08
+- with dfx 0.30 now the subnet's pid can be read, and stored in the root's SubnetContext
+
 ## [0.1.4] - 2025-10-07
 - added ops::delegation::sync_session_with_source to stop repeated code in toko
 - added debug! macro that always does Log::Debug and has a conditional first argument
