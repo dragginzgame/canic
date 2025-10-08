@@ -29,26 +29,6 @@ macro_rules! eager_init {
     };
 }
 
-/// Conditionally emit a debug log line if the first argument is `true`.
-///
-/// Always logs at [`Log::Debug`](crate::Log::Debug) level.
-#[macro_export]
-macro_rules! debug {
-    // No extra args
-    ($cond:expr, $fmt:expr) => {{
-        if $cond {
-            $crate::log!($crate::Log::Debug, $fmt);
-        }
-    }};
-
-    // With format args
-    ($cond:expr, $fmt:expr, $($arg:tt)*) => {{
-        if $cond {
-            $crate::log!($crate::Log::Debug, $fmt, $($arg)*);
-        }
-    }};
-}
-
 /// Emit a structured log line with consistent coloring and headers.
 ///
 /// Accepts an optional [`Log`](crate::Log) level followed by a format string
