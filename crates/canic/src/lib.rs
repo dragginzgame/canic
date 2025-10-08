@@ -96,20 +96,26 @@ pub enum Error {
     #[error("{0}")]
     StateError(String),
 
-    //
-    // Common IC errors
-    //
+    ///
+    /// Common IC errors
+    ///
+    /// CallError          : should be automatic with ?
+    /// CallFailed         : use this for wrapping <T, String> return values
+    /// CandidError        : for decode_one errors etc.  automatic
+    /// CandidDecodeFailed : automatic for calls like ::candid<T>()
+    ///
+
     #[error("call error: {0}")]
     CallError(String),
 
-    #[error("call error: {0}")]
+    #[error("call failed: {0}")]
     CallFailed(String),
 
     #[error("candid error: {0}")]
-    CandidDecodeFailed(String),
-
-    #[error("candid error: {0}")]
     CandidError(String),
+
+    #[error("candid decode failed: {0}")]
+    CandidDecodeFailed(String),
 }
 
 macro_rules! from_to_string {
@@ -139,8 +145,8 @@ from_to_string!(state::StateError, StateError);
 
 from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);
-from_to_string!(CandidError, CandidError);
 from_to_string!(CandidDecodeFailed, CandidDecodeFailed);
+from_to_string!(CandidError, CandidError);
 
 ///
 /// Log
