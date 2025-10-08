@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "criterion",
@@ -225,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "canister_delegation"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "candid",
  "canic",
