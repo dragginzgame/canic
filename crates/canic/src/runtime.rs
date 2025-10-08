@@ -11,7 +11,7 @@ use std::cell::RefCell;
 
 thread_local! {
     /// Registry of closures that force eager initialization of TLS statics.
-    pub(crate) static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
+    pub static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
         RefCell::new(Vec::new())
     };
 }
