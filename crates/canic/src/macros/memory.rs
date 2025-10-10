@@ -8,8 +8,11 @@
 #[macro_export]
 macro_rules! ic_memory {
     ($label:ident, $id:expr) => {{
+        // Force the compiler to resolve the type. This causes a compile-time error
+        // if `$label` does not exist or is not a valid local type.
+        let _type_check: Option<$label> = None;
+
         // Enqueue this memory ID registration for deferred validation.
-        // All memory for a crate lives under the `CARGO_PKG_NAME` namespace.
         $crate::memory::registry::defer_register(
             $id,
             env!("CARGO_PKG_NAME"),

@@ -9,7 +9,10 @@ use crate::{
     memory::{
         CanisterSummary,
         state::CanisterState,
-        topology::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetTopology},
+        topology::{
+            SubnetCanisterChildren, SubnetCanisterDirectory, SubnetCanisterParents,
+            SubnetCanisterRegistry,
+        },
     },
     ops::{OpsError, prelude::*, sync::SyncError},
 };
@@ -33,9 +36,9 @@ impl TopologyBundle {
         let root_pid = root_summary.pid;
 
         Ok(Self {
-            subtree: SubnetTopology::subtree(root_pid), // subtree rooted at the actual root PID
+            subtree: SubnetCanisterRegistry::subtree(root_pid), // subtree rooted at the actual root PID
             parents: vec![root_summary],
-            directory: SubnetTopology::directory(),
+            directory: SubnetCanisterRegistry::directory(),
         })
     }
 
@@ -50,7 +53,7 @@ impl TopologyBundle {
         // Trim subtree to child’s subtree
         let child_subtree: Vec<_> = subtree
             .iter()
-            .filter(|e| SubnetTopology::is_in_subtree(child_pid, e, subtree))
+            .filter(|e| SubnetCanisterRegistry::is_in_subtree(child_pid, e, subtree))
             .cloned()
             .collect();
 
@@ -87,7 +90,7 @@ pub async fn root_cascade() -> Result<(), Error> {
     let root_pid = canister_self();
     let bundle = TopologyBundle::root()?;
 
-    for child in SubnetTopology::children(root_pid) {
+    for child in SubnetCanisterRegistry::children(root_pid) {
         let child_bundle = TopologyBundle::for_child(root_pid, child.pid, &bundle.subtree, &bundle);
         send_bundle(&child.pid, &child_bundle).await?;
     }
@@ -101,7 +104,7 @@ pub async fn cascade_children(bundle: &TopologyBundle) -> Result<(), Error> {
     let self_pid = canister_self();
 
     // Direct children of self (freshly imported during save_state)
-    for child in SubnetChildren::export() {
+    for child in SubnetCanisterChildren::export() {
         let child_bundle = TopologyBundle::for_child(self_pid, child.pid, &bundle.subtree, bundle);
         send_bundle(&child.pid, &child_bundle).await?;
     }
@@ -123,20 +126,20 @@ pub fn save_state(bundle: &TopologyBundle) -> Result<(), Error> {
         .ok_or(SyncError::CanisterNotFound(self_pid))?;
     CanisterState::set_canister(self_entry);
 
-    // subnet parents
-    SubnetParents::import(bundle.parents.clone());
+    // subnet canister parents
+    SubnetCanisterParents::import(bundle.parents.clone());
 
-    // subnet children
+    // subnet canister children
     let direct_children: Vec<_> = bundle
         .subtree
         .iter()
         .filter(|entry| entry.parent_pid == Some(self_pid))
         .cloned()
         .collect();
-    SubnetChildren::import(direct_children);
+    SubnetCanisterChildren::import(direct_children);
 
-    // subnet directory
-    SubnetDirectory::import(bundle.directory.clone());
+    // subnet canister directory
+    SubnetCanisterDirectory::import(bundle.directory.clone());
 
     Ok(())
 }

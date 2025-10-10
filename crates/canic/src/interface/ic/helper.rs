@@ -28,5 +28,5 @@ pub fn derive_subaccount_with(
     let mut sub = [0u8; 32];
     sub.copy_from_slice(&hash[..32]);
 
-    Subaccount(sub)
+    sub
 }

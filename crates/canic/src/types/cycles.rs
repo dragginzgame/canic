@@ -57,6 +57,11 @@ impl Cycles {
     }
 
     #[must_use]
+    pub fn to_u64(&self) -> u64 {
+        self.0.0.to_u64().unwrap_or(u64::MAX)
+    }
+
+    #[must_use]
     pub fn to_u128(&self) -> u128 {
         self.0.0.to_u128().unwrap_or(u128::MAX)
     }

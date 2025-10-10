@@ -13,17 +13,17 @@ use candid::Principal;
 
 #[derive(Debug, ThisError)]
 pub enum TopologyError {
-    #[error("subnet not found: {0}")]
-    SubnetNotFound(Principal),
+    #[error("canister already installed: {0}")]
+    CanisterAlreadyInstalled(Principal),
 
     #[error("canister not found: {0}")]
     PrincipalNotFound(Principal),
 
+    #[error("subnet not found: {0}")]
+    SubnetNotFound(Principal),
+
     #[error("canister not found: {0}")]
     TypeNotFound(CanisterType),
-
-    #[error(transparent)]
-    SubnetTopologyError(#[from] SubnetTopologyError),
 }
 
 impl From<TopologyError> for Error {

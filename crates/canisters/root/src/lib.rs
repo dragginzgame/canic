@@ -14,6 +14,7 @@ use canic::{
         root::root_create_canisters,
     },
     prelude::*,
+    types::{Account, TC},
 };
 
 //
@@ -84,6 +85,22 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 #[query(composite)]
 async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
     canic::interface::ic::get_current_subnet_pid().await
+}
+
+// convert_icp_to_cycles
+#[update]
+#[allow(clippy::cast_possible_truncation)]
+async fn convert_icp_to_cycles() -> Result<(), Error> {
+    let acc = Account::from(msg_caller());
+    let cycles = (TC * 2) as u64;
+
+    canic::interface::ic::convert_icp_to_cycles(acc, cycles).await
+}
+
+// get_icp_xdr_conversion_rate
+#[query(composite)]
+async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
+    canic::interface::ic::get_icp_xdr_conversion_rate().await
 }
 
 // create_blank

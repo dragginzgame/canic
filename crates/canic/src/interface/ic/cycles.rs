@@ -1,6 +1,14 @@
 use crate::{
-    Error, cdk::call::Call, env::nns::CYCLES_MINTING_CANISTER,
-    spec::ic::cycles::IcpXdrConversionRateResponse,
+    Error,
+    cdk::{api::canister_self, call::Call},
+    env::nns::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
+    interface::ic::derive_subaccount,
+    spec::{
+        ic::cycles::{IcpXdrConversionRateResponse, NotifyTopUpArgs},
+        icrc::icrc1::Icrc1TransferArgs,
+    },
+    types::{Account, Nat, Principal, Subaccount},
+    utils::time::now_secs,
 };
 
 ///
@@ -19,17 +27,18 @@ pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
     Ok(rate)
 }
 
-/*
+///
 /// convert_icp_to_cycles
 /// uses the Cycles Minting Canister
-async fn convert_icp_to_cycles(
+///
+pub async fn convert_icp_to_cycles(
     icp_ledger_account: Account,
     cycles_needed: u64,
 ) -> Result<(), Error> {
     // Step 1: Calculate ICP amount needed
     // Get current ICP/XDR conversion rate from CMC
     let conversion_rate = get_icp_xdr_conversion_rate().await?;
-    let icp_needed = calculate_icp_for_cycles(cycles_needed, conversion_rate)?;
+    let icp_needed = calculate_icp_for_cycles(cycles_needed, conversion_rate);
 
     // Step 2: Generate unique subaccount for this transaction
     let root_principal = canister_self();
@@ -45,17 +54,26 @@ async fn convert_icp_to_cycles(
     Ok(())
 }
 
-/// Calculate ICP amount needed for desired cycles
-fn calculate_icp_for_cycles(cycles_needed: u64, icp_per_xdr: f64) -> Result<u64, Error> {
-    // 1 XDR = 1T cycles (1_000_000_000_000)
-    let xdr_needed = cycles_needed as f64 / 1_000_000_000_000.0;
-    let icp_needed = xdr_needed * icp_per_xdr;
-    let icp_e8s = (icp_needed * 100_000_000.0) as u64; // Convert to e8s
+/// Calculates the ICP amount (in e8s) required to obtain a given number of cycles.
+///
+/// - `cycles_needed`: number of cycles required.
+/// - `icp_per_xdr`: current exchange rate (ICP per XDR).
+///
+/// 1 XDR = 1e12 cycles.
+/// Adds a 5% buffer to account for rate fluctuations.
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_possible_truncation)]
+fn calculate_icp_for_cycles(cycles_needed: u64, icp_per_xdr: f64) -> u64 {
+    const CYCLES_PER_XDR: f64 = 1_000_000_000_000.0;
+    const E8S_PER_ICP: f64 = 100_000_000.0;
+    const BUFFER_FACTOR: f64 = 1.05; // +5%
 
-    // Add 5% buffer for exchange rate fluctuations
-    let icp_with_buffer = icp_e8s + (icp_e8s / 20);
+    let xdr_needed = cycles_needed as f64 / CYCLES_PER_XDR;
+    let icp_needed = xdr_needed * icp_per_xdr * BUFFER_FACTOR;
+    let icp_e8s = (icp_needed * E8S_PER_ICP).round();
 
-    Ok(icp_with_buffer)
+    icp_e8s as u64
 }
 
 /// Transfer ICP to Cycles Minting Canister
@@ -85,6 +103,7 @@ async fn transfer_icp_to_cmc(
             let transfer_result: Result<Nat, Nat> = res
                 .candid()
                 .map_err(|e| Error::custom(format!("Failed to decode transfer result: {e}")))?;
+
             match transfer_result {
                 Ok(block_index) => {
                     let block_u64: u64 = block_index
@@ -120,4 +139,3 @@ async fn notify_cycles_minting_canister(
         Err(e) => Err(Error::custom(format!("Failed to notify CMC: {e}"))),
     }
 }
-*/

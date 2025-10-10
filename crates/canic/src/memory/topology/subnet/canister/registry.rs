@@ -4,8 +4,8 @@ use crate::{
     config::Config,
     eager_static, ic_memory,
     memory::{
-        CanisterEntry, CanisterStatus, CanisterSummary, MemoryError,
-        id::topology::subnet::SUBNET_TOPOLOGY_ID, topology::TopologyError,
+        CanisterEntry, CanisterStatus, CanisterSummary,
+        id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID, topology::TopologyError,
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -14,37 +14,28 @@ use candid::Principal;
 use std::cell::RefCell;
 
 //
-// SUBNET_TOPOLOGY
+// SUBNET_CANISTER_REGISTRY
 //
 
 eager_static! {
-    static SUBNET_TOPOLOGY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(SubnetTopology, SUBNET_TOPOLOGY_ID)));
+    static SUBNET_CANISTER_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(ic_memory!(SubnetCanisterRegistry, SUBNET_CANISTER_REGISTRY_ID)));
 }
 
 ///
-/// SubnetTopologyError
+/// SubnetCanisterRegistryError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SubnetTopologyError {
-    #[error("canister already installed: {0}")]
-    AlreadyInstalled(Principal),
-}
-
-impl From<SubnetTopologyError> for Error {
-    fn from(err: SubnetTopologyError) -> Self {
-        MemoryError::from(TopologyError::from(err)).into()
-    }
-}
+pub enum SubnetCanisterRegistryError {}
 
 ///
-/// SubnetTopology
+/// SubnetCanisterRegistry
 ///
 
-pub struct SubnetTopology;
+pub struct SubnetCanisterRegistry;
 
-impl SubnetTopology {
+impl SubnetCanisterRegistry {
     #[must_use]
     pub fn init_root(pid: Principal) -> CanisterEntry {
         let entry = CanisterEntry {
@@ -56,14 +47,14 @@ impl SubnetTopology {
             created_at: now_secs(),
         };
 
-        SUBNET_TOPOLOGY.with_borrow_mut(|map| map.insert(pid, entry.clone()));
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry.clone()));
 
         entry
     }
 
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterEntry> {
-        SUBNET_TOPOLOGY.with_borrow(|map| map.get(&pid))
+        SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
     pub fn try_get(pid: Principal) -> Result<CanisterEntry, Error> {
@@ -72,7 +63,7 @@ impl SubnetTopology {
 
     /// Look up a canister by its type.
     pub fn try_get_type(ty: &CanisterType) -> Result<CanisterEntry, Error> {
-        SUBNET_TOPOLOGY.with_borrow(|map| {
+        SUBNET_CANISTER_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|e| e.value())
                 .find(|entry| &entry.ty == ty)
@@ -90,15 +81,15 @@ impl SubnetTopology {
             created_at: now_secs(),
         };
 
-        SUBNET_TOPOLOGY.with_borrow_mut(|map| map.insert(pid, entry));
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry));
     }
 
     pub fn install(pid: Principal, module_hash: Vec<u8>) -> Result<(), Error> {
-        SUBNET_TOPOLOGY.with_borrow_mut(|map| {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| {
             let entry = map.get(&pid).ok_or(TopologyError::PrincipalNotFound(pid))?;
 
             if entry.status == CanisterStatus::Installed {
-                return Err(SubnetTopologyError::AlreadyInstalled(pid))?;
+                return Err(TopologyError::CanisterAlreadyInstalled(pid))?;
             }
 
             let mut updated = entry;
@@ -111,17 +102,17 @@ impl SubnetTopology {
 
     #[must_use]
     pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
-        SUBNET_TOPOLOGY.with_borrow_mut(|map| map.remove(pid))
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
     #[must_use]
     pub fn all() -> Vec<CanisterEntry> {
-        SUBNET_TOPOLOGY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
+        SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
     #[must_use]
     pub fn all_summaries() -> Vec<CanisterSummary> {
-        SUBNET_TOPOLOGY.with_borrow(|map| {
+        SUBNET_CANISTER_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|e| CanisterSummary::from(e.value()))
                 .collect()
@@ -227,6 +218,6 @@ impl SubnetTopology {
 
     #[cfg(test)]
     pub fn clear_for_tests() {
-        SUBNET_TOPOLOGY.with_borrow_mut(BTreeMap::clear);
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 }

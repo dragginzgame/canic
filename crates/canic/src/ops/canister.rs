@@ -13,7 +13,8 @@ use crate::{
         prelude::*,
     },
     memory::{
-        CanisterSummary, root::CanisterReserve, state::CanisterStateData, topology::SubnetTopology,
+        CanisterSummary, root::CanisterReserve, state::CanisterStateData,
+        topology::SubnetCanisterRegistry,
     },
     ops::sync::topology::root_cascade,
     state::wasm::WasmRegistry,
@@ -44,7 +45,7 @@ pub async fn create_and_install_canister(
     let (pid, cycles) = allocate_canister(ty).await?;
 
     // mark Created in registry
-    SubnetTopology::create(pid, ty, parent);
+    SubnetCanisterRegistry::create(pid, ty, parent);
 
     // install wasm + flip to Installed
     install_canister(pid, ty, extra_arg).await?;
@@ -67,7 +68,7 @@ pub async fn uninstall_and_delete_canister(canister_pid: Principal) -> Result<St
     uninstall_code(canister_pid).await?;
 
     // remove from registry
-    let canister_type = if let Some(canister) = SubnetTopology::remove(&canister_pid) {
+    let canister_type = if let Some(canister) = SubnetCanisterRegistry::remove(&canister_pid) {
         canister.ty.to_string()
     } else {
         String::from("unregistered")
@@ -136,14 +137,14 @@ async fn install_canister(
     let wasm = WasmRegistry::try_get(ty)?;
 
     // Canister entry
-    let canister_entry = SubnetTopology::try_get(pid)?;
+    let canister_entry = SubnetCanisterRegistry::try_get(pid)?;
 
     // Construct initial state
     // the view is the smaller version of the CanisterEntry
     let state = CanisterStateData {
         canister: Some(canister_entry.into()),
     };
-    let parents: Vec<CanisterSummary> = SubnetTopology::parents(pid);
+    let parents: Vec<CanisterSummary> = SubnetCanisterRegistry::parents(pid);
 
     // Install code
     install_code(
@@ -155,7 +156,7 @@ async fn install_canister(
     .await?;
 
     // Flip to Installed
-    SubnetTopology::install(pid, wasm.module_hash())?;
+    SubnetCanisterRegistry::install(pid, wasm.module_hash())?;
 
     log!(
         Log::Ok,

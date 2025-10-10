@@ -59,31 +59,38 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         fn canic_subnet_registry() -> Vec<::canic::memory::CanisterEntry> {
-            $crate::memory::topology::SubnetTopology::all()
+            $crate::memory::topology::SubnetCanisterRegistry::all()
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_children() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetTopology::children(::canic::cdk::api::canister_self())
+            $crate::memory::topology::SubnetCanisterRegistry::children(
+                ::canic::cdk::api::canister_self(),
+            )
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_directory() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetTopology::directory()
+            $crate::memory::topology::SubnetCanisterRegistry::directory()
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_parents() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetTopology::parents(::canic::cdk::api::canister_self())
+            $crate::memory::topology::SubnetCanisterRegistry::parents(
+                ::canic::cdk::api::canister_self(),
+            )
         }
 
         //
-        // RESERVE
+        // CANISTER RESERVE
         //
 
         #[::canic::cdk::query]
-        fn canic_reserve_list() -> ::canic::memory::root::CanisterReserveView {
-            $crate::memory::root::CanisterReserve::export()
+        async fn canic_reserve_list()
+        -> Result<::canic::memory::root::CanisterReserveView, ::canic::Error> {
+            $crate::auth_require_any!(::canic::auth::is_controller)?;
+
+            Ok($crate::memory::root::CanisterReserve::export())
         }
 
         #[update]
@@ -127,22 +134,22 @@ macro_rules! canic_endpoints_root {
 macro_rules! canic_endpoints_nonroot {
     () => {
         //
-        // TOPOLOGY (NOT AUTHORITATIVE)
+        // TOPOLOGY (NON AUTHORITATIVE)
         //
 
         #[::canic::cdk::query]
-        fn canic_subnet_children() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetChildren::export()
+        fn canic_subnet_canister_children() -> Vec<::canic::memory::CanisterSummary> {
+            $crate::memory::topology::SubnetCanisterChildren::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_directory() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetDirectory::export()
+        fn canic_subnet_canister_directory() -> Vec<::canic::memory::CanisterSummary> {
+            $crate::memory::topology::SubnetCanisterDirectory::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_parents() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetParents::export()
+        fn canic_subnet_canister_parents() -> Vec<::canic::memory::CanisterSummary> {
+            $crate::memory::topology::SubnetCanisterParents::export()
         }
 
         //

@@ -7,7 +7,7 @@ use crate::{
     Error,
     memory::{
         state::{AppState, AppStateData, SubnetState, SubnetStateData},
-        topology::{SubnetChildren, SubnetTopology},
+        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
     ops::{OpsError, prelude::*},
 };
@@ -67,7 +67,7 @@ pub async fn root_cascade(bundle: StateBundle) -> Result<(), Error> {
     }
 
     let root_pid = canister_self();
-    for child in SubnetTopology::children(root_pid) {
+    for child in SubnetCanisterRegistry::children(root_pid) {
         send_bundle(&child.pid, &bundle).await?;
     }
 
@@ -87,7 +87,7 @@ pub async fn cascade_children(bundle: &StateBundle) -> Result<(), Error> {
         return Ok(());
     }
 
-    for child in SubnetChildren::export() {
+    for child in SubnetCanisterChildren::export() {
         send_bundle(&child.pid, bundle).await?;
     }
 

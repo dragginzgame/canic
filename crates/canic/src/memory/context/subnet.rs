@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 eager_static! {
     static SUBNET_CONTEXT: RefCell<Cell<SubnetContextData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(SubnetState, SUBNET_CONTEXT_ID),
+            ic_memory!(SubnetContext, SUBNET_CONTEXT_ID),
             SubnetContextData::default(),
         ));
 }
