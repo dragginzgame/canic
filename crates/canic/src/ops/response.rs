@@ -8,7 +8,7 @@
 use crate::{
     Error,
     interface::ic::{deposit_cycles, upgrade_canister},
-    memory::topology::SubnetTopology,
+    memory::topology::SubnetCanisterRegistry,
     ops::{
         canister::create_and_install_canister,
         prelude::*,
@@ -77,7 +77,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
     let parent_pid = match &req.parent {
         CreateCanisterParent::Root => canister_self(),
         CreateCanisterParent::Caller => msg_caller(),
-        CreateCanisterParent::Directory(ty) => SubnetTopology::try_get_type(ty)?.pid,
+        CreateCanisterParent::Directory(ty) => SubnetCanisterRegistry::try_get_type(ty)?.pid,
         CreateCanisterParent::Canister(pid) => *pid,
     };
 

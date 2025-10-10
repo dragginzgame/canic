@@ -1,4 +1,5 @@
-//! Canister Directory
+//!
+//! Subnet Canister Directory
 //!
 //! Purpose
 //! - Provides a read-only view of installed canisters, keyed by `CanisterType`.
@@ -17,35 +18,39 @@
 //! Implementation
 //! - Internally stored as a `BTreeMap<CanisterType, CanisterEntry>` in stable memory.
 //! - Wrapped in a `thread_local` for safe global access.
-//! - `SubnetDirectory` exposes a small, invariant-preserving API: get, import, export.
+//! - `SubnetCanisterDirectory` exposes a small, invariant-preserving API: get, import, export.
+//!
 use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    memory::{CanisterSummary, id::topology::subnet::SUBNET_DIRECTORY_ID, topology::TopologyError},
+    memory::{
+        CanisterSummary, id::topology::subnet::SUBNET_CANISTER_DIRECTORY_ID,
+        topology::TopologyError,
+    },
     types::CanisterType,
 };
 use std::cell::RefCell;
 
 //
-// SUBNET_DIRECTORY
+// SUBNET_CANISTER_DIRECTORY
 //
 
 eager_static! {
-    static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterType, CanisterSummary, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(SubnetDirectory, SUBNET_DIRECTORY_ID)));
+    static SUBNET_CANISTER_DIRECTORY: RefCell<BTreeMap<CanisterType, CanisterSummary, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(ic_memory!(SubnetCanisterDirectory, SUBNET_CANISTER_DIRECTORY_ID)));
 }
 
 ///
-/// SubnetDirectory
+/// SubnetCanisterDirectory
 ///
 
-pub struct SubnetDirectory;
+pub struct SubnetCanisterDirectory;
 
-impl SubnetDirectory {
+impl SubnetCanisterDirectory {
     #[must_use]
     pub fn get(ty: &CanisterType) -> Option<CanisterSummary> {
-        SUBNET_DIRECTORY.with_borrow(|map| map.get(ty))
+        SUBNET_CANISTER_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
     pub fn try_get(ty: &CanisterType) -> Result<CanisterSummary, Error> {
@@ -53,7 +58,7 @@ impl SubnetDirectory {
     }
 
     pub fn import(view: Vec<CanisterSummary>) {
-        SUBNET_DIRECTORY.with_borrow_mut(|map| {
+        SUBNET_CANISTER_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for entry in view {
                 map.insert(entry.ty.clone(), entry);
@@ -63,6 +68,6 @@ impl SubnetDirectory {
 
     #[must_use]
     pub fn export() -> Vec<CanisterSummary> {
-        SUBNET_DIRECTORY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
+        SUBNET_CANISTER_DIRECTORY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 }

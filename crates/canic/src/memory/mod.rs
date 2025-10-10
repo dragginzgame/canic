@@ -104,15 +104,16 @@ pub(crate) mod id {
 
         pub mod app {
             // prime root is authoritative
-            pub const APP_TOPOLOGY_ID: u8 = 12;
+            pub const APP_SUBNET_REGISTRY_ID: u8 = 12;
+            pub const APP_CANISTER_REGISTRY_ID: u8 = 13;
         }
 
         pub mod subnet {
             // registry is root-authoritative, the others are cascaded views
-            pub const SUBNET_TOPOLOGY_ID: u8 = 15;
-            pub const SUBNET_CHILDREN_ID: u8 = 16;
-            pub const SUBNET_DIRECTORY_ID: u8 = 17;
-            pub const SUBNET_PARENTS_ID: u8 = 18;
+            pub const SUBNET_CANISTER_REGISTRY_ID: u8 = 15;
+            pub const SUBNET_CANISTER_DIRECTORY_ID: u8 = 16;
+            pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 17;
+            pub const SUBNET_CANISTER_PARENTS_ID: u8 = 18;
         }
     }
 

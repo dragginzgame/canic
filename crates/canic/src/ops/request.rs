@@ -8,7 +8,7 @@
 use crate::{
     Error,
     cdk::call::Call,
-    memory::{context::CanisterContext, state::CanisterState, topology::SubnetChildren},
+    memory::{context::CanisterContext, state::CanisterState, topology::SubnetCanisterChildren},
     ops::{
         prelude::*,
         response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
@@ -132,7 +132,7 @@ pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
-    let canister = SubnetChildren::try_find_by_pid(&canister_pid)?;
+    let canister = SubnetCanisterChildren::try_find_by_pid(&canister_pid)?;
 
     // send the request
     let q = Request::UpgradeCanister(UpgradeCanisterRequest {

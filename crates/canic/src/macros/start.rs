@@ -28,7 +28,7 @@ macro_rules! canic_start {
             ::canic::memory::registry::init_memory();
             ::canic::memory::context::CanisterContext::set_root_pid(::canic::cdk::api::msg_caller());
             ::canic::memory::state::CanisterState::import(state);
-            ::canic::memory::topology::SubnetParents::import(parents);
+            ::canic::memory::topology::SubnetCanisterParents::import(parents);
 
             // cycles
             ::canic::memory::capability::cycles::CycleTracker::start();
@@ -98,7 +98,7 @@ macro_rules! canic_start_root {
             ::canic::memory::registry::init_memory();
 
             // memory topology
-            let entry = ::canic::memory::topology::SubnetTopology::init_root(
+            let entry = ::canic::memory::topology::SubnetCanisterRegistry::init_root(
                 ::canic::cdk::api::canister_self(),
             );
             ::canic::memory::state::CanisterState::set_canister(entry.into());

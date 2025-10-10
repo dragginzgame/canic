@@ -27,8 +27,8 @@ use thiserror::Error as ThisError;
 eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
-            BTreeMap::init(ic_memory!(ShardRegistry, SHARDING_REGISTRY_ID)),
-            BTreeMap::init(ic_memory!(ShardRegistry, SHARDING_TENANTS_ID)),
+            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_REGISTRY_ID)),
+            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_TENANTS_ID)),
         )
     );
 }

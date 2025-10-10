@@ -10,7 +10,10 @@ use crate::{
     cdk::api::{canister_self, msg_caller},
     memory::{
         context::CanisterContext,
-        topology::{SubnetChildren, SubnetDirectory, SubnetParents, SubnetTopology},
+        topology::{
+            SubnetCanisterChildren, SubnetCanisterDirectory, SubnetCanisterParents,
+            SubnetCanisterRegistry,
+        },
     },
     types::CanisterType,
 };
@@ -152,7 +155,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetTopology::get(caller) {
+        match SubnetCanisterRegistry::get(caller) {
             Some(_) => Ok(()),
             None => Err(AuthError::NotApp(caller))?,
         }
@@ -163,7 +166,7 @@ pub fn is_app(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let canister = SubnetDirectory::try_get(&ty)
+        let canister = SubnetCanisterDirectory::try_get(&ty)
             .map_err(|_| AuthError::NotDirectoryType(caller, ty.clone()))?;
 
         if canister.pid == caller {
@@ -178,7 +181,7 @@ pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult 
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        SubnetChildren::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
+        SubnetCanisterChildren::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -220,7 +223,7 @@ pub fn is_parent(caller: Principal) -> AuthRuleResult {
             return Ok(());
         }
 
-        if SubnetParents::find_by_pid(&caller).is_some() {
+        if SubnetCanisterParents::find_by_pid(&caller).is_some() {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?

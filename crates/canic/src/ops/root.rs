@@ -7,7 +7,7 @@
 use crate::{
     Error,
     config::Config,
-    memory::topology::SubnetTopology,
+    memory::topology::SubnetCanisterRegistry,
     ops::{
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},
@@ -26,7 +26,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for canister in SubnetTopology::all() {
+    for canister in SubnetCanisterRegistry::all() {
         log!(
             Log::Info,
             "🥫 {} ({}) [{}]",
