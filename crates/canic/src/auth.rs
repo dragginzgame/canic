@@ -9,11 +9,9 @@ use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
     memory::{
-        context::CanisterContext,
-        topology::{
-            SubnetCanisterChildren, SubnetCanisterDirectory, SubnetCanisterParents,
-            SubnetCanisterRegistry,
-        },
+        Env,
+        directory::{AppDirectory, SubnetDirectory},
+        topology::{SubnetCanisterChildren, SubnetCanisterParents, SubnetCanisterRegistry},
     },
     types::CanisterType,
 };
@@ -36,39 +34,33 @@ pub enum AuthError {
     #[error("one or more rules must be defined")]
     NoRulesDefined,
 
-    /// Caller is not an application canister registered on this subnet.
-    #[error("caller '{0}' is not an application canister on this subnet")]
-    NotApp(Principal),
+    #[error("caller '{0}' does not match the app directory's canister type '{1}'")]
+    NotAppDirectoryType(Principal, CanisterType),
 
-    /// Caller does not match the expected canister type.
     #[error("caller '{0}' does not match the subnet directory's canister type '{1}'")]
-    NotDirectoryType(Principal, CanisterType),
+    NotSubnetDirectoryType(Principal, CanisterType),
 
-    /// Caller is not a child of the current canister.
     #[error("caller '{0}' is not a child of this canister")]
     NotChild(Principal),
 
-    /// Caller is not a controller of the current canister.
     #[error("caller '{0}' is not a controller of this canister")]
     NotController(Principal),
 
-    /// Caller is not the parent of the current canister.
     #[error("caller '{0}' is not the parent of this canister")]
     NotParent(Principal),
 
-    /// Caller principal does not equal the expected principal.
     #[error("expected caller principal '{1}' got '{0}'")]
     NotPrincipal(Principal, Principal),
 
-    /// Caller is not the root canister.
     #[error("caller '{0}' is not root")]
     NotRoot(Principal),
 
-    /// Caller is not the current canister (self).
     #[error("caller '{0}' is not the current canister")]
     NotSameCanister(Principal),
 
-    /// Caller is not present in the active whitelist.
+    #[error("caller '{0}' is not registered on the subnet registry")]
+    NotRegisteredToSubnet(Principal),
+
     #[error("caller '{0}' is not on the whitelist")]
     NotWhitelisted(Principal),
 }
@@ -150,29 +142,32 @@ macro_rules! auth_require_any {
 // Rule functions
 // -----------------------------------------------------------------------------
 
-/// Require that the caller is registered as an application canister on this
-/// subnet.
+/// Ensure the caller matches the subnet directory entry recorded for `ty`.
 #[must_use]
-pub fn is_app(caller: Principal) -> AuthRuleResult {
+pub fn is_app_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetCanisterRegistry::get(caller) {
-            Some(_) => Ok(()),
-            None => Err(AuthError::NotApp(caller))?,
+        let canister_pid = AppDirectory::try_get(&ty)
+            .map_err(|_| AuthError::NotAppDirectoryType(caller, ty.clone()))?;
+
+        if canister_pid == caller {
+            Ok(())
+        } else {
+            Err(AuthError::NotAppDirectoryType(caller, ty.clone()))?
         }
     })
 }
 
-/// Ensure the caller matches the directory entry recorded for `ty`.
+/// Ensure the caller matches the subnet directory entry recorded for `ty`.
 #[must_use]
-pub fn is_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
+pub fn is_subnet_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let canister = SubnetCanisterDirectory::try_get(&ty)
-            .map_err(|_| AuthError::NotDirectoryType(caller, ty.clone()))?;
+        let canister_pid = SubnetDirectory::try_get(&ty)
+            .map_err(|_| AuthError::NotSubnetDirectoryType(caller, ty.clone()))?;
 
-        if canister.pid == caller {
+        if canister_pid == caller {
             Ok(())
         } else {
-            Err(AuthError::NotDirectoryType(caller, ty.clone()))?
+            Err(AuthError::NotSubnetDirectoryType(caller, ty.clone()))?
         }
     })
 }
@@ -203,7 +198,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = CanisterContext::try_get_root_pid()?;
+        let root_pid = Env::try_get_root_pid()?;
 
         if caller == root_pid {
             Ok(())
@@ -218,7 +213,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         // Root is always considered a parent
-        let root_pid = CanisterContext::try_get_root_pid()?;
+        let root_pid = Env::try_get_root_pid()?;
         if caller == root_pid {
             return Ok(());
         }
@@ -255,6 +250,19 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     })
 }
 
+/// Require that the caller is registered as an canister on this
+/// subnet
+/// *** ONLY ON ROOT FOR NOW ***
+#[must_use]
+pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
+    Box::pin(async move {
+        match SubnetCanisterRegistry::get(caller) {
+            Some(_) => Ok(()),
+            None => Err(AuthError::NotRegisteredToSubnet(caller))?,
+        }
+    })
+}
+
 /// Require that the caller appears in the active whitelist (IC deployments).
 #[must_use]
 #[allow(unused_variables)]
@@ -263,7 +271,7 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
         #[cfg(feature = "ic")]
         {
             use crate::config::Config;
-            let cfg = Config::try_get()?;
+            let cfg = Config::get();
 
             if !cfg.is_whitelisted(&caller) {
                 Err(AuthError::NotWhitelisted(caller))?;

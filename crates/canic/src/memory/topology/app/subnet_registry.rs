@@ -4,7 +4,7 @@ use crate::{
     eager_static, ic_memory, impl_storable_bounded,
     memory::{id::topology::app::APP_SUBNET_REGISTRY_ID, topology::TopologyError},
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -22,7 +22,7 @@ eager_static! {
 /// AppSubnet
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AppSubnet {
     pub subnet_pid: Principal,
     pub root_pid: Principal,

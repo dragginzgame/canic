@@ -1,61 +1,20 @@
-//! ICU Memory ID Layout (5–30)
-//!
-//! Memory IDs are grouped by **domain**, with a clear scope and lifecycle.
-//!
-//! ┌───────────────────────────────┐
-//! │           Context             │  (immutable, creation-only)
-//! │   • SUBNET_CONTEXT_ID         │
-//! │   • CANISTER_CONTEXT_ID       │
-//! └──────────────┬────────────────┘
-//!                │
-//! ┌──────────────▼────────────────┐
-//! │            State              │  (mutable, runtime)
-//! │   • APP_STATE_ID              │
-//! │   • SUBNET_STATE_ID           │
-//! │   • CANISTER_STATE_ID         │
-//! └──────────────┬────────────────┘
-//!                │
-//! ┌──────────────▼────────────────┐
-//! │           Topology            │  (relational, cascading)
-//! │   • APP_TOPOLOGY_ID           │
-//! │   • SUBNET_TOPOLOGY_ID        │
-//! │   • SUBNET_CHILDREN_ID        │
-//! │   • SUBNET_DIRECTORY_ID       │
-//! │   • SUBNET_PARENTS_ID         │
-//! └──────────────┬────────────────┘
-//!                │
-//!      ┌─────────▼───────────┐       ┌───────────────────┐
-//!      │     Root-only       │       │   Capabilities    │
-//!      │  • CANISTER_RESERVE │       │  • SCALING_REG    │
-//!      │ (privileged)        │       │  • SHARDING_*     │
-//!      └─────────────────────┘       └───────────────────┘
-//!
-//! ## Domains
-//!
-//! - **Context** → identity (set once at creation)
-//! - **State**   → runtime control knobs
-//! - **Topology**→ system map (parent/child relationships)
-//! - **Root**    → privileged registries/reserves
-//! - **Caps**    → optional feature extensions
-//!
-//! This taxonomy ensures a clean separation of responsibilities across
-//! the memory layout.
-
-pub mod capability;
-pub mod context;
+pub mod directory;
+pub mod env;
+pub mod ext;
 pub mod registry;
 pub mod root;
 pub mod state;
 pub mod topology;
 pub mod types;
 
+pub use env::Env;
 pub use registry::{MemoryRegistry, MemoryRegistryError};
 pub use types::*;
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
-        capability::CapabilityError, context::ContextError, state::StateError,
+        directory::DirectoryError, env::ContextError, ext::ExtensionError, state::StateError,
         topology::TopologyError,
     },
 };
@@ -82,36 +41,33 @@ pub(crate) const CANIC_MEMORY_MAX: u8 = 30;
 ///
 
 pub(crate) mod id {
-    // context
+    // environment
     // creation-only, and it stays immutable
-    // all canisters get canister_context
-    // only root knows about the subnet context
-    pub mod context {
-        pub const SUBNET_CONTEXT_ID: u8 = 5;
-        pub const CANISTER_CONTEXT_ID: u8 = 6;
-    }
+    // all canisters get env
+    pub const ENV_ID: u8 = 5;
 
     // icu network states
-    // should remain just three, app -> subnet -> canister
     pub mod state {
-        pub const APP_STATE_ID: u8 = 8;
-        pub const SUBNET_STATE_ID: u8 = 9;
-        pub const CANISTER_STATE_ID: u8 = 10;
+        pub const APP_STATE_ID: u8 = 7;
+        pub const SUBNET_STATE_ID: u8 = 8;
+    }
+
+    // directory
+    pub mod directory {
+        pub const SUBNET_DIRECTORY_ID: u8 = 10;
+        pub const APP_DIRECTORY_ID: u8 = 11;
     }
 
     // topology
     pub mod topology {
-
         pub mod app {
             // prime root is authoritative
-            pub const APP_SUBNET_REGISTRY_ID: u8 = 12;
-            pub const APP_CANISTER_REGISTRY_ID: u8 = 13;
+            pub const APP_SUBNET_REGISTRY_ID: u8 = 13;
         }
 
         pub mod subnet {
             // registry is root-authoritative, the others are cascaded views
             pub const SUBNET_CANISTER_REGISTRY_ID: u8 = 15;
-            pub const SUBNET_CANISTER_DIRECTORY_ID: u8 = 16;
             pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 17;
             pub const SUBNET_CANISTER_PARENTS_ID: u8 = 18;
         }
@@ -135,7 +91,7 @@ pub(crate) mod id {
 
         pub mod sharding {
             pub const SHARDING_REGISTRY_ID: u8 = 26;
-            pub const SHARDING_TENANTS_ID: u8 = 23;
+            pub const SHARDING_TENANTS_ID: u8 = 27;
         }
     }
 }
@@ -167,10 +123,13 @@ pub enum MemoryError {
     MemoryRegistryError(#[from] MemoryRegistryError),
 
     #[error(transparent)]
-    CapabilityError(#[from] CapabilityError),
+    ContextError(#[from] ContextError),
 
     #[error(transparent)]
-    ContextError(#[from] ContextError),
+    DirectoryError(#[from] DirectoryError),
+
+    #[error(transparent)]
+    ExtensionError(#[from] ExtensionError),
 
     #[error(transparent)]
     StateError(#[from] StateError),

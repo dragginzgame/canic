@@ -10,12 +10,12 @@ cargo install \
     cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
     candid-extractor ic-wasm
 
-# cleanup
+# audit
 cargo audit
 
-# update last
+# update
 cargo update --verbose
 
-# dfx
+# dfxvm update
+# (not update as that can set the default to an older version)
 dfxvm self update
-dfxvm update

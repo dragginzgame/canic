@@ -7,20 +7,20 @@ pub use subnet::*;
 use crate::{Error, ThisError, memory::MemoryError};
 
 ///
-/// StateError
+/// DirectoryError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum StateError {
+pub enum DirectoryError {
     #[error(transparent)]
-    AppStateError(#[from] AppStateError),
+    AppDirectoryError(#[from] AppDirectoryError),
 
     #[error(transparent)]
-    SubnetStateError(#[from] SubnetStateError),
+    SubnetDirectoryError(#[from] SubnetDirectoryError),
 }
 
-impl From<StateError> for Error {
-    fn from(err: StateError) -> Self {
+impl From<DirectoryError> for Error {
+    fn from(err: DirectoryError) -> Self {
         MemoryError::from(err).into()
     }
 }

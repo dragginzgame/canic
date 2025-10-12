@@ -160,27 +160,3 @@ pub enum Log {
     Error,
     Debug,
 }
-
-///
-/// expect_or_trap
-///
-
-#[inline]
-pub fn expect_or_trap<T, E: core::fmt::Display>(res: Result<T, E>, context: &str) -> T {
-    match res {
-        Ok(v) => v,
-        Err(e) => {
-            #[cfg(target_arch = "wasm32")]
-            {
-                // Log and trap inside the canister environment.
-                crate::log!(crate::Log::Error, "{}: {}", context, e);
-                crate::cdk::trap(&format!("{}: {}", context, e));
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // Native/testing: surface as panic with context.
-                panic!("{context}: {e}");
-            }
-        }
-    }
-}

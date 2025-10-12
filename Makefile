@@ -116,7 +116,7 @@ test-canisters:
 		( dfx canister create --all -qq ); \
 		( dfx build --all ); \
 		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
-		( dfx canister install root --mode=reinstall -y ); \
+		( dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
 	else \
 		echo "Skipping canister tests (dfx not installed)"; \
 	fi

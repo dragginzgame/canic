@@ -8,11 +8,7 @@
 use candid::Principal;
 use canic::{
     Error, canister,
-    ops::{
-        request::{CreateCanisterParent, create_canister_request},
-        response::CreateCanisterResponse,
-        root::root_create_canisters,
-    },
+    ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
     types::{Account, TC},
 };
@@ -25,9 +21,7 @@ canic_start_root!();
 
 async fn canic_setup() {}
 
-async fn canic_install() {
-    root_create_canisters().await.unwrap();
-}
+async fn canic_install() {}
 
 async fn canic_upgrade() {}
 

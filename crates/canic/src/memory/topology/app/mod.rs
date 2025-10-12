@@ -1,5 +1,3 @@
-mod canister;
-mod subnet;
+mod subnet_registry;
 
-pub use canister::*;
-pub use subnet::*;
+pub use subnet_registry::*;

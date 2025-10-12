@@ -1,9 +1,7 @@
 use crate::{
     Error,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    memory::capability::sharding::{
-        SHARDING_CORE, ShardEntry, ShardKey, ShardingCore, ShardingError,
-    },
+    memory::ext::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore, ShardingError},
     types::CanisterType,
     utils::time::now_secs,
 };

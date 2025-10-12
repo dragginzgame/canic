@@ -80,16 +80,20 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
     let request = GetSubnetForCanisterRequest::new(msg_caller());
 
-    let subnet_id = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
+    let subnet_id_opt = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
         .with_arg(request)
         .await?
         .candid::<GetSubnetForCanisterResponse>()?
         .map_err(Error::CallFailed)?
         .subnet_id;
 
-    log!("[GET_SUBNET] found subnet_id {subnet_id:?}");
+    if let Some(subnet_id) = subnet_id_opt {
+        log!("get_current_subnet_pid: {subnet_id}");
+    } else {
+        log!("get_current_subnet_pid: not found");
+    }
 
-    Ok(subnet_id)
+    Ok(subnet_id_opt)
 }
 
 //

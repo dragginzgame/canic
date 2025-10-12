@@ -6,6 +6,7 @@
 use crate::{
     Error,
     memory::{
+        directory::{AppDirectory, AppDirectoryView, SubnetDirectory, SubnetDirectoryView},
         state::{AppState, AppStateData, SubnetState, SubnetStateData},
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
@@ -17,10 +18,15 @@ use crate::{
 /// Snapshot of mutable state sections that can be propagated to peers
 ///
 
-#[derive(CandidType, Copy, Clone, Debug, Default, Deserialize)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct StateBundle {
+    // states
     pub app_state: Option<AppStateData>,
     pub subnet_state: Option<SubnetStateData>,
+
+    // directories
+    pub app_directory: Option<AppDirectoryView>,
+    pub subnet_directory: Option<SubnetDirectoryView>,
 }
 
 impl StateBundle {
@@ -30,32 +36,56 @@ impl StateBundle {
         Self {
             app_state: Some(AppState::export()),
             subnet_state: Some(SubnetState::export()),
+            app_directory: Some(AppDirectory::export()),
+            subnet_directory: Some(SubnetDirectory::export()),
         }
     }
 
-    /// Compact debug string (`a..`) showing which sections are present.
-    fn debug(self) -> String {
-        [
-            if self.app_state.is_some() { 'a' } else { '.' },
-            if self.subnet_state.is_some() {
-                's'
-            } else {
-                '.'
-            },
-        ]
-        .iter()
-        .collect()
+    #[must_use]
+    pub fn app_state() -> Self {
+        Self {
+            app_state: Some(AppState::export()),
+            ..Default::default()
+        }
     }
 
-    /// Whether the bundle is "empty" (nothing to sync).
-    const fn is_empty(self) -> bool {
+    #[must_use]
+    pub fn subnet_directory() -> Self {
+        Self {
+            subnet_directory: Some(SubnetDirectory::export()),
+            ..Default::default()
+        }
+    }
+
+    /// Compact debug string showing which sections are present.
+    /// Example: `[as ss .. sd]`
+    #[must_use]
+    pub fn debug(&self) -> String {
+        const fn fmt(present: bool, code: &str) -> &str {
+            if present { code } else { ".." }
+        }
+
+        format!(
+            "[{} {} {} {}]",
+            fmt(self.app_state.is_some(), "as"),
+            fmt(self.subnet_state.is_some(), "ss"),
+            fmt(self.app_directory.is_some(), "ad"),
+            fmt(self.subnet_directory.is_some(), "sd"),
+        )
+    }
+
+    /// Whether the bundle carries any state sections (true when both are absent).
+    const fn is_empty(&self) -> bool {
         self.app_state.is_none()
+            && self.subnet_state.is_none()
+            && self.app_directory.is_none()
+            && self.subnet_directory.is_none()
     }
 }
 
 /// Cascade from root: distribute the state bundle to direct children.
 /// No-op when the bundle is empty.
-pub async fn root_cascade(bundle: StateBundle) -> Result<(), Error> {
+pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
     if bundle.is_empty() {
@@ -76,16 +106,11 @@ pub async fn root_cascade(bundle: StateBundle) -> Result<(), Error> {
 
 /// Cascade from a child: forward the bundle to direct children.
 /// No-op when the bundle is empty.
-pub async fn cascade_children(bundle: &StateBundle) -> Result<(), Error> {
+pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
-    if bundle.is_empty() {
-        log!(
-            Log::Info,
-            "💦 sync.state: cascade_children skipped (empty bundle)"
-        );
-        return Ok(());
-    }
+    // update local state
+    save_state(bundle)?;
 
     for child in SubnetCanisterChildren::export() {
         send_bundle(&child.pid, bundle).await?;
@@ -95,14 +120,23 @@ pub async fn cascade_children(bundle: &StateBundle) -> Result<(), Error> {
 }
 
 /// Save state locally on a child canister.
-pub fn save_state(bundle: &StateBundle) -> Result<(), Error> {
+fn save_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
+    // states
     if let Some(state) = bundle.app_state {
         AppState::import(state);
     }
     if let Some(state) = bundle.subnet_state {
         SubnetState::import(state);
+    }
+
+    // directories
+    if let Some(dir) = &bundle.app_directory {
+        AppDirectory::import(dir.clone());
+    }
+    if let Some(dir) = &bundle.subnet_directory {
+        SubnetDirectory::import(dir.clone());
     }
 
     Ok(())

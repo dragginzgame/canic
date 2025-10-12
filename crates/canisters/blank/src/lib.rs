@@ -8,10 +8,7 @@
 use canic::{
     Error,
     canister::BLANK,
-    ops::{
-        request::{CreateCanisterParent, create_canister_request},
-        response::CreateCanisterResponse,
-    },
+    ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
 };
 

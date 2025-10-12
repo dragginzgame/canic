@@ -5,8 +5,9 @@
 mod canister_demo {
     use canic::Error;
     use canic::canister;
-    use canic::ops::request::{CreateCanisterParent, create_canister_request};
-    use canic::ops::response::CreateCanisterResponse;
+    use canic::ops::request::{
+        CreateCanisterParent, CreateCanisterResponse, create_canister_request,
+    };
 
     // Not a full canister; demonstrates the call site.
     #[allow(dead_code)]

@@ -1,11 +1,10 @@
 use crate::{
     Error, ThisError,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    config::Config,
     eager_static, ic_memory,
     memory::{
-        CanisterEntry, CanisterStatus, CanisterSummary,
-        id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID, topology::TopologyError,
+        CanisterEntry, CanisterSummary, id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID,
+        topology::TopologyError,
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -37,22 +36,6 @@ pub struct SubnetCanisterRegistry;
 
 impl SubnetCanisterRegistry {
     #[must_use]
-    pub fn init_root(pid: Principal) -> CanisterEntry {
-        let entry = CanisterEntry {
-            pid,
-            ty: CanisterType::ROOT,
-            parent_pid: None,
-            status: CanisterStatus::Installed,
-            module_hash: None,
-            created_at: now_secs(),
-        };
-
-        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry.clone()));
-
-        entry
-    }
-
-    #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.get(&pid))
     }
@@ -71,33 +54,42 @@ impl SubnetCanisterRegistry {
         })
     }
 
-    pub fn create(pid: Principal, ty: &CanisterType, parent_pid: Principal) {
+    /// Register a new canister (non-root) with parent + module hash.
+    pub fn register(
+        pid: Principal,
+        ty: &CanisterType,
+        parent_pid: Principal,
+        module_hash: Vec<u8>,
+    ) {
         let entry = CanisterEntry {
             pid,
             ty: ty.clone(),
             parent_pid: Some(parent_pid),
-            status: CanisterStatus::Created,
+            module_hash: Some(module_hash),
+            created_at: now_secs(),
+        };
+
+        Self::insert(entry);
+    }
+
+    /// Register the root canister itself (no parent, no module hash).
+    pub fn register_root(pid: Principal) {
+        let entry = CanisterEntry {
+            pid,
+            ty: CanisterType::ROOT,
+            parent_pid: None,
             module_hash: None,
             created_at: now_secs(),
         };
 
-        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.insert(pid, entry));
+        Self::insert(entry);
     }
 
-    pub fn install(pid: Principal, module_hash: Vec<u8>) -> Result<(), Error> {
-        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| {
-            let entry = map.get(&pid).ok_or(TopologyError::PrincipalNotFound(pid))?;
-
-            if entry.status == CanisterStatus::Installed {
-                return Err(TopologyError::CanisterAlreadyInstalled(pid))?;
-            }
-
-            let mut updated = entry;
-            updated.status = CanisterStatus::Installed;
-            updated.module_hash = Some(module_hash);
-            map.insert(pid, updated);
-            Ok(())
-        })
+    /// Internal helper: inserts a fully-formed entry into the registry.
+    fn insert(entry: CanisterEntry) {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
+            reg.insert(entry.pid, entry);
+        });
     }
 
     #[must_use]
@@ -110,29 +102,9 @@ impl SubnetCanisterRegistry {
         SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
-    #[must_use]
-    pub fn all_summaries() -> Vec<CanisterSummary> {
-        SUBNET_CANISTER_REGISTRY.with_borrow(|map| {
-            map.iter()
-                .map(|e| CanisterSummary::from(e.value()))
-                .collect()
-        })
-    }
-
-    /// Returns the contents of the Subnet Directory
-    #[must_use]
-    pub fn directory() -> Vec<CanisterSummary> {
-        Self::all()
-            .into_iter()
-            .filter(|e| e.status == CanisterStatus::Installed)
-            .filter(|e| {
-                e.ty == CanisterType::ROOT
-                    || Config::try_get_canister(&e.ty)
-                        .map(|cfg| cfg.uses_directory)
-                        .unwrap_or(false)
-            })
-            .map(CanisterSummary::from)
-            .collect()
+    #[cfg(test)]
+    pub fn clear_for_tests() {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
     /// Return the full parent chain for a given PID,
@@ -214,10 +186,5 @@ impl SubnetCanisterRegistry {
         }
 
         false
-    }
-
-    #[cfg(test)]
-    pub fn clear_for_tests() {
-        SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 }

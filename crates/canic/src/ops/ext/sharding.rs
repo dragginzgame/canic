@@ -6,15 +6,12 @@
 //! planners, and helper flows for assigning, draining, or rebalancing shards.
 
 use crate::{
-    Error, Log, ThisError,
-    config::Config,
-    log,
-    memory::{
-        capability::sharding::{PoolMetrics, ShardingRegistry, ShardingRegistryView},
-        state::CanisterState,
-    },
+    Error, Log, ThisError, log,
+    memory::ext::sharding::{PoolMetrics, ShardingRegistry, ShardingRegistryView},
     ops::{
         OpsError,
+        context::cfg_current_canister,
+        ext::ExtensionError,
         request::{CreateCanisterParent, create_canister_request},
     },
     types::CanisterType,
@@ -47,7 +44,7 @@ pub enum ShardingError {
 
 impl From<ShardingError> for Error {
     fn from(err: ShardingError) -> Self {
-        OpsError::from(err).into()
+        OpsError::from(ExtensionError::from(err)).into()
     }
 }
 
@@ -136,6 +133,7 @@ pub async fn admin_command(cmd: AdminCommand) -> Result<AdminResult, Error> {
             ShardingRegistry::assign(&pool, pid, shard_pid)?;
             Ok(AdminResult::Ok)
         }
+
         AdminCommand::Drain {
             pool,
             shard_pid,
@@ -144,10 +142,12 @@ pub async fn admin_command(cmd: AdminCommand) -> Result<AdminResult, Error> {
             let moved = drain_shard(&pool, shard_pid, max_moves).await?;
             Ok(AdminResult::Moved(moved))
         }
+
         AdminCommand::Rebalance { pool, max_moves } => {
             let moved = rebalance_pool(&pool, max_moves)?;
             Ok(AdminResult::Moved(moved))
         }
+
         AdminCommand::Decommission { shard_pid } => {
             decommission_shard(shard_pid)?;
             Ok(AdminResult::Ok)
@@ -163,6 +163,7 @@ const fn ensure_can_create(
     if metrics.active_count >= policy.max_shards {
         return Err(ShardingError::ShardCapReached);
     }
+
     if metrics.utilization_pct < policy.growth_threshold_pct && metrics.total_capacity > 0 {
         return Err(ShardingError::BelowGrowthThreshold);
     }
@@ -172,16 +173,13 @@ const fn ensure_can_create(
 
 /// Lookup the config for a shard pool on the current canister.
 fn get_shard_pool_cfg(pool: &str) -> Result<(CanisterType, ShardingPolicy), Error> {
-    let this_ty = CanisterState::try_get_canister()?.ty;
-
-    let sharding_cfg = Config::try_get_canister(&this_ty)?
-        .sharding
-        .ok_or(OpsError::ShardingError(ShardingError::ShardingDisabled))?;
+    let cfg = cfg_current_canister()?;
+    let sharding_cfg = cfg.sharding.ok_or(ShardingError::ShardingDisabled)?;
 
     let pool_cfg = sharding_cfg
         .pools
         .get(pool)
-        .ok_or(OpsError::ShardingError(ShardingError::PoolNotFound))?;
+        .ok_or(ShardingError::PoolNotFound)?;
 
     Ok((
         pool_cfg.canister_type.clone(),
@@ -245,7 +243,7 @@ pub async fn assign_with_policy(
 
     // Maybe create new shard
     let metrics = ShardingRegistry::metrics(pool);
-    ensure_can_create(&metrics, &policy).map_err(OpsError::ShardingError)?;
+    ensure_can_create(&metrics, &policy)?;
 
     let response =
         create_canister_request::<Vec<u8>>(canister_type, CreateCanisterParent::Caller, extra_arg)
@@ -283,7 +281,7 @@ pub async fn drain_shard(pool: &str, shard_pid: Principal, limit: u32) -> Result
 
         // No shard available → create one if policy allows
         let metrics = ShardingRegistry::metrics(pool);
-        ensure_can_create(&metrics, &policy).map_err(OpsError::ShardingError)?;
+        ensure_can_create(&metrics, &policy)?;
 
         let response =
             create_canister_request::<Vec<u8>>(&canister_type, CreateCanisterParent::Caller, None)

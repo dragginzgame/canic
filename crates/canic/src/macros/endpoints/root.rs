@@ -11,8 +11,8 @@ macro_rules! canic_endpoints_root {
 
             ::canic::memory::state::AppState::command(cmd)?;
 
-            let bundle = ::canic::ops::sync::state::StateBundle::root();
-            ::canic::ops::sync::state::root_cascade(bundle).await?;
+            let bundle = ::canic::ops::sync::state::StateBundle::app_state();
+            ::canic::ops::sync::state::root_cascade_state(bundle).await?;
 
             Ok(())
         }
@@ -21,7 +21,7 @@ macro_rules! canic_endpoints_root {
         #[::canic::cdk::update]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
-        ) -> Result<::canic::ops::response::UpgradeCanisterResponse, ::canic::Error> {
+        ) -> Result<::canic::ops::request::UpgradeCanisterResponse, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
             let res = $crate::ops::request::upgrade_canister_request(canister_pid).await?;
@@ -35,10 +35,10 @@ macro_rules! canic_endpoints_root {
         #[::canic::cdk::update]
         async fn canic_response(
             request: ::canic::ops::request::Request,
-        ) -> Result<::canic::ops::response::Response, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_app)?;
+        ) -> Result<::canic::ops::request::Response, ::canic::Error> {
+            $crate::auth_require_any!(::canic::auth::is_registered_to_subnet)?;
 
-            let response = $crate::ops::response::response(request).await?;
+            let response = $crate::ops::request::response(request).await?;
 
             Ok(response)
         }
@@ -53,29 +53,37 @@ macro_rules! canic_endpoints_root {
         }
 
         //
-        // TOPOLOGY
-        // (on root, these views are returned by the registry)
+        // CONFIG
         //
 
         #[::canic::cdk::query]
-        fn canic_subnet_registry() -> Vec<::canic::memory::CanisterEntry> {
+        async fn canic_config() -> Result<String, ::canic::Error> {
+            $crate::auth_require_any!(::canic::auth::is_controller)?;
+
+            $crate::config::Config::to_toml()
+        }
+
+        //
+        // TOPOLOGY
+        // on root, the SubnetCanisterRegistry is the main source of truth
+        //
+
+        #[::canic::cdk::query]
+        fn canic_subnet_canister_registry() -> Vec<::canic::memory::CanisterEntry> {
             $crate::memory::topology::SubnetCanisterRegistry::all()
         }
 
+        // children is auto-generated from the registry
         #[::canic::cdk::query]
-        fn canic_subnet_children() -> Vec<::canic::memory::CanisterSummary> {
+        fn canic_subnet_canister_children() -> Vec<::canic::memory::CanisterSummary> {
             $crate::memory::topology::SubnetCanisterRegistry::children(
                 ::canic::cdk::api::canister_self(),
             )
         }
 
+        // parents are auto-generated from the registry (always empty)
         #[::canic::cdk::query]
-        fn canic_subnet_directory() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterRegistry::directory()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_subnet_parents() -> Vec<::canic::memory::CanisterSummary> {
+        fn canic_subnet_canister_parents() -> Vec<::canic::memory::CanisterSummary> {
             $crate::memory::topology::SubnetCanisterRegistry::parents(
                 ::canic::cdk::api::canister_self(),
             )
@@ -87,44 +95,24 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         async fn canic_reserve_list()
-        -> Result<::canic::memory::root::CanisterReserveView, ::canic::Error> {
+        -> Result<::canic::memory::root::reserve::CanisterReserveView, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            Ok($crate::memory::root::CanisterReserve::export())
+            Ok($crate::memory::root::reserve::CanisterReserve::export())
         }
 
         #[update]
         async fn canic_reserve_create_canister() -> Result<Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::reserve::create_reserve_canister().await
+            ::canic::ops::root::reserve::create_reserve_canister().await
         }
 
         #[update]
         async fn canic_reserve_move_canister(pid: Principal) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::reserve::move_canister_to_reserve(pid).await
-        }
-
-        //
-        // MEMORY CONTEXT
-        //
-
-        #[::canic::cdk::query]
-        fn canic_subnet_context() -> ::canic::memory::context::SubnetContextData {
-            $crate::memory::context::SubnetContext::export()
-        }
-
-        //
-        // CONFIG
-        //
-
-        #[::canic::cdk::query]
-        async fn canic_config() -> Result<String, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_controller)?;
-
-            $crate::config::Config::to_toml()
+            ::canic::ops::root::reserve::move_canister_to_reserve(pid).await
         }
     };
 }
@@ -143,11 +131,6 @@ macro_rules! canic_endpoints_nonroot {
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_canister_directory() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterDirectory::export()
-        }
-
-        #[::canic::cdk::query]
         fn canic_subnet_canister_parents() -> Vec<::canic::memory::CanisterSummary> {
             $crate::memory::topology::SubnetCanisterParents::export()
         }
@@ -162,8 +145,7 @@ macro_rules! canic_endpoints_nonroot {
         ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_parent)?;
 
-            $crate::ops::sync::state::save_state(&bundle)?;
-            $crate::ops::sync::state::cascade_children(&bundle).await
+            $crate::ops::sync::state::nonroot_cascade_state(&bundle).await
         }
 
         #[::canic::cdk::update]
@@ -172,8 +154,7 @@ macro_rules! canic_endpoints_nonroot {
         ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_parent)?;
 
-            $crate::ops::sync::topology::save_state(&bundle)?;
-            $crate::ops::sync::topology::cascade_children(&bundle).await
+            $crate::ops::sync::topology::nonroot_cascade_topology(&bundle).await
         }
     };
 }

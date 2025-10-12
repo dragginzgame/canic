@@ -8,9 +8,10 @@
 //! - decommissioning an empty shard
 
 use candid::Principal;
-use canic::memory::capability::sharding::ShardingRegistry;
-use canic::ops::sharding::rebalance_pool;
-use canic::types::CanisterType;
+use canic::{
+    memory::ext::sharding::ShardingRegistry, ops::ext::sharding::rebalance_pool,
+    types::CanisterType,
+};
 
 const fn p(id: u8) -> Principal {
     // Deterministic test principal (29 identical bytes)

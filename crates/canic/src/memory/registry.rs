@@ -9,7 +9,7 @@ use crate::{
         CANIC_MEMORY_MAX, CANIC_MEMORY_MIN, MEMORY_MANAGER, MEMORY_RANGES_ID, MEMORY_REGISTRY_ID,
         MemoryError,
     },
-    types::BoundedString64,
+    types::BoundedString256,
     utils::time::now_secs,
 };
 use candid::CandidType;
@@ -165,7 +165,7 @@ impl From<MemoryRegistryError> for Error {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRange {
-    pub crate_key: BoundedString64,
+    pub crate_key: BoundedString256,
     pub start: u8,
     pub end: u8,
     pub created_at: u64,
@@ -175,7 +175,7 @@ impl MemoryRange {
     #[must_use]
     pub fn new(crate_key: &str, start: u8, end: u8) -> Self {
         Self {
-            crate_key: BoundedString64::new(crate_key),
+            crate_key: BoundedString256::new(crate_key),
             start,
             end,
             created_at: now_secs(),
@@ -188,7 +188,7 @@ impl MemoryRange {
     }
 }
 
-impl_storable_bounded!(MemoryRange, 128, false);
+impl_storable_bounded!(MemoryRange, 320, false);
 
 ///
 /// MemoryRegistryEntry
@@ -196,7 +196,7 @@ impl_storable_bounded!(MemoryRange, 128, false);
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRegistryEntry {
-    pub label: BoundedString64,
+    pub label: BoundedString256,
     pub created_at: u64,
 }
 
@@ -204,13 +204,13 @@ impl MemoryRegistryEntry {
     #[must_use]
     pub fn new(label: &str) -> Self {
         Self {
-            label: BoundedString64::new(label),
+            label: BoundedString256::new(label),
             created_at: now_secs(),
         }
     }
 }
 
-impl_storable_bounded!(MemoryRegistryEntry, 128, false);
+impl_storable_bounded!(MemoryRegistryEntry, 320, false);
 
 ///
 /// MemoryRegistry

@@ -8,13 +8,12 @@
 //! here.
 
 pub mod canister;
+pub mod context;
 pub mod delegation;
+pub mod ext;
+pub mod lifecycle;
 pub mod request;
-pub mod reserve;
-pub mod response;
 pub mod root;
-pub mod scaling;
-pub mod sharding;
 pub mod sync;
 
 /// Common imports for ops submodules and consumers.
@@ -34,11 +33,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{
-    Error, ThisError,
-    config::{Config, data::Canister as CanisterConfig},
-    memory::state::CanisterState,
-};
+use crate::{ThisError, memory::Env};
 
 ///
 /// OpsError
@@ -59,13 +54,10 @@ pub enum OpsError {
     DelegationError(#[from] delegation::DelegationError),
 
     #[error(transparent)]
+    ExtensionError(#[from] ext::ExtensionError),
+
+    #[error(transparent)]
     RequestError(#[from] request::RequestError),
-
-    #[error(transparent)]
-    ScalingError(#[from] scaling::ScalingError),
-
-    #[error(transparent)]
-    ShardingError(#[from] sharding::ShardingError),
 
     #[error(transparent)]
     SyncError(#[from] sync::SyncError),
@@ -74,7 +66,7 @@ pub enum OpsError {
 impl OpsError {
     /// Ensure the caller is the root canister.
     pub fn require_root() -> Result<(), Self> {
-        if CanisterState::is_root() {
+        if Env::is_root() {
             Ok(())
         } else {
             Err(Self::NotRoot)
@@ -83,18 +75,10 @@ impl OpsError {
 
     /// Ensure the caller is not the root canister.
     pub fn deny_root() -> Result<(), Self> {
-        if CanisterState::is_root() {
+        if Env::is_root() {
             Err(Self::IsRoot)
         } else {
             Ok(())
         }
     }
-}
-
-/// Fetch the configuration record for the currently executing canister.
-pub fn cfg_current_canister() -> Result<CanisterConfig, Error> {
-    let this_ty = CanisterState::try_get_canister()?.ty;
-    let cfg = Config::try_get_canister(&this_ty)?;
-
-    Ok(cfg)
 }

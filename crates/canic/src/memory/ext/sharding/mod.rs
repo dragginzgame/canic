@@ -10,7 +10,7 @@ use crate::{
     eager_static, ic_memory, impl_storable_bounded,
     memory::{
         MemoryError,
-        capability::CapabilityError,
+        ext::ExtensionError,
         id::capability::sharding::{SHARDING_REGISTRY_ID, SHARDING_TENANTS_ID},
     },
     types::CanisterType,
@@ -51,7 +51,7 @@ pub enum ShardingError {
 
 impl From<ShardingError> for Error {
     fn from(err: ShardingError) -> Self {
-        MemoryError::from(CapabilityError::from(err)).into()
+        MemoryError::from(ExtensionError::from(err)).into()
     }
 }
 

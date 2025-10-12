@@ -8,7 +8,7 @@
 use canic::{
     Error,
     canister::SHARD_HUB,
-    ops::sharding::{ShardingPlan, assign_to_pool, plan_assign_to_pool},
+    ops::ext::sharding::{ShardingPlan, assign_to_pool, plan_assign_to_pool},
     prelude::*,
 };
 

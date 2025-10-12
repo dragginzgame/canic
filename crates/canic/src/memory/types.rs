@@ -1,6 +1,5 @@
 use crate::{impl_storable_bounded, types::CanisterType};
 use candid::{CandidType, Principal};
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 ///
@@ -13,7 +12,6 @@ pub struct CanisterEntry {
     pub pid: Principal,
     pub ty: CanisterType,
     pub parent_pid: Option<Principal>,
-    pub status: CanisterStatus,
     pub module_hash: Option<Vec<u8>>,
     pub created_at: u64,
 }
@@ -53,16 +51,6 @@ impl From<CanisterEntry> for CanisterSummary {
 impl_storable_bounded!(CanisterSummary, CanisterSummary::STORABLE_MAX_SIZE, false);
 
 ///
-/// CanisterStatus
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
-pub enum CanisterStatus {
-    Created,
-    Installed,
-}
-
-///
 /// TESTS
 ///
 
@@ -82,7 +70,6 @@ pub mod test {
             pid,
             ty: CanisterType::new("really_long_canister_type"),
             parent_pid: Some(pid),
-            status: CanisterStatus::Installed,
             module_hash: Some(vec![0u8; 32]),
             created_at: u64::MAX,
         };

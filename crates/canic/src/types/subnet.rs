@@ -1,9 +1,3 @@
-//!
-//! Strongly-typed identifiers representing canister roles within the project.
-//! Provides string-backed wrappers with storage traits and helpers for config
-//! parsing while avoiding repeated `Cow` boilerplate around the codebase.
-//!
-
 use crate::impl_storable_bounded;
 use candid::CandidType;
 use derive_more::Display;
@@ -11,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 
 ///
-/// CanisterType
+/// SubnetType
 ///
-/// A human-readable identifier for a canister role/type (e.g., "root", "example").
+/// A human-readable identifier for a subnet type
 ///
 /// Stored as `Cow<'static, str>` so known constants can be zero‑copy while
 /// dynamic values allocate only when needed.
@@ -23,10 +17,10 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
     CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
 #[serde(transparent)]
-pub struct CanisterType(pub Cow<'static, str>);
+pub struct SubnetType(pub Cow<'static, str>);
 
-impl CanisterType {
-    pub const ROOT: Self = Self(Cow::Borrowed("root"));
+impl SubnetType {
+    pub const PRIME: Self = Self(Cow::Borrowed("prime"));
 
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
@@ -45,8 +39,8 @@ impl CanisterType {
 
     /// Returns true if this type represents the built-in ROOT canister.
     #[must_use]
-    pub fn is_root(&self) -> bool {
-        self.0.as_ref() == "root"
+    pub fn is_prime(&self) -> bool {
+        self.0.as_ref() == "prime"
     }
 
     /// Convert into an owned string (avoids an extra allocation for owned variants).
@@ -56,7 +50,7 @@ impl CanisterType {
     }
 }
 
-impl FromStr for CanisterType {
+impl FromStr for SubnetType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -64,43 +58,43 @@ impl FromStr for CanisterType {
     }
 }
 
-impl From<&'static str> for CanisterType {
+impl From<&'static str> for SubnetType {
     fn from(s: &'static str) -> Self {
         Self(Cow::Borrowed(s))
     }
 }
 
-impl From<&String> for CanisterType {
+impl From<&String> for SubnetType {
     fn from(s: &String) -> Self {
         Self(Cow::Owned(s.clone()))
     }
 }
 
-impl From<String> for CanisterType {
+impl From<String> for SubnetType {
     fn from(s: String) -> Self {
         Self(Cow::Owned(s))
     }
 }
 
-impl From<CanisterType> for String {
-    fn from(ct: CanisterType) -> Self {
+impl From<SubnetType> for String {
+    fn from(ct: SubnetType) -> Self {
         ct.into_string()
     }
 }
 
-impl AsRef<str> for CanisterType {
+impl AsRef<str> for SubnetType {
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
-impl Borrow<str> for CanisterType {
+impl Borrow<str> for SubnetType {
     fn borrow(&self) -> &str {
         self.as_str()
     }
 }
 
-impl_storable_bounded!(CanisterType, 64, false);
+impl_storable_bounded!(SubnetType, 64, false);
 
 ///
 /// TESTS
@@ -108,13 +102,13 @@ impl_storable_bounded!(CanisterType, 64, false);
 
 #[cfg(test)]
 mod tests {
-    use super::CanisterType;
+    use super::SubnetType;
     #[test]
     fn basic_traits_and_utils() {
-        let a = CanisterType::ROOT;
-        assert!(a.is_root());
-        assert_eq!(a.as_str(), "root");
-        let b: CanisterType = "example".into();
+        let a = SubnetType::PRIME;
+        assert!(a.is_prime());
+        assert_eq!(a.as_str(), "prime");
+        let b: SubnetType = "example".into();
         assert_eq!(b.as_str(), "example");
         let s: String = b.clone().into();
         assert_eq!(s, "example");

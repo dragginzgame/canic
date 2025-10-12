@@ -1,68 +1,78 @@
-controllers = []
+# ================================================================
+#  CANIC CONFIGURATION
+# ================================================================
+
+# ----------------------------------------------------------------
+# Global Settings
+# ----------------------------------------------------------------
+
+controllers = [] # Optional: additional controllers
 
 [reserve]
-minimum_size = 3
+minimum_size = 3 # Minimum number of reserved canisters
 
-#################### canisters
+# ----------------------------------------------------------------
+# Standards
+# ----------------------------------------------------------------
 
-# ----------------------------------
-# blank
-# ----------------------------------
-[canisters.blank]
-auto_create = true
-topup.threshold = "10T"
-topup.amount = "5T"
+[standards]
+icrc21 = true # Enable ICRC-21 capability
 
 
-# ----------------------------------
-# Delegation
-# ----------------------------------
-[canisters.delegation]
-auto_create = true
-uses_directory = true
+# ----------------------------------------------------------------
+# Subnet Definitions
+# ----------------------------------------------------------------
+# Each subnet defines how its canisters behave and when they top up.
+# ----------------------------------------------------------------
+
+# ================================================================
+#  PRIME SUBNET
+# ================================================================
+[subnets.prime]
+auto_create = ["delegation", "scale_hub", "shard_hub"]
+directory = ["delegation", "scale_hub", "shard_hub"]
+
+# --- Delegation ---
+[subnets.prime.canisters.delegation]
 delegation = true
-topup.amount = "5T"
-topup.threshold = "10T"
-
-
-# ---------------------------
-# Scaling
-# ---------------------------
-[canisters.scale_hub]
-auto_create = true
-uses_directory = true
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[canisters.scale_hub.scaling.pools.workers]
+# --- Scale Hub ---
+[subnets.prime.canisters.scale_hub]
+topup.threshold = "10T"
+topup.amount = "5T"
+
+# --- Scale Hub Pools ---
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_type = "scale"
+policy.min_workers = 2
 
-[canisters.scale]
+# --- Scale ---
+[subnets.prime.canisters.scale]
+
+# --- Shard Hub ---topup.threshold = "10T"
+[subnets.prime.canisters.shard_hub]
 topup.threshold = "10T"
 topup.amount = "5T"
 
-
-# ---------------------------
-# Sharding
-# ---------------------------
-[canisters.shard_hub]
-auto_create = true
-uses_directory = true
-topup.threshold = "10T"
-topup.amount = "5T"
-
-[canisters.shard_hub.sharding.pools.shards]
+# --- Shard Hub Pools ---
+[subnets.prime.canisters.shard_hub.sharding.pools.shards]
 canister_type = "shard"
 policy.initial_capacity = 100
 policy.max_shards = 64
 policy.growth_threshold_pct = 80
 
-[canisters.shard]
+# --- Shard ---
+[subnets.prime.canisters.shard]
 topup.threshold = "10T"
 topup.amount = "5T"
 
 
-#####################################
+# ================================================================
+#  GENERAL SUBNET
+# ================================================================
+[subnets.general]
 
-[standards]
-icrc21 = true
+# --- Blank Canister ---
+[subnets.general.canisters.blank]

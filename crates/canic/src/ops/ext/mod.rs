@@ -2,17 +2,23 @@ pub mod cycles;
 pub mod scaling;
 pub mod sharding;
 
-use thiserror::Error as ThisError;
+use crate::{Error, ThisError, ops::OpsError};
 
 ///
-/// CapabilityError
+/// ExtensionError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum CapabilityError {
+pub enum ExtensionError {
     #[error(transparent)]
     ScalingError(#[from] scaling::ScalingError),
 
     #[error(transparent)]
     ShardingError(#[from] sharding::ShardingError),
+}
+
+impl From<ExtensionError> for Error {
+    fn from(err: ExtensionError) -> Self {
+        OpsError::from(err).into()
+    }
 }

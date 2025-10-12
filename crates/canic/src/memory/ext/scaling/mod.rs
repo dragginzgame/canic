@@ -2,9 +2,7 @@ use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    memory::{
-        MemoryError, capability::CapabilityError, id::capability::scaling::SCALING_REGISTRY_ID,
-    },
+    memory::{MemoryError, ext::ExtensionError, id::capability::scaling::SCALING_REGISTRY_ID},
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
@@ -36,7 +34,7 @@ pub enum ScalingError {
 
 impl From<ScalingError> for Error {
     fn from(err: ScalingError) -> Self {
-        MemoryError::from(CapabilityError::from(err)).into()
+        MemoryError::from(ExtensionError::from(err)).into()
     }
 }
 

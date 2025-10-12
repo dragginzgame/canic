@@ -1,68 +1,77 @@
-//! Macros used to bootstrap Canic canisters.
+//! # Canic Lifecycle Macros
+//!
+//! These macros define **compile-time lifecycle entry points** (`init` and `post_upgrade`)
+//! for Canic canisters. Lifecycle hooks must exist at the crate root with fixed names,
+//! so they cannot be registered dynamically — macros are therefore used to generate the
+//! boilerplate pre- and post-initialization logic automatically.
+//!
+//! Each macro sets up configuration, memory, timers, and TLS before calling user-defined
+//! async setup functions (`canic_setup`, `canic_install`, `canic_upgrade`), and then
+//! exposes the standard Canic endpoint suites.
+//!
+//! ## When to use which
+//!
+//! - [`macro@canic_start`] — for **non-root** canisters (standard services, workers, etc.).
+//! - [`macro@canic_start_root`] — for the **root orchestrator**, which performs
+//!   additional initialization for global registries and root-only extensions.
 
-/// Configure lifecycle hooks for non-root Canic canisters.
+/// Configure lifecycle hooks for **non-root Canic canisters**.
 ///
-/// This macro wires up `init` and `post_upgrade` entry points that bootstrap
-/// configuration, memory, timers, and eager TLS state before deferring to the
-/// user-provided `canic_setup`, `canic_install`, and `canic_upgrade`
-/// functions. It also exposes the standard Canic endpoint suites.
+/// This macro wires up the `init` and `post_upgrade` entry points required by the IC,
+/// performing pre-initialization steps (config, memory, TLS, environment) before invoking
+/// user async functions:
+///
+/// ```ignore
+/// async fn canic_setup() { /* shared setup */ }
+/// async fn canic_install(args: Option<Vec<u8>>) { /* called after init */ }
+/// async fn canic_upgrade() { /* called after post_upgrade */ }
+/// ```
+///
+/// These functions are spawned asynchronously after bootstrap completes.
+/// The macro also exposes the standard non-root Canic endpoint suites.
+///
+/// This macro must be used instead of a normal function because the IC runtime requires
+/// `init` and `post_upgrade` to be declared at the top level.
+
 #[macro_export]
 macro_rules! canic_start {
     ($canister_type:expr) => {
         #[::canic::cdk::init]
         fn init(
-            state: ::canic::memory::state::CanisterStateData,
+            env: ::canic::memory::env::EnvData,
             parents: Vec<::canic::memory::CanisterSummary>,
             args: Option<Vec<u8>>,
         ) {
-            // log (generic, no state info yet)
-            ::canic::log!(::canic::Log::Info, "🏁 init: {}", $canister_type);
-
-            // config
             ::canic::__canic_load_config!();
 
-            // tls
-            ::canic::runtime::init_eager_tls(); // ⚠️ MUST precede init_memory
-
-            // memory
-            ::canic::memory::registry::init_memory();
-            ::canic::memory::context::CanisterContext::set_root_pid(::canic::cdk::api::msg_caller());
-            ::canic::memory::state::CanisterState::import(state);
-            ::canic::memory::topology::SubnetCanisterParents::import(parents);
-
-            // cycles
-            ::canic::memory::capability::cycles::CycleTracker::start();
+            // ops
+            ::canic::ops::lifecycle::nonroot_init($canister_type, env, parents);
 
             // timers
-            let _ = ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::canic::cdk::futures::spawn(async move {
-                    canic_setup().await;
-                    canic_install(args).await;
+            let _ =
+                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                    ::canic::cdk::futures::spawn(async move {
+                        canic_setup().await;
+                        canic_install(args).await;
+                    });
                 });
-            });
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
-            // log
-            ::canic::log!(::canic::Log::Info, "🏁 post_upgrade: {}", $canister_type);
-
-            // config
             ::canic::__canic_load_config!();
 
-            // tls
-            ::canic::runtime::init_eager_tls(); // ⚠️ MUST precede init_memory
-
-            // cycles
-            ::canic::memory::capability::cycles::CycleTracker::start();
+            // ops
+            ::canic::ops::lifecycle::nonroot_post_upgrade($canister_type);
 
             // timers
-            let _ = ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                ::canic::cdk::futures::spawn(async move {
-                    canic_setup().await;
-                    canic_upgrade().await;
+            let _ =
+                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
+                    ::canic::cdk::futures::spawn(async move {
+                        canic_setup().await;
+                        canic_upgrade().await;
+                    });
                 });
-            });
         }
 
         ::canic::canic_endpoints!();
@@ -70,93 +79,53 @@ macro_rules! canic_start {
     };
 }
 
-/// Configure lifecycle hooks for the root Canic orchestrator canister.
 ///
-/// Similar to [`macro@canic_start`] but tailored to the root environment: it
-/// initializes the global subnet registry, root-only capabilities, and
-/// exports root-specific endpoints.
+/// Configure lifecycle hooks for the **root Canic orchestrator canister**.
+///
+/// This macro behaves like [`macro@canic_start`], but includes additional
+/// root-only initialization for:
+///
+/// - the global subnet registry
+/// - root-only memory extensions and cycle tracking
+/// - the root endpoint suite
+///
+/// It generates the `init` and `post_upgrade` hooks required by the IC, loads embedded
+/// configuration, imports the root `WASMS` bundle, and runs pre- and post-upgrade logic
+/// in [`ops::lifecycle`].
+///
+/// Use this for the root orchestrator canister only. Other canisters should use
+/// [`macro@canic_start`].
+
 #[macro_export]
 macro_rules! canic_start_root {
     () => {
         #[::canic::cdk::init]
-        fn init() {
-            // log
-            ::canic::cdk::println!("");
-            ::canic::log!(
-                ::canic::Log::Info,
-                "------------------------------------------------------------"
-            );
-            ::canic::log!(::canic::Log::Info, "🏁 init: root");
-
-            // config
+        fn init(identity: ::canic::memory::topology::SubnetIdentity) {
             ::canic::__canic_load_config!();
-
-            // tls
-            ::canic::runtime::init_eager_tls();
-
-            // memory
-            ::canic::memory::registry::init_memory();
-
-            // memory topology
-            let entry = ::canic::memory::topology::SubnetCanisterRegistry::init_root(
-                ::canic::cdk::api::canister_self(),
-            );
-            ::canic::memory::state::CanisterState::set_canister(entry.into());
-
-            // memory context
-            // set the canister context root_pid to self
-            ::canic::memory::context::CanisterContext::set_root_pid(
-                ::canic::cdk::api::canister_self(),
-            );
-
-            // state
             ::canic::state::wasm::WasmRegistry::import(WASMS);
 
-            // cycles
-            ::canic::memory::capability::cycles::CycleTracker::start();
-
-            // root only
-            ::canic::memory::root::CanisterReserve::start();
+            // ops
+            ::canic::ops::lifecycle::root_init(identity);
 
             // timers
-            let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                    ::canic::cdk::futures::spawn(async move {
-                        //
-                        // get the current subnet_pid and set it in the SubnetContext
-                        //
-                        if let Some(subnet_pid) = ::canic::interface::ic::get_current_subnet_pid()
-                            .await
-                            .unwrap()
-                        {
-                            ::canic::memory::context::SubnetContext::set_subnet_pid(subnet_pid);
-                        }
+            let _ = ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), move || {
+                ::canic::cdk::futures::spawn(async move {
+                    ::canic::ops::root::root_set_subnet_id().await;
+                    ::canic::ops::root::root_create_canisters().await.unwrap();
 
-                        canic_setup().await;
-                        canic_install().await;
-                    });
+                    canic_setup().await;
+                    canic_install().await;
                 });
+            });
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
-            // log
-            ::canic::log!(::canic::Log::Info, "🏁 post_upgrade: root");
-
-            // config
             ::canic::__canic_load_config!();
-
-            // tls
-            ::canic::runtime::init_eager_tls();
-
-            // state
             ::canic::state::wasm::WasmRegistry::import(WASMS);
 
-            // cycles
-            ::canic::memory::capability::cycles::CycleTracker::start();
-
-            // root only
-            ::canic::memory::root::CanisterReserve::start();
+            // ops
+            ::canic::ops::lifecycle::root_post_upgrade();
 
             // timers
             let _ =
@@ -177,18 +146,21 @@ macro_rules! canic_start_root {
 // Private helpers
 //
 
+///
 /// Load the embedded configuration during init and upgrade hooks.
+///
+/// This macro exists solely to embed and load the TOML configuration file
+/// at compile time (`CANIC_CONFIG_PATH`). It is used internally by
+/// [`macro@canic_start`] and [`macro@canic_start_root`].
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_load_config {
     () => {
-        #[cfg(any(canic))]
+        #[cfg(canic)]
         {
             let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
-            $crate::expect_or_trap(
-                $crate::config::Config::init_from_toml(config_str),
-                "init config",
-            )
+            $crate::config::Config::init_from_toml(config_str).unwrap();
         }
     };
 }

@@ -7,10 +7,12 @@
 
 use crate::{
     Error, ThisError,
-    config::data::ScalePool,
-    memory::capability::scaling::{ScalingRegistry, ScalingRegistryView, WorkerEntry},
+    config::model::ScalePool,
+    memory::ext::scaling::{ScalingRegistry, ScalingRegistryView, WorkerEntry},
     ops::{
-        OpsError, cfg_current_canister,
+        OpsError,
+        context::cfg_current_canister,
+        ext::ExtensionError,
         request::{CreateCanisterParent, create_canister_request},
     },
     utils::time::now_secs,
@@ -33,7 +35,7 @@ pub enum ScalingError {
 
 impl From<ScalingError> for Error {
     fn from(err: ScalingError) -> Self {
-        OpsError::from(err).into()
+        OpsError::from(ExtensionError::from(err)).into()
     }
 }
 
@@ -46,6 +48,7 @@ impl From<ScalingError> for Error {
 pub struct ScalingPlan {
     /// Whether a new worker should be spawned.
     pub should_spawn: bool,
+
     /// Explanation / debug string for the decision.
     pub reason: String,
 }
@@ -53,7 +56,6 @@ pub struct ScalingPlan {
 /// Look up the config for a given pool on the *current canister*.
 fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
     let cfg = cfg_current_canister()?;
-
     let scale_cfg = cfg.scaling.ok_or(ScalingError::ScalingDisabled)?;
 
     let pool_cfg = scale_cfg
