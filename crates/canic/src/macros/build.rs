@@ -31,27 +31,6 @@ macro_rules! canic_build {
                         .expect("cannot infer canister name; place crate under canisters/<name>/ or set CARGO_BIN_NAME")
                 };
 
-                // Canister Lookup
-                let dir = canister_dir.clone();
-                if let Ok(canister_cfg) = cfg.try_get_canister(&dir.clone().into()) {
-                    // canister capabilities
-                    if canister_cfg.delegation {
-                        println!("cargo:rustc-cfg=canic_capability_delegation");
-                    }
-                    if canister_cfg.scaling.is_some() {
-                        println!("cargo:rustc-cfg=canic_capability_scaling");
-                    }
-                    if canister_cfg.sharding.is_some() {
-                        println!("cargo:rustc-cfg=canic_capability_sharding");
-                    }
-                } else {
-                    log!(
-                        Log::Warn,
-                        "⚠️ canister '{dir}' not found in Canic config. \
-                        Add it under [canisters] in your config TOML."
-                    );
-                }
-
             }
         }
     }};
@@ -96,9 +75,6 @@ macro_rules! __canic_build_internal {
 
         // declare the cfg names
         println!("cargo:rustc-check-cfg=cfg(canic)");
-        println!("cargo:rustc-check-cfg=cfg(canic_capability_delegation)");
-        println!("cargo:rustc-check-cfg=cfg(canic_capability_scaling)");
-        println!("cargo:rustc-check-cfg=cfg(canic_capability_sharding)");
         println!("cargo:rustc-check-cfg=cfg(canic_github_ci)");
         println!("cargo:rustc-check-cfg=cfg(canic_root)");
 

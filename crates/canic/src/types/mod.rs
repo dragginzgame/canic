@@ -9,11 +9,13 @@
 mod canister;
 mod cycles;
 mod string;
+mod subnet;
 mod wasm;
 
 pub use canister::*;
 pub use cycles::*;
 pub use string::*;
+pub use subnet::*;
 pub use wasm::*;
 
 //

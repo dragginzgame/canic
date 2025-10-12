@@ -8,13 +8,9 @@ use crate::{
     Error,
     memory::{
         CanisterSummary,
-        state::CanisterState,
-        topology::{
-            SubnetCanisterChildren, SubnetCanisterDirectory, SubnetCanisterParents,
-            SubnetCanisterRegistry,
-        },
+        topology::{SubnetCanisterChildren, SubnetCanisterParents, SubnetCanisterRegistry},
     },
-    ops::{OpsError, prelude::*, sync::SyncError},
+    ops::{OpsError, prelude::*},
 };
 
 ///
@@ -26,19 +22,16 @@ use crate::{
 pub struct TopologyBundle {
     pub subtree: Vec<CanisterSummary>,
     pub parents: Vec<CanisterSummary>,
-    pub directory: Vec<CanisterSummary>,
 }
 
 impl TopologyBundle {
     /// Construct a bundle rooted at the actual root canister.
     pub fn root() -> Result<Self, Error> {
-        let root_summary = CanisterState::try_get_canister()?;
-        let root_pid = root_summary.pid;
+        let root = SubnetCanisterRegistry::try_get_type(&CanisterType::ROOT)?;
 
         Ok(Self {
-            subtree: SubnetCanisterRegistry::subtree(root_pid), // subtree rooted at the actual root PID
-            parents: vec![root_summary],
-            directory: SubnetCanisterRegistry::directory(),
+            subtree: SubnetCanisterRegistry::subtree(root.pid), // subtree rooted at the actual root PID
+            parents: vec![root.into()],
         })
     }
 
@@ -67,7 +60,6 @@ impl TopologyBundle {
         Self {
             subtree: child_subtree,
             parents: new_parents,
-            directory: base.directory.clone(),
         }
     }
 
@@ -75,16 +67,15 @@ impl TopologyBundle {
     #[must_use]
     pub fn debug(&self) -> String {
         format!(
-            "subtree:{} parents:{} dir:{}",
+            "subtree:{} parents:{}",
             self.subtree.len(),
             self.parents.len(),
-            self.directory.len()
         )
     }
 }
 
 /// Cascade from root: build fresh bundles per direct child from the registry.
-pub async fn root_cascade() -> Result<(), Error> {
+pub async fn root_cascade_topology() -> Result<(), Error> {
     OpsError::require_root()?;
 
     let root_pid = canister_self();
@@ -99,9 +90,12 @@ pub async fn root_cascade() -> Result<(), Error> {
 }
 
 /// Cascade from a child: trim bundle to the child’s subtree and forward.
-pub async fn cascade_children(bundle: &TopologyBundle) -> Result<(), Error> {
+pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
     let self_pid = canister_self();
+
+    // save local topology
+    save_topology(bundle)?;
 
     // Direct children of self (freshly imported during save_state)
     for child in SubnetCanisterChildren::export() {
@@ -112,24 +106,15 @@ pub async fn cascade_children(bundle: &TopologyBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Save topology state locally on a child canister.
-pub fn save_state(bundle: &TopologyBundle) -> Result<(), Error> {
+/// private function to save local state
+fn save_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
-
-    // canister state
-    let self_pid = canister_self();
-    let self_entry = bundle
-        .subtree
-        .iter()
-        .find(|e| e.pid == self_pid)
-        .cloned()
-        .ok_or(SyncError::CanisterNotFound(self_pid))?;
-    CanisterState::set_canister(self_entry);
 
     // subnet canister parents
     SubnetCanisterParents::import(bundle.parents.clone());
 
     // subnet canister children
+    let self_pid = canister_self();
     let direct_children: Vec<_> = bundle
         .subtree
         .iter()
@@ -137,9 +122,6 @@ pub fn save_state(bundle: &TopologyBundle) -> Result<(), Error> {
         .cloned()
         .collect();
     SubnetCanisterChildren::import(direct_children);
-
-    // subnet canister directory
-    SubnetCanisterDirectory::import(bundle.directory.clone());
 
     Ok(())
 }

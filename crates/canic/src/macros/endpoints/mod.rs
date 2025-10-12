@@ -53,7 +53,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // MEMORY REGISTRY EXPORTS
+        // MEMORY REGISTRY
         //
 
         #[::canic::cdk::query]
@@ -62,16 +62,44 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // MEMORY CONTEXT EXPORTS
+        // MEMORY ENV
         //
 
         #[::canic::cdk::query]
-        fn canic_canister_context() -> ::canic::memory::context::CanisterContextData {
-            $crate::memory::context::CanisterContext::export()
+        fn canic_env() -> ::canic::memory::env::EnvData {
+            $crate::memory::Env::export()
         }
 
         //
-        // Canic MEMORY STATE EXPORTS
+        // MEMORY DIRECTORY
+        //
+
+        #[::canic::cdk::query]
+        fn canic_app_directory() -> ::canic::memory::directory::AppDirectoryView {
+            $crate::memory::directory::AppDirectory::export()
+        }
+
+        #[::canic::cdk::query]
+        fn canic_subnet_directory() -> ::canic::memory::directory::SubnetDirectoryView {
+            $crate::memory::directory::SubnetDirectory::export()
+        }
+
+        //
+        // MEMORY TOPOLOGY
+        //
+
+        #[::canic::cdk::query]
+        fn canic_app_subnet_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
+            $crate::memory::topology::AppSubnetRegistry::export()
+        }
+
+        #[::canic::cdk::query]
+        fn canic_app_canister_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
+            $crate::memory::topology::AppSubnetRegistry::export()
+        }
+
+        //
+        // STATE
         //
 
         #[::canic::cdk::query]
@@ -84,87 +112,18 @@ macro_rules! canic_endpoints {
             $crate::memory::state::SubnetState::export()
         }
 
-        #[::canic::cdk::query]
-        fn canic_canister_state() -> ::canic::memory::state::CanisterStateData {
-            $crate::memory::state::CanisterState::export()
-        }
-
         //
-        // CAPABILITY ENDPOINTS
+        // CYCLES
         //
 
         // canic_cycle_tracker
-        // for all canisters right now, but it's part of capabilities
         #[::canic::cdk::query]
-        fn canic_cycle_tracker() -> ::canic::memory::capability::cycles::CycleTrackerView {
-            $crate::memory::capability::cycles::CycleTracker::export()
+        fn canic_cycle_tracker() -> ::canic::memory::ext::cycles::CycleTrackerView {
+            $crate::memory::ext::cycles::CycleTracker::export()
         }
-
-        #[cfg(canic_capability_delegation)]
-        $crate::canic_endpoints_delegation!();
-
-        #[cfg(canic_capability_scaling)]
-        $crate::canic_endpoints_scaling!();
-
-        #[cfg(canic_capability_sharding)]
-        $crate::canic_endpoints_sharding!();
 
         //
-        // ICTS ENDPOINTS
-        //
-
-        #[::canic::cdk::query]
-        fn icts_name() -> String {
-            env!("CARGO_PKG_NAME").to_string()
-        }
-
-        #[::canic::cdk::query]
-        fn icts_version() -> String {
-            env!("CARGO_PKG_VERSION").to_string()
-        }
-
-        #[::canic::cdk::query]
-        fn icts_description() -> String {
-            env!("CARGO_PKG_DESCRIPTION").to_string()
-        }
-
-        #[::canic::cdk::query]
-        fn icts_metadata() -> Vec<(String, String)> {
-            vec![
-                ("name".to_string(), icts_name()),
-                ("version".to_string(), icts_version()),
-                ("description".to_string(), icts_description()),
-            ]
-        }
-
-        #[::canic::cdk::update]
-        async fn icts_canister_status()
-        -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
-            use $crate::cdk::{
-                api::canister_self,
-                management_canister::{CanisterStatusArgs, canister_status},
-            };
-
-            if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
-                return Err("Unauthorized".to_string());
-            }
-
-            canister_status(&CanisterStatusArgs {
-                canister_id: canister_self(),
-            })
-            .await
-            .map_err(|e| e.to_string())
-        }
-    };
-}
-
-// Add delegation-specific endpoints when the capability is enabled.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! canic_endpoints_delegation {
-    () => {
-        //
-        // DELEGATION ENDPOINTS
+        // DELEGATION
         //
 
         #[::canic::cdk::query]
@@ -223,33 +182,27 @@ macro_rules! canic_endpoints_delegation {
 
             Ok($crate::ops::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
         }
-    };
-}
 
-// Add scaling registry endpoints when the capability is enabled.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! canic_endpoints_scaling {
-    () => {
+        //
+        // SCALING
+        //
+
         // canic_scaling_registry
         #[::canic::cdk::query]
         async fn canic_scaling_registry()
-        -> Result<::canic::memory::capability::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::ops::scaling::export_registry())
+        -> Result<::canic::memory::ext::scaling::ScalingRegistryView, ::canic::Error> {
+            Ok($crate::ops::ext::scaling::export_registry())
         }
-    };
-}
 
-// Add sharding endpoints when the capability is enabled.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! canic_endpoints_sharding {
-    () => {
+        //
+        // SHARDING
+        //
+
         // canic_sharding_registry
         #[::canic::cdk::query]
         async fn canic_sharding_registry()
-        -> Result<::canic::memory::capability::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::ops::sharding::export_registry())
+        -> Result<::canic::memory::ext::sharding::ShardingRegistryView, ::canic::Error> {
+            Ok($crate::ops::ext::sharding::export_registry())
         }
 
         // canic_sharding_lookup_tenant
@@ -259,18 +212,65 @@ macro_rules! canic_endpoints_sharding {
             pool: String,
             tenant_pid: ::candid::Principal,
         ) -> Result<::candid::Principal, ::canic::Error> {
-            $crate::ops::sharding::try_lookup_tenant(&pool, tenant_pid)
+            $crate::ops::ext::sharding::try_lookup_tenant(&pool, tenant_pid)
         }
 
         // canic_sharding_admin
         // combined admin endpoint for shard lifecycle operations (controller only).
         #[::canic::cdk::update]
         async fn canic_sharding_admin(
-            cmd: ::canic::ops::sharding::AdminCommand,
-        ) -> Result<::canic::ops::sharding::AdminResult, ::canic::Error> {
+            cmd: ::canic::ops::ext::sharding::AdminCommand,
+        ) -> Result<::canic::ops::ext::sharding::AdminResult, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            $crate::ops::sharding::admin_command(cmd).await
+            $crate::ops::ext::sharding::admin_command(cmd).await
+        }
+
+        //
+        // ICTS
+        //
+
+        #[::canic::cdk::query]
+        fn icts_name() -> String {
+            env!("CARGO_PKG_NAME").to_string()
+        }
+
+        #[::canic::cdk::query]
+        fn icts_version() -> String {
+            env!("CARGO_PKG_VERSION").to_string()
+        }
+
+        #[::canic::cdk::query]
+        fn icts_description() -> String {
+            env!("CARGO_PKG_DESCRIPTION").to_string()
+        }
+
+        #[::canic::cdk::query]
+        fn icts_metadata() -> Vec<(String, String)> {
+            vec![
+                ("name".to_string(), icts_name()),
+                ("version".to_string(), icts_version()),
+                ("description".to_string(), icts_description()),
+            ]
+        }
+
+        #[::canic::cdk::update]
+        async fn icts_canister_status()
+        -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
+            use $crate::cdk::{
+                api::canister_self,
+                management_canister::{CanisterStatusArgs, canister_status},
+            };
+
+            if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
+                return Err("Unauthorized".to_string());
+            }
+
+            canister_status(&CanisterStatusArgs {
+                canister_id: canister_self(),
+            })
+            .await
+            .map_err(|e| e.to_string())
         }
     };
 }

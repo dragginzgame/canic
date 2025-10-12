@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     eager_static, ic_memory, impl_storable_unbounded, log,
     memory::id::root::CANISTER_RESERVE_ID,
-    ops::reserve::create_reserve_canister,
+    ops::root::reserve::create_reserve_canister,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -90,33 +90,32 @@ impl CanisterReserve {
     #[must_use]
     pub fn check() -> u64 {
         let reserve_size = CANISTER_RESERVE.with_borrow(|map| map.len());
+        let cfg = Config::get();
 
-        if let Ok(cfg) = Config::try_get() {
-            let min_size = u64::from(cfg.reserve.minimum_size);
-            if reserve_size < min_size {
-                // Safety valve: never create more than 10 at once.
-                let missing = (min_size - reserve_size).min(10);
+        let min_size = u64::from(cfg.reserve.minimum_size);
+        if reserve_size < min_size {
+            // Safety valve: never create more than 10 at once.
+            let missing = (min_size - reserve_size).min(10);
 
-                log!(
-                    Log::Ok,
-                    "💧 canister reserve low: size {reserve_size}, min {min_size}, creating {missing}"
-                );
+            log!(
+                Log::Ok,
+                "💧 canister reserve low: size {reserve_size}, min {min_size}, creating {missing}"
+            );
 
-                spawn(async move {
-                    for i in 0..missing {
-                        match create_reserve_canister().await {
-                            Ok(_) => {
-                                log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1);
-                            }
-                            Err(e) => {
-                                log!(Log::Warn, "⚠️  failed to create reserve canister: {e:?}");
-                            }
+            spawn(async move {
+                for i in 0..missing {
+                    match create_reserve_canister().await {
+                        Ok(_) => {
+                            log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1);
+                        }
+                        Err(e) => {
+                            log!(Log::Warn, "⚠️  failed to create reserve canister: {e:?}");
                         }
                     }
-                });
+                }
+            });
 
-                return missing;
-            }
+            return missing;
         }
 
         0

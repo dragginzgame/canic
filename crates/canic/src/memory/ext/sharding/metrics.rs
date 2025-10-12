@@ -1,5 +1,5 @@
 use crate::{
-    memory::capability::sharding::{ShardEntry, ShardingRegistry, ShardingRegistryView},
+    memory::ext::sharding::{ShardEntry, ShardingRegistry, ShardingRegistryView},
     types::CanisterType,
 };
 

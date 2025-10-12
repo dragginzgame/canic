@@ -1,11 +1,11 @@
-pub mod data;
+pub mod model;
 
-use crate::{Error, types::CanisterType};
-use data::{Canister, ConfigDataError};
+use crate::Error;
+use model::ConfigModelError;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
-pub use data::ConfigData;
+pub use model::ConfigModel;
 
 //
 // CONFIG
@@ -23,13 +23,12 @@ pub use data::ConfigData;
 //
 
 thread_local! {
-    static CONFIG: RefCell<Option<Arc<ConfigData>>> = const {  RefCell::new(None) };
+    static CONFIG: RefCell<Option<Arc<ConfigModel>>> = const { RefCell::new(None) };
 }
 
 /// Errors related to configuration lifecycle and parsing.
 #[derive(Debug, ThisError)]
 pub enum ConfigError {
-    /// Configuration has already been initialized; reinitialization is not allowed.
     #[error("config has already been initialized")]
     AlreadyInitialized,
 
@@ -37,13 +36,9 @@ pub enum ConfigError {
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
-    /// Configuration has not been initialized yet
-    #[error("config has not been initialized")]
-    NotInitialized,
-
-    /// Wrapper for data-level errors.
+    /// Wrapper for data model-level errors.
     #[error(transparent)]
-    ConfigDataError(#[from] ConfigDataError),
+    ConfigModelError(#[from] ConfigModelError),
 }
 
 ///
@@ -54,21 +49,20 @@ pub struct Config {}
 
 impl Config {
     // use an Arc to avoid repeatedly cloning
-    pub fn try_get() -> Result<Arc<ConfigData>, Error> {
-        let arc = CONFIG.with(|cfg| {
+    #[must_use]
+    pub fn get() -> Arc<ConfigModel> {
+        CONFIG.with(|cfg| {
             cfg.borrow()
                 .as_ref()
                 .cloned()
-                .ok_or(ConfigError::NotInitialized)
-        })?;
-
-        Ok(arc)
+                .expect("⚠️ Config must be initialized before use")
+        })
     }
 
     /// Initialize the global configuration from a TOML string.
     /// return the config as it is read at build time
-    pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigData>, Error> {
-        let config: ConfigData =
+    pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigModel>, Error> {
+        let config: ConfigModel =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
         // validate
@@ -88,17 +82,10 @@ impl Config {
 
     /// Return the current config as a TOML string.
     pub fn to_toml() -> Result<String, Error> {
-        let cfg = Self::try_get()?;
+        let cfg = Self::get();
 
         toml::to_string_pretty(&*cfg)
             .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())
-    }
-
-    // try_get_canister
-    // helper function as its used everywhere
-    pub fn try_get_canister(ty: &CanisterType) -> Result<Canister, Error> {
-        let cfg = Self::try_get()?;
-        cfg.try_get_canister(ty)
     }
 
     /// Test-only: reset the global config so tests can reinitialize with a fresh TOML.

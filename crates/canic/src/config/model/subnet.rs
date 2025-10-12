@@ -1,107 +1,59 @@
 use crate::{
     Error,
-    config::ConfigError,
+    config::model::ConfigModelError,
     types::{CanisterType, Cycles, TC},
 };
-use candid::Principal;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error as ThisError;
-
-///
-/// ConfigDataError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ConfigDataError {
-    #[error("invalid principal: {0} ({1})")]
-    InvalidPrincipal(String, usize),
-
-    #[error("canister not found: {0}")]
-    CanisterNotFound(CanisterType),
-}
+use std::collections::{BTreeMap, HashSet};
 
 mod defaults {
     use super::Cycles;
+
     pub fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
     }
 }
 
 ///
-/// ConfigData
+/// SubnetConfig
 ///
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ConfigData {
+pub struct SubnetConfig {
     #[serde(default)]
-    pub canisters: BTreeMap<CanisterType, Canister>,
-
-    // controllers
-    // a vec because we just append it to the controller arguments
-    #[serde(default)]
-    pub controllers: Vec<Principal>,
+    pub canisters: BTreeMap<CanisterType, CanisterConfig>,
 
     #[serde(default)]
-    pub reserve: CanisterReserve,
+    pub auto_create: HashSet<CanisterType>,
 
     #[serde(default)]
-    pub standards: Option<Standards>,
-
-    #[serde(default)]
-    pub whitelist: Option<WhiteList>,
+    pub directory: HashSet<CanisterType>,
 }
 
-impl ConfigData {
-    pub(super) fn validate(&self) -> Result<(), ConfigDataError> {
-        if let Some(list) = &self.whitelist {
-            for (i, s) in list.principals.iter().enumerate() {
-                // Reject if invalid principal format
-                if Principal::from_text(s).is_err() {
-                    return Err(ConfigDataError::InvalidPrincipal(s.to_string(), i));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Lookup a canister config by type name (string).
-    pub fn try_get_canister(&self, ty: &CanisterType) -> Result<Canister, Error> {
-        self.canisters.get(ty).cloned().ok_or_else(|| {
-            ConfigError::ConfigDataError(ConfigDataError::CanisterNotFound(ty.clone())).into()
-        })
-    }
-
-    /// Return true if the given principal is present in the whitelist.
+impl SubnetConfig {
+    /// Returns the directory canisters for this subnet.
     #[must_use]
-    pub fn is_whitelisted(&self, principal: &Principal) -> bool {
-        self.whitelist
-            .as_ref()
-            .is_none_or(|w| w.principals.contains(&principal.to_string()))
+    pub fn directory_canisters(&self) -> Vec<CanisterType> {
+        self.directory.iter().cloned().collect()
     }
 
-    /// Return whether ICRC-21 standard support is enabled.
-    #[must_use]
-    pub fn icrc21_enabled(&self) -> bool {
-        self.standards.as_ref().is_some_and(|s| s.icrc21)
+    /// Get a canister configuration by type.
+    pub fn try_get_canister(&self, ty: &CanisterType) -> Result<CanisterConfig, Error> {
+        self.canisters
+            .get(ty)
+            .cloned()
+            .ok_or_else(|| ConfigModelError::CanisterNotFound(ty.clone()).into())
     }
 }
 
 ///
-/// Canister
+/// CanisterConfig
 ///
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Canister {
-    #[serde(default)]
-    pub auto_create: bool,
-
-    #[serde(default)]
-    pub delegation: bool,
-
+pub struct CanisterConfig {
     #[serde(
         default = "defaults::initial_cycles",
         deserialize_with = "Cycles::from_config"
@@ -112,7 +64,7 @@ pub struct Canister {
     pub topup: Option<CanisterTopup>,
 
     #[serde(default)]
-    pub uses_directory: bool,
+    pub delegation: bool,
 
     #[serde(default)]
     pub scaling: Option<ScalingConfig>,
@@ -144,44 +96,6 @@ impl Default for CanisterTopup {
             amount: Cycles::new(5 * TC),
         }
     }
-}
-
-///
-/// CanisterReserve
-/// defaults to a minimum size of 0
-///
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct CanisterReserve {
-    pub minimum_size: u8,
-}
-
-///
-/// Whitelist
-///
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct WhiteList {
-    // principals
-    // a hashset as we constantly have to do lookups
-    // strings because then we can validate and know if there are any bad ones
-    #[serde(default)]
-    pub principals: BTreeSet<String>,
-}
-
-///
-/// Standards
-///
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Standards {
-    #[serde(default)]
-    pub icrc21: bool,
-
-    #[serde(default)]
-    pub icrc103: bool,
 }
 
 ///

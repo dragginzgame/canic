@@ -8,7 +8,7 @@
 use crate::{
     Error, Log,
     interface::ic::get_cycles,
-    memory::root::CanisterReserve,
+    memory::root::reserve::CanisterReserve,
     ops::{
         canister::{raw_create_canister, uninstall_and_delete_canister},
         prelude::*,
@@ -38,7 +38,7 @@ pub async fn move_canister_to_reserve(canister_pid: Principal) -> Result<(), Err
     OpsError::require_root()?;
 
     // uninstall and delete
-    let canister_type = uninstall_and_delete_canister(canister_pid).await?;
+    uninstall_and_delete_canister(canister_pid).await?;
 
     // register to Reserve
     let cycles = get_cycles(canister_pid).await?;
@@ -46,7 +46,7 @@ pub async fn move_canister_to_reserve(canister_pid: Principal) -> Result<(), Err
 
     log!(
         Log::Ok,
-        "🪶  move_canister_to_reserve: {canister_pid} (was {canister_type}) ({cycles})",
+        "🪶  move_canister_to_reserve: {canister_pid} ({cycles})",
     );
 
     Ok(())

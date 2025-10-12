@@ -5,7 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{Error, canister::SCALE_HUB, ops, prelude::*};
+use canic::{Error, canister::SCALE_HUB, ops::ext::scaling, prelude::*};
 
 //
 // ICU
@@ -24,7 +24,7 @@ async fn canic_upgrade() {}
 /// Create a new worker in the given pool.
 #[update]
 async fn create_worker(pool: String) -> Result<Principal, Error> {
-    let worker_pid = ops::scaling::create_worker(&pool).await?;
+    let worker_pid = scaling::create_worker(&pool).await?;
 
     Ok(worker_pid)
 }
@@ -33,7 +33,7 @@ async fn create_worker(pool: String) -> Result<Principal, Error> {
 #[query]
 async fn plan_create_worker(pool: String) -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
-    let plan = ops::scaling::plan_create_worker(&pool)?;
+    let plan = scaling::plan_create_worker(&pool)?;
 
     Ok(plan.should_spawn)
 }

@@ -12,7 +12,7 @@ pub use registry::*;
 use crate::{
     Error,
     cdk::call::Call,
-    memory::topology::SubnetCanisterDirectory,
+    memory::directory::SubnetDirectory,
     state::delegation::{DelegationSessionView, RegisterSessionArgs},
     types::{CanisterType, Principal},
     utils::time::now_secs,
@@ -33,7 +33,7 @@ pub async fn sync_session_with_source(
     session_pid: Principal,
     ty: CanisterType,
 ) -> Result<(), Error> {
-    let auth_canister_pid = SubnetCanisterDirectory::try_get(&ty)?.pid;
+    let auth_canister_pid = SubnetDirectory::try_get(&ty)?;
 
     let session: DelegationSessionView =
         Call::unbounded_wait(auth_canister_pid, "canic_delegation_track")

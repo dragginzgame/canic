@@ -5,14 +5,15 @@
 //! high-level helpers for creating new canisters, triggering upgrades, or
 //! moving cycles between principals.
 
+mod response;
+
+pub use response::*;
+
 use crate::{
     Error,
     cdk::call::Call,
-    memory::{context::CanisterContext, state::CanisterState, topology::SubnetCanisterChildren},
-    ops::{
-        prelude::*,
-        response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
-    },
+    memory::{Env, topology::SubnetCanisterChildren},
+    ops::prelude::*,
 };
 use candid::encode_one;
 use thiserror::Error as ThisError;
@@ -29,6 +30,12 @@ pub enum RequestError {
 
     #[error("invalid response type")]
     InvalidResponseType,
+}
+
+impl From<RequestError> for Error {
+    fn from(err: RequestError) -> Self {
+        OpsError::from(err).into()
+    }
 }
 
 ///
@@ -91,7 +98,7 @@ pub struct CyclesRequest {
 
 /// Send a request to the root canister and decode its response.
 async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = CanisterContext::try_get_root_pid()?;
+    let root_pid = Env::try_get_root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, "canic_response")
         .with_arg(&request)
@@ -150,7 +157,7 @@ pub async fn upgrade_canister_request(
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
 
-    if CanisterState::is_root() {
+    if Env::is_root() {
         return Err(OpsError::RequestError(RequestError::RootNotAllowed))?;
     }
 

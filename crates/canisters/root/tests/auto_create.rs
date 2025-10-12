@@ -1,7 +1,7 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::memory::{CanisterEntry, CanisterStatus};
+use canic::memory::CanisterEntry;
 use canic::types::CanisterType;
 use pocket_ic::PocketIc;
 
@@ -86,11 +86,6 @@ fn root_auto_creates_expected_canisters() {
             .find(|entry| entry.ty == ty)
             .unwrap_or_else(|| panic!("missing {ty} entry"));
 
-        assert_eq!(
-            entry.status,
-            CanisterStatus::Installed,
-            "{ty} not installed"
-        );
         assert_eq!(entry.parent_pid, parent, "unexpected parent for {ty}");
     }
 }

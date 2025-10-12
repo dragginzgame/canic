@@ -32,8 +32,7 @@ pub struct Icrc10Registry();
 
 impl Icrc10Registry {
     fn standards() -> Vec<Icrc10Standard> {
-        let config = Config::try_get().unwrap();
-
+        let config = Config::get();
         let mut supported = vec![Icrc10Standard::Icrc10];
 
         #[allow(clippy::collapsible_if)]
