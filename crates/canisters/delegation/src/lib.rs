@@ -8,7 +8,7 @@
 use canic::{canister::DELEGATION, prelude::*};
 
 //
-// ICU
+// CANIC
 //
 
 canic_start!(DELEGATION);

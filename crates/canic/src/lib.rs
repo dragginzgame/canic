@@ -1,4 +1,4 @@
-//! ICU crate utilities for multi-canister apps on the Internet Computer.
+//! CANIC crate utilities for multi-canister apps on the Internet Computer.
 pub mod auth;
 pub mod canister;
 pub mod cdk;
@@ -28,7 +28,8 @@ pub use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Error as IcuError, Log, auth_require_all, auth_require_any, canic_start, canic_start_root,
+        Error as CanicError, Log, auth_require_all, auth_require_any, canic_start,
+        canic_start_root,
         cdk::{api::msg_caller, candid::CandidType, export_candid, init, query, update},
         guard::{guard_query, guard_update},
         ic_memory, log, perf, perf_start,

@@ -13,7 +13,7 @@ use canic::{
 };
 
 //
-// ICU
+// CANIC
 //
 
 canic_start!(BLANK);
