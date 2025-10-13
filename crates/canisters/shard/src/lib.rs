@@ -8,7 +8,7 @@
 use canic::{canister::SHARD, prelude::*};
 
 //
-// ICU
+// CANIC
 //
 
 canic_start!(SHARD);

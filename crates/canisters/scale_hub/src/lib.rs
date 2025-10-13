@@ -8,7 +8,7 @@
 use canic::{Error, canister::SCALE_HUB, ops::ext::scaling, prelude::*};
 
 //
-// ICU
+// CANIC
 //
 
 canic_start!(SCALE_HUB);

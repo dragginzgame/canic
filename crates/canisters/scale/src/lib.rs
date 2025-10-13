@@ -8,7 +8,7 @@
 use canic::{canister::SCALE, prelude::*};
 
 //
-// ICU
+// CANIC
 //
 
 canic_start!(SCALE);

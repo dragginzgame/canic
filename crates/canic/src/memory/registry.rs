@@ -85,7 +85,7 @@ pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
 ///
 /// Panics if called more than once or if duplicate memory IDs exist
 pub fn init_memory() {
-    // reserve internal icu range
+    // reserve internal range
     MemoryRegistry::reserve_range(CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX).unwrap();
 
     // FIRST: flush all pending ranges

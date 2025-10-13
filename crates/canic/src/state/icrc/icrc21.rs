@@ -13,7 +13,7 @@ thread_local! {
 
 ///
 /// ConsentHandlerFn
-/// this is what the user has to pass into icu
+/// this is what the user has to pass into canic
 ///
 
 pub type ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>;

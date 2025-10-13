@@ -14,15 +14,13 @@ use canic::{
 };
 
 //
-// ICU
+// CANIC
 //
 
 canic_start_root!();
 
 async fn canic_setup() {}
-
 async fn canic_install() {}
-
 async fn canic_upgrade() {}
 
 // WASMS
