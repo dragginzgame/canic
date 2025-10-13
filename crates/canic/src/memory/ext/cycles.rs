@@ -2,7 +2,7 @@ use crate::{
     Log,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, log,
-    memory::id::capability::cycles::CYCLE_TRACKER_ID,
+    memory::id::ext::cycles::CYCLE_TRACKER_ID,
     types::Cycles,
     utils::time::now_secs,
 };

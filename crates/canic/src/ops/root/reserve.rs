@@ -20,12 +20,11 @@ use crate::{
 const RESERVE_CANISTER_CYCLES: u128 = 5 * TC;
 
 /// Create an empty reserve canister controlled by root.
-pub async fn create_reserve_canister() -> Result<Principal, Error> {
+pub async fn reserve_create_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
     let canister_pid = raw_create_canister(cycles.clone()).await?;
-
     log!(Log::Ok, "🪶  create_reserve: {canister_pid} ({cycles})",);
 
     CanisterReserve::register(canister_pid, cycles);
@@ -34,7 +33,7 @@ pub async fn create_reserve_canister() -> Result<Principal, Error> {
 }
 
 /// Move an existing canister into the reserve pool after uninstalling it.
-pub async fn move_canister_to_reserve(canister_pid: Principal) -> Result<(), Error> {
+pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
     // uninstall and delete

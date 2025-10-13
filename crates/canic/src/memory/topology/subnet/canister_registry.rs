@@ -107,27 +107,6 @@ impl SubnetCanisterRegistry {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
-    /// Return the full parent chain for a given PID,
-    /// starting with the root-most parent and ending with the given canister.
-    #[must_use]
-    pub fn parents(pid: Principal) -> Vec<CanisterSummary> {
-        let mut result = Vec::new();
-        let mut current = Some(pid);
-
-        while let Some(p) = current {
-            if let Ok(entry) = Self::try_get(p) {
-                let summ: CanisterSummary = entry.clone().into();
-                result.push(summ);
-                current = entry.parent_pid;
-            } else {
-                break; // orphaned, stop here
-            }
-        }
-
-        result.reverse();
-        result
-    }
-
     /// Return the direct children of the given `pid`.
     ///
     /// This only returns canisters whose `parent_pid` is exactly `pid`

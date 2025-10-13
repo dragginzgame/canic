@@ -1,6 +1,6 @@
 //! Topology synchronization helpers.
 //!
-//! Captures subsets of the canister graph (subtree, parents, directory) and
+//! Captures subsets of the canister graph (subtree and parent chain) and
 //! propagates them down the hierarchy so every node maintains an up-to-date
 //! view of its surroundings.
 
@@ -8,7 +8,7 @@ use crate::{
     Error,
     memory::{
         CanisterSummary,
-        topology::{SubnetCanisterChildren, SubnetCanisterParents, SubnetCanisterRegistry},
+        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
     ops::{OpsError, prelude::*},
 };
@@ -92,12 +92,12 @@ pub async fn root_cascade_topology() -> Result<(), Error> {
 /// Cascade from a child: trim bundle to the child’s subtree and forward.
 pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
-    let self_pid = canister_self();
 
     // save local topology
     save_topology(bundle)?;
 
     // Direct children of self (freshly imported during save_state)
+    let self_pid = canister_self();
     for child in SubnetCanisterChildren::export() {
         let child_bundle = TopologyBundle::for_child(self_pid, child.pid, &bundle.subtree, bundle);
         send_bundle(&child.pid, &child_bundle).await?;
@@ -109,9 +109,6 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 /// private function to save local state
 fn save_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
-
-    // subnet canister parents
-    SubnetCanisterParents::import(bundle.parents.clone());
 
     // subnet canister children
     let self_pid = canister_self();

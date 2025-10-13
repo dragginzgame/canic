@@ -21,11 +21,14 @@ pub enum ConfigModelError {
     #[error("invalid principal: {0} ({1})")]
     InvalidPrincipal(String, usize),
 
-    #[error("canister not found: {0}")]
-    CanisterNotFound(CanisterType),
-
     #[error("subnet not found: {0}")]
     SubnetNotFound(SubnetType),
+
+    #[error("canister not found on subnet: {0}")]
+    CanisterNotFound(CanisterType),
+
+    #[error("app_directory canister not found on prime subnet: {0}")]
+    MissingAppDirectoryCanister(CanisterType),
 }
 
 impl From<ConfigModelError> for Error {
@@ -53,6 +56,9 @@ pub struct ConfigModel {
     pub standards: Option<Standards>,
 
     #[serde(default)]
+    pub app_directory: BTreeSet<CanisterType>,
+
+    #[serde(default)]
     pub subnets: BTreeMap<SubnetType, SubnetConfig>,
 
     #[serde(default)]
@@ -61,12 +67,28 @@ pub struct ConfigModel {
 
 impl ConfigModel {
     pub(super) fn validate(&self) -> Result<(), ConfigModelError> {
+        // 1. Validate whitelist principals
         if let Some(list) = &self.whitelist {
             for (i, s) in list.principals.iter().enumerate() {
-                // Reject if invalid principal format
                 if Principal::from_text(s).is_err() {
                     return Err(ConfigModelError::InvalidPrincipal(s.to_string(), i));
                 }
+            }
+        }
+
+        // 2. Validate that prime subnet exists
+        let prime = SubnetType::PRIME;
+        let prime_subnet = self
+            .subnets
+            .get(&prime)
+            .ok_or_else(|| ConfigModelError::SubnetNotFound(prime.clone()))?;
+
+        // 3. Validate that every app_directory entry exists in prime.canisters
+        for canister_ty in &self.app_directory {
+            if !prime_subnet.canisters.contains_key(canister_ty) {
+                return Err(ConfigModelError::MissingAppDirectoryCanister(
+                    canister_ty.clone(),
+                ));
             }
         }
 

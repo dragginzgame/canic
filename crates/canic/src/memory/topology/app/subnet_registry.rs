@@ -10,7 +10,7 @@ use std::cell::RefCell;
 
 //
 // APP_SUBNET_REGISTRY
-// a application-wide map of every subnet_id to subnet information
+// An application-wide map of every subnet_id to subnet information
 //
 
 eager_static! {

@@ -4,7 +4,7 @@ use crate::{
     types::{CanisterType, Cycles, TC},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 mod defaults {
     use super::Cycles;
@@ -25,10 +25,10 @@ pub struct SubnetConfig {
     pub canisters: BTreeMap<CanisterType, CanisterConfig>,
 
     #[serde(default)]
-    pub auto_create: HashSet<CanisterType>,
+    pub auto_create: BTreeSet<CanisterType>,
 
     #[serde(default)]
-    pub directory: HashSet<CanisterType>,
+    pub directory: BTreeSet<CanisterType>,
 }
 
 impl SubnetConfig {

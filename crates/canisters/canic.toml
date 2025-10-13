@@ -6,10 +6,12 @@
 # Global Settings
 # ----------------------------------------------------------------
 
-controllers = [] # Optional: additional controllers
+controllers = []
+app_directory = ["scale_hub", "shard_hub"]
 
 [reserve]
 minimum_size = 3 # Minimum number of reserved canisters
+
 
 # ----------------------------------------------------------------
 # Standards
@@ -51,7 +53,7 @@ policy.min_workers = 2
 # --- Scale ---
 [subnets.prime.canisters.scale]
 
-# --- Shard Hub ---topup.threshold = "10T"
+# --- Shard Hub ---
 [subnets.prime.canisters.shard_hub]
 topup.threshold = "10T"
 topup.amount = "5T"

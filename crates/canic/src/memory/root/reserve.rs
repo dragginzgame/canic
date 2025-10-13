@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     eager_static, ic_memory, impl_storable_unbounded, log,
     memory::id::root::CANISTER_RESERVE_ID,
-    ops::root::reserve::create_reserve_canister,
+    ops::root::reserve::reserve_create_canister,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -104,7 +104,7 @@ impl CanisterReserve {
 
             spawn(async move {
                 for i in 0..missing {
-                    match create_reserve_canister().await {
+                    match reserve_create_canister().await {
                         Ok(_) => {
                             log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1);
                         }
