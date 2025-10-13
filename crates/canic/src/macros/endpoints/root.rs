@@ -11,7 +11,7 @@ macro_rules! canic_endpoints_root {
 
             ::canic::memory::state::AppState::command(cmd)?;
 
-            let bundle = ::canic::ops::sync::state::StateBundle::app_state();
+            let bundle = ::canic::ops::sync::state::StateBundle::new().with_app_state();
             ::canic::ops::sync::state::root_cascade_state(bundle).await?;
 
             Ok(())
@@ -81,14 +81,6 @@ macro_rules! canic_endpoints_root {
             )
         }
 
-        // parents are auto-generated from the registry (always empty)
-        #[::canic::cdk::query]
-        fn canic_subnet_canister_parents() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterRegistry::parents(
-                ::canic::cdk::api::canister_self(),
-            )
-        }
-
         //
         // CANISTER RESERVE
         //
@@ -105,14 +97,14 @@ macro_rules! canic_endpoints_root {
         async fn canic_reserve_create_canister() -> Result<Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::root::reserve::create_reserve_canister().await
+            ::canic::ops::root::reserve::reserve_create_canister().await
         }
 
         #[update]
-        async fn canic_reserve_move_canister(pid: Principal) -> Result<(), ::canic::Error> {
+        async fn canic_reserve_import_canister(pid: Principal) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::root::reserve::move_canister_to_reserve(pid).await
+            ::canic::ops::root::reserve::reserve_import_canister(pid).await
         }
     };
 }
@@ -128,11 +120,6 @@ macro_rules! canic_endpoints_nonroot {
         #[::canic::cdk::query]
         fn canic_subnet_canister_children() -> Vec<::canic::memory::CanisterSummary> {
             $crate::memory::topology::SubnetCanisterChildren::export()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_subnet_canister_parents() -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterParents::export()
         }
 
         //

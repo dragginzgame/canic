@@ -11,7 +11,7 @@ use crate::{
     memory::{
         MemoryError,
         ext::ExtensionError,
-        id::capability::sharding::{SHARDING_REGISTRY_ID, SHARDING_TENANTS_ID},
+        id::ext::sharding::{SHARDING_REGISTRY_ID, SHARDING_TENANTS_ID},
     },
     types::CanisterType,
 };

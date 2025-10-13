@@ -53,6 +53,17 @@ impl AppDirectory {
         Self::get(ty).ok_or_else(|| AppDirectoryError::TypeNotFound(ty.clone()).into())
     }
 
+    pub fn register(ty: &CanisterType, pid: Principal) -> Result<(), Error> {
+        APP_DIRECTORY.with_borrow_mut(|map| {
+            if map.contains_key(ty) {
+                return Err(AppDirectoryError::AlreadyRegistered(ty.clone()).into());
+            }
+            map.insert(ty.clone(), pid);
+
+            Ok(())
+        })
+    }
+
     #[must_use]
     pub fn remove(ty: &CanisterType) -> Option<Principal> {
         APP_DIRECTORY.with_borrow_mut(|map| map.remove(ty))

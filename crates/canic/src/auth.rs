@@ -11,7 +11,7 @@ use crate::{
     memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
-        topology::{SubnetCanisterChildren, SubnetCanisterParents, SubnetCanisterRegistry},
+        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
     types::CanisterType,
 };
@@ -212,13 +212,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        // Root is always considered a parent
-        let root_pid = Env::try_get_root_pid()?;
-        if caller == root_pid {
-            return Ok(());
-        }
-
-        if SubnetCanisterParents::find_by_pid(&caller).is_some() {
+        if Some(caller) == Env::get_parent_pid() {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?

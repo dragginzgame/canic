@@ -46,7 +46,7 @@ pub(crate) mod id {
     // all canisters get env
     pub const ENV_ID: u8 = 5;
 
-    // icu network states
+    // subnet-level state payloads
     pub mod state {
         pub const APP_STATE_ID: u8 = 7;
         pub const SUBNET_STATE_ID: u8 = 8;
@@ -54,8 +54,8 @@ pub(crate) mod id {
 
     // directory
     pub mod directory {
-        pub const SUBNET_DIRECTORY_ID: u8 = 10;
-        pub const APP_DIRECTORY_ID: u8 = 11;
+        pub const APP_DIRECTORY_ID: u8 = 10;
+        pub const SUBNET_DIRECTORY_ID: u8 = 11;
     }
 
     // topology
@@ -68,8 +68,7 @@ pub(crate) mod id {
         pub mod subnet {
             // registry is root-authoritative, the others are cascaded views
             pub const SUBNET_CANISTER_REGISTRY_ID: u8 = 15;
-            pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 17;
-            pub const SUBNET_CANISTER_PARENTS_ID: u8 = 18;
+            pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 16;
         }
     }
 
@@ -79,8 +78,8 @@ pub(crate) mod id {
         pub const CANISTER_RESERVE_ID: u8 = 20;
     }
 
-    // capability
-    pub mod capability {
+    // ext
+    pub mod ext {
         pub mod cycles {
             pub const CYCLE_TRACKER_ID: u8 = 24;
         }

@@ -2,7 +2,7 @@ use crate::{
     Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    memory::{MemoryError, ext::ExtensionError, id::capability::scaling::SCALING_REGISTRY_ID},
+    memory::{MemoryError, ext::ExtensionError, id::ext::scaling::SCALING_REGISTRY_ID},
     types::CanisterType,
 };
 use candid::{CandidType, Principal};

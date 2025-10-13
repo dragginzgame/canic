@@ -16,6 +16,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 - 🧩 **Bootstrap macros** – `canic_start!`, `canic_start_root!`, `canic_build!`, and `canic_build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
 - 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
+- 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and reserve policies validated straight from `canic.toml`.
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
@@ -96,7 +97,7 @@ See `crates/canisters/root` and the hub/shard reference canisters under `crates/
 
 ### 4. Define your topology
 
-Populate `canic.toml` with canister metadata, capabilities, and auth lists. The schema is documented in `CONFIG.md`.
+Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `directory` canister types, then nests `[subnets.<name>.canisters.<type>]` tables for top-up settings, delegation, sharding, and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, and `standards` shape the overall cluster. The full schema lives in `CONFIG.md`.
 
 ## Layered Architecture
 
@@ -138,6 +139,11 @@ Command variants cover register, audit, drain, rebalance, and decommission flows
 
 - `canic_endpoints_scaling!()` exposes `canic_scaling_registry()` for controller insight.
 - Root canisters manage spare capacity through `canic::ops::reserve` and the `canic_reserve_*` endpoints.
+
+### Directory Views 📇
+
+- `canic_app_directory()` returns the prime root directory view for operator dashboards.
+- `canic_subnet_directory()` exposes the per-subnet directory so children can discover peers.
 
 ### ICRC Support 📚
 

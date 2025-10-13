@@ -3,12 +3,12 @@ use crate::{
     cdk::{api::canister_self, println},
     log,
     memory::{
-        CanisterSummary, Env,
+        Env,
         env::EnvData,
         ext::cycles::CycleTracker,
         registry,
         root::reserve::CanisterReserve,
-        topology::{SubnetCanisterParents, SubnetCanisterRegistry, SubnetIdentity},
+        topology::{SubnetCanisterRegistry, SubnetIdentity},
     },
     runtime,
     types::{CanisterType, SubnetType},
@@ -70,7 +70,7 @@ pub fn root_post_upgrade() {
 }
 
 /// nonroot_init
-pub fn nonroot_init(canister_type: CanisterType, env: EnvData, parents: Vec<CanisterSummary>) {
+pub fn nonroot_init(canister_type: CanisterType, env: EnvData) {
     // --- Phase 1: Init base systems ---
     log!(Log::Info, "🏁 init: {}", canister_type);
     runtime::init_eager_tls();
@@ -78,7 +78,6 @@ pub fn nonroot_init(canister_type: CanisterType, env: EnvData, parents: Vec<Cani
 
     // --- Phase 2: Env registration ---
     Env::import(env);
-    SubnetCanisterParents::import(parents);
 
     // --- Phase 3: Service startup ---
     CycleTracker::start();

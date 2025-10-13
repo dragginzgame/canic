@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.0] - 2025-10-13 - PRIME Subnet
+- Added the SubnetType, so we can have a Prime Subnet and others
+- Added an Env cell so each canister remembers its root, subnet, parent, and type IDs.
+- Split topology storage into dedicated directory modules and updated the ops helpers to use them.
+- AppDirectory is now an App-level canister directory
+- SyncBundle will sync both states and directories now
+- Tons of little code improvements, especially splitting memory:: and ops::
+
 ## [0.1.7] - 2025-10-08
 - with dfx 0.30 now the subnet's pid can be read, and stored in the root's SubnetContext
 
@@ -188,6 +196,13 @@ adding canister IDs to config
 - added the CycleTracker stable memory
 - rewrote all stable memory wrappers so they can be tested properly
 - removed wrapper for Cell and BTreeSet as they were redundant
+
+## [0.2.32]
+- Restructured the config model into typed subnet and canister sections with whitelist checks.
+- Added an Env cell so each canister remembers its root, subnet, parent, and type IDs.
+- Split topology storage into dedicated directory modules and updated the ops helpers to use them.
+- Refreshed the lifecycle and start macros so cycle tracking and the reserve start with the new layout.
+- Removed the CanisterParents memory wrapper because parent tracking now lives in Env.
 
 ## [0.2.31] - 2025-08-16
 - changed Config to an Arc as it could get big and can potentially be requested many times

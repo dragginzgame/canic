@@ -10,6 +10,7 @@
 pub mod canister;
 pub mod context;
 pub mod delegation;
+pub mod directory;
 pub mod ext;
 pub mod lifecycle;
 pub mod request;

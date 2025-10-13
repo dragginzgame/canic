@@ -57,9 +57,12 @@ impl From<ContextError> for Error {
 ///
 /// EnvData
 ///
-/// prime_root_pid   : passed to the root as arguments
+/// `prime_root_pid` : passed to the root during install arguments.
+/// `parent_pid`     : passed to the root during install arguments.
 ///
-/// all other fields are calculated upon root installaetion
+/// All other fields are derived during install/upgrade and cached locally so
+/// every canister can answer questions about its environment without touching
+/// global state.
 ///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
@@ -74,6 +77,7 @@ pub struct EnvData {
 
     // canister
     pub canister_type: Option<CanisterType>,
+    pub parent_pid: Option<Principal>,
 }
 
 impl_storable_bounded!(EnvData, 256, true);
@@ -101,6 +105,13 @@ impl Env {
             data.prime_root_pid = Some(pid);
             cell.set(data);
         });
+    }
+
+    #[must_use]
+    pub fn is_prime_root() -> bool {
+        let prime_root_pid = Self::get_prime_root_pid();
+
+        prime_root_pid.is_some() && prime_root_pid == Self::get_root_pid()
     }
 
     // ---- Subnet Type ----
@@ -182,6 +193,20 @@ impl Env {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.canister_type = Some(ty);
+            cell.set(data);
+        });
+    }
+
+    // ---- Parent PID ----
+    #[must_use]
+    pub fn get_parent_pid() -> Option<Principal> {
+        ENV.with_borrow(|cell| cell.get().parent_pid)
+    }
+
+    pub fn set_parent_pid(pid: Principal) {
+        ENV.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.parent_pid = Some(pid);
             cell.set(data);
         });
     }

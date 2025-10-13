@@ -1,7 +1,7 @@
 //! State synchronization routines shared by root and child canisters.
 //!
-//! Bundles snapshot portions of `AppState` and `SubnetState`, ships them across
-//! the topology, and replays them on recipients.
+//! Bundles snapshot portions of `AppState`, `SubnetState`, and the directory
+//! views, ships them across the topology, and replays them on recipients.
 
 use crate::{
     Error,
@@ -15,7 +15,7 @@ use crate::{
 
 ///
 /// StateBundle
-/// Snapshot of mutable state sections that can be propagated to peers
+/// Snapshot of mutable state and directory sections that can be propagated to peers
 ///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
@@ -30,6 +30,11 @@ pub struct StateBundle {
 }
 
 impl StateBundle {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Construct a bundle containing the root canister’s full state view.
     #[must_use]
     pub fn root() -> Self {
@@ -42,19 +47,27 @@ impl StateBundle {
     }
 
     #[must_use]
-    pub fn app_state() -> Self {
-        Self {
-            app_state: Some(AppState::export()),
-            ..Default::default()
-        }
+    pub fn with_app_state(mut self) -> Self {
+        self.app_state = Some(AppState::export());
+        self
     }
 
     #[must_use]
-    pub fn subnet_directory() -> Self {
-        Self {
-            subnet_directory: Some(SubnetDirectory::export()),
-            ..Default::default()
-        }
+    pub fn with_subnet_state(mut self) -> Self {
+        self.subnet_state = Some(SubnetState::export());
+        self
+    }
+
+    #[must_use]
+    pub fn with_app_directory(mut self) -> Self {
+        self.app_directory = Some(AppDirectory::export());
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_directory(mut self) -> Self {
+        self.subnet_directory = Some(SubnetDirectory::export());
+        self
     }
 
     /// Compact debug string showing which sections are present.
@@ -74,8 +87,9 @@ impl StateBundle {
         )
     }
 
-    /// Whether the bundle carries any state sections (true when both are absent).
-    const fn is_empty(&self) -> bool {
+    /// Whether the bundle carries any sections (true when every optional field is absent).
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.app_state.is_none()
             && self.subnet_state.is_none()
             && self.app_directory.is_none()
@@ -145,7 +159,7 @@ fn save_state(bundle: &StateBundle) -> Result<(), Error> {
 /// Low-level bundle sender.
 async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let debug = bundle.debug();
-    log!(Log::Info, "💦 sync.state: [{debug}] -> {pid}");
+    log!(Log::Info, "💦 sync.state: {debug} -> {pid}");
 
     call_and_decode::<Result<(), Error>>(*pid, "canic_sync_state", bundle).await?
 }
