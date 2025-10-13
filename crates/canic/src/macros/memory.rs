@@ -7,17 +7,13 @@
 /// Memory IDs are automatically namespaced per crate via `CARGO_PKG_NAME`.
 #[macro_export]
 macro_rules! ic_memory {
-    ($label:ident, $id:expr) => {{
+    ($label:path, $id:expr) => {{
         // Force the compiler to resolve the type. This causes a compile-time error
         // if `$label` does not exist or is not a valid local type.
         let _type_check: Option<$label> = None;
 
         // Enqueue this memory ID registration for deferred validation.
-        $crate::memory::registry::defer_register(
-            $id,
-            env!("CARGO_PKG_NAME"),
-            concat!(module_path!(), "::", stringify!($label)),
-        );
+        $crate::memory::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label));
 
         // Return the stable memory handle immediately for further wrapping.
         $crate::memory::MEMORY_MANAGER
