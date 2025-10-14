@@ -10,6 +10,7 @@ mod canister_demo {
     };
 
     // Not a full canister; demonstrates the call site.
+    #[allow(dead_code)]
     async fn create_blank_canister() -> Result<CreateCanisterResponse, Error> {
         create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::Caller, None::<()>)
             .await
