@@ -35,16 +35,14 @@ impl Icrc10Registry {
         let config = Config::get();
         let mut supported = vec![Icrc10Standard::Icrc10];
 
-        #[allow(clippy::collapsible_if)]
         if let Some(standards) = &config.standards {
             if standards.icrc21 {
                 supported.push(Icrc10Standard::Icrc21);
             }
+
             if standards.icrc103 {
                 supported.push(Icrc10Standard::Icrc103);
             }
-
-            // if standards.
         }
 
         supported
