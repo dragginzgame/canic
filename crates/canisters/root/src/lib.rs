@@ -81,7 +81,6 @@ async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
 
 // convert_icp_to_cycles
 #[update]
-#[allow(clippy::cast_possible_truncation)]
 async fn convert_icp_to_cycles() -> Result<(), Error> {
     let acc = Account::from(msg_caller());
     let cycles = (TC * 2) as u64;

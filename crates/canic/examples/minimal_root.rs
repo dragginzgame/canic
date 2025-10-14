@@ -11,7 +11,7 @@ mod canister {
     // Set up a minimal root canister with default hooks.
     canic_start_root!();
 
-    #[allow(clippy::unused_async)]
+    #[expect(clippy::unused_async)]
     async fn canic_setup() {}
     async fn canic_install() {}
     async fn canic_upgrade() {}

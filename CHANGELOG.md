@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.1] - 2025-10-13
+- bug fixes as expected
+
 ## [0.2.0] - 2025-10-13 - PRIME Subnet
 - Added the SubnetType, so we can have a Prime Subnet and others
 - Added an Env cell so each canister remembers its root, subnet, parent, and type IDs.

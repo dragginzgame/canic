@@ -10,7 +10,7 @@ use crate::{
     interface::ic::get_cycles,
     memory::root::reserve::CanisterReserve,
     ops::{
-        canister::{raw_create_canister, uninstall_and_delete_canister},
+        canister::{create_canister, uninstall_and_delete_canister},
         prelude::*,
     },
     types::{Cycles, TC},
@@ -24,7 +24,7 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
-    let canister_pid = raw_create_canister(cycles.clone()).await?;
+    let canister_pid = create_canister(cycles.clone()).await?;
     log!(Log::Ok, "🪶  create_reserve: {canister_pid} ({cycles})",);
 
     CanisterReserve::register(canister_pid, cycles);

@@ -88,7 +88,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
 }
 
 //
-// PHASE 0: Allocation
+// PHASE 1: Allocation or Creation
 //
 
 /// Allocate a canister ID and cycle balance, preferring the shared reserve.
@@ -104,24 +104,20 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
         Ok(pid)
     } else {
         let cfg = cfg_current_subnet()?.try_get_canister(ty)?;
-        let pid = raw_create_canister(cfg.initial_cycles.clone()).await?;
+        let pid = create_canister(cfg.initial_cycles.clone()).await?;
         log!(Log::Info, "⚡ allocate_canister: pool empty");
 
         Ok(pid)
     }
 }
 
-//
-// PHASE 1: Creation
-//
-
 /// Create a fresh canister on the IC with the configured controllers.
-pub(crate) async fn raw_create_canister(cycles: Cycles) -> Result<Principal, Error> {
+pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> {
     let mut controllers = Config::get().controllers.clone();
     controllers.push(canister_self()); // root always controls
 
     let pid = crate::interface::ic::create_canister(controllers, cycles.clone()).await?;
-    log!(Log::Ok, "⚡ raw_create_canister: {pid} ({cycles})");
+    log!(Log::Ok, "⚡ create_canister: {pid} ({cycles})");
 
     Ok(pid)
 }

@@ -76,7 +76,6 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 //
 
 /// Queries the NNS registry for the subnet that this canister belongs to.
-#[allow(clippy::unused_async)]
 pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
     let request = GetSubnetForCanisterRequest::new(msg_caller());
 
