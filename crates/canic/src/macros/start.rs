@@ -37,11 +37,11 @@
 macro_rules! canic_start {
     ($canister_type:expr) => {
         #[::canic::cdk::init]
-        fn init(env: ::canic::memory::env::EnvData, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
             ::canic::__canic_load_config!();
 
             // ops
-            ::canic::ops::lifecycle::nonroot_init($canister_type, env);
+            ::canic::ops::lifecycle::nonroot_init($canister_type, payload);
 
             // timers
             let _ =

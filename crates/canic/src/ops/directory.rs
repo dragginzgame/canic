@@ -1,82 +1,86 @@
 use crate::{
     Error,
     config::Config,
-    interface::prelude::*,
     memory::{
         Env,
-        directory::{AppDirectory, SubnetDirectory},
+        directory::{AppDirectory, PrincipalList, SubnetDirectory},
+        topology::SubnetCanisterRegistry,
     },
     ops::{
         context::cfg_current_subnet,
         sync::state::{StateBundle, root_cascade_state},
     },
 };
-use candid::Principal;
-
-//
-// INTERNAL: directory helpers
-//
+use std::collections::BTreeMap;
 
 ///
-/// Handles inserting a canister into the relevant directory or directories.
+/// Rebuilds and reimports the AppDirectory and/or SubnetDirectory
+/// based on the current contents of the SubnetCanisterRegistry.
 ///
-/// Rules:
-/// - If this is the prime root subnet and `ty` is listed in the app_directory,
-///   register in the global AppDirectory.
-/// - If the current subnet config lists `ty` in its directory,
-///   register in the local SubnetDirectory.
-/// - If any directory changes, cascade state to children.
+/// Detects changes by comparing against the existing stable directories
+/// before importing and cascading.
 ///
-pub(crate) async fn add_to_directories(ty: &CanisterType, pid: Principal) -> Result<(), Error> {
+pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
     let cfg = Config::get();
     let subnet_cfg = cfg_current_subnet()?;
     let mut bundle = StateBundle::default();
 
-    // Prime subnet → app directory
-    if Env::is_prime_root() && cfg.app_directory.contains(ty) {
-        AppDirectory::register(ty, pid)?;
-        bundle = bundle.with_app_directory();
+    // Get all current canisters from the registry
+    let entries = SubnetCanisterRegistry::export();
+
+    //
+    // Rebuild the app and subnet directory views from registry data
+    //
+    let mut app_map: BTreeMap<_, PrincipalList> = BTreeMap::new();
+    let mut subnet_map: BTreeMap<_, PrincipalList> = BTreeMap::new();
+
+    for entry in entries {
+        let ty = entry.ty.clone();
+
+        // Prime root → add to AppDirectory if configured
+        if Env::is_prime_root() && cfg.app_directory.contains(&ty) {
+            app_map.entry(ty.clone()).or_default().push(entry.pid);
+        }
+
+        // Always check subnet directory configuration
+        if subnet_cfg.subnet_directory.contains(&ty) {
+            subnet_map.entry(ty).or_default().push(entry.pid);
+        }
     }
 
-    // Local subnet directory
-    if subnet_cfg.directory.contains(ty) {
-        SubnetDirectory::register(ty, pid)?;
+    //
+    // Detect and import AppDirectory changes (only for prime root)
+    //
+    if Env::is_prime_root() {
+        let current_app = AppDirectory::export();
+        let new_app: Vec<_> = app_map
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        if current_app != new_app {
+            AppDirectory::import(app_map.into_iter().collect());
+            bundle = bundle.with_app_directory();
+        }
+    }
+
+    //
+    // Detect and import SubnetDirectory changes
+    //
+    let current_subnet = SubnetDirectory::export();
+    let new_subnet: Vec<_> = subnet_map
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    if current_subnet != new_subnet {
+        SubnetDirectory::import(subnet_map.into_iter().collect());
         bundle = bundle.with_subnet_directory();
     }
 
-    // Cascade if something changed
-    if !bundle.is_empty() {
-        root_cascade_state(bundle).await?;
-    }
-
-    Ok(())
-}
-
-///
-/// Handles removing a canister from directories.
-///
-/// Rules:
-/// - Removes from AppDirectory if it exists there (only prime root).
-/// - Removes from SubnetDirectory if it exists there.
-/// - If anything was removed, cascade state.
-///
-pub(crate) async fn remove_from_directories(ty: &CanisterType) -> Result<(), Error> {
-    let cfg = Config::get();
-    let subnet_cfg = cfg_current_subnet()?;
-    let mut bundle = StateBundle::default();
-
-    // Prime subnet → remove from app directory
-    if Env::is_prime_root() && cfg.app_directory.contains(ty) && AppDirectory::remove(ty).is_some()
-    {
-        bundle = bundle.with_app_directory();
-    }
-
-    // Local subnet directory
-    if subnet_cfg.directory.contains(ty) && SubnetDirectory::remove(ty).is_some() {
-        bundle = bundle.with_subnet_directory();
-    }
-
-    // Cascade if something changed
+    //
+    // Cascade updates if anything changed
+    //
     if !bundle.is_empty() {
         root_cascade_state(bundle).await?;
     }

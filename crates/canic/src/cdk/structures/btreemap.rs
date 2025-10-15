@@ -1,3 +1,5 @@
+pub use ic_stable_structures::btreemap::*;
+
 use derive_more::{Deref, DerefMut};
 use ic_stable_structures::{Memory, Storable, btreemap::BTreeMap as WrappedBTreeMap};
 

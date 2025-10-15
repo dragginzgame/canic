@@ -1,9 +1,12 @@
 use crate::{
-    Error, ThisError,
+    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    memory::{MemoryError, directory::DirectoryError, id::directory::APP_DIRECTORY_ID},
-    types::{CanisterType, Principal},
+    memory::{
+        directory::{DirectoryError, DirectoryView, PrincipalList},
+        id::directory::APP_DIRECTORY_ID,
+    },
+    types::CanisterType,
 };
 use std::cell::RefCell;
 
@@ -12,27 +15,8 @@ use std::cell::RefCell;
 //
 
 eager_static! {
-    static APP_DIRECTORY: RefCell<BTreeMap<CanisterType, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+    static APP_DIRECTORY: RefCell<BTreeMap<CanisterType, PrincipalList, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(ic_memory!(AppDirectory, APP_DIRECTORY_ID)));
-}
-
-///
-/// AppDirectoryError
-///
-
-#[derive(Debug, ThisError)]
-pub enum AppDirectoryError {
-    #[error("canister already in app directory: {0}")]
-    AlreadyRegistered(CanisterType),
-
-    #[error("canister not in app directory: {0}")]
-    TypeNotFound(CanisterType),
-}
-
-impl From<AppDirectoryError> for Error {
-    fn from(err: AppDirectoryError) -> Self {
-        MemoryError::from(DirectoryError::from(err)).into()
-    }
 }
 
 ///
@@ -41,49 +25,31 @@ impl From<AppDirectoryError> for Error {
 
 pub struct AppDirectory;
 
-pub type AppDirectoryView = Vec<(CanisterType, Principal)>;
-
 impl AppDirectory {
     #[must_use]
-    pub fn get(ty: &CanisterType) -> Option<Principal> {
+    pub fn get(ty: &CanisterType) -> Option<PrincipalList> {
         APP_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    pub fn try_get(ty: &CanisterType) -> Result<Principal, Error> {
-        Self::get(ty).ok_or_else(|| AppDirectoryError::TypeNotFound(ty.clone()).into())
-    }
-
-    pub fn register(ty: &CanisterType, pid: Principal) -> Result<(), Error> {
-        APP_DIRECTORY.with_borrow_mut(|map| {
-            if map.contains_key(ty) {
-                return Err(AppDirectoryError::AlreadyRegistered(ty.clone()).into());
-            }
-            map.insert(ty.clone(), pid);
-
-            Ok(())
-        })
-    }
-
-    #[must_use]
-    pub fn remove(ty: &CanisterType) -> Option<Principal> {
-        APP_DIRECTORY.with_borrow_mut(|map| map.remove(ty))
+    pub fn try_get(ty: &CanisterType) -> Result<PrincipalList, Error> {
+        Self::get(ty).ok_or_else(|| DirectoryError::TypeNotFound(ty.clone()).into())
     }
 
     //
     // Import & Export
     //
 
-    pub fn import(view: AppDirectoryView) {
+    pub fn import(view: DirectoryView) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (ty, pid) in view {
-                map.insert(ty, pid);
+            for (ty, pids) in view {
+                map.insert(ty, pids);
             }
         });
     }
 
     #[must_use]
-    pub fn export() -> AppDirectoryView {
+    pub fn export() -> DirectoryView {
         APP_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))

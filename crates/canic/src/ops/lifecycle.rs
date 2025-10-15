@@ -4,12 +4,13 @@ use crate::{
     log,
     memory::{
         Env,
-        env::EnvData,
+        directory::{AppDirectory, SubnetDirectory},
         ext::cycles::CycleTracker,
         registry,
         root::reserve::CanisterReserve,
         topology::{SubnetCanisterRegistry, SubnetIdentity},
     },
+    ops::CanisterInitPayload,
     runtime,
     types::{CanisterType, SubnetType},
 };
@@ -70,14 +71,16 @@ pub fn root_post_upgrade() {
 }
 
 /// nonroot_init
-pub fn nonroot_init(canister_type: CanisterType, env: EnvData) {
+pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     log!(Log::Info, "🏁 init: {}", canister_type);
     runtime::init_eager_tls();
     registry::init_memory();
 
-    // --- Phase 2: Env registration ---
-    Env::import(env);
+    // --- Phase 2: Payload registration ---
+    Env::import(payload.env);
+    AppDirectory::import(payload.app_directory);
+    SubnetDirectory::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
     CycleTracker::start();
