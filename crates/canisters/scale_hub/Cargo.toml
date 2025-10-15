@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
 canic = { workspace = true }
+canic_internal = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }

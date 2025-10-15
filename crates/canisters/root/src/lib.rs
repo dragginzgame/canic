@@ -7,11 +7,12 @@
 
 use candid::Principal;
 use canic::{
-    Error, canister,
+    Error,
     ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
     types::{Account, TC},
 };
+use canic_internal::canister;
 
 //
 // CANIC
@@ -26,18 +27,25 @@ async fn canic_upgrade() {}
 // WASMS
 pub static WASMS: &[(CanisterType, &[u8])] = &[
     (
+        canister::APP,
+        #[cfg(canic_github_ci)]
+        &[],
+        #[cfg(not(canic_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/app/app.wasm.gz"),
+    ),
+    (
+        canister::AUTH,
+        #[cfg(canic_github_ci)]
+        &[],
+        #[cfg(not(canic_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/auth/auth.wasm.gz"),
+    ),
+    (
         canister::BLANK,
         #[cfg(canic_github_ci)]
         &[],
         #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz"),
-    ),
-    (
-        canister::DELEGATION,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/delegation/delegation.wasm.gz"),
     ),
     (
         canister::SCALE_HUB,
@@ -81,17 +89,18 @@ async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
 
 // convert_icp_to_cycles
 #[update]
+#[allow(clippy::cast_possible_truncation)]
 async fn convert_icp_to_cycles() -> Result<(), Error> {
     let acc = Account::from(msg_caller());
     let cycles = (TC * 2) as u64;
 
-    canic::interface::ic::convert_icp_to_cycles(acc, cycles).await
+    canic::interface::ic::cycles::convert_icp_to_cycles(acc, cycles).await
 }
 
 // get_icp_xdr_conversion_rate
 #[query(composite)]
 async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
-    canic::interface::ic::get_icp_xdr_conversion_rate().await
+    canic::interface::ic::cycles::get_icp_xdr_conversion_rate().await
 }
 
 // create_blank

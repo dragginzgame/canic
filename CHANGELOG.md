@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.2] - 2025-10-13
+- removed all the delegation code
+- added in ops::signature, a wrapper around creating and verifying canister signatures
+
 ## [0.2.1] - 2025-10-13
 - bug fixes as expected
 

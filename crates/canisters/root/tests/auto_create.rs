@@ -1,8 +1,8 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::memory::CanisterEntry;
-use canic::types::CanisterType;
+use canic::{memory::CanisterEntry, types::CanisterType};
+use canic_internal::canister;
 use pocket_ic::PocketIc;
 
 const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
@@ -74,10 +74,10 @@ fn root_auto_creates_expected_canisters() {
 
     let expected = [
         (CanisterType::ROOT, None),
-        (canic::canister::BLANK, Some(root_id)),
-        (canic::canister::DELEGATION, Some(root_id)),
-        (canic::canister::SCALE_HUB, Some(root_id)),
-        (canic::canister::SHARD_HUB, Some(root_id)),
+        (canister::AUTH, Some(root_id)),
+        (canister::BLANK, Some(root_id)),
+        (canister::SCALE_HUB, Some(root_id)),
+        (canister::SHARD_HUB, Some(root_id)),
     ];
 
     for (ty, parent) in expected {

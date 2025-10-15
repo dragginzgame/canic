@@ -123,67 +123,6 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // DELEGATION
-        //
-
-        #[::canic::cdk::query]
-        async fn canic_delegation_get(
-            session_pid: ::candid::Principal,
-        ) -> Result<::canic::state::delegation::DelegationSessionView, ::canic::Error> {
-            $crate::ops::delegation::DelegationRegistry::get_view(session_pid)
-        }
-
-        #[::canic::cdk::update]
-        async fn canic_delegation_track(
-            session_pid: ::candid::Principal,
-        ) -> Result<::canic::state::delegation::DelegationSessionView, ::canic::Error> {
-            $crate::ops::delegation::DelegationRegistry::track(msg_caller(), session_pid)
-        }
-
-        #[::canic::cdk::update]
-        async fn canic_delegation_register(
-            args: ::canic::state::delegation::RegisterSessionArgs,
-        ) -> Result<::canic::state::delegation::DelegationSessionView, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_whitelisted)?;
-
-            let wallet = msg_caller();
-
-            $crate::ops::delegation::DelegationRegistry::register_session(wallet, args.clone())?;
-            $crate::ops::delegation::DelegationRegistry::get_view(args.session_pid)
-        }
-
-        #[::canic::cdk::update]
-        async fn canic_delegation_revoke(pid: ::candid::Principal) -> Result<(), ::canic::Error> {
-            use ::canic::auth::{is_parent, is_principal};
-
-            // make sure the caller == pid to revoke
-            // or a parent canister
-            let expected = pid;
-            $crate::auth_require_any!(is_parent, |caller| is_principal(caller, expected))?;
-
-            $crate::ops::delegation::DelegationRegistry::revoke(pid)
-        }
-
-        // List all delegation sessions (admin only)
-        #[::canic::cdk::query]
-        async fn canic_delegation_list_all()
-        -> Result<Vec<::canic::state::delegation::DelegationSessionView>, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_controller)?;
-
-            Ok($crate::ops::delegation::DelegationRegistry::list_all_sessions())
-        }
-
-        // List sessions by wallet (admin only)
-        #[::canic::cdk::query]
-        async fn canic_delegation_list_by_wallet(
-            wallet_pid: ::candid::Principal,
-        ) -> Result<Vec<::canic::state::delegation::DelegationSessionView>, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_controller)?;
-
-            Ok($crate::ops::delegation::DelegationRegistry::list_sessions_by_wallet(wallet_pid))
-        }
-
-        //
         // SCALING
         //
 

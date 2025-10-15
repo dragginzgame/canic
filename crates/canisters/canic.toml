@@ -31,14 +31,14 @@ icrc21 = true # Enable ICRC-21 capability
 #  PRIME SUBNET
 # ================================================================
 [subnets.prime]
-auto_create = ["delegation", "scale_hub", "shard_hub"]
-directory = ["delegation", "scale_hub", "shard_hub"]
+auto_create = ["app", "auth", "scale_hub", "shard_hub"]
+directory = ["app", "auth", "scale_hub", "shard_hub"]
 
-# --- Delegation ---
-[subnets.prime.canisters.delegation]
-delegation = true
-topup.threshold = "10T"
-topup.amount = "5T"
+# --- App ---
+[subnets.prime.canisters.app]
+
+# --- Auth ---
+[subnets.prime.canisters.auth]
 
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]

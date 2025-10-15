@@ -1,13 +1,15 @@
 [workspace]
 members = [
+    "crates/canisters/app",
+    "crates/canisters/auth",
     "crates/canisters/blank",
-    "crates/canisters/delegation",
     "crates/canisters/root",
     "crates/canisters/scale",
     "crates/canisters/scale_hub",
     "crates/canisters/shard",
     "crates/canisters/shard_hub",
     "crates/canic",
+    "crates/canic_internal",
 ]
 resolver = "2"
 
@@ -27,21 +29,26 @@ publish = true
 
 [workspace.dependencies]
 
-# ic cdk
+# canic
+canic = { path = "crates/canic" }
+canic_internal = { path = "crates/canic_internal" }
+
+# ic
 candid = { version = "0.10", default-features = false }
-ctor = "0.6"
-criterion = "0.7"
-defer = "0.2"
-derive_more = { version = "2.0", default-features = false, features = ["full"] }
 ic-cdk = "0.18.7"
 ic-cdk-timers = "0.12.2"
 ic-management-canister-types = "0.3.3"
 ic-stable-structures = "0.7.2"
+ic-canister-sig-creation = "1.3"
+ic-signature-verification = "0.2"
 icrc-ledger-types = "0.1.10"
-canic = { path = "crates/canic" }
 pocket-ic = "10.0"
 
 # third party
+ctor = "0.6"
+criterion = "0.7"
+defer = "0.2"
+derive_more = { version = "2.0", default-features = false, features = ["full"] }
 minicbor-serde = { version = "0.6", features = ["alloc"] }
 remain = "0.2"
 num-traits = "0.2"

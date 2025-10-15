@@ -64,9 +64,6 @@ pub struct CanisterConfig {
     pub topup: Option<CanisterTopup>,
 
     #[serde(default)]
-    pub delegation: bool,
-
-    #[serde(default)]
     pub scaling: Option<ScalingConfig>,
 
     #[serde(default)]

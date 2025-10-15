@@ -1,5 +1,5 @@
 [package]
-name = "canister_delegation"
+name = "canister_app"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
 canic = { workspace = true }
+canic_internal = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }

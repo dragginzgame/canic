@@ -116,7 +116,7 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
     let mut controllers = Config::get().controllers.clone();
     controllers.push(canister_self()); // root always controls
 
-    let pid = crate::interface::ic::create_canister(controllers, cycles.clone()).await?;
+    let pid = crate::interface::ic::canister::create_canister(controllers, cycles.clone()).await?;
     log!(Log::Ok, "⚡ create_canister: {pid} ({cycles})");
 
     Ok(pid)

@@ -5,7 +5,8 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{Error, canister::SCALE_HUB, ops::ext::scaling, prelude::*};
+use canic::{Error, ops::ext::scaling, prelude::*};
+use canic_internal::canister::SCALE_HUB;
 
 //
 // CANIC
