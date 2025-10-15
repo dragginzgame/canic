@@ -108,22 +108,18 @@ pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
 ///
 /// Verify a user token that was issued by the auth canister.
 ///
-/// - `token_bytes`: the CBOR-encoded `AuthToken`
+/// - `message`: the CBOR-encoded message Token
 /// - `signature`:  the CBOR canister signature returned by auth
 /// - `issuer_pid`: the Principal of the auth canister (the one that signed)
 ///
-pub fn verify(
-    token_bytes: Vec<u8>,
-    signature_cbor: Vec<u8>,
-    issuer_pid: Principal,
-) -> Result<(), Error> {
+pub fn verify(message: &[u8], signature_cbor: &[u8], issuer_pid: Principal) -> Result<(), Error> {
     // 1️⃣ Parse CBOR
-    parse_canister_sig_cbor(&signature_cbor).map_err(|_| SignatureError::CannotParseSignature)?;
+    parse_canister_sig_cbor(signature_cbor).map_err(|_| SignatureError::CannotParseSignature)?;
 
     // 2️⃣ Verify the IC canister signature cryptographically
     verify_canister_sig(
-        &signature_cbor,
-        &token_bytes,
+        message,
+        signature_cbor,
         issuer_pid.as_slice(),
         &IC_ROOT_PUBLIC_KEY,
     )
@@ -133,20 +129,16 @@ pub fn verify(
 }
 
 ///
-/// Parses CBOR-encoded token bytes into a strongly-typed value `T`.
+/// Parses CBOR-encoded message bytes into a strongly-typed value `T`.
 ///
 /// This is a thin convenience wrapper over [`deserialize`], ensuring that
 /// all token deserialization uses the same canonical CBOR implementation.
 ///
-/// # Errors
-/// Returns `Error::InvalidToken` (or similar, depending on your Error type)
-/// if deserialization fails.
-///
-pub fn parse_tokens<T>(token_bytes: &[u8]) -> Result<T, Error>
+pub fn parse_message<T>(message: &[u8]) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
-    let token = deserialize::<T>(token_bytes).map_err(|_| SignatureError::CannotParseTokens)?;
+    let token = deserialize::<T>(message).map_err(|_| SignatureError::CannotParseTokens)?;
 
     Ok(token)
 }

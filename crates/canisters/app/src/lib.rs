@@ -18,14 +18,14 @@ async fn canic_upgrade() {}
 ///
 #[update]
 async fn verify(
-    token_bytes: Vec<u8>,
-    signature: Vec<u8>,
+    message: Vec<u8>,
+    signature_cbor: Vec<u8>,
     issuer_pid: Principal,
 ) -> Result<String, Error> {
-    signature::verify(token_bytes.clone(), signature, issuer_pid)?;
+    signature::verify(&message, &signature_cbor, issuer_pid)?;
 
     // 3️⃣ Parse the AuthToken from CBOR
-    let token: AuthToken = signature::parse_tokens(&token_bytes)?;
+    let token: AuthToken = signature::parse_message(&message)?;
     let expiry = token.exp;
 
     // 4️⃣ Expiry check
