@@ -1,11 +1,7 @@
-pub mod delegation;
 pub mod icrc;
 pub mod wasm;
 
-use crate::{
-    cdk::api::performance_counter,
-    state::{delegation::DelegationRegistryError, wasm::WasmRegistryError},
-};
+use crate::{cdk::api::performance_counter, state::wasm::WasmRegistryError};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
@@ -15,9 +11,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum StateError {
-    #[error(transparent)]
-    DelegationRegistryError(#[from] DelegationRegistryError),
-
     #[error(transparent)]
     WasmRegistryError(#[from] WasmRegistryError),
 }

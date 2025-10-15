@@ -1,5 +1,5 @@
 [package]
-name = "canister_root"
+name = "canister_auth"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -13,9 +13,6 @@ candid = { workspace = true }
 ic-cdk = { workspace = true }
 canic = { workspace = true }
 canic_internal = { workspace = true }
-
-[dev-dependencies]
-pocket-ic = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }

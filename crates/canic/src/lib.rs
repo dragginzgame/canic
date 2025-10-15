@@ -1,6 +1,5 @@
 //! CANIC crate utilities for multi-canister apps on the Internet Computer.
 pub mod auth;
-pub mod canister;
 pub mod cdk;
 pub mod config;
 pub mod env;

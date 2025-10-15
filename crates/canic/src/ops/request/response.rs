@@ -7,7 +7,7 @@
 
 use crate::{
     Error,
-    interface::ic::{deposit_cycles, upgrade_canister},
+    interface::ic::{canister::upgrade_canister, deposit_cycles},
     memory::topology::SubnetCanisterRegistry,
     ops::{
         canister::create_and_install_canister,

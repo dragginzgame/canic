@@ -7,10 +7,10 @@
 
 use canic::{
     Error,
-    canister::SHARD_HUB,
     ops::ext::sharding::{ShardingPlan, assign_to_pool, plan_assign_to_pool},
     prelude::*,
 };
+use canic_internal::canister::SHARD_HUB;
 
 //
 // CANIC

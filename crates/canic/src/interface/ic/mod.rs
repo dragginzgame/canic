@@ -1,19 +1,14 @@
 //! IC Interfaces
 //! Thin wrappers around the management canister and network-specific helpers.
 
-mod canister;
-mod cycles;
-mod helper;
-mod icp;
-mod network;
-mod sns;
+pub mod canister;
+pub mod cycles;
+pub mod helper;
+pub mod icp;
+pub mod network;
+pub mod sns;
 
-pub use canister::*;
-pub use cycles::*;
 pub use helper::*;
-pub use icp::*;
-pub use network::*;
-pub use sns::*;
 
 use crate::{
     Error,

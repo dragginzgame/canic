@@ -2,19 +2,19 @@
 //! layer.
 //!
 //! The ops layer orchestrates multi-step workflows such as provisioning new
-//! canisters, delegating sessions, running scaling/sharding policies, and
+//! canisters,  running scaling/sharding policies, and
 //! synchronizing topology snapshots. Endpoint macros call into these modules so
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
 pub mod canister;
 pub mod context;
-pub mod delegation;
 pub mod directory;
 pub mod ext;
 pub mod lifecycle;
 pub mod request;
 pub mod root;
+pub mod signature;
 pub mod sync;
 
 /// Common imports for ops submodules and consumers.
@@ -52,13 +52,13 @@ pub enum OpsError {
     IsRoot,
 
     #[error(transparent)]
-    DelegationError(#[from] delegation::DelegationError),
-
-    #[error(transparent)]
     ExtensionError(#[from] ext::ExtensionError),
 
     #[error(transparent)]
     RequestError(#[from] request::RequestError),
+
+    #[error(transparent)]
+    SignatureError(#[from] signature::SignatureError),
 
     #[error(transparent)]
     SyncError(#[from] sync::SyncError),

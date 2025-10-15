@@ -13,17 +13,18 @@
                 }
             ],
             "dependencies": [
+                "app",
+                "auth",
                 "blank",
-                "delegation",
                 "scale_hub",
                 "shard_hub"
             ]
         },
-        "blank": {
+        "app": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/blank/blank.did",
-            "build": "bash -c 'scripts/app/build.sh blank'",
-            "wasm": ".dfx/local/canisters/blank/blank.wasm",
+            "candid": ".dfx/local/canisters/app/app.did",
+            "build": "bash -c 'scripts/app/build.sh app'",
+            "wasm": ".dfx/local/canisters/app/app.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
@@ -32,11 +33,24 @@
                 }
             ]
         },
-        "delegation": {
+        "auth": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/delegation/delegation.did",
-            "build": "bash -c 'scripts/app/build.sh delegation'",
-            "wasm": ".dfx/local/canisters/delegation/delegation.wasm",
+            "candid": ".dfx/local/canisters/auth/auth.did",
+            "build": "bash -c 'scripts/app/build.sh auth'",
+            "wasm": ".dfx/local/canisters/auth/auth.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
+            ]
+        },
+        "blank": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/blank/blank.did",
+            "build": "bash -c 'scripts/app/build.sh blank'",
+            "wasm": ".dfx/local/canisters/blank/blank.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
