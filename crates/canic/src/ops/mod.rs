@@ -16,6 +16,9 @@ pub mod request;
 pub mod root;
 pub mod signature;
 pub mod sync;
+pub mod types;
+
+pub use types::*;
 
 /// Common imports for ops submodules and consumers.
 pub mod prelude {

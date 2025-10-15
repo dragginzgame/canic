@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     memory::{
@@ -22,39 +22,59 @@ eager_static! {
 }
 
 ///
-/// SubnetCanisterRegistryError
-///
-
-#[derive(Debug, ThisError)]
-pub enum SubnetCanisterRegistryError {}
-
-///
 /// SubnetCanisterRegistry
 ///
 
 pub struct SubnetCanisterRegistry;
 
 impl SubnetCanisterRegistry {
+    //
+    // Internal helper
+    //
+
+    #[inline]
+    fn with_entries<F, R>(f: F) -> R
+    where
+        F: FnOnce(
+            ic_stable_structures::btreemap::Iter<
+                Principal,
+                CanisterEntry,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    {
+        SUBNET_CANISTER_REGISTRY.with_borrow(|map| f(map.iter()))
+    }
+
+    //
+    // Core accessors
+    //
+
+    /// Returns a canister entry for the given [`Principal`], if present.
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
+    /// Returns a canister entry or an error if it doesn't exist.
     pub fn try_get(pid: Principal) -> Result<CanisterEntry, Error> {
         Self::get(pid).ok_or_else(|| TopologyError::PrincipalNotFound(pid).into())
     }
 
-    /// Look up a canister by its type.
+    /// Finds the first canister with the given [`CanisterType`].
     pub fn try_get_type(ty: &CanisterType) -> Result<CanisterEntry, Error> {
-        SUBNET_CANISTER_REGISTRY.with_borrow(|map| {
-            map.iter()
-                .map(|e| e.value())
+        Self::with_entries(|iter| {
+            iter.map(|e| e.value())
                 .find(|entry| &entry.ty == ty)
                 .ok_or_else(|| TopologyError::TypeNotFound(ty.clone()).into())
         })
     }
 
-    /// Register a new canister (non-root) with parent + module hash.
+    //
+    // Registration
+    //
+
+    /// Registers a new non-root canister with its parent and module hash.
     pub fn register(
         pid: Principal,
         ty: &CanisterType,
@@ -85,21 +105,28 @@ impl SubnetCanisterRegistry {
         Self::insert(entry);
     }
 
-    /// Internal helper: inserts a fully-formed entry into the registry.
+    /// Inserts a fully formed entry into the registry.
+    #[inline]
     fn insert(entry: CanisterEntry) {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
             reg.insert(entry.pid, entry);
         });
     }
 
+    /// Removes a canister entry by principal.
     #[must_use]
     pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
+    //
+    // Export & test utils
+    //
+
+    /// Returns all canister entries as a vector.
     #[must_use]
-    pub fn all() -> Vec<CanisterEntry> {
-        SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.iter().map(|e| e.value()).collect())
+    pub fn export() -> Vec<CanisterEntry> {
+        Self::with_entries(|iter| iter.map(|e| e.value()).collect())
     }
 
     #[cfg(test)]
@@ -107,20 +134,25 @@ impl SubnetCanisterRegistry {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
-    /// Return the direct children of the given `pid`.
+    //
+    // Hierarchical queries
+    //
+
+    /// Returns all direct children of a given parent canister (`pid`).
     ///
-    /// This only returns canisters whose `parent_pid` is exactly `pid`
-    /// (one level down). It does not recurse into grandchildren.
+    /// This only traverses **one level down**.
     #[must_use]
     pub fn children(pid: Principal) -> Vec<CanisterSummary> {
-        Self::all()
-            .into_iter()
-            .filter(|e| e.parent_pid == Some(pid))
-            .map(Into::into)
+        Self::with_entries(|iter| {
+            iter.filter_map(|entry| {
+                let value = entry.value();
+                (value.parent_pid == Some(pid)).then(|| CanisterSummary::from(value))
+            })
             .collect()
+        })
     }
 
-    /// Return the subtree rooted at `pid`:
+    /// Returns the entire subtree rooted at `pid`:
     /// the original canister (if found) plus all its descendants.
     #[must_use]
     pub fn subtree(pid: Principal) -> Vec<CanisterSummary> {
@@ -131,12 +163,15 @@ impl SubnetCanisterRegistry {
         }
 
         let mut stack = vec![pid];
+
         while let Some(current) = stack.pop() {
-            let children: Vec<CanisterSummary> = Self::all()
-                .into_iter()
-                .filter(|e| e.parent_pid == Some(current))
-                .map(Into::into)
-                .collect();
+            let children = Self::with_entries(|iter| {
+                iter.filter_map(|entry| {
+                    let value = entry.value();
+                    (value.parent_pid == Some(current)).then(|| CanisterSummary::from(value))
+                })
+                .collect::<Vec<_>>()
+            });
 
             stack.extend(children.iter().map(|c| c.pid));
             result.extend(children);

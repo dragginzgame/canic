@@ -1,3 +1,5 @@
+pub use ic_stable_structures::vec::*;
+
 use derive_more::{Deref, DerefMut};
 use ic_stable_structures::{Memory, Storable, vec::Vec as WrappedVec};
 use std::vec::Vec as StdVec;

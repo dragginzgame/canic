@@ -12,11 +12,16 @@ use crate::{
         ic::{install_code, uninstall_code},
         prelude::*,
     },
-    memory::{Env, env::EnvData, root::reserve::CanisterReserve, topology::SubnetCanisterRegistry},
+    memory::{
+        Env,
+        directory::{AppDirectory, SubnetDirectory},
+        env::EnvData,
+        root::reserve::CanisterReserve,
+        topology::SubnetCanisterRegistry,
+    },
     ops::{
-        context::cfg_current_subnet,
-        directory::{add_to_directories, remove_from_directories},
-        sync::topology::root_cascade_topology,
+        CanisterInitPayload, context::cfg_current_subnet,
+        directory::sync_directories_from_registry, sync::topology::root_cascade_topology,
     },
     state::wasm::WasmRegistry,
 };
@@ -52,7 +57,7 @@ pub async fn create_and_install_canister(
     root_cascade_topology().await?;
 
     // Phase 3: update directories (this will cause a cascade)
-    add_to_directories(ty, pid).await?;
+    sync_directories_from_registry().await?;
 
     Ok(pid)
 }
@@ -81,8 +86,8 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
     // Phase 2: cascade
     root_cascade_topology().await?;
 
-    // Phase 3: update directory if it existed
-    remove_from_directories(&canister.ty).await?;
+    // Phase 3: update directories (this will cause a cascade)
+    sync_directories_from_registry().await?;
 
     Ok(())
 }
@@ -134,8 +139,11 @@ async fn install_canister(
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
-    // Construct initial state
-    // the view is the smaller version of the CanisterEntry
+    // register
+    let wasm = WasmRegistry::try_get(ty)?;
+    SubnetCanisterRegistry::register(pid, ty, parent_pid, wasm.module_hash());
+
+    // construct payload
     let env = EnvData {
         prime_root_pid: Env::get_prime_root_pid(),
         subnet_type: Env::get_subnet_type(),
@@ -144,19 +152,20 @@ async fn install_canister(
         canister_type: Some(ty.clone()),
         parent_pid: Some(parent_pid),
     };
+    let payload = CanisterInitPayload {
+        env,
+        app_directory: AppDirectory::export(),
+        subnet_directory: SubnetDirectory::export(),
+    };
 
     // Fetch WASM and Install code
-    let wasm = WasmRegistry::try_get(ty)?;
     install_code(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),
-        (env, extra_arg),
+        (payload, extra_arg),
     )
     .await?;
-
-    // Register in topology registry after successful install
-    SubnetCanisterRegistry::register(pid, ty, parent_pid, wasm.module_hash());
 
     log!(
         Log::Ok,

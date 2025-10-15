@@ -32,7 +32,7 @@ icrc21 = true # Enable ICRC-21 capability
 # ================================================================
 [subnets.prime]
 auto_create = ["app", "auth", "scale_hub", "shard_hub"]
-directory = ["app", "auth", "scale_hub", "shard_hub"]
+subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
 
 # --- App ---
 [subnets.prime.canisters.app]

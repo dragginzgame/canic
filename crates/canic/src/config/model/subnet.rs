@@ -28,14 +28,14 @@ pub struct SubnetConfig {
     pub auto_create: BTreeSet<CanisterType>,
 
     #[serde(default)]
-    pub directory: BTreeSet<CanisterType>,
+    pub subnet_directory: BTreeSet<CanisterType>,
 }
 
 impl SubnetConfig {
     /// Returns the directory canisters for this subnet.
     #[must_use]
     pub fn directory_canisters(&self) -> Vec<CanisterType> {
-        self.directory.iter().cloned().collect()
+        self.subnet_directory.iter().cloned().collect()
     }
 
     /// Get a canister configuration by type.

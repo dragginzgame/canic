@@ -24,17 +24,17 @@ async fn canic_upgrade() {}
 
 /// Create a new worker in the given pool.
 #[update]
-async fn create_worker(pool: String) -> Result<Principal, Error> {
-    let worker_pid = scaling::create_worker(&pool).await?;
+async fn create_worker() -> Result<Principal, Error> {
+    let worker_pid = scaling::create_worker("scales").await?;
 
     Ok(worker_pid)
 }
 
 /// Dry-run the worker creation decision using config-driven policy.
 #[query]
-async fn plan_create_worker(pool: String) -> Result<bool, Error> {
+async fn plan_create_worker() -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
-    let plan = scaling::plan_create_worker(&pool)?;
+    let plan = scaling::plan_create_worker("scales")?;
 
     Ok(plan.should_spawn)
 }

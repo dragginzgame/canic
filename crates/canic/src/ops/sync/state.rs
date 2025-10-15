@@ -6,7 +6,7 @@
 use crate::{
     Error,
     memory::{
-        directory::{AppDirectory, AppDirectoryView, SubnetDirectory, SubnetDirectoryView},
+        directory::{AppDirectory, DirectoryView, SubnetDirectory},
         state::{AppState, AppStateData, SubnetState, SubnetStateData},
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
@@ -25,8 +25,8 @@ pub struct StateBundle {
     pub subnet_state: Option<SubnetStateData>,
 
     // directories
-    pub app_directory: Option<AppDirectoryView>,
-    pub subnet_directory: Option<SubnetDirectoryView>,
+    pub app_directory: Option<DirectoryView>,
+    pub subnet_directory: Option<DirectoryView>,
 }
 
 impl StateBundle {

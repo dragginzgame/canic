@@ -70,7 +70,7 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         fn canic_subnet_canister_registry() -> Vec<::canic::memory::CanisterEntry> {
-            $crate::memory::topology::SubnetCanisterRegistry::all()
+            $crate::memory::topology::SubnetCanisterRegistry::export()
         }
 
         // children is auto-generated from the registry
