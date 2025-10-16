@@ -28,7 +28,6 @@ readme = "README.md"
 publish = true
 
 [workspace.dependencies]
-
 # canic
 canic = { path = "crates/canic" }
 canic_internal = { path = "crates/canic_internal" }
@@ -58,6 +57,7 @@ sha2 = "0.10"
 thiserror = "2.0"
 tinyrand = "0.5"
 toml = "0.9"
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # lints.clippy
 
