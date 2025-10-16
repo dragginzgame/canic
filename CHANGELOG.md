@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.7] - 2025-10-16
+- moved xxhash functions to canic as mimic can import them, and we also need them for sharding
+
 ## [0.2.6] - 2025-10-16
 - moved more of the memory:: logic to Ops, and split things like CycleTracker vs. CycleTrackerOps
 - moved the CanisterReserve config to be on a per-subnet basis
