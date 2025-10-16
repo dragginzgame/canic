@@ -50,9 +50,6 @@ pub struct ConfigModel {
     pub controllers: Vec<Principal>,
 
     #[serde(default)]
-    pub reserve: CanisterReserve,
-
-    #[serde(default)]
     pub standards: Option<Standards>,
 
     #[serde(default)]
@@ -116,16 +113,6 @@ impl ConfigModel {
     pub fn icrc21_enabled(&self) -> bool {
         self.standards.as_ref().is_some_and(|s| s.icrc21)
     }
-}
-
-///
-/// CanisterReserve
-/// defaults to a minimum size of 0
-///
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct CanisterReserve {
-    pub minimum_size: u8,
 }
 
 ///

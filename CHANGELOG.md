@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.6] - 2025-10-16
+- moved more of the memory:: logic to Ops, and split things like CycleTracker vs. CycleTrackerOps
+- moved the CanisterReserve config to be on a per-subnet basis
+
 ## [0.2.3] - 2025-10-15
 - app_directory and subnet_directory are now calculated from the SubnetCanisterRegistry
 - directories are now part of CanisterInitPayload, with the Env struct, sent to a canister as its created

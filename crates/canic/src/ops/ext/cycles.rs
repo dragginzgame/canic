@@ -12,19 +12,31 @@ use crate::{
 };
 use std::{cell::RefCell, time::Duration};
 
+//
+// TIMER
+//
+
 thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-// constants
-const TIMER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10); // 10 minutes
-
 ///
-/// CycleTracker
-/// ops::level logic
+/// Constants
 ///
 
-impl CycleTracker {
+/// Wait 10 seconds till we start so the auto-create finishes
+const TRACKER_INIT_DELAY: Duration = Duration::new(10, 0);
+
+// Check every 10 mintues
+const TRACKER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10);
+
+///
+/// CycleTrackerOps
+///
+
+pub struct CycleTrackerOps;
+
+impl CycleTrackerOps {
     /// Start recurring tracking every X seconds
     /// Safe to call multiple times: only one loop will run.
     pub fn start() {
@@ -33,10 +45,10 @@ impl CycleTracker {
                 return;
             }
 
-            let id = set_timer(crate::CANISTER_INIT_DELAY, || {
+            let id = set_timer(TRACKER_INIT_DELAY, || {
                 let _ = Self::track();
 
-                let interval_id = set_timer_interval(TIMER_INTERVAL_SECS, || {
+                let interval_id = set_timer_interval(TRACKER_INTERVAL_SECS, || {
                     let _ = Self::track();
                 });
 
@@ -63,7 +75,7 @@ impl CycleTracker {
 
         Self::check_auto_topup();
 
-        Self::record(ts, cycles)
+        CycleTracker::record(ts, cycles)
     }
 
     fn check_auto_topup() {

@@ -29,7 +29,7 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 ✅ PRs must pass `make fmt-check`, `make clippy`, and `make test`.
 
 ### Versioning & Release
-- Scripts in `scripts/app/` handle bumps and tags.
+- Scripts in `scripts/ci/` handle bumps and tags.
 - Use `make patch|minor|major` → `make release`.
 - Tags are immutable. Never alter historical tags.
 
@@ -43,19 +43,19 @@ crates/
 ├─ canic/              # Core library crate (macros, memory/state, ops, auth)
 └─ canisters/          # Reference Internet Computer canisters
    ├─ root/            # Orchestrator wiring the full stack
+   ├─ app/             # Sample application canister driving end-to-end flows
+   ├─ auth/            # Authorization helper canister
    ├─ shard/           # Shard canister implementation
    ├─ shard_hub/       # Shard pool coordinator
    ├─ scale/           # Scaling worker example
    ├─ scale_hub/       # Scaling coordinator example
-   ├─ delegation/      # Delegation/session flows
    └─ blank/           # Minimal test canister
 scripts/                # Build, versioning, and environment helpers
 .github/workflows/      # CI/CD pipelines
 dfx.json                # Local canister topology for dfx
 Makefile                # Convenience targets (`make fmt`, `make test`, ...)
 target/                 # Build output (ignored)
-AGENTS.md, CONFIG.md, VERSIONING.md, RELEASE_GUIDE.md
-                       # Contributor and release documentation
+AGENTS.md, CONFIG.md    # Contributor documentation
 ```
 
 
@@ -68,12 +68,12 @@ We separate responsibilities into **three main layers**:
 ### `memory/`
 - Stable storage across canister upgrades.
 - Wraps IC stable memory (`BTreeMap`).
-- Example: `memory/shard.rs` (persistent shard registry).
+- Example: `memory/ext/sharding/registry.rs` (persistent shard registry).
 
 ### `state/`
 - Volatile in-memory state (cleared on upgrade).
-- Caches, delegation sessions, authentication.
-- Example: `state/delegation.rs` (ephemeral delegation sessions).
+- WASM registry caching and consent message registries.
+- Example: `state/wasm.rs` (tracks registered WASM modules).
 
 ### `ops/`
 - Business logic layer above `memory/` and `state/`.
@@ -81,12 +81,13 @@ We separate responsibilities into **three main layers**:
   - Applying pool/shard policies.
   - Creating new canisters via management API.
   - Logging, cleanup cadence, authorization.
-- Example: `ops/shard.rs` orchestrates shard lifecycle.
+- Example: `ops/ext/sharding.rs` orchestrates shard lifecycle.
 
 ### `endpoints/`
 - Public IC endpoints defined via macros (`canic_endpoints_*`).
-- Must call **`ops/` only**, never touch `memory/` or `state/` directly.
-- Admin operations are grouped into a single update call per domain (e.g., `shard_admin`, `delegation_admin`).
+- Default rule: route mutations through `ops/` so policies stay centralized.
+- Temporary exception (target revisit in ~2 weeks): read-only queries may pull directly from `memory/` or `state/` when an ops façade does not yet exist.
+- Admin operations are grouped into a single update call per domain (e.g., `shard_admin`).
 
 ---
 

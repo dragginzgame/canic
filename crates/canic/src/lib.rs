@@ -41,7 +41,6 @@ use crate::cdk::{
     candid::{CandidType, Error as CandidError},
 };
 use serde::Deserialize;
-use std::time::Duration;
 
 ///
 /// Crate Version
@@ -49,12 +48,6 @@ use std::time::Duration;
 
 pub const CRATE_NAME: &str = "canic";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-///
-/// Constants
-///
-
-pub const CANISTER_INIT_DELAY: Duration = Duration::new(5, 0);
 
 /// Logging layout constants
 ///

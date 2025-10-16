@@ -88,8 +88,10 @@ pub enum ShardingPlanState {
 }
 
 ///
+/// AdminCommand
 /// Administrative shard operations, grouped under a single endpoint.
 ///
+
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 pub enum AdminCommand {
     Assign {
@@ -112,7 +114,7 @@ pub enum AdminCommand {
 }
 
 ///
-/// AdminCommand
+/// AdminResult
 /// Result of executing an [`AdminCommand`].
 ///
 

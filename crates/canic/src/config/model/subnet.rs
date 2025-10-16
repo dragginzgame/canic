@@ -29,6 +29,9 @@ pub struct SubnetConfig {
 
     #[serde(default)]
     pub subnet_directory: BTreeSet<CanisterType>,
+
+    #[serde(default)]
+    pub reserve: CanisterReserve,
 }
 
 impl SubnetConfig {
@@ -45,6 +48,16 @@ impl SubnetConfig {
             .cloned()
             .ok_or_else(|| ConfigModelError::CanisterNotFound(ty.clone()).into())
     }
+}
+
+///
+/// CanisterReserve
+/// defaults to a minimum size of 0
+///
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CanisterReserve {
+    pub minimum_size: u8,
 }
 
 ///
@@ -182,6 +195,7 @@ pub struct ShardingConfig {
 #[serde(deny_unknown_fields)]
 pub struct ShardPool {
     pub canister_type: CanisterType,
+
     #[serde(default)]
     pub policy: ShardPoolPolicy,
 }
