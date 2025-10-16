@@ -6,6 +6,7 @@
 
 pub mod cbor;
 pub mod format;
+pub mod hash;
 pub mod instructions;
 pub mod rand;
 pub mod time;
