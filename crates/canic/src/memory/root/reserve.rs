@@ -1,14 +1,7 @@
 use crate::{
-    Log,
-    cdk::{
-        futures::spawn,
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-        timers::{TimerId, clear_timer, set_timer, set_timer_interval},
-    },
-    config::Config,
-    eager_static, ic_memory, impl_storable_unbounded, log,
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    eager_static, ic_memory, impl_storable_unbounded,
     memory::id::root::CANISTER_RESERVE_ID,
-    ops::root::reserve::reserve_create_canister,
     types::Cycles,
     utils::time::now_secs,
 };
@@ -26,12 +19,6 @@ eager_static! {
             ic_memory!(CanisterReserve, CANISTER_RESERVE_ID),
         ));
 }
-
-thread_local! {
-    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
-
-const RESERVE_CHECK_TIMER: u64 = 30 * 60; // 30 mins
 
 ///
 /// CanisterReserveEntry
@@ -54,73 +41,6 @@ pub struct CanisterReserve;
 pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
 
 impl CanisterReserve {
-    /// Start recurring tracking every 30 minutes
-    /// Safe to call multiple times: only one loop will run.
-    pub fn start() {
-        TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let id = set_timer(crate::CANISTER_INIT_DELAY, || {
-                let _ = Self::check();
-
-                let interval_id =
-                    set_timer_interval(std::time::Duration::from_secs(RESERVE_CHECK_TIMER), || {
-                        let _ = Self::check();
-                    });
-
-                TIMER.with_borrow_mut(|slot| *slot = Some(interval_id));
-            });
-
-            *slot = Some(id);
-        });
-    }
-
-    /// Stop recurring tracking.
-    pub fn stop() {
-        TIMER.with_borrow_mut(|slot| {
-            if let Some(id) = slot.take() {
-                clear_timer(id);
-            }
-        });
-    }
-
-    /// Check the reserve size and create new canisters if required.
-    #[must_use]
-    pub fn check() -> u64 {
-        let reserve_size = CANISTER_RESERVE.with_borrow(|map| map.len());
-        let cfg = Config::get();
-
-        let min_size = u64::from(cfg.reserve.minimum_size);
-        if reserve_size < min_size {
-            // Safety valve: never create more than 10 at once.
-            let missing = (min_size - reserve_size).min(10);
-
-            log!(
-                Log::Ok,
-                "💧 canister reserve low: size {reserve_size}, min {min_size}, creating {missing}"
-            );
-
-            spawn(async move {
-                for i in 0..missing {
-                    match reserve_create_canister().await {
-                        Ok(_) => {
-                            log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1);
-                        }
-                        Err(e) => {
-                            log!(Log::Warn, "⚠️  failed to create reserve canister: {e:?}");
-                        }
-                    }
-                }
-            });
-
-            return missing;
-        }
-
-        0
-    }
-
     /// Register a canister into the reserve.
     pub fn register(pid: Principal, cycles: Cycles) {
         let entry = CanisterReserveEntry {

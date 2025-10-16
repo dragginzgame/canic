@@ -50,7 +50,7 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 ### `[subnets.<name>]`
 
 - `auto_create = ["type_a", ...]` – canister types that root should ensure exist during bootstrap.
-- `directory = ["type_a", ...]` – canister types exposed through `canic_subnet_directory()`.
+- `subnet_directory = ["type_a", ...]` – canister types exposed through `canic_subnet_directory()`.
 - `canisters.*` – nested tables describing per-type policies (see below).
 
 ### `[subnets.<name>.canisters.<type>]`
@@ -58,7 +58,6 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 Each child table configures a logical canister type within the subnet.
 
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
-- `delegation = true|false` – enable delegation endpoints for this type (default `false`).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (optional).
 - `topup.amount = "5T"` – cycles to request when topping up (optional).
 - `scaling` – optional table that defines stateless worker pools.
@@ -119,17 +118,20 @@ minimum_size = 3
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["delegation", "scale_hub", "shard_hub"]
-directory = ["delegation", "scale_hub", "shard_hub"]
+auto_create = ["app", "auth", "scale_hub", "shard_hub"]
+subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
 
-[subnets.prime.canisters.delegation]
-delegation = true
+[subnets.prime.canisters.scale_hub]
 topup.threshold = "10T"
 topup.amount = "5T"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_type = "scale"
 policy.min_workers = 2
+
+[subnets.prime.canisters.shard_hub]
+topup.threshold = "10T"
+topup.amount = "5T"
 
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
 canister_type = "shard"
@@ -142,4 +144,3 @@ initial_cycles = "3T"
 ```
 
 This example defines two subnets (`prime` and `general`), enables the reserve pool, whitelists ICRC-21, and configures both scaling and sharding strategies for hub canisters.
-

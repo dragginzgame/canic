@@ -5,12 +5,10 @@ use crate::{
     memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
-        ext::cycles::CycleTracker,
         registry,
-        root::reserve::CanisterReserve,
         topology::{SubnetCanisterRegistry, SubnetIdentity},
     },
-    ops::CanisterInitPayload,
+    ops::{CanisterInitPayload, ext::cycles::CycleTrackerOps, root::reserve::CanisterReserveOps},
     runtime,
     types::{CanisterType, SubnetType},
 };
@@ -53,8 +51,8 @@ pub fn root_init(identity: SubnetIdentity) {
     SubnetCanisterRegistry::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
-    CycleTracker::start();
-    CanisterReserve::start();
+    CycleTrackerOps::start();
+    CanisterReserveOps::start();
 }
 
 /// root_post_upgrade
@@ -66,8 +64,8 @@ pub fn root_post_upgrade() {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    CycleTracker::start();
-    CanisterReserve::start();
+    CycleTrackerOps::start();
+    CanisterReserveOps::start();
 }
 
 /// nonroot_init
@@ -83,7 +81,7 @@ pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     SubnetDirectory::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
-    CycleTracker::start();
+    CycleTrackerOps::start();
 }
 
 /// nonroot_post_upgrade
@@ -95,5 +93,5 @@ pub fn nonroot_post_upgrade(canister_type: CanisterType) {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    CycleTracker::start();
+    CycleTrackerOps::start();
 }
