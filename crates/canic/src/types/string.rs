@@ -111,7 +111,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::structures::Storable,
-        utils::cbor::{deserialize, serialize},
+        core::serialize::{deserialize, serialize},
     };
 
     #[test]

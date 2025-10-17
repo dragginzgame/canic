@@ -12,8 +12,8 @@
 //!
 
 use crate::{
-    Error, ThisError, cdk::api::certified_data_set, ops::OpsError, types::Principal,
-    utils::cbor::deserialize,
+    Error, ThisError, cdk::api::certified_data_set, core::serialize::deserialize, ops::OpsError,
+    types::Principal,
 };
 use ic_canister_sig_creation::{
     IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,

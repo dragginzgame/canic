@@ -4,10 +4,10 @@
 //! round-trips in stable structures.
 //!
 
+use crate::{Error, ThisError, core::CoreError};
 use minicbor_serde::{from_slice, to_vec};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use thiserror::Error as ThisError;
 
 ///
 /// SerializeError
@@ -25,10 +25,16 @@ pub enum SerializeError {
     Deserialize(String),
 }
 
+impl From<SerializeError> for Error {
+    fn from(err: SerializeError) -> Self {
+        CoreError::from(err).into()
+    }
+}
+
 ///
 /// Serialize a value into CBOR bytes using MiniCBOR.
 ///
-pub fn serialize<T>(t: &T) -> Result<Vec<u8>, SerializeError>
+pub fn serialize<T>(t: &T) -> Result<Vec<u8>, Error>
 where
     T: Serialize,
 {
@@ -40,7 +46,7 @@ where
 ///
 /// Deserialize CBOR bytes into a value using MiniCBOR.
 ///
-pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
+pub fn deserialize<T>(bytes: &[u8]) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
