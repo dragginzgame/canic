@@ -29,6 +29,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
   - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
   - `src/config/` – configuration loaders, validators, and schema helpers.
+  - `src/core/` – shared error types plus deterministic serialization/codecs.
   - `src/env/` – IC mainnet configuration (canister IDs, SNSs etc.)
   - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
   - `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
@@ -126,7 +127,7 @@ Command variants cover register, audit, drain, rebalance, and decommission flows
 ### Scaling & Reserve Pools ⚖️
 
 - `canic_scaling_registry()` provides controller insight into scaling pools via the shared endpoint bundle.
-- Root canisters manage spare capacity through `canic::ops::reserve` and the `canic_reserve_*` endpoints.
+- Root canisters manage spare capacity through `canic::ops::root::reserve` and the `canic_reserve_*` endpoints.
 
 ### Directory Views 📇
 

@@ -1,7 +1,7 @@
 //! Policy layer for scaling worker pools.
 //!
 //! Scaling builds on top of [`ScalingRegistry`] and the configuration entries
-//! under `[canisters.<type>.sharder]`. The helpers in this module apply policy
+//! under `[canisters.<type>.scaling]`. The helpers in this module apply policy
 //! decisions, create new workers when necessary, and surface registry
 //! snapshots for diagnostics.
 

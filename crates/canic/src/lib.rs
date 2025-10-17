@@ -2,6 +2,7 @@
 pub mod auth;
 pub mod cdk;
 pub mod config;
+pub mod core;
 pub mod env;
 pub mod guard;
 pub mod interface;
@@ -75,6 +76,9 @@ pub enum Error {
     ConfigError(String),
 
     #[error("{0}")]
+    CoreError(String),
+
+    #[error("{0}")]
     EnvError(String),
 
     #[error("{0}")]
@@ -130,6 +134,7 @@ impl Error {
 
 from_to_string!(auth::AuthError, AuthError);
 from_to_string!(config::ConfigError, ConfigError);
+from_to_string!(core::CoreError, CoreError);
 from_to_string!(env::EnvError, EnvError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(memory::MemoryError, MemoryError);

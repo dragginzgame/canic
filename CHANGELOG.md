@@ -120,7 +120,7 @@ with audit logs; new coverage test ensures idempotency.
 - CI: Workflow updates and cleanup.
 
 ## [0.6.6] - 2025-09-04
-- Changed: Move `utils::serialization` to `utils::cbor`; introduce `SerializeError` and update imports.
+- Changed: Move `utils::serialization` utilities into `core::serialize`; introduce `SerializeError` and update imports.
 
 ## [0.6.5] - 2025-09-04
 - Maintenance: Version bump; no functional changes.

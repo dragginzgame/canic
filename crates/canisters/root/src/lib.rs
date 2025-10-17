@@ -81,12 +81,6 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 /// ENDPOINTS
 ///
 
-// get_current_subnet_pid
-#[query(composite)]
-async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
-    canic::interface::ic::get_current_subnet_pid().await
-}
-
 // convert_icp_to_cycles
 #[update]
 #[allow(clippy::cast_possible_truncation)]
