@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.9] - 2025-10-18
+- gave config a better recursive validation.  Also now checking for invalid subnet directory entries
+
 ## [0.2.7] - 2025-10-16
 - moved xxhash functions to canic as mimic can import them, and we also need them for sharding
 

@@ -1,7 +1,7 @@
 pub mod model;
 
 use crate::Error;
-use model::ConfigModelError;
+use model::{ConfigModelError, Validate};
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 

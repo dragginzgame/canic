@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    config::model::ConfigModelError,
+    config::model::{ConfigModelError, Validate},
     types::{CanisterType, Cycles, TC},
 };
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,21 @@ impl SubnetConfig {
             .get(ty)
             .cloned()
             .ok_or_else(|| ConfigModelError::CanisterNotFound(ty.clone()).into())
+    }
+}
+
+impl Validate for SubnetConfig {
+    fn validate(&self) -> Result<(), ConfigModelError> {
+        //  Validate that every subnet_directory entry exists
+        for canister_ty in &self.subnet_directory {
+            if !self.canisters.contains_key(canister_ty) {
+                return Err(ConfigModelError::ValidationError(format!(
+                    "subnet_directory canister '{canister_ty}' is not in subnet",
+                )));
+            }
+        }
+
+        Ok(())
     }
 }
 
