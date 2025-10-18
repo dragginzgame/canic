@@ -18,23 +18,28 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum ConfigModelError {
-    #[error("invalid principal: {0} ({1})")]
-    InvalidPrincipal(String, usize),
-
     #[error("subnet not found: {0}")]
     SubnetNotFound(SubnetType),
 
     #[error("canister not found on subnet: {0}")]
     CanisterNotFound(CanisterType),
 
-    #[error("app_directory canister not found on prime subnet: {0}")]
-    MissingAppDirectoryCanister(CanisterType),
+    #[error("validation error: {0}")]
+    ValidationError(String),
 }
 
 impl From<ConfigModelError> for Error {
     fn from(err: ConfigModelError) -> Self {
         ConfigError::from(err).into()
     }
+}
+
+///
+/// Validate
+///
+
+pub trait Validate {
+    fn validate(&self) -> Result<(), ConfigModelError>;
 }
 
 ///
@@ -59,39 +64,10 @@ pub struct ConfigModel {
     pub subnets: BTreeMap<SubnetType, SubnetConfig>,
 
     #[serde(default)]
-    pub whitelist: Option<WhiteList>,
+    pub whitelist: Option<Whitelist>,
 }
 
 impl ConfigModel {
-    pub(super) fn validate(&self) -> Result<(), ConfigModelError> {
-        // 1. Validate whitelist principals
-        if let Some(list) = &self.whitelist {
-            for (i, s) in list.principals.iter().enumerate() {
-                if Principal::from_text(s).is_err() {
-                    return Err(ConfigModelError::InvalidPrincipal(s.to_string(), i));
-                }
-            }
-        }
-
-        // 2. Validate that prime subnet exists
-        let prime = SubnetType::PRIME;
-        let prime_subnet = self
-            .subnets
-            .get(&prime)
-            .ok_or_else(|| ConfigModelError::SubnetNotFound(prime.clone()))?;
-
-        // 3. Validate that every app_directory entry exists in prime.canisters
-        for canister_ty in &self.app_directory {
-            if !prime_subnet.canisters.contains_key(canister_ty) {
-                return Err(ConfigModelError::MissingAppDirectoryCanister(
-                    canister_ty.clone(),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
     /// Get a subnet configuration by type.
     pub fn try_get_subnet(&self, ty: &SubnetType) -> Result<SubnetConfig, Error> {
         self.subnets
@@ -115,18 +91,62 @@ impl ConfigModel {
     }
 }
 
+impl Validate for ConfigModel {
+    fn validate(&self) -> Result<(), ConfigModelError> {
+        //  Validate that prime subnet exists
+        let prime = SubnetType::PRIME;
+        let prime_subnet = self
+            .subnets
+            .get(&prime)
+            .ok_or_else(|| ConfigModelError::ValidationError("prime subnet not found".into()))?;
+
+        //  Validate that every app_directory entry exists in prime.canisters
+        for canister_ty in &self.app_directory {
+            if !prime_subnet.canisters.contains_key(canister_ty) {
+                return Err(ConfigModelError::ValidationError(format!(
+                    "app_directory canister '{canister_ty}' is not in prime subnet",
+                )));
+            }
+        }
+
+        // child validation
+        if let Some(list) = &self.whitelist {
+            list.validate()?;
+        }
+        for subnet in self.subnets.values() {
+            subnet.validate()?;
+        }
+
+        Ok(())
+    }
+}
+
 ///
 /// Whitelist
 ///
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct WhiteList {
+pub struct Whitelist {
     // principals
     // a hashset as we constantly have to do lookups
     // strings because then we can validate and know if there are any bad ones
     #[serde(default)]
     pub principals: BTreeSet<String>,
+}
+
+impl Validate for Whitelist {
+    fn validate(&self) -> Result<(), ConfigModelError> {
+        for (i, s) in self.principals.iter().enumerate() {
+            if Principal::from_text(s).is_err() {
+                return Err(ConfigModelError::ValidationError(format!(
+                    "principal #{i} {s} is invalid"
+                )));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 ///
