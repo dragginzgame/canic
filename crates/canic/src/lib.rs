@@ -37,7 +37,7 @@ pub mod prelude {
         },
         guard::{guard_query, guard_update},
         ic_memory, log, perf, perf_start,
-        types::{CanisterType, Cycles},
+        types::{CanisterType, Cycles, Principal},
     };
 }
 
