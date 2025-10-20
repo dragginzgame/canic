@@ -126,11 +126,6 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
     let canister_pid = create_canister(cycles.clone()).await?;
 
-    log!(
-        Log::Ok,
-        "🪶  reserve_create_canister: {canister_pid} ({cycles})",
-    );
-
     CanisterReserve::register(canister_pid, cycles);
 
     Ok(canister_pid)

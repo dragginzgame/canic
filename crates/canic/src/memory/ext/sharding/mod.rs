@@ -11,7 +11,7 @@ use crate::{
     memory::{
         MemoryError,
         ext::ExtensionError,
-        id::ext::sharding::{SHARDING_REGISTRY_ID, SHARDING_TENANTS_ID},
+        id::ext::sharding::{SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
     },
     types::CanisterType,
 };
@@ -21,14 +21,14 @@ use std::cell::RefCell;
 use thiserror::Error as ThisError;
 
 //
-// (this i) SHARDing CORE
+// SHARDING CORE
 //
 
 eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
             BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_REGISTRY_ID)),
-            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_TENANTS_ID)),
+            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_ASSIGNMENTS_ID)),
         )
     );
 }
@@ -89,9 +89,9 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 pub struct ShardEntry {
     pub capacity: u32,
     pub count: u32,
-    pub created_at_secs: u64,
     pub pool: String,
     pub canister_type: CanisterType,
+    pub created_at: u64,
 }
 
 impl ShardEntry {

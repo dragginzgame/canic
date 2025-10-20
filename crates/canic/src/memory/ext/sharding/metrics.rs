@@ -90,7 +90,7 @@ impl ShardingRegistry {
         Self::with(|s| {
             s.all_entries().iter().fold(0, |last, (_, e)| {
                 if &e.canister_type == ty {
-                    last.max(e.created_at_secs)
+                    last.max(e.created_at)
                 } else {
                     last
                 }
@@ -118,8 +118,8 @@ mod tests {
             canister_type: CanisterType::new("alpha"),
             capacity: 10,
             count: 3,
-            created_at_secs: 123,
             pool: "poolX".into(),
+            created_at: 123,
         };
         let metrics = ShardMetrics::from_entry(&entry);
 

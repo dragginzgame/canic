@@ -93,7 +93,7 @@ Sharding pools manage stateful shards that own tenant partitions.
 canister_type = "shard_type"
 policy.initial_capacity = 100
 policy.max_shards = 64
-policy.growth_threshold_pct = 80
+policy.strategy = "balanced"
 ```
 
 Fields:
@@ -101,7 +101,7 @@ Fields:
 - `canister_type` – canister type that implements the shard.
 - `policy.initial_capacity` – number of shards to create at startup (default `100`).
 - `policy.max_shards` – maximum shard count (default `64`).
-- `policy.growth_threshold_pct` – utilisation percentage that triggers shard creation (default `80`).
+- `policy.strategy` – tenant assignment strategy (`"balanced"` or `"hrw"`, default `"balanced"`).
 
 ---
 

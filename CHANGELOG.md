@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.10] - 2025-10-20
+- updated scaling to use HRW algo always, removed a lot of unused code that won't make sense going forward
+
 ## [0.2.9] - 2025-10-18
 - gave config a better recursive validation.  Also now checking for invalid subnet directory entries
 

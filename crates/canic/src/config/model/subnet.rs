@@ -56,7 +56,7 @@ impl Validate for SubnetConfig {
         for canister_ty in &self.subnet_directory {
             if !self.canisters.contains_key(canister_ty) {
                 return Err(ConfigModelError::ValidationError(format!(
-                    "subnet_directory canister '{canister_ty}' is not in subnet",
+                    "subnet directory canister '{canister_ty}' is not in subnet",
                 )));
             }
         }
@@ -101,16 +101,14 @@ pub struct CanisterConfig {
 ///
 /// CanisterTopup
 ///
-/// auto_topup : default to false
-///
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterTopup {
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(default, deserialize_with = "Cycles::from_config")]
     pub threshold: Cycles,
 
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(default, deserialize_with = "Cycles::from_config")]
     pub amount: Cycles,
 }
 
@@ -166,12 +164,6 @@ pub struct ScalePoolPolicy {
 
     /// Maximum number of worker canisters to allow
     pub max_workers: u32,
-
-    /// When average load % exceeds this, spawn a new worker
-    pub scale_up_threshold_pct: u32,
-
-    /// When average load % drops below this, retire a worker
-    pub scale_down_threshold_pct: u32,
 }
 
 impl Default for ScalePoolPolicy {
@@ -179,8 +171,6 @@ impl Default for ScalePoolPolicy {
         Self {
             min_workers: 1,
             max_workers: 32,
-            scale_up_threshold_pct: 75,
-            scale_down_threshold_pct: 25,
         }
     }
 }
@@ -191,7 +181,7 @@ impl Default for ScalePoolPolicy {
 ///
 /// * Organizes canisters into named **pools**.
 /// * Each pool manages a set of **shards**, and each shard owns a partition of state.
-/// * Tenants are assigned to shards and stay there.
+/// * Tenants are assigned to shards via HRW and stay there.
 /// * Hence: `ShardManager → pools → ShardPoolSpec → ShardPoolPolicy`.
 ///
 
@@ -222,17 +212,15 @@ pub struct ShardPool {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ShardPoolPolicy {
-    pub initial_capacity: u32,
+    pub capacity: u32,
     pub max_shards: u32,
-    pub growth_threshold_pct: u32,
 }
 
 impl Default for ShardPoolPolicy {
     fn default() -> Self {
         Self {
-            initial_capacity: 100,
+            capacity: 100,
             max_shards: 64,
-            growth_threshold_pct: 80,
         }
     }
 }

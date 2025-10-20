@@ -90,7 +90,7 @@ pub(crate) mod id {
 
         pub mod sharding {
             pub const SHARDING_REGISTRY_ID: u8 = 26;
-            pub const SHARDING_TENANTS_ID: u8 = 27;
+            pub const SHARDING_ASSIGNMENTS_ID: u8 = 27;
         }
     }
 }
