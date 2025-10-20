@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "criterion",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "canic_internal"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "candid",
  "canic",
@@ -362,18 +362,18 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.49"
+version = "4.5.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4512b90fa68d3a9932cea5184017c5d200f5921df706d45e853537dea51508f"
+checksum = "0c2cfd7bf8a6017ddaa4e32ffe7403d547790db06bd171c1c53926faab501623"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.5.49"
+version = "4.5.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0025e98baa12e766c67ba13ff4695a887a1eba19569aad00a472546795bd6730"
+checksum = "0a4c05b9e80c5ccd3a7ef080ad7b6ba7d6fc00a985b8b157197075677c82c7a0"
 dependencies = [
  "anstyle",
  "clap_lex",
