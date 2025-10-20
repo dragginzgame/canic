@@ -5,7 +5,6 @@
 
 #![allow(clippy::unused_async)]
 
-use candid::Principal;
 use canic::{
     Error,
     ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},

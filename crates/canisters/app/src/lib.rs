@@ -1,5 +1,6 @@
 #![allow(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{Error, ops::signature, prelude::*, utils::time::now_secs};
 use canic_internal::{AuthToken, canister::APP};
 

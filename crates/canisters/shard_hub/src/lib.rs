@@ -5,6 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{
     Error,
     ops::ext::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
