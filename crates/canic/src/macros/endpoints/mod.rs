@@ -141,7 +141,7 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         async fn canic_sharding_registry()
         -> Result<::canic::memory::ext::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::ops::ext::sharding::export_registry())
+            Ok($crate::ops::ext::sharding::ShardingManageOps::export_registry())
         }
 
         // canic_sharding_lookup_tenant
@@ -151,18 +151,7 @@ macro_rules! canic_endpoints {
             pool: String,
             tenant_pid: ::candid::Principal,
         ) -> Result<::candid::Principal, ::canic::Error> {
-            $crate::ops::ext::sharding::try_lookup_tenant(&pool, tenant_pid)
-        }
-
-        // canic_sharding_admin
-        // combined admin endpoint for shard lifecycle operations (controller only).
-        #[::canic::cdk::update]
-        async fn canic_sharding_admin(
-            cmd: ::canic::ops::ext::sharding::AdminCommand,
-        ) -> Result<::canic::ops::ext::sharding::AdminResult, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_controller)?;
-
-            $crate::ops::ext::sharding::admin_command(cmd).await
+            $crate::ops::ext::sharding::ShardingPolicyOps::try_lookup_tenant(&pool, tenant_pid)
         }
 
         //

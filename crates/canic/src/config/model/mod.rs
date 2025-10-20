@@ -104,7 +104,7 @@ impl Validate for ConfigModel {
         for canister_ty in &self.app_directory {
             if !prime_subnet.canisters.contains_key(canister_ty) {
                 return Err(ConfigModelError::ValidationError(format!(
-                    "app_directory canister '{canister_ty}' is not in prime subnet",
+                    "app directory canister '{canister_ty}' is not in prime subnet",
                 )));
             }
         }
