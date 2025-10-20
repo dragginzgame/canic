@@ -8,7 +8,6 @@ pub use {assign::*, manage::*, policy::*};
 use crate::{
     Error, ThisError,
     ops::{OpsError, ext::ExtensionError},
-    types::Principal,
 };
 
 ///
@@ -31,7 +30,7 @@ pub enum ShardingError {
     ShardingDisabled,
 
     #[error("tenant '{0}' not found")]
-    TenantNotFound(Principal),
+    TenantNotFound(String),
 }
 
 impl From<ShardingError> for Error {

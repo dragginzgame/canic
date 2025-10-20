@@ -59,37 +59,44 @@ pub struct ShardingOps;
 
 impl ShardingOps {
     /// Assign a tenant to the given pool, creating a shard if necessary.
-    pub async fn assign_to_pool(pool: &str, tenant: Principal) -> Result<Principal, Error> {
+    pub async fn assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<Principal, Error> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
-        Self::assign_with_policy(&pool_cfg.canister_type, pool, tenant, pool_cfg.policy, None).await
+        Self::assign_with_policy(
+            &pool_cfg.canister_type,
+            pool,
+            &tenant.to_string(),
+            pool_cfg.policy,
+            None,
+        )
+        .await
     }
 
     /// Assign a tenant according to pool policy and HRW selection.
     pub async fn assign_with_policy(
         canister_type: &CanisterType,
         pool: &str,
-        tenant_pid: Principal,
+        tenant: &str,
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
         // Step 1: Determine plan via HRW-based policy
-        let plan = ShardingPolicyOps::plan_assign_to_pool(pool, tenant_pid)?;
+        let plan = ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?;
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
                 log!(
                     Log::Info,
-                    "📦 tenant={tenant_pid} already shard={pid} pool={pool}"
+                    "📦 tenant={tenant} already shard={pid} pool={pool}"
                 );
 
                 Ok(pid)
             }
 
             ShardingPlanState::UseExisting { pid } => {
-                ShardingRegistry::assign(pool, tenant_pid, pid)?;
+                ShardingRegistry::assign(pool, tenant, pid)?;
                 log!(
                     Log::Info,
-                    "📦 tenant={tenant_pid} assigned shard={pid} pool={pool}"
+                    "📦 tenant={tenant} assigned shard={pid} pool={pool}"
                 );
 
                 Ok(pid)
@@ -97,10 +104,10 @@ impl ShardingOps {
 
             ShardingPlanState::CreateAllowed => {
                 let pid = ShardAllocator::allocate(pool, canister_type, &policy, extra_arg).await?;
-                ShardingRegistry::assign(pool, tenant_pid, pid)?;
+                ShardingRegistry::assign(pool, tenant, pid)?;
                 log!(
                     Log::Ok,
-                    "✨ tenant={tenant_pid} created+assigned shard={pid} pool={pool}"
+                    "✨ tenant={tenant} created+assigned shard={pid} pool={pool}"
                 );
 
                 Ok(pid)
@@ -122,14 +129,14 @@ impl ShardingOps {
         let tenants = ShardingRegistry::tenants_in_shard(pool, donor_shard_pid);
         let mut moved = 0u32;
 
-        for tenant_pid in tenants.into_iter().take(limit as usize) {
+        for tenant in tenants.iter().take(limit as usize) {
             // Let the normal policy decide where this tenant should go.
-            match ShardingPolicyOps::plan_assign_to_pool(pool, tenant_pid)?.state {
+            match ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?.state {
                 ShardingPlanState::UseExisting { pid } if pid != donor_shard_pid => {
-                    ShardingRegistry::assign(pool, tenant_pid, pid)?;
+                    ShardingRegistry::assign(pool, tenant, pid)?;
                     log!(
                         Log::Info,
-                        "🚰 drained tenant={tenant_pid} donor={donor_shard_pid} → shard={pid}"
+                        "🚰 drained tenant={tenant} donor={donor_shard_pid} → shard={pid}"
                     );
                     moved += 1;
                 }
@@ -141,7 +148,7 @@ impl ShardingOps {
                         None,
                     )
                     .await?;
-                    ShardingRegistry::assign(pool, tenant_pid, new_pid)?;
+                    ShardingRegistry::assign(pool, tenant, new_pid)?;
                     log!(
                         Log::Ok,
                         "✨ shard.create: {new_pid} draining donor={donor_shard_pid}"

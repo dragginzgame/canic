@@ -1,6 +1,7 @@
 use crate::{impl_storable_bounded, types::CanisterType};
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 ///
 /// CanisterEntry

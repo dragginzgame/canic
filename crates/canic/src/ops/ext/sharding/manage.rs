@@ -76,14 +76,14 @@ impl ShardingManageOps {
                 break;
             }
 
-            if let Some(tenant_pid) = ShardingRegistry::tenants_in_shard(pool, donor_pid)
+            if let Some(tenant) = ShardingRegistry::tenants_in_shard(pool, donor_pid)
                 .first()
-                .copied()
-                && ShardingRegistry::assign(pool, tenant_pid, recv_pid).is_ok()
+                .cloned()
+                && ShardingRegistry::assign(pool, tenant.clone(), recv_pid).is_ok()
             {
                 log!(
                     Log::Info,
-                    "🔀 shard.rebalance: tenant={tenant_pid} donor={donor_pid} → recv={recv_pid}"
+                    "🔀 shard.rebalance: tenant={tenant} donor={donor_pid} → recv={recv_pid}"
                 );
                 moved += 1;
             }
