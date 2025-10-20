@@ -30,10 +30,14 @@ pub mod prelude {
     pub use crate::{
         Error as CanicError, Log, auth_require_all, auth_require_any, canic_start,
         canic_start_root,
-        cdk::{api::msg_caller, candid::CandidType, export_candid, init, query, update},
+        cdk::{
+            api::{canister_self, msg_caller},
+            candid::CandidType,
+            export_candid, init, query, update,
+        },
         guard::{guard_query, guard_update},
         ic_memory, log, perf, perf_start,
-        types::{Account, CanisterType, Cycles, Principal, Subaccount},
+        types::{CanisterType, Cycles},
     };
 }
 

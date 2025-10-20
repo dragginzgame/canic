@@ -47,7 +47,7 @@ macro_rules! canic_endpoints_root {
         // this can be called via root as root is the master controller
         #[::canic::cdk::update]
         async fn canic_canister_status(
-            pid: Principal,
+            pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
             $crate::interface::ic::canister_status(pid).await
         }
@@ -94,14 +94,17 @@ macro_rules! canic_endpoints_root {
         }
 
         #[update]
-        async fn canic_reserve_create_canister() -> Result<Principal, ::canic::Error> {
+        async fn canic_reserve_create_canister()
+        -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
             ::canic::ops::root::reserve::reserve_create_canister().await
         }
 
         #[update]
-        async fn canic_reserve_import_canister(pid: Principal) -> Result<(), ::canic::Error> {
+        async fn canic_reserve_import_canister(
+            pid: ::canic::cdk::candid::Principal,
+        ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
             ::canic::ops::root::reserve::reserve_import_canister(pid).await
