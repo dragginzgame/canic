@@ -11,7 +11,7 @@ use crate::{
     memory::{
         MemoryError,
         ext::ExtensionError,
-        id::ext::sharding::{SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
+        id::ext::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     },
     types::CanisterType,
 };
@@ -28,7 +28,7 @@ eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
             BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_REGISTRY_ID)),
-            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_ASSIGNMENTS_ID)),
+            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
         )
     );
 }

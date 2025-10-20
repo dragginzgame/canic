@@ -33,7 +33,7 @@ pub mod prelude {
         cdk::{api::msg_caller, candid::CandidType, export_candid, init, query, update},
         guard::{guard_query, guard_update},
         ic_memory, log, perf, perf_start,
-        types::{CanisterType, Cycles, Principal},
+        types::{Account, CanisterType, Cycles, Principal, Subaccount},
     };
 }
 
