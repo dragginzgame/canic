@@ -13,9 +13,9 @@ use crate::{
         ext::ExtensionError,
         id::ext::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     },
-    types::CanisterType,
+    types::{BoundedString32, BoundedString128, CanisterType, Principal},
 };
-use candid::{CandidType, Principal};
+use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -46,7 +46,7 @@ pub enum ShardingError {
     ShardFull(Principal),
 
     #[error("tenant not found: {0}")]
-    TenantNotFound(Principal),
+    TenantNotFound(String),
 }
 
 impl From<ShardingError> for Error {
@@ -62,18 +62,18 @@ impl From<ShardingError> for Error {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ShardKey {
-    pub pool: String,
-    pub tenant_pid: Principal,
+    pub pool: BoundedString32,
+    pub tenant: BoundedString128,
 }
 
 impl ShardKey {
-    pub const STORABLE_MAX_SIZE: u32 = 128;
+    pub const STORABLE_MAX_SIZE: u32 = 160;
 
     #[must_use]
-    pub fn new(pool: &str, tenant_pid: Principal) -> Self {
+    pub fn new(pool: &str, tenant: &str) -> Self {
         Self {
-            pool: pool.to_string(),
-            tenant_pid,
+            pool: pool.try_into().unwrap(),
+            tenant: tenant.try_into().unwrap(),
         }
     }
 }
@@ -173,7 +173,7 @@ impl<M: Memory> ShardingCore<M> {
     pub fn remove_assignment(&mut self, key: &ShardKey) -> Result<Principal, Error> {
         self.assignments
             .remove(key)
-            .ok_or_else(|| ShardingError::TenantNotFound(key.tenant_pid).into())
+            .ok_or_else(|| ShardingError::TenantNotFound(key.tenant.to_string()).into())
     }
 
     pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {

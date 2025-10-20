@@ -15,7 +15,7 @@ pub struct HrwSelector;
 impl HrwSelector {
     /// Pick the shard with the highest HRW score for this tenant.
     #[must_use]
-    pub fn select(tenant: &Principal, shards: &[Principal]) -> Option<Principal> {
+    pub fn select(tenant: &str, shards: &[Principal]) -> Option<Principal> {
         if shards.is_empty() {
             return None;
         }
@@ -36,9 +36,9 @@ impl HrwSelector {
 
     /// Deterministic HRW score = hash(tenant || shard).
     #[inline]
-    fn hrw_score(tenant: &Principal, shard: &Principal) -> u64 {
-        let mut bytes = Vec::with_capacity(tenant.as_slice().len() + shard.as_slice().len());
-        bytes.extend_from_slice(tenant.as_slice());
+    fn hrw_score(tenant: &str, shard: &Principal) -> u64 {
+        let mut bytes = Vec::with_capacity(tenant.len() + shard.as_slice().len());
+        bytes.extend_from_slice(tenant.as_bytes());
         bytes.extend_from_slice(shard.as_slice());
 
         hash_u64(&bytes)
@@ -56,13 +56,13 @@ mod tests {
 
     #[test]
     fn selects_consistently() {
-        let tenant = Principal::anonymous();
+        let tenant = "hello";
         let shards = vec![
             Principal::from_text("aaaaa-aa").unwrap(),
             Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap(),
         ];
-        let s1 = HrwSelector::select(&tenant, &shards).unwrap();
-        let s2 = HrwSelector::select(&tenant, &shards).unwrap();
+        let s1 = HrwSelector::select(tenant, &shards).unwrap();
+        let s2 = HrwSelector::select(tenant, &shards).unwrap();
         assert_eq!(s1, s2);
     }
 }

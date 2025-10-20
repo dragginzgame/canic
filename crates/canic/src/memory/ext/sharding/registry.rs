@@ -90,7 +90,14 @@ impl ShardingRegistry {
     ///
     /// This is a low-level operation; capacity and pool validity are checked,
     /// but no balancing or policy logic is applied here.
-    pub fn assign(pool: &str, tenant: Principal, shard: Principal) -> Result<(), Error> {
+    pub fn assign<P, T>(pool: P, tenant: T, shard: Principal) -> Result<(), Error>
+    where
+        P: AsRef<str>,
+        T: AsRef<str>,
+    {
+        let pool = pool.as_ref();
+        let tenant = tenant.as_ref();
+
         // Ensure shard exists and has available capacity
         let mut entry =
             Self::with(|s| s.get_entry(&shard)).ok_or(ShardingError::ShardNotFound(shard))?;
@@ -120,7 +127,7 @@ impl ShardingRegistry {
     }
 
     /// Releases a tenant from its assigned shard and decrements the count.
-    pub fn release(pool: &str, tenant: Principal) -> Result<(), Error> {
+    pub fn release(pool: &str, tenant: &str) -> Result<(), Error> {
         let key = ShardKey::new(pool, tenant);
         let shard = Self::with_mut(|s| s.remove_assignment(&key))?;
 
@@ -155,18 +162,18 @@ impl ShardingRegistry {
 
     /// Returns the shard assigned to the given tenant (if any).
     #[must_use]
-    pub fn tenant_shard(pool: &str, tenant: Principal) -> Option<Principal> {
+    pub fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
         Self::with(|s| s.get_assignment(&ShardKey::new(pool, tenant)))
     }
 
     /// Lists all tenants currently assigned to the specified shard.
     #[must_use]
-    pub fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<Principal> {
+    pub fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<String> {
         Self::with(|s| {
             s.all_assignments()
                 .into_iter()
-                .filter(|(k, v)| v == &shard && k.pool == pool)
-                .map(|(k, _)| k.tenant_pid)
+                .filter(|(k, v)| v == &shard && k.pool.as_ref() == pool)
+                .map(|(k, _)| k.tenant.to_string())
                 .collect()
         })
     }

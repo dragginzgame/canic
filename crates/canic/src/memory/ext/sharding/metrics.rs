@@ -137,10 +137,10 @@ mod tests {
 
         // Simulate usage: assign 3 tenants to shard 1, 10 tenants to shard 2
         for i in 0..3 {
-            ShardingRegistry::assign("poolA", p(10 + i), p(1)).unwrap();
+            ShardingRegistry::assign("poolA", p(10 + i).to_string(), p(1)).unwrap();
         }
         for i in 0..10 {
-            ShardingRegistry::assign("poolA", p(20 + i), p(2)).unwrap();
+            ShardingRegistry::assign("poolA", p(20 + i).to_string(), p(2)).unwrap();
         }
 
         let m = ShardingRegistry::metrics("poolA");

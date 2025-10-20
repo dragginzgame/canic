@@ -149,9 +149,9 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         async fn canic_sharding_lookup_tenant(
             pool: String,
-            tenant_pid: ::candid::Principal,
+            tenant: String,
         ) -> Result<::candid::Principal, ::canic::Error> {
-            $crate::ops::ext::sharding::ShardingPolicyOps::try_lookup_tenant(&pool, tenant_pid)
+            $crate::ops::ext::sharding::ShardingPolicyOps::try_lookup_tenant(&pool, &tenant)
         }
 
         //

@@ -101,11 +101,12 @@ impl ShardingPolicyOps {
 
     /// Perform a dry-run plan for assigning a tenant to a shard.
     /// Never creates or mutates registry state.
-    pub fn plan_assign_to_pool(pool: &str, tenant: Principal) -> Result<ShardingPlan, Error> {
+    pub fn plan_assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<ShardingPlan, Error> {
+        let tenant = tenant.to_string();
         let metrics = ShardingRegistry::metrics(pool);
 
         // Case 1: Tenant already assigned → nothing to do
-        if let Some(pid) = ShardingRegistry::tenant_shard(pool, tenant) {
+        if let Some(pid) = ShardingRegistry::tenant_shard(pool, &tenant) {
             return Ok(Self::make_plan(
                 ShardingPlanState::AlreadyAssigned { pid },
                 &metrics,
@@ -149,14 +150,14 @@ impl ShardingPolicyOps {
 
     /// Lookup the shard assigned to a tenant, if any.
     #[must_use]
-    pub fn lookup_tenant(pool: &str, tenant_pid: Principal) -> Option<Principal> {
-        ShardingRegistry::tenant_shard(pool, tenant_pid)
+    pub fn lookup_tenant(pool: &str, tenant: &str) -> Option<Principal> {
+        ShardingRegistry::tenant_shard(pool, tenant)
     }
 
     /// Lookup the shard assigned to a tenant, returning an error if none exists.
-    pub fn try_lookup_tenant(pool: &str, tenant_pid: Principal) -> Result<Principal, Error> {
-        Self::lookup_tenant(pool, tenant_pid)
-            .ok_or_else(|| ShardingError::TenantNotFound(tenant_pid).into())
+    pub fn try_lookup_tenant(pool: &str, tenant: &str) -> Result<Principal, Error> {
+        Self::lookup_tenant(pool, tenant)
+            .ok_or_else(|| ShardingError::TenantNotFound(tenant.to_string()).into())
     }
 
     // -----------------------------------------------------------------------
