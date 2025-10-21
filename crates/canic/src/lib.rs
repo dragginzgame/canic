@@ -24,6 +24,7 @@ pub use thiserror::Error as ThisError;
 
 ///
 /// Prelude
+/// should only be used in the Actor file
 ///
 
 pub mod prelude {
