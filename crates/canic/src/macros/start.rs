@@ -98,10 +98,12 @@ macro_rules! canic_start_root {
         #[::canic::cdk::init]
         fn init(identity: ::canic::memory::topology::SubnetIdentity) {
             ::canic::__canic_load_config!();
-            ::canic::state::wasm::WasmRegistry::import(WASMS);
 
             // ops
             ::canic::ops::lifecycle::root_init(identity);
+
+            // import wasms
+            ::canic::state::wasm::WasmRegistry::import(WASMS);
 
             // timers
             let _ = ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), move || {
