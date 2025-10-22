@@ -97,5 +97,5 @@ fn full_account_checksum(owner: &[u8], subaccount: &[u8]) -> String {
     crc32hasher.update(subaccount);
     let checksum = crc32hasher.finalize().to_be_bytes();
 
-    base32::encode(base32::Alphabet::RFC4648 { padding: false }, &checksum).to_lowercase()
+    base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &checksum).to_lowercase()
 }
