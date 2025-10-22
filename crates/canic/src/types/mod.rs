@@ -6,12 +6,14 @@
 //! submodules.
 //!
 
+mod account;
 mod canister;
 mod cycles;
 mod string;
 mod subnet;
 mod wasm;
 
+pub use account::*;
 pub use canister::*;
 pub use cycles::*;
 pub use string::*;
@@ -23,5 +25,4 @@ pub use wasm::*;
 //
 
 pub use crate::cdk::candid::{Int, Nat, Principal};
-pub use icrc_ledger_types::icrc1::account::{Account, Subaccount};
 pub use serde_bytes::ByteBuf;
