@@ -43,7 +43,7 @@ ic-signature-verification = "0.2"
 pocket-ic = "10.0"
 
 # icrc-ledger-types replacement
-base32 = "0.4"
+base32 = "0.5"
 crc32fast = "1.5"
 hex = "0.4"
 
