@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.17] - 2025-10-20
+- removed icrc-ledger-types and implemented it manually
+
 ## [0.2.10] - 2025-10-20
 - made the Sharding data structures use String not Principal so they're more flexible
 - updated scaling to use HRW algo always, removed a lot of unused code that won't make sense going forward
