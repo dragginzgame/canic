@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.21] - 2025-10-24
+- fixed config validation, now its finding nested invalid canister types
+
 ## [0.2.17] - 2025-10-20
 - removed icrc-ledger-types and implemented it manually
 

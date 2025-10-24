@@ -52,12 +52,39 @@ impl SubnetConfig {
 
 impl Validate for SubnetConfig {
     fn validate(&self) -> Result<(), ConfigModelError> {
-        //  Validate that every subnet_directory entry exists
+        // --- 1. Validate directory entries ---
         for canister_ty in &self.subnet_directory {
             if !self.canisters.contains_key(canister_ty) {
                 return Err(ConfigModelError::ValidationError(format!(
-                    "subnet directory canister '{canister_ty}' is not in subnet",
+                    "subnet directory canister '{canister_ty}' is not defined in subnet",
                 )));
+            }
+        }
+
+        // --- 2. Validate canister configurations ---
+        for (parent_ty, cfg) in &self.canisters {
+            // Sharding pools
+            if let Some(sharding) = &cfg.sharding {
+                for (pool_name, pool) in &sharding.pools {
+                    if !self.canisters.contains_key(&pool.canister_type) {
+                        return Err(ConfigModelError::ValidationError(format!(
+                            "canister '{parent_ty}' sharding pool '{pool_name}' references unknown canister type '{ty}'",
+                            ty = pool.canister_type
+                        )));
+                    }
+                }
+            }
+
+            // Scaling pools
+            if let Some(scaling) = &cfg.scaling {
+                for (pool_name, pool) in &scaling.pools {
+                    if !self.canisters.contains_key(&pool.canister_type) {
+                        return Err(ConfigModelError::ValidationError(format!(
+                            "canister '{parent_ty}' scaling pool '{pool_name}' references unknown canister type '{ty}'",
+                            ty = pool.canister_type
+                        )));
+                    }
+                }
             }
         }
 
@@ -221,6 +248,56 @@ impl Default for ShardPoolPolicy {
         Self {
             capacity: 100,
             max_shards: 64,
+        }
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn sharding_pool_references_must_exist_in_subnet() {
+        let managing_ty: CanisterType = "shard_hub".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut sharding = ShardingConfig::default();
+        sharding.pools.insert(
+            "primary".into(),
+            ShardPool {
+                canister_type: CanisterType::from("missing_shard_worker"),
+                policy: ShardPoolPolicy::default(),
+            },
+        );
+
+        let manager_cfg = CanisterConfig {
+            sharding: Some(sharding),
+            ..Default::default()
+        };
+
+        canisters.insert(managing_ty, manager_cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        let err = subnet
+            .validate()
+            .expect_err("expected missing worker type to fail");
+        match err {
+            ConfigModelError::ValidationError(msg) => {
+                assert!(
+                    msg.contains("missing_shard_worker"),
+                    "error should include missing canister type, got: {msg}"
+                );
+            }
+            other => panic!("unexpected error variant: {other:?}"),
         }
     }
 }
