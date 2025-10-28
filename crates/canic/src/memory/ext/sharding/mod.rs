@@ -159,9 +159,9 @@ impl<M: Memory> ShardingCore<M> {
     }
 
     pub fn remove_entry(&mut self, pid: &Principal) -> Result<(), Error> {
-        self.registry
-            .remove(pid)
-            .ok_or(ShardingError::ShardNotFound(*pid))?;
+        if self.registry.remove(pid).is_none() {
+            return Err(ShardingError::ShardNotFound(*pid).into());
+        }
 
         Ok(())
     }

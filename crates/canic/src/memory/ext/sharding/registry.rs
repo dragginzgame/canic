@@ -167,7 +167,9 @@ impl ShardingRegistry {
 
         Self::with_mut(|core| {
             let mut updates = Vec::new();
-            let entries: Vec<_> = core
+
+            // deterministic sorted order for etnries
+            let mut entries: Vec<_> = core
                 .all_entries()
                 .into_iter()
                 .filter(|(_, entry)| entry.pool == pool)
@@ -176,7 +178,9 @@ impl ShardingRegistry {
             if entries.is_empty() {
                 return;
             }
+            entries.sort_by_key(|(pid, _)| *pid);
 
+            //
             let mut occupied: BTreeSet<u32> = entries
                 .iter()
                 .filter_map(|(_, entry)| entry.has_assigned_slot().then_some(entry.slot))
@@ -248,6 +252,10 @@ impl ShardingRegistry {
     }
 }
 
+///
+/// TESTS
+///
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,5 +300,23 @@ mod tests {
         let slot1 = ShardingRegistry::slot_for_shard("poolA", p(1)).unwrap();
         let slot2 = ShardingRegistry::slot_for_shard("poolA", p(2)).unwrap();
         assert_ne!(slot1, slot2);
+    }
+
+    #[test]
+    fn assign_and_release_updates_count() {
+        ShardingRegistry::clear();
+        let ty = CanisterType::new("alpha");
+        let shard_pid = p(1);
+
+        ShardingRegistry::create(shard_pid, "poolA", 0, &ty, 2);
+        assert_eq!(ShardingRegistry::count(), 1);
+
+        ShardingRegistry::assign("poolA", "tenant1", shard_pid).unwrap();
+        let count_after = ShardingRegistry::with(|s| s.get_entry(&shard_pid).unwrap().count);
+        assert_eq!(count_after, 1);
+
+        ShardingRegistry::release("poolA", "tenant1").unwrap();
+        let count_final = ShardingRegistry::with(|s| s.get_entry(&shard_pid).unwrap().count);
+        assert_eq!(count_final, 0);
     }
 }

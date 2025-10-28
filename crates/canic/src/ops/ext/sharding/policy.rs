@@ -166,13 +166,13 @@ impl ShardingPolicyOps {
 
     /// Lookup the shard assigned to a tenant, if any.
     #[must_use]
-    pub fn lookup_tenant(pool: &str, tenant: &str) -> Option<Principal> {
-        ShardingRegistry::tenant_shard(pool, tenant)
+    pub fn lookup_tenant<S: ToString>(pool: &str, tenant: S) -> Option<Principal> {
+        ShardingRegistry::tenant_shard(pool, &tenant.to_string())
     }
 
     /// Lookup the shard assigned to a tenant, returning an error if none exists.
-    pub fn try_lookup_tenant(pool: &str, tenant: &str) -> Result<Principal, Error> {
-        Self::lookup_tenant(pool, tenant)
+    pub fn try_lookup_tenant<S: ToString>(pool: &str, tenant: S) -> Result<Principal, Error> {
+        ShardingRegistry::tenant_shard(pool, &tenant.to_string())
             .ok_or_else(|| ShardingError::TenantNotFound(tenant.to_string()).into())
     }
 
