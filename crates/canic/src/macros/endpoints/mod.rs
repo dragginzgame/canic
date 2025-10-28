@@ -141,7 +141,7 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         async fn canic_sharding_registry()
         -> Result<::canic::memory::ext::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::ops::ext::sharding::ShardingManageOps::export_registry())
+            Ok($crate::ops::ext::sharding::ShardingPolicyOps::export_registry())
         }
 
         // canic_sharding_lookup_tenant
