@@ -246,8 +246,8 @@ pub struct ShardPoolPolicy {
 impl Default for ShardPoolPolicy {
     fn default() -> Self {
         Self {
-            capacity: 100,
-            max_shards: 64,
+            capacity: 1_000,
+            max_shards: 4,
         }
     }
 }

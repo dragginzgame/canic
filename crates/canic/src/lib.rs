@@ -2,7 +2,6 @@
 pub mod auth;
 pub mod cdk;
 pub mod config;
-pub mod core;
 pub mod env;
 pub mod guard;
 pub mod interface;
@@ -10,6 +9,7 @@ pub mod macros;
 pub mod memory;
 pub mod ops;
 pub mod runtime;
+pub mod serialize;
 pub mod spec;
 pub mod state;
 pub mod types;
@@ -81,9 +81,6 @@ pub enum Error {
     ConfigError(String),
 
     #[error("{0}")]
-    CoreError(String),
-
-    #[error("{0}")]
     EnvError(String),
 
     #[error("{0}")]
@@ -94,6 +91,9 @@ pub enum Error {
 
     #[error("{0}")]
     OpsError(String),
+
+    #[error("{0}")]
+    SerializeError(String),
 
     #[error("{0}")]
     StateError(String),
@@ -139,11 +139,11 @@ impl Error {
 
 from_to_string!(auth::AuthError, AuthError);
 from_to_string!(config::ConfigError, ConfigError);
-from_to_string!(core::CoreError, CoreError);
 from_to_string!(env::EnvError, EnvError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(memory::MemoryError, MemoryError);
 from_to_string!(ops::OpsError, OpsError);
+from_to_string!(serialize::SerializeError, SerializeError);
 from_to_string!(state::StateError, StateError);
 
 from_to_string!(CallError, CallError);

@@ -6,6 +6,7 @@ use crate::{
     utils::time::now_secs,
 };
 use candid::Principal;
+use std::collections::BTreeSet;
 
 /// ---------------------------------------------------------------------------
 /// Sharding Registry
@@ -56,8 +57,9 @@ impl ShardingRegistry {
     }
 
     /// Creates a new shard entry with the specified capacity and type.
-    pub fn create(shard_pid: Principal, pool: &str, ty: &CanisterType, capacity: u32) {
+    pub fn create(shard_pid: Principal, pool: &str, slot: u32, ty: &CanisterType, capacity: u32) {
         let entry = ShardEntry {
+            slot,
             canister_type: ty.clone(),
             capacity,
             count: 0,
@@ -160,6 +162,83 @@ impl ShardingRegistry {
         })
     }
 
+    /// Lookup the shard principal that backs a specific slot (if any).
+    #[must_use]
+    pub fn shard_for_slot(pool: &str, slot: u32) -> Option<Principal> {
+        Self::with(|s| {
+            s.all_entries()
+                .into_iter()
+                .find(|(_, entry)| {
+                    entry.pool == pool && entry.has_assigned_slot() && entry.slot == slot
+                })
+                .map(|(pid, _)| pid)
+        })
+    }
+
+    /// Ensure every shard in the pool has a deterministic slot assignment.
+    pub fn ensure_slot_assignments(pool: &str, max_slots: u32) {
+        if max_slots == 0 {
+            return;
+        }
+
+        Self::with_mut(|core| {
+            let mut updates = Vec::new();
+            let entries: Vec<_> = core
+                .all_entries()
+                .into_iter()
+                .filter(|(_, entry)| entry.pool == pool)
+                .collect();
+
+            if entries.is_empty() {
+                return;
+            }
+
+            let mut occupied: BTreeSet<u32> = entries
+                .iter()
+                .filter_map(|(_, entry)| entry.has_assigned_slot().then_some(entry.slot))
+                .collect();
+            let available: Vec<u32> = (0..max_slots)
+                .filter(|slot| !occupied.contains(slot))
+                .collect();
+
+            if available.is_empty() {
+                return;
+            }
+
+            let mut idx = 0usize;
+            for (pid, mut entry) in entries {
+                if entry.has_assigned_slot() {
+                    continue;
+                }
+
+                if idx >= available.len() {
+                    break;
+                }
+
+                entry.slot = available[idx];
+                occupied.insert(entry.slot);
+                idx += 1;
+                updates.push((pid, entry));
+            }
+
+            for (pid, entry) in updates {
+                core.insert_entry(pid, entry);
+            }
+        });
+    }
+
+    /// Lookup the slot index for a given shard principal.
+    #[must_use]
+    pub fn slot_for_shard(pool: &str, shard: Principal) -> Option<u32> {
+        Self::with(|s| s.get_entry(&shard)).and_then(|entry| {
+            if entry.pool == pool && entry.has_assigned_slot() {
+                Some(entry.slot)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Returns the shard assigned to the given tenant (if any).
     #[must_use]
     pub fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
@@ -182,5 +261,52 @@ impl ShardingRegistry {
     #[must_use]
     pub fn export() -> ShardingRegistryView {
         Self::with(ShardingCore::all_entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::CanisterType;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn ensure_slot_assignments_backfills_unassigned_entries() {
+        ShardingRegistry::clear();
+        let ty = CanisterType::new("alpha");
+
+        ShardingRegistry::with_mut(|core| {
+            core.insert_entry(
+                p(1),
+                ShardEntry {
+                    slot: ShardEntry::UNASSIGNED_SLOT,
+                    canister_type: ty.clone(),
+                    capacity: 10,
+                    count: 0,
+                    pool: "poolA".into(),
+                    created_at: 0,
+                },
+            );
+            core.insert_entry(
+                p(2),
+                ShardEntry {
+                    slot: ShardEntry::UNASSIGNED_SLOT,
+                    canister_type: ty.clone(),
+                    capacity: 10,
+                    count: 0,
+                    pool: "poolA".into(),
+                    created_at: 0,
+                },
+            );
+        });
+
+        ShardingRegistry::ensure_slot_assignments("poolA", 4);
+
+        let slot1 = ShardingRegistry::slot_for_shard("poolA", p(1)).unwrap();
+        let slot2 = ShardingRegistry::slot_for_shard("poolA", p(2)).unwrap();
+        assert_ne!(slot1, slot2);
     }
 }

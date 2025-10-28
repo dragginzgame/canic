@@ -26,12 +26,13 @@ use serde::{Deserialize, Serialize};
 
 ///
 /// ShardingPlan
-/// Result of a dry-run shard assignment plan.
+/// Result of a dry-run shard assignment plan (including the desired slot index).
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ShardingPlan {
     pub state: ShardingPlanState,
+    pub target_slot: Option<u32>,
     pub utilization_pct: u32,
     pub active_count: u32,
     pub total_capacity: u64,
@@ -104,36 +105,51 @@ impl ShardingPolicyOps {
     pub fn plan_assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<ShardingPlan, Error> {
         let tenant = tenant.to_string();
         let metrics = ShardingRegistry::metrics(pool);
+        let pool_cfg = Self::get_pool_config(pool)?;
+        ShardingRegistry::ensure_slot_assignments(pool, pool_cfg.policy.max_shards);
 
         // Case 1: Tenant already assigned → nothing to do
         if let Some(pid) = ShardingRegistry::tenant_shard(pool, &tenant) {
+            let slot = ShardingRegistry::slot_for_shard(pool, pid);
             return Ok(Self::make_plan(
                 ShardingPlanState::AlreadyAssigned { pid },
                 &metrics,
+                slot,
             ));
         }
 
-        // Case 2: Try to reuse an existing shard using HRW.
-        // This ensures deterministic placement even if pool size changes over time
-        let active_shards = ShardingRegistry::list_active_shards(pool);
-        if !active_shards.is_empty()
-            && let Some(pid) = HrwSelector::select(&tenant, &active_shards)
-        {
+        let max_slots = pool_cfg.policy.max_shards;
+        let Some(target_slot) = HrwSelector::select_slot(pool, &tenant, max_slots) else {
+            return Ok(Self::make_plan(
+                ShardingPlanState::CreateBlocked {
+                    reason: "sharding pool max_shards is zero".to_string(),
+                },
+                &metrics,
+                None,
+            ));
+        };
+
+        if let Some(pid) = ShardingRegistry::shard_for_slot(pool, target_slot) {
             return Ok(Self::make_plan(
                 ShardingPlanState::UseExisting { pid },
                 &metrics,
+                Some(target_slot),
             ));
         }
 
         // Case 3: No shards or none suitable → check policy for creation
-        let pool_cfg = Self::get_pool_config(pool)?;
         match Self::check_create_allowed(&metrics, &pool_cfg.policy) {
-            Ok(()) => Ok(Self::make_plan(ShardingPlanState::CreateAllowed, &metrics)),
+            Ok(()) => Ok(Self::make_plan(
+                ShardingPlanState::CreateAllowed,
+                &metrics,
+                Some(target_slot),
+            )),
             Err(e) => Ok(Self::make_plan(
                 ShardingPlanState::CreateBlocked {
                     reason: e.to_string(),
                 },
                 &metrics,
+                Some(target_slot),
             )),
         }
     }
@@ -165,9 +181,14 @@ impl ShardingPolicyOps {
     // -----------------------------------------------------------------------
 
     /// Internal helper to construct a plan from metrics and state.
-    const fn make_plan(state: ShardingPlanState, metrics: &PoolMetrics) -> ShardingPlan {
+    const fn make_plan(
+        state: ShardingPlanState,
+        metrics: &PoolMetrics,
+        slot: Option<u32>,
+    ) -> ShardingPlan {
         ShardingPlan {
             state,
+            target_slot: slot,
             utilization_pct: metrics.utilization_pct,
             active_count: metrics.active_count,
             total_capacity: metrics.total_capacity,
@@ -205,6 +226,7 @@ mod tests {
         let tenant = Principal::anonymous();
         let plan = ShardingPlan {
             state: ShardingPlanState::AlreadyAssigned { pid: tenant },
+            target_slot: Some(0),
             utilization_pct: 50,
             active_count: 2,
             total_capacity: 100,

@@ -58,7 +58,7 @@ topup.amount = "5T"
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
 canister_type = "shard"
 policy.capacity = 100
-policy.max_shards = 64
+policy.max_shards = 4
 
 # --- Shard ---
 [subnets.prime.canisters.shard]

@@ -4,7 +4,7 @@
 //! round-trips in stable structures.
 //!
 
-use crate::{Error, ThisError, core::CoreError};
+use crate::{Error, ThisError};
 use minicbor_serde::{from_slice, to_vec};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
@@ -23,12 +23,6 @@ pub enum SerializeError {
 
     #[error("deserialize error: {0}")]
     Deserialize(String),
-}
-
-impl From<SerializeError> for Error {
-    fn from(err: SerializeError) -> Self {
-        CoreError::from(err).into()
-    }
 }
 
 ///
