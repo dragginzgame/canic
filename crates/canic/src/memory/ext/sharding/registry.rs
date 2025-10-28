@@ -146,22 +146,6 @@ impl ShardingRegistry {
     // Queries
     // -----------------------------------------------------------------------
 
-    /// Lists all active shard Principals for the specified pool.
-    ///
-    /// A shard is considered *active* if it exists in the registry and has
-    /// a nonzero capacity (even if currently empty). This does not filter
-    /// by load, only by membership.
-    #[must_use]
-    pub fn list_active_shards(pool: &str) -> Vec<Principal> {
-        Self::with(|s| {
-            s.all_entries()
-                .into_iter()
-                .filter(|(_, entry)| entry.pool == pool)
-                .map(|(pid, _)| pid)
-                .collect()
-        })
-    }
-
     /// Lookup the shard principal that backs a specific slot (if any).
     #[must_use]
     pub fn shard_for_slot(pool: &str, slot: u32) -> Option<Principal> {
