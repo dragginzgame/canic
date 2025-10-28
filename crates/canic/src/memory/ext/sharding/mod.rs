@@ -87,6 +87,9 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardEntry {
+    /// Logical slot index within the pool (assigned deterministically).
+    #[serde(default = "ShardEntry::slot_default")]
+    pub slot: u32,
     pub capacity: u32,
     pub count: u32,
     pub pool: String,
@@ -95,7 +98,8 @@ pub struct ShardEntry {
 }
 
 impl ShardEntry {
-    pub const STORABLE_MAX_SIZE: u32 = 192;
+    pub const STORABLE_MAX_SIZE: u32 = 208;
+    pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
     /// Whether this shard has room for more tenants.
     #[must_use]
@@ -111,6 +115,16 @@ impl ShardEntry {
         } else {
             Some((self.count as u64).saturating_mul(10_000) / self.capacity as u64)
         }
+    }
+
+    #[inline]
+    const fn slot_default() -> u32 {
+        Self::UNASSIGNED_SLOT
+    }
+
+    #[must_use]
+    pub const fn has_assigned_slot(&self) -> bool {
+        self.slot != Self::UNASSIGNED_SLOT
     }
 }
 

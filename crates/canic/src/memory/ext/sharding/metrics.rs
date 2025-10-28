@@ -116,6 +116,7 @@ mod tests {
     fn shard_metrics_computation() {
         let entry = ShardEntry {
             canister_type: CanisterType::new("alpha"),
+            slot: 1,
             capacity: 10,
             count: 3,
             pool: "poolX".into(),
@@ -132,8 +133,8 @@ mod tests {
     #[test]
     fn pool_metrics_computation() {
         ShardingRegistry::clear();
-        ShardingRegistry::create(p(1), "poolA", &CanisterType::new("alpha"), 10);
-        ShardingRegistry::create(p(2), "poolA", &CanisterType::new("alpha"), 20);
+        ShardingRegistry::create(p(1), "poolA", 0, &CanisterType::new("alpha"), 10);
+        ShardingRegistry::create(p(2), "poolA", 1, &CanisterType::new("alpha"), 20);
 
         // Simulate usage: assign 3 tenants to shard 1, 10 tenants to shard 2
         for i in 0..3 {
@@ -156,9 +157,9 @@ mod tests {
         ShardingRegistry::clear();
         let ty = CanisterType::new("alpha");
 
-        ShardingRegistry::create(p(1), "poolA", &ty, 5);
+        ShardingRegistry::create(p(1), "poolA", 0, &ty, 5);
         std::thread::sleep(std::time::Duration::from_millis(5)); // ensure clock moves
-        ShardingRegistry::create(p(2), "poolA", &ty, 5);
+        ShardingRegistry::create(p(2), "poolA", 1, &ty, 5);
 
         let t = ShardingRegistry::last_created_at_for_type(&ty);
         assert!(t > 0);

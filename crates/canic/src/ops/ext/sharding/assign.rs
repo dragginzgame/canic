@@ -29,6 +29,7 @@ impl ShardAllocator {
     /// Create a new shard in the given pool if policy allows.
     pub async fn allocate(
         pool: &str,
+        slot: u32,
         canister_type: &CanisterType,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
@@ -44,8 +45,8 @@ impl ShardAllocator {
         .await?;
         let pid = response.new_canister_pid;
 
-        ShardingRegistry::create(pid, pool, canister_type, policy.capacity);
-        log!(Log::Ok, "✨ shard.create: {pid} pool={pool}");
+        ShardingRegistry::create(pid, pool, slot, canister_type, policy.capacity);
+        log!(Log::Ok, "✨ shard.create: {pid} pool={pool} slot={slot}");
         Ok(pid)
     }
 }
@@ -84,9 +85,12 @@ impl ShardingOps {
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
+                let slot = plan
+                    .target_slot
+                    .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
                 log!(
                     Log::Info,
-                    "📦 tenant={tenant} already shard={pid} pool={pool}"
+                    "📦 tenant={tenant} already shard={pid} pool={pool} slot={slot:?}"
                 );
 
                 Ok(pid)
@@ -94,20 +98,29 @@ impl ShardingOps {
 
             ShardingPlanState::UseExisting { pid } => {
                 ShardingRegistry::assign(pool, tenant, pid)?;
+                let slot = plan
+                    .target_slot
+                    .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
                 log!(
                     Log::Info,
-                    "📦 tenant={tenant} assigned shard={pid} pool={pool}"
+                    "📦 tenant={tenant} assigned shard={pid} pool={pool} slot={slot:?}"
                 );
 
                 Ok(pid)
             }
 
             ShardingPlanState::CreateAllowed => {
-                let pid = ShardAllocator::allocate(pool, canister_type, &policy, extra_arg).await?;
+                let slot = plan.target_slot.ok_or_else(|| {
+                    ShardingError::ShardCreationBlocked(
+                        "missing target slot in allocation plan".into(),
+                    )
+                })?;
+                let pid =
+                    ShardAllocator::allocate(pool, slot, canister_type, &policy, extra_arg).await?;
                 ShardingRegistry::assign(pool, tenant, pid)?;
                 log!(
                     Log::Ok,
-                    "✨ tenant={tenant} created+assigned shard={pid} pool={pool}"
+                    "✨ tenant={tenant} created+assigned shard={pid} pool={pool} slot={slot}"
                 );
 
                 Ok(pid)
@@ -131,7 +144,8 @@ impl ShardingOps {
 
         for tenant in tenants.iter().take(limit as usize) {
             // Let the normal policy decide where this tenant should go.
-            match ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?.state {
+            let plan = ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?;
+            match plan.state {
                 ShardingPlanState::UseExisting { pid } if pid != donor_shard_pid => {
                     ShardingRegistry::assign(pool, tenant, pid)?;
                     log!(
@@ -141,8 +155,14 @@ impl ShardingOps {
                     moved += 1;
                 }
                 ShardingPlanState::CreateAllowed => {
+                    let slot = plan.target_slot.ok_or_else(|| {
+                        ShardingError::ShardCreationBlocked(
+                            "missing slot when draining shard".into(),
+                        )
+                    })?;
                     let new_pid = ShardAllocator::allocate(
                         pool,
+                        slot,
                         &pool_cfg.canister_type,
                         &pool_cfg.policy,
                         None,
@@ -151,7 +171,7 @@ impl ShardingOps {
                     ShardingRegistry::assign(pool, tenant, new_pid)?;
                     log!(
                         Log::Ok,
-                        "✨ shard.create: {new_pid} draining donor={donor_shard_pid}"
+                        "✨ shard.create: {new_pid} draining donor={donor_shard_pid} slot={slot}"
                     );
                     moved += 1;
                 }

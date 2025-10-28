@@ -12,7 +12,7 @@
 //!
 
 use crate::{
-    Error, ThisError, cdk::api::certified_data_set, core::serialize::deserialize, ops::OpsError,
+    Error, ThisError, cdk::api::certified_data_set, ops::OpsError, serialize::deserialize,
     types::Principal,
 };
 use ic_canister_sig_creation::{
