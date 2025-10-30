@@ -130,6 +130,8 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         async fn canic_scaling_registry()
         -> Result<::canic::memory::ext::scaling::ScalingRegistryView, ::canic::Error> {
+            $crate::auth_require_any!(::canic::auth::is_controller)?;
+
             Ok($crate::ops::ext::scaling::export_registry())
         }
 
@@ -141,17 +143,9 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         async fn canic_sharding_registry()
         -> Result<::canic::memory::ext::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::ops::ext::sharding::ShardingPolicyOps::export_registry())
-        }
+            $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-        // canic_sharding_lookup_tenant
-        // can be called by any principal
-        #[::canic::cdk::query]
-        async fn canic_sharding_lookup_tenant(
-            pool: String,
-            tenant: String,
-        ) -> Result<::candid::Principal, ::canic::Error> {
-            $crate::ops::ext::sharding::ShardingPolicyOps::try_lookup_tenant(&pool, &tenant)
+            Ok($crate::ops::ext::sharding::ShardingPolicyOps::export_registry())
         }
 
         //

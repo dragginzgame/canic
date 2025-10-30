@@ -14,7 +14,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.90.0"
+rust-version = "1.91.0"
 edition = "2024"
 version = "0.2.23"
 license = "MIT"
@@ -64,7 +64,6 @@ toml = "0.9"
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # lints.clippy
-
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
