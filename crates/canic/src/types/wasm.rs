@@ -27,6 +27,11 @@ impl WasmModule {
     }
 
     #[must_use]
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.bytes.to_vec()
+    }
+
+    #[must_use]
     pub const fn bytes(&self) -> &'static [u8] {
         self.bytes
     }

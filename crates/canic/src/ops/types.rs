@@ -8,9 +8,16 @@ use serde::Deserialize;
 /// CanisterInitPayload
 ///
 
-#[derive(Debug, CandidType, Deserialize)]
+#[derive(Debug, CandidType, Default, Deserialize)]
 pub struct CanisterInitPayload {
     pub env: EnvData,
     pub app_directory: DirectoryView,
     pub subnet_directory: DirectoryView,
+}
+
+impl CanisterInitPayload {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::default()
+    }
 }
