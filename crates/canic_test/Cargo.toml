@@ -15,7 +15,7 @@ default = []
 ic = []
 
 [dependencies]
-canic = "0.2.27"
+canic = "0.2"
 derive_more = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
