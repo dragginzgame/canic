@@ -185,36 +185,6 @@ dependencies = [
 [[package]]
 name = "canic"
 version = "0.2.34"
-dependencies = [
- "base32",
- "candid",
- "crc32fast",
- "criterion",
- "ctor",
- "defer",
- "derive_more",
- "hex",
- "ic-canister-sig-creation",
- "ic-cdk",
- "ic-cdk-timers",
- "ic-signature-verification",
- "ic-stable-structures",
- "minicbor-serde",
- "num-traits",
- "remain",
- "serde",
- "serde_bytes",
- "sha2",
- "thiserror 2.0.17",
- "tinyrand",
- "toml",
- "ulid",
- "xxhash-rust",
-]
-
-[[package]]
-name = "canic"
-version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35b4b134280f93ee2501323ae84a9d4dab02f467824279d3b7cf6c8f5e2aa626"
 dependencies = [
@@ -244,11 +214,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic"
+version = "0.2.35"
+dependencies = [
+ "base32",
+ "candid",
+ "crc32fast",
+ "criterion",
+ "ctor",
+ "defer",
+ "derive_more",
+ "hex",
+ "ic-canister-sig-creation",
+ "ic-cdk",
+ "ic-cdk-timers",
+ "ic-signature-verification",
+ "ic-stable-structures",
+ "minicbor-serde",
+ "num-traits",
+ "remain",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "thiserror 2.0.17",
+ "tinyrand",
+ "toml",
+ "ulid",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "canic_internal"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "ctor",
  "derive_more",
  "ic-canister-sig-creation",
@@ -268,10 +268,10 @@ dependencies = [
 
 [[package]]
 name = "canic_test"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34 (registry+https://github.com/rust-lang/crates.io-index)",
+ "canic 0.2.34",
  "derive_more",
  "pocket-ic",
  "serde",
@@ -280,40 +280,40 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_auth"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_blank"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_root"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
  "pocket-ic",
@@ -321,40 +321,40 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_shard"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "candid",
- "canic 0.2.34",
+ "canic 0.2.35",
  "canic_internal",
  "ic-cdk",
 ]
