@@ -11,6 +11,7 @@ mod canister;
 mod cycles;
 mod string;
 mod subnet;
+mod ulid;
 mod wasm;
 
 pub use account::*;
@@ -18,6 +19,7 @@ pub use canister::*;
 pub use cycles::*;
 pub use string::*;
 pub use subnet::*;
+pub use ulid::*;
 pub use wasm::*;
 
 //
@@ -26,4 +28,3 @@ pub use wasm::*;
 
 pub use crate::cdk::candid::{Int, Nat, Principal};
 pub use serde_bytes::ByteBuf;
-pub use ulid::Ulid;
