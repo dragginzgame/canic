@@ -20,13 +20,23 @@ impl Ulid {
         Self(WrappedUlid::nil())
     }
 
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(WrappedUlid::from_bytes(bytes))
+    }
+
+    #[must_use]
+    pub const fn from_parts(timestamp_ms: u64, random: u128) -> Self {
+        Self(WrappedUlid::from_parts(timestamp_ms, random))
+    }
+
     pub fn from_string(s: &str) -> Result<Self, ulid::DecodeError> {
         Ok(Self(WrappedUlid::from_string(s)?))
     }
 
     #[must_use]
-    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(WrappedUlid::from_bytes(bytes))
+    pub fn increment(&self) -> Option<Self> {
+        self.0.increment().map(Self::from)
     }
 }
 
