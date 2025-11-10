@@ -3,7 +3,11 @@ use derive_more::{Deref, DerefMut, Display, FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ulid::Ulid as WrappedUlid;
 
+///
+/// Ulid
 /// A Candid-safe wrapper around `ulid::Ulid`.
+///
+
 #[derive(
     Clone, Copy, Debug, Deref, DerefMut, Display, Eq, FromStr, Hash, Ord, PartialEq, PartialOrd,
 )]
@@ -11,15 +15,17 @@ use ulid::Ulid as WrappedUlid;
 pub struct Ulid(WrappedUlid);
 
 impl Ulid {
+    #[must_use]
+    pub const fn nil() -> Self {
+        Self(WrappedUlid::nil())
+    }
+
     pub fn from_string(s: &str) -> Result<Self, ulid::DecodeError> {
         Ok(Self(WrappedUlid::from_string(s)?))
     }
 
     #[must_use]
-    pub fn from_bytes(seed: u32) -> Self {
-        let mut bytes = [0u8; 16];
-        bytes[..4].copy_from_slice(&seed.to_be_bytes());
-
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(WrappedUlid::from_bytes(bytes))
     }
 }
