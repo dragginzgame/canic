@@ -1,4 +1,4 @@
-use candid::{CandidType, decode_one, encode_args, encode_one};
+use candid::{CandidType, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     Error,
     memory::topology::SubnetIdentity,
@@ -23,10 +23,15 @@ impl PicBuilder {
         Self(PocketIcBuilder::new())
     }
 
-    /// Add default subnets (NNS + application)
     #[must_use]
-    pub fn with_default_subnets(mut self) -> Self {
-        self.0 = self.0.with_nns_subnet().with_application_subnet();
+    pub fn with_application_subnet(mut self) -> Self {
+        self.0 = self.0.with_application_subnet();
+        self
+    }
+
+    #[must_use]
+    pub fn with_nns_subnet(mut self) -> Self {
+        self.0 = self.0.with_nns_subnet();
         self
     }
 
@@ -46,7 +51,11 @@ pub struct Pic(PocketIc);
 
 impl Pic {
     /// Install a canister with the given type and wasm bytes
-    pub fn install_canister(&self, ty: CanisterType, wasm: &[u8]) -> Result<Principal, Error> {
+    pub fn create_and_install_canister(
+        &self,
+        ty: CanisterType,
+        wasm: &[u8],
+    ) -> Result<Principal, Error> {
         // Create and fund the canister
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, 1_000_000_000_000);
@@ -64,9 +73,9 @@ impl Pic {
         &self,
         canister_id: Principal,
         method: &str,
-        args: impl CandidType,
+        args: impl ArgumentEncoder,
     ) -> Result<T, Error> {
-        let bytes = encode_one(args)?;
+        let bytes = encode_args(args)?;
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
@@ -80,9 +89,9 @@ impl Pic {
         &self,
         canister_id: Principal,
         method: &str,
-        args: impl CandidType,
+        args: impl ArgumentEncoder,
     ) -> Result<T, Error> {
-        let bytes = encode_one(args)?;
+        let bytes = encode_args(args)?;
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)
