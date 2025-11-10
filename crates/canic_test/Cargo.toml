@@ -15,10 +15,11 @@ default = []
 ic = []
 
 [dependencies]
-canic = { path = "../canic" }
+canic = "0.2.27"
 derive_more = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
+thiserror = { workspace = true }
 pocket-ic = { workspace = true }
 
 [lints]
