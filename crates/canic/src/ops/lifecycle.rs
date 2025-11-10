@@ -46,6 +46,7 @@ pub fn root_init(identity: SubnetIdentity) {
             Env::set_prime_root_pid(params.prime_root_pid);
             Env::set_subnet_type(params.subnet_type);
         }
+        SubnetIdentity::Test => panic!("not sure what to do with test"),
     }
 
     SubnetCanisterRegistry::register_root(self_pid);

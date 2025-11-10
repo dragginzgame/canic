@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ####################################
 
+## [0.2.24] - 2025-11-10
+- added a test/ module that's gated by cfg(test) for pocket-ic helpers
+
 ## [0.2.21] - 2025-10-24
 - fixed config validation, now its finding nested invalid canister types
 
