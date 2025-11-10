@@ -1,0 +1,25 @@
+[package]
+name = "canic_test"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[features]
+default = []
+ic = []
+
+[dependencies]
+canic = "0.2.25"
+derive_more = { workspace = true }
+candid = { workspace = true }
+serde = { workspace = true }
+pocket-ic = { workspace = true }
+
+[lints]
+workspace = true
