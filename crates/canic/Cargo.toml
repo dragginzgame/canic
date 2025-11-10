@@ -39,7 +39,6 @@ toml = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [dev-dependencies]
-pocket-ic = { workspace = true }
 criterion = { workspace = true }
 
 [[bench]]
