@@ -54,7 +54,7 @@ impl Pic {
     pub fn create_and_install_canister(
         &self,
         ty: CanisterType,
-        wasm: &[u8],
+        wasm: Vec<u8>,
     ) -> Result<Principal, Error> {
         // Create and fund the canister
         let canister_id = self.create_canister();
@@ -62,19 +62,22 @@ impl Pic {
 
         // Install
         let init_bytes = install_args(ty)?;
-        self.0
-            .install_canister(canister_id, wasm.to_vec(), init_bytes, None);
+        self.0.install_canister(canister_id, wasm, init_bytes, None);
 
         Ok(canister_id)
     }
 
     /// Generic update call helper (serializes args + decodes result)
-    pub fn update_call<T: CandidType + DeserializeOwned>(
+    pub fn update_call<T, A>(
         &self,
         canister_id: Principal,
         method: &str,
-        args: impl ArgumentEncoder,
-    ) -> Result<T, Error> {
+        args: A,
+    ) -> Result<T, Error>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
         let bytes = encode_args(args)?;
         let result = self
             .0
@@ -85,12 +88,16 @@ impl Pic {
     }
 
     /// Generic query call helper
-    pub fn query_call<T: CandidType + DeserializeOwned>(
+    pub fn query_call<T, A>(
         &self,
         canister_id: Principal,
         method: &str,
-        args: impl ArgumentEncoder,
-    ) -> Result<T, Error> {
+        args: A,
+    ) -> Result<T, Error>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
         let bytes = encode_args(args)?;
         let result = self
             .0
