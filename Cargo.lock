@@ -184,13 +184,12 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.2.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "269f097b1c8891a09919a8e6399ec47d20d4a7c2fd8fafb24261092705545a90"
+version = "0.2.32"
 dependencies = [
  "base32",
  "candid",
  "crc32fast",
+ "criterion",
  "ctor",
  "defer",
  "derive_more",
@@ -209,17 +208,19 @@ dependencies = [
  "thiserror 2.0.17",
  "tinyrand",
  "toml",
+ "ulid",
  "xxhash-rust",
 ]
 
 [[package]]
 name = "canic"
 version = "0.2.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abbcece7aeb7e104ddcd2623a6e1ea8ccb9f5ba122096c827ef7a4e9f529a0ad"
 dependencies = [
  "base32",
  "candid",
  "crc32fast",
- "criterion",
  "ctor",
  "defer",
  "derive_more",
@@ -270,7 +271,7 @@ name = "canic_test"
 version = "0.2.32"
 dependencies = [
  "candid",
- "canic 0.2.31",
+ "canic 0.2.32 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more",
  "pocket-ic",
  "serde",
