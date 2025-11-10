@@ -99,6 +99,14 @@ pub enum Error {
     StateError(String),
 
     ///
+    /// Test Error
+    /// as we don't want to import dev-dependencies
+    ///
+
+    #[error("{0}")]
+    TestError(String),
+
+    ///
     /// Common IC errors
     ///
     /// CallError          : should be automatic with ?
@@ -134,6 +142,11 @@ impl Error {
     #[must_use]
     pub fn custom<S: Into<String>>(s: S) -> Self {
         Self::CustomError(s.into())
+    }
+
+    #[must_use]
+    pub fn test<S: Into<String>>(s: S) -> Self {
+        Self::TestError(s.into())
     }
 }
 
