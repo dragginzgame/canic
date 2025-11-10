@@ -10,6 +10,7 @@ members = [
     "crates/canisters/shard_hub",
     "crates/canic",
     "crates/canic_internal",
+    "crates/canic_test",
 ]
 resolver = "2"
 
@@ -25,12 +26,12 @@ homepage = "https://github.com/dragginzgame/canic"
 keywords = ["internet-computer", "canister", "dfinity", "icp", "management"]
 categories = ["wasm"]
 readme = "README.md"
-publish = true
 
 [workspace.dependencies]
 # canic
 canic = { path = "crates/canic" }
 canic_internal = { path = "crates/canic_internal" }
+canic_test = { path = "crates/canic_test" }
 
 # ic
 candid = { version = "0.10", default-features = false }

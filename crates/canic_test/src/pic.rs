@@ -1,6 +1,15 @@
-use crate::{
+use canic::{
     Error, memory::topology::SubnetIdentity, ops::CanisterInitPayload, types::CanisterType,
 };
+use derive_more::{Deref, DerefMut};
+use pocket_ic::PocketIc;
+
+///
+/// Pic
+///
+
+#[derive(Deref, DerefMut)]
+pub struct Pic<'a>(&'a PocketIc);
 
 // install_args
 // these vary depending on the canister type

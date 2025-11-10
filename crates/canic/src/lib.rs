@@ -12,7 +12,6 @@ pub mod runtime;
 pub mod serialize;
 pub mod spec;
 pub mod state;
-pub mod test;
 pub mod types;
 pub mod utils;
 
