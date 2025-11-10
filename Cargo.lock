@@ -201,7 +201,6 @@ dependencies = [
  "ic-stable-structures",
  "minicbor-serde",
  "num-traits",
- "pocket-ic",
  "remain",
  "serde",
  "serde_bytes",

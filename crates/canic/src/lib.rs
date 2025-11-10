@@ -12,11 +12,9 @@ pub mod runtime;
 pub mod serialize;
 pub mod spec;
 pub mod state;
+pub mod test;
 pub mod types;
 pub mod utils;
-
-#[cfg(test)]
-pub mod test;
 
 pub mod export {
     pub use ::ctor;
