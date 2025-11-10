@@ -78,7 +78,7 @@ impl Pic {
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let bytes = encode_args(args)?;
+        let bytes: Vec<u8> = encode_args(args)?;
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
@@ -98,7 +98,7 @@ impl Pic {
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let bytes = encode_args(args)?;
+        let bytes: Vec<u8> = encode_args(args)?;
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)

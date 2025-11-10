@@ -63,6 +63,8 @@ thiserror = "2.0"
 tinyrand = "0.5"
 toml = "0.9"
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
+# removed std because it imports rand.  serde feature doesn't compile without it
+ulid = { version = "1.2", default-features = false }
 
 # lints.clippy
 [workspace.lints.clippy]

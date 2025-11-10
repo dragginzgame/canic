@@ -26,3 +26,4 @@ pub use wasm::*;
 
 pub use crate::cdk::candid::{Int, Nat, Principal};
 pub use serde_bytes::ByteBuf;
+pub use ulid::Ulid;

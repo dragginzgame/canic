@@ -31,6 +31,7 @@ serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 ctor = { workspace = true }
 thiserror = { workspace = true }
+ulid = { workspace = true }
 base32 = { workspace = true }
 hex = { workspace = true }
 crc32fast = { workspace = true }
