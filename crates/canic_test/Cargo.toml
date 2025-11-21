@@ -15,8 +15,7 @@ default = []
 ic = []
 
 [dependencies]
-canic = "0.2.38"
-#canic = { path = "../canic" }
+canic = { workspace = true }
 derive_more = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }

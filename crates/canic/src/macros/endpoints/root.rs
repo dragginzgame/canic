@@ -64,9 +64,19 @@ macro_rules! canic_endpoints_root {
         }
 
         //
-        // TOPOLOGY
+        // REGISTRIES + TOPOLOGY
         // on root, the SubnetCanisterRegistry is the main source of truth
         //
+
+        #[::canic::cdk::query]
+        fn canic_app_subnet_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
+            $crate::memory::topology::AppSubnetRegistry::export()
+        }
+
+        #[::canic::cdk::query]
+        fn canic_app_canister_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
+            $crate::memory::topology::AppSubnetRegistry::export()
+        }
 
         #[::canic::cdk::query]
         fn canic_subnet_canister_registry() -> Vec<::canic::memory::CanisterEntry> {
@@ -123,6 +133,20 @@ macro_rules! canic_endpoints_nonroot {
         #[::canic::cdk::query]
         fn canic_subnet_canister_children() -> Vec<::canic::memory::CanisterSummary> {
             $crate::memory::topology::SubnetCanisterChildren::export()
+        }
+
+        //
+        // DIRECTORY VIEWS
+        //
+
+        #[::canic::cdk::query]
+        fn canic_app_directory() -> ::canic::memory::directory::DirectoryView {
+            $crate::memory::directory::AppDirectory::export()
+        }
+
+        #[::canic::cdk::query]
+        fn canic_subnet_directory() -> ::canic::memory::directory::DirectoryView {
+            $crate::memory::directory::SubnetDirectory::export()
         }
 
         //

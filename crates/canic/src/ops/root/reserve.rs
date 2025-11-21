@@ -58,10 +58,10 @@ impl CanisterReserveOps {
                 return;
             }
 
-            let id = set_timer(RESERVE_INIT_DELAY, || {
+            let id = set_timer(RESERVE_INIT_DELAY, async {
                 let _ = Self::check();
 
-                let interval_id = set_timer_interval(RESERVE_CHECK_TIMER, || {
+                let interval_id = set_timer_interval(RESERVE_CHECK_TIMER, || async {
                     let _ = Self::check();
                 });
 

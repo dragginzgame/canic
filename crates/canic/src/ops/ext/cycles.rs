@@ -45,17 +45,17 @@ impl CycleTrackerOps {
                 return;
             }
 
-            let id = set_timer(TRACKER_INIT_DELAY, || {
+            let init = set_timer(TRACKER_INIT_DELAY, async {
                 let _ = Self::track();
 
-                let interval_id = set_timer_interval(TRACKER_INTERVAL_SECS, || {
+                let interval = set_timer_interval(TRACKER_INTERVAL_SECS, || async {
                     let _ = Self::track();
                 });
 
-                TIMER.with_borrow_mut(|slot| *slot = Some(interval_id));
+                TIMER.with_borrow_mut(|slot| *slot = Some(interval));
             });
 
-            *slot = Some(id);
+            *slot = Some(init);
         });
     }
 
