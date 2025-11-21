@@ -43,13 +43,11 @@ macro_rules! canic_start {
             // ops
             ::canic::ops::lifecycle::nonroot_init($canister_type, payload);
 
-            // timers
+            // timers — async body, no spawn()
             let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                    ::canic::cdk::futures::spawn(async move {
-                        canic_setup().await;
-                        canic_install(args).await;
-                    });
+                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+                    canic_setup().await;
+                    canic_install(args).await;
                 });
         }
 
@@ -60,13 +58,11 @@ macro_rules! canic_start {
             // ops
             ::canic::ops::lifecycle::nonroot_post_upgrade($canister_type);
 
-            // timers
+            // timers — async body, no spawn()
             let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                    ::canic::cdk::futures::spawn(async move {
-                        canic_setup().await;
-                        canic_upgrade().await;
-                    });
+                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+                    canic_setup().await;
+                    canic_upgrade().await;
                 });
         }
 
@@ -106,15 +102,14 @@ macro_rules! canic_start_root {
             ::canic::state::wasm::WasmRegistry::import(WASMS);
 
             // timers
-            let _ = ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), move || {
-                ::canic::cdk::futures::spawn(async move {
+            let _ =
+                ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), async move {
                     ::canic::ops::root::root_set_subnet_id().await;
                     ::canic::ops::root::root_create_canisters().await.unwrap();
 
                     canic_setup().await;
                     canic_install().await;
                 });
-            });
         }
 
         #[::canic::cdk::post_upgrade]
@@ -127,11 +122,9 @@ macro_rules! canic_start_root {
 
             // timers
             let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), move || {
-                    ::canic::cdk::futures::spawn(async move {
-                        canic_setup().await;
-                        canic_upgrade().await;
-                    });
+                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+                    canic_setup().await;
+                    canic_upgrade().await;
                 });
         }
 

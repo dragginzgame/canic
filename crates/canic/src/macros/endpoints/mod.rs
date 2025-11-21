@@ -71,34 +71,6 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // MEMORY TOPOLOGY
-        //
-
-        #[::canic::cdk::query]
-        fn canic_app_subnet_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
-            $crate::memory::topology::AppSubnetRegistry::export()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_app_canister_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
-            $crate::memory::topology::AppSubnetRegistry::export()
-        }
-
-        //
-        // MEMORY DIRECTORY
-        //
-
-        #[::canic::cdk::query]
-        fn canic_app_directory() -> ::canic::memory::directory::DirectoryView {
-            $crate::memory::directory::AppDirectory::export()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_subnet_directory() -> ::canic::memory::directory::DirectoryView {
-            $crate::memory::directory::SubnetDirectory::export()
-        }
-
-        //
         // STATE
         //
 
