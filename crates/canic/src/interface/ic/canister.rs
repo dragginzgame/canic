@@ -1,11 +1,12 @@
 use crate::{
-    Error, Log,
+    Error,
     cdk::mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
     interface::{
         ic::{canister_status, install_code},
         prelude::*,
     },
     log,
+    log::Level,
     utils::wasm::get_wasm_hash,
 };
 
@@ -49,7 +50,7 @@ pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(
     #[allow(clippy::cast_precision_loss)]
     let bytes_fmt = bytes.len() as f64 / 1_000.0;
     log!(
-        Log::Ok,
+        Level::Ok,
         "canister_upgrade: {} ({} KB) upgraded",
         canister_pid,
         bytes_fmt,

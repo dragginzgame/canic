@@ -6,12 +6,13 @@
 //! pool.
 
 use crate::{
-    Error, Log,
+    Error,
     cdk::{
         futures::spawn,
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     interface::ic::get_cycles,
+    log::Level,
     memory::root::reserve::CanisterReserve,
     ops::{
         canister::{create_canister, uninstall_and_delete_canister},
@@ -87,7 +88,7 @@ impl CanisterReserveOps {
         let subnet_cfg = match cfg_current_subnet() {
             Ok(cfg) => cfg,
             Err(e) => {
-                log!(Log::Warn, "⚠️ cannot get current subnet config: {e:?}");
+                log!(Level::Warn, "⚠️ cannot get current subnet config: {e:?}");
                 return 0;
             }
         };
@@ -99,15 +100,19 @@ impl CanisterReserveOps {
         if reserve_size < min_size {
             let missing = (min_size - reserve_size).min(10);
             log!(
-                Log::Ok,
+                Level::Ok,
                 "💧 reserve low: {reserve_size}/{min_size}, creating {missing}"
             );
 
             spawn(async move {
                 for i in 0..missing {
                     match reserve_create_canister().await {
-                        Ok(_) => log!(Log::Ok, "✨ reserve canister created ({}/{missing})", i + 1),
-                        Err(e) => log!(Log::Warn, "⚠️ failed to create reserve canister: {e:?}"),
+                        Ok(_) => log!(
+                            Level::Ok,
+                            "✨ reserve canister created ({}/{missing})",
+                            i + 1
+                        ),
+                        Err(e) => log!(Level::Warn, "⚠️ failed to create reserve canister: {e:?}"),
                     }
                 }
             });
@@ -142,7 +147,7 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
     let cycles = get_cycles(canister_pid).await?;
 
     log!(
-        Log::Ok,
+        Level::Ok,
         "🪶  reserve_import_canister: {canister_pid} ({cycles})",
     );
 

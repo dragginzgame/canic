@@ -9,7 +9,6 @@ use canic::{
     Error,
     ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
-    types::{Account, TC},
 };
 use canic_internal::canister;
 
@@ -81,13 +80,11 @@ pub static WASMS: &[(CanisterType, &[u8])] = &[
 ///
 
 // convert_icp_to_cycles
+/*
 #[update]
 #[allow(clippy::cast_possible_truncation)]
 async fn convert_icp_to_cycles() -> Result<(), Error> {
-    let acc = Account::from(msg_caller());
-    let cycles = (TC * 2) as u64;
-
-    canic::interface::ic::cycles::convert_icp_to_cycles(acc, cycles).await
+    canic::ops::ext::cycles::CycleTrackerOps::convert_caller_icp_to_cycles((TC * 2) as u64).await
 }
 
 // get_icp_xdr_conversion_rate
@@ -95,7 +92,7 @@ async fn convert_icp_to_cycles() -> Result<(), Error> {
 async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
     canic::interface::ic::cycles::get_icp_xdr_conversion_rate().await
 }
-
+*/
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {

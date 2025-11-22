@@ -1,7 +1,8 @@
 use crate::{
-    Error, Log,
+    Error,
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded, log,
+    log::Level,
     memory::{MemoryError, id::state::APP_STATE_ID, state::StateError},
 };
 use candid::CandidType;
@@ -114,7 +115,8 @@ impl AppState {
             data.mode = new_mode;
             cell.set(data);
 
-            log!(Log::Ok, "app: mode changed {old_mode} -> {new_mode}");
+            log!(Level::Ok, "app: mode changed {old_mode} -> {new_mode}");
+
             Ok(())
         })
     }

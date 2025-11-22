@@ -29,60 +29,6 @@ macro_rules! eager_init {
     };
 }
 
-/// Emit a structured log line with consistent coloring and headers.
-///
-/// Accepts an optional [`Log`](crate::Log) level followed by a format string
-/// and arguments, mirroring `format!`. When the level is omitted the macro
-/// defaults to [`Log::Debug`](crate::Log::Debug).
-#[macro_export]
-macro_rules! log {
-    // Explicit level, no args
-    ($level:expr, $fmt:expr) => {{
-        $crate::log!(@inner $level, $fmt,);
-    }};
-
-    // Explicit level, with args
-    ($level:expr, $fmt:expr, $($arg:tt)*) => {{
-        $crate::log!(@inner $level, $fmt, $($arg)*);
-    }};
-
-    // No level given, default to Info
-    ($fmt:expr) => {{
-        $crate::log!(@inner $crate::Log::Debug, $fmt,);
-    }};
-    ($fmt:expr, $($arg:tt)*) => {{
-        $crate::log!(@inner $crate::Log::Debug, $fmt, $($arg)*);
-    }};
-
-
-    // Inner logic
-    (@inner $level:expr, $fmt:expr, $($arg:tt)*) => {{
-        let message = format!($fmt, $($arg)*);
-        let ty_raw = match $crate::memory::Env::get_canister_type() {
-            Some(ty) => ty.to_string(),
-            None => "...".to_string(),
-        };
-        let ty_disp = $crate::utils::format::ellipsize_middle(
-            &ty_raw,
-            $crate::LOG_CANISTER_TYPE_ELLIPSIS_THRESHOLD,
-            4,
-            4,
-        );
-        let ty_col = format!("{:^width$}", ty_disp, width = $crate::LOG_CANISTER_TYPE_WIDTH);
-
-        let final_line = match $level {
-            $crate::Log::Ok => format!("\x1b[32m OK  \x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Perf => format!("\x1b[35mPERF \x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Info => format!("\x1b[34mINFO \x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Warn => format!("\x1b[33mWARN \x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Error => format!("\x1b[31mERROR\x1b[0m|{ty_col}| {message}"),
-            $crate::Log::Debug => format!("DEBUG|{ty_col}| {message}"),
-        };
-
-        $crate::cdk::println!("{final_line}");
-    }};
-}
-
 /// Log elapsed instruction counts since the last `perf!` invocation.
 ///
 /// Records the delta in instructions between calls and emits a

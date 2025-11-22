@@ -7,7 +7,6 @@ pub mod icrc;
 
 pub mod prelude {
     pub use crate::{
-        Log,
         cdk::{
             api::{canister_self, msg_caller},
             call::Call,
@@ -15,6 +14,7 @@ pub mod prelude {
         },
         interface::InterfaceError,
         log,
+        log::Level,
         types::{Account, CanisterType, Cycles, Int, Nat, Principal, Subaccount},
         utils::time::now_secs,
     };

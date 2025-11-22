@@ -126,7 +126,7 @@ fn save_topology(bundle: &TopologyBundle) -> Result<(), Error> {
 /// Low-level bundle sender used by cascade helpers.
 async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
     let debug = bundle.debug();
-    log!(Log::Info, "💦 sync.topology: [{debug}] -> {pid}");
+    log!(Level::Info, "💦 sync.topology: [{debug}] -> {pid}");
 
     call_and_decode::<Result<(), Error>>(*pid, "canic_sync_topology", bundle).await?
 }

@@ -5,6 +5,7 @@ pub mod config;
 pub mod env;
 pub mod guard;
 pub mod interface;
+pub mod log;
 pub mod macros;
 pub mod memory;
 pub mod ops;
@@ -29,8 +30,7 @@ pub use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Error as CanicError, Log, auth_require_all, auth_require_any, canic_start,
-        canic_start_root,
+        Error as CanicError, auth_require_all, auth_require_any, canic_start, canic_start_root,
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
@@ -54,14 +54,6 @@ use serde::Deserialize;
 
 pub const CRATE_NAME: &str = "canic";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Logging layout constants
-///
-/// Canister type column width and ellipsis threshold for log lines.
-/// If a type exceeds the threshold, it is rendered as first 4, '…', last 4
-/// to keep the log pipes aligned.
-pub const LOG_CANISTER_TYPE_WIDTH: usize = 9; // 4 + 1 + 4
-pub const LOG_CANISTER_TYPE_ELLIPSIS_THRESHOLD: usize = LOG_CANISTER_TYPE_WIDTH;
 
 ///
 /// Error
@@ -163,16 +155,3 @@ from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);
 from_to_string!(CandidDecodeFailed, CandidDecodeFailed);
 from_to_string!(CandidError, CandidError);
-
-///
-/// Log
-///
-
-pub enum Log {
-    Ok,
-    Perf,
-    Info,
-    Warn,
-    Error,
-    Debug,
-}

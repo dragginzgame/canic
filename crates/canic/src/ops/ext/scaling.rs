@@ -116,3 +116,8 @@ pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
         reason,
     })
 }
+
+/// Convenience: return only the decision flag for a pool.
+pub fn should_spawn_worker(pool: &str) -> Result<bool, Error> {
+    Ok(plan_create_worker(pool)?.should_spawn)
+}
