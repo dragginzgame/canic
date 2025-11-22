@@ -12,6 +12,7 @@ pub mod context;
 pub mod directory;
 pub mod ext;
 pub mod lifecycle;
+pub mod log;
 pub mod request;
 pub mod root;
 pub mod signature;
@@ -23,7 +24,6 @@ pub use types::*;
 /// Common imports for ops submodules and consumers.
 pub mod prelude {
     pub use crate::{
-        Log,
         cdk::{
             api::{canister_self, msg_caller},
             call::Call,
@@ -31,6 +31,7 @@ pub mod prelude {
         },
         interface::{InterfaceError, ic::call_and_decode},
         log,
+        log::Level,
         ops::OpsError,
         types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},
     };

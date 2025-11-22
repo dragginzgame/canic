@@ -1,7 +1,7 @@
 use crate::{
-    Log,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, log,
+    log::Level,
     memory::id::ext::cycles::CYCLE_TRACKER_ID,
     types::Cycles,
     utils::time::now_secs,
@@ -73,6 +73,19 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow(Self::view)
     }
 
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn entries(offset: u64, limit: u64) -> CycleTrackerView {
+        CYCLE_TRACKER.with_borrow(|t| {
+            t.map
+                .iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .map(|entry| (*entry.key(), entry.value().into()))
+                .collect()
+        })
+    }
+
     // --- internal state methods ---
 
     fn insert(&mut self, now: u64, cycles: u128) -> bool {
@@ -99,7 +112,7 @@ impl CycleTracker {
             }
         }
 
-        log!(Log::Info, "cycle_tracker: purged {purged} old entries");
+        log!(Level::Info, "cycle_tracker: purged {purged} old entries");
         purged
     }
 

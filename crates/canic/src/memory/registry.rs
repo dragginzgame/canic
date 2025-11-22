@@ -1,10 +1,11 @@
 use crate::{
-    CRATE_NAME, Error, Log,
+    CRATE_NAME, Error,
     cdk::structures::{
         BTreeMap as StableBTreeMap, DefaultMemoryImpl,
         memory::{MemoryId, VirtualMemory},
     },
     impl_storable_bounded, log,
+    log::Level,
     memory::{
         CANIC_MEMORY_MAX, CANIC_MEMORY_MIN, MEMORY_MANAGER, MEMORY_RANGES_ID, MEMORY_REGISTRY_ID,
         MemoryError,
@@ -118,7 +119,7 @@ pub fn init_memory() {
                 let count = reg.iter().filter(|e| range.contains(*e.key())).count();
 
                 log!(
-                    Log::Info,
+                    Level::Info,
                     "💾 memory.range: {} [{}-{}] ({}/{} slots used)",
                     crate_name,
                     range.start,

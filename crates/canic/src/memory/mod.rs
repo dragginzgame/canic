@@ -1,6 +1,7 @@
 pub mod directory;
 pub mod env;
 pub mod ext;
+pub mod log;
 pub mod registry;
 pub mod root;
 pub mod state;
@@ -14,8 +15,8 @@ pub use types::*;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     memory::{
-        directory::DirectoryError, env::ContextError, ext::ExtensionError, state::StateError,
-        topology::TopologyError,
+        directory::DirectoryError, env::ContextError, ext::ExtensionError, log::LogError,
+        state::StateError, topology::TopologyError,
     },
 };
 use std::cell::RefCell;
@@ -58,17 +59,23 @@ pub(crate) mod id {
         pub const SUBNET_DIRECTORY_ID: u8 = 11;
     }
 
+    // log
+    pub mod log {
+        pub const LOG_INDEX_ID: u8 = 13;
+        pub const LOG_DATA_ID: u8 = 14;
+    }
+
     // topology
     pub mod topology {
         pub mod app {
             // prime root is authoritative
-            pub const APP_SUBNET_REGISTRY_ID: u8 = 13;
+            pub const APP_SUBNET_REGISTRY_ID: u8 = 16;
         }
 
         pub mod subnet {
             // registry is root-authoritative, the others are cascaded views
-            pub const SUBNET_CANISTER_REGISTRY_ID: u8 = 15;
-            pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 16;
+            pub const SUBNET_CANISTER_REGISTRY_ID: u8 = 17;
+            pub const SUBNET_CANISTER_CHILDREN_ID: u8 = 18;
         }
     }
 
@@ -85,12 +92,12 @@ pub(crate) mod id {
         }
 
         pub mod scaling {
-            pub const SCALING_REGISTRY_ID: u8 = 25;
+            pub const SCALING_REGISTRY_ID: u8 = 26;
         }
 
         pub mod sharding {
-            pub const SHARDING_REGISTRY_ID: u8 = 26;
-            pub const SHARDING_ASSIGNMENT_ID: u8 = 27;
+            pub const SHARDING_REGISTRY_ID: u8 = 27;
+            pub const SHARDING_ASSIGNMENT_ID: u8 = 28;
         }
     }
 }
@@ -129,6 +136,9 @@ pub enum MemoryError {
 
     #[error(transparent)]
     ExtensionError(#[from] ExtensionError),
+
+    #[error(transparent)]
+    LogError(#[from] LogError),
 
     #[error(transparent)]
     StateError(#[from] StateError),

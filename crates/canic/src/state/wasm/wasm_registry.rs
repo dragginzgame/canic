@@ -1,5 +1,6 @@
 use crate::{
-    Error, Log, log,
+    Error, log,
+    log::Level,
     state::StateError,
     types::{CanisterType, WasmModule},
 };
@@ -61,7 +62,7 @@ impl WasmRegistry {
         });
 
         log!(
-            Log::Info,
+            Level::Info,
             "📄 WASM_REGISTRY.insert: {} ({:.2} KB)",
             canister_type,
             wasm_size as f64 / 1000.0

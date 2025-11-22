@@ -12,7 +12,7 @@ macro_rules! canic_build {
         $crate::__canic_build_internal! {
             $file,
             |cfg_str, cfg_path, cfg| {
-                use canic::{log, Log, types::CanisterType};
+                use canic::{log, log::Level, types::CanisterType};
                 use std::path::PathBuf;
 
                 // Infer canister name from directory structure: .../canisters/<name>/...

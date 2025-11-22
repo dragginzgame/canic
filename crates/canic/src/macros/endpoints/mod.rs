@@ -53,7 +53,7 @@ macro_rules! canic_endpoints {
         }
 
         //
-        // MEMORY REGISTRY
+        // MEMORY
         //
 
         #[::canic::cdk::query]
@@ -61,13 +61,18 @@ macro_rules! canic_endpoints {
             $crate::memory::registry::MemoryRegistry::export()
         }
 
-        //
-        // MEMORY ENV
-        //
-
         #[::canic::cdk::query]
         fn canic_env() -> ::canic::memory::env::EnvData {
             $crate::memory::Env::export()
+        }
+
+        #[::canic::cdk::query]
+        fn canic_log(
+            offset: u64,
+            limit: u64,
+            min_level: ::canic::log::Level,
+        ) -> ::canic::ops::log::LogPageDto {
+            ::canic::ops::log::LogOps::page(offset, limit, min_level)
         }
 
         //
@@ -90,8 +95,11 @@ macro_rules! canic_endpoints {
 
         // canic_cycle_tracker
         #[::canic::cdk::query]
-        fn canic_cycle_tracker() -> ::canic::memory::ext::cycles::CycleTrackerView {
-            $crate::memory::ext::cycles::CycleTracker::export()
+        fn canic_cycle_tracker(
+            offset: u64,
+            limit: u64,
+        ) -> ::canic::ops::ext::cycles::CycleTrackerPage {
+            $crate::ops::ext::cycles::CycleTrackerOps::page(offset, limit)
         }
 
         //

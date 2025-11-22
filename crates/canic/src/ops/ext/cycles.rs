@@ -1,15 +1,17 @@
 use crate::{
-    Log,
     cdk::{
         futures::spawn,
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     interface::ic::canister_cycle_balance,
     log,
-    memory::ext::cycles::CycleTracker,
+    log::Level,
+    memory::ext::cycles::{CycleTracker, CycleTrackerView},
     ops::context::cfg_current_canister,
     utils::time::now_secs,
 };
+use candid::CandidType;
+use serde::Serialize;
 use std::{cell::RefCell, time::Duration};
 
 //
@@ -33,6 +35,12 @@ const TRACKER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10);
 ///
 /// CycleTrackerOps
 ///
+
+#[derive(CandidType, Serialize)]
+pub struct CycleTrackerPage {
+    pub entries: CycleTrackerView,
+    pub total: u64,
+}
 
 pub struct CycleTrackerOps;
 
@@ -90,16 +98,24 @@ impl CycleTrackerOps {
                 spawn(async move {
                     match cycles_request(topup.amount.to_u128()).await {
                         Ok(res) => log!(
-                            Log::Ok,
+                            Level::Ok,
                             "💫 requested {}, topped up by {}, now {}",
                             topup.amount,
                             res.cycles_transferred,
                             canister_cycle_balance()
                         ),
-                        Err(e) => log!(Log::Error, "💫 failed to request cycles: {e}"),
+                        Err(e) => log!(Level::Error, "💫 failed to request cycles: {e}"),
                     }
                 });
             }
         }
+    }
+
+    #[must_use]
+    pub fn page(offset: u64, limit: u64) -> CycleTrackerPage {
+        let entries = CycleTracker::entries(offset, limit);
+        let total = CycleTracker::len();
+
+        CycleTrackerPage { entries, total }
     }
 }
