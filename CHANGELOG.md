@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Added paginated `canic_subnet_canister_children` via `CanisterChildrenOps::page` and `CanisterChildrenPage` DTO, mirroring CycleTracker paging.
 - Introduced global log retention config (`max_entries` ring cap + optional `max_age_secs`) with second-level timestamps and enforced trimming.
 - Documented the new log config block and refreshed README layout to match current modules.
+- Added notes about the cross-filesystem compilation error for the LLM
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
