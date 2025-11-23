@@ -17,6 +17,7 @@ pub mod request;
 pub mod root;
 pub mod signature;
 pub mod sync;
+pub mod topology;
 pub mod types;
 
 pub use types::*;

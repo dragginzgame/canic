@@ -74,13 +74,15 @@ impl CycleTracker {
     }
 
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub fn entries(offset: u64, limit: u64) -> CycleTrackerView {
+        let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+
         CYCLE_TRACKER.with_borrow(|t| {
             t.map
                 .iter()
-                .skip(offset as usize)
-                .take(limit as usize)
+                .skip(offset)
+                .take(limit)
                 .map(|entry| (*entry.key(), entry.value().into()))
                 .collect()
         })

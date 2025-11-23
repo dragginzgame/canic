@@ -20,6 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
+- 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers.
 - ♻️ **Lifecycle helpers** – shard policies, reserve pools, scaling helpers, and sync cascades keep fleets healthy.
 - 🧪 **Ready for CI** – Rust 2024 edition, MSRV 1.90, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
@@ -29,12 +30,15 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
   - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
   - `src/config/` – configuration loaders, validators, and schema helpers.
-  - `src/core/` – shared error types plus deterministic serialization/codecs.
-  - `src/env/` – IC mainnet configuration (canister IDs, SNSs etc.)
+  - `src/dto/` – candid DTOs shared between ops layers and endpoint surfaces.
+  - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
   - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
+  - `src/log.rs` – logging macros.
   - `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
   - `src/memory/` – stable storage abstractions and registries built on `ic-stable-structures`.
   - `src/ops/` – orchestration/business logic bridging memory and state layers.
+  - `src/runtime.rs` – runtime glue shared by macros.
+  - `src/serialize.rs` – deterministic codecs.
   - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
   - `src/state/` – volatile runtime state caches and registries.
   - `src/types/` - shared domain types
@@ -99,7 +103,7 @@ See `crates/canisters/root` and the hub/shard reference canisters under `crates/
 
 ### 4. Define your topology
 
-Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister types, then nests `[subnets.<name>.canisters.<type>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, and `standards` shape the overall cluster. The full schema lives in `CONFIG.md`.
+Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister types, then nests `[subnets.<name>.canisters.<type>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention in seconds. The full schema lives in `CONFIG.md`.
 
 ## Layered Architecture
 
@@ -172,4 +176,4 @@ Canic is the successor to the internal ICU toolkit. The repository is in the pro
 
 ## License
 
-Proprietary and confidential. See `LICENSE` for details.
+MIT. See `LICENSE` for details.

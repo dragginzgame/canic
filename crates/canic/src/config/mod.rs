@@ -59,6 +59,12 @@ impl Config {
         })
     }
 
+    /// Return the config if initialized, otherwise `None`.
+    #[must_use]
+    pub fn try_get() -> Option<Arc<ConfigModel>> {
+        CONFIG.with(|cfg| cfg.borrow().as_ref().cloned())
+    }
+
     /// Initialize the global configuration from a TOML string.
     /// return the config as it is read at build time
     pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigModel>, Error> {

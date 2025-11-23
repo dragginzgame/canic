@@ -5,6 +5,7 @@ use crate::{
         log::{Log as StableLogImpl, WriteError},
         memory::VirtualMemory,
     },
+    config::{Config, model::LogConfig},
     eager_static, ic_memory, impl_storable_unbounded,
     log::Level,
     memory::{
@@ -45,9 +46,58 @@ fn reset_log() -> StableLogStorage {
     )
 }
 
-///
-/// LogError
-///
+fn log_config() -> LogConfig {
+    Config::try_get()
+        .map(|cfg| cfg.log.clone())
+        .unwrap_or_default()
+}
+
+/// Removes old entries by age or count.
+/// Everything uses *seconds only* (`created_at` and `now_secs()`).
+#[allow(clippy::cast_possible_truncation)]
+fn apply_retention(cfg: &LogConfig) -> Result<(), Error> {
+    if cfg.max_entries == 0 {
+        LOG.with_borrow_mut(|log| *log = reset_log());
+        return Ok(());
+    }
+
+    let now_secs = time::now_secs();
+    let max_entries = cfg.max_entries.try_into().unwrap_or(usize::MAX);
+
+    // Collect all entries
+    let mut retained: Vec<LogEntry> = LOG.with_borrow(|log| log.iter().collect());
+
+    // Apply max age (seconds)
+    if let Some(age_limit) = cfg.max_age_secs {
+        retained.retain(|entry| now_secs.saturating_sub(entry.created_at) <= age_limit);
+    }
+
+    // Apply max number of entries
+    if retained.len() > max_entries {
+        let drop = retained.len() - max_entries;
+        retained.drain(0..drop);
+    }
+
+    // If nothing changed, skip rewrite
+    if retained.len() == LOG.with_borrow(|l| l.len() as usize) {
+        return Ok(());
+    }
+
+    // Rewrite log
+    LOG.with_borrow_mut(|log| *log = reset_log());
+
+    for entry in retained {
+        LOG.with_borrow(|log| log.append(&entry))
+            .map_err(LogError::from)
+            .map_err(Error::from)?;
+    }
+
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// LogError
+// -----------------------------------------------------------------------------
 
 #[derive(Debug, ThisError)]
 pub enum LogError {
@@ -77,10 +127,9 @@ impl From<LogError> for Error {
     }
 }
 
-///
-/// LogEntry
-/// (stored)
-///
+// -----------------------------------------------------------------------------
+// LogEntry
+// -----------------------------------------------------------------------------
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntry {
@@ -104,10 +153,9 @@ impl LogEntry {
 
 impl_storable_unbounded!(LogEntry);
 
-///
-/// LogEntryView
-/// (exported)
-///
+// -----------------------------------------------------------------------------
+// LogEntryView
+// -----------------------------------------------------------------------------
 
 #[derive(CandidType, Debug, Clone, Serialize)]
 pub struct LogEntryView {
@@ -133,7 +181,7 @@ impl LogEntryView {
 pub type LogView = Vec<LogEntryView>;
 
 // -----------------------------------------------------------------------------
-// StableLog
+// StableLog API
 // -----------------------------------------------------------------------------
 
 pub struct StableLog;
@@ -141,24 +189,28 @@ pub struct StableLog;
 impl StableLog {
     // -------- Append / write --------
 
-    /// Append a log entry and return its index.
     pub fn append(entry: LogEntry) -> Result<u64, Error> {
+        let cfg = log_config();
+
+        if cfg.max_entries == 0 {
+            return Ok(0);
+        }
+
+        apply_retention(&cfg)?;
+
         LOG.with_borrow(|log| log.append(&entry))
             .map_err(LogError::from)
             .map_err(Error::from)
     }
 
-    /// Append a level+message with no topic.
     pub fn append_line(level: Level, message: &str) -> Result<u64, Error> {
         Self::append(LogEntry::new(level, None, message))
     }
 
-    /// Append an INFO-level message with no topic.
     pub fn append_text(message: impl AsRef<str>) -> Result<u64, Error> {
         Self::append(LogEntry::new(Level::Info, None, message.as_ref()))
     }
 
-    /// Append an INFO-level message with a topic.
     pub fn append_text_with_topic(
         topic: impl AsRef<str>,
         message: impl AsRef<str>,
@@ -172,61 +224,56 @@ impl StableLog {
 
     // -------- Single-entry read --------
 
-    /// Return the stored entry at `index`, or `None`.
     #[must_use]
     pub fn get(index: u64) -> Option<LogEntry> {
         LOG.with_borrow(|log| log.get(index))
     }
 
-    /// Return the stored entry at `index`, or an error.
     pub fn try_get(index: u64) -> Result<LogEntry, Error> {
         Self::get(index).ok_or_else(|| LogError::EntryNotFound(index).into())
     }
 
-    /// First stored entry (oldest).
-    #[must_use]
     pub fn first() -> Option<LogEntry> {
         LOG.with_borrow(StableLogImpl::first)
     }
 
-    /// Last stored entry (newest).
-    #[must_use]
     pub fn last() -> Option<LogEntry> {
         LOG.with_borrow(StableLogImpl::last)
     }
 
     // -------- Pagination / views --------
 
-    /// Page over all entries as views.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub fn entries_page(offset: u64, limit: u64) -> LogView {
+        let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+
         LOG.with_borrow(|log| {
             log.iter()
                 .enumerate()
-                .skip(offset as usize)
-                .take(limit as usize)
+                .skip(offset)
+                .take(limit)
                 .map(|(i, entry)| LogEntryView::from_pair(i as u64, entry))
                 .collect()
         })
     }
 
-    /// Page over entries with a minimum level.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub fn entries_page_level(offset: u64, limit: u64, min_level: Level) -> LogView {
+        let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+
         LOG.with_borrow(|log| {
             log.iter()
                 .enumerate()
                 .filter(|(_, e)| e.level >= min_level)
-                .skip(offset as usize)
-                .take(limit as usize)
+                .skip(offset)
+                .take(limit)
                 .map(|(i, e)| LogEntryView::from_pair(i as u64, e))
                 .collect()
         })
     }
 
-    /// Most recent `limit` entries.
     #[must_use]
     pub fn tail(limit: u64) -> LogView {
         let len = Self::len();
@@ -234,7 +281,6 @@ impl StableLog {
         Self::entries_page(offset, limit)
     }
 
-    /// Export the entire log as views.
     #[must_use]
     pub fn entries() -> LogView {
         LOG.with_borrow(|log| {
@@ -245,7 +291,6 @@ impl StableLog {
         })
     }
 
-    /// Export entries starting from index `start` as views.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn entries_from(start: u64) -> LogView {
@@ -258,9 +303,8 @@ impl StableLog {
         })
     }
 
-    // -------- Bulk transforms / maintenance --------
+    // -------- Bulk transforms --------
 
-    /// Clear all entries below `min_level`, keep others.
     pub fn clear_below(min_level: Level) {
         let retained: Vec<LogEntry> =
             LOG.with_borrow(|log| log.iter().filter(|e| e.level >= min_level).collect());
@@ -272,16 +316,12 @@ impl StableLog {
         }
     }
 
-    /// Reset log entirely (wipe index + data).
     pub fn clear() {
-        LOG.with_borrow_mut(|log| {
-            *log = reset_log();
-        });
+        LOG.with_borrow_mut(|log| *log = reset_log());
     }
 
     // -------- Introspection --------
 
-    #[must_use]
     pub fn len() -> u64 {
         LOG.with_borrow(StableLogImpl::len)
     }
@@ -296,8 +336,6 @@ impl StableLog {
         LOG.with_borrow(|log| (log.index_size_bytes(), log.data_size_bytes()))
     }
 
-    /// Convenience: collect all entries into a Vec and iterate.
-    /// (This *does* allocate; it's just a helper).
     pub fn iter() -> impl Iterator<Item = LogEntry> {
         LOG.with_borrow(|log| log.iter().collect::<Vec<_>>())
             .into_iter()

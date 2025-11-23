@@ -88,9 +88,11 @@ macro_rules! canic_endpoints_root {
         fn canic_subnet_canister_children(
             offset: u64,
             limit: u64,
-        ) -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterRegistry::children(
+        ) -> ::canic::ops::topology::subnet::CanisterChildrenPage {
+            ::canic::ops::topology::subnet::CanisterChildrenOps::page(
                 ::canic::cdk::api::canister_self(),
+                offset,
+                limit,
             )
         }
 
@@ -137,8 +139,12 @@ macro_rules! canic_endpoints_nonroot {
         fn canic_subnet_canister_children(
             offset: u64,
             limit: u64,
-        ) -> Vec<::canic::memory::CanisterSummary> {
-            $crate::memory::topology::SubnetCanisterChildren::export()
+        ) -> ::canic::ops::topology::subnet::CanisterChildrenPage {
+            ::canic::ops::topology::subnet::CanisterChildrenOps::page(
+                ::canic::cdk::api::canister_self(),
+                offset,
+                limit,
+            )
         }
 
         //
