@@ -1,6 +1,9 @@
-use crate::{memory::topology::SubnetCanisterRegistry, types::Principal};
-
-pub use crate::dto::topology::subnet::CanisterChildrenPage;
+use crate::{
+    memory::{CanisterSummary, topology::SubnetCanisterRegistry},
+    types::Principal,
+};
+use candid::CandidType;
+use serde::Serialize;
 
 ///
 /// CanisterChildrenOps
@@ -27,4 +30,17 @@ impl CanisterChildrenOps {
             children,
         }
     }
+}
+
+///
+/// CanisterChildrenPage
+/// Page of subnet canister children.
+///
+
+#[derive(CandidType, Serialize)]
+pub struct CanisterChildrenPage {
+    pub total: u64,
+    pub offset: u64,
+    pub limit: u64,
+    pub children: Vec<CanisterSummary>,
 }
