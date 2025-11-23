@@ -3,8 +3,8 @@
 # --------------------------------------------------------------------
 [patch.crates-io]
 canic = { path = "crates/canic" }
-canic_internal = { path = "crates/canic_internal" }
-canic_test = { path = "crates/canic_test" }
+canic-internal = { path = "crates/canic-internal" }
+canic-test = { path = "crates/canic-test" }
 
 [workspace]
 members = [
@@ -17,8 +17,8 @@ members = [
     "crates/canisters/shard",
     "crates/canisters/shard_hub",
     "crates/canic",
-    "crates/canic_internal",
-    "crates/canic_test",
+    "crates/canic-internal",
+    "crates/canic-test",
 ]
 resolver = "2"
 
@@ -37,8 +37,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 canic = { version = "0.3.1", path = "crates/canic" }
-canic_internal = { version = "0.3.1", path = "crates/canic_internal" }
-canic_test = { version = "0.3.1", path = "crates/canic_test" }
+canic-internal = { version = "0.3.1", path = "crates/canic-internal" }
+canic-test = { version = "0.3.1", path = "crates/canic-test" }
 
 # ic core crates
 candid = { version = "0.10", default-features = false }

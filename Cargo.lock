@@ -213,7 +213,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic_internal"
+name = "canic-internal"
 version = "0.3.1"
 dependencies = [
  "candid",
@@ -236,7 +236,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic_test"
+name = "canic-test"
 version = "0.3.1"
 dependencies = [
  "candid",
@@ -253,7 +253,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -263,7 +263,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -273,7 +273,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -283,7 +283,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
  "pocket-ic",
 ]
@@ -294,7 +294,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -304,7 +304,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -314,7 +314,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -324,7 +324,7 @@ version = "0.3.1"
 dependencies = [
  "candid",
  "canic",
- "canic_internal",
+ "canic-internal",
  "ic-cdk",
 ]
 
