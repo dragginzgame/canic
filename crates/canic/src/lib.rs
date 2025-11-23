@@ -2,7 +2,6 @@
 pub mod auth;
 pub mod cdk;
 pub mod config;
-pub mod dto;
 pub mod env;
 pub mod guard;
 pub mod interface;

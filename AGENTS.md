@@ -28,6 +28,14 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 
 ✅ PRs must pass `make fmt-check`, `make clippy`, and `make test`.
 
+### Sandboxed builds
+- The CLI sandbox can split the workspace across mounts, causing `Invalid cross-device link` during Cargo’s atomic renames.
+- When sandboxed, build with a workspace-local target/temp dir to keep all writes on one filesystem:
+  - `CARGO_TARGET_DIR=$PWD/target_tmp TMPDIR=$PWD/target_tmp cargo build -p canic --examples`
+  - Same pattern for `cargo test`/`make` targets if you hit the error.
+- Unsandboxed builds can stick to the default `target/`.
+- `target_tmp` is the recommended shared path;
+
 ### Versioning & Release
 - Scripts in `scripts/ci/` handle bumps and tags.
 - Use `make patch|minor|major` → `make release`.

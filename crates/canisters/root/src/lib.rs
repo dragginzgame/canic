@@ -99,5 +99,24 @@ async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::Caller, None).await
 }
 
+/// test_perf
+/// just checks to see if the perf macros compile
+#[ic_cdk::update]
+async fn test_perf() {
+    // Start the cumulative measurement for the call
+    perf_start!();
+
+    //
+    // First workload
+    //
+    perf!("starting workload 1");
+    let mut acc1 = 0u64;
+    for i in 0..50_000 {
+        acc1 = acc1.wrapping_add(i);
+    }
+
+    perf!("end");
+}
+
 // end
 export_candid!();

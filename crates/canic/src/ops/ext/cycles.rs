@@ -8,6 +8,7 @@ use crate::{
     log::Level,
     memory::ext::cycles::{CycleTracker, CycleTrackerView},
     ops::context::cfg_current_canister,
+    types::Cycles,
     utils::time::now_secs,
 };
 use candid::CandidType;
@@ -101,7 +102,7 @@ impl CycleTrackerOps {
                             Level::Ok,
                             "💫 requested {}, topped up by {}, now {}",
                             topup.amount,
-                            res.cycles_transferred,
+                            Cycles::from(res.cycles_transferred),
                             canister_cycle_balance()
                         ),
                         Err(e) => log!(Level::Error, "💫 failed to request cycles: {e}"),

@@ -39,16 +39,15 @@ macro_rules! eager_init {
 macro_rules! perf {
     ($($label:tt)*) => {{
         $crate::state::PERF_LAST.with(|last| {
-            let now = ::canic::cdk::api::performance_counter(1);
+            let now = $crate::cdk::api::performance_counter(1);
             let then = *last.borrow();
             let delta = now.saturating_sub(then);
             *last.borrow_mut() = now;
 
-            let delta_fmt = $crate::format_instructions(delta);
-            let now_fmt = $crate::format_instructions(now);
+            let delta_fmt = $crate::utils::instructions::format_instructions(delta);
+            let now_fmt = $crate::utils::instructions::format_instructions(now);
 
-            $crate::log!(
-                ::canic::Log::Perf,
+            $crate::cdk::println!(
                 "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),
                 format!($($label)*),
@@ -69,16 +68,11 @@ macro_rules! perf {
 #[macro_export]
 macro_rules! perf_start {
     () => {
-        ::canic::export::defer::defer!({
-            let end = ::canic::cdk::api::performance_counter(1);
-            let end_fmt = ::canic::utils::instructions::format_instructions(end);
+        $crate::export::defer::defer!({
+            let end = $crate::cdk::api::performance_counter(1);
+            let end_fmt = $crate::utils::instructions::format_instructions(end);
 
-            $crate::log!(
-                ::canic::Log::Perf,
-                "{} used {}i in this call",
-                module_path!(),
-                end_fmt,
-            )
+            $crate::cdk::println!("{} used {}i in this call", module_path!(), end_fmt,)
         });
     };
 }
