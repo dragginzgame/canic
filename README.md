@@ -30,7 +30,6 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
   - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
   - `src/config/` – configuration loaders, validators, and schema helpers.
-  - `src/dto/` – candid DTOs shared between ops layers and endpoint surfaces.
   - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
   - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
   - `src/log.rs` – logging macros.
@@ -149,11 +148,19 @@ Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
 
 ## Tooling & DX
 
-- Format: `cargo fmt --all`
+- Format: `cargo fmt --all` (or `make fmt`)
+- Fmt check: `make fmt-check`
+- Check (type-check only): `make check`
 - Lint: `make clippy`
 - Test: `make test`
 - Build release WASMs: `make build`
 - Run the example suite: `make examples` or `cargo build -p canic --examples`
+
+Sandboxed builds can hit `Invalid cross-device link` during Cargo’s atomic renames. Pin the target/temp dirs to the workspace when sandboxed:
+
+```bash
+CARGO_TARGET_DIR=$PWD/target_tmp TMPDIR=$PWD/target_tmp cargo build -p canic --examples
+```
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 
