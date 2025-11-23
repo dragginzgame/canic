@@ -1,5 +1,5 @@
 [package]
-name = "canic-test"
+name = "canic-testkit"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
