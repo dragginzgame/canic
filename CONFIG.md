@@ -28,6 +28,13 @@ Controls the warm canister reserve pool.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0`).
 
+### `[log]`
+
+Configure log retention for every canister.
+
+- `max_entries: u64` – ring buffer cap on stored log entries (default `10000`).
+- `max_age_secs: u64` – optional maximum age; entries older than this (in seconds) are purged (default `null` = no age limit).
+
 ### `[standards]`
 
 Feature toggles tied to public standards.

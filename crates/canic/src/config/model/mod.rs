@@ -1,5 +1,7 @@
+mod log;
 mod subnet;
 
+pub use log::*;
 pub use subnet::*;
 
 use crate::{
@@ -56,6 +58,9 @@ pub struct ConfigModel {
 
     #[serde(default)]
     pub standards: Option<Standards>,
+
+    #[serde(default)]
+    pub log: LogConfig,
 
     #[serde(default)]
     pub app_directory: BTreeSet<CanisterType>,
