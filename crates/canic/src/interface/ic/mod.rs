@@ -22,6 +22,7 @@ use crate::{
     env::nns::NNS_REGISTRY_CANISTER,
     interface::prelude::*,
     log,
+    log::Topic,
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
@@ -82,9 +83,9 @@ pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
         .subnet_id;
 
     if let Some(subnet_id) = subnet_id_opt {
-        log!(Level::Info, "get_current_subnet_pid: {subnet_id}");
+        log!(Topic::Topology, Info, "get_current_subnet_pid: {subnet_id}");
     } else {
-        log!(Level::Warn, "get_current_subnet_pid: not found");
+        log!(Topic::Topology, Warn, "get_current_subnet_pid: not found");
     }
 
     Ok(subnet_id_opt)

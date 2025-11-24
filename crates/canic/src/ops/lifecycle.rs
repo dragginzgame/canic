@@ -2,7 +2,6 @@ use crate::{
     VERSION,
     cdk::{api::canister_self, println},
     log,
-    log::Level,
     memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
@@ -24,10 +23,10 @@ pub fn root_init(identity: SubnetIdentity) {
     println!("");
     println!("");
     log!(
-        Level::Info,
+        Info,
         "🔧 --------------------- 'canic v{VERSION} -----------------------",
     );
-    log!(Level::Info, "🏁 init: root ({identity:?})");
+    log!(Info, "🏁 init: root ({identity:?})");
 
     // init
     runtime::init_eager_tls();
@@ -60,7 +59,7 @@ pub fn root_init(identity: SubnetIdentity) {
 /// root_post_upgrade
 pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
-    log!(Level::Info, "🏁 post_upgrade: root");
+    log!(Info, "🏁 post_upgrade: root");
     runtime::init_eager_tls();
 
     // --- Phase 2: Env registration ---
@@ -73,7 +72,7 @@ pub fn root_post_upgrade() {
 /// nonroot_init
 pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
-    log!(Level::Info, "🏁 init: {}", canister_type);
+    log!(Info, "🏁 init: {}", canister_type);
     runtime::init_eager_tls();
     registry::init_memory();
 
@@ -89,7 +88,7 @@ pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
 /// nonroot_post_upgrade
 pub fn nonroot_post_upgrade(canister_type: CanisterType) {
     // --- Phase 1: Init base systems ---
-    log!(Level::Info, "🏁 post_upgrade: {}", canister_type);
+    log!(Info, "🏁 post_upgrade: {}", canister_type);
     runtime::init_eager_tls();
 
     // --- Phase 2: Env registration ---

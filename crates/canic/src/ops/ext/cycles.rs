@@ -5,7 +5,7 @@ use crate::{
     },
     interface::ic::canister_cycle_balance,
     log,
-    log::Level,
+    log::Topic,
     memory::ext::cycles::{CycleTracker, CycleTrackerView},
     ops::context::cfg_current_canister,
     types::Cycles,
@@ -99,13 +99,14 @@ impl CycleTrackerOps {
                 spawn(async move {
                     match cycles_request(topup.amount.to_u128()).await {
                         Ok(res) => log!(
-                            Level::Ok,
+                            Topic::Cycles,
+                            Ok,
                             "💫 requested {}, topped up by {}, now {}",
                             topup.amount,
                             Cycles::from(res.cycles_transferred),
                             canister_cycle_balance()
                         ),
-                        Err(e) => log!(Level::Error, "💫 failed to request cycles: {e}"),
+                        Err(e) => log!(Topic::Cycles, Error, "💫 failed to request cycles: {e}"),
                     }
                 });
             }

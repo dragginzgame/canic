@@ -70,9 +70,10 @@ macro_rules! canic_endpoints {
         fn canic_log(
             offset: u64,
             limit: u64,
+            topic: Option<String>,
             min_level: Option<::canic::log::Level>,
         ) -> ::canic::ops::log::LogPageDto {
-            ::canic::ops::log::LogOps::page(offset, limit, min_level)
+            ::canic::ops::log::LogOps::page(offset, limit, topic, min_level)
         }
 
         //

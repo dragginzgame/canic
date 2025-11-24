@@ -1,7 +1,6 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, log,
-    log::Level,
     memory::id::ext::cycles::CYCLE_TRACKER_ID,
     types::Cycles,
     utils::time::now_secs,
@@ -114,7 +113,7 @@ impl CycleTracker {
             }
         }
 
-        log!(Level::Info, "cycle_tracker: purged {purged} old entries");
+        log!(Info, "cycle_tracker: purged {purged} old entries");
         purged
     }
 

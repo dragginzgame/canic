@@ -103,10 +103,7 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
     if bundle.is_empty() {
-        log!(
-            Level::Info,
-            "💦 sync.state: root_cascade skipped (empty bundle)"
-        );
+        log!(Info, "💦 sync.state: root_cascade skipped (empty bundle)");
         return Ok(());
     }
 
@@ -159,7 +156,7 @@ fn save_state(bundle: &StateBundle) -> Result<(), Error> {
 /// Low-level bundle sender.
 async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let debug = bundle.debug();
-    log!(Level::Info, "💦 sync.state: {debug} -> {pid}");
+    log!(Info, "💦 sync.state: {debug} -> {pid}");
 
     call_and_decode::<Result<(), Error>>(*pid, "canic_sync_state", bundle).await?
 }
