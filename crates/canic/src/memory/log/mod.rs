@@ -243,16 +243,21 @@ impl StableLog {
 
     // -------- Pagination / views --------
 
+    fn page_iter(
+        log: &StableLogStorage,
+        offset: usize,
+        limit: usize,
+    ) -> impl Iterator<Item = (usize, LogEntry)> + '_ {
+        log.iter().enumerate().skip(offset).take(limit)
+    }
+
     #[must_use]
     pub fn entries_page(offset: u64, limit: u64) -> LogView {
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 
         LOG.with_borrow(|log| {
-            log.iter()
-                .enumerate()
-                .skip(offset)
-                .take(limit)
+            Self::page_iter(log, offset, limit)
                 .map(|(i, entry)| LogEntryView::from_pair(i as u64, entry))
                 .collect()
         })
@@ -264,11 +269,8 @@ impl StableLog {
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 
         LOG.with_borrow(|log| {
-            log.iter()
-                .enumerate()
+            Self::page_iter(log, offset, limit)
                 .filter(|(_, e)| e.level >= min_level)
-                .skip(offset)
-                .take(limit)
                 .map(|(i, e)| LogEntryView::from_pair(i as u64, e))
                 .collect()
         })
@@ -324,6 +326,12 @@ impl StableLog {
 
     pub fn len() -> u64 {
         LOG.with_borrow(StableLogImpl::len)
+    }
+
+    /// Count entries at or above `min_level`.
+    #[must_use]
+    pub fn len_level(min_level: Level) -> u64 {
+        LOG.with_borrow(|log| log.iter().filter(|entry| entry.level >= min_level).count() as u64)
     }
 
     #[must_use]

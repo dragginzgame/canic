@@ -70,7 +70,7 @@ macro_rules! canic_endpoints {
         fn canic_log(
             offset: u64,
             limit: u64,
-            min_level: ::canic::log::Level,
+            min_level: Option<::canic::log::Level>,
         ) -> ::canic::ops::log::LogPageDto {
             ::canic::ops::log::LogOps::page(offset, limit, min_level)
         }
@@ -87,6 +87,18 @@ macro_rules! canic_endpoints {
         #[::canic::cdk::query]
         fn canic_subnet_state() -> ::canic::memory::state::SubnetStateData {
             $crate::memory::state::SubnetState::export()
+        }
+
+        //
+        // TOPOLOGY
+        //
+
+        #[::canic::cdk::query]
+        fn canic_subnet_canister_children(
+            offset: u64,
+            limit: u64,
+        ) -> ::canic::ops::topology::subnet::CanisterChildrenPage {
+            ::canic::ops::topology::subnet::CanisterChildrenOps::page(offset, limit)
         }
 
         //

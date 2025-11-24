@@ -1,6 +1,9 @@
 use crate::{
-    memory::{CanisterSummary, topology::SubnetCanisterRegistry},
-    types::Principal,
+    cdk::api::canister_self,
+    memory::{
+        CanisterSummary, Env,
+        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
+    },
 };
 use candid::CandidType;
 use serde::Serialize;
@@ -12,13 +15,21 @@ use serde::Serialize;
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {
+    #[must_use]
+    pub fn fetch_children_from_topology() -> Vec<CanisterSummary> {
+        if Env::is_root() {
+            SubnetCanisterRegistry::children(canister_self())
+        } else {
+            SubnetCanisterChildren::export()
+        }
+    }
+
     /// Return a paginated view of the canister's direct children.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
-    pub fn page(subnet_id: Principal, offset: u64, limit: u64) -> CanisterChildrenPage {
-        let all_children = SubnetCanisterRegistry::children(subnet_id);
+    pub fn page(offset: u64, limit: u64) -> CanisterChildrenPage {
+        let all_children = Self::fetch_children_from_topology();
         let total = all_children.len() as u64;
-
         let start = offset.min(total) as usize;
         let end = offset.saturating_add(limit).min(total) as usize;
         let children = all_children[start..end].to_vec();
