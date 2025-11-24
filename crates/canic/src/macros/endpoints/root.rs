@@ -90,8 +90,6 @@ macro_rules! canic_endpoints_root {
         #[::canic::cdk::query]
         async fn canic_reserve_list()
         -> Result<::canic::memory::root::reserve::CanisterReserveView, ::canic::Error> {
-            $crate::auth_require_any!(::canic::auth::is_controller)?;
-
             Ok($crate::memory::root::reserve::CanisterReserve::export())
         }
 
