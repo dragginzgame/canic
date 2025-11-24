@@ -4,6 +4,7 @@
 //! by the ops and state layers.
 //!
 
+pub mod case;
 pub mod format;
 pub mod hash;
 pub mod instructions;

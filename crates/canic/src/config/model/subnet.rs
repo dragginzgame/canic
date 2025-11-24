@@ -18,7 +18,7 @@ mod defaults {
 /// SubnetConfig
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubnetConfig {
     #[serde(default)]
@@ -97,7 +97,7 @@ impl Validate for SubnetConfig {
 /// defaults to a minimum size of 0
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CanisterReserve {
     pub minimum_size: u8,
 }
@@ -106,7 +106,7 @@ pub struct CanisterReserve {
 /// CanisterConfig
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterConfig {
     #[serde(
@@ -129,7 +129,7 @@ pub struct CanisterConfig {
 /// CanisterTopup
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterTopup {
     #[serde(default, deserialize_with = "Cycles::from_config")]
@@ -158,7 +158,7 @@ impl Default for CanisterTopup {
 /// * Hence: `WorkerManager → pools → WorkerSpec → WorkerPolicy`.
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ScalingConfig {
     #[serde(default)]
@@ -170,7 +170,7 @@ pub struct ScalingConfig {
 /// One stateless worker group (e.g. "oracle").
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ScalePool {
     pub canister_type: CanisterType,
@@ -183,7 +183,7 @@ pub struct ScalePool {
 /// ScalePoolPolicy
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ScalePoolPolicy {
     /// Minimum number of worker canisters to keep alive
@@ -212,7 +212,7 @@ impl Default for ScalePoolPolicy {
 /// * Hence: `ShardManager → pools → ShardPoolSpec → ShardPoolPolicy`.
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShardingConfig {
     #[serde(default)]
@@ -223,7 +223,7 @@ pub struct ShardingConfig {
 /// ShardPool
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShardPool {
     pub canister_type: CanisterType,
@@ -236,7 +236,7 @@ pub struct ShardPool {
 /// ShardPoolPolicy
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ShardPoolPolicy {
     pub capacity: u32,

@@ -8,7 +8,7 @@ use crate::spec::prelude::*;
 /// GetSubnetForCanisterRequest
 ///
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterRequest {
     pub principal: Principal,
 }
@@ -28,7 +28,7 @@ impl GetSubnetForCanisterRequest {
 
 pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterPayload {
     pub subnet_id: Option<Principal>,
 }

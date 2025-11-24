@@ -22,7 +22,7 @@ eager_static! {
 /// AppSubnet
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppSubnet {
     pub subnet_pid: Principal,
     pub root_pid: Principal,

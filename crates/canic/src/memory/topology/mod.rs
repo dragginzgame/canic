@@ -41,7 +41,7 @@ impl From<TopologyError> for Error {
 /// SubnetIdentity
 ///
 
-#[derive(Debug, CandidType, Deserialize)]
+#[derive(CandidType, Debug, Deserialize)]
 pub enum SubnetIdentity {
     Prime,
 
@@ -57,7 +57,7 @@ pub enum SubnetIdentity {
 /// everything we need to populate the SubnetContext on a non-Prime subnet
 ///
 
-#[derive(Debug, CandidType, Deserialize)]
+#[derive(CandidType, Debug, Deserialize)]
 pub struct SubnetContextParams {
     pub subnet_type: SubnetType,
     pub prime_root_pid: Principal,

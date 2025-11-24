@@ -48,7 +48,7 @@ pub trait Validate {
 /// ConfigModel
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
     // controllers
@@ -130,7 +130,7 @@ impl Validate for ConfigModel {
 /// Whitelist
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Whitelist {
     // principals
@@ -158,7 +158,7 @@ impl Validate for Whitelist {
 /// Standards
 ///
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Standards {
     #[serde(default)]

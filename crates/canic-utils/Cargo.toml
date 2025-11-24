@@ -1,5 +1,5 @@
 [package]
-name = "canic-testkit"
+name = "canic-utils"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -10,16 +10,13 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[features]
-default = []
-ic = []
-
 [dependencies]
-candid = { workspace = true }
-canic = { workspace = true }
+convert_case = { workspace = true }
 derive_more = { workspace = true }
-pocket-ic = { workspace = true }
-serde = { workspace = true }
+ic-cdk = { workspace = true }
+sha2 = { workspace = true }
+tinyrand = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [lints]
 workspace = true

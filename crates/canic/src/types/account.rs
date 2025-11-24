@@ -20,7 +20,7 @@ pub type Subaccount = [u8; 32];
 
 pub const DEFAULT_SUBACCOUNT: &Subaccount = &[0; 32];
 
-#[derive(Serialize, CandidType, Deserialize, Clone, Debug, Copy)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Account {
     pub owner: Principal,
     pub subaccount: Option<Subaccount>,
