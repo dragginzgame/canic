@@ -83,19 +83,6 @@ macro_rules! canic_endpoints_root {
             $crate::memory::topology::SubnetCanisterRegistry::export()
         }
 
-        // children is auto-generated from the registry
-        #[::canic::cdk::query]
-        fn canic_subnet_canister_children(
-            offset: u64,
-            limit: u64,
-        ) -> ::canic::ops::topology::subnet::CanisterChildrenPage {
-            ::canic::ops::topology::subnet::CanisterChildrenOps::page(
-                ::canic::cdk::api::canister_self(),
-                offset,
-                limit,
-            )
-        }
-
         //
         // CANISTER RESERVE
         //
@@ -131,22 +118,6 @@ macro_rules! canic_endpoints_root {
 #[macro_export]
 macro_rules! canic_endpoints_nonroot {
     () => {
-        //
-        // TOPOLOGY (NON AUTHORITATIVE)
-        //
-
-        #[::canic::cdk::query]
-        fn canic_subnet_canister_children(
-            offset: u64,
-            limit: u64,
-        ) -> ::canic::ops::topology::subnet::CanisterChildrenPage {
-            ::canic::ops::topology::subnet::CanisterChildrenOps::page(
-                ::canic::cdk::api::canister_self(),
-                offset,
-                limit,
-            )
-        }
-
         //
         // DIRECTORY VIEWS
         //
