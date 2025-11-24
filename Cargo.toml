@@ -1,13 +1,10 @@
-# --------------------------------------------------------------------
-#   IMPORTANT: patch section MUST be at the top level (not nested)
-# --------------------------------------------------------------------
-[patch.crates-io]
-canic = { path = "crates/canic" }
-canic-internal = { path = "crates/canic-internal" }
-canic-testkit = { path = "crates/canic-testkit" }
 
 [workspace]
 members = [
+    "crates/canic",
+    "crates/canic-internal",
+    "crates/canic-testkit",
+    "crates/canic-utils",
     "crates/canisters/app",
     "crates/canisters/auth",
     "crates/canisters/blank",
@@ -16,9 +13,6 @@ members = [
     "crates/canisters/scale_hub",
     "crates/canisters/shard",
     "crates/canisters/shard_hub",
-    "crates/canic",
-    "crates/canic-internal",
-    "crates/canic-testkit",
 ]
 resolver = "2"
 
@@ -36,43 +30,45 @@ categories = ["wasm"]
 readme = "README.md"
 
 [workspace.dependencies]
-canic = { version = "0.3.8", path = "crates/canic" }
-canic-internal = { version = "0.3.8", path = "crates/canic-internal" }
-canic-testkit = { version = "0.3.8", path = "crates/canic-testkit" }
-
-# ic core crates
-candid = { version = "0.10", default-features = false }
-ic-cdk = "0.19.0"
-ic-cdk-timers = "1.0"
-ic-management-canister-types = "0.3.3"
-ic-stable-structures = "0.7.2"
-ic-canister-sig-creation = "1.3.1"
-ic-signature-verification = "0.2"
-pocket-ic = "10.0"
 
 # icrc-ledger-types replacement
 base32 = "0.5"
-crc32fast = "1.5"
-hex = "0.4"
+
+# ic core crates
+candid = { version = "0.10", default-features = false }
+canic = { version = "0.3.8", path = "crates/canic" }
+canic-internal = { version = "0.3.8", path = "crates/canic-internal" }
+canic-testkit = { version = "0.3.8", path = "crates/canic-testkit" }
+canic-utils = { version = "0.3.8", path = "crates/canic-utils" }
 
 # third-party crates
-ctor = "0.6"
+convert_case = "0.10"
+crc32fast = "1.5"
 criterion = "0.7"
+ctor = "0.6"
 defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
+hex = "0.4"
+ic-canister-sig-creation = "1.3.1"
+ic-cdk = "0.19.0"
+ic-cdk-timers = "1.0"
+ic-management-canister-types = "0.3.3"
+ic-signature-verification = "0.2"
+ic-stable-structures = "0.7.2"
 minicbor-serde = { version = "0.6", features = ["alloc"] }
-remain = "0.2"
 num-traits = "0.2"
+pocket-ic = "10.0"
+remain = "0.2"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 sha2 = "0.10"
 thiserror = "2.0"
 tinyrand = "0.5"
 toml = "0.9"
-xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # removed std because it imports rand; serde feature doesn't compile with std
 ulid = { version = "1.2", default-features = false }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # shared clippy rules
 [workspace.lints.clippy]
@@ -99,6 +95,14 @@ needless_pass_by_value = "allow"
 option_if_let_else = "allow"
 significant_drop_tightening = "allow"
 wildcard_imports = "allow"
+# --------------------------------------------------------------------
+#   IMPORTANT: patch section MUST be at the top level (not nested)
+# --------------------------------------------------------------------
+[patch.crates-io]
+canic = { path = "crates/canic" }
+canic-internal = { path = "crates/canic-internal" }
+canic-testkit = { path = "crates/canic-testkit" }
+canic-utils = { path = "crates/canic-utils" }
 
 # profiles
 [profile.dev]

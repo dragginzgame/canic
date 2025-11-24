@@ -135,9 +135,13 @@ clippy: ensure-hooks
 	cargo clippy --workspace -- -D warnings
 
 fmt: ensure-hooks
+	cargo sort --workspace
+	cargo sort-derives
 	cargo fmt --all
 
 fmt-check: ensure-hooks
+	cargo sort --workspace --check
+	cargo sort-derives --check
 	cargo fmt --all -- --check
 
 clean:

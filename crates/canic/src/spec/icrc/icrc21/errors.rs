@@ -5,7 +5,7 @@ use serde::Serialize;
 /// ErrorInfo
 ///
 
-#[derive(Debug, CandidType, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ErrorInfo {
     pub description: String,
 }
@@ -14,7 +14,7 @@ pub struct ErrorInfo {
 /// Icrc21Error
 ///
 
-#[derive(Debug, CandidType, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Icrc21Error {
     UnsupportedCanisterCall(ErrorInfo),
     ConsentMessageUnavailable(ErrorInfo),

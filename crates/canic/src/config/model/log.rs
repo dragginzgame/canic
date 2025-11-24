@@ -10,7 +10,7 @@ mod defaults {
 /// LogConfig
 ///
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LogConfig {
     #[serde(default = "defaults::max_entries")]

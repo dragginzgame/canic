@@ -11,7 +11,7 @@ use serde::Deserialize;
 /// This is what the auth canister signed.
 ///
 
-#[derive(Clone, Debug, CandidType, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct AuthToken {
     pub sub: Principal,
     pub exp: u64,

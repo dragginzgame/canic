@@ -13,7 +13,10 @@ use crate::{
         MemoryError,
         id::log::{LOG_DATA_ID, LOG_INDEX_ID},
     },
-    utils::time,
+    utils::{
+        case::{Case, Casing},
+        time,
+    },
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -160,7 +163,7 @@ impl_storable_unbounded!(LogEntry);
 // LogEntryView
 // -----------------------------------------------------------------------------
 
-#[derive(CandidType, Debug, Clone, Serialize)]
+#[derive(CandidType, Clone, Debug, Serialize)]
 pub struct LogEntryView {
     pub index: u64,
     pub created_at: u64,
@@ -212,11 +215,9 @@ impl StableLog {
         T: ToString,
         M: AsRef<str>,
     {
-        let entry = LogEntry::new(
-            level,
-            topic.as_ref().map(ToString::to_string).as_deref(),
-            message.as_ref(),
-        );
+        let topic_normalized = Self::normalize_topic(topic);
+        let entry = LogEntry::new(level, topic_normalized.as_deref(), message.as_ref());
+
         Self::append_entry(entry)
     }
 
@@ -231,6 +232,12 @@ impl StableLog {
         with_log(|log| log.append(&entry))
             .map_err(LogError::from)
             .map_err(Error::from)
+    }
+
+    // -------- Helper -----------
+
+    fn normalize_topic<T: ToString>(topic: Option<T>) -> Option<String> {
+        topic.as_ref().map(|t| t.to_string().to_case(Case::Snake))
     }
 
     // -------- Single reads --------
@@ -275,10 +282,12 @@ impl StableLog {
     ) -> (LogView, u64) {
         let offset = offset as usize;
         let limit = limit as usize;
+        let topic_norm: Option<String> = Self::normalize_topic(topic);
+        let topic_norm = topic_norm.as_deref();
 
         with_log(|log| {
             // Collect entire filtered list IN ORDER (once)
-            let items: Vec<(usize, LogEntry)> = iter_filtered(log, topic, min_level).collect();
+            let items: Vec<(usize, LogEntry)> = iter_filtered(log, topic_norm, min_level).collect();
 
             let total = items.len() as u64;
 

@@ -8,7 +8,7 @@ use serde::Deserialize;
 /// CanisterInitPayload
 ///
 
-#[derive(Debug, CandidType, Default, Deserialize)]
+#[derive(CandidType, Debug, Default, Deserialize)]
 pub struct CanisterInitPayload {
     pub env: EnvData,
     pub app_directory: DirectoryView,

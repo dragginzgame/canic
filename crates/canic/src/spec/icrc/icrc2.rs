@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// The arguments for the
 /// [ICRC-2 `allowance`](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-2/README.md#icrc2_allowance)
 /// endpoint.
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AllowanceArgs {
     pub account: Account,
     pub spender: Account,
@@ -19,7 +19,7 @@ pub struct AllowanceArgs {
 /// The `Allowance` response type for the
 /// [ICRC-2 `allowance`](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-2/README.md#icrc2_allowance)
 /// endpoint.
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Allowance {
     pub allowance: Nat,
     #[serde(default)]

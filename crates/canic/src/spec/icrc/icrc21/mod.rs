@@ -16,7 +16,7 @@ use crate::spec::prelude::*;
 /// ConsentInfo
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentInfo {
     pub consent_message: ConsentMessage,
     pub metadata: ConsentMessageMetadata,
@@ -26,7 +26,7 @@ pub struct ConsentInfo {
 /// ConsentMessage
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum ConsentMessage {
     GenericDisplayMessage(String),
     FieldsDisplayMessage(FieldsDisplay),
@@ -36,7 +36,7 @@ pub enum ConsentMessage {
 /// ConsentMessageMetadata
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageMetadata {
     pub language: String,
     pub utc_offset_minutes: Option<i16>,
@@ -46,7 +46,7 @@ pub struct ConsentMessageMetadata {
 /// ConsentMessageRequest
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageRequest {
     pub method: String,
     pub arg: Vec<u8>,
@@ -68,7 +68,7 @@ pub enum ConsentMessageResponse {
 /// ConsentMessageSpec
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageSpec {
     pub metadata: ConsentMessageMetadata,
     pub device_spec: Option<DisplayMessageType>,
@@ -78,7 +78,7 @@ pub struct ConsentMessageSpec {
 /// DisplayMessageType
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum DisplayMessageType {
     GenericDisplay,
     FieldsDisplay,
@@ -88,7 +88,7 @@ pub enum DisplayMessageType {
 /// FieldsDisplay
 ///
 
-#[derive(Debug, CandidType, Clone, Deserialize, PartialEq, Eq, Default)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct FieldsDisplay {
     pub intent: String,
     pub fields: Vec<(String, Value)>,
@@ -98,7 +98,7 @@ pub struct FieldsDisplay {
 /// Value
 ///
 
-#[derive(CandidType, Deserialize, Eq, PartialEq, Debug, Clone)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum Value {
     TokenAmount {
         decimals: u8,

@@ -21,7 +21,7 @@ pub enum Level {
 /// Topic
 ///
 
-#[derive(Display, Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Display, Eq, PartialEq)]
 pub enum Topic {
     Cycles,
     Topology,
