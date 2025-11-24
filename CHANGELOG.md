@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Introduced global log retention config (`max_entries` ring cap + optional `max_age_secs`) with second-level timestamps and enforced trimming.
 - Documented the new log config block and refreshed README layout to match current modules.
 - Added notes about the cross-filesystem compilation error for the LLM
+- fixed logging so that the message is stored correctly, and made the log! macro more ergonomic and include topic
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
