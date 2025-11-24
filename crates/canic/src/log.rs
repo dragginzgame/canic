@@ -3,11 +3,11 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 ///
-/// Level
+/// Debug
 ///
 
 #[derive(
-    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, CandidType, Display, Serialize, Deserialize, Copy,
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, CandidType, Display, Serialize, Deserialize,
 )]
 pub enum Level {
     Debug, // least severe
@@ -17,70 +17,86 @@ pub enum Level {
     Error, // most severe
 }
 
-/// Emit a structured log line with consistent coloring and headers.
-///
-/// Accepts an optional [`Log`](crate::Log) level followed by a format string
-/// and arguments, mirroring `format!`. When the level is omitted the macro
-/// defaults to [`Log::Debug`](crate::Log::Debug).
 #[macro_export]
 macro_rules! log {
-    // Explicit level, no args
-    ($level:expr, $fmt:expr) => {{
-        $crate::log!(@inner $level, $fmt);
+    // ============================================================
+    // (1) topic, level, message
+    //    log!("db", Level::Error, "failed {}", err)
+    // ============================================================
+    ($topic:literal, $level:expr, $fmt:expr, $($arg:tt)*) => {{
+        $crate::log!(@inner $level, Some($topic), $fmt, $($arg)*);
+    }};
+    ($topic:literal, $level:expr, $fmt:expr) => {{
+        $crate::log!(@inner $level, Some($topic), $fmt);
     }};
 
-    // Explicit level, with args
+    // ============================================================
+    // (2) topic, message
+    //    log!("auth", "login {}", user)
+    // ============================================================
+    ($topic:literal, $fmt:expr, $($arg:tt)*) => {{
+        $crate::log!(@inner $crate::log::Level::Info, Some($topic), $fmt, $($arg)*);
+    }};
+    ($topic:literal, $fmt:expr) => {{
+        $crate::log!(@inner $crate::log::Level::Info, Some($topic), $fmt);
+    }};
+
+    // ============================================================
+    // (3) level, message
+    //    log!(Level::Warn, "bad input {}", id)
+    // ============================================================
     ($level:expr, $fmt:expr, $($arg:tt)*) => {{
-        $crate::log!(@inner $level, $fmt, $($arg)*);
+        $crate::log!(@inner $level, None, $fmt, $($arg)*);
+    }};
+    ($level:expr, $fmt:expr) => {{
+        $crate::log!(@inner $level, None, $fmt);
     }};
 
-    // No level → default to Debug
-    ($fmt:expr) => {{
-        $crate::log!(@inner $crate::log::Level::Info, $fmt);
-    }};
-    ($fmt:expr, $($arg:tt)*) => {{
-        $crate::log!(@inner $crate::log::Level::Info, $fmt, $($arg)*);
-    }};
 
-    // -------------------------------------------------------
-    // Inner expansion
-    // -------------------------------------------------------
-    (@inner $level:expr, $fmt:expr $(, $($arg:tt)*)?) => {{
+    // ============================================================
+    // INTERNAL IMPLEMENTATION
+    // ============================================================
+    (@inner $level:expr, $topic:expr, $fmt:expr $(, $($arg:tt)*)?) => {{
         let level = $level;
+        let topic: Option<&str> = $topic;
         let message = format!($fmt $(, $($arg)*)?);
 
-        // Canister type label (truncated)
-        let ty = $crate::memory::Env::get_canister_type();
-        let ty_raw = ty.as_ref()
-            .map_or("...".to_string(), ::std::string::ToString::to_string);
+        // Persist log entry in stable memory
+        let _ = $crate::memory::log::StableLog::append(level, topic, &message);
+
+        // Compute canister type field
+        let ty_raw = $crate::memory::Env::get_canister_type()
+            .as_ref()
+            .map_or_else(|| "...".to_string(), ::std::string::ToString::to_string);
 
         let ty_disp = $crate::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);
-        let ty_col = format!("{:^width$}", ty_disp, width = 9);
+        let ty_centered = format!("{:^9}", ty_disp);
 
-        // Level label based on Display impl
-        let level_label = level.to_string().to_uppercase();
-
-        // The plain/raw line (stored in stable memory, no ANSI)
-        let plain_line = format!("{:<5}|{ty_col}| {message}", level_label);
-
-        // Colored console output
-        let final_line = match level {
-            $crate::log::Level::Ok =>
-                format!("\x1b[32m{:<5}\x1b[0m|{ty_col}| {message}", level_label),
-            $crate::log::Level::Info =>
-                format!("\x1b[34m{:<5}\x1b[0m|{ty_col}| {message}", level_label),
-            $crate::log::Level::Warn =>
-                format!("\x1b[33m{:<5}\x1b[0m|{ty_col}| {message}", level_label),
-            $crate::log::Level::Error =>
-                format!("\x1b[31m{:<5}\x1b[0m|{ty_col}| {message}", level_label),
-            $crate::log::Level::Debug =>
-                format!("{:<5}|{ty_col}| {message}", level_label),
+        // Optional topic rendering
+        let final_msg = if let Some(t) = topic {
+            format!("[{t}] {message}")
+        } else {
+            message
         };
 
-        // Output to replica console
-        $crate::cdk::println!("{final_line}");
+        // ANSI color codes (Debug has no color)
+        let color = match level {
+            $crate::log::Level::Ok    => "\x1b[32m", // green
+            $crate::log::Level::Info  => "\x1b[34m", // blue
+            $crate::log::Level::Warn  => "\x1b[33m", // yellow
+            $crate::log::Level::Error => "\x1b[31m", // red
+            $crate::log::Level::Debug => "",         // no color
+        };
 
-        // Store the plain log line in stable memory (no ANSI)
-        let _ = $crate::memory::log::StableLog::append_line(level, &plain_line);
+        // Only apply reset if we actually colored the label
+        let reset = if color.is_empty() { "" } else { "\x1b[0m" };
+
+        // Final colored (or plain) label
+        let label = format!("{color}{:^5}{reset}", level.to_string().to_uppercase());
+
+        // Final log line
+        let line = format!("{label}|{ty_centered}| {final_msg}");
+
+        $crate::cdk::println!("{line}");
     }};
 }

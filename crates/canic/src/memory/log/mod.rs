@@ -189,7 +189,11 @@ pub struct StableLog;
 impl StableLog {
     // -------- Append / write --------
 
-    pub fn append(entry: LogEntry) -> Result<u64, Error> {
+    pub fn append(level: Level, topic: Option<&str>, message: &str) -> Result<u64, Error> {
+        Self::append_entry(LogEntry::new(level, topic, message))
+    }
+
+    pub fn append_entry(entry: LogEntry) -> Result<u64, Error> {
         let cfg = log_config();
 
         if cfg.max_entries == 0 {
@@ -201,25 +205,6 @@ impl StableLog {
         LOG.with_borrow(|log| log.append(&entry))
             .map_err(LogError::from)
             .map_err(Error::from)
-    }
-
-    pub fn append_line(level: Level, message: &str) -> Result<u64, Error> {
-        Self::append(LogEntry::new(level, None, message))
-    }
-
-    pub fn append_text(message: impl AsRef<str>) -> Result<u64, Error> {
-        Self::append(LogEntry::new(Level::Info, None, message.as_ref()))
-    }
-
-    pub fn append_text_with_topic(
-        topic: impl AsRef<str>,
-        message: impl AsRef<str>,
-    ) -> Result<u64, Error> {
-        Self::append(LogEntry::new(
-            Level::Info,
-            Some(topic.as_ref()),
-            message.as_ref(),
-        ))
     }
 
     // -------- Single-entry read --------
@@ -314,7 +299,7 @@ impl StableLog {
         LOG.with_borrow_mut(|log| *log = reset_log());
 
         for entry in retained {
-            let _ = Self::append(entry);
+            let _ = Self::append_entry(entry);
         }
     }
 

@@ -82,9 +82,9 @@ pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
         .subnet_id;
 
     if let Some(subnet_id) = subnet_id_opt {
-        log!("get_current_subnet_pid: {subnet_id}");
+        log!(Level::Info, "get_current_subnet_pid: {subnet_id}");
     } else {
-        log!("get_current_subnet_pid: not found");
+        log!(Level::Warn, "get_current_subnet_pid: not found");
     }
 
     Ok(subnet_id_opt)
