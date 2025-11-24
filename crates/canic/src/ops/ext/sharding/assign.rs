@@ -8,7 +8,6 @@ use crate::{
     Error,
     config::model::{ShardPool, ShardPoolPolicy},
     log,
-    log::Level,
     memory::ext::sharding::ShardingRegistry,
     ops::{
         context::cfg_current_canister,
@@ -47,7 +46,7 @@ impl ShardAllocator {
         let pid = response.new_canister_pid;
 
         ShardingRegistry::create(pid, pool, slot, canister_type, policy.capacity);
-        log!(Level::Ok, "✨ shard.create: {pid} pool={pool} slot={slot}");
+        log!(Ok, "✨ shard.create: {pid} pool={pool} slot={slot}");
         Ok(pid)
     }
 }
@@ -90,7 +89,7 @@ impl ShardingOps {
                     .target_slot
                     .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
                 log!(
-                    Level::Info,
+                    Info,
                     "📦 tenant={tenant} already shard={pid} pool={pool} slot={slot:?}"
                 );
 
@@ -103,7 +102,7 @@ impl ShardingOps {
                     .target_slot
                     .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
                 log!(
-                    Level::Info,
+                    Info,
                     "📦 tenant={tenant} assigned shard={pid} pool={pool} slot={slot:?}"
                 );
 
@@ -120,7 +119,7 @@ impl ShardingOps {
                     ShardAllocator::allocate(pool, slot, canister_type, &policy, extra_arg).await?;
                 ShardingRegistry::assign(pool, tenant, pid)?;
                 log!(
-                    Level::Ok,
+                    Ok,
                     "✨ tenant={tenant} created+assigned shard={pid} pool={pool} slot={slot}"
                 );
 
@@ -150,7 +149,7 @@ impl ShardingOps {
                 ShardingPlanState::UseExisting { pid } if pid != donor_shard_pid => {
                     ShardingRegistry::assign(pool, tenant, pid)?;
                     log!(
-                        Level::Info,
+                        Info,
                         "🚰 drained tenant={tenant} donor={donor_shard_pid} → shard={pid}"
                     );
                     moved += 1;
@@ -171,7 +170,7 @@ impl ShardingOps {
                     .await?;
                     ShardingRegistry::assign(pool, tenant, new_pid)?;
                     log!(
-                        Level::Ok,
+                        Ok,
                         "✨ shard.create: {new_pid} draining donor={donor_shard_pid} slot={slot}"
                     );
                     moved += 1;

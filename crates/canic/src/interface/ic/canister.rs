@@ -6,7 +6,6 @@ use crate::{
         prelude::*,
     },
     log,
-    log::Level,
     utils::wasm::get_wasm_hash,
 };
 
@@ -50,7 +49,7 @@ pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(
     #[allow(clippy::cast_precision_loss)]
     let bytes_fmt = bytes.len() as f64 / 1_000.0;
     log!(
-        Level::Ok,
+        Ok,
         "canister_upgrade: {} ({} KB) upgraded",
         canister_pid,
         bytes_fmt,

@@ -26,14 +26,14 @@ impl LogOps {
     /// Export a page of log entries and the total count.
     ///
     #[must_use]
-    pub fn page(offset: u64, limit: u64, min_level: Option<Level>) -> LogPageDto {
-        let (entries, total) = match min_level {
-            Some(level) => (
-                StableLog::entries_page_level(offset, limit, level),
-                StableLog::len_level(level),
-            ),
-            None => (StableLog::entries_page(offset, limit), StableLog::len()),
-        };
+    pub fn page(
+        offset: u64,
+        limit: u64,
+        topic: Option<String>,
+        min_level: Option<Level>,
+    ) -> LogPageDto {
+        let (entries, total) =
+            StableLog::entries_page_filtered(offset, limit, topic.as_deref(), min_level);
 
         LogPageDto { entries, total }
     }
