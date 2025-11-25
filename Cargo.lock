@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "convert_case 0.10.0",
  "derive_more",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "candid",
  "canic",
@@ -929,12 +929,11 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.3.1"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4a85d31aea989eead29a3aaf9e1115a180df8282431156e533de47660892565"
+checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
 dependencies = [
  "bytes",
- "fnv",
  "itoa",
 ]
 
@@ -1576,17 +1575,14 @@ version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7005aaf257a59ff4de471a9d5538ec868a21586534fff7f85dd97d4043a6139"
 dependencies = [
- "minicbor-derive 0.13.0",
+ "minicbor-derive",
 ]
 
 [[package]]
 name = "minicbor"
-version = "2.1.2"
+version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcdf88f4e6c97939dc99797448e722d618ab7e34f96d2c030d60fb8023793fa0"
-dependencies = [
- "minicbor-derive 0.18.2",
-]
+checksum = "f9a1119e42fbacc2bb65d860de6eb7c930562bc71d42dca026d06b0228231f77"
 
 [[package]]
 name = "minicbor-derive"
@@ -1600,23 +1596,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "minicbor-derive"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b17290c95158a760027059fe3f511970d6857e47ff5008f9e09bffe3d3e1c6af"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.111",
-]
-
-[[package]]
 name = "minicbor-serde"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80047f75e28e3b38f6ab2ec3c2c7669f6b411fa6f8424e1a90a3fd784b19a3f4"
 dependencies = [
- "minicbor 2.1.2",
+ "minicbor 2.1.3",
  "serde",
 ]
 
@@ -2816,9 +2801,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adc82fd73de2a9722ac5da747f12383d2bfdb93591ee6c58486e0097890f05f2"
+checksum = "9cf146f99d442e8e68e585f5d798ccd3cad9a7835b917e09728880a862706456"
 dependencies = [
  "bitflags",
  "bytes",
@@ -3393,18 +3378,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.28"
+version = "0.8.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43fa6694ed34d6e57407afbccdeecfa268c470a7d2a5b0cf49ce9fcc345afb90"
+checksum = "4ea879c944afe8a2b25fef16bb4ba234f47c694565e97383b36f3a878219065c"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.28"
+version = "0.8.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c640b22cd9817fae95be82f0d2f90b11f7605f6c319d16705c459b27ac2cbc26"
+checksum = "cf955aa904d6040f70dc8e9384444cb1030aed272ba3cb09bbc4ab9e7c1f34f5"
 dependencies = [
  "proc-macro2",
  "quote",
