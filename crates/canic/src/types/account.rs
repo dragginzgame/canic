@@ -1,9 +1,11 @@
 use candid::{CandidType, Principal};
+use icrc_ledger_types::icrc1::account::Account as IcrcAccount;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
     hash::{Hash, Hasher},
+    str::FromStr,
 };
 
 ///
@@ -27,6 +29,13 @@ pub struct Account {
 }
 
 impl Account {
+    pub fn new<P: Into<Principal>, S: Into<Subaccount>>(owner: P, subaccount: Option<S>) -> Self {
+        Self {
+            owner: owner.into(),
+            subaccount: subaccount.map(Into::into),
+        }
+    }
+
     /// The effective subaccount of an account - the subaccount if it is set, otherwise the default
     /// subaccount of all zeroes.
     #[inline]
@@ -69,6 +78,16 @@ impl From<Principal> for Account {
     }
 }
 
+impl FromStr for Account {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let acc = IcrcAccount::from_str(s).map_err(|e| e.to_string())?;
+
+        Ok(Self::new(acc.owner, acc.subaccount))
+    }
+}
+
 impl Hash for Account {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.owner.hash(state);
@@ -91,6 +110,7 @@ impl PartialOrd for Account {
     }
 }
 
+// make your internal code public, dfinity!
 fn full_account_checksum(owner: &[u8], subaccount: &[u8]) -> String {
     let mut crc32hasher = crc32fast::Hasher::new();
     crc32hasher.update(owner);
