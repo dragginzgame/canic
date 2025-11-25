@@ -26,6 +26,8 @@ jobs:
           toolchain: 1.91.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install fmt tools
+        run: cargo install cargo-sort cargo-sort-derives --locked
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
@@ -47,6 +49,8 @@ jobs:
           toolchain: 1.91.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install fmt tools
+        run: cargo install cargo-sort cargo-sort-derives --locked
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
