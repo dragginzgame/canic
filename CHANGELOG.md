@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Documented the new log config block and refreshed README layout to match current modules.
 - Added notes about the cross-filesystem compilation error for the LLM
 - fixed logging so that the message is stored correctly, and made the log! macro more ergonomic and include topic
+- moved all the mimic utils into canic-utils so they can be used independently
+- added FromStr for Account
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
