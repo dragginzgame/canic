@@ -1,0 +1,3 @@
+[env]
+# Avoid cross-device link errors in temp dirs during builds/tests.
+CARGO_TARGET_TMPDIR = { value = "target/tmp", relative = true }
