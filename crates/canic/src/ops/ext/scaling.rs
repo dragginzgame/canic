@@ -31,6 +31,9 @@ pub enum ScalingError {
 
     #[error("scaling pool '{0}' not found")]
     PoolNotFound(String),
+
+    #[error("scaling plan rejected: {0}")]
+    PlanRejected(String),
 }
 
 impl From<ScalingError> for Error {
@@ -51,6 +54,41 @@ pub struct ScalingPlan {
 
     /// Explanation / debug string for the decision.
     pub reason: String,
+}
+
+/// Evaluate scaling policy for a pool without side effects.
+pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
+    let pool_cfg = get_scaling_pool_cfg(pool)?;
+    let policy = pool_cfg.policy;
+    let worker_count = ScalingRegistry::find_by_pool(pool).len() as u32;
+
+    if policy.max_workers > 0 && worker_count >= policy.max_workers {
+        return Ok(ScalingPlan {
+            should_spawn: false,
+            reason: format!(
+                "pool '{pool}' at max_workers ({}/{})",
+                worker_count, policy.max_workers
+            ),
+        });
+    }
+
+    if worker_count < policy.min_workers {
+        return Ok(ScalingPlan {
+            should_spawn: true,
+            reason: format!(
+                "pool '{pool}' below min_workers (current {worker_count}, min {})",
+                policy.min_workers
+            ),
+        });
+    }
+
+    Ok(ScalingPlan {
+        should_spawn: false,
+        reason: format!(
+            "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
+            policy.min_workers, policy.max_workers
+        ),
+    })
 }
 
 /// Look up the config for a given pool on the *current canister*.
@@ -74,16 +112,24 @@ pub fn export_registry() -> ScalingRegistryView {
 
 /// Create a new worker canister in the given pool and register it.
 pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
-    // 1. Look up pool config
+    // 1. Evaluate policy
+    let plan = plan_create_worker(pool)?;
+    if !plan.should_spawn {
+        return Err(Error::from(OpsError::from(ExtensionError::from(
+            ScalingError::PlanRejected(plan.reason),
+        ))));
+    }
+
+    // 2. Look up pool config
     let pool_cfg = get_scaling_pool_cfg(pool)?;
     let ty = pool_cfg.canister_type.clone();
 
-    // 2. Create the canister
+    // 3. Create the canister
     let pid = create_canister_request::<()>(&ty, CreateCanisterParent::Caller, None)
         .await?
         .new_canister_pid;
 
-    // 3. Register in memory
+    // 4. Register in memory
     let entry = WorkerEntry {
         pool: pool.to_string(),
         canister_type: ty,
@@ -94,27 +140,6 @@ pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
     ScalingRegistry::insert(pid, entry);
 
     Ok(pid)
-}
-
-/// Dry-run the scaling policy for a pool without creating a canister.
-///
-/// For now this is a stub that always recommends scaling up. Later, it should
-/// evaluate thresholds from [`ScalePool::policy`] and current registry load.
-pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
-    // Ensure pool exists + capability enabled (mirrors create_worker).
-    let pool_cfg = get_scaling_pool_cfg(pool)?;
-
-    // TODO: fold in policy thresholds + registry state
-    let should_spawn = true;
-    let reason = format!(
-        "scaling pool '{pool}' (type {}) requested scale-up (naive policy)",
-        pool_cfg.canister_type
-    );
-
-    Ok(ScalingPlan {
-        should_spawn,
-        reason,
-    })
 }
 
 /// Convenience: return only the decision flag for a pool.

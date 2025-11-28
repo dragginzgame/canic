@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - moved all the mimic utils into canic-utils so they can be used independently
 - added FromStr for Account
 - added crate_name to the logs, plus filtering on the front end
+- Scaling now uses plan_create_worker so there aren't two parallel paths for checking if a worker can be spawned
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
