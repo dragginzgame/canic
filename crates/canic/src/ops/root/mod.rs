@@ -3,6 +3,7 @@ pub mod reserve;
 use crate::{
     Error,
     interface::ic::get_current_subnet_pid,
+    log::Topic,
     memory::{Env, topology::SubnetCanisterRegistry},
     ops::{
         context::cfg_current_subnet,
@@ -28,7 +29,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
 
     // Report pass
     for canister in SubnetCanisterRegistry::export() {
-        log!(Info, "🥫 {} ({})", canister.ty, canister.pid);
+        log!(Topic::Init, Info, "🥫 {} ({})", canister.ty, canister.pid);
     }
 
     Ok(())

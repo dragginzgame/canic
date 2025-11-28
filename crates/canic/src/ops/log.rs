@@ -27,13 +27,19 @@ impl LogOps {
     ///
     #[must_use]
     pub fn page(
-        offset: u64,
-        limit: u64,
+        crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
+        offset: u64,
+        limit: u64,
     ) -> LogPageDto {
-        let (entries, total) =
-            StableLog::entries_page_filtered(offset, limit, topic.as_deref(), min_level);
+        let (entries, total) = StableLog::entries_page_filtered(
+            crate_name.as_deref(),
+            topic.as_deref(),
+            min_level,
+            offset,
+            limit,
+        );
 
         LogPageDto { entries, total }
     }

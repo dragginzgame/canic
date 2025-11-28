@@ -53,7 +53,7 @@ use serde::Deserialize;
 /// Crate Version
 ///
 
-pub const CRATE_NAME: &str = "canic";
+pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - fixed logging so that the message is stored correctly, and made the log! macro more ergonomic and include topic
 - moved all the mimic utils into canic-utils so they can be used independently
 - added FromStr for Account
+- added crate_name to the logs, plus filtering on the front end
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
