@@ -8,7 +8,7 @@ use canic_internal::{AuthToken, canister::APP};
 // CANIC
 //
 
-canic_start!(APP);
+canic::start!(APP);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

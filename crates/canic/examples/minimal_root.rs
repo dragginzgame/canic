@@ -9,7 +9,7 @@ mod canister {
     use canic::types::CanisterType;
 
     // Set up a minimal root canister with default hooks.
-    canic_start_root!();
+    canic::start_root!();
 
     #[expect(clippy::unused_async)]
     async fn canic_setup() {}

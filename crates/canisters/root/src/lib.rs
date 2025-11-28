@@ -16,7 +16,7 @@ use canic_internal::canister;
 // CANIC
 //
 
-canic_start_root!();
+canic::start_root!();
 
 async fn canic_setup() {}
 async fn canic_install() {}

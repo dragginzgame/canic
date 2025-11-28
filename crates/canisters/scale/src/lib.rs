@@ -12,7 +12,7 @@ use canic_internal::canister::SCALE;
 // CANIC
 //
 
-canic_start!(SCALE);
+canic::start!(SCALE);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

@@ -12,7 +12,7 @@ use canic_internal::canister::SHARD;
 // CANIC
 //
 
-canic_start!(SHARD);
+canic::start!(SHARD);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

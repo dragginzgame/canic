@@ -1,3 +1,3 @@
 fn main() {
-    canic::canic_build!("../canic.toml");
+    canic::build!("../canic.toml");
 }

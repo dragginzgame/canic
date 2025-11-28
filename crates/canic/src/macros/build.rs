@@ -7,7 +7,7 @@
 /// sets `CANIC_CONFIG_PATH` for later use by `include_str!`. Canister crates
 /// typically invoke this from `build.rs`.
 #[macro_export]
-macro_rules! canic_build {
+macro_rules! build {
     ($file:expr) => {{
         $crate::__canic_build_internal! {
             $file,
@@ -41,7 +41,7 @@ macro_rules! canic_build {
 /// Performs the same validation as [`macro@canic_build`] and also marks the
 /// build with the `canic_root` cfg.
 #[macro_export]
-macro_rules! canic_build_root {
+macro_rules! build_root {
     ($file:expr) => {{
         $crate::__canic_build_internal! {
             $file,

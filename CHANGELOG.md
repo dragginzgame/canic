@@ -276,8 +276,8 @@ possible security issues
 - now canisters are stored in a constant slice and made the import procedure much easier
 - canic_setup() before canic_install() and canic_upgrade()
 
-## [0.2.5] - icu_init + canic_startup
-- split these functions, now post_upgrade calls canic_startup in addition to icu_init
+## [0.2.5] - icu_init + canic::startup
+- split these functions, now post_upgrade calls canic::startup in addition to icu_init
 
 ## [0.2.3] - Toko Time Really
 - use this for toko
@@ -356,7 +356,7 @@ it's also sent via canister create args
 
 ## [0.1.4]
 - refactored into two crates, just so I have a test crate to play with
-- updated canic_start! so it takes another optional argument to pass to the init function
+- updated canic::start! so it takes another optional argument to pass to the init function
 - added a timer for init_async so we dont call it from the macro
 - auth rules working, now with support for custom auth rules
 
