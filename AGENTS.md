@@ -112,7 +112,7 @@ We separate responsibilities into **three main layers**:
     - Prefer captured identifiers inside the format string over trailing single args.
       ```rust
       // Preferred
-      log!(Log::Info, "cleaned up sessions, before: {before}, after: {after}");
+      log!(Topic::Topic, Log::Info, "cleaned up sessions, before: {before}, after: {after}");
       // Avoid mixing styles in the same call
       ```
     - For non-identifier expressions, bind to a local first or use positional formatting.

@@ -12,6 +12,7 @@ use crate::{
         ic::{install_code, uninstall_code},
         prelude::*,
     },
+    log::Topic,
     memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
@@ -76,12 +77,22 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
 
     // Phase 1: remove from registry
     let Some(canister) = SubnetCanisterRegistry::remove(&pid) else {
-        log!(Warn, "🗑️ delete_canister: {pid} not in registry");
+        log!(
+            Topic::CanisterLifecycle,
+            Warn,
+            "🗑️ delete_canister: {pid} not in registry"
+        );
 
         return Ok(());
     };
 
-    log!(Ok, "🗑️ delete_canister: {} ({})", pid, canister.ty);
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "🗑️ delete_canister: {} ({})",
+        pid,
+        canister.ty
+    );
 
     // Phase 2: cascade
     root_cascade_topology().await?;
@@ -100,6 +111,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
 pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
     if let Some((pid, entry)) = CanisterReserve::pop_first() {
         log!(
+            Topic::CanisterReserve,
             Ok,
             "⚡ allocate_canister: reusing {} from pool ({})",
             pid,
@@ -110,7 +122,11 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
     } else {
         let cfg = cfg_current_subnet()?.try_get_canister(ty)?;
         let pid = create_canister(cfg.initial_cycles.clone()).await?;
-        log!(Info, "⚡ allocate_canister: pool empty");
+        log!(
+            Topic::CanisterReserve,
+            Info,
+            "⚡ allocate_canister: pool empty"
+        );
 
         Ok(pid)
     }
@@ -122,7 +138,11 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
     controllers.push(canister_self()); // root always controls
 
     let pid = crate::interface::ic::canister::create_canister(controllers, cycles.clone()).await?;
-    log!(Ok, "⚡ create_canister: {pid} ({cycles})");
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "⚡ create_canister: {pid} ({cycles})"
+    );
 
     Ok(pid)
 }
@@ -168,6 +188,7 @@ async fn install_canister(
     .await?;
 
     log!(
+        Topic::CanisterLifecycle,
         Ok,
         "⚡ install_canister: {pid} ({ty}, {:.2}KiB)",
         wasm.len() as f64 / 1_024.0,

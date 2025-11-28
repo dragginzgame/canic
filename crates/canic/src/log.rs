@@ -23,7 +23,13 @@ pub enum Level {
 
 #[derive(Clone, Copy, Display, Eq, PartialEq)]
 pub enum Topic {
+    CanisterLifecycle,
+    CanisterReserve,
+    CanisterState,
     Cycles,
+    Init,
+    Memory,
+    Sharding,
     Topology,
     Wasm,
 }
@@ -52,7 +58,9 @@ macro_rules! log {
         let topic_opt: Option<&str> = $topic;
         let message = format!($fmt $(, $arg)*);
 
-        let _ = $crate::memory::log::StableLog::append(topic_opt, level, &message);
+        // append entry
+        let crate_name = env!("CARGO_PKG_NAME");
+        let _ = $crate::memory::log::StableLog::append(crate_name, topic_opt, level, &message);
 
         let ty_raw = $crate::memory::Env::get_canister_type()
             .as_ref()

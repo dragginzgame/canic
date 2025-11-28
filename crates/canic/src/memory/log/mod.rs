@@ -140,6 +140,7 @@ impl From<LogError> for Error {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntry {
+    pub crate_name: String,
     pub created_at: u64,
     pub level: Level,
     pub topic: Option<String>,
@@ -147,8 +148,9 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
-    pub fn new(level: Level, topic: Option<&str>, msg: &str) -> Self {
+    pub fn new(crate_name: &str, level: Level, topic: Option<&str>, msg: &str) -> Self {
         Self {
+            crate_name: crate_name.to_string(),
             created_at: time::now_secs(),
             level,
             topic: topic.map(ToString::to_string),
@@ -167,6 +169,7 @@ impl_storable_unbounded!(LogEntry);
 pub struct LogEntryView {
     pub index: u64,
     pub created_at: u64,
+    pub crate_name: String,
     pub level: Level,
     pub topic: Option<String>,
     pub message: String,
@@ -177,6 +180,7 @@ impl LogEntryView {
         Self {
             index: index as u64,
             created_at: entry.created_at,
+            crate_name: entry.crate_name,
             level: entry.level,
             topic: entry.topic,
             message: entry.message,
@@ -192,12 +196,14 @@ pub type LogView = Vec<LogEntryView>;
 
 fn iter_filtered<'a>(
     log: &'a StableLogStorage,
-    topic: Option<&'a str>,
-    min_level: Option<Level>,
+    crate_name: Option<&'a str>, // this is optional
+    topic: Option<&'a str>,      // optional
+    min_level: Option<Level>,    // optional
 ) -> impl Iterator<Item = (usize, LogEntry)> + 'a {
     log.iter().enumerate().filter(move |(_, e)| {
-        min_level.is_none_or(|lvl| e.level >= lvl)
+        crate_name.is_none_or(|name| e.crate_name == name)
             && topic.is_none_or(|t| e.topic.as_deref() == Some(t))
+            && min_level.is_none_or(|lvl| e.level >= lvl)
     })
 }
 
@@ -210,13 +216,23 @@ pub struct StableLog;
 impl StableLog {
     // -------- Append --------
 
-    pub fn append<T, M>(topic: Option<T>, level: Level, message: M) -> Result<u64, Error>
+    pub fn append<T, M>(
+        crate_name: &str,
+        topic: Option<T>,
+        level: Level,
+        message: M,
+    ) -> Result<u64, Error>
     where
         T: ToString,
         M: AsRef<str>,
     {
         let topic_normalized = Self::normalize_topic(topic);
-        let entry = LogEntry::new(level, topic_normalized.as_deref(), message.as_ref());
+        let entry = LogEntry::new(
+            crate_name,
+            level,
+            topic_normalized.as_deref(),
+            message.as_ref(),
+        );
 
         Self::append_entry(entry)
     }
@@ -265,20 +281,16 @@ impl StableLog {
 
     #[must_use]
     pub fn entries_page(offset: u64, limit: u64) -> LogView {
-        Self::entries_page_filtered(offset, limit, None, None).0
-    }
-
-    #[must_use]
-    pub fn entries_page_level(offset: u64, limit: u64, min_level: Level) -> LogView {
-        Self::entries_page_filtered(offset, limit, None, Some(min_level)).0
+        Self::entries_page_filtered(None, None, None, offset, limit).0
     }
 
     #[must_use]
     pub fn entries_page_filtered(
-        offset: u64,
-        limit: u64,
+        crate_name: Option<&str>,
         topic: Option<&str>,
         min_level: Option<Level>,
+        offset: u64,
+        limit: u64,
     ) -> (LogView, u64) {
         let offset = offset as usize;
         let limit = limit as usize;
@@ -287,7 +299,8 @@ impl StableLog {
 
         with_log(|log| {
             // Collect entire filtered list IN ORDER (once)
-            let items: Vec<(usize, LogEntry)> = iter_filtered(log, topic_norm, min_level).collect();
+            let items: Vec<(usize, LogEntry)> =
+                iter_filtered(log, crate_name, topic_norm, min_level).collect();
 
             let total = items.len() as u64;
 

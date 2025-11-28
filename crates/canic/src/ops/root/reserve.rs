@@ -88,7 +88,11 @@ impl CanisterReserveOps {
         let subnet_cfg = match cfg_current_subnet() {
             Ok(cfg) => cfg,
             Err(e) => {
-                log!(Warn, "⚠️ cannot get current subnet config: {e:?}");
+                log!(
+                    Topic::CanisterState,
+                    Warn,
+                    "⚠️ cannot get current subnet config: {e:?}"
+                );
                 return 0;
             }
         };
@@ -108,8 +112,17 @@ impl CanisterReserveOps {
             spawn(async move {
                 for i in 0..missing {
                     match reserve_create_canister().await {
-                        Ok(_) => log!(Ok, "✨ reserve canister created ({}/{missing})", i + 1),
-                        Err(e) => log!(Warn, "⚠️ failed to create reserve canister: {e:?}"),
+                        Ok(_) => log!(
+                            Topic::CanisterReserve,
+                            Ok,
+                            "✨ reserve canister created ({}/{missing})",
+                            i + 1
+                        ),
+                        Err(e) => log!(
+                            Topic::CanisterReserve,
+                            Warn,
+                            "⚠️ failed to create reserve canister: {e:?}"
+                        ),
                     }
                 }
             });
@@ -143,7 +156,11 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
     // register to Reserve
     let cycles = get_cycles(canister_pid).await?;
 
-    log!(Ok, "🪶  reserve_import_canister: {canister_pid} ({cycles})",);
+    log!(
+        Topic::CanisterReserve,
+        Ok,
+        "🪶  reserve_import_canister: {canister_pid} ({cycles})",
+    );
 
     CanisterReserve::register(canister_pid, cycles);
 

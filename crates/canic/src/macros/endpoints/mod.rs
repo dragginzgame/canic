@@ -68,12 +68,13 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         fn canic_log(
-            offset: u64,
-            limit: u64,
+            crate_name: Option<String>,
             topic: Option<String>,
             min_level: Option<::canic::log::Level>,
+            offset: u64,
+            limit: u64,
         ) -> ::canic::ops::log::LogPageDto {
-            ::canic::ops::log::LogOps::page(offset, limit, topic, min_level)
+            ::canic::ops::log::LogOps::page(crate_name, topic, min_level, offset, limit)
         }
 
         //
