@@ -31,7 +31,7 @@ pub use thiserror::Error as ThisError;
 
 pub mod prelude {
     pub use crate::{
-        Error as CanicError, auth_require_all, auth_require_any, canic_start, canic_start_root,
+        Error as CanicError, auth_require_all, auth_require_any,
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,

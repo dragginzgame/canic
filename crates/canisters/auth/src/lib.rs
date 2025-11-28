@@ -7,7 +7,7 @@ use canic_internal::canister::AUTH;
 // CANIC
 //
 
-canic_start!(AUTH);
+canic::start!(AUTH);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

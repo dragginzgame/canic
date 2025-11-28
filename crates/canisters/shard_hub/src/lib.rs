@@ -19,7 +19,7 @@ const SHARD_POOL: &str = "shards";
 // CANIC
 //
 
-canic_start!(SHARD_HUB);
+canic::start!(SHARD_HUB);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

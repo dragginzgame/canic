@@ -11,8 +11,8 @@
 //!
 //! ## When to use which
 //!
-//! - [`macro@canic_start`] — for **non-root** canisters (standard services, workers, etc.).
-//! - [`macro@canic_start_root`] — for the **root orchestrator**, which performs
+//! - [`macro@canic::start`] — for **non-root** canisters (standard services, workers, etc.).
+//! - [`macro@canic::start_root`] — for the **root orchestrator**, which performs
 //!   additional initialization for global registries and root-only extensions.
 
 /// Configure lifecycle hooks for **non-root Canic canisters**.
@@ -34,7 +34,7 @@
 /// `init` and `post_upgrade` to be declared at the top level.
 
 #[macro_export]
-macro_rules! canic_start {
+macro_rules! start {
     ($canister_type:expr) => {
         #[::canic::cdk::init]
         fn init(payload: ::canic::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
@@ -74,7 +74,7 @@ macro_rules! canic_start {
 ///
 /// Configure lifecycle hooks for the **root Canic orchestrator canister**.
 ///
-/// This macro behaves like [`macro@canic_start`], but includes additional
+/// This macro behaves like [`macro@canic::start`], but includes additional
 /// root-only initialization for:
 ///
 /// - the global subnet registry
@@ -86,10 +86,10 @@ macro_rules! canic_start {
 /// in [`ops::lifecycle`].
 ///
 /// Use this for the root orchestrator canister only. Other canisters should use
-/// [`macro@canic_start`].
+/// [`macro@canic::start`].
 
 #[macro_export]
-macro_rules! canic_start_root {
+macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
         fn init(identity: ::canic::memory::topology::SubnetIdentity) {
@@ -142,7 +142,7 @@ macro_rules! canic_start_root {
 ///
 /// This macro exists solely to embed and load the TOML configuration file
 /// at compile time (`CANIC_CONFIG_PATH`). It is used internally by
-/// [`macro@canic_start`] and [`macro@canic_start_root`].
+/// [`macro@canic::start`] and [`macro@canic::start_root`].
 
 #[doc(hidden)]
 #[macro_export]

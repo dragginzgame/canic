@@ -14,7 +14,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 ## Highlights
 
-- 🧩 **Bootstrap macros** – `canic_start!`, `canic_start_root!`, `canic_build!`, and `canic_build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
+- 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic_build!`, and `canic_build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
 - 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
 - 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and reserve policies validated straight from `canic.toml`.
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
@@ -33,7 +33,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
   - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
   - `src/log.rs` – logging macros.
-  - `src/macros/` – public macro entrypoints (`canic_start!`, `canic_endpoints_*`, memory helpers).
+  - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
   - `src/memory/` – stable storage abstractions and registries built on `ic-stable-structures`.
   - `src/ops/` – orchestration/business logic bridging memory and state layers.
   - `src/runtime.rs` – runtime glue shared by macros.
@@ -77,7 +77,7 @@ fn main() {
 ```rust
 // Non-root canister build.rs
 fn main() {
-    canic::canic_build!("../canic.toml");
+    canic::build!("../canic.toml");
 }
 ```
 
@@ -91,7 +91,7 @@ In `lib.rs`:
 use canic::prelude::*;
 use canic::canister::EXAMPLE;
 
-canic_start!(EXAMPLE); // or canic_start_root!() for the orchestrator canister
+canic::start!(EXAMPLE); // or canic::start_root!() for the orchestrator canister
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

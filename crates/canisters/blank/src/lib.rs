@@ -16,7 +16,7 @@ use canic_internal::canister::BLANK;
 // CANIC
 //
 
-canic_start!(BLANK);
+canic::start!(BLANK);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
