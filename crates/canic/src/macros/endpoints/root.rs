@@ -4,7 +4,7 @@ macro_rules! canic_endpoints_root {
     () => {
         // canic_app
         // modify app-level state
-        // @todo eventually this will cascade down from an orchestrator canister
+        // eventually this will cascade down from an orchestrator canister
         #[::canic::cdk::update]
         async fn canic_app(cmd: ::canic::memory::state::AppCommand) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
