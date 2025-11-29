@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+## [0.3.15] - 2025-11-29
+- app and subnet_directory() now are on all canisters, use pagination and a proper DTO return type
+
 ## [0.3.0] - 2025-11-15
 - Added paginated `canic_subnet_canister_children` via `CanisterChildrenOps::page` and `CanisterChildrenPage` DTO, mirroring CycleTracker paging.
 - Introduced global log retention config (`max_entries` ring cap + optional `max_age_secs`) with second-level timestamps and enforced trimming.

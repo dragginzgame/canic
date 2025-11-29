@@ -24,7 +24,7 @@ use crate::{
     ops::{
         CanisterInitPayload,
         context::cfg_current_subnet,
-        model::memory::directory::{build_app_directory_view, build_subnet_directory_view},
+        model::memory::directory::{AppDirectoryOps, SubnetDirectoryOps},
         sync::{
             state::{StateBundle, root_cascade_state},
             topology::root_cascade_topology,
@@ -47,13 +47,13 @@ pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
 
     // App directory is only meaningful on prime root
     if Env::is_prime_root() {
-        let app_view = build_app_directory_view();
+        let app_view = AppDirectoryOps::export();
         AppDirectory::import(app_view);
         bundle = bundle.with_app_directory();
     }
 
     // Subnet directory is always present
-    let subnet_view = build_subnet_directory_view()?;
+    let subnet_view = SubnetDirectoryOps::export()?;
     SubnetDirectory::import(subnet_view);
     bundle = bundle.with_subnet_directory();
 
