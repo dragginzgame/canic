@@ -61,7 +61,16 @@ impl Validate for SubnetConfig {
             }
         }
 
-        // --- 2. Validate canister configurations ---
+        // --- 2. Validate auto-create entries ---
+        for canister_ty in &self.auto_create {
+            if !self.canisters.contains_key(canister_ty) {
+                return Err(ConfigModelError::ValidationError(format!(
+                    "auto-create canister '{canister_ty}' is not defined in subnet",
+                )));
+            }
+        }
+
+        // --- 3. Validate canister configurations ---
         for (parent_ty, cfg) in &self.canisters {
             // Sharding pools
             if let Some(sharding) = &cfg.sharding {
@@ -98,6 +107,7 @@ impl Validate for SubnetConfig {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CanisterReserve {
     pub minimum_size: u8,
 }
@@ -259,7 +269,31 @@ impl Default for ShardPoolPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn auto_create_entries_must_exist_in_subnet() {
+        let mut auto_create = BTreeSet::new();
+        auto_create.insert(CanisterType::from("missing_auto_canister"));
+
+        let subnet = SubnetConfig {
+            auto_create,
+            ..Default::default()
+        };
+
+        let err = subnet
+            .validate()
+            .expect_err("expected missing auto-create type to fail");
+        match err {
+            ConfigModelError::ValidationError(msg) => {
+                assert!(
+                    msg.contains("missing_auto_canister"),
+                    "error should include missing canister type, got: {msg}"
+                );
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
 
     #[test]
     fn sharding_pool_references_must_exist_in_subnet() {

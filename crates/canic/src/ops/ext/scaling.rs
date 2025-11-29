@@ -57,6 +57,7 @@ pub struct ScalingPlan {
 }
 
 /// Evaluate scaling policy for a pool without side effects.
+#[allow(clippy::cast_possible_truncation)]
 pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
     let pool_cfg = get_scaling_pool_cfg(pool)?;
     let policy = pool_cfg.policy;
