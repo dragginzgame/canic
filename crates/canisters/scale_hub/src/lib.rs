@@ -6,7 +6,7 @@
 #![allow(clippy::unused_async)]
 
 use candid::Principal;
-use canic::{Error, ops::ext::scaling, prelude::*};
+use canic::{Error, ops::model::memory::scaling, prelude::*};
 use canic_internal::canister::SCALE_HUB;
 
 //

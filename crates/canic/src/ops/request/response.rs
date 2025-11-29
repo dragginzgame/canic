@@ -8,7 +8,7 @@
 use crate::{
     Error,
     interface::ic::{canister::upgrade_canister, deposit_cycles},
-    memory::topology::SubnetCanisterRegistry,
+    model::{memory::topology::SubnetCanisterRegistry, wasm::WasmRegistry},
     ops::{
         canister::create_and_install_canister,
         prelude::*,
@@ -17,7 +17,6 @@ use crate::{
             UpgradeCanisterRequest,
         },
     },
-    state::wasm::WasmRegistry,
 };
 
 ///

@@ -7,12 +7,11 @@ pub mod guard;
 pub mod interface;
 pub mod log;
 pub mod macros;
-pub mod memory;
+pub mod model;
 pub mod ops;
 pub mod runtime;
 pub mod serialize;
 pub mod spec;
-pub mod state;
 pub mod types;
 
 pub use ::canic_utils as utils;
@@ -80,16 +79,13 @@ pub enum Error {
     InterfaceError(String),
 
     #[error("{0}")]
-    MemoryError(String),
+    ModelError(String),
 
     #[error("{0}")]
     OpsError(String),
 
     #[error("{0}")]
     SerializeError(String),
-
-    #[error("{0}")]
-    StateError(String),
 
     ///
     /// Test Error
@@ -147,10 +143,9 @@ from_to_string!(auth::AuthError, AuthError);
 from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(env::EnvError, EnvError);
 from_to_string!(interface::InterfaceError, InterfaceError);
-from_to_string!(memory::MemoryError, MemoryError);
+from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
 from_to_string!(serialize::SerializeError, SerializeError);
-from_to_string!(state::StateError, StateError);
 
 from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);

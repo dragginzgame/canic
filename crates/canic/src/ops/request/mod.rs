@@ -12,19 +12,19 @@ pub use response::*;
 use crate::{
     Error,
     cdk::call::Call,
-    memory::{Env, topology::SubnetCanisterChildren},
+    model::memory::{Env, topology::SubnetCanisterChildren},
     ops::prelude::*,
 };
 use candid::encode_one;
 use thiserror::Error as ThisError;
 
 ///
-/// RequestError
+/// RequestOpsError
 /// Errors produced during request dispatch or response handling
 ///
 
 #[derive(Debug, ThisError)]
-pub enum RequestError {
+pub enum RequestOpsError {
     #[error("this request is not allowed to be called on root")]
     RootNotAllowed,
 
@@ -32,8 +32,8 @@ pub enum RequestError {
     InvalidResponseType,
 }
 
-impl From<RequestError> for Error {
-    fn from(err: RequestError) -> Self {
+impl From<RequestOpsError> for Error {
+    fn from(err: RequestOpsError) -> Self {
         OpsError::from(err).into()
     }
 }
@@ -130,7 +130,7 @@ where
 
     match request(q).await? {
         Response::CreateCanister(res) => Ok(res),
-        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
+        _ => Err(RequestOpsError::InvalidResponseType)?,
     }
 }
 
@@ -149,7 +149,7 @@ pub async fn upgrade_canister_request(
 
     match request(q).await? {
         Response::UpgradeCanister(res) => Ok(res),
-        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
+        _ => Err(RequestOpsError::InvalidResponseType)?,
     }
 }
 
@@ -158,11 +158,11 @@ pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     let q = Request::Cycles(CyclesRequest { cycles });
 
     if Env::is_root() {
-        return Err(OpsError::RequestError(RequestError::RootNotAllowed))?;
+        return Err(RequestOpsError::RootNotAllowed)?;
     }
 
     match request(q).await? {
         Response::Cycles(res) => Ok(res),
-        _ => Err(OpsError::RequestError(RequestError::InvalidResponseType))?,
+        _ => Err(RequestOpsError::InvalidResponseType)?,
     }
 }

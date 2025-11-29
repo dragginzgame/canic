@@ -38,7 +38,7 @@ macro_rules! eager_init {
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
-        $crate::state::PERF_LAST.with(|last| {
+        $crate::model::PERF_LAST.with(|last| {
             let now = $crate::cdk::api::performance_counter(1);
             let then = *last.borrow();
             let delta = now.saturating_sub(then);

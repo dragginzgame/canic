@@ -8,7 +8,7 @@
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
-    memory::{
+    model::memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},

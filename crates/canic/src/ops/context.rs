@@ -4,7 +4,7 @@ use crate::{
         Config,
         model::{CanisterConfig, SubnetConfig},
     },
-    memory::Env,
+    model::memory::Env,
 };
 
 ///

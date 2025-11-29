@@ -3,13 +3,16 @@ use crate::{
     cdk::{api::canister_self, println},
     log,
     log::Topic,
-    memory::{
+    model::memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
         registry,
         topology::{SubnetCanisterRegistry, SubnetIdentity},
     },
-    ops::{CanisterInitPayload, ext::cycles::CycleTrackerOps, root::reserve::CanisterReserveOps},
+    ops::{
+        CanisterInitPayload, model::memory::cycles::CycleTrackerOps,
+        model::memory::reserve::CanisterReserveOps,
+    },
     runtime,
     types::{CanisterType, SubnetType},
 };

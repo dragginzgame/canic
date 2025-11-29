@@ -26,30 +26,39 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 ## 📁 Repository Layout
 
-- `crates/canic/` – core library crate with orchestration primitives and macros.
-  - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
-  - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
-  - `src/config/` – configuration loaders, validators, and schema helpers.
-  - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
-  - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
-  - `src/log.rs` – logging macros.
-  - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
-  - `src/memory/` – stable storage abstractions and registries built on `ic-stable-structures`.
-  - `src/ops/` – orchestration/business logic bridging memory and state layers.
-  - `src/runtime.rs` – runtime glue shared by macros.
-  - `src/serialize.rs` – deterministic codecs.
-  - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
-  - `src/state/` – volatile runtime state caches and registries.
-  - `src/types/` - shared domain types
-  - `src/utils/` – time helpers, wasm utilities, etc.
-- `crates/canisters/` – reference canisters that exercise the library end to end:
-  - `root/` orchestrator tying together shards, scaling, and reserve flows.
-  - `app/` – sample application canister used in integration flows.
-  - `auth/` – auxiliary canister covering authorization patterns.
-  - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
-  - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
-  - `blank/` – minimal canister template.
-- `scripts/` – build, release, and environment helpers (`app/`, `ci/`, `env/`).
+- `assets/` – documentation media (logo and shared imagery).
+- `crates/` – workspace crates.
+  - `canic/` – core library crate with orchestration primitives and macros.
+    - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
+    - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
+    - `src/config/` – configuration loaders, validators, and schema helpers.
+    - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
+    - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
+    - `src/log.rs` – logging macros.
+    - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
+    - `src/memory/` – stable storage abstractions and registries built on `ic-stable-structures`.
+    - `src/ops/` – orchestration/business logic bridging memory and state layers.
+    - `src/runtime.rs` – runtime glue shared by macros.
+    - `src/serialize.rs` – deterministic codecs.
+    - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
+    - `src/state/` – volatile runtime state caches and registries.
+    - `src/types/` – shared domain types.
+    - `src/utils/` – time helpers, wasm utilities, etc.
+    - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
+  - `canisters/` – reference canisters that exercise the library end to end:
+    - `root/` orchestrator tying together shards, scaling, and reserve flows.
+    - `app/` – sample application canister used in integration flows.
+    - `auth/` – auxiliary canister covering authorization patterns.
+    - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
+    - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
+    - `blank/` – minimal canister template.
+- `scripts/` – build, release, and environment helpers.
+  - `app/` – dfx bootstrap scripts for the demo topology.
+  - `ci/` – version bumping and security checks used by CI.
+  - `env/` – local environment utilities (e.g., shared env updates).
+- `.github/workflows/` – CI pipelines (fmt, clippy, tests, release).
+- `.githooks/` – optional git hooks; `pre-commit` formats and runs cargo sort before committing.
+- `.cargo/` – workspace Cargo config that pins the tmp dir to avoid cross-device link errors when sandboxed.
 
 ## Getting Started
 

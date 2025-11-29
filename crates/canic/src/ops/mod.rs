@@ -9,15 +9,12 @@
 
 pub mod canister;
 pub mod context;
-pub mod directory;
-pub mod ext;
 pub mod lifecycle;
-pub mod log;
+pub mod model;
 pub mod request;
 pub mod root;
 pub mod signature;
 pub mod sync;
-pub mod topology;
 pub mod types;
 
 pub use types::*;
@@ -33,13 +30,16 @@ pub mod prelude {
         interface::{InterfaceError, ic::call_and_decode},
         log,
         log::Level,
-        ops::OpsError,
+        ops::{
+            OpsError,
+            context::{cfg_current_canister, cfg_current_subnet},
+        },
         types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},
     };
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, memory::Env};
+use crate::{ThisError, model::memory::Env};
 
 ///
 /// OpsError
@@ -57,16 +57,16 @@ pub enum OpsError {
     IsRoot,
 
     #[error(transparent)]
-    ExtensionError(#[from] ext::ExtensionError),
+    ModelOpsError(#[from] model::ModelOpsError),
 
     #[error(transparent)]
-    RequestError(#[from] request::RequestError),
+    RequestOpsError(#[from] request::RequestOpsError),
 
     #[error(transparent)]
-    SignatureError(#[from] signature::SignatureError),
+    SignatureOpsError(#[from] signature::SignatureOpsError),
 
     #[error(transparent)]
-    SyncError(#[from] sync::SyncError),
+    SyncOpsError(#[from] sync::SyncOpsError),
 }
 
 impl OpsError {

@@ -6,10 +6,12 @@ macro_rules! canic_endpoints_root {
         // modify app-level state
         // eventually this will cascade down from an orchestrator canister
         #[::canic::cdk::update]
-        async fn canic_app(cmd: ::canic::memory::state::AppCommand) -> Result<(), ::canic::Error> {
+        async fn canic_app(
+            cmd: ::canic::model::memory::state::AppCommand,
+        ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::memory::state::AppState::command(cmd)?;
+            ::canic::model::memory::state::AppState::command(cmd)?;
 
             let bundle = ::canic::ops::sync::state::StateBundle::new().with_app_state();
             ::canic::ops::sync::state::root_cascade_state(bundle).await?;
@@ -69,18 +71,19 @@ macro_rules! canic_endpoints_root {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_subnet_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
-            $crate::memory::topology::AppSubnetRegistry::export()
+        fn canic_app_subnet_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView {
+            $crate::model::memory::topology::AppSubnetRegistry::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_app_canister_registry() -> ::canic::memory::topology::AppSubnetRegistryView {
-            $crate::memory::topology::AppSubnetRegistry::export()
+        fn canic_app_canister_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView
+        {
+            $crate::model::memory::topology::AppSubnetRegistry::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_canister_registry() -> Vec<::canic::memory::CanisterEntry> {
-            $crate::memory::topology::SubnetCanisterRegistry::export()
+        fn canic_subnet_canister_registry() -> Vec<::canic::model::memory::CanisterEntry> {
+            $crate::model::memory::topology::SubnetCanisterRegistry::export()
         }
 
         //
@@ -89,8 +92,8 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         async fn canic_reserve_list()
-        -> Result<::canic::memory::root::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::memory::root::reserve::CanisterReserve::export())
+        -> Result<::canic::model::memory::reserve::CanisterReserveView, ::canic::Error> {
+            Ok($crate::model::memory::reserve::CanisterReserve::export())
         }
 
         #[update]
@@ -98,7 +101,7 @@ macro_rules! canic_endpoints_root {
         -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::root::reserve::reserve_create_canister().await
+            ::canic::ops::model::memory::reserve::reserve_create_canister().await
         }
 
         #[update]
@@ -107,7 +110,7 @@ macro_rules! canic_endpoints_root {
         ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::ops::root::reserve::reserve_import_canister(pid).await
+            ::canic::ops::model::memory::reserve::reserve_import_canister(pid).await
         }
     };
 }
@@ -121,13 +124,13 @@ macro_rules! canic_endpoints_nonroot {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_directory() -> ::canic::memory::directory::DirectoryView {
-            $crate::memory::directory::AppDirectory::export()
+        fn canic_app_directory() -> ::canic::model::memory::directory::DirectoryView {
+            $crate::model::memory::directory::AppDirectory::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_directory() -> ::canic::memory::directory::DirectoryView {
-            $crate::memory::directory::SubnetDirectory::export()
+        fn canic_subnet_directory() -> ::canic::model::memory::directory::DirectoryView {
+            $crate::model::memory::directory::SubnetDirectory::export()
         }
 
         //

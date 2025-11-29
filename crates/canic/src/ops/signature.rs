@@ -30,11 +30,11 @@ thread_local! {
 }
 
 ///
-/// SignatureError
+/// SignatureOpsError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SignatureError {
+pub enum SignatureOpsError {
     #[error("cannot parse signature")]
     CannotParseSignature,
 
@@ -45,8 +45,8 @@ pub enum SignatureError {
     InvalidSignature,
 }
 
-impl From<SignatureError> for Error {
-    fn from(err: SignatureError) -> Self {
+impl From<SignatureOpsError> for Error {
+    fn from(err: SignatureOpsError) -> Self {
         OpsError::from(err).into()
     }
 }
@@ -114,7 +114,7 @@ pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
 ///
 pub fn verify(message: &[u8], signature_cbor: &[u8], issuer_pid: Principal) -> Result<(), Error> {
     // 1️⃣ Parse CBOR
-    parse_canister_sig_cbor(signature_cbor).map_err(|_| SignatureError::CannotParseSignature)?;
+    parse_canister_sig_cbor(signature_cbor).map_err(|_| SignatureOpsError::CannotParseSignature)?;
 
     // 2️⃣ Verify the IC canister signature cryptographically
     verify_canister_sig(
@@ -123,7 +123,7 @@ pub fn verify(message: &[u8], signature_cbor: &[u8], issuer_pid: Principal) -> R
         issuer_pid.as_slice(),
         &IC_ROOT_PUBLIC_KEY,
     )
-    .map_err(|_| SignatureError::InvalidSignature)?;
+    .map_err(|_| SignatureOpsError::InvalidSignature)?;
 
     Ok(())
 }
@@ -138,7 +138,7 @@ pub fn parse_message<T>(message: &[u8]) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
-    let token = deserialize::<T>(message).map_err(|_| SignatureError::CannotParseTokens)?;
+    let token = deserialize::<T>(message).map_err(|_| SignatureOpsError::CannotParseTokens)?;
 
     Ok(token)
 }

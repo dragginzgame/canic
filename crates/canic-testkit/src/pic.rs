@@ -1,7 +1,7 @@
 use candid::{CandidType, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     Error,
-    memory::topology::SubnetIdentity,
+    model::memory::topology::SubnetIdentity,
     ops::CanisterInitPayload,
     types::{CanisterType, Principal},
 };

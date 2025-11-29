@@ -9,36 +9,73 @@ use crate::{
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     interface::{
-        ic::{install_code, uninstall_code},
+        ic::{deposit_cycles, get_cycles, install_code, uninstall_code},
         prelude::*,
     },
     log::Topic,
-    memory::{
+    model::memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
         env::EnvData,
-        root::reserve::CanisterReserve,
+        reserve::CanisterReserve,
         topology::SubnetCanisterRegistry,
     },
+    model::wasm::WasmRegistry,
     ops::{
-        CanisterInitPayload, context::cfg_current_subnet,
-        directory::sync_directories_from_registry, sync::topology::root_cascade_topology,
+        CanisterInitPayload,
+        context::cfg_current_subnet,
+        model::memory::directory::{build_app_directory_view, build_subnet_directory_view},
+        sync::{
+            state::{StateBundle, root_cascade_state},
+            topology::root_cascade_topology,
+        },
     },
-    state::wasm::WasmRegistry,
+    types::Cycles,
 };
 use candid::Principal;
 
 //
+// ===========================================================================
+// DIRECTORY SYNC
+// ===========================================================================
+//
+
+/// Rebuild AppDirectory and SubnetDirectory from the registry,
+/// import them directly, and cascade state exactly once.
+pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
+    let mut bundle = StateBundle::default();
+
+    // App directory is only meaningful on prime root
+    if Env::is_prime_root() {
+        let app_view = build_app_directory_view();
+        AppDirectory::import(app_view);
+        bundle = bundle.with_app_directory();
+    }
+
+    // Subnet directory is always present
+    let subnet_view = build_subnet_directory_view()?;
+    SubnetDirectory::import(subnet_view);
+    bundle = bundle.with_subnet_directory();
+
+    // Cascade the new directory state once
+    root_cascade_state(bundle).await?;
+
+    Ok(())
+}
+
+//
+// ===========================================================================
 // HIGH-LEVEL FLOW
+// ===========================================================================
 //
 
 /// Create and install a new canister of the requested type beneath `parent`.
 ///
-/// The helper performs the following phases:
-/// 1. Allocate a canister ID and cycles (preferring the reserve pool).
-/// 2. Install the WASM module and bootstrap the initial state payload.
-/// 3. Record the canister in [`SubnetCanisterRegistry`] and update directory membership.
-/// 4. Cascade refreshed topology (and directory state, if applicable) so children stay in sync.
+/// PHASES:
+/// 1. Allocate a canister ID and cycles (preferring the reserve pool)
+/// 2. Install WASM + bootstrap initial state
+/// 3. Register canister in SubnetCanisterRegistry
+/// 4. Cascade topology + sync directories
 pub async fn create_and_install_canister(
     ty: &CanisterType,
     parent_pid: Principal,
@@ -46,90 +83,121 @@ pub async fn create_and_install_canister(
 ) -> Result<Principal, Error> {
     let subnet_cfg = cfg_current_subnet()?;
 
-    // Validate upfront
-    subnet_cfg.try_get_canister(ty)?; // must exist in config
-    WasmRegistry::try_get(ty)?; // must have wasm
+    // Validate configuration up front
+    subnet_cfg.try_get_canister(ty)?; // must exist in subnet config
+    WasmRegistry::try_get(ty)?; // must have WASM module registered
 
-    // Phase 1: allocate and install
+    // Phase 1: allocation
     let pid = allocate_canister(ty).await?;
+
+    // Phase 2: installation
     install_canister(pid, ty, parent_pid, extra_arg).await?;
 
-    // Phase 2: cascade topology
+    // Phase 3: update topology
     root_cascade_topology().await?;
 
-    // Phase 3: update directories (this will cause a cascade)
+    // Phase 4: sync directories (triggers its own cascade)
     sync_directories_from_registry().await?;
 
     Ok(pid)
 }
 
-///
+//
+// ===========================================================================
+// DELETION
+// ===========================================================================
+//
+
 /// Uninstall and delete an existing canister.
 ///
-/// After uninstalling the WASM code, the node is removed from
-/// [`SubnetCanisterRegistry`] and a root cascade is triggered so descendants learn
-/// about the removal.
-///
-
+/// PHASES:
+/// 0. Uninstall code
+/// 1. Remove from SubnetCanisterRegistry
+/// 2. Cascade topology
+/// 3. Sync directories
 pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
     // Phase 0: uninstall code
     uninstall_code(pid).await?;
 
-    // Phase 1: remove from registry
-    let Some(canister) = SubnetCanisterRegistry::remove(&pid) else {
+    // Phase 1: remove registry record
+    let removed = SubnetCanisterRegistry::remove(&pid);
+    if let Some(c) = removed {
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "🗑️ delete_canister: {} ({})",
+            pid,
+            c.ty
+        );
+    } else {
         log!(
             Topic::CanisterLifecycle,
             Warn,
             "🗑️ delete_canister: {pid} not in registry"
         );
-
         return Ok(());
-    };
+    }
 
-    log!(
-        Topic::CanisterLifecycle,
-        Ok,
-        "🗑️ delete_canister: {} ({})",
-        pid,
-        canister.ty
-    );
-
-    // Phase 2: cascade
+    // Phase 2: cascade topology
     root_cascade_topology().await?;
 
-    // Phase 3: update directories (this will cause a cascade)
+    // Phase 3: sync directories
     sync_directories_from_registry().await?;
 
     Ok(())
 }
 
 //
-// PHASE 1: Allocation or Creation
+// ===========================================================================
+// PHASE 1 — ALLOCATION (Reserve → Create)
+// ===========================================================================
 //
 
-/// Allocate a canister ID and cycle balance, preferring the shared reserve.
+/// Allocate a canister ID and ensure it meets the initial cycle target.
+///
+/// Reuses a canister from the reserve if available; otherwise creates a new one.
 pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
-    if let Some((pid, entry)) = CanisterReserve::pop_first() {
+    let cfg = cfg_current_subnet()?.try_get_canister(ty)?;
+    let target = cfg.initial_cycles;
+
+    // Reuse from reserve
+    if let Some((pid, _)) = CanisterReserve::pop_first() {
+        let mut current = get_cycles(pid).await?;
+
+        if current < target {
+            let missing = target.to_u128().saturating_sub(current.to_u128());
+            if missing > 0 {
+                deposit_cycles(pid, missing).await?;
+                current = Cycles::new(current.to_u128() + missing);
+
+                log!(
+                    Topic::CanisterReserve,
+                    Ok,
+                    "⚡ allocate_canister: topped up {pid} by {} to meet target {}",
+                    Cycles::from(missing),
+                    target
+                );
+            }
+        }
+
         log!(
             Topic::CanisterReserve,
             Ok,
-            "⚡ allocate_canister: reusing {} from pool ({})",
-            pid,
-            entry.cycles
+            "⚡ allocate_canister: reusing {pid} from pool (current {current})"
         );
 
-        Ok(pid)
-    } else {
-        let cfg = cfg_current_subnet()?.try_get_canister(ty)?;
-        let pid = create_canister(cfg.initial_cycles.clone()).await?;
-        log!(
-            Topic::CanisterReserve,
-            Info,
-            "⚡ allocate_canister: pool empty"
-        );
-
-        Ok(pid)
+        return Ok(pid);
     }
+
+    // Create new canister
+    let pid = create_canister(target).await?;
+    log!(
+        Topic::CanisterReserve,
+        Info,
+        "⚡ allocate_canister: pool empty"
+    );
+
+    Ok(pid)
 }
 
 /// Create a fresh canister on the IC with the configured controllers.
@@ -138,6 +206,7 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
     controllers.push(canister_self()); // root always controls
 
     let pid = crate::interface::ic::canister::create_canister(controllers, cycles.clone()).await?;
+
     log!(
         Topic::CanisterLifecycle,
         Ok,
@@ -148,10 +217,12 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
 }
 
 //
-// PHASE 2: Installation
+// ===========================================================================
+// PHASE 2 — INSTALLATION
+// ===========================================================================
 //
 
-/// Install code and initial state into a new canister.
+/// Install WASM and initial state into a new canister.
 #[allow(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,
@@ -159,11 +230,11 @@ async fn install_canister(
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
-    // register
+    // Fetch and register WASM
     let wasm = WasmRegistry::try_get(ty)?;
     SubnetCanisterRegistry::register(pid, ty, parent_pid, wasm.module_hash());
 
-    // construct payload
+    // Construct init payload
     let env = EnvData {
         prime_root_pid: Env::get_prime_root_pid(),
         subnet_type: Env::get_subnet_type(),
@@ -172,13 +243,14 @@ async fn install_canister(
         canister_type: Some(ty.clone()),
         parent_pid: Some(parent_pid),
     };
+
     let payload = CanisterInitPayload {
         env,
         app_directory: AppDirectory::export(),
         subnet_directory: SubnetDirectory::export(),
     };
 
-    // Fetch WASM and Install code
+    // Install code
     install_code(
         CanisterInstallMode::Install,
         pid,
@@ -190,7 +262,7 @@ async fn install_canister(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ install_canister: {pid} ({ty}, {:.2}KiB)",
+        "⚡ install_canister: {pid} ({ty}, {:.2} KiB)",
         wasm.len() as f64 / 1_024.0,
     );
 
