@@ -75,7 +75,8 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
     // Look up parent
     let parent_pid = match &req.parent {
         CreateCanisterParent::Root => canister_self(),
-        CreateCanisterParent::Caller => msg_caller(),
+        CreateCanisterParent::ThisCanister => msg_caller(),
+        CreateCanisterParent::Parent => SubnetCanisterRegistry::try_get_parent(msg_caller())?,
         CreateCanisterParent::Directory(ty) => SubnetCanisterRegistry::try_get_type(ty)?.pid,
         CreateCanisterParent::Canister(pid) => *pid,
     };

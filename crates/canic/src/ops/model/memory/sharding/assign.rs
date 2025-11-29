@@ -40,7 +40,7 @@ impl ShardAllocator {
 
         let response = create_canister_request::<Vec<u8>>(
             canister_type,
-            CreateCanisterParent::Caller,
+            CreateCanisterParent::ThisCanister,
             extra_arg,
         )
         .await?;
