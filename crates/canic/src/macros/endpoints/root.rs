@@ -120,20 +120,6 @@ macro_rules! canic_endpoints_root {
 macro_rules! canic_endpoints_nonroot {
     () => {
         //
-        // DIRECTORY VIEWS
-        //
-
-        #[::canic::cdk::query]
-        fn canic_app_directory() -> ::canic::model::memory::directory::DirectoryView {
-            $crate::model::memory::directory::AppDirectory::export()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_subnet_directory() -> ::canic::model::memory::directory::DirectoryView {
-            $crate::model::memory::directory::SubnetDirectory::export()
-        }
-
-        //
         // SYNC
         //
 

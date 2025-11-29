@@ -94,6 +94,26 @@ macro_rules! canic_endpoints {
         }
 
         //
+        // DIRECTORY VIEWS
+        //
+
+        #[::canic::cdk::query]
+        fn canic_app_directory(
+            offset: u64,
+            limit: u64,
+        ) -> ::canic::ops::model::memory::directory::DirectoryPageDto {
+            $crate::ops::model::memory::directory::AppDirectoryOps::page(offset, limit)
+        }
+
+        #[::canic::cdk::query]
+        fn canic_subnet_directory(
+            offset: u64,
+            limit: u64,
+        ) -> Result<::canic::ops::model::memory::directory::DirectoryPageDto, ::canic::Error> {
+            $crate::ops::model::memory::directory::SubnetDirectoryOps::page(offset, limit)
+        }
+
+        //
         // TOPOLOGY
         //
 
