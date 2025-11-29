@@ -13,7 +13,7 @@ use canic::{
 };
 use canic_internal::canister::SHARD_HUB;
 
-const SHARD_POOL: &str = "shards";
+const POOL_NAME: &str = "shards";
 
 //
 // CANIC
@@ -31,7 +31,7 @@ async fn canic_upgrade() {}
 
 #[update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
-    let shard_pid = ShardingOps::assign_to_pool(SHARD_POOL, pid).await?;
+    let shard_pid = ShardingOps::assign_to_pool(POOL_NAME, pid).await?;
 
     Ok(shard_pid)
 }
@@ -39,7 +39,7 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 /// Dry-run the player registration decision using config-driven policy.
 #[query]
 async fn plan_register_principal(pid: Principal) -> Result<ShardingPlan, Error> {
-    let plan = ShardingPolicyOps::plan_assign_to_pool(SHARD_POOL, pid)?;
+    let plan = ShardingPolicyOps::plan_assign_to_pool(POOL_NAME, pid)?;
 
     Ok(plan)
 }

@@ -9,6 +9,8 @@ use candid::Principal;
 use canic::{Error, ops::model::memory::scaling, prelude::*};
 use canic_internal::canister::SCALE_HUB;
 
+const POOL_NAME: &str = "scales";
+
 //
 // CANIC
 //
@@ -26,7 +28,7 @@ async fn canic_upgrade() {}
 /// Create a new worker in the given pool.
 #[update]
 async fn create_worker() -> Result<Principal, Error> {
-    let worker_pid = scaling::create_worker("scales").await?;
+    let worker_pid = scaling::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
 }
@@ -35,7 +37,7 @@ async fn create_worker() -> Result<Principal, Error> {
 #[query]
 async fn plan_create_worker() -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
-    let plan = scaling::plan_create_worker("scales")?;
+    let plan = scaling::plan_create_worker(POOL_NAME)?;
 
     Ok(plan.should_spawn)
 }

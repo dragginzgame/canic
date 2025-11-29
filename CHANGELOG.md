@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - added FromStr for Account
 - added crate_name to the logs, plus filtering on the front end
 - Scaling now uses plan_create_worker so there aren't two parallel paths for checking if a worker can be spawned
+- lots of work going through the codebase and moving state and memory into model
 
 ## [0.2.24] - 2025-11-10
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
