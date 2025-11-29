@@ -70,7 +70,10 @@ pub struct CreateCanisterRequest {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
-    Caller,
+    /// Use the requesting canister as parent.
+    ThisCanister,
+    /// Use the requesting canister's parent (creates a sibling).
+    Parent,
     Canister(Principal),
     Directory(CanisterType),
 }

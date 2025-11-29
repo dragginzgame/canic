@@ -61,6 +61,13 @@ impl SubnetCanisterRegistry {
         Self::get(pid).ok_or_else(|| TopologyError::PrincipalNotFound(pid).into())
     }
 
+    /// Returns the parent PID for a given canister, if recorded.
+    pub fn try_get_parent(pid: Principal) -> Result<Principal, Error> {
+        Self::try_get(pid)?
+            .parent_pid
+            .ok_or_else(|| TopologyError::PrincipalNotFound(pid).into())
+    }
+
     /// Finds the first canister with the given [`CanisterType`].
     pub fn try_get_type(ty: &CanisterType) -> Result<CanisterEntry, Error> {
         Self::with_entries(|iter| {

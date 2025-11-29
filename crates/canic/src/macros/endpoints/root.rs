@@ -66,18 +66,11 @@ macro_rules! canic_endpoints_root {
         }
 
         //
-        // REGISTRIES + TOPOLOGY
-        // on root, the SubnetCanisterRegistry is the main source of truth
+        // REGISTRIES
         //
 
         #[::canic::cdk::query]
         fn canic_app_subnet_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView {
-            $crate::model::memory::topology::AppSubnetRegistry::export()
-        }
-
-        #[::canic::cdk::query]
-        fn canic_app_canister_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView
-        {
             $crate::model::memory::topology::AppSubnetRegistry::export()
         }
 

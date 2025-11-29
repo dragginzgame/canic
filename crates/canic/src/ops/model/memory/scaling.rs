@@ -127,7 +127,7 @@ pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
     let ty = pool_cfg.canister_type.clone();
 
     // 3. Create the canister
-    let pid = create_canister_request::<()>(&ty, CreateCanisterParent::Caller, None)
+    let pid = create_canister_request::<()>(&ty, CreateCanisterParent::ThisCanister, None)
         .await?
         .new_canister_pid;
 

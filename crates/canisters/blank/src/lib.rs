@@ -25,7 +25,7 @@ async fn canic_upgrade() {}
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&BLANK, CreateCanisterParent::Caller, None).await
+    create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
 export_candid!();

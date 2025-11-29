@@ -96,7 +96,7 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::Caller, None).await
+    create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
 /// test_perf
