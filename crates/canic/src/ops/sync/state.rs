@@ -7,7 +7,7 @@ use crate::{
     Error,
     log::Topic,
     model::memory::{
-        directory::{AppDirectory, DirectoryView, SubnetDirectory},
+        directory::{AppDirectory, SubnetDirectory},
         state::{AppState, AppStateData, SubnetState, SubnetStateData},
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },

@@ -19,7 +19,10 @@ use crate::{
     Error,
     config::model::{ShardPool, ShardPoolPolicy},
     model::memory::sharding::{PoolMetrics, ShardingRegistry, ShardingRegistryView},
-    ops::{context::cfg_current_canister, model::memory::sharding::ShardingOpsError},
+    ops::{
+        context::cfg_current_canister,
+        model::memory::sharding::{ShardingOpsError, ShardingRegistryOps},
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -110,7 +113,7 @@ impl ShardingPolicyOps {
         let tenant = tenant.to_string();
         let metrics = ShardingRegistry::metrics(pool);
         let pool_cfg = Self::get_pool_config(pool)?;
-        ShardingRegistry::ensure_slot_assignments(pool, pool_cfg.policy.max_shards);
+        ShardingRegistryOps::ensure_slot_assignments(pool, pool_cfg.policy.max_shards);
 
         // Case 1: Tenant already assigned → nothing to do
         if let Some(pid) = ShardingRegistry::tenant_shard(pool, &tenant) {

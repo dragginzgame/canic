@@ -165,35 +165,6 @@ impl LogEntry {
 impl_storable_unbounded!(LogEntry);
 
 // -----------------------------------------------------------------------------
-// LogEntryView
-// -----------------------------------------------------------------------------
-
-#[derive(CandidType, Clone, Debug, Serialize)]
-pub struct LogEntryView {
-    pub index: u64,
-    pub created_at: u64,
-    pub crate_name: String,
-    pub level: Level,
-    pub topic: Option<String>,
-    pub message: String,
-}
-
-impl LogEntryView {
-    fn from_pair(index: usize, entry: LogEntry) -> Self {
-        Self {
-            index: index as u64,
-            created_at: entry.created_at,
-            crate_name: entry.crate_name,
-            level: entry.level,
-            topic: entry.topic,
-            message: entry.message,
-        }
-    }
-}
-
-pub type LogView = Vec<LogEntryView>;
-
-// -----------------------------------------------------------------------------
 // Core filtering iterator
 // -----------------------------------------------------------------------------
 

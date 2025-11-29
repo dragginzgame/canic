@@ -1,6 +1,6 @@
 use crate::{
     cdk::api::{is_controller, msg_caller},
-    model::memory::state::{AppMode, AppState},
+    ops::model::memory::state::{AppMode, AppStateOps},
 };
 use thiserror::Error as ThisError;
 
@@ -19,25 +19,23 @@ pub enum GuardError {
     AppReadonly,
 }
 
-// guard_query
 pub fn guard_query() -> Result<(), String> {
     if is_controller(&msg_caller()) {
         return Ok(());
     }
 
-    match AppState::get_mode() {
+    match AppStateOps::get_mode() {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),
     }
 }
 
-// guard_update
 pub fn guard_update() -> Result<(), String> {
     if is_controller(&msg_caller()) {
         return Ok(());
     }
 
-    match AppState::get_mode() {
+    match AppStateOps::get_mode() {
         AppMode::Enabled => Ok(()),
         AppMode::Readonly => Err(GuardError::AppReadonly.to_string()),
         AppMode::Disabled => Err(GuardError::AppDisabled.to_string()),

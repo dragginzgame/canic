@@ -1,10 +1,15 @@
 pub mod cycles;
 pub mod directory;
+pub mod env;
 pub mod log;
+pub mod registry;
 pub mod reserve;
 pub mod scaling;
 pub mod sharding;
+pub mod state;
 pub mod topology;
+
+pub use env::EnvOps;
 
 use crate::{
     Error, ThisError,

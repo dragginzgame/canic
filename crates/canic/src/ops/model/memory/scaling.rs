@@ -8,7 +8,7 @@
 use crate::{
     Error, ThisError,
     config::model::ScalePool,
-    model::memory::scaling::{ScalingRegistry, ScalingRegistryView, WorkerEntry},
+    model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
         OpsError,
         context::cfg_current_canister,

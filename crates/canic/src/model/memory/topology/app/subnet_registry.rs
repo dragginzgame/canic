@@ -36,8 +36,6 @@ impl_storable_bounded!(AppSubnet, 64, true);
 
 pub struct AppSubnetRegistry;
 
-pub type AppSubnetRegistryView = Vec<(Principal, AppSubnet)>;
-
 impl AppSubnetRegistry {
     #[must_use]
     pub fn get(subnet_pid: Principal) -> Option<AppSubnet> {
@@ -48,17 +46,17 @@ impl AppSubnetRegistry {
         Self::get(subnet_pid).ok_or_else(|| TopologyError::SubnetNotFound(subnet_pid).into())
     }
 
-    pub fn import(view: AppSubnetRegistryView) {
+    pub fn import(data: Vec<(Principal, AppSubnet)>) {
         APP_SUBNET_REGISTRY.with_borrow_mut(|map| {
             map.clear();
-            for (pid, subnet) in view {
+            for (pid, subnet) in data {
                 map.insert(pid, subnet);
             }
         });
     }
 
     #[must_use]
-    pub fn export() -> AppSubnetRegistryView {
+    pub fn export() -> Vec<(Principal, AppSubnet)> {
         APP_SUBNET_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
     }
 }

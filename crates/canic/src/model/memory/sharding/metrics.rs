@@ -1,5 +1,5 @@
 use crate::{
-    model::memory::sharding::{ShardEntry, ShardingRegistry, ShardingRegistryView},
+    model::memory::sharding::{ShardEntry, ShardingRegistry},
     types::CanisterType,
 };
 
@@ -106,6 +106,7 @@ impl ShardingRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::memory::sharding::ShardKey;
     use candid::Principal;
 
     fn p(id: u8) -> Principal {
@@ -137,12 +138,23 @@ mod tests {
         ShardingRegistry::create(p(2), "poolA", 1, &CanisterType::new("alpha"), 20);
 
         // Simulate usage: assign 3 tenants to shard 1, 10 tenants to shard 2
-        for i in 0..3 {
-            ShardingRegistry::assign("poolA", p(10 + i).to_string(), p(1)).unwrap();
-        }
-        for i in 0..10 {
-            ShardingRegistry::assign("poolA", p(20 + i).to_string(), p(2)).unwrap();
-        }
+        ShardingRegistry::with_mut(|core| {
+            for i in 0..3 {
+                core.insert_assignment(ShardKey::new("poolA", &p(10 + i).to_string()), p(1));
+            }
+            for i in 0..10 {
+                core.insert_assignment(ShardKey::new("poolA", &p(20 + i).to_string()), p(2));
+            }
+
+            if let Some(mut entry) = core.get_entry(&p(1)) {
+                entry.count = 3;
+                core.insert_entry(p(1), entry);
+            }
+            if let Some(mut entry) = core.get_entry(&p(2)) {
+                entry.count = 10;
+                core.insert_entry(p(2), entry);
+            }
+        });
 
         let m = ShardingRegistry::metrics("poolA");
 

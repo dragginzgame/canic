@@ -1,8 +1,9 @@
 pub mod assign;
 pub mod hrw;
 pub mod policy;
+pub mod registry;
 
-pub use {assign::*, policy::*};
+pub use {assign::*, policy::*, registry::*};
 
 use crate::{
     Error, ThisError,

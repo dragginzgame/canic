@@ -1,9 +1,36 @@
 use crate::{
     log::Level,
-    model::memory::log::{LogEntryView, StableLog},
+    model::memory::log::{LogEntry, StableLog},
 };
 use candid::CandidType;
 use serde::Serialize;
+
+///
+/// LogEntryDto
+///
+
+#[derive(CandidType, Clone, Debug, Serialize)]
+pub struct LogEntryDto {
+    pub index: u64,
+    pub created_at: u64,
+    pub crate_name: String,
+    pub level: Level,
+    pub topic: Option<String>,
+    pub message: String,
+}
+
+impl LogEntryDto {
+    fn from_pair(index: usize, entry: LogEntry) -> Self {
+        Self {
+            index: index as u64,
+            created_at: entry.created_at,
+            crate_name: entry.crate_name,
+            level: entry.level,
+            topic: entry.topic,
+            message: entry.message,
+        }
+    }
+}
 
 ///
 /// LogPageDto
@@ -11,7 +38,7 @@ use serde::Serialize;
 
 #[derive(CandidType, Serialize)]
 pub struct LogPageDto {
-    pub entries: Vec<LogEntryView>,
+    pub entries: Vec<LogEntryDto>,
     pub total: u64,
 }
 

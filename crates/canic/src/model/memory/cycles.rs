@@ -1,6 +1,7 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, log,
+    log::Topic,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
     types::Cycles,
     utils::time::now_secs,
@@ -20,7 +21,7 @@ eager_static! {
 
 /// constants
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
-const PURGE_INSERT_INTERVAL: u64 = 1_000; // purge every 1000 inserts
+const PURGE_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 
 ///
 /// CycleTracker
@@ -28,8 +29,6 @@ const PURGE_INSERT_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 /// NOTE : Can't really do tests for this here, it really needs e2e because I can't
 /// declare M: Memory as a generic right now, it breaks ic-stable-structures/other ic packages
 ///
-
-pub type CycleTrackerView = Vec<(u64, Cycles)>;
 
 pub struct CycleTracker {
     map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>,
@@ -43,6 +42,8 @@ impl CycleTracker {
             insert_count: 0,
         }
     }
+
+    // -------- PUBLIC API (model-facing) -------- //
 
     #[must_use]
     pub fn len() -> u64 {
@@ -68,12 +69,12 @@ impl CycleTracker {
     }
 
     #[must_use]
-    pub fn export() -> CycleTrackerView {
+    pub fn export() -> Vec<(u64, Cycles)> {
         CYCLE_TRACKER.with_borrow(Self::view)
     }
 
     #[must_use]
-    pub fn entries(offset: u64, limit: u64) -> CycleTrackerView {
+    pub fn entries(offset: u64, limit: u64) -> Vec<(u64, Cycles)> {
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 
@@ -87,13 +88,13 @@ impl CycleTracker {
         })
     }
 
-    // --- internal state methods ---
+    // -------- INTERNAL MAP OPERATIONS -------- //
 
     fn insert(&mut self, now: u64, cycles: u128) -> bool {
         self.map.insert(now, cycles);
         self.insert_count += 1;
 
-        if self.insert_count.is_multiple_of(PURGE_INSERT_INTERVAL) {
+        if self.insert_count % PURGE_INTERVAL == 0 {
             self.purge(now);
         }
 
@@ -113,11 +114,18 @@ impl CycleTracker {
             }
         }
 
-        log!(Info, "cycle_tracker: purged {purged} old entries");
+        if purged > 0 {
+            log!(
+                Topic::Cycles,
+                Info,
+                "cycle_tracker: purged {purged} old entries"
+            );
+        }
+
         purged
     }
 
-    fn view(&self) -> CycleTrackerView {
-        self.map.view().map(|(t, c)| (t, c.into())).collect()
+    fn view(&self) -> Vec<(u64, Cycles)> {
+        self.map.view().map(|(ts, c)| (ts, c.into())).collect()
     }
 }

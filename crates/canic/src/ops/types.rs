@@ -1,7 +1,4 @@
-use crate::{
-    interface::prelude::*,
-    model::memory::{directory::DirectoryView, env::EnvData},
-};
+use crate::{interface::prelude::*, model::memory::env::EnvData};
 use serde::Deserialize;
 
 ///

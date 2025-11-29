@@ -38,8 +38,6 @@ impl_storable_unbounded!(CanisterReserveEntry);
 
 pub struct CanisterReserve;
 
-pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
-
 impl CanisterReserve {
     /// Register a canister into the reserve.
     pub fn register(pid: Principal, cycles: Cycles) {
@@ -73,7 +71,7 @@ impl CanisterReserve {
 
     /// Export the reserve as a vector of (Principal, Entry).
     #[must_use]
-    pub fn export() -> CanisterReserveView {
+    pub fn export() -> Vec<(Principal, CanisterReserveEntry)> {
         CANISTER_RESERVE.with_borrow(BTreeMap::to_vec)
     }
 
