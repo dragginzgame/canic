@@ -7,11 +7,11 @@ macro_rules! canic_endpoints_root {
         // eventually this will cascade down from an orchestrator canister
         #[::canic::cdk::update]
         async fn canic_app(
-            cmd: ::canic::model::memory::state::AppCommand,
+            cmd: ::canic::ops::model::memory::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            ::canic::model::memory::state::AppState::command(cmd)?;
+            ::canic::ops::model::memory::state::AppStateOps::command(cmd)?;
 
             let bundle = ::canic::ops::sync::state::StateBundle::new().with_app_state();
             ::canic::ops::sync::state::root_cascade_state(bundle).await?;
@@ -71,12 +71,12 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         fn canic_app_subnet_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView {
-            $crate::model::memory::topology::AppSubnetRegistry::export()
+            $crate::ops::model::memory::topology::TopologyRegistryOps::export_app_subnet_registry()
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_canister_registry() -> Vec<::canic::model::memory::CanisterEntry> {
-            $crate::model::memory::topology::SubnetCanisterRegistry::export()
+            $crate::ops::model::memory::topology::TopologyRegistryOps::export_subnet_canister_registry()
         }
 
         //
@@ -86,7 +86,7 @@ macro_rules! canic_endpoints_root {
         #[::canic::cdk::query]
         async fn canic_reserve_list()
         -> Result<::canic::model::memory::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::model::memory::reserve::CanisterReserve::export())
+            Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
         }
 
         #[update]

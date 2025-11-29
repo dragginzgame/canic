@@ -57,13 +57,13 @@ macro_rules! canic_endpoints {
         //
 
         #[::canic::cdk::query]
-        fn canic_memory_registry() -> ::canic::model::memory::registry::MemoryRegistryView {
-            $crate::model::memory::registry::MemoryRegistry::export()
+        fn canic_memory_registry() -> ::canic::ops::model::memory::registry::MemoryRegistryView {
+            $crate::ops::model::memory::registry::MemoryRegistry::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_env() -> ::canic::model::memory::env::EnvData {
-            $crate::model::memory::Env::export()
+        fn canic_env() -> ::canic::ops::model::memory::env::EnvData {
+            $crate::ops::model::memory::EnvOps::export()
         }
 
         #[::canic::cdk::query]
@@ -85,12 +85,12 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         fn canic_app_state() -> ::canic::model::memory::state::AppStateData {
-            $crate::model::memory::state::AppState::export()
+            $crate::ops::model::memory::state::AppStateOps::export()
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_state() -> ::canic::model::memory::state::SubnetStateData {
-            $crate::model::memory::state::SubnetState::export()
+            $crate::ops::model::memory::state::SubnetStateOps::export()
         }
 
         //

@@ -6,10 +6,7 @@ use crate::{
     interface::ic::canister_cycle_balance,
     log,
     log::Topic,
-    model::memory::{
-        Env,
-        cycles::{CycleTracker, CycleTrackerView},
-    },
+    model::memory::{Env, cycles::CycleTracker},
     ops::context::cfg_current_canister,
     types::Cycles,
     utils::time::now_secs,

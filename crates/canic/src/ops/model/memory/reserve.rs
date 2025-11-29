@@ -132,6 +132,11 @@ impl CanisterReserveOps {
 
         0
     }
+
+    #[must_use]
+    pub fn export() -> CanisterReserveView {
+        CanisterReserve::export()
+    }
 }
 
 /// Create an empty reserve canister controlled by root.

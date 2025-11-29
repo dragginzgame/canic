@@ -12,7 +12,7 @@ use crate::{
     model::memory::sharding::ShardingRegistry,
     ops::{
         context::cfg_current_canister,
-        model::memory::sharding::ShardingOpsError,
+        model::memory::sharding::{ShardingOpsError, ShardingRegistryOps},
         request::{CreateCanisterParent, create_canister_request},
     },
     types::CanisterType,
@@ -103,7 +103,7 @@ impl ShardingOps {
             }
 
             ShardingPlanState::UseExisting { pid } => {
-                ShardingRegistry::assign(pool, tenant, pid)?;
+                ShardingRegistryOps::assign(pool, tenant, pid)?;
                 let slot = plan
                     .target_slot
                     .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
@@ -124,7 +124,7 @@ impl ShardingOps {
                 })?;
                 let pid =
                     ShardAllocator::allocate(pool, slot, canister_type, &policy, extra_arg).await?;
-                ShardingRegistry::assign(pool, tenant, pid)?;
+                ShardingRegistryOps::assign(pool, tenant, pid)?;
                 log!(
                     Topic::Sharding,
                     Ok,
@@ -155,7 +155,7 @@ impl ShardingOps {
             let plan = ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?;
             match plan.state {
                 ShardingPlanState::UseExisting { pid } if pid != donor_shard_pid => {
-                    ShardingRegistry::assign(pool, tenant, pid)?;
+                    ShardingRegistryOps::assign(pool, tenant, pid)?;
                     log!(
                         Topic::Sharding,
                         Info,
@@ -177,7 +177,7 @@ impl ShardingOps {
                         None,
                     )
                     .await?;
-                    ShardingRegistry::assign(pool, tenant, new_pid)?;
+                    ShardingRegistryOps::assign(pool, tenant, new_pid)?;
                     log!(
                         Topic::Sharding,
                         Ok,

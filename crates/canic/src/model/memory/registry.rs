@@ -223,8 +223,6 @@ impl_storable_bounded!(MemoryRegistryEntry, 320, false);
 
 pub struct MemoryRegistry;
 
-pub type MemoryRegistryView = Vec<(u8, MemoryRegistryEntry)>;
-
 impl MemoryRegistry {
     #[must_use]
     pub fn is_empty() -> bool {
@@ -327,7 +325,7 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub fn export() -> MemoryRegistryView {
+    pub fn export() -> Vec<(u8, MemoryRegistryEntry)> {
         MEMORY_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (*entry.key(), entry.value()))

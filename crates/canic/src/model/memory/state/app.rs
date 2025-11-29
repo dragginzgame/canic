@@ -1,8 +1,7 @@
 use crate::{
     Error,
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    eager_static, ic_memory, impl_storable_bounded, log,
-    log::Topic,
+    eager_static, ic_memory, impl_storable_bounded,
     model::{
         ModelError,
         memory::{MemoryError, id::state::APP_STATE_ID, state::StateError},
@@ -59,17 +58,6 @@ pub enum AppMode {
 }
 
 ///
-/// AppCommand
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq)]
-pub enum AppCommand {
-    Start,
-    Readonly,
-    Stop,
-}
-
-///
 /// AppStateData
 ///
 
@@ -98,30 +86,6 @@ impl AppState {
             data.mode = mode;
             cell.set(data);
         });
-    }
-
-    pub fn command(cmd: AppCommand) -> Result<(), Error> {
-        APP_STATE.with_borrow_mut(|cell| {
-            let old_mode = cell.get().mode;
-
-            let new_mode = match cmd {
-                AppCommand::Start => AppMode::Enabled,
-                AppCommand::Readonly => AppMode::Readonly,
-                AppCommand::Stop => AppMode::Disabled,
-            };
-
-            if old_mode == new_mode {
-                return Err(AppStateError::AlreadyInMode(old_mode))?;
-            }
-
-            let mut data = *cell.get();
-            data.mode = new_mode;
-            cell.set(data);
-
-            log!(Topic::App, Ok, "app: mode changed {old_mode} -> {new_mode}");
-
-            Ok(())
-        })
     }
 
     pub fn import(data: AppStateData) {
@@ -161,38 +125,6 @@ mod tests {
 
         AppState::set_mode(AppMode::Readonly);
         assert_eq!(AppState::get_mode(), AppMode::Readonly);
-    }
-
-    #[test]
-    fn command_changes_modes() {
-        reset_state(AppMode::Disabled);
-
-        // Start command sets to Enabled
-        assert!(AppState::command(AppCommand::Start).is_ok());
-        assert_eq!(AppState::get_mode(), AppMode::Enabled);
-
-        // Readonly command sets to Readonly
-        assert!(AppState::command(AppCommand::Readonly).is_ok());
-        assert_eq!(AppState::get_mode(), AppMode::Readonly);
-
-        // Stop command sets to Disabled
-        assert!(AppState::command(AppCommand::Stop).is_ok());
-        assert_eq!(AppState::get_mode(), AppMode::Disabled);
-    }
-
-    #[test]
-    fn duplicate_command_fails() {
-        reset_state(AppMode::Enabled);
-
-        // Sending Start again when already Enabled should error
-        let err = AppState::command(AppCommand::Start)
-            .unwrap_err()
-            .to_string();
-
-        assert!(
-            err.contains("app is already in Enabled mode"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]

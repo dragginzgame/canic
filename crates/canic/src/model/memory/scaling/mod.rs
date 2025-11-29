@@ -66,8 +66,6 @@ impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ScalingRegistry;
 
-pub type ScalingRegistryView = Vec<(Principal, WorkerEntry)>;
-
 impl ScalingRegistry {
     /// Insert or update a worker entry
     pub fn insert(pid: Principal, entry: WorkerEntry) {

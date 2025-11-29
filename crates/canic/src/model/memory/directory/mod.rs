@@ -30,12 +30,6 @@ impl From<DirectoryError> for Error {
 }
 
 ///
-/// DirectoryView
-///
-
-pub type DirectoryView = Vec<(CanisterType, PrincipalList)>;
-
-///
 /// PrincipalList
 ///
 
