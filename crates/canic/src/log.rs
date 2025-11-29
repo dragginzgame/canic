@@ -61,9 +61,9 @@ macro_rules! log {
 
         // append entry
         let crate_name = env!("CARGO_PKG_NAME");
-        let _ = $crate::memory::log::StableLog::append(crate_name, topic_opt, level, &message);
+        let _ = $crate::model::memory::log::StableLog::append(crate_name, topic_opt, level, &message);
 
-        let ty_raw = $crate::memory::Env::get_canister_type()
+        let ty_raw = $crate::model::memory::Env::get_canister_type()
             .as_ref()
             .map_or_else(|| "...".to_string(), ::std::string::ToString::to_string);
 

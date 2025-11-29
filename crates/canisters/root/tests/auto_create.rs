@@ -1,7 +1,7 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::{memory::CanisterEntry, types::CanisterType};
+use canic::{model::memory::CanisterEntry, types::CanisterType};
 use canic_internal::canister;
 use pocket_ic::PocketIc;
 

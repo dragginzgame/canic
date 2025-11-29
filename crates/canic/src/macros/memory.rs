@@ -13,10 +13,14 @@ macro_rules! ic_memory {
         let _type_check: Option<$label> = None;
 
         // Enqueue this memory ID registration for deferred validation.
-        $crate::memory::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label));
+        $crate::model::memory::registry::defer_register(
+            $id,
+            env!("CARGO_PKG_NAME"),
+            stringify!($label),
+        );
 
         // Return the stable memory handle immediately for further wrapping.
-        $crate::memory::MEMORY_MANAGER
+        $crate::model::memory::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
@@ -31,6 +35,6 @@ macro_rules! ic_memory_range {
         // Enqueue this range reservation. The actual check/insert happens in
         // `force_init_all_tls()`. This guarantees the reservation is made
         // before any memory IDs from this range are registered.
-        $crate::memory::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
+        $crate::model::memory::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
     }};
 }

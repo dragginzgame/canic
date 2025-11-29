@@ -92,14 +92,14 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::memory::topology::SubnetIdentity) {
+        fn init(identity: ::canic::model::memory::topology::SubnetIdentity) {
             ::canic::__canic_load_config!();
 
             // ops
             ::canic::ops::lifecycle::root_init(identity);
 
             // import wasms
-            ::canic::state::wasm::WasmRegistry::import(WASMS);
+            ::canic::model::wasm::WasmRegistry::import(WASMS);
 
             // timers
             let _ =
@@ -115,7 +115,7 @@ macro_rules! start_root {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             ::canic::__canic_load_config!();
-            ::canic::state::wasm::WasmRegistry::import(WASMS);
+            ::canic::model::wasm::WasmRegistry::import(WASMS);
 
             // ops
             ::canic::ops::lifecycle::root_post_upgrade();

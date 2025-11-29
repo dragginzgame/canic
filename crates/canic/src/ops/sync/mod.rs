@@ -7,18 +7,18 @@ use crate::{Error, ThisError, ops::OpsError};
 use candid::Principal;
 
 ///
-/// SyncError
+/// SyncOpsError
 /// Errors raised during synchronization
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SyncError {
+pub enum SyncOpsError {
     #[error("canister not found")]
     CanisterNotFound(Principal),
 }
 
-impl From<SyncError> for Error {
-    fn from(err: SyncError) -> Self {
+impl From<SyncOpsError> for Error {
+    fn from(err: SyncOpsError) -> Self {
         OpsError::from(err).into()
     }
 }

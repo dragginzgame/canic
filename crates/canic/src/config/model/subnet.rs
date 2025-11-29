@@ -81,6 +81,18 @@ impl Validate for SubnetConfig {
                             ty = pool.canister_type
                         )));
                     }
+
+                    if pool.policy.capacity == 0 {
+                        return Err(ConfigModelError::ValidationError(format!(
+                            "canister '{parent_ty}' sharding pool '{pool_name}' has zero capacity; must be > 0",
+                        )));
+                    }
+
+                    if pool.policy.max_shards == 0 {
+                        return Err(ConfigModelError::ValidationError(format!(
+                            "canister '{parent_ty}' sharding pool '{pool_name}' has max_shards of 0; must be > 0",
+                        )));
+                    }
                 }
             }
 
@@ -91,6 +103,15 @@ impl Validate for SubnetConfig {
                         return Err(ConfigModelError::ValidationError(format!(
                             "canister '{parent_ty}' scaling pool '{pool_name}' references unknown canister type '{ty}'",
                             ty = pool.canister_type
+                        )));
+                    }
+
+                    if pool.policy.max_workers != 0
+                        && pool.policy.max_workers < pool.policy.min_workers
+                    {
+                        return Err(ConfigModelError::ValidationError(format!(
+                            "canister '{parent_ty}' scaling pool '{pool_name}' has max_workers < min_workers (min {}, max {})",
+                            pool.policy.min_workers, pool.policy.max_workers
                         )));
                     }
                 }
@@ -329,6 +350,93 @@ mod tests {
                 assert!(
                     msg.contains("missing_shard_worker"),
                     "error should include missing canister type, got: {msg}"
+                );
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sharding_pool_policy_requires_positive_capacity_and_shards() {
+        let managing_ty: CanisterType = "shard_hub".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut sharding = ShardingConfig::default();
+        sharding.pools.insert(
+            "primary".into(),
+            ShardPool {
+                canister_type: managing_ty.clone(),
+                policy: ShardPoolPolicy {
+                    capacity: 0,
+                    max_shards: 0,
+                },
+            },
+        );
+
+        canisters.insert(
+            managing_ty,
+            CanisterConfig {
+                sharding: Some(sharding),
+                ..Default::default()
+            },
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        let err = subnet
+            .validate()
+            .expect_err("expected invalid sharding policy to fail");
+        match err {
+            ConfigModelError::ValidationError(msg) => {
+                assert!(
+                    msg.contains("zero capacity") || msg.contains("max_shards"),
+                    "error should mention capacity or max_shards, got: {msg}"
+                );
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scaling_pool_policy_requires_max_ge_min_when_bounded() {
+        let mut canisters = BTreeMap::new();
+        let mut pools = BTreeMap::new();
+        pools.insert(
+            "worker".into(),
+            ScalePool {
+                canister_type: CanisterType::from("worker"),
+                policy: ScalePoolPolicy {
+                    min_workers: 5,
+                    max_workers: 3,
+                },
+            },
+        );
+
+        canisters.insert(CanisterType::from("worker"), CanisterConfig::default());
+
+        let manager_cfg = CanisterConfig {
+            scaling: Some(ScalingConfig { pools }),
+            ..Default::default()
+        };
+
+        canisters.insert(CanisterType::from("manager"), manager_cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        let err = subnet
+            .validate()
+            .expect_err("expected invalid scaling policy to fail");
+        match err {
+            ConfigModelError::ValidationError(msg) => {
+                assert!(
+                    msg.contains("max_workers < min_workers"),
+                    "error should mention ordering, got: {msg}"
                 );
             }
             other => panic!("unexpected error variant: {other:?}"),

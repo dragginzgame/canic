@@ -7,7 +7,7 @@
 use crate::{
     Error,
     log::Topic,
-    memory::{
+    model::memory::{
         CanisterSummary,
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
