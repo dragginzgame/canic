@@ -17,11 +17,29 @@ thread_local! {
 }
 
 /// Ensure all eager TLS statics are touched before memory init runs.
+///
+/// This drains (not clones) the list of registered TLS initializer closures,
+/// and invokes each one exactly once. Using `std::mem::take` ensures:
+///
+/// - we avoid holding a mutable borrow while calling user-registered closures
+/// - closures cannot be called twice (the vector is emptied atomically)
+/// - no accidental re-entrancy can append while we iterate
+/// - the registry remains empty after initialization, preventing repeats
+///
+/// This must run *before* memory initialization so that all thread_local!
+/// statics which allocate or register stable memory segments are forced to
+/// initialize deterministically and contribute their memory IDs in a stable
+/// order. Without this eager pass, TLS statics would initialize lazily on
+/// first use, which could cause non-deterministic memory registration during
+/// canister execution.
 pub fn init_eager_tls() {
-    // Drain into a temporary Vec so we don't hold the borrow
-    // while invoking the closures.
-    let funcs: Vec<_> = CANIC_EAGER_TLS.with(|v| v.borrow().clone());
+    // Atomically take ownership of the initializer list and leave it empty.
+    let funcs = CANIC_EAGER_TLS.with(|v| {
+        let mut v = v.borrow_mut();
+        std::mem::take(&mut *v)
+    });
 
+    // Invoke all registered TLS initializers.
     for f in funcs {
         f();
     }

@@ -70,7 +70,7 @@ macro_rules! canic_endpoints_root {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_subnet_registry() -> ::canic::model::memory::topology::AppSubnetRegistryView {
+        fn canic_app_subnet_registry() -> ::canic::ops::model::memory::topology::AppSubnetRegistryView {
             $crate::ops::model::memory::topology::TopologyRegistryOps::export_app_subnet_registry()
         }
 
@@ -85,7 +85,7 @@ macro_rules! canic_endpoints_root {
 
         #[::canic::cdk::query]
         async fn canic_reserve_list()
-        -> Result<::canic::model::memory::reserve::CanisterReserveView, ::canic::Error> {
+        -> Result<::canic::ops::model::memory::reserve::CanisterReserveView, ::canic::Error> {
             Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
         }
 

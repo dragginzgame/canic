@@ -141,7 +141,7 @@ impl Error {
 
 from_to_string!(auth::AuthError, AuthError);
 from_to_string!(config::ConfigError, ConfigError);
-from_to_string!(env::EnvError, EnvError);
+from_to_string!(env::EnvError, ConfigError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);

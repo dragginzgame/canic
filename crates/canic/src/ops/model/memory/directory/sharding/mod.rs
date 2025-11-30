@@ -1,13 +1,14 @@
 pub mod assign;
 pub mod hrw;
+pub mod metrics;
 pub mod policy;
 pub mod registry;
 
-pub use {assign::*, policy::*, registry::*};
+pub use {assign::*, metrics::*, policy::*, registry::*};
 
 use crate::{
-    Error, ThisError,
-    ops::{OpsError, model::ModelOpsError, model::memory::MemoryOpsError},
+    Error, ThisError, model::memory::sharding::ShardEntry, ops::model::memory::MemoryOpsError,
+    types::Principal,
 };
 
 ///
@@ -26,6 +27,12 @@ pub enum ShardingOpsError {
     #[error("shard creation blocked: {0}")]
     ShardCreationBlocked(String),
 
+    #[error("shard not found: {0}")]
+    ShardNotFound(Principal),
+
+    #[error("shard full: {0}")]
+    ShardFull(Principal),
+
     #[error("sharding disabled")]
     ShardingDisabled,
 
@@ -35,9 +42,12 @@ pub enum ShardingOpsError {
 
 impl From<ShardingOpsError> for Error {
     fn from(err: ShardingOpsError) -> Self {
-        OpsError::ModelOpsError(ModelOpsError::MemoryOpsError(
-            MemoryOpsError::ShardingOpsError(err),
-        ))
-        .into()
+        MemoryOpsError::ShardingOpsError(err).into()
     }
 }
+
+///
+/// ShardingRegistryDto
+///
+
+pub type ShardingRegistryDto = Vec<(Principal, ShardEntry)>;

@@ -15,6 +15,9 @@ use candid::Principal;
 pub enum SyncOpsError {
     #[error("canister not found")]
     CanisterNotFound(Principal),
+
+    #[error("root canister not found")]
+    RootNotFound,
 }
 
 impl From<SyncOpsError> for Error {

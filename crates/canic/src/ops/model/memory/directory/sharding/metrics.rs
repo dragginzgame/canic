@@ -1,10 +1,11 @@
 use crate::{
     model::memory::sharding::{ShardEntry, ShardingRegistry},
-    types::CanisterType,
+    types::{CanisterType, Principal},
 };
 
 ///
 /// PoolMetrics
+/// Aggregated metrics for a pool (derived view, therefore ops).
 ///
 
 #[derive(Clone, Copy, Debug)]
@@ -17,6 +18,7 @@ pub struct PoolMetrics {
 
 ///
 /// ShardMetrics
+/// Metrics for a single shard (derived view, therefore ops).
 ///
 
 #[derive(Clone, Copy, Debug)]
@@ -48,55 +50,54 @@ impl ShardMetrics {
     }
 }
 
-impl ShardingRegistry {
-    #[must_use]
-    pub fn metrics(pool: &str) -> PoolMetrics {
-        let view: ShardingRegistryView = Self::export();
-        let mut active = 0;
-        let mut cap = 0;
-        let mut used = 0;
+/// Compute pool-level metrics from the registry.
+#[must_use]
+pub fn pool_metrics(pool: &str) -> PoolMetrics {
+    let view = ShardingRegistry::export();
+    let mut active = 0;
+    let mut cap = 0;
+    let mut used = 0;
 
-        for (_, e) in &view {
-            if e.capacity > 0 && e.pool == pool {
-                active += 1;
-                cap += u64::from(e.capacity);
-                used += u64::from(e.count);
+    for (_, e) in &view {
+        if e.capacity > 0 && e.pool == pool {
+            active += 1;
+            cap += u64::from(e.capacity);
+            used += u64::from(e.count);
+        }
+    }
+
+    let utilization = if cap == 0 {
+        0
+    } else {
+        ((used * 100) / cap).min(100) as u32
+    };
+
+    PoolMetrics {
+        utilization_pct: utilization,
+        active_count: active,
+        total_capacity: cap,
+        total_used: used,
+    }
+}
+
+/// Compute metrics for a single shard.
+#[must_use]
+pub fn shard_metrics(shard_pid: &Principal) -> Option<ShardMetrics> {
+    ShardingRegistry::with(|s| s.get_entry(shard_pid)).map(|e| ShardMetrics::from_entry(&e))
+}
+
+/// Find the latest creation timestamp for shards of a given type.
+#[must_use]
+pub fn last_created_at_for_type(ty: &CanisterType) -> u64 {
+    ShardingRegistry::with(|s| {
+        s.all_entries().iter().fold(0, |last, (_, e)| {
+            if &e.canister_type == ty {
+                last.max(e.created_at)
+            } else {
+                last
             }
-        }
-
-        let utilization = if cap == 0 {
-            0
-        } else {
-            ((used * 100) / cap).min(100) as u32
-        };
-
-        PoolMetrics {
-            utilization_pct: utilization,
-            active_count: active,
-            total_capacity: cap,
-            total_used: used,
-        }
-    }
-
-    /// Compute metrics for a single shard
-    #[must_use]
-    pub fn shard_metrics(shard_pid: &candid::Principal) -> Option<ShardMetrics> {
-        Self::with(|s| s.get_entry(shard_pid)).map(|e| ShardMetrics::from_entry(&e))
-    }
-
-    /// Find latest `created_at_secs` for all shards of given type
-    #[must_use]
-    pub fn last_created_at_for_type(ty: &CanisterType) -> u64 {
-        Self::with(|s| {
-            s.all_entries().iter().fold(0, |last, (_, e)| {
-                if &e.canister_type == ty {
-                    last.max(e.created_at)
-                } else {
-                    last
-                }
-            })
         })
-    }
+    })
 }
 
 ///
@@ -106,8 +107,9 @@ impl ShardingRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::memory::sharding::ShardKey;
-    use candid::Principal;
+    use crate::{
+        model::memory::sharding::ShardKey, ops::model::memory::sharding::ShardingRegistryOps,
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -134,8 +136,8 @@ mod tests {
     #[test]
     fn pool_metrics_computation() {
         ShardingRegistry::clear();
-        ShardingRegistry::create(p(1), "poolA", 0, &CanisterType::new("alpha"), 10);
-        ShardingRegistry::create(p(2), "poolA", 1, &CanisterType::new("alpha"), 20);
+        ShardingRegistryOps::create(p(1), "poolA", 0, &CanisterType::new("alpha"), 10).unwrap();
+        ShardingRegistryOps::create(p(2), "poolA", 1, &CanisterType::new("alpha"), 20).unwrap();
 
         // Simulate usage: assign 3 tenants to shard 1, 10 tenants to shard 2
         ShardingRegistry::with_mut(|core| {
@@ -156,7 +158,7 @@ mod tests {
             }
         });
 
-        let m = ShardingRegistry::metrics("poolA");
+        let m = pool_metrics("poolA");
 
         assert_eq!(m.active_count, 2);
         assert_eq!(m.total_capacity, 30);
@@ -169,17 +171,17 @@ mod tests {
         ShardingRegistry::clear();
         let ty = CanisterType::new("alpha");
 
-        ShardingRegistry::create(p(1), "poolA", 0, &ty, 5);
+        ShardingRegistryOps::create(p(1), "poolA", 0, &ty, 5).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(5)); // ensure clock moves
-        ShardingRegistry::create(p(2), "poolA", 1, &ty, 5);
+        ShardingRegistryOps::create(p(2), "poolA", 1, &ty, 5).unwrap();
 
-        let t = ShardingRegistry::last_created_at_for_type(&ty);
+        let t = last_created_at_for_type(&ty);
         assert!(t > 0);
     }
 
     #[test]
     fn shard_metrics_none_for_missing_shard() {
         ShardingRegistry::clear();
-        assert!(ShardingRegistry::shard_metrics(&p(99)).is_none());
+        assert!(shard_metrics(&p(99)).is_none());
     }
 }

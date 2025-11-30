@@ -2,11 +2,11 @@ use crate::{
     config::Config,
     model::memory::{
         Env,
-        directory::{AppDirectory, DirectoryView, PrincipalList},
+        directory::{AppDirectory, PrincipalList},
         topology::SubnetCanisterRegistry,
     },
     ops::{
-        model::memory::directory::{DirectoryPageDto, paginate},
+        model::memory::directory::{DirectoryPageDto, DirectoryView, paginate},
         prelude::*,
     },
 };

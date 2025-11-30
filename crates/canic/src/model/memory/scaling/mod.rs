@@ -1,17 +1,12 @@
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    model::{
-        ModelError,
-        memory::{MemoryError, id::scaling::SCALING_REGISTRY_ID},
-    },
+    model::memory::id::scaling::SCALING_REGISTRY_ID,
     types::CanisterType,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // SCALING REGISTRY
@@ -23,22 +18,6 @@ eager_static! {
     > = RefCell::new(
         BTreeMap::init(ic_memory!(ScalingRegistry, SCALING_REGISTRY_ID)),
     );
-}
-
-///
-/// ScalingError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ScalingError {
-    #[error("worker not found: {0}")]
-    WorkerNotFound(Principal),
-}
-
-impl From<ScalingError> for Error {
-    fn from(err: ScalingError) -> Self {
-        ModelError::MemoryError(MemoryError::from(err)).into()
-    }
 }
 
 ///
@@ -75,12 +54,9 @@ impl ScalingRegistry {
     }
 
     /// Remove a worker by PID
-    pub fn remove(pid: &Principal) -> Result<(), Error> {
-        SCALING_REGISTRY.with_borrow_mut(|map| {
-            map.remove(pid).ok_or(ScalingError::WorkerNotFound(*pid))?;
-
-            Ok(())
-        })
+    #[must_use]
+    pub fn remove(pid: &Principal) -> Option<WorkerEntry> {
+        SCALING_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
     /// Lookup a worker by PID

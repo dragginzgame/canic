@@ -7,17 +7,23 @@
 
 use crate::{
     Error, ThisError,
-    config::model::ScalePool,
+    config::schema::ScalePool,
     model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
-        OpsError,
-        context::cfg_current_canister,
-        model::{ModelOpsError, memory::MemoryOpsError},
+        config::ConfigOps,
+        model::memory::MemoryOpsError,
         request::{CreateCanisterParent, create_canister_request},
     },
     utils::time::now_secs,
 };
 use candid::Principal;
+
+///
+/// ScalingRegistryDto
+/// DTO view of scaling registry entries.
+///
+
+pub type ScalingRegistryDto = Vec<(Principal, WorkerEntry)>;
 
 ///
 /// ScalingOpsError
@@ -38,10 +44,7 @@ pub enum ScalingOpsError {
 
 impl From<ScalingOpsError> for Error {
     fn from(err: ScalingOpsError) -> Self {
-        OpsError::ModelOpsError(ModelOpsError::MemoryOpsError(
-            MemoryOpsError::ScalingOpsError(err),
-        ))
-        .into()
+        MemoryOpsError::ScalingOpsError(err).into()
     }
 }
 
@@ -97,7 +100,7 @@ pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
 
 /// Look up the config for a given pool on the *current canister*.
 fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-    let cfg = cfg_current_canister()?;
+    let cfg = ConfigOps::current_canister()?;
     let scale_cfg = cfg.scaling.ok_or(ScalingOpsError::ScalingDisabled)?;
 
     let pool_cfg = scale_cfg
@@ -110,7 +113,7 @@ fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
 
 /// Export a snapshot of the current registry state.
 #[must_use]
-pub fn export_registry() -> ScalingRegistryView {
+pub fn export_registry() -> ScalingRegistryDto {
     ScalingRegistry::export()
 }
 

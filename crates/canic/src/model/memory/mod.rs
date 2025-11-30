@@ -15,11 +15,9 @@ pub use registry::{MemoryRegistry, MemoryRegistryError};
 pub use types::*;
 
 use crate::{
+    Error,
     cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
-    model::memory::{
-        directory::DirectoryError, env::ContextError, log::LogError, scaling::ScalingError,
-        sharding::ShardingError, state::StateError, topology::TopologyError,
-    },
+    model::{ModelError, memory::log::LogError},
 };
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -131,23 +129,11 @@ pub enum MemoryError {
     MemoryRegistryError(#[from] MemoryRegistryError),
 
     #[error(transparent)]
-    ContextError(#[from] ContextError),
-
-    #[error(transparent)]
-    DirectoryError(#[from] DirectoryError),
-
-    #[error(transparent)]
     LogError(#[from] LogError),
+}
 
-    #[error(transparent)]
-    ScalingError(#[from] ScalingError),
-
-    #[error(transparent)]
-    ShardingError(#[from] ShardingError),
-
-    #[error(transparent)]
-    StateError(#[from] StateError),
-
-    #[error(transparent)]
-    TopologyError(#[from] TopologyError),
+impl From<MemoryError> for Error {
+    fn from(err: MemoryError) -> Self {
+        ModelError::MemoryError(err).into()
+    }
 }

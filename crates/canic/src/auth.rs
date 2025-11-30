@@ -8,10 +8,10 @@
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
-    model::memory::{
-        Env,
-        directory::{AppDirectory, SubnetDirectory},
-        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
+    ops::model::memory::{
+        EnvOps,
+        directory::{AppDirectoryOps, SubnetDirectoryOps},
+        topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
     },
     types::CanisterType,
 };
@@ -146,8 +146,8 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = AppDirectory::try_get(&ty)
-            .map_err(|_| AuthError::NotAppDirectoryType(caller, ty.clone()))?;
+        let pids = AppDirectoryOps::get(&ty)
+            .ok_or(|_| AuthError::NotAppDirectoryType(caller, ty.clone()))?;
 
         if pids.contains(&caller) {
             Ok(())
@@ -161,8 +161,8 @@ pub fn is_app_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleRes
 #[must_use]
 pub fn is_subnet_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = SubnetDirectory::try_get(&ty)
-            .map_err(|_| AuthError::NotSubnetDirectoryType(caller, ty.clone()))?;
+        let pids = SubnetDirectoryOps::get(&ty)
+            .ok_or(|_| AuthError::NotSubnetDirectoryType(caller, ty.clone()))?;
 
         if pids.contains(&caller) {
             Ok(())
@@ -176,7 +176,7 @@ pub fn is_subnet_directory_type(caller: Principal, ty: CanisterType) -> AuthRule
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        SubnetCanisterChildren::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
+        SubnetCanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -198,7 +198,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = Env::try_get_root_pid()?;
+        let root_pid = EnvOps::try_get_root_pid()?;
 
         if caller == root_pid {
             Ok(())
@@ -212,7 +212,9 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        if Some(caller) == Env::get_parent_pid() {
+        let parent_pid = EnvOps::try_get_parent_pid()?;
+
+        if parent_pid == caller {
             Ok(())
         } else {
             Err(AuthError::NotParent(caller))?
@@ -250,7 +252,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetCanisterRegistry::get(caller) {
+        match SubnetCanisterRegistryOps::get(caller) {
             Some(_) => Ok(()),
             None => Err(AuthError::NotRegisteredToSubnet(caller))?,
         }

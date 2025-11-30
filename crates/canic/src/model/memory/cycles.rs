@@ -94,7 +94,7 @@ impl CycleTracker {
         self.map.insert(now, cycles);
         self.insert_count += 1;
 
-        if self.insert_count % PURGE_INTERVAL == 0 {
+        if self.insert_count.is_multiple_of(PURGE_INTERVAL) {
             self.purge(now);
         }
 

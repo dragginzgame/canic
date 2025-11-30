@@ -13,11 +13,11 @@ pub use env::EnvOps;
 
 use crate::{
     Error, ThisError,
-    ops::{
-        OpsError,
-        model::{
-            ModelOpsError,
-            memory::{scaling::ScalingOpsError, sharding::ShardingOpsError},
+    ops::model::{
+        ModelOpsError,
+        memory::{
+            env::EnvOpsError, registry::MemoryRegistryOpsError, scaling::ScalingOpsError,
+            sharding::ShardingOpsError, state::AppStateOpsError,
         },
     },
 };
@@ -29,6 +29,15 @@ use crate::{
 #[derive(Debug, ThisError)]
 pub enum MemoryOpsError {
     #[error(transparent)]
+    AppStateOpsError(#[from] AppStateOpsError),
+
+    #[error(transparent)]
+    EnvOpsError(#[from] EnvOpsError),
+
+    #[error(transparent)]
+    MemoryRegistryOpsError(#[from] MemoryRegistryOpsError),
+
+    #[error(transparent)]
     ScalingOpsError(#[from] ScalingOpsError),
 
     #[error(transparent)]
@@ -37,6 +46,6 @@ pub enum MemoryOpsError {
 
 impl From<MemoryOpsError> for Error {
     fn from(err: MemoryOpsError) -> Self {
-        OpsError::ModelOpsError(ModelOpsError::MemoryOpsError(err)).into()
+        ModelOpsError::MemoryOpsError(err).into()
     }
 }

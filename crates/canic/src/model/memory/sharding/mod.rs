@@ -1,26 +1,16 @@
-mod metrics;
 mod registry;
 
-pub use metrics::*;
 pub use registry::*;
 
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    model::{
-        ModelError,
-        memory::{
-            MemoryError,
-            id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-        },
-    },
+    model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     types::{BoundedString32, BoundedString128, CanisterType, Principal},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // SHARDING CORE
@@ -33,28 +23,6 @@ eager_static! {
             BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
         )
     );
-}
-
-///
-/// ShardingError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ShardingError {
-    #[error("shard not found: {0}")]
-    ShardNotFound(Principal),
-
-    #[error("shard full: {0}")]
-    ShardFull(Principal),
-
-    #[error("tenant not found: {0}")]
-    TenantNotFound(String),
-}
-
-impl From<ShardingError> for Error {
-    fn from(err: ShardingError) -> Self {
-        ModelError::MemoryError(MemoryError::from(err)).into()
-    }
 }
 
 ///
@@ -102,6 +70,17 @@ pub struct ShardEntry {
 impl ShardEntry {
     pub const STORABLE_MAX_SIZE: u32 = 208;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
+
+    pub fn new(pool: &str, slot: u32, ty: CanisterType, capacity: u32, created_at: u64) -> Self {
+        Self {
+            slot,
+            canister_type: ty,
+            capacity,
+            count: 0,
+            pool: pool.to_string(),
+            created_at,
+        }
+    }
 
     /// Whether this shard has room for more tenants.
     #[must_use]
@@ -156,16 +135,13 @@ impl<M: Memory> ShardingCore<M> {
     // ---------------------------
     // Registry CRUD
     // ---------------------------
+
     pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
         self.registry.insert(pid, entry);
     }
 
-    pub fn remove_entry(&mut self, pid: &Principal) -> Result<(), Error> {
-        if self.registry.remove(pid).is_none() {
-            return Err(ShardingError::ShardNotFound(*pid).into());
-        }
-
-        Ok(())
+    pub fn remove_entry(&mut self, pid: &Principal) -> Option<ShardEntry> {
+        self.registry.remove(pid)
     }
 
     pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
@@ -182,14 +158,13 @@ impl<M: Memory> ShardingCore<M> {
     // ---------------------------
     // Assignments CRUD
     // ---------------------------
+
     pub fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
         self.assignments.insert(key, shard);
     }
 
-    pub fn remove_assignment(&mut self, key: &ShardKey) -> Result<Principal, Error> {
-        self.assignments
-            .remove(key)
-            .ok_or_else(|| ShardingError::TenantNotFound(key.tenant.to_string()).into())
+    pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
+        self.assignments.remove(key)
     }
 
     pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
@@ -203,28 +178,24 @@ impl<M: Memory> ShardingCore<M> {
             .collect()
     }
 
-    pub fn increment_count(&mut self, pid: Principal) -> Result<(), Error> {
-        let mut entry = self
-            .registry
-            .get(&pid)
-            .ok_or(ShardingError::ShardNotFound(pid))?;
-
-        entry.count = entry.count.saturating_add(1);
-        self.registry.insert(pid, entry);
-
-        Ok(())
+    pub fn increment_count(&mut self, pid: &Principal) -> bool {
+        if let Some(mut entry) = self.registry.get(pid) {
+            entry.count = entry.count.saturating_add(1);
+            self.registry.insert(*pid, entry);
+            true
+        } else {
+            false
+        }
     }
 
-    pub fn decrement_count(&mut self, pid: Principal) -> Result<(), Error> {
-        let mut entry = self
-            .registry
-            .get(&pid)
-            .ok_or(ShardingError::ShardNotFound(pid))?;
-
-        entry.count = entry.count.saturating_sub(1);
-        self.registry.insert(pid, entry);
-
-        Ok(())
+    pub fn decrement_count(&mut self, pid: &Principal) -> bool {
+        if let Some(mut entry) = self.registry.get(pid) {
+            entry.count = entry.count.saturating_sub(1);
+            self.registry.insert(*pid, entry);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn clear(&mut self) {

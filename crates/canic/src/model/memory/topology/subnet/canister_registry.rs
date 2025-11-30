@@ -1,10 +1,8 @@
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     model::memory::{
         CanisterEntry, CanisterSummary, id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID,
-        topology::TopologyError,
     },
     types::CanisterType,
     utils::time::now_secs,
@@ -56,25 +54,14 @@ impl SubnetCanisterRegistry {
         SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
-    /// Returns a canister entry or an error if it doesn't exist.
-    pub fn try_get(pid: Principal) -> Result<CanisterEntry, Error> {
-        Self::get(pid).ok_or_else(|| TopologyError::PrincipalNotFound(pid).into())
-    }
-
     /// Returns the parent PID for a given canister, if recorded.
-    pub fn try_get_parent(pid: Principal) -> Result<Principal, Error> {
-        Self::try_get(pid)?
-            .parent_pid
-            .ok_or_else(|| TopologyError::PrincipalNotFound(pid).into())
+    pub fn get_parent(pid: Principal) -> Option<Principal> {
+        Self::get(pid)?.parent_pid
     }
 
     /// Finds the first canister with the given [`CanisterType`].
-    pub fn try_get_type(ty: &CanisterType) -> Result<CanisterEntry, Error> {
-        Self::with_entries(|iter| {
-            iter.map(|e| e.value())
-                .find(|entry| &entry.ty == ty)
-                .ok_or_else(|| TopologyError::TypeNotFound(ty.clone()).into())
-        })
+    pub fn get_type(ty: &CanisterType) -> Option<CanisterEntry> {
+        Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.ty == ty))
     }
 
     //
@@ -113,7 +100,6 @@ impl SubnetCanisterRegistry {
     }
 
     /// Inserts a fully formed entry into the registry.
-    #[inline]
     fn insert(entry: CanisterEntry) {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
             reg.insert(entry.pid, entry);
@@ -124,21 +110,6 @@ impl SubnetCanisterRegistry {
     #[must_use]
     pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.remove(pid))
-    }
-
-    //
-    // Export & test utils
-    //
-
-    /// Returns all canister entries as a vector.
-    #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
-        Self::with_entries(|iter| iter.map(|e| e.value()).collect())
-    }
-
-    #[cfg(test)]
-    pub fn clear_for_tests() {
-        SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
     //
@@ -165,7 +136,7 @@ impl SubnetCanisterRegistry {
     pub fn subtree(pid: Principal) -> Vec<CanisterSummary> {
         let mut result = vec![];
 
-        if let Ok(entry) = Self::try_get(pid) {
+        if let Some(entry) = Self::get(pid) {
             result.push(entry.into());
         }
 
@@ -207,5 +178,20 @@ impl SubnetCanisterRegistry {
         }
 
         false
+    }
+
+    //
+    // Export & test utils
+    //
+
+    /// Returns all canister entries as a vector.
+    #[must_use]
+    pub fn export() -> Vec<CanisterEntry> {
+        Self::with_entries(|iter| iter.map(|e| e.value()).collect())
+    }
+
+    #[cfg(test)]
+    pub fn clear_for_tests() {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 }

@@ -1,10 +1,7 @@
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    model::memory::{
-        CanisterSummary, id::topology::subnet::SUBNET_CANISTER_CHILDREN_ID, topology::TopologyError,
-    },
+    model::memory::{CanisterSummary, id::topology::subnet::SUBNET_CANISTER_CHILDREN_ID},
     types::CanisterType,
 };
 use candid::Principal;
@@ -36,11 +33,6 @@ impl SubnetCanisterChildren {
     #[must_use]
     pub fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
         SUBNET_CANISTER_CHILDREN.with_borrow(|map| map.get(pid))
-    }
-
-    /// Same as `find_by_pid` but returns a typed error
-    pub fn try_find_by_pid(pid: &Principal) -> Result<CanisterSummary, Error> {
-        Self::find_by_pid(pid).ok_or_else(|| TopologyError::PrincipalNotFound(*pid).into())
     }
 
     /// Lookup all children of a given type

@@ -13,7 +13,7 @@ use crate::{
         canister::create_and_install_canister,
         prelude::*,
         request::{
-            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request,
+            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
     },
@@ -74,11 +74,18 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
     // Look up parent
     let parent_pid = match &req.parent {
+        CreateCanisterParent::Canister(pid) => *pid,
         CreateCanisterParent::Root => canister_self(),
         CreateCanisterParent::ThisCanister => msg_caller(),
-        CreateCanisterParent::Parent => SubnetCanisterRegistry::try_get_parent(msg_caller())?,
-        CreateCanisterParent::Directory(ty) => SubnetCanisterRegistry::try_get_type(ty)?.pid,
-        CreateCanisterParent::Canister(pid) => *pid,
+
+        CreateCanisterParent::Parent => SubnetCanisterRegistry::get_parent(msg_caller())
+            .ok_or(RequestOpsError::ParentNotFound(msg_caller()))?,
+
+        CreateCanisterParent::Directory(ty) => {
+            SubnetCanisterRegistry::get_type(ty)
+                .ok_or(RequestOpsError::CanisterTypeNotFound(ty.clone()))?
+                .pid
+        }
     };
 
     let new_canister_pid =

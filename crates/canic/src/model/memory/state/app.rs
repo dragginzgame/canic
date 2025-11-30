@@ -1,17 +1,12 @@
 use crate::{
-    Error,
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    model::{
-        ModelError,
-        memory::{MemoryError, id::state::APP_STATE_ID, state::StateError},
-    },
+    model::memory::id::state::APP_STATE_ID,
 };
 use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // APP_STATE
@@ -23,22 +18,6 @@ eager_static! {
             ic_memory!(AppState, APP_STATE_ID),
             AppStateData::default(),
         ));
-}
-
-///
-/// AppStateError
-///
-
-#[derive(Debug, ThisError)]
-pub enum AppStateError {
-    #[error("app is already in {0} mode")]
-    AlreadyInMode(AppMode),
-}
-
-impl From<AppStateError> for Error {
-    fn from(err: AppStateError) -> Self {
-        ModelError::MemoryError(MemoryError::from(StateError::from(err))).into()
-    }
 }
 
 ///

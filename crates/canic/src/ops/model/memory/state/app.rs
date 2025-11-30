@@ -1,13 +1,30 @@
 pub use crate::model::memory::state::AppMode;
 
 use crate::{
-    Error, log,
+    Error, ThisError, log,
     log::Topic,
-    model::memory::state::{AppState, AppStateData, AppStateError},
+    model::memory::state::{AppState, AppStateData},
+    ops::model::memory::MemoryOpsError,
 };
 use candid::CandidType;
 use derive_more::Display;
 use serde::Deserialize;
+
+///
+/// AppStateOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum AppStateOpsError {
+    #[error("app is already in {0} mode")]
+    AlreadyInMode(AppMode),
+}
+
+impl From<AppStateOpsError> for Error {
+    fn from(err: AppStateOpsError) -> Self {
+        MemoryOpsError::from(err).into()
+    }
+}
 
 ///
 /// AppCommand
@@ -46,7 +63,7 @@ impl AppStateOps {
         };
 
         if old_mode == new_mode {
-            return Err(AppStateError::AlreadyInMode(old_mode))?;
+            return Err(AppStateOpsError::AlreadyInMode(old_mode))?;
         }
 
         AppState::set_mode(new_mode);

@@ -1,8 +1,7 @@
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    model::memory::{id::topology::app::APP_SUBNET_REGISTRY_ID, topology::TopologyError},
+    model::memory::id::topology::app::APP_SUBNET_REGISTRY_ID,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -40,10 +39,6 @@ impl AppSubnetRegistry {
     #[must_use]
     pub fn get(subnet_pid: Principal) -> Option<AppSubnet> {
         APP_SUBNET_REGISTRY.with_borrow(|map| map.get(&subnet_pid))
-    }
-
-    pub fn try_get(subnet_pid: Principal) -> Result<AppSubnet, Error> {
-        Self::get(subnet_pid).ok_or_else(|| TopologyError::SubnetNotFound(subnet_pid).into())
     }
 
     pub fn import(data: Vec<(Principal, AppSubnet)>) {

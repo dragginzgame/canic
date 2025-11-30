@@ -4,7 +4,7 @@ use crate::{
     log::Topic,
     model::memory::{Env, topology::SubnetCanisterRegistry},
     ops::{
-        context::cfg_current_subnet,
+        config::ConfigOps,
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},
     },
@@ -20,7 +20,7 @@ pub async fn root_set_subnet_id() {
 /// Ensure all auto-create canisters exist and log the current topology.
 pub async fn root_create_canisters() -> Result<(), Error> {
     // Top-up pass
-    let subnet_cfg = cfg_current_subnet()?;
+    let subnet_cfg = ConfigOps::current_subnet()?;
     for ty in &subnet_cfg.auto_create {
         create_canister_request::<()>(ty, CreateCanisterParent::Root, None).await?;
     }

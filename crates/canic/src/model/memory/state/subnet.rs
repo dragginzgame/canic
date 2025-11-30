@@ -1,16 +1,11 @@
 use crate::{
-    Error,
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, ic_memory, impl_storable_bounded,
-    model::{
-        ModelError,
-        memory::{MemoryError, id::state::SUBNET_STATE_ID, state::StateError},
-    },
+    model::memory::id::state::SUBNET_STATE_ID,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // SUBNET_STATE
@@ -24,19 +19,6 @@ eager_static! {
             ic_memory!(SubnetState, SUBNET_STATE_ID),
             SubnetStateData::default(),
         ));
-}
-
-///
-/// SubnetStateError
-///
-
-#[derive(Debug, ThisError)]
-pub enum SubnetStateError {}
-
-impl From<SubnetStateError> for Error {
-    fn from(err: SubnetStateError) -> Self {
-        ModelError::MemoryError(MemoryError::from(StateError::from(err))).into()
-    }
 }
 
 ///

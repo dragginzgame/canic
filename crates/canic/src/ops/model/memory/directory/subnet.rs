@@ -2,11 +2,12 @@ use crate::{
     Error,
     model::memory::{
         Env,
-        directory::{DirectoryView, PrincipalList, SubnetDirectory},
+        directory::{PrincipalList, SubnetDirectory},
         topology::SubnetCanisterRegistry,
     },
     ops::{
-        model::memory::directory::{DirectoryPageDto, paginate},
+        config::ConfigOps,
+        model::memory::directory::{DirectoryPageDto, DirectoryView, paginate},
         prelude::*,
     },
 };
@@ -39,7 +40,7 @@ impl SubnetDirectoryOps {
 
     /// Build SubnetDirectory from the registry.
     pub fn root_build_view() -> Result<DirectoryView, Error> {
-        let cfg = cfg_current_subnet()?;
+        let cfg = ConfigOps::current_subnet()?;
         let entries = SubnetCanisterRegistry::export();
 
         let mut map: BTreeMap<CanisterType, PrincipalList> = BTreeMap::new();

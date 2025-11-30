@@ -6,13 +6,13 @@
 use super::policy::{ShardingPlanState, ShardingPolicyOps};
 use crate::{
     Error,
-    config::model::{ShardPool, ShardPoolPolicy},
+    config::schema::{ShardPool, ShardPoolPolicy},
     log,
     log::Topic,
     model::memory::sharding::ShardingRegistry,
     ops::{
-        context::cfg_current_canister,
-        model::memory::sharding::{ShardingOpsError, ShardingRegistryOps},
+        config::ConfigOps,
+        model::memory::sharding::{ShardingOpsError, ShardingRegistryOps, pool_metrics},
         request::{CreateCanisterParent, create_canister_request},
     },
     types::CanisterType,
@@ -35,7 +35,7 @@ impl ShardAllocator {
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
-        let metrics = ShardingRegistry::metrics(pool);
+        let metrics = pool_metrics(pool);
         ShardingPolicyOps::check_create_allowed(&metrics, policy)?;
 
         let response = create_canister_request::<Vec<u8>>(
@@ -46,12 +46,13 @@ impl ShardAllocator {
         .await?;
         let pid = response.new_canister_pid;
 
-        ShardingRegistry::create(pid, pool, slot, canister_type, policy.capacity);
+        ShardingRegistryOps::create(pid, pool, slot, canister_type, policy.capacity)?;
         log!(
             Topic::Sharding,
             Ok,
             "✨ shard.create: {pid} pool={pool} slot={slot}"
         );
+
         Ok(pid)
     }
 }
@@ -163,12 +164,14 @@ impl ShardingOps {
                     );
                     moved += 1;
                 }
+
                 ShardingPlanState::CreateAllowed => {
                     let slot = plan.target_slot.ok_or_else(|| {
                         ShardingOpsError::ShardCreationBlocked(
                             "missing slot when draining shard".into(),
                         )
                     })?;
+
                     let new_pid = ShardAllocator::allocate(
                         pool,
                         slot,
@@ -177,7 +180,9 @@ impl ShardingOps {
                         None,
                     )
                     .await?;
+
                     ShardingRegistryOps::assign(pool, tenant, new_pid)?;
+
                     log!(
                         Topic::Sharding,
                         Ok,
@@ -194,7 +199,7 @@ impl ShardingOps {
 
     /// Internal: fetch shard pool config for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
-        let cfg = cfg_current_canister()?;
+        let cfg = ConfigOps::current_canister()?;
         let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
             .pools
