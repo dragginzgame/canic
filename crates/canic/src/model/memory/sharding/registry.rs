@@ -1,19 +1,17 @@
 use crate::{
-    Error,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    model::memory::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore, ShardingError},
-    types::CanisterType,
-    utils::time::now_secs,
+    model::memory::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
 };
 use candid::Principal;
 
-/// ---------------------------------------------------------------------------
+///
 /// Sharding Registry
 ///
 /// Persistent memory interface for tracking shard entries and tenant → shard
 /// assignments. This layer is purely responsible for durable state and
 /// consistency enforcement — not for selection, policy, or orchestration.
-/// ---------------------------------------------------------------------------
+///
+
 pub struct ShardingRegistry;
 
 impl ShardingRegistry {
@@ -52,32 +50,9 @@ impl ShardingRegistry {
         Self::with(|s| s.all_entries().len() as u64)
     }
 
-    /// Creates a new shard entry with the specified capacity and type.
-    pub fn create(shard_pid: Principal, pool: &str, slot: u32, ty: &CanisterType, capacity: u32) {
-        let entry = ShardEntry {
-            slot,
-            canister_type: ty.clone(),
-            capacity,
-            count: 0,
-            pool: pool.to_string(),
-            created_at: now_secs(),
-        };
-
-        Self::with_mut(|s| s.insert_entry(shard_pid, entry));
-    }
-
     /// Removes a shard entry from the registry. The shard must be empty.
-    pub fn remove(shard_pid: Principal) -> Result<(), Error> {
-        let entry = Self::with(|s| s.get_entry(&shard_pid));
-
-        if let Some(e) = entry
-            && e.count > 0
-        {
-            Err(ShardingError::ShardFull(shard_pid))?;
-        }
-
-        Self::with_mut(|s| s.remove_entry(&shard_pid))?;
-        Ok(())
+    pub fn remove(shard_pid: Principal) -> Option<ShardEntry> {
+        Self::with_mut(|s| s.remove_entry(&shard_pid))
     }
 
     // -----------------------------------------------------------------------

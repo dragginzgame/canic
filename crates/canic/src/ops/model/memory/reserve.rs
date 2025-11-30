@@ -13,15 +13,22 @@ use crate::{
     },
     interface::ic::get_cycles,
     log::Topic,
-    model::memory::reserve::CanisterReserve,
+    model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
         canister::{create_canister, uninstall_and_delete_canister},
-        context::cfg_current_subnet,
+        config::ConfigOps,
         prelude::*,
     },
-    types::{Cycles, TC},
+    types::{Cycles, Principal, TC},
 };
 use std::{cell::RefCell, time::Duration};
+
+///
+/// CanisterReserveView
+/// DTO view of the canister reserve.
+///
+
+pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
 
 //
 // TIMER
@@ -85,7 +92,7 @@ impl CanisterReserveOps {
     #[must_use]
     pub fn check() -> u64 {
         // try and get the subnet config
-        let subnet_cfg = match cfg_current_subnet() {
+        let subnet_cfg = match ConfigOps::current_subnet() {
             Ok(cfg) => cfg,
             Err(e) => {
                 log!(

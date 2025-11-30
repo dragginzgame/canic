@@ -1,11 +1,11 @@
-pub mod model;
+pub mod schema;
 
 use crate::Error;
-use model::{ConfigModelError, Validate};
+use schema::{ConfigSchemaError, Validate};
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
-pub use model::ConfigModel;
+pub use schema::ConfigModel;
 
 //
 // CONFIG
@@ -36,9 +36,9 @@ pub enum ConfigError {
     #[error("toml error: {0}")]
     CannotParseToml(String),
 
-    /// Wrapper for data model-level errors.
+    /// Wrapper for data schema-level errors.
     #[error(transparent)]
-    ConfigModelError(#[from] ConfigModelError),
+    ConfigSchemaError(#[from] ConfigSchemaError),
 }
 
 ///

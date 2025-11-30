@@ -11,7 +11,7 @@ use crate::{
         state::{AppState, AppStateData, SubnetState, SubnetStateData},
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
-    ops::{OpsError, prelude::*},
+    ops::{OpsError, model::memory::directory::DirectoryView, prelude::*},
 };
 
 ///

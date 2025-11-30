@@ -4,9 +4,16 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-use crate::model::memory::directory::DirectoryView;
+use crate::{model::memory::directory::PrincipalList, types::CanisterType};
 use candid::CandidType;
 use serde::Serialize;
+
+///
+/// DirectoryView
+/// DTO wrapper for directory exports.
+///
+
+pub type DirectoryView = Vec<(CanisterType, PrincipalList)>;
 
 ///
 /// DirectoryPageDto

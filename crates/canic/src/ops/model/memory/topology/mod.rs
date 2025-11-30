@@ -1,5 +1,5 @@
-pub mod registry_ops;
+pub mod app;
 pub mod subnet;
 
-pub use registry_ops::*;
+pub use app::*;
 pub use subnet::*;

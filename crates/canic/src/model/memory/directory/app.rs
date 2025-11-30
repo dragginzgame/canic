@@ -1,11 +1,7 @@
 use crate::{
-    Error,
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    model::memory::{
-        directory::{DirectoryError, DirectoryView, PrincipalList},
-        id::directory::APP_DIRECTORY_ID,
-    },
+    model::memory::{directory::PrincipalList, id::directory::APP_DIRECTORY_ID},
     types::CanisterType,
 };
 use std::cell::RefCell;
@@ -31,15 +27,11 @@ impl AppDirectory {
         APP_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    pub fn try_get(ty: &CanisterType) -> Result<PrincipalList, Error> {
-        Self::get(ty).ok_or_else(|| DirectoryError::TypeNotFound(ty.clone()).into())
-    }
-
     //
     // Import & Export
     //
 
-    pub fn import(view: DirectoryView) {
+    pub fn import(view: Vec<(CanisterType, PrincipalList)>) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (ty, pids) in view {
@@ -49,7 +41,7 @@ impl AppDirectory {
     }
 
     #[must_use]
-    pub fn export() -> DirectoryView {
+    pub fn export() -> Vec<(CanisterType, PrincipalList)> {
         APP_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))

@@ -4,38 +4,9 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-use crate::{
-    Error, ThisError,
-    model::{ModelError, memory::MemoryError},
-    types::{CanisterType, SubnetType},
-};
+use crate::types::SubnetType;
 use candid::{CandidType, Principal};
 use serde::Deserialize;
-
-///
-/// TopologyError
-///
-
-#[derive(Debug, ThisError)]
-pub enum TopologyError {
-    #[error("canister already installed: {0}")]
-    CanisterAlreadyInstalled(Principal),
-
-    #[error("canister not found: {0}")]
-    PrincipalNotFound(Principal),
-
-    #[error("subnet not found: {0}")]
-    SubnetNotFound(Principal),
-
-    #[error("canister not found: {0}")]
-    TypeNotFound(CanisterType),
-}
-
-impl From<TopologyError> for Error {
-    fn from(err: TopologyError) -> Self {
-        ModelError::MemoryError(MemoryError::from(err)).into()
-    }
-}
 
 ///
 /// SubnetIdentity

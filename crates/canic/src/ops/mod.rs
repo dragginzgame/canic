@@ -8,7 +8,7 @@
 //! here.
 
 pub mod canister;
-pub mod context;
+pub mod config;
 pub mod lifecycle;
 pub mod model;
 pub mod request;
@@ -30,10 +30,7 @@ pub mod prelude {
         interface::{InterfaceError, ic::call_and_decode},
         log,
         log::Level,
-        ops::{
-            OpsError,
-            context::{cfg_current_canister, cfg_current_subnet},
-        },
+        ops::OpsError,
         types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},
     };
     pub use serde::{Deserialize, Serialize};
@@ -55,6 +52,9 @@ pub enum OpsError {
     /// Raised when a function must not be called from root.
     #[error("operation cannot be called from the root canister")]
     IsRoot,
+
+    #[error(transparent)]
+    ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
     ModelOpsError(#[from] model::ModelOpsError),

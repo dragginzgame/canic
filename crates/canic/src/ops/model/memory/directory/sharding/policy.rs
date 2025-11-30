@@ -17,11 +17,13 @@
 use super::hrw::HrwSelector;
 use crate::{
     Error,
-    config::model::{ShardPool, ShardPoolPolicy},
-    model::memory::sharding::{PoolMetrics, ShardingRegistry, ShardingRegistryView},
+    config::schema::{ShardPool, ShardPoolPolicy},
+    model::memory::sharding::ShardingRegistry,
     ops::{
-        context::cfg_current_canister,
-        model::memory::sharding::{ShardingOpsError, ShardingRegistryOps},
+        config::ConfigOps,
+        model::memory::sharding::{
+            PoolMetrics, ShardingOpsError, ShardingRegistryDto, ShardingRegistryOps, pool_metrics,
+        },
     },
 };
 use candid::{CandidType, Principal};
@@ -92,7 +94,7 @@ impl ShardingPolicyOps {
 
     /// Retrieve the shard pool configuration from the current canister’s config.
     pub fn get_pool_config(pool: &str) -> Result<ShardPool, Error> {
-        let cfg = cfg_current_canister()?;
+        let cfg = ConfigOps::current_canister()?;
         let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
             .pools
@@ -111,8 +113,9 @@ impl ShardingPolicyOps {
     /// Never creates or mutates registry state.
     pub fn plan_assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<ShardingPlan, Error> {
         let tenant = tenant.to_string();
-        let metrics = ShardingRegistry::metrics(pool);
+        let metrics = pool_metrics(pool);
         let pool_cfg = Self::get_pool_config(pool)?;
+
         ShardingRegistryOps::ensure_slot_assignments(pool, pool_cfg.policy.max_shards);
 
         // Case 1: Tenant already assigned → nothing to do
@@ -167,7 +170,7 @@ impl ShardingPolicyOps {
 
     /// Export a read-only view of the sharding registry.
     #[must_use]
-    pub fn export_registry() -> ShardingRegistryView {
+    pub fn export_registry() -> ShardingRegistryDto {
         ShardingRegistry::export()
     }
 

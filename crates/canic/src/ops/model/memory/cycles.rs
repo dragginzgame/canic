@@ -7,13 +7,20 @@ use crate::{
     log,
     log::Topic,
     model::memory::{Env, cycles::CycleTracker},
-    ops::context::cfg_current_canister,
+    ops::config::ConfigOps,
     types::Cycles,
     utils::time::now_secs,
 };
 use candid::CandidType;
 use serde::Serialize;
 use std::{cell::RefCell, time::Duration};
+
+///
+/// CycleTrackerDto
+/// Snapshot view of cycle tracker entries
+///
+
+pub type CycleTrackerDto = Vec<(u64, Cycles)>;
 
 //
 // TIMER
@@ -34,14 +41,18 @@ const TRACKER_INIT_DELAY: Duration = Duration::new(10, 0);
 const TRACKER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10);
 
 ///
-/// CycleTrackerOps
+/// CycleTrackerPage
 ///
 
 #[derive(CandidType, Serialize)]
 pub struct CycleTrackerPage {
-    pub entries: CycleTrackerView,
+    pub entries: CycleTrackerDto,
     pub total: u64,
 }
+
+///
+/// CycleTrackerOps
+///
 
 pub struct CycleTrackerOps;
 
@@ -93,7 +104,7 @@ impl CycleTrackerOps {
     fn check_auto_topup() {
         use crate::ops::request::cycles_request;
 
-        if let Ok(canister_cfg) = cfg_current_canister()
+        if let Ok(canister_cfg) = ConfigOps::current_canister()
             && let Some(topup) = canister_cfg.topup
         {
             let cycles = canister_cycle_balance();

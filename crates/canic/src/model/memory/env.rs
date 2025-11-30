@@ -1,20 +1,15 @@
 use crate::{
-    Error,
     cdk::{
         api::canister_self,
         structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     },
     eager_static, ic_memory, impl_storable_bounded,
-    model::{
-        ModelError,
-        memory::{MemoryError, id::ENV_ID},
-    },
+    model::memory::id::ENV_ID,
     types::{CanisterType, SubnetType},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use thiserror::Error as ThisError;
 
 //
 // ENV
@@ -27,34 +22,6 @@ eager_static! {
             ic_memory!(EnvData, ENV_ID),
             EnvData::default(),
         ));
-}
-
-///
-/// ContextError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ContextError {
-    #[error("canister type not set")]
-    CanisterTypeNotSet,
-
-    #[error("prime root pid not set")]
-    PrimeRootPidNotSet,
-
-    #[error("root pid not set")]
-    RootPidNotSet,
-
-    #[error("subnet pid not set")]
-    SubnetPidNotSet,
-
-    #[error("subnet type not set")]
-    SubnetTypeNotSet,
-}
-
-impl From<ContextError> for Error {
-    fn from(err: ContextError) -> Self {
-        ModelError::MemoryError(MemoryError::from(err)).into()
-    }
 }
 
 ///
@@ -98,10 +65,6 @@ impl Env {
         ENV.with_borrow(|cell| cell.get().prime_root_pid)
     }
 
-    pub fn try_get_prime_root_pid() -> Result<Principal, Error> {
-        Self::get_prime_root_pid().ok_or_else(|| ContextError::PrimeRootPidNotSet.into())
-    }
-
     pub fn set_prime_root_pid(pid: Principal) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
@@ -123,10 +86,6 @@ impl Env {
         ENV.with_borrow(|cell| cell.get().subnet_type.clone())
     }
 
-    pub fn try_get_subnet_type() -> Result<SubnetType, Error> {
-        Self::get_subnet_type().ok_or_else(|| ContextError::SubnetTypeNotSet.into())
-    }
-
     pub fn set_subnet_type(ty: SubnetType) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
@@ -139,10 +98,6 @@ impl Env {
     #[must_use]
     pub fn get_subnet_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().subnet_pid)
-    }
-
-    pub fn try_get_subnet_pid() -> Result<Principal, Error> {
-        Self::get_subnet_pid().ok_or_else(|| ContextError::SubnetPidNotSet.into())
     }
 
     pub fn set_subnet_pid(pid: Principal) {
@@ -158,12 +113,6 @@ impl Env {
     #[must_use]
     pub fn get_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().root_pid)
-    }
-
-    pub fn try_get_root_pid() -> Result<Principal, Error> {
-        let pid = Self::get_root_pid().ok_or(ContextError::RootPidNotSet)?;
-
-        Ok(pid)
     }
 
     pub fn set_root_pid(pid: Principal) {
@@ -184,11 +133,6 @@ impl Env {
     #[must_use]
     pub fn get_canister_type() -> Option<CanisterType> {
         ENV.with_borrow(|cell| cell.get().canister_type.clone())
-    }
-
-    /// Try to get the current canister type, or error if missing.
-    pub fn try_get_canister_type() -> Result<CanisterType, Error> {
-        Self::get_canister_type().ok_or_else(|| ContextError::CanisterTypeNotSet.into())
     }
 
     /// Set/replace the current canister type.

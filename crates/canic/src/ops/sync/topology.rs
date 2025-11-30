@@ -11,7 +11,7 @@ use crate::{
         CanisterSummary,
         topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
     },
-    ops::{OpsError, prelude::*},
+    ops::{OpsError, prelude::*, sync::SyncOpsError},
 };
 
 ///
@@ -28,7 +28,8 @@ pub struct TopologyBundle {
 impl TopologyBundle {
     /// Construct a bundle rooted at the actual root canister.
     pub fn root() -> Result<Self, Error> {
-        let root = SubnetCanisterRegistry::try_get_type(&CanisterType::ROOT)?;
+        let root = SubnetCanisterRegistry::get_type(&CanisterType::ROOT)
+            .ok_or(SyncOpsError::RootNotFound)?;
 
         Ok(Self {
             subtree: SubnetCanisterRegistry::subtree(root.pid), // subtree rooted at the actual root PID

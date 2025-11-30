@@ -57,8 +57,8 @@ macro_rules! canic_endpoints {
         //
 
         #[::canic::cdk::query]
-        fn canic_memory_registry() -> ::canic::ops::model::memory::registry::MemoryRegistryView {
-            $crate::ops::model::memory::registry::MemoryRegistry::export()
+        fn canic_memory_registry() -> ::canic::ops::model::memory::registry::MemoryRegistryDto {
+            $crate::ops::model::memory::registry::MemoryRegistryOps::export()
         }
 
         #[::canic::cdk::query]
@@ -145,7 +145,7 @@ macro_rules! canic_endpoints {
         // canic_scaling_registry
         #[::canic::cdk::query]
         async fn canic_scaling_registry()
-        -> Result<::canic::model::memory::scaling::ScalingRegistryView, ::canic::Error> {
+        -> Result<::canic::ops::model::memory::scaling::ScalingRegistryDto, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
             Ok($crate::ops::model::memory::scaling::export_registry())
@@ -158,7 +158,7 @@ macro_rules! canic_endpoints {
         // canic_sharding_registry
         #[::canic::cdk::query]
         async fn canic_sharding_registry()
-        -> Result<::canic::model::memory::sharding::ShardingRegistryView, ::canic::Error> {
+        -> Result<::canic::ops::model::memory::sharding::ShardingRegistryDto, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
             Ok($crate::ops::model::memory::sharding::ShardingPolicyOps::export_registry())

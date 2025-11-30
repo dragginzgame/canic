@@ -60,13 +60,18 @@ impl LogOps {
         offset: u64,
         limit: u64,
     ) -> LogPageDto {
-        let (entries, total) = StableLog::entries_page_filtered(
+        let (raw_entries, total) = StableLog::entries_page_filtered(
             crate_name.as_deref(),
             topic.as_deref(),
             min_level,
             offset,
             limit,
         );
+
+        let entries = raw_entries
+            .into_iter()
+            .map(|(i, entry)| LogEntryDto::from_pair(i, entry))
+            .collect();
 
         LogPageDto { entries, total }
     }

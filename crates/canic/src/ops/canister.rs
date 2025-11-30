@@ -23,7 +23,7 @@ use crate::{
     model::wasm::WasmRegistry,
     ops::{
         CanisterInitPayload,
-        context::cfg_current_subnet,
+        config::ConfigOps,
         model::memory::directory::{AppDirectoryOps, SubnetDirectoryOps},
         sync::{
             state::{StateBundle, root_cascade_state},
@@ -81,11 +81,8 @@ pub async fn create_and_install_canister(
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
-    let subnet_cfg = cfg_current_subnet()?;
-
-    // Validate configuration up front
-    subnet_cfg.try_get_canister(ty)?; // must exist in subnet config
-    WasmRegistry::try_get(ty)?; // must have WASM module registered
+    // must have WASM module registered
+    WasmRegistry::try_get(ty)?;
 
     // Phase 1: allocation
     let pid = allocate_canister(ty).await?;
@@ -157,7 +154,9 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
 ///
 /// Reuses a canister from the reserve if available; otherwise creates a new one.
 pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
-    let cfg = cfg_current_subnet()?.try_get_canister(ty)?;
+    // use ConfigOps for a clean, ops-layer config lookup
+    let cfg = ConfigOps::current_subnet_canister(ty)?;
+
     let target = cfg.initial_cycles;
 
     // Reuse from reserve

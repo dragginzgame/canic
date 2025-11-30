@@ -2,7 +2,7 @@ use crate::{config::Config, spec::icrc::icrc10::Icrc10Standard};
 
 //
 // ICRC 10
-// this is now a wrapper around the Config state
+// formatting instructions for each standard
 //
 
 pub const ICRC_10_SUPPORTED_STANDARDS: &[(Icrc10Standard, &str, &str)] = &[

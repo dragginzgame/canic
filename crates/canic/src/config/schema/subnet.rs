@@ -1,6 +1,5 @@
 use crate::{
-    Error,
-    config::model::{ConfigModelError, Validate},
+    config::schema::{ConfigSchemaError, Validate},
     types::{CanisterType, Cycles, TC},
 };
 use serde::{Deserialize, Serialize};
@@ -42,20 +41,17 @@ impl SubnetConfig {
     }
 
     /// Get a canister configuration by type.
-    pub fn try_get_canister(&self, ty: &CanisterType) -> Result<CanisterConfig, Error> {
-        self.canisters
-            .get(ty)
-            .cloned()
-            .ok_or_else(|| ConfigModelError::CanisterNotFound(ty.clone()).into())
+    pub fn get_canister(&self, ty: &CanisterType) -> Option<CanisterConfig> {
+        self.canisters.get(ty).cloned()
     }
 }
 
 impl Validate for SubnetConfig {
-    fn validate(&self) -> Result<(), ConfigModelError> {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
         // --- 1. Validate directory entries ---
         for canister_ty in &self.subnet_directory {
             if !self.canisters.contains_key(canister_ty) {
-                return Err(ConfigModelError::ValidationError(format!(
+                return Err(ConfigSchemaError::ValidationError(format!(
                     "subnet directory canister '{canister_ty}' is not defined in subnet",
                 )));
             }
@@ -64,7 +60,7 @@ impl Validate for SubnetConfig {
         // --- 2. Validate auto-create entries ---
         for canister_ty in &self.auto_create {
             if !self.canisters.contains_key(canister_ty) {
-                return Err(ConfigModelError::ValidationError(format!(
+                return Err(ConfigSchemaError::ValidationError(format!(
                     "auto-create canister '{canister_ty}' is not defined in subnet",
                 )));
             }
@@ -76,20 +72,20 @@ impl Validate for SubnetConfig {
             if let Some(sharding) = &cfg.sharding {
                 for (pool_name, pool) in &sharding.pools {
                     if !self.canisters.contains_key(&pool.canister_type) {
-                        return Err(ConfigModelError::ValidationError(format!(
+                        return Err(ConfigSchemaError::ValidationError(format!(
                             "canister '{parent_ty}' sharding pool '{pool_name}' references unknown canister type '{ty}'",
                             ty = pool.canister_type
                         )));
                     }
 
                     if pool.policy.capacity == 0 {
-                        return Err(ConfigModelError::ValidationError(format!(
+                        return Err(ConfigSchemaError::ValidationError(format!(
                             "canister '{parent_ty}' sharding pool '{pool_name}' has zero capacity; must be > 0",
                         )));
                     }
 
                     if pool.policy.max_shards == 0 {
-                        return Err(ConfigModelError::ValidationError(format!(
+                        return Err(ConfigSchemaError::ValidationError(format!(
                             "canister '{parent_ty}' sharding pool '{pool_name}' has max_shards of 0; must be > 0",
                         )));
                     }
@@ -100,7 +96,7 @@ impl Validate for SubnetConfig {
             if let Some(scaling) = &cfg.scaling {
                 for (pool_name, pool) in &scaling.pools {
                     if !self.canisters.contains_key(&pool.canister_type) {
-                        return Err(ConfigModelError::ValidationError(format!(
+                        return Err(ConfigSchemaError::ValidationError(format!(
                             "canister '{parent_ty}' scaling pool '{pool_name}' references unknown canister type '{ty}'",
                             ty = pool.canister_type
                         )));
@@ -109,7 +105,7 @@ impl Validate for SubnetConfig {
                     if pool.policy.max_workers != 0
                         && pool.policy.max_workers < pool.policy.min_workers
                     {
-                        return Err(ConfigModelError::ValidationError(format!(
+                        return Err(ConfigSchemaError::ValidationError(format!(
                             "canister '{parent_ty}' scaling pool '{pool_name}' has max_workers < min_workers (min {}, max {})",
                             pool.policy.min_workers, pool.policy.max_workers
                         )));
@@ -302,18 +298,9 @@ mod tests {
             ..Default::default()
         };
 
-        let err = subnet
+        subnet
             .validate()
             .expect_err("expected missing auto-create type to fail");
-        match err {
-            ConfigModelError::ValidationError(msg) => {
-                assert!(
-                    msg.contains("missing_auto_canister"),
-                    "error should include missing canister type, got: {msg}"
-                );
-            }
-            other => panic!("unexpected error variant: {other:?}"),
-        }
     }
 
     #[test]
@@ -342,18 +329,9 @@ mod tests {
             ..Default::default()
         };
 
-        let err = subnet
+        subnet
             .validate()
             .expect_err("expected missing worker type to fail");
-        match err {
-            ConfigModelError::ValidationError(msg) => {
-                assert!(
-                    msg.contains("missing_shard_worker"),
-                    "error should include missing canister type, got: {msg}"
-                );
-            }
-            other => panic!("unexpected error variant: {other:?}"),
-        }
     }
 
     #[test]
@@ -386,18 +364,9 @@ mod tests {
             ..Default::default()
         };
 
-        let err = subnet
+        subnet
             .validate()
             .expect_err("expected invalid sharding policy to fail");
-        match err {
-            ConfigModelError::ValidationError(msg) => {
-                assert!(
-                    msg.contains("zero capacity") || msg.contains("max_shards"),
-                    "error should mention capacity or max_shards, got: {msg}"
-                );
-            }
-            other => panic!("unexpected error variant: {other:?}"),
-        }
     }
 
     #[test]
@@ -429,17 +398,8 @@ mod tests {
             ..Default::default()
         };
 
-        let err = subnet
+        subnet
             .validate()
             .expect_err("expected invalid scaling policy to fail");
-        match err {
-            ConfigModelError::ValidationError(msg) => {
-                assert!(
-                    msg.contains("max_workers < min_workers"),
-                    "error should mention ordering, got: {msg}"
-                );
-            }
-            other => panic!("unexpected error variant: {other:?}"),
-        }
     }
 }

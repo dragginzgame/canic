@@ -14,6 +14,12 @@ pub enum SnsError {
     InvalidPrincipal(String, String),
 }
 
+impl From<SnsError> for Error {
+    fn from(err: SnsError) -> Self {
+        EnvError::SnsError(err).into()
+    }
+}
+
 ///
 /// SnsCanisters
 ///

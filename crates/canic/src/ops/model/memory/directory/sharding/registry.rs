@@ -1,6 +1,9 @@
 use crate::{
     Error,
-    model::memory::sharding::{ShardKey, ShardingError, ShardingRegistry},
+    model::memory::sharding::{ShardEntry, ShardKey, ShardingRegistry},
+    ops::model::memory::sharding::ShardingOpsError,
+    types::CanisterType,
+    utils::time::now_secs,
 };
 use candid::Principal;
 use std::collections::BTreeSet;
@@ -12,17 +15,30 @@ use std::collections::BTreeSet;
 pub struct ShardingRegistryOps;
 
 impl ShardingRegistryOps {
+    /// Create a new shard entry in the registry.
+    pub fn create(
+        pid: Principal,
+        pool: &str,
+        slot: u32,
+        canister_type: &CanisterType,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let entry = ShardEntry::new(pool, slot, canister_type.clone(), capacity, now_secs());
+        ShardingRegistry::with_mut(|core| core.insert_entry(pid, entry));
+        Ok(())
+    }
+
     /// Assign a tenant to a shard with basic capacity/pool validation.
     pub fn assign(pool: &str, tenant: &str, shard: Principal) -> Result<(), Error> {
         let mut entry = ShardingRegistry::with(|s| s.get_entry(&shard))
-            .ok_or(ShardingError::ShardNotFound(shard))?;
+            .ok_or(ShardingOpsError::ShardNotFound(shard))?;
 
         if entry.pool != pool {
-            Err(ShardingError::ShardNotFound(shard))?;
+            return Err(ShardingOpsError::ShardNotFound(shard).into());
         }
 
         if entry.count >= entry.capacity {
-            Err(ShardingError::ShardFull(shard))?;
+            return Err(ShardingOpsError::ShardFull(shard).into());
         }
 
         // If tenant is already assigned, replace only if different
@@ -46,12 +62,13 @@ impl ShardingRegistryOps {
     /// Release a tenant from its shard and decrement the shard's load.
     pub fn release(pool: &str, tenant: &str) -> Result<(), Error> {
         let key = ShardKey::new(pool, tenant);
-        let shard = ShardingRegistry::with_mut(|s| s.remove_assignment(&key))?;
+        let shard = ShardingRegistry::with_mut(|s| s.remove_assignment(&key))
+            .ok_or_else(|| ShardingOpsError::TenantNotFound(tenant.to_string()))?;
 
-        if let Some(mut entry) = ShardingRegistry::with(|s| s.get_entry(&shard)) {
-            entry.count = entry.count.saturating_sub(1);
-            ShardingRegistry::with_mut(|s| s.insert_entry(shard, entry));
-        }
+        let mut entry = ShardingRegistry::with(|s| s.get_entry(&shard))
+            .ok_or(ShardingOpsError::ShardNotFound(shard))?;
+        entry.count = entry.count.saturating_sub(1);
+        ShardingRegistry::with_mut(|s| s.insert_entry(shard, entry));
 
         Ok(())
     }
@@ -163,7 +180,7 @@ mod tests {
         let ty = CanisterType::new("alpha");
         let shard_pid = p(1);
 
-        ShardingRegistry::create(shard_pid, "poolA", 0, &ty, 2);
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &ty, 2).unwrap();
         ShardingRegistryOps::assign("poolA", "tenant1", shard_pid).unwrap();
         let count_after = ShardingRegistry::with(|s| s.get_entry(&shard_pid).unwrap().count);
         assert_eq!(count_after, 1);

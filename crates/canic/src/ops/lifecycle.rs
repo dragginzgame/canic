@@ -6,12 +6,11 @@ use crate::{
     model::memory::{
         Env,
         directory::{AppDirectory, SubnetDirectory},
-        registry,
         topology::{SubnetCanisterRegistry, SubnetIdentity},
     },
     ops::{
         CanisterInitPayload, model::memory::cycles::CycleTrackerOps,
-        model::memory::reserve::CanisterReserveOps,
+        model::memory::registry::MemoryRegistryOps, model::memory::reserve::CanisterReserveOps,
     },
     runtime,
     types::{CanisterType, SubnetType},
@@ -35,7 +34,7 @@ pub fn root_init(identity: SubnetIdentity) {
 
     // init
     runtime::init_eager_tls();
-    registry::init_memory();
+    MemoryRegistryOps::init_memory();
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
@@ -79,7 +78,7 @@ pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 init: {}", canister_type);
     runtime::init_eager_tls();
-    registry::init_memory();
+    MemoryRegistryOps::init_memory();
 
     // --- Phase 2: Payload registration ---
     Env::import(payload.env);

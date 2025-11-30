@@ -15,23 +15,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 ///
-/// ConfigModelError
+/// ConfigSchemaError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum ConfigModelError {
-    #[error("subnet not found: {0}")]
-    SubnetNotFound(SubnetType),
-
-    #[error("canister not found on subnet: {0}")]
-    CanisterNotFound(CanisterType),
-
+pub enum ConfigSchemaError {
     #[error("validation error: {0}")]
     ValidationError(String),
 }
 
-impl From<ConfigModelError> for Error {
-    fn from(err: ConfigModelError) -> Self {
+impl From<ConfigSchemaError> for Error {
+    fn from(err: ConfigSchemaError) -> Self {
         ConfigError::from(err).into()
     }
 }
@@ -41,7 +35,7 @@ impl From<ConfigModelError> for Error {
 ///
 
 pub trait Validate {
-    fn validate(&self) -> Result<(), ConfigModelError>;
+    fn validate(&self) -> Result<(), ConfigSchemaError>;
 }
 
 ///
@@ -74,11 +68,8 @@ pub struct ConfigModel {
 
 impl ConfigModel {
     /// Get a subnet configuration by type.
-    pub fn try_get_subnet(&self, ty: &SubnetType) -> Result<SubnetConfig, Error> {
-        self.subnets
-            .get(ty)
-            .cloned()
-            .ok_or_else(|| ConfigModelError::SubnetNotFound(ty.clone()).into())
+    pub fn get_subnet(&self, ty: &SubnetType) -> Option<SubnetConfig> {
+        self.subnets.get(ty).cloned()
     }
 
     /// Return true if the given principal is present in the whitelist.
@@ -97,18 +88,18 @@ impl ConfigModel {
 }
 
 impl Validate for ConfigModel {
-    fn validate(&self) -> Result<(), ConfigModelError> {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
         //  Validate that prime subnet exists
         let prime = SubnetType::PRIME;
         let prime_subnet = self
             .subnets
             .get(&prime)
-            .ok_or_else(|| ConfigModelError::ValidationError("prime subnet not found".into()))?;
+            .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
 
         //  Validate that every app_directory entry exists in prime.canisters
         for canister_ty in &self.app_directory {
             if !prime_subnet.canisters.contains_key(canister_ty) {
-                return Err(ConfigModelError::ValidationError(format!(
+                return Err(ConfigSchemaError::ValidationError(format!(
                     "app directory canister '{canister_ty}' is not in prime subnet",
                 )));
             }
@@ -141,10 +132,10 @@ pub struct Whitelist {
 }
 
 impl Validate for Whitelist {
-    fn validate(&self) -> Result<(), ConfigModelError> {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
         for (i, s) in self.principals.iter().enumerate() {
             if Principal::from_text(s).is_err() {
-                return Err(ConfigModelError::ValidationError(format!(
+                return Err(ConfigSchemaError::ValidationError(format!(
                     "principal #{i} {s} is invalid"
                 )));
             }
