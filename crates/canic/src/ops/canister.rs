@@ -230,7 +230,6 @@ async fn install_canister(
 ) -> Result<(), Error> {
     // Fetch and register WASM
     let wasm = WasmOps::try_get(ty)?;
-    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, wasm.module_hash());
 
     // Construct init payload
     let env = EnvData {
@@ -256,6 +255,9 @@ async fn install_canister(
         (payload, extra_arg),
     )
     .await?;
+
+    // register only if the wasm install succeeds
+    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, wasm.module_hash());
 
     log!(
         Topic::CanisterLifecycle,
