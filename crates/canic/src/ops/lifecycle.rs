@@ -68,6 +68,7 @@ pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 post_upgrade: root");
     runtime::init_eager_tls();
+    MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---
 
@@ -97,6 +98,7 @@ pub fn nonroot_post_upgrade(canister_type: CanisterType) {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_type);
     runtime::init_eager_tls();
+    MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---
 
