@@ -10,12 +10,12 @@ use crate::utils::hash::hash_u64;
 use candid::Principal;
 
 /// HRW-based shard selector.
-pub struct HrwSelector;
+pub(crate) struct HrwSelector;
 
 impl HrwSelector {
     /// Pick the shard with the highest HRW score for this tenant.
     #[must_use]
-    pub fn select(tenant: &str, shards: &[Principal]) -> Option<Principal> {
+    pub(crate) fn select(tenant: &str, shards: &[Principal]) -> Option<Principal> {
         if shards.is_empty() {
             return None;
         }
@@ -34,17 +34,17 @@ impl HrwSelector {
         Some(best_shard)
     }
 
-    /// Pick the slot index with the highest HRW score for this tenant.
+    /// Pick the highest-scoring slot from a provided list.
     #[must_use]
-    pub fn select_slot(pool: &str, tenant: &str, slots: u32) -> Option<u32> {
-        if slots == 0 {
+    pub(crate) fn select_from_slots(pool: &str, tenant: &str, slots: &[u32]) -> Option<u32> {
+        if slots.is_empty() {
             return None;
         }
 
         let mut best_score = 0u64;
-        let mut best_slot = 0u32;
+        let mut best_slot = slots[0];
 
-        for slot in 0..slots {
+        for &slot in slots {
             let score = Self::hrw_score_slot(pool, tenant, slot);
             if score > best_score {
                 best_score = score;
@@ -97,14 +97,5 @@ mod tests {
         let s1 = HrwSelector::select(tenant, &shards).unwrap();
         let s2 = HrwSelector::select(tenant, &shards).unwrap();
         assert_eq!(s1, s2);
-    }
-
-    #[test]
-    fn select_slot_is_deterministic() {
-        let tenant = "tenant-123";
-        let pool = "primary";
-        let slot = HrwSelector::select_slot(pool, tenant, 4).unwrap();
-        let slot_again = HrwSelector::select_slot(pool, tenant, 4).unwrap();
-        assert_eq!(slot, slot_again);
     }
 }

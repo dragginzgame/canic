@@ -20,11 +20,12 @@ pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 
     let rate_info: IcpXdrConversionRateResponse = res.candid()?;
 
-    // Extract the conversion rate (ICP e8s per XDR)
+    // Extract the conversion rate (XDR per ICP) and invert to get ICP per XDR.
     #[allow(clippy::cast_precision_loss)]
-    let rate = rate_info.data.xdr_permyriad_per_icp as f64 / 10000.0;
+    let xdr_per_icp = rate_info.data.xdr_permyriad_per_icp as f64 / 10000.0;
+    let icp_per_xdr = 1.0 / xdr_per_icp;
 
-    Ok(rate)
+    Ok(icp_per_xdr)
 }
 
 ///
@@ -137,5 +138,26 @@ async fn notify_cycles_minting_canister(
     match call_result {
         Ok(_) => Ok(()),
         Err(e) => Err(Error::custom(format!("Failed to notify CMC: {e}"))),
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::calculate_icp_for_cycles;
+
+    #[test]
+    fn calculates_icp_for_cycles_with_buffer() {
+        // Need 2e12 cycles (2 XDR) with a rate of 0.8 XDR/ICP → 1.25 ICP/XDR.
+        // With the 5% buffer we expect ~2.625 ICP = 262_500_000 e8s.
+        let cycles_needed = 2_000_000_000_000u64;
+        let icp_per_xdr = 1.25_f64;
+
+        let icp_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
+
+        assert_eq!(icp_e8s, 262_500_000);
     }
 }

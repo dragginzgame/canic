@@ -112,6 +112,7 @@ async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Respo
     // Use the registry's type to avoid trusting request payload.
     let wasm = WasmOps::try_get(&registry_entry.ty)?;
     upgrade_canister(registry_entry.pid, wasm.bytes()).await?;
+    SubnetCanisterRegistryOps::update_module_hash(registry_entry.pid, wasm.module_hash())?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
 }

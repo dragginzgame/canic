@@ -64,13 +64,13 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum Error {
     #[error("{0}")]
-    CustomError(String),
-
-    #[error("{0}")]
     AuthError(String),
 
     #[error("{0}")]
     ConfigError(String),
+
+    #[error("{0}")]
+    CustomError(String),
 
     #[error("{0}")]
     EnvError(String),

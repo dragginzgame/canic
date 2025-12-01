@@ -77,7 +77,7 @@ impl ShardingPolicyOps {
 
     /// Validate whether a pool may create a new shard under its policy.
     #[inline]
-    pub fn check_create_allowed(
+    pub(crate) fn check_create_allowed(
         metrics: &PoolMetrics,
         policy: &ShardPoolPolicy,
     ) -> Result<(), Error> {
@@ -93,7 +93,7 @@ impl ShardingPolicyOps {
     // -----------------------------------------------------------------------
 
     /// Retrieve the shard pool configuration from the current canister’s config.
-    pub fn get_pool_config(pool: &str) -> Result<ShardPool, Error> {
+    pub(crate) fn get_pool_config(pool: &str) -> Result<ShardPool, Error> {
         let cfg = ConfigOps::current_canister()?;
         let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
@@ -113,8 +113,8 @@ impl ShardingPolicyOps {
     /// Never creates or mutates registry state.
     pub fn plan_assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<ShardingPlan, Error> {
         let tenant = tenant.to_string();
-        let metrics = pool_metrics(pool);
         let pool_cfg = Self::get_pool_config(pool)?;
+        let metrics = pool_metrics(pool);
 
         ShardingRegistryOps::ensure_slot_assignments(pool, pool_cfg.policy.max_shards);
 
@@ -128,26 +128,45 @@ impl ShardingPolicyOps {
             ));
         }
 
+        // Prefer an existing shard with spare capacity.
+        let view = ShardingRegistry::export();
+        let shards_with_capacity: Vec<_> = view
+            .iter()
+            .filter(|(_, entry)| entry.pool == pool && entry.count < entry.capacity)
+            .map(|(pid, _)| *pid)
+            .collect();
+
+        if let Some(target_pid) = HrwSelector::select(&tenant, &shards_with_capacity) {
+            let slot = ShardingRegistry::slot_for_shard(pool, target_pid);
+            return Ok(Self::make_plan(
+                ShardingPlanState::UseExisting { pid: target_pid },
+                &metrics,
+                slot,
+            ));
+        }
+
         let max_slots = pool_cfg.policy.max_shards;
-        let Some(target_slot) = HrwSelector::select_slot(pool, &tenant, max_slots) else {
+        let occupied: Vec<u32> = view
+            .iter()
+            .filter_map(|(_, entry)| {
+                (entry.pool == pool && entry.has_assigned_slot()).then_some(entry.slot)
+            })
+            .collect();
+        let free_slots: Vec<u32> = (0..max_slots)
+            .filter(|slot| !occupied.contains(slot))
+            .collect();
+
+        let Some(target_slot) = HrwSelector::select_from_slots(pool, &tenant, &free_slots) else {
             return Ok(Self::make_plan(
                 ShardingPlanState::CreateBlocked {
-                    reason: "sharding pool max_shards is zero".to_string(),
+                    reason: "sharding pool has no free slots".to_string(),
                 },
                 &metrics,
                 None,
             ));
         };
 
-        if let Some(pid) = ShardingRegistry::shard_for_slot(pool, target_slot) {
-            return Ok(Self::make_plan(
-                ShardingPlanState::UseExisting { pid },
-                &metrics,
-                Some(target_slot),
-            ));
-        }
-
-        // Case 3: No shards or none suitable → check policy for creation
+        // Case 3: No shard with capacity → check policy for creation
         match Self::check_create_allowed(&metrics, &pool_cfg.policy) {
             Ok(()) => Ok(Self::make_plan(
                 ShardingPlanState::CreateAllowed,
@@ -214,6 +233,12 @@ impl ShardingPolicyOps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        config::Config,
+        model::memory::sharding::ShardingRegistry,
+        ops::model::memory::{EnvOps, sharding::ShardingRegistryOps},
+        types::CanisterType,
+    };
     use candid::Principal;
 
     #[test]
@@ -246,5 +271,85 @@ mod tests {
             plan.state,
             ShardingPlanState::AlreadyAssigned { .. }
         ));
+    }
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn init_config() {
+        use crate::{
+            config::Config,
+            types::{CanisterType, SubnetType},
+        };
+
+        let toml = r#"
+            [subnets.prime.canisters.manager]
+            initial_cycles = "5T"
+
+            [subnets.prime.canisters.manager.sharding.pools.primary]
+            canister_type = "shard"
+            [subnets.prime.canisters.manager.sharding.pools.primary.policy]
+            capacity = 1
+            max_shards = 2
+
+            [subnets.prime.canisters.shard]
+            initial_cycles = "5T"
+        "#;
+
+        Config::init_from_toml(toml).unwrap();
+        EnvOps::set_subnet_type(SubnetType::PRIME);
+        EnvOps::set_canister_type(CanisterType::from("manager"));
+    }
+
+    #[test]
+    fn plan_allows_creation_when_target_shard_full() {
+        Config::reset_for_tests();
+        init_config();
+        ShardingRegistry::clear();
+
+        let shard_ty = CanisterType::from("shard");
+        let shard = p(1);
+        ShardingRegistryOps::create(shard, "primary", 0, &shard_ty, 1).unwrap();
+        ShardingRegistry::with_mut(|core| {
+            if let Some(mut entry) = core.get_entry(&shard) {
+                entry.count = entry.capacity;
+                core.insert_entry(shard, entry);
+            }
+        });
+
+        let plan = ShardingPolicyOps::plan_assign_to_pool("primary", "tenant-x").unwrap();
+
+        assert!(matches!(plan.state, ShardingPlanState::CreateAllowed));
+        Config::reset_for_tests();
+    }
+
+    #[test]
+    fn plan_blocks_creation_when_pool_at_capacity() {
+        Config::reset_for_tests();
+        init_config();
+        ShardingRegistry::clear();
+
+        let shard_ty = CanisterType::from("shard");
+        let shard_a = p(1);
+        let shard_b = p(2);
+        ShardingRegistryOps::create(shard_a, "primary", 0, &shard_ty, 1).unwrap();
+        ShardingRegistryOps::create(shard_b, "primary", 1, &shard_ty, 1).unwrap();
+        ShardingRegistry::with_mut(|core| {
+            for shard in [shard_a, shard_b] {
+                if let Some(mut entry) = core.get_entry(&shard) {
+                    entry.count = entry.capacity;
+                    core.insert_entry(shard, entry);
+                }
+            }
+        });
+
+        let plan = ShardingPolicyOps::plan_assign_to_pool("primary", "tenant-y").unwrap();
+
+        assert!(matches!(
+            plan.state,
+            ShardingPlanState::CreateBlocked { .. }
+        ));
+        Config::reset_for_tests();
     }
 }

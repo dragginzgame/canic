@@ -32,16 +32,16 @@ impl SubnetCanisterChildrenOps {
 
     /// Lookup a child by principal
     #[must_use]
-    pub fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
+    pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
         SubnetCanisterChildren::find_by_pid(pid)
     }
 
     #[must_use]
-    pub fn export() -> Vec<CanisterSummary> {
+    pub(crate) fn export() -> Vec<CanisterSummary> {
         SubnetCanisterChildren::export()
     }
 
-    pub fn import(children: Vec<CanisterSummary>) {
+    pub(crate) fn import(children: Vec<CanisterSummary>) {
         SubnetCanisterChildren::import(children);
     }
 }

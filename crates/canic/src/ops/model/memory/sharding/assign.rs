@@ -24,7 +24,7 @@ use candid::Principal;
 /// Allocates new shards when policy allows.
 ///
 
-pub struct ShardAllocator;
+pub(crate) struct ShardAllocator;
 
 impl ShardAllocator {
     /// Create a new shard in the given pool if policy allows.
