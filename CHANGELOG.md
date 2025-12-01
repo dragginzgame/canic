@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.4.1] - 2025-12-01 - Bug Splatting
 - Register new canisters in the subnet registry only after a successful install to avoid phantom entries on install failure.
 - Post-upgrade now replays memory range/ID registrations so new stable-memory segments are validated after upgrades.
+- Failed canister installs recycle the allocated canister into the reserve instead of leaving it orphaned.
 - Fix ICP→cycles conversion to use ICP-per-XDR and add coverage for the buffered calculation.
 - Sharding planner now skips full shards and requests creation when capacity is exhausted.
 - Reserve imports reset controllers to the configured set, and registry records track upgraded module hashes.
