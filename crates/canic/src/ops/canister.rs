@@ -20,7 +20,7 @@ use crate::{
             EnvOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::EnvData,
-            reserve::CanisterReserveOps,
+            reserve::{CanisterReserveOps, reserve_import_canister},
             topology::SubnetCanisterRegistryOps,
         },
         sync::{
@@ -87,7 +87,24 @@ pub async fn create_and_install_canister(
     let pid = allocate_canister(ty).await?;
 
     // Phase 2: installation
-    install_canister(pid, ty, parent_pid, extra_arg).await?;
+    if let Err(err) = install_canister(pid, ty, parent_pid, extra_arg).await {
+        let err_msg = err.to_string();
+        log!(
+            Topic::CanisterLifecycle,
+            Warn,
+            "⚠️ install_canister failed for {pid}: {err_msg}"
+        );
+
+        if let Err(recycle_err) = reserve_import_canister(pid).await {
+            log!(
+                Topic::CanisterReserve,
+                Warn,
+                "⚠️ failed to recycle {pid} into reserve after install failure: {recycle_err}"
+            );
+        }
+
+        return Err(err);
+    }
 
     // Phase 3: update topology
     root_cascade_topology().await?;
