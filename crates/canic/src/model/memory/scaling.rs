@@ -38,6 +38,12 @@ impl WorkerEntry {
 impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);
 
 ///
+/// ScalingRegistryView
+///
+
+pub type ScalingRegistryView = Vec<(Principal, WorkerEntry)>;
+
+///
 /// ScalingRegistry
 /// Registry of active scaling workers
 ///

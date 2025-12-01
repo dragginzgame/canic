@@ -170,7 +170,7 @@ impl ShardingPolicyOps {
 
     /// Export a read-only view of the sharding registry.
     #[must_use]
-    pub fn export_registry() -> ShardingRegistryDto {
+    pub fn export() -> ShardingRegistryDto {
         ShardingRegistry::export()
     }
 

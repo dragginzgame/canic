@@ -6,12 +6,15 @@
 use crate::{
     Error,
     log::Topic,
-    model::memory::{
-        directory::{AppDirectory, SubnetDirectory},
-        state::{AppState, AppStateData, SubnetState, SubnetStateData},
-        topology::{SubnetCanisterChildren, SubnetCanisterRegistry},
+    ops::{
+        OpsError,
+        model::memory::{
+            directory::{AppDirectoryOps, DirectoryView, SubnetDirectoryOps},
+            state::{AppStateDto, AppStateOps, SubnetStateDto, SubnetStateOps},
+            topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        },
+        prelude::*,
     },
-    ops::{OpsError, model::memory::directory::DirectoryView, prelude::*},
 };
 
 ///
@@ -19,11 +22,11 @@ use crate::{
 /// Snapshot of mutable state and directory sections that can be propagated to peers
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
-pub struct StateBundle {
-    // states
-    pub app_state: Option<AppStateData>,
-    pub subnet_state: Option<SubnetStateData>,
+    #[derive(CandidType, Clone, Debug, Default, Deserialize)]
+    pub struct StateBundle {
+        // states
+        pub app_state: Option<AppStateDto>,
+        pub subnet_state: Option<SubnetStateDto>,
 
     // directories
     pub app_directory: Option<DirectoryView>,
@@ -40,34 +43,34 @@ impl StateBundle {
     #[must_use]
     pub fn root() -> Self {
         Self {
-            app_state: Some(AppState::export()),
-            subnet_state: Some(SubnetState::export()),
-            app_directory: Some(AppDirectory::export()),
-            subnet_directory: Some(SubnetDirectory::export()),
+            app_state: Some(AppStateOps::export()),
+            subnet_state: Some(SubnetStateOps::export()),
+            app_directory: Some(AppDirectoryOps::export()),
+            subnet_directory: Some(SubnetDirectoryOps::export()),
         }
     }
 
     #[must_use]
     pub fn with_app_state(mut self) -> Self {
-        self.app_state = Some(AppState::export());
+        self.app_state = Some(AppStateOps::export());
         self
     }
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.subnet_state = Some(SubnetState::export());
+        self.subnet_state = Some(SubnetStateOps::export());
         self
     }
 
     #[must_use]
     pub fn with_app_directory(mut self) -> Self {
-        self.app_directory = Some(AppDirectory::export());
+        self.app_directory = Some(AppDirectoryOps::export());
         self
     }
 
     #[must_use]
     pub fn with_subnet_directory(mut self) -> Self {
-        self.subnet_directory = Some(SubnetDirectory::export());
+        self.subnet_directory = Some(SubnetDirectoryOps::export());
         self
     }
 
@@ -113,7 +116,7 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     }
 
     let root_pid = canister_self();
-    for child in SubnetCanisterRegistry::children(root_pid) {
+    for child in SubnetCanisterRegistryOps::children(root_pid) {
         send_bundle(&child.pid, &bundle).await?;
     }
 
@@ -128,7 +131,7 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     // update local state
     save_state(bundle)?;
 
-    for child in SubnetCanisterChildren::export() {
+    for child in SubnetCanisterChildrenOps::export() {
         send_bundle(&child.pid, bundle).await?;
     }
 
@@ -141,18 +144,18 @@ fn save_state(bundle: &StateBundle) -> Result<(), Error> {
 
     // states
     if let Some(state) = bundle.app_state {
-        AppState::import(state);
+        AppStateOps::import(state);
     }
     if let Some(state) = bundle.subnet_state {
-        SubnetState::import(state);
+        SubnetStateOps::import(state);
     }
 
     // directories
     if let Some(dir) = &bundle.app_directory {
-        AppDirectory::import(dir.clone());
+        AppDirectoryOps::import(dir.clone());
     }
     if let Some(dir) = &bundle.subnet_directory {
-        SubnetDirectory::import(dir.clone());
+        SubnetDirectoryOps::import(dir.clone());
     }
 
     Ok(())

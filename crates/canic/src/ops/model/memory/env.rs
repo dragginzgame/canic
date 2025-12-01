@@ -42,8 +42,38 @@ impl From<EnvOpsError> for Error {
 pub struct EnvOps;
 
 impl EnvOps {
+    pub fn import(env: EnvData) {
+        Env::import(env);
+    }
+
+    pub fn set_canister_type(ty: CanisterType) {
+        Env::set_canister_type(ty);
+    }
+
+    pub fn set_root_pid(pid: Principal) {
+        Env::set_root_pid(pid);
+    }
+
+    pub fn set_prime_root_pid(pid: Principal) {
+        Env::set_prime_root_pid(pid);
+    }
+
+    pub fn set_subnet_pid(pid: Principal) {
+        Env::set_subnet_pid(pid);
+    }
+
+    pub fn set_subnet_type(ty: SubnetType) {
+        Env::set_subnet_type(ty);
+    }
+
+    #[must_use]
     pub fn is_root() -> bool {
         Env::is_root()
+    }
+
+    #[must_use]
+    pub fn is_prime_root() -> bool {
+        Env::is_prime_root()
     }
 
     pub fn try_get_subnet_type() -> Result<SubnetType, Error> {
@@ -66,6 +96,12 @@ impl EnvOps {
 
     pub fn try_get_root_pid() -> Result<Principal, Error> {
         let pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+
+        Ok(pid)
+    }
+
+    pub fn try_get_prime_root_pid() -> Result<Principal, Error> {
+        let pid = Env::get_prime_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
 
         Ok(pid)
     }

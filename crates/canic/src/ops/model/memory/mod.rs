@@ -16,8 +16,13 @@ use crate::{
     ops::model::{
         ModelOpsError,
         memory::{
-            env::EnvOpsError, registry::MemoryRegistryOpsError, scaling::ScalingOpsError,
-            sharding::ShardingOpsError, state::AppStateOpsError,
+            directory::{AppDirectoryOpsError, SubnetDirectoryOpsError},
+            env::EnvOpsError,
+            registry::MemoryRegistryOpsError,
+            scaling::ScalingOpsError,
+            sharding::ShardingOpsError,
+            state::AppStateOpsError,
+            topology::TopologyOpsError,
         },
     },
 };
@@ -28,6 +33,9 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum MemoryOpsError {
+    #[error(transparent)]
+    AppDirectoryOpsError(#[from] AppDirectoryOpsError),
+
     #[error(transparent)]
     AppStateOpsError(#[from] AppStateOpsError),
 
@@ -42,6 +50,12 @@ pub enum MemoryOpsError {
 
     #[error(transparent)]
     ShardingOpsError(#[from] ShardingOpsError),
+
+    #[error(transparent)]
+    SubnetDirectoryOpsError(#[from] SubnetDirectoryOpsError),
+
+    #[error(transparent)]
+    TopologyOpsError(#[from] TopologyOpsError),
 }
 
 impl From<MemoryOpsError> for Error {

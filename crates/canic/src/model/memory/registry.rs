@@ -63,6 +63,7 @@ pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
 
 /// Drain (and clear) all pending registrations.
 /// Intended to be called from the ops layer during init/post-upgrade.
+#[must_use]
 pub fn drain_pending_registrations() -> Vec<(u8, &'static str, &'static str)> {
     PENDING_REGISTRATIONS.with(|q| q.borrow_mut().drain(..).collect())
 }
@@ -83,6 +84,7 @@ pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
 
 /// Drain (and clear) all pending ranges.
 /// Intended to be called from the ops layer during init/post-upgrade.
+#[must_use]
 pub fn drain_pending_ranges() -> Vec<(&'static str, u8, u8)> {
     PENDING_RANGES.with(|q| q.borrow_mut().drain(..).collect())
 }
@@ -167,6 +169,12 @@ impl MemoryRegistryEntry {
 }
 
 impl_storable_bounded!(MemoryRegistryEntry, 320, false);
+
+///
+/// MemoryRegistryView
+///
+
+pub type MemoryRegistryView = Vec<(u8, MemoryRegistryEntry)>;
 
 ///
 /// MemoryRegistry
@@ -283,7 +291,7 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub fn export() -> Vec<(u8, MemoryRegistryEntry)> {
+    pub fn export() -> MemoryRegistryView {
         MEMORY_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (*entry.key(), entry.value()))

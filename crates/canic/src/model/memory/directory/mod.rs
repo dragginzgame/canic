@@ -4,10 +4,19 @@ pub mod subnet;
 pub use app::AppDirectory;
 pub use subnet::SubnetDirectory;
 
-use crate::{impl_storable_unbounded, types::Principal};
+use crate::{
+    impl_storable_unbounded,
+    types::{CanisterType, Principal},
+};
 use candid::CandidType;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
+
+///
+/// DirectoryView
+///
+
+pub type DirectoryView = Vec<(CanisterType, PrincipalList)>;
 
 ///
 /// PrincipalList

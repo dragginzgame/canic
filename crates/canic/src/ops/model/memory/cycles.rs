@@ -1,3 +1,5 @@
+pub use crate::model::memory::cycles::CycleTrackerView;
+
 use crate::{
     cdk::{
         futures::spawn,
@@ -6,21 +8,14 @@ use crate::{
     interface::ic::canister_cycle_balance,
     log,
     log::Topic,
-    model::memory::{Env, cycles::CycleTracker},
-    ops::config::ConfigOps,
+    model::memory::cycles::CycleTracker,
+    ops::{config::ConfigOps, model::memory::EnvOps},
     types::Cycles,
     utils::time::now_secs,
 };
 use candid::CandidType;
 use serde::Serialize;
 use std::{cell::RefCell, time::Duration};
-
-///
-/// CycleTrackerDto
-/// Snapshot view of cycle tracker entries
-///
-
-pub type CycleTrackerDto = Vec<(u64, Cycles)>;
 
 //
 // TIMER
@@ -46,7 +41,7 @@ const TRACKER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10);
 
 #[derive(CandidType, Serialize)]
 pub struct CycleTrackerPage {
-    pub entries: CycleTrackerDto,
+    pub entries: CycleTrackerView,
     pub total: u64,
 }
 
@@ -94,7 +89,7 @@ impl CycleTrackerOps {
         let cycles = canister_cycle_balance().to_u128();
 
         // only check for topup on non-root canisters
-        if !Env::is_root() {
+        if !EnvOps::is_root() {
             Self::check_auto_topup();
         }
 

@@ -68,6 +68,7 @@ pub struct ConfigModel {
 
 impl ConfigModel {
     /// Get a subnet configuration by type.
+    #[must_use]
     pub fn get_subnet(&self, ty: &SubnetType) -> Option<SubnetConfig> {
         self.subnets.get(ty).cloned()
     }

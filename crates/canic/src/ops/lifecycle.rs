@@ -3,14 +3,17 @@ use crate::{
     cdk::{api::canister_self, println},
     log,
     log::Topic,
-    model::memory::{
-        Env,
-        directory::{AppDirectory, SubnetDirectory},
-        topology::{SubnetCanisterRegistry, SubnetIdentity},
-    },
+    model::memory::topology::SubnetIdentity,
     ops::{
-        CanisterInitPayload, model::memory::cycles::CycleTrackerOps,
-        model::memory::registry::MemoryRegistryOps, model::memory::reserve::CanisterReserveOps,
+        CanisterInitPayload,
+        model::memory::cycles::CycleTrackerOps,
+        model::memory::{
+            EnvOps,
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            registry::MemoryRegistryOps,
+            reserve::CanisterReserveOps,
+            topology::SubnetCanisterRegistryOps,
+        },
     },
     runtime,
     types::{CanisterType, SubnetType},
@@ -34,26 +37,26 @@ pub fn root_init(identity: SubnetIdentity) {
 
     // init
     runtime::init_eager_tls();
-    MemoryRegistryOps::init_memory();
+    MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
-    Env::set_canister_type(CanisterType::ROOT);
-    Env::set_root_pid(self_pid);
+    EnvOps::set_canister_type(CanisterType::ROOT);
+    EnvOps::set_root_pid(self_pid);
 
     match identity {
         SubnetIdentity::Prime => {
-            Env::set_prime_root_pid(self_pid);
-            Env::set_subnet_type(SubnetType::PRIME);
+            EnvOps::set_prime_root_pid(self_pid);
+            EnvOps::set_subnet_type(SubnetType::PRIME);
         }
         SubnetIdentity::Standard(params) => {
-            Env::set_prime_root_pid(params.prime_root_pid);
-            Env::set_subnet_type(params.subnet_type);
+            EnvOps::set_prime_root_pid(params.prime_root_pid);
+            EnvOps::set_subnet_type(params.subnet_type);
         }
         SubnetIdentity::Test => panic!("not sure what to do with test"),
     }
 
-    SubnetCanisterRegistry::register_root(self_pid);
+    SubnetCanisterRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
     CycleTrackerOps::start();
@@ -78,12 +81,12 @@ pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 init: {}", canister_type);
     runtime::init_eager_tls();
-    MemoryRegistryOps::init_memory();
+    MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Payload registration ---
-    Env::import(payload.env);
-    AppDirectory::import(payload.app_directory);
-    SubnetDirectory::import(payload.subnet_directory);
+    EnvOps::import(payload.env);
+    AppDirectoryOps::import(payload.app_directory);
+    SubnetDirectoryOps::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
     CycleTrackerOps::start();

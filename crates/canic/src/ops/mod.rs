@@ -9,6 +9,7 @@
 
 pub mod canister;
 pub mod config;
+pub mod icrc;
 pub mod lifecycle;
 pub mod model;
 pub mod request;
@@ -16,6 +17,7 @@ pub mod root;
 pub mod signature;
 pub mod sync;
 pub mod types;
+pub mod wasm;
 
 pub use types::*;
 
@@ -36,7 +38,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, model::memory::Env};
+use crate::{ThisError, ops::model::memory::EnvOps};
 
 ///
 /// OpsError
@@ -72,7 +74,7 @@ pub enum OpsError {
 impl OpsError {
     /// Ensure the caller is the root canister.
     pub fn require_root() -> Result<(), Self> {
-        if Env::is_root() {
+        if EnvOps::is_root() {
             Ok(())
         } else {
             Err(Self::NotRoot)
@@ -81,7 +83,7 @@ impl OpsError {
 
     /// Ensure the caller is not the root canister.
     pub fn deny_root() -> Result<(), Self> {
-        if Env::is_root() {
+        if EnvOps::is_root() {
             Err(Self::IsRoot)
         } else {
             Ok(())

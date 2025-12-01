@@ -1,7 +1,10 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    model::memory::{directory::PrincipalList, id::directory::APP_DIRECTORY_ID},
+    model::memory::{
+        directory::{DirectoryView, PrincipalList},
+        id::directory::APP_DIRECTORY_ID,
+    },
     types::CanisterType,
 };
 use std::cell::RefCell;
@@ -31,7 +34,7 @@ impl AppDirectory {
     // Import & Export
     //
 
-    pub fn import(view: Vec<(CanisterType, PrincipalList)>) {
+    pub fn import(view: DirectoryView) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (ty, pids) in view {
@@ -41,7 +44,7 @@ impl AppDirectory {
     }
 
     #[must_use]
-    pub fn export() -> Vec<(CanisterType, PrincipalList)> {
+    pub fn export() -> DirectoryView {
         APP_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))

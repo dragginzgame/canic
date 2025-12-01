@@ -51,6 +51,7 @@ impl ShardingRegistry {
     }
 
     /// Removes a shard entry from the registry. The shard must be empty.
+    #[must_use]
     pub fn remove(shard_pid: Principal) -> Option<ShardEntry> {
         Self::with_mut(|s| s.remove_entry(&shard_pid))
     }

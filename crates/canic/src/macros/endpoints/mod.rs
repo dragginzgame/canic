@@ -23,14 +23,14 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-            $crate::model::icrc::Icrc10Registry::supported_standards()
+            $crate::ops::icrc::Icrc10Ops::supported_standards()
         }
 
         #[::canic::cdk::query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::spec::icrc::icrc21::ConsentMessageResponse {
-            $crate::model::icrc::Icrc21Registry::consent_message(req)
+            $crate::ops::icrc::Icrc21Ops::consent_message(req)
         }
 
         //
@@ -57,7 +57,7 @@ macro_rules! canic_endpoints {
         //
 
         #[::canic::cdk::query]
-        fn canic_memory_registry() -> ::canic::ops::model::memory::registry::MemoryRegistryDto {
+        fn canic_memory_registry() -> ::canic::ops::model::memory::registry::MemoryRegistryView {
             $crate::ops::model::memory::registry::MemoryRegistryOps::export()
         }
 
@@ -84,12 +84,12 @@ macro_rules! canic_endpoints {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_state() -> ::canic::model::memory::state::AppStateData {
+        fn canic_app_state() -> ::canic::ops::model::memory::state::AppStateDto {
             $crate::ops::model::memory::state::AppStateOps::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_state() -> ::canic::model::memory::state::SubnetStateData {
+        fn canic_subnet_state() -> ::canic::ops::model::memory::state::SubnetStateDto {
             $crate::ops::model::memory::state::SubnetStateOps::export()
         }
 
@@ -121,8 +121,10 @@ macro_rules! canic_endpoints {
         fn canic_subnet_canister_children(
             offset: u64,
             limit: u64,
-        ) -> ::canic::ops::model::memory::topology::subnet::CanisterChildrenPage {
-            ::canic::ops::model::memory::topology::subnet::CanisterChildrenOps::page(offset, limit)
+        ) -> ::canic::ops::model::memory::topology::subnet::SubnetCanisterChildrenPage {
+            ::canic::ops::model::memory::topology::subnet::SubnetCanisterChildrenOps::page(
+                offset, limit,
+            )
         }
 
         //
@@ -145,10 +147,10 @@ macro_rules! canic_endpoints {
         // canic_scaling_registry
         #[::canic::cdk::query]
         async fn canic_scaling_registry()
-        -> Result<::canic::ops::model::memory::scaling::ScalingRegistryDto, ::canic::Error> {
+        -> Result<::canic::ops::model::memory::scaling::ScalingRegistryView, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            Ok($crate::ops::model::memory::scaling::export_registry())
+            Ok($crate::ops::model::memory::scaling::ScalingRegistryOps::export())
         }
 
         //
@@ -161,7 +163,7 @@ macro_rules! canic_endpoints {
         -> Result<::canic::ops::model::memory::sharding::ShardingRegistryDto, ::canic::Error> {
             $crate::auth_require_any!(::canic::auth::is_controller)?;
 
-            Ok($crate::ops::model::memory::sharding::ShardingPolicyOps::export_registry())
+            Ok($crate::ops::model::memory::sharding::ShardingPolicyOps::export())
         }
 
         //

@@ -41,6 +41,7 @@ impl SubnetConfig {
     }
 
     /// Get a canister configuration by type.
+    #[must_use]
     pub fn get_canister(&self, ty: &CanisterType) -> Option<CanisterConfig> {
         self.canisters.get(ty).cloned()
     }

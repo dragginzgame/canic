@@ -70,13 +70,15 @@ macro_rules! canic_endpoints_root {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_subnet_registry() -> ::canic::ops::model::memory::topology::AppSubnetRegistryView {
-            $crate::ops::model::memory::topology::TopologyRegistryOps::export_app_subnet_registry()
+        fn canic_app_subnet_registry()
+        -> ::canic::ops::model::memory::topology::AppSubnetRegistryView {
+            $crate::ops::model::memory::topology::AppSubnetRegistryOps::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_canister_registry() -> Vec<::canic::model::memory::CanisterEntry> {
-            $crate::ops::model::memory::topology::TopologyRegistryOps::export_subnet_canister_registry()
+        fn canic_subnet_canister_registry()
+        -> ::canic::ops::model::memory::topology::subnet::SubnetCanisterRegistryView {
+            $crate::ops::model::memory::topology::SubnetCanisterRegistryOps::export()
         }
 
         //

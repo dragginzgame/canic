@@ -71,6 +71,7 @@ impl ShardEntry {
     pub const STORABLE_MAX_SIZE: u32 = 208;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
+    #[must_use]
     pub fn new(pool: &str, slot: u32, ty: CanisterType, capacity: u32, created_at: u64) -> Self {
         Self {
             slot,

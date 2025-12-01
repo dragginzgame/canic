@@ -99,7 +99,7 @@ macro_rules! start_root {
             ::canic::ops::lifecycle::root_init(identity);
 
             // import wasms
-            ::canic::model::wasm::WasmRegistry::import(WASMS);
+            ::canic::ops::wasm::WasmOps::import_static(WASMS);
 
             // timers
             let _ =
@@ -115,7 +115,7 @@ macro_rules! start_root {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             ::canic::__canic_load_config!();
-            ::canic::model::wasm::WasmRegistry::import(WASMS);
+            ::canic::ops::wasm::WasmOps::import_static(WASMS);
 
             // ops
             ::canic::ops::lifecycle::root_post_upgrade();

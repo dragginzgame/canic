@@ -21,9 +21,7 @@ eager_static! {
 
 ///
 /// SubnetCanisterChildren
-///
 /// Public API for accessing children
-/// This is a zero-sized handle.
 ///
 
 pub struct SubnetCanisterChildren;

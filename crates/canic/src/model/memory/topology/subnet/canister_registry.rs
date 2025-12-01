@@ -20,6 +20,12 @@ eager_static! {
 }
 
 ///
+/// SubnetCanisterRegistryView
+///
+
+pub type SubnetCanisterRegistryView = Vec<CanisterEntry>;
+
+///
 /// SubnetCanisterRegistry
 ///
 
@@ -55,11 +61,13 @@ impl SubnetCanisterRegistry {
     }
 
     /// Returns the parent PID for a given canister, if recorded.
+    #[must_use]
     pub fn get_parent(pid: Principal) -> Option<Principal> {
         Self::get(pid)?.parent_pid
     }
 
     /// Finds the first canister with the given [`CanisterType`].
+    #[must_use]
     pub fn get_type(ty: &CanisterType) -> Option<CanisterEntry> {
         Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.ty == ty))
     }

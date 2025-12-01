@@ -5,6 +5,8 @@
 //! canisters, top them up with cycles, and reclaim existing canisters into the
 //! pool.
 
+pub use crate::model::memory::reserve::CanisterReserveView;
+
 use crate::{
     Error,
     cdk::{
@@ -22,13 +24,6 @@ use crate::{
     types::{Cycles, Principal, TC},
 };
 use std::{cell::RefCell, time::Duration};
-
-///
-/// CanisterReserveView
-/// DTO view of the canister reserve.
-///
-
-pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
 
 //
 // TIMER
@@ -143,6 +138,11 @@ impl CanisterReserveOps {
     #[must_use]
     pub fn export() -> CanisterReserveView {
         CanisterReserve::export()
+    }
+
+    #[must_use]
+    pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
+        CanisterReserve::pop_first()
     }
 }
 
