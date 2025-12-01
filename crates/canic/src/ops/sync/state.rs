@@ -10,7 +10,7 @@ use crate::{
         OpsError,
         model::memory::{
             directory::{AppDirectoryOps, DirectoryView, SubnetDirectoryOps},
-            state::{AppStateDto, AppStateOps, SubnetStateDto, SubnetStateOps},
+            state::{AppStateData, AppStateOps, SubnetStateData, SubnetStateOps},
             topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
         },
         prelude::*,
@@ -22,11 +22,11 @@ use crate::{
 /// Snapshot of mutable state and directory sections that can be propagated to peers
 ///
 
-    #[derive(CandidType, Clone, Debug, Default, Deserialize)]
-    pub struct StateBundle {
-        // states
-        pub app_state: Option<AppStateDto>,
-        pub subnet_state: Option<SubnetStateDto>,
+#[derive(CandidType, Clone, Debug, Default, Deserialize)]
+pub struct StateBundle {
+    // states
+    pub app_state: Option<AppStateData>,
+    pub subnet_state: Option<SubnetStateData>,
 
     // directories
     pub app_directory: Option<DirectoryView>,
