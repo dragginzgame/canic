@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+## [Unreleased]
+- Fix ICP→cycles conversion to use ICP-per-XDR and add coverage for the buffered calculation.
+- Sharding planner now skips full shards and requests creation when capacity is exhausted.
+- Reserve imports reset controllers to the configured set, and registry records track upgraded module hashes.
+- Narrowed internal sharding/pagination helpers to crate scope to shrink the public surface.
+- Removed unused shard metrics helpers.
+
 ## [0.4.0] - 2025-12-01 - endpoints -> ops -> model
 - Endpoints now call a slim ops façade; ops owns orchestration and DTOs; model stays pure storage/registries.
 - ICRC helpers added to ops for supported standards and consent messages.

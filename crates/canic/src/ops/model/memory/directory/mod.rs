@@ -26,7 +26,7 @@ pub struct DirectoryPageDto {
 ///
 
 #[must_use]
-pub fn paginate(view: DirectoryView, offset: u64, limit: u64) -> DirectoryPageDto {
+pub(crate) fn paginate(view: DirectoryView, offset: u64, limit: u64) -> DirectoryPageDto {
     let total = view.len() as u64;
     let (start, end) = pagination_bounds(total, offset, limit);
 

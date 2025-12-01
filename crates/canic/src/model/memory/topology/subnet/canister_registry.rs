@@ -114,6 +114,20 @@ impl SubnetCanisterRegistry {
         });
     }
 
+    /// Update the recorded module hash for a canister, returning whether it existed.
+    #[must_use]
+    pub fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
+            if let Some(mut entry) = reg.get(&pid) {
+                entry.module_hash = Some(module_hash);
+                reg.insert(pid, entry);
+                true
+            } else {
+                false
+            }
+        })
+    }
+
     /// Removes a canister entry by principal.
     #[must_use]
     pub fn remove(pid: &Principal) -> Option<CanisterEntry> {

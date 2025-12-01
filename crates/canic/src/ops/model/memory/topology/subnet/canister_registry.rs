@@ -54,17 +54,17 @@ impl SubnetCanisterRegistryOps {
     }
 
     #[must_use]
-    pub fn children(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn children(pid: Principal) -> Vec<CanisterSummary> {
         SubnetCanisterRegistry::children(pid)
     }
 
     #[must_use]
-    pub fn subtree(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn subtree(pid: Principal) -> Vec<CanisterSummary> {
         SubnetCanisterRegistry::subtree(pid)
     }
 
     #[must_use]
-    pub fn is_in_subtree(
+    pub(crate) fn is_in_subtree(
         root_pid: Principal,
         entry: &CanisterSummary,
         all: &[CanisterSummary],
@@ -73,11 +73,11 @@ impl SubnetCanisterRegistryOps {
     }
 
     #[must_use]
-    pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntry> {
         SubnetCanisterRegistry::remove(pid)
     }
 
-    pub fn register(
+    pub(crate) fn register(
         pid: Principal,
         ty: &CanisterType,
         parent_pid: Principal,
@@ -86,7 +86,7 @@ impl SubnetCanisterRegistryOps {
         SubnetCanisterRegistry::register(pid, ty, parent_pid, module_hash);
     }
 
-    pub fn register_root(pid: Principal) {
+    pub(crate) fn register_root(pid: Principal) {
         SubnetCanisterRegistry::register_root(pid);
     }
 
@@ -103,5 +103,16 @@ impl SubnetCanisterRegistryOps {
     ) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
         SubnetCanisterRegistry::get_type(ty)
             .ok_or_else(|| SubnetCanisterRegistryOpsError::TypeNotFound(ty.clone()))
+    }
+
+    pub(crate) fn update_module_hash(
+        pid: Principal,
+        module_hash: Vec<u8>,
+    ) -> Result<(), SubnetCanisterRegistryOpsError> {
+        if SubnetCanisterRegistry::update_module_hash(pid, module_hash) {
+            Ok(())
+        } else {
+            Err(SubnetCanisterRegistryOpsError::NotFound(pid))
+        }
     }
 }

@@ -74,7 +74,7 @@ impl ShardingRegistryOps {
     }
 
     /// Backfill unassigned shard slots deterministically within a pool.
-    pub fn ensure_slot_assignments(pool: &str, max_slots: u32) {
+    pub(crate) fn ensure_slot_assignments(pool: &str, max_slots: u32) {
         if max_slots == 0 {
             return;
         }

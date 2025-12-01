@@ -10,9 +10,12 @@ pub use crate::model::memory::reserve::CanisterReserveView;
 use crate::{
     Error,
     cdk::{
+        api::canister_self,
         futures::spawn,
+        mgmt::{self, CanisterSettings, UpdateSettingsArgs},
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
+    config::Config,
     interface::ic::get_cycles,
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
@@ -164,6 +167,19 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
 
     // uninstall and delete
     uninstall_and_delete_canister(canister_pid).await?;
+
+    // reset controllers to the configured set (+ root) before reuse
+    let mut controllers = Config::get().controllers.clone();
+    controllers.push(canister_self());
+    let settings = CanisterSettings {
+        controllers: Some(controllers),
+        ..Default::default()
+    };
+    mgmt::update_settings(&UpdateSettingsArgs {
+        canister_id: canister_pid,
+        settings,
+    })
+    .await?;
 
     // register to Reserve
     let cycles = get_cycles(canister_pid).await?;
