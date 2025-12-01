@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+## [0.4.0] - 2025-12-01 - endpoints -> ops -> model
+-
+
 ## [0.3.15] - 2025-11-29
 - app and subnet_directory() now are on all canisters, use pagination and a proper DTO return type
 

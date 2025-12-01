@@ -5,6 +5,8 @@
 //! decisions, create new workers when necessary, and surface registry
 //! snapshots for diagnostics.
 
+pub use crate::model::memory::scaling::ScalingRegistryView;
+
 use crate::{
     Error, ThisError,
     config::schema::ScalePool,
@@ -17,13 +19,6 @@ use crate::{
     utils::time::now_secs,
 };
 use candid::Principal;
-
-///
-/// ScalingRegistryDto
-/// DTO view of scaling registry entries.
-///
-
-pub type ScalingRegistryDto = Vec<(Principal, WorkerEntry)>;
 
 ///
 /// ScalingOpsError
@@ -62,92 +57,100 @@ pub struct ScalingPlan {
     pub reason: String,
 }
 
-/// Evaluate scaling policy for a pool without side effects.
-#[allow(clippy::cast_possible_truncation)]
-pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
-    let pool_cfg = get_scaling_pool_cfg(pool)?;
-    let policy = pool_cfg.policy;
-    let worker_count = ScalingRegistry::find_by_pool(pool).len() as u32;
+///
+/// ScalingRegistryOps
+///
 
-    if policy.max_workers > 0 && worker_count >= policy.max_workers {
-        return Ok(ScalingPlan {
+pub struct ScalingRegistryOps;
+
+impl ScalingRegistryOps {
+    /// Evaluate scaling policy for a pool without side effects.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
+        let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
+        let policy = pool_cfg.policy;
+        let worker_count = ScalingRegistry::find_by_pool(pool).len() as u32;
+
+        if policy.max_workers > 0 && worker_count >= policy.max_workers {
+            return Ok(ScalingPlan {
+                should_spawn: false,
+                reason: format!(
+                    "pool '{pool}' at max_workers ({}/{})",
+                    worker_count, policy.max_workers
+                ),
+            });
+        }
+
+        if worker_count < policy.min_workers {
+            return Ok(ScalingPlan {
+                should_spawn: true,
+                reason: format!(
+                    "pool '{pool}' below min_workers (current {worker_count}, min {})",
+                    policy.min_workers
+                ),
+            });
+        }
+
+        Ok(ScalingPlan {
             should_spawn: false,
             reason: format!(
-                "pool '{pool}' at max_workers ({}/{})",
-                worker_count, policy.max_workers
+                "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
+                policy.min_workers, policy.max_workers
             ),
-        });
+        })
     }
 
-    if worker_count < policy.min_workers {
-        return Ok(ScalingPlan {
-            should_spawn: true,
-            reason: format!(
-                "pool '{pool}' below min_workers (current {worker_count}, min {})",
-                policy.min_workers
-            ),
-        });
+    /// Look up the config for a given pool on the *current canister*.
+    fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
+        let cfg = ConfigOps::current_canister()?;
+        let scale_cfg = cfg.scaling.ok_or(ScalingOpsError::ScalingDisabled)?;
+
+        let pool_cfg = scale_cfg
+            .pools
+            .get(pool)
+            .ok_or_else(|| ScalingOpsError::PoolNotFound(pool.to_string()))?;
+
+        Ok(pool_cfg.clone())
     }
 
-    Ok(ScalingPlan {
-        should_spawn: false,
-        reason: format!(
-            "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
-            policy.min_workers, policy.max_workers
-        ),
-    })
-}
-
-/// Look up the config for a given pool on the *current canister*.
-fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-    let cfg = ConfigOps::current_canister()?;
-    let scale_cfg = cfg.scaling.ok_or(ScalingOpsError::ScalingDisabled)?;
-
-    let pool_cfg = scale_cfg
-        .pools
-        .get(pool)
-        .ok_or_else(|| ScalingOpsError::PoolNotFound(pool.to_string()))?;
-
-    Ok(pool_cfg.clone())
-}
-
-/// Export a snapshot of the current registry state.
-#[must_use]
-pub fn export_registry() -> ScalingRegistryDto {
-    ScalingRegistry::export()
-}
-
-/// Create a new worker canister in the given pool and register it.
-pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
-    // 1. Evaluate policy
-    let plan = plan_create_worker(pool)?;
-    if !plan.should_spawn {
-        return Err(ScalingOpsError::PlanRejected(plan.reason))?;
+    /// Export a snapshot of the current registry state.
+    #[must_use]
+    pub fn export() -> ScalingRegistryView {
+        ScalingRegistry::export()
     }
 
-    // 2. Look up pool config
-    let pool_cfg = get_scaling_pool_cfg(pool)?;
-    let ty = pool_cfg.canister_type.clone();
+    /// Create a new worker canister in the given pool and register it.
+    pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
+        // 1. Evaluate policy
+        let plan = Self::plan_create_worker(pool)?;
+        if !plan.should_spawn {
+            return Err(ScalingOpsError::PlanRejected(plan.reason))?;
+        }
 
-    // 3. Create the canister
-    let pid = create_canister_request::<()>(&ty, CreateCanisterParent::ThisCanister, None)
-        .await?
-        .new_canister_pid;
+        // 2. Look up pool config
+        let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
+        let ty = pool_cfg.canister_type.clone();
 
-    // 4. Register in memory
-    let entry = WorkerEntry {
-        pool: pool.to_string(),
-        canister_type: ty,
-        created_at_secs: now_secs(),
-        // load_bps: 0 by default (no load yet)
-    };
+        // 3. Create the canister
+        let pid = create_canister_request::<()>(&ty, CreateCanisterParent::ThisCanister, None)
+            .await?
+            .new_canister_pid;
 
-    ScalingRegistry::insert(pid, entry);
+        // 4. Register in memory
+        let entry = WorkerEntry {
+            pool: pool.to_string(),
+            canister_type: ty,
+            created_at_secs: now_secs(),
+            // load_bps: 0 by default (no load yet)
+        };
 
-    Ok(pid)
-}
+        ScalingRegistry::insert(pid, entry);
 
-/// Convenience: return only the decision flag for a pool.
-pub fn should_spawn_worker(pool: &str) -> Result<bool, Error> {
-    Ok(plan_create_worker(pool)?.should_spawn)
+        Ok(pid)
+    }
+
+    /// Convenience: return only the decision flag for a pool.
+    pub fn should_spawn_worker(pool: &str) -> Result<bool, Error> {
+        Ok(Self::plan_create_worker(pool)?.should_spawn)
+    }
 }

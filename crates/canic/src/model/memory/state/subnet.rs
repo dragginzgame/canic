@@ -9,7 +9,6 @@ use std::cell::RefCell;
 
 //
 // SUBNET_STATE
-//
 // EMPTY FOR NOW - if we ever want to store subnet-specific state it's here
 //
 

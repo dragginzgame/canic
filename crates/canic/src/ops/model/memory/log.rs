@@ -1,4 +1,5 @@
 use crate::{
+    Error,
     log::Level,
     model::memory::log::{LogEntry, StableLog},
 };
@@ -49,6 +50,16 @@ pub struct LogPageDto {
 pub struct LogOps;
 
 impl LogOps {
+    /// Append a log entry to stable storage.
+    pub fn append<T: ToString, M: AsRef<str>>(
+        crate_name: &str,
+        topic: Option<T>,
+        level: Level,
+        message: M,
+    ) -> Result<u64, Error> {
+        StableLog::append(crate_name, topic, level, message)
+    }
+
     ///
     /// Export a page of log entries and the total count.
     ///

@@ -1,4 +1,4 @@
-pub use crate::model::memory::registry::{MemoryRange, MemoryRegistryEntry};
+pub use crate::model::memory::registry::{MemoryRange, MemoryRegistryView};
 
 use crate::{
     CRATE_NAME, Error, ThisError, log,
@@ -6,18 +6,12 @@ use crate::{
     model::memory::{
         CANIC_MEMORY_MAX, CANIC_MEMORY_MIN,
         registry::{
-            MemoryRegistry, MemoryRegistryError, drain_pending_ranges, drain_pending_registrations,
+            MemoryRegistry, MemoryRegistryEntry, MemoryRegistryError, drain_pending_ranges,
+            drain_pending_registrations,
         },
     },
     ops::model::memory::MemoryOpsError,
 };
-
-///
-/// MemoryRegistryDto
-/// DTO view of the memory registry
-///
-
-pub type MemoryRegistryDto = Vec<(u8, MemoryRegistryEntry)>;
 
 ///
 /// MemoryRegistryOpsError
@@ -97,7 +91,7 @@ impl MemoryRegistryOps {
     }
 
     #[must_use]
-    pub fn export() -> MemoryRegistryDto {
+    pub fn export() -> MemoryRegistryView {
         MemoryRegistry::export()
     }
 

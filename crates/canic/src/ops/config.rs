@@ -54,7 +54,7 @@ impl ConfigOps {
     pub fn try_get_subnet(ty: &SubnetType) -> Result<SubnetConfig, Error> {
         let subnet_cfg = Config::get()
             .get_subnet(ty)
-            .ok_or(ConfigOpsError::SubnetNotFound(ty.to_string()))?;
+            .ok_or_else(|| ConfigOpsError::SubnetNotFound(ty.to_string()))?;
 
         Ok(subnet_cfg)
     }
@@ -88,7 +88,7 @@ impl ConfigOps {
         let canister_type = EnvOps::try_get_canister_type()?;
 
         // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = ConfigOps::try_get_canister(&subnet_type, &canister_type)?;
+        let canister_cfg = Self::try_get_canister(&subnet_type, &canister_type)?;
 
         Ok(canister_cfg)
     }
@@ -97,7 +97,7 @@ impl ConfigOps {
         let subnet_type = EnvOps::try_get_subnet_type()?;
 
         // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = ConfigOps::try_get_canister(&subnet_type, &canister_type)?;
+        let canister_cfg = Self::try_get_canister(&subnet_type, canister_type)?;
 
         Ok(canister_cfg)
     }

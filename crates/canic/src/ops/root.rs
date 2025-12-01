@@ -2,9 +2,9 @@ use crate::{
     Error,
     interface::ic::get_current_subnet_pid,
     log::Topic,
-    model::memory::{Env, topology::SubnetCanisterRegistry},
     ops::{
         config::ConfigOps,
+        model::memory::{EnvOps, topology::SubnetCanisterRegistryOps},
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},
     },
@@ -13,7 +13,7 @@ use crate::{
 pub async fn root_set_subnet_id() {
     // set subnet_id asynchrously, but before its needed
     if let Ok(Some(subnet_pid)) = get_current_subnet_pid().await {
-        Env::set_subnet_pid(subnet_pid);
+        EnvOps::set_subnet_pid(subnet_pid);
     }
 }
 
@@ -26,7 +26,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Report pass
-    for canister in SubnetCanisterRegistry::export() {
+    for canister in SubnetCanisterRegistryOps::export() {
         log!(Topic::Init, Info, "🥫 {} ({})", canister.ty, canister.pid);
     }
 

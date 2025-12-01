@@ -1,10 +1,14 @@
 use crate::{
     Error,
     cdk::call::Call,
-    model::memory::Env,
     ops::{
+        model::memory::EnvOps,
+        model::memory::topology::SubnetCanisterChildrenOps,
         prelude::*,
-        request::{CreateCanisterResponse, CyclesResponse, RequestOpsError, Response},
+        request::{
+            CreateCanisterResponse, CyclesResponse, RequestOpsError, Response,
+            UpgradeCanisterResponse,
+        },
     },
 };
 use candid::encode_one;
@@ -72,7 +76,7 @@ pub struct CyclesRequest {
 
 /// Send a request to the root canister and decode its response.
 async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = Env::get_root_pid().ok_or(RequestOpsError::RootNotFound)?;
+    let root_pid = EnvOps::try_get_root_pid().map_err(|_| RequestOpsError::RootNotFound)?;
 
     let call_response = Call::unbounded_wait(root_pid, "canic_response")
         .with_arg(&request)
@@ -105,13 +109,12 @@ where
     }
 }
 
-/*
 /// Ask root to upgrade a child canister to its latest registered WASM.
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     // check this is a valid child
-    let canister = SubnetCanisterChildren::find_by_pid(&canister_pid)
+    let canister = SubnetCanisterChildrenOps::find_by_pid(&canister_pid)
         .ok_or(RequestOpsError::ChildNotFound(canister_pid))?;
 
     // send the request
@@ -125,7 +128,6 @@ pub async fn upgrade_canister_request(
         _ => Err(RequestOpsError::InvalidResponseType.into()),
     }
 }
-*/
 
 /// Request a cycle transfer from root to the current canister.
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {

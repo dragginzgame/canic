@@ -21,6 +21,12 @@ eager_static! {
 }
 
 ///
+/// CanisterReserveView
+///
+
+pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
+
+///
 /// CanisterReserveEntry
 ///
 
@@ -71,7 +77,7 @@ impl CanisterReserve {
 
     /// Export the reserve as a vector of (Principal, Entry).
     #[must_use]
-    pub fn export() -> Vec<(Principal, CanisterReserveEntry)> {
+    pub fn export() -> CanisterReserveView {
         CANISTER_RESERVE.with_borrow(BTreeMap::to_vec)
     }
 

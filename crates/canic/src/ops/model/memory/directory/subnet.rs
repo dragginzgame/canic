@@ -1,17 +1,28 @@
 use crate::{
-    Error,
-    model::memory::{
-        Env,
-        directory::{PrincipalList, SubnetDirectory},
-        topology::SubnetCanisterRegistry,
+    Error, ThisError,
+    model::memory::directory::{DirectoryView, PrincipalList, SubnetDirectory},
+    ops::model::memory::{
+        MemoryOpsError,
+        directory::{DirectoryPageDto, paginate},
     },
-    ops::{
-        config::ConfigOps,
-        model::memory::directory::{DirectoryPageDto, DirectoryView, paginate},
-        prelude::*,
-    },
+    types::CanisterType,
 };
-use std::collections::BTreeMap;
+
+///
+/// SubnetDirectoryOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum SubnetDirectoryOpsError {
+    #[error("canister type {0} not found in subnet directory")]
+    NotFound(CanisterType),
+}
+
+impl From<SubnetDirectoryOpsError> for Error {
+    fn from(err: SubnetDirectoryOpsError) -> Self {
+        MemoryOpsError::from(err).into()
+    }
+}
 
 ///
 /// SubnetDirectoryOps
@@ -20,39 +31,24 @@ use std::collections::BTreeMap;
 pub struct SubnetDirectoryOps;
 
 impl SubnetDirectoryOps {
-    pub fn export() -> Result<DirectoryView, Error> {
-        if Env::is_root() {
-            Self::root_build_view()
-        } else {
-            Ok(SubnetDirectory::export())
-        }
+    #[must_use]
+    pub fn export() -> DirectoryView {
+        SubnetDirectory::export()
+    }
+
+    pub fn import(view: DirectoryView) {
+        SubnetDirectory::import(view);
     }
 
     pub fn page(offset: u64, limit: u64) -> Result<DirectoryPageDto, Error> {
-        let view = Self::export()?;
-        let total = view.len() as u64;
-
-        Ok(DirectoryPageDto {
-            entries: paginate(view, offset, limit),
-            total,
-        })
+        Ok(paginate(Self::export(), offset, limit))
     }
 
-    /// Build SubnetDirectory from the registry.
-    pub fn root_build_view() -> Result<DirectoryView, Error> {
-        let cfg = ConfigOps::current_subnet()?;
-        let entries = SubnetCanisterRegistry::export();
+    /// Fetch principals for a canister type from the current AppDirectory.
+    pub fn try_get(ty: &CanisterType) -> Result<PrincipalList, Error> {
+        let entry = SubnetDirectory::get(ty)
+            .ok_or_else(|| SubnetDirectoryOpsError::NotFound(ty.clone()))?;
 
-        let mut map: BTreeMap<CanisterType, PrincipalList> = BTreeMap::new();
-
-        for entry in entries {
-            let ty = entry.ty.clone();
-
-            if cfg.subnet_directory.contains(&ty) {
-                map.entry(ty).or_default().0.push(entry.pid);
-            }
-        }
-
-        Ok(map.into_iter().collect())
+        Ok(entry)
     }
 }

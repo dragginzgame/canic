@@ -24,6 +24,13 @@ const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 const PURGE_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 
 ///
+/// CycleTrackerView
+/// Snapshot view of cycle tracker entries
+///
+
+pub type CycleTrackerView = Vec<(u64, Cycles)>;
+
+///
 /// CycleTracker
 ///
 /// NOTE : Can't really do tests for this here, it really needs e2e because I can't
@@ -69,12 +76,12 @@ impl CycleTracker {
     }
 
     #[must_use]
-    pub fn export() -> Vec<(u64, Cycles)> {
+    pub fn export() -> CycleTrackerView {
         CYCLE_TRACKER.with_borrow(Self::view)
     }
 
     #[must_use]
-    pub fn entries(offset: u64, limit: u64) -> Vec<(u64, Cycles)> {
+    pub fn entries(offset: u64, limit: u64) -> CycleTrackerView {
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 

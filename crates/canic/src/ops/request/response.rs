@@ -8,14 +8,15 @@
 use crate::{
     Error,
     interface::ic::{canister::upgrade_canister, deposit_cycles},
-    model::{memory::topology::SubnetCanisterRegistry, wasm::WasmRegistry},
     ops::{
         canister::create_and_install_canister,
+        model::memory::topology::subnet::SubnetCanisterRegistryOps,
         prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
+        wasm::WasmOps,
     },
 };
 
@@ -72,18 +73,20 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 
 // create_canister_response
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
+    let caller = msg_caller();
+
     // Look up parent
     let parent_pid = match &req.parent {
         CreateCanisterParent::Canister(pid) => *pid,
         CreateCanisterParent::Root => canister_self(),
-        CreateCanisterParent::ThisCanister => msg_caller(),
+        CreateCanisterParent::ThisCanister => caller,
 
-        CreateCanisterParent::Parent => SubnetCanisterRegistry::get_parent(msg_caller())
-            .ok_or(RequestOpsError::ParentNotFound(msg_caller()))?,
+        CreateCanisterParent::Parent => SubnetCanisterRegistryOps::get_parent(caller)
+            .ok_or(RequestOpsError::ParentNotFound(caller))?,
 
         CreateCanisterParent::Directory(ty) => {
-            SubnetCanisterRegistry::get_type(ty)
-                .ok_or(RequestOpsError::CanisterTypeNotFound(ty.clone()))?
+            SubnetCanisterRegistryOps::get_type(ty)
+                .ok_or_else(|| RequestOpsError::CanisterTypeNotFound(ty.clone()))?
                 .pid
         }
     };
@@ -98,8 +101,17 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 
 // upgrade_canister_response
 async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
-    let wasm = WasmRegistry::try_get(&req.canister_type)?;
-    upgrade_canister(req.canister_pid, wasm.bytes()).await?;
+    let caller = msg_caller();
+    let registry_entry = SubnetCanisterRegistryOps::get(req.canister_pid)
+        .ok_or(RequestOpsError::ChildNotFound(req.canister_pid))?;
+
+    if registry_entry.parent_pid != Some(caller) {
+        return Err(RequestOpsError::NotChildOfCaller(req.canister_pid, caller).into());
+    }
+
+    // Use the registry's type to avoid trusting request payload.
+    let wasm = WasmOps::try_get(&registry_entry.ty)?;
+    upgrade_canister(registry_entry.pid, wasm.bytes()).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
 }

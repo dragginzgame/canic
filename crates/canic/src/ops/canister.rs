@@ -13,22 +13,21 @@ use crate::{
         prelude::*,
     },
     log::Topic,
-    model::memory::{
-        Env,
-        directory::{AppDirectory, SubnetDirectory},
-        env::EnvData,
-        reserve::CanisterReserve,
-        topology::SubnetCanisterRegistry,
-    },
-    model::wasm::WasmRegistry,
     ops::{
         CanisterInitPayload,
         config::ConfigOps,
-        model::memory::directory::{AppDirectoryOps, SubnetDirectoryOps},
+        model::memory::{
+            EnvOps,
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            env::EnvData,
+            reserve::CanisterReserveOps,
+            topology::SubnetCanisterRegistryOps,
+        },
         sync::{
             state::{StateBundle, root_cascade_state},
             topology::root_cascade_topology,
         },
+        wasm::WasmOps,
     },
     types::Cycles,
 };
@@ -46,16 +45,16 @@ pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
     let mut bundle = StateBundle::default();
 
     // App directory is only meaningful on prime root
-    if Env::is_prime_root() {
+    if EnvOps::is_prime_root() {
         let app_view = AppDirectoryOps::export();
-        AppDirectory::import(app_view);
-        bundle = bundle.with_app_directory();
+        AppDirectoryOps::import(app_view.clone());
+        bundle.app_directory = Some(app_view);
     }
 
     // Subnet directory is always present
-    let subnet_view = SubnetDirectoryOps::export()?;
-    SubnetDirectory::import(subnet_view);
-    bundle = bundle.with_subnet_directory();
+    let subnet_view = SubnetDirectoryOps::export();
+    SubnetDirectoryOps::import(subnet_view.clone());
+    bundle.subnet_directory = Some(subnet_view);
 
     // Cascade the new directory state once
     root_cascade_state(bundle).await?;
@@ -82,7 +81,7 @@ pub async fn create_and_install_canister(
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, Error> {
     // must have WASM module registered
-    WasmRegistry::try_get(ty)?;
+    WasmOps::try_get(ty)?;
 
     // Phase 1: allocation
     let pid = allocate_canister(ty).await?;
@@ -117,7 +116,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
     uninstall_code(pid).await?;
 
     // Phase 1: remove registry record
-    let removed = SubnetCanisterRegistry::remove(&pid);
+    let removed = SubnetCanisterRegistryOps::remove(&pid);
     if let Some(c) = removed {
         log!(
             Topic::CanisterLifecycle,
@@ -160,7 +159,7 @@ pub async fn allocate_canister(ty: &CanisterType) -> Result<Principal, Error> {
     let target = cfg.initial_cycles;
 
     // Reuse from reserve
-    if let Some((pid, _)) = CanisterReserve::pop_first() {
+    if let Some((pid, _)) = CanisterReserveOps::pop_first() {
         let mut current = get_cycles(pid).await?;
 
         if current < target {
@@ -230,23 +229,23 @@ async fn install_canister(
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
     // Fetch and register WASM
-    let wasm = WasmRegistry::try_get(ty)?;
-    SubnetCanisterRegistry::register(pid, ty, parent_pid, wasm.module_hash());
+    let wasm = WasmOps::try_get(ty)?;
+    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, wasm.module_hash());
 
     // Construct init payload
     let env = EnvData {
-        prime_root_pid: Env::get_prime_root_pid(),
-        subnet_type: Env::get_subnet_type(),
-        subnet_pid: Env::get_subnet_pid(),
-        root_pid: Env::get_root_pid(),
+        prime_root_pid: Some(EnvOps::try_get_prime_root_pid()?),
+        subnet_type: Some(EnvOps::try_get_subnet_type()?),
+        subnet_pid: Some(EnvOps::try_get_subnet_pid()?),
+        root_pid: Some(EnvOps::try_get_root_pid()?),
         canister_type: Some(ty.clone()),
         parent_pid: Some(parent_pid),
     };
 
     let payload = CanisterInitPayload {
         env,
-        app_directory: AppDirectory::export(),
-        subnet_directory: SubnetDirectory::export(),
+        app_directory: AppDirectoryOps::export(),
+        subnet_directory: SubnetDirectoryOps::export(),
     };
 
     // Install code

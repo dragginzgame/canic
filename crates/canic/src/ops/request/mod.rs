@@ -23,6 +23,12 @@ pub enum RequestOpsError {
     #[error("canister type {0} not found")]
     CanisterTypeNotFound(CanisterType),
 
+    #[error("child canister {0} not found")]
+    ChildNotFound(Principal),
+
+    #[error("canister {0} is not a child of caller {1}")]
+    NotChildOfCaller(Principal, Principal),
+
     #[error("canister {0}'s parent was not found")]
     ParentNotFound(Principal),
 

@@ -146,8 +146,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = AppDirectoryOps::get(&ty)
-            .ok_or(|_| AuthError::NotAppDirectoryType(caller, ty.clone()))?;
+        let pids = AppDirectoryOps::try_get(&ty)?;
 
         if pids.contains(&caller) {
             Ok(())
@@ -161,8 +160,7 @@ pub fn is_app_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleRes
 #[must_use]
 pub fn is_subnet_directory_type(caller: Principal, ty: CanisterType) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = SubnetDirectoryOps::get(&ty)
-            .ok_or(|_| AuthError::NotSubnetDirectoryType(caller, ty.clone()))?;
+        let pids = SubnetDirectoryOps::try_get(&ty)?;
 
         if pids.contains(&caller) {
             Ok(())
