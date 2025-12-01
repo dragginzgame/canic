@@ -1,11 +1,11 @@
 pub mod assign;
 pub mod hrw;
+mod metrics;
 pub mod policy;
 pub mod registry;
-mod metrics;
 
-pub use {assign::*, policy::*, registry::*};
 pub(crate) use metrics::{PoolMetrics, pool_metrics};
+pub use {assign::*, policy::*, registry::*};
 
 use crate::{
     Error, ThisError, model::memory::sharding::ShardEntry, ops::model::memory::MemoryOpsError,
