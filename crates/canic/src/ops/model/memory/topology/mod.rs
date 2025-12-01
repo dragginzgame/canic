@@ -12,7 +12,7 @@ use crate::{Error, ThisError, ops::model::memory::MemoryOpsError};
 
 #[derive(Debug, ThisError)]
 pub enum TopologyOpsError {
-    #[error("tenant '{0}' not found")]
+    #[error(transparent)]
     SubnetCanisterRegistryOpsError(#[from] SubnetCanisterRegistryOpsError),
 }
 

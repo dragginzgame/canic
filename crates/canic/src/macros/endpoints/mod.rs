@@ -84,12 +84,12 @@ macro_rules! canic_endpoints {
         //
 
         #[::canic::cdk::query]
-        fn canic_app_state() -> ::canic::ops::model::memory::state::AppStateDto {
+        fn canic_app_state() -> ::canic::ops::model::memory::state::AppStateData {
             $crate::ops::model::memory::state::AppStateOps::export()
         }
 
         #[::canic::cdk::query]
-        fn canic_subnet_state() -> ::canic::ops::model::memory::state::SubnetStateDto {
+        fn canic_subnet_state() -> ::canic::ops::model::memory::state::SubnetStateData {
             $crate::ops::model::memory::state::SubnetStateOps::export()
         }
 
