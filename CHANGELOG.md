@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ############################ canic ################################
 
 ## [0.4.0] - 2025-12-01 - endpoints -> ops -> model
--
+- Endpoints now call a slim ops façade; ops owns orchestration and DTOs; model stays pure storage/registries.
+- ICRC helpers added to ops for supported standards and consent messages.
+- Sharding, topology, directory, reserve, and env access now flow through ops (no direct model calls).
+- State and topology sync now use ops DTOs and cascade helpers; logging writes routed through LogOps.
+- Auth, request handling, and canister lifecycle updated to enforce layering while keeping behavior the same.
 
 ## [0.3.15] - 2025-11-29
 - app and subnet_directory() now are on all canisters, use pagination and a proper DTO return type
