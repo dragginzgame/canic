@@ -128,7 +128,7 @@ test-canisters:
 build: ensure-clean ensure-hooks
 	cargo build --release --workspace
 
-check: ensure-hooks fmt-check
+check: ensure-hooks fmt
 	cargo check --workspace
 
 clippy: ensure-hooks

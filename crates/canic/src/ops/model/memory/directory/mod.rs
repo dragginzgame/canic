@@ -1,9 +1,10 @@
 mod app;
 mod subnet;
 
-pub use crate::model::memory::directory::DirectoryView;
 pub use app::*;
 pub use subnet::*;
+
+pub use crate::model::memory::directory::DirectoryView;
 
 use candid::CandidType;
 use serde::Serialize;
@@ -12,7 +13,7 @@ use serde::Serialize;
 /// DirectoryPageDto
 ///
 
-#[derive(CandidType, Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(CandidType, Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct DirectoryPageDto {
     pub entries: DirectoryView,
     pub total: u64,
