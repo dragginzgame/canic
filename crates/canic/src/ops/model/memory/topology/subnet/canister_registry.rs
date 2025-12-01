@@ -15,6 +15,9 @@ use crate::{
 pub enum SubnetCanisterRegistryOpsError {
     #[error("canister {0} not found in registry")]
     NotFound(Principal),
+
+    #[error("canister type {0} not found in registry")]
+    TypeNotFound(CanisterType),
 }
 
 impl From<SubnetCanisterRegistryOpsError> for Error {
@@ -87,8 +90,18 @@ impl SubnetCanisterRegistryOps {
         SubnetCanisterRegistry::register_root(pid);
     }
 
-    pub fn try_get(pid: Principal) -> Result<CanisterEntry, Error> {
-        SubnetCanisterRegistry::get(pid)
-            .ok_or_else(|| SubnetCanisterRegistryOpsError::NotFound(pid).into())
+    pub fn try_get(pid: Principal) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
+        SubnetCanisterRegistry::get(pid).ok_or(SubnetCanisterRegistryOpsError::NotFound(pid))
+    }
+
+    pub fn try_get_parent(pid: Principal) -> Result<Principal, SubnetCanisterRegistryOpsError> {
+        SubnetCanisterRegistry::get_parent(pid).ok_or(SubnetCanisterRegistryOpsError::NotFound(pid))
+    }
+
+    pub fn try_get_type(
+        ty: &CanisterType,
+    ) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
+        SubnetCanisterRegistry::get_type(ty)
+            .ok_or_else(|| SubnetCanisterRegistryOpsError::TypeNotFound(ty.clone()))
     }
 }

@@ -81,12 +81,12 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         CreateCanisterParent::Root => canister_self(),
         CreateCanisterParent::ThisCanister => caller,
 
-        CreateCanisterParent::Parent => SubnetCanisterRegistryOps::get_parent(caller)
-            .ok_or(RequestOpsError::ParentNotFound(caller))?,
+        CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
+            .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
 
         CreateCanisterParent::Directory(ty) => {
-            SubnetCanisterRegistryOps::get_type(ty)
-                .ok_or_else(|| RequestOpsError::CanisterTypeNotFound(ty.clone()))?
+            SubnetCanisterRegistryOps::try_get_type(ty)
+                .map_err(|_| RequestOpsError::CanisterTypeNotFound(ty.clone()))?
                 .pid
         }
     };
@@ -102,8 +102,8 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 // upgrade_canister_response
 async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
     let caller = msg_caller();
-    let registry_entry = SubnetCanisterRegistryOps::get(req.canister_pid)
-        .ok_or(RequestOpsError::ChildNotFound(req.canister_pid))?;
+    let registry_entry = SubnetCanisterRegistryOps::try_get(req.canister_pid)
+        .map_err(|_| RequestOpsError::ChildNotFound(req.canister_pid))?;
 
     if registry_entry.parent_pid != Some(caller) {
         return Err(RequestOpsError::NotChildOfCaller(req.canister_pid, caller).into());
