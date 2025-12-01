@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -238,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "convert_case 0.10.0",
  "derive_more",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -322,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "candid",
  "canic",
