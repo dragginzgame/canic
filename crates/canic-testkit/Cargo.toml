@@ -10,14 +10,9 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[features]
-default = []
-ic = []
-
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true }
-canic-internal = { workspace = true }
 derive_more = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }

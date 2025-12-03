@@ -233,6 +233,7 @@ version = "0.4.3"
 dependencies = [
  "candid",
  "canic",
+ "canic-testkit",
  "serde",
 ]
 
@@ -242,7 +243,6 @@ version = "0.4.3"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
  "derive_more",
  "pocket-ic",
  "serde",
