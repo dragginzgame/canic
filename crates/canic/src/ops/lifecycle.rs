@@ -48,12 +48,18 @@ pub fn root_init(identity: SubnetIdentity) {
         SubnetIdentity::Prime => {
             EnvOps::set_prime_root_pid(self_pid);
             EnvOps::set_subnet_type(SubnetType::PRIME);
+            EnvOps::set_subnet_pid(self_pid);
         }
         SubnetIdentity::Standard(params) => {
             EnvOps::set_prime_root_pid(params.prime_root_pid);
             EnvOps::set_subnet_type(params.subnet_type);
+            EnvOps::set_subnet_pid(self_pid);
         }
-        SubnetIdentity::Test => panic!("not sure what to do with test"),
+        SubnetIdentity::Manual(subnet_pid) => {
+            EnvOps::set_prime_root_pid(self_pid);
+            EnvOps::set_subnet_type(SubnetType::PRIME);
+            EnvOps::set_subnet_pid(subnet_pid);
+        }
     }
 
     SubnetCanisterRegistryOps::register_root(self_pid);

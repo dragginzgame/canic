@@ -44,15 +44,13 @@ use candid::Principal;
 pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
     let mut bundle = StateBundle::default();
 
-    // App directory is only meaningful on prime root
-    if EnvOps::is_prime_root() {
-        let app_view = AppDirectoryOps::export();
-        AppDirectoryOps::import(app_view.clone());
-        bundle.app_directory = Some(app_view);
-    }
+    // App directory is rebuilt on root then cascaded
+    let app_view = AppDirectoryOps::root_build_view();
+    AppDirectoryOps::import(app_view.clone());
+    bundle.app_directory = Some(app_view);
 
     // Subnet directory is always present
-    let subnet_view = SubnetDirectoryOps::export();
+    let subnet_view = SubnetDirectoryOps::root_build_view();
     SubnetDirectoryOps::import(subnet_view.clone());
     bundle.subnet_directory = Some(subnet_view);
 
