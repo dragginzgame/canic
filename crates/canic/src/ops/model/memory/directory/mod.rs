@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// DirectoryPageDto
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DirectoryPageDto {
     pub entries: DirectoryView,
     pub total: u64,
