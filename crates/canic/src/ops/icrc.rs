@@ -28,6 +28,20 @@ impl Icrc10Ops {
 pub struct Icrc21Ops;
 
 impl Icrc21Ops {
+    pub fn register<F>(method: &str, handler: F)
+    where
+        F: Fn(ConsentMessageRequest) -> crate::spec::icrc::icrc21::ConsentMessageResponse + 'static,
+    {
+        Icrc21Registry::register(method, handler);
+    }
+
+    pub fn register_static_with<F>(method: &str, generator: F)
+    where
+        F: Fn(&ConsentMessageRequest) -> String + 'static,
+    {
+        Icrc21Registry::register_static_with(method, generator);
+    }
+
     #[must_use]
     pub fn consent_message(
         req: ConsentMessageRequest,
