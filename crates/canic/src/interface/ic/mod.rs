@@ -73,7 +73,7 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 
 /// Queries the NNS registry for the subnet that this canister belongs to.
 pub async fn get_current_subnet_pid() -> Result<Option<Principal>, Error> {
-    let request = GetSubnetForCanisterRequest::new(msg_caller());
+    let request = GetSubnetForCanisterRequest::new(canister_self());
 
     let subnet_id_opt = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
         .with_arg(request)

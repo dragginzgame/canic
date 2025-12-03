@@ -113,7 +113,9 @@ impl Pic {
 /// --------------------------------------
 fn install_args(ty: CanisterType) -> Result<Vec<u8>, Error> {
     let args = if ty.is_root() {
-        encode_one(SubnetIdentity::Test)
+        // Provide a deterministic subnet principal for PocketIC runs
+        let subnet_pid = Principal::from_slice(&[0xAA; 29]);
+        encode_one(SubnetIdentity::Manual(subnet_pid))
     } else {
         let payload = CanisterInitPayload::empty();
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))

@@ -30,9 +30,15 @@ impl SubnetDirectory {
         SUBNET_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    //
-    // Import & Export
-    //
+    // cannot return an iterator because of stable memory
+    #[must_use]
+    pub fn view() -> DirectoryView {
+        SUBNET_DIRECTORY.with_borrow(|map| {
+            map.iter()
+                .map(|entry| (entry.key().clone(), entry.value()))
+                .collect()
+        })
+    }
 
     pub fn import(view: DirectoryView) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
@@ -41,14 +47,5 @@ impl SubnetDirectory {
                 map.insert(ty, pids);
             }
         });
-    }
-
-    #[must_use]
-    pub fn export() -> DirectoryView {
-        SUBNET_DIRECTORY.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
     }
 }

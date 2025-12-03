@@ -9,6 +9,7 @@ use crate::{
         model::memory::{
             MemoryOpsError,
             directory::{DirectoryPageDto, DirectoryView, paginate},
+            env::EnvOps,
         },
         prelude::*,
     },
@@ -38,10 +39,19 @@ impl From<AppDirectoryOpsError> for Error {
 pub struct AppDirectoryOps;
 
 impl AppDirectoryOps {
+    /// Single source of truth: recompute on root, otherwise use stable view.
+    fn resolve_view() -> DirectoryView {
+        if EnvOps::is_root() {
+            Self::root_build_view()
+        } else {
+            AppDirectory::view()
+        }
+    }
+
     /// Public stable API for exporting the view.
     #[must_use]
     pub fn export() -> DirectoryView {
-        AppDirectory::export()
+        Self::resolve_view()
     }
 
     /// Import a full view into stable memory.
@@ -51,7 +61,7 @@ impl AppDirectoryOps {
 
     #[must_use]
     pub fn page(offset: u64, limit: u64) -> DirectoryPageDto {
-        paginate(Self::export(), offset, limit)
+        paginate(Self::resolve_view(), offset, limit)
     }
 
     /// Build AppDirectory from the registry.
@@ -74,8 +84,12 @@ impl AppDirectoryOps {
 
     /// Fetch principals for a canister type from the current AppDirectory.
     pub fn try_get(ty: &CanisterType) -> Result<PrincipalList, Error> {
-        let entry =
-            AppDirectory::get(ty).ok_or_else(|| AppDirectoryOpsError::NotFound(ty.clone()))?;
+        let target = ty.clone();
+        let view = Self::resolve_view();
+        let entry = view
+            .into_iter()
+            .find_map(|(t, pids)| (t == target).then_some(pids))
+            .ok_or_else(|| AppDirectoryOpsError::NotFound(ty.clone()))?;
 
         Ok(entry)
     }

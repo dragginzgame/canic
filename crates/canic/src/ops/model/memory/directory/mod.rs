@@ -7,13 +7,13 @@ pub use subnet::*;
 pub use crate::model::memory::directory::DirectoryView;
 
 use candid::CandidType;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 ///
 /// DirectoryPageDto
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DirectoryPageDto {
     pub entries: DirectoryView,
     pub total: u64,
@@ -30,11 +30,7 @@ pub(crate) fn paginate(view: DirectoryView, offset: u64, limit: u64) -> Director
     let total = view.len() as u64;
     let (start, end) = pagination_bounds(total, offset, limit);
 
-    let entries = view
-        .into_iter()
-        .skip(start)
-        .take(end.saturating_sub(start))
-        .collect();
+    let entries = view.into_iter().skip(start).take(end - start).collect();
 
     DirectoryPageDto {
         entries,
@@ -44,12 +40,13 @@ pub(crate) fn paginate(view: DirectoryView, offset: u64, limit: u64) -> Director
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn pagination_bounds(total: u64, offset: u64, limit: u64) -> (usize, usize) {
-    let clamped_end = offset.saturating_add(limit).min(total);
+    let start = offset.min(total);
+    let end = (offset + limit).min(total);
 
-    let start =
-        usize::try_from(offset.min(total)).expect("directory offset cannot exceed usize capacity");
-    let end = usize::try_from(clamped_end).expect("directory end cannot exceed usize capacity");
+    let start = start as usize;
+    let end = end as usize;
 
     (start, end)
 }

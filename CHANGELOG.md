@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+## [0.4.2] - 2025-12-03 - e2e Tests
+- added an end to end test under the testkit that verifies that all the canisters build, and checks the size of
+AppDirectory and SubnetDirectory post-init.
+
 ## [0.4.1] - 2025-12-01 - Bug Splatting
 - Register new canisters in the subnet registry only after a successful install to avoid phantom entries on install failure.
 - Post-upgrade now replays memory range/ID registrations so new stable-memory segments are validated after upgrades.

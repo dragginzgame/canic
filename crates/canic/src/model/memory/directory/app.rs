@@ -30,9 +30,15 @@ impl AppDirectory {
         APP_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
-    //
-    // Import & Export
-    //
+    // cannot return an iterator because of stable memory
+    #[must_use]
+    pub fn view() -> DirectoryView {
+        APP_DIRECTORY.with_borrow(|map| {
+            map.iter()
+                .map(|entry| (entry.key().clone(), entry.value()))
+                .collect()
+        })
+    }
 
     pub fn import(view: DirectoryView) {
         APP_DIRECTORY.with_borrow_mut(|map| {
@@ -41,14 +47,5 @@ impl AppDirectory {
                 map.insert(ty, pids);
             }
         });
-    }
-
-    #[must_use]
-    pub fn export() -> DirectoryView {
-        APP_DIRECTORY.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
     }
 }

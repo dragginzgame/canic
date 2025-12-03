@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/canic_logo.png" alt="Canic logo" width="360" />
+  <img src="assets/canic_logo.svg" alt="Canic logo" width="360" />
 </p>
 
 # 🧑‍🔧 Canic 🧑‍🔧 – Internet Computer Orchestration
