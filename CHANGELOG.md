@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+
 ## [0.4.2] - 2025-12-03 - e2e Tests
-- added an end to end test under the testkit that verifies that all the canisters build, and checks the size of
-AppDirectory and SubnetDirectory post-init.
+- AppDirectory now rebuilds from the registry on root (not just prime root) while children read their stable snapshot, keeping directory queries consistent everywhere.
+- SubnetDirectory resolves from the registry on root and falls back to an empty view instead of erroring during early bootstrap/config gaps.
+- Added PocketIC coverage that asserts app/subnet directory views match across root and all children after auto-create.
 
 ## [0.4.1] - 2025-12-01 - Bug Splatting
 - Register new canisters in the subnet registry only after a successful install to avoid phantom entries on install failure.
