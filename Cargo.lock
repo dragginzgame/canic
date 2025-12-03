@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "convert_case",
  "derive_more",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "candid",
  "canic",
@@ -1012,9 +1012,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52e9a2a24dc5c6821e71a7030e1e14b7b632acac55c40e9d2e082c621261bb56"
+checksum = "727805d60e7938b76b826a6ef209eb70eaa1812794f9424d4a4e2d740662df5f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
