@@ -1,6 +1,6 @@
 use crate::{
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
-    types::Principal,
+    types::{CanisterType, Principal},
 };
 use candid::CandidType;
 use serde::Serialize;
@@ -34,6 +34,12 @@ impl SubnetCanisterChildrenOps {
     #[must_use]
     pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
         SubnetCanisterChildren::find_by_pid(pid)
+    }
+
+    /// Lookup the first child of a given type
+    #[must_use]
+    pub fn find_first_by_type(ty: &CanisterType) -> Option<CanisterSummary> {
+        SubnetCanisterChildren::find_first_by_type(ty)
     }
 
     #[must_use]
