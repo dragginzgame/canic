@@ -27,13 +27,13 @@ pub(crate) struct AppDirectory;
 impl AppDirectory {
     #[must_use]
     #[expect(dead_code)]
-    pub fn get(ty: &CanisterType) -> Option<PrincipalList> {
+    pub(crate) fn get(ty: &CanisterType) -> Option<PrincipalList> {
         APP_DIRECTORY.with_borrow(|map| map.get(ty))
     }
 
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub fn view() -> DirectoryView {
+    pub(crate) fn view() -> DirectoryView {
         APP_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
@@ -41,7 +41,7 @@ impl AppDirectory {
         })
     }
 
-    pub fn import(view: DirectoryView) {
+    pub(crate) fn import(view: DirectoryView) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (ty, pids) in view {

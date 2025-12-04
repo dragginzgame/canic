@@ -61,11 +61,11 @@ pub(crate) struct Env;
 impl Env {
     // ---- Prime Root PID ----
     #[must_use]
-    pub fn get_prime_root_pid() -> Option<Principal> {
+    pub(crate) fn get_prime_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().prime_root_pid)
     }
 
-    pub fn set_prime_root_pid(pid: Principal) {
+    pub(crate) fn set_prime_root_pid(pid: Principal) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.prime_root_pid = Some(pid);
@@ -74,7 +74,7 @@ impl Env {
     }
 
     #[must_use]
-    pub fn is_prime_root() -> bool {
+    pub(crate) fn is_prime_root() -> bool {
         let prime_root_pid = Self::get_prime_root_pid();
 
         prime_root_pid.is_some() && prime_root_pid == Self::get_root_pid()
@@ -82,11 +82,11 @@ impl Env {
 
     // ---- Subnet Type ----
     #[must_use]
-    pub fn get_subnet_type() -> Option<SubnetType> {
+    pub(crate) fn get_subnet_type() -> Option<SubnetType> {
         ENV.with_borrow(|cell| cell.get().subnet_type.clone())
     }
 
-    pub fn set_subnet_type(ty: SubnetType) {
+    pub(crate) fn set_subnet_type(ty: SubnetType) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.subnet_type = Some(ty);
@@ -96,11 +96,11 @@ impl Env {
 
     // ---- Subnet PID ----
     #[must_use]
-    pub fn get_subnet_pid() -> Option<Principal> {
+    pub(crate) fn get_subnet_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().subnet_pid)
     }
 
-    pub fn set_subnet_pid(pid: Principal) {
+    pub(crate) fn set_subnet_pid(pid: Principal) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.subnet_pid = Some(pid);
@@ -111,11 +111,11 @@ impl Env {
     // ---- Root PID ----
 
     #[must_use]
-    pub fn get_root_pid() -> Option<Principal> {
+    pub(crate) fn get_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().root_pid)
     }
 
-    pub fn set_root_pid(pid: Principal) {
+    pub(crate) fn set_root_pid(pid: Principal) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.root_pid = Some(pid);
@@ -124,19 +124,19 @@ impl Env {
     }
 
     #[must_use]
-    pub fn is_root() -> bool {
+    pub(crate) fn is_root() -> bool {
         Self::get_root_pid() == Some(canister_self())
     }
 
     // ---- Canister Type ----
 
     #[must_use]
-    pub fn get_canister_type() -> Option<CanisterType> {
+    pub(crate) fn get_canister_type() -> Option<CanisterType> {
         ENV.with_borrow(|cell| cell.get().canister_type.clone())
     }
 
     /// Set/replace the current canister type.
-    pub fn set_canister_type(ty: CanisterType) {
+    pub(crate) fn set_canister_type(ty: CanisterType) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.canister_type = Some(ty);
@@ -146,21 +146,21 @@ impl Env {
 
     // ---- Parent PID ----
     #[must_use]
-    pub fn get_parent_pid() -> Option<Principal> {
+    pub(crate) fn get_parent_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().parent_pid)
     }
 
     // ---- Import / Export ----
 
     /// Import a complete EnvData record, replacing any existing state.
-    pub fn import(data: EnvData) {
+    pub(crate) fn import(data: EnvData) {
         ENV.with_borrow_mut(|cell| {
             cell.set(data);
         });
     }
 
     #[must_use]
-    pub fn export() -> EnvData {
+    pub(crate) fn export() -> EnvData {
         ENV.with_borrow(|cell| cell.get().clone())
     }
 }
