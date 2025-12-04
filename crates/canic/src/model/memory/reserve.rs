@@ -42,11 +42,11 @@ impl_storable_unbounded!(CanisterReserveEntry);
 /// CanisterReserve
 ///
 
-pub struct CanisterReserve;
+pub(crate) struct CanisterReserve;
 
 impl CanisterReserve {
     /// Register a canister into the reserve.
-    pub fn register(pid: Principal, cycles: Cycles) {
+    pub(crate) fn register(pid: Principal, cycles: Cycles) {
         let entry = CanisterReserveEntry {
             created_at: now_secs(),
             cycles,
@@ -59,7 +59,7 @@ impl CanisterReserve {
 
     /// Pop the oldest canister from the reserve.
     #[must_use]
-    pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
+    pub(crate) fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
         CANISTER_RESERVE.with_borrow_mut(|map| {
             let min_pid = map
                 .iter()
@@ -71,30 +71,33 @@ impl CanisterReserve {
 
     /// Remove a specific canister from the reserve.
     #[must_use]
-    pub fn remove(pid: &Principal) -> Option<CanisterReserveEntry> {
+    #[cfg(test)]
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterReserveEntry> {
         CANISTER_RESERVE.with_borrow_mut(|map| map.remove(pid))
     }
 
     /// Export the reserve as a vector of (Principal, Entry).
     #[must_use]
-    pub fn export() -> CanisterReserveView {
+    pub(crate) fn export() -> CanisterReserveView {
         CANISTER_RESERVE.with_borrow(BTreeMap::to_vec)
     }
 
     /// Clear the reserve (mainly for tests).
-    pub fn clear() {
+    #[cfg(test)]
+    pub(crate) fn clear() {
         CANISTER_RESERVE.with_borrow_mut(BTreeMap::clear);
     }
 
     /// Return the current reserve size.
     #[must_use]
-    pub fn len() -> u64 {
+    pub(crate) fn len() -> u64 {
         CANISTER_RESERVE.with_borrow(|map| map.len())
     }
 
     /// Return whether the reserve is empty.
     #[must_use]
-    pub fn is_empty() -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_empty() -> bool {
         CANISTER_RESERVE.with_borrow(|map| map.is_empty())
     }
 }

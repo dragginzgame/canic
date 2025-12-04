@@ -4,7 +4,6 @@ use crate::{
     log::Topic,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
     types::Cycles,
-    utils::time::now_secs,
 };
 use std::cell::RefCell;
 
@@ -37,7 +36,7 @@ pub type CycleTrackerView = Vec<(u64, Cycles)>;
 /// declare M: Memory as a generic right now, it breaks ic-stable-structures/other ic packages
 ///
 
-pub struct CycleTracker {
+pub(crate) struct CycleTracker {
     map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>,
     insert_count: u64,
 }
@@ -53,35 +52,17 @@ impl CycleTracker {
     // -------- PUBLIC API (model-facing) -------- //
 
     #[must_use]
-    pub fn len() -> u64 {
+    pub(crate) fn len() -> u64 {
         CYCLE_TRACKER.with_borrow(|t| t.map.len())
     }
 
     #[must_use]
-    pub fn record(now: u64, cycles: u128) -> bool {
+    pub(crate) fn record(now: u64, cycles: u128) -> bool {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles))
     }
 
     #[must_use]
-    pub fn purge_old() -> usize {
-        let ts = now_secs();
-        CYCLE_TRACKER.with_borrow_mut(|t| t.purge(ts))
-    }
-
-    pub fn clear() {
-        CYCLE_TRACKER.with_borrow_mut(|t| {
-            t.map.clear();
-            t.insert_count = 0;
-        });
-    }
-
-    #[must_use]
-    pub fn export() -> CycleTrackerView {
-        CYCLE_TRACKER.with_borrow(Self::view)
-    }
-
-    #[must_use]
-    pub fn entries(offset: u64, limit: u64) -> CycleTrackerView {
+    pub(crate) fn entries(offset: u64, limit: u64) -> CycleTrackerView {
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 
@@ -130,9 +111,5 @@ impl CycleTracker {
         }
 
         purged
-    }
-
-    fn view(&self) -> Vec<(u64, Cycles)> {
-        self.map.view().map(|(ts, c)| (ts, c.into())).collect()
     }
 }

@@ -1,6 +1,6 @@
 mod registry;
 
-pub use registry::*;
+pub(crate) use registry::ShardingRegistry;
 
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
@@ -117,7 +117,7 @@ impl_storable_bounded!(ShardEntry, ShardEntry::STORABLE_MAX_SIZE, false);
 /// Registry + assignments
 ///
 
-pub struct ShardingCore<M: Memory> {
+pub(crate) struct ShardingCore<M: Memory> {
     registry: BTreeMap<Principal, ShardEntry, M>,
     assignments: BTreeMap<ShardKey, Principal, M>,
 }
@@ -139,10 +139,6 @@ impl<M: Memory> ShardingCore<M> {
 
     pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
         self.registry.insert(pid, entry);
-    }
-
-    pub fn remove_entry(&mut self, pid: &Principal) -> Option<ShardEntry> {
-        self.registry.remove(pid)
     }
 
     pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
@@ -177,30 +173,5 @@ impl<M: Memory> ShardingCore<M> {
             .iter()
             .map(|e| (e.key().clone(), e.value()))
             .collect()
-    }
-
-    pub fn increment_count(&mut self, pid: &Principal) -> bool {
-        if let Some(mut entry) = self.registry.get(pid) {
-            entry.count = entry.count.saturating_add(1);
-            self.registry.insert(*pid, entry);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn decrement_count(&mut self, pid: &Principal) -> bool {
-        if let Some(mut entry) = self.registry.get(pid) {
-            entry.count = entry.count.saturating_sub(1);
-            self.registry.insert(*pid, entry);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.registry.clear();
-        self.assignments.clear();
     }
 }

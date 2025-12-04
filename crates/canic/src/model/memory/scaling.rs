@@ -49,7 +49,7 @@ pub type ScalingRegistryView = Vec<(Principal, WorkerEntry)>;
 ///
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct ScalingRegistry;
+pub(crate) struct ScalingRegistry;
 
 impl ScalingRegistry {
     /// Insert or update a worker entry
@@ -57,18 +57,6 @@ impl ScalingRegistry {
         SCALING_REGISTRY.with_borrow_mut(|map| {
             map.insert(pid, entry);
         });
-    }
-
-    /// Remove a worker by PID
-    #[must_use]
-    pub fn remove(pid: &Principal) -> Option<WorkerEntry> {
-        SCALING_REGISTRY.with_borrow_mut(|map| map.remove(pid))
-    }
-
-    /// Lookup a worker by PID
-    #[must_use]
-    pub fn find_by_pid(pid: &Principal) -> Option<WorkerEntry> {
-        SCALING_REGISTRY.with_borrow(|map| map.get(pid))
     }
 
     /// Lookup all workers in a given pool
@@ -86,10 +74,5 @@ impl ScalingRegistry {
     #[must_use]
     pub fn export() -> Vec<(Principal, WorkerEntry)> {
         SCALING_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
-    }
-
-    /// Clear registry
-    pub fn clear() {
-        SCALING_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 }

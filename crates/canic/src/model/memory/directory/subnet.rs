@@ -22,10 +22,11 @@ eager_static! {
 /// SubnetDirectory
 ///
 
-pub struct SubnetDirectory;
+pub(crate) struct SubnetDirectory;
 
 impl SubnetDirectory {
     #[must_use]
+    #[expect(dead_code)]
     pub fn get(ty: &CanisterType) -> Option<PrincipalList> {
         SUBNET_DIRECTORY.with_borrow(|map| map.get(ty))
     }

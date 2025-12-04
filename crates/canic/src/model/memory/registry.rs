@@ -180,14 +180,9 @@ pub type MemoryRegistryView = Vec<(u8, MemoryRegistryEntry)>;
 /// MemoryRegistry
 ///
 
-pub struct MemoryRegistry;
+pub(crate) struct MemoryRegistry;
 
 impl MemoryRegistry {
-    #[must_use]
-    pub fn is_empty() -> bool {
-        MEMORY_REGISTRY.with_borrow(|map| map.is_empty())
-    }
-
     /// Register an ID, enforcing crate’s allowed range.
     ///
     /// Pure domain/model-level function:
@@ -307,10 +302,5 @@ impl MemoryRegistry {
                 .map(|e| (e.key().clone(), e.value()))
                 .collect()
         })
-    }
-
-    pub fn clear() {
-        MEMORY_REGISTRY.with_borrow_mut(StableBTreeMap::clear);
-        MEMORY_RANGES.with_borrow_mut(StableBTreeMap::clear);
     }
 }

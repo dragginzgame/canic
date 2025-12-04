@@ -24,6 +24,8 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - ♻️ **Lifecycle helpers** – shard policies, reserve pools, scaling helpers, and sync cascades keep fleets healthy.
 - 🧪 **Ready for CI** – Rust 2024 edition, MSRV 1.90, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
+For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`verify_auth_token`) instead of feeding raw principals into `ic-signature-verification`; the helper builds the proper DER canister-sig public key and domain-prefixed message to avoid slice panics on short (10-byte) canister IDs.
+
 ## 📁 Repository Layout
 
 - `assets/` – documentation media (logo and shared imagery).
