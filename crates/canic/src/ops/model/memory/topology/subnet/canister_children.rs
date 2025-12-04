@@ -1,9 +1,11 @@
 use crate::{
+    cdk::api::canister_self,
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
+    ops::model::memory::{env::EnvOps, topology::SubnetCanisterRegistryOps},
     types::{CanisterType, Principal},
 };
 use candid::CandidType;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 ///
 /// SubnetCanisterChildrenOps
@@ -12,11 +14,21 @@ use serde::Serialize;
 pub struct SubnetCanisterChildrenOps;
 
 impl SubnetCanisterChildrenOps {
+    /// Resolve the canonical view of direct children for the current canister.
+    /// Root rebuilds from the registry; children rely on their imported snapshot.
+    fn resolve_children() -> Vec<CanisterSummary> {
+        if EnvOps::is_root() {
+            SubnetCanisterRegistryOps::children(canister_self())
+        } else {
+            SubnetCanisterChildren::export()
+        }
+    }
+
     /// Return a paginated view of the canister's direct children.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn page(offset: u64, limit: u64) -> SubnetCanisterChildrenPage {
-        let all_children = SubnetCanisterChildren::export();
+        let all_children = Self::resolve_children();
         let total = all_children.len() as u64;
         let start = offset.min(total) as usize;
         let end = offset.saturating_add(limit).min(total) as usize;
@@ -33,18 +45,22 @@ impl SubnetCanisterChildrenOps {
     /// Lookup a child by principal
     #[must_use]
     pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
-        SubnetCanisterChildren::find_by_pid(pid)
+        Self::resolve_children()
+            .into_iter()
+            .find(|child| child.pid == *pid)
     }
 
     /// Lookup the first child of a given type
     #[must_use]
     pub fn find_first_by_type(ty: &CanisterType) -> Option<CanisterSummary> {
-        SubnetCanisterChildren::find_first_by_type(ty)
+        Self::resolve_children()
+            .into_iter()
+            .find(|child| &child.ty == ty)
     }
 
     #[must_use]
     pub(crate) fn export() -> Vec<CanisterSummary> {
-        SubnetCanisterChildren::export()
+        Self::resolve_children()
     }
 
     pub(crate) fn import(children: Vec<CanisterSummary>) {
@@ -57,7 +73,7 @@ impl SubnetCanisterChildrenOps {
 /// Page of subnet canister children.
 ///
 
-#[derive(CandidType, Serialize)]
+#[derive(CandidType, Serialize, Deserialize, Debug)]
 pub struct SubnetCanisterChildrenPage {
     pub total: u64,
     pub offset: u64,

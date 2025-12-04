@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.4.9] - 2025-12-04
 - Removed the auth-specific `verify_auth_token`; callers now pass the signing domain and seed into `ops::signature::verify` when validating tokens.
+- Fixed `canic_subnet_canister_children` on root by rebuilding the view from the registry instead of the empty local snapshot.
 
 ## [0.4.8] - 2025-12-04
 - made the memory data structures pub(crate), and removed unused code

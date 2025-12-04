@@ -28,7 +28,7 @@ impl_storable_bounded!(CanisterEntry, CanisterEntry::STORABLE_MAX_SIZE, false);
 /// Minimal view for children/subnet directories
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct CanisterSummary {
     pub pid: Principal,
     pub ty: CanisterType,
