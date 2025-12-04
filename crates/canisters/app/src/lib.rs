@@ -19,11 +19,13 @@ async fn canic_upgrade() {}
 ///
 #[update]
 async fn verify(
+    domain: Vec<u8>,
+    seed: Vec<u8>,
     message: Vec<u8>,
     signature_cbor: Vec<u8>,
     issuer_pid: Principal,
 ) -> Result<String, Error> {
-    signature::verify_auth_token(&message, &signature_cbor, issuer_pid)?;
+    signature::verify(&domain, &seed, &message, &signature_cbor, issuer_pid)?;
 
     // 3️⃣ Parse the AuthToken from CBOR
     let token: AuthToken = signature::parse_message(&message)?;

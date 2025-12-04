@@ -29,9 +29,6 @@ thread_local! {
     static SIGNATURES: RefCell<SignatureMap> = RefCell::new(SignatureMap::default());
 }
 
-const AUTH_SIGNATURE_DOMAIN: &[u8] = b"toko";
-const AUTH_SIGNATURE_SEED: &[u8] = b"user-auth";
-
 ///
 /// SignatureOpsError
 ///
@@ -110,6 +107,7 @@ pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
 
 ///
 /// Verify a user token that was issued by the auth canister.
+/// Callers must pass the domain separator and seed that were used during signing.
 ///
 /// - `domain`:    the domain separator used during signing
 /// - `seed`:      the seed that derived the signing public key
@@ -139,24 +137,6 @@ pub fn verify(
     .map_err(|_| SignatureOpsError::InvalidSignature)?;
 
     Ok(())
-}
-
-///
-/// Verify a user token from the auth canister with the canonical domain/seed.
-/// Keeps the domain/seed constants centralized to avoid call-site drift.
-///
-pub fn verify_auth_token(
-    message: &[u8],
-    signature_cbor: &[u8],
-    issuer_pid: Principal,
-) -> Result<(), Error> {
-    verify(
-        AUTH_SIGNATURE_DOMAIN,
-        AUTH_SIGNATURE_SEED,
-        message,
-        signature_cbor,
-        issuer_pid,
-    )
 }
 
 ///
@@ -204,6 +184,8 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     const TEST_SIGNING_CANISTER_ID: &str = "rwlgt-iiaaa-aaaaa-aaaaa-cai";
+    const TEST_DOMAIN: &[u8] = b"toko";
+    const TEST_SEED: &[u8] = b"user-auth";
     const CANISTER_SIG_CBOR: &[u8; 265] = b"\xd9\xd9\xf7\xa2\x6b\x63\x65\x72\x74\x69\x66\x69\x63\x61\x74\x65\x58\xa1\xd9\xd9\xf7\xa2\x64\x74\x72\x65\x65\x83\x01\x83\x02\x48\x63\x61\x6e\x69\x73\x74\x65\x72\x83\x02\x4a\x00\x00\x00\x00\x00\x00\x00\x01\x01\x01\x83\x02\x4e\x63\x65\x72\x74\x69\x66\x69\x65\x64\x5f\x64\x61\x74\x61\x82\x03\x58\x20\xa9\xea\x05\x9d\xf2\x7a\x09\x7e\xc4\x38\xdb\x35\x62\xb9\x55\xc3\xd3\xfa\x08\xeb\x17\xc1\x3c\xda\x63\x90\x42\xfa\xe0\xcf\x60\x36\x83\x02\x44\x74\x69\x6d\x65\x82\x03\x43\x87\xad\x4b\x69\x73\x69\x67\x6e\x61\x74\x75\x72\x65\x58\x30\xa4\xd5\xfd\x47\xa0\x88\x13\x5b\xed\x52\x22\x0c\xca\xa4\x76\xfb\x6c\x88\x95\xdd\xa3\x1e\x2a\x86\xa7\xa2\x97\xdc\x7a\x30\x81\x27\x1e\xf1\x1a\xee\xb5\xd2\xbb\x25\x83\x0d\xcb\xdd\x82\xad\x7a\x52\x64\x74\x72\x65\x65\x83\x02\x43\x73\x69\x67\x83\x02\x58\x20\x00\x42\xcd\x04\x7a\xad\x32\x06\x37\xce\xae\xe2\x1d\x48\x9e\xf4\xe5\x14\xce\x20\x1f\x19\x60\x68\x30\xa2\xaf\x7b\x7d\x9c\x86\x7d\x83\x02\x58\x20\x14\x9b\x80\x95\x11\x98\x27\xcf\xea\x0a\xa6\x6e\x7b\x7f\x80\xe9\x13\xca\xef\xa3\x1a\x60\x6d\xe4\x02\x69\xc3\xd8\x6c\xfe\xa5\x8d\x82\x03\x40";
 
     #[test]
@@ -221,10 +203,16 @@ mod tests {
     }
 
     #[test]
-    fn verify_auth_token_handles_short_principal_without_panicking() {
+    fn verify_handles_short_principal_without_panicking() {
         let issuer_pid = Principal::from_text(TEST_SIGNING_CANISTER_ID).unwrap();
-        let err = verify_auth_token(b"payload", CANISTER_SIG_CBOR, issuer_pid)
-            .expect_err("expected invalid signature, not success");
+        let err = verify(
+            TEST_DOMAIN,
+            TEST_SEED,
+            b"payload",
+            CANISTER_SIG_CBOR,
+            issuer_pid,
+        )
+        .expect_err("expected invalid signature, not success");
         assert_eq!(err.to_string(), "invalid signature");
     }
 }
