@@ -1,7 +1,16 @@
-.PHONY: help version current tags patch minor major release \
+.PHONY: help version tags patch minor major release \
         test build check clippy fmt fmt-check clean install-dev \
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
+
+CARGO_TARGET_DIR := $(CURDIR)/target
+CARGO_TMP_DIR := $(CURDIR)/target/tmp
+
+export CARGO_TARGET_DIR
+export TMPDIR := $(CARGO_TMP_DIR)
+
+# Combined environment prefix for Cargo commands
+CARGO_ENV := CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" TMPDIR="$(CARGO_TMP_DIR)"
 
 # Check for clean git state
 ensure-clean:
@@ -109,7 +118,8 @@ release: ensure-clean
 test: test-canisters test-unit
 
 test-unit:
-	cargo test --workspace
+	@mkdir -p $(CARGO_TMP_DIR)
+	$(CARGO_ENV) cargo test --workspace
 
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \
@@ -125,14 +135,17 @@ test-canisters:
 # Development commands
 #
 
-build: ensure-clean ensure-hooks
-	cargo build --release --workspace
+build:
+	@mkdir -p $(CARGO_TMP_DIR)
+	$(CARGO_ENV) cargo build --workspace --release
 
 check: ensure-hooks fmt
-	cargo check --workspace
+	@mkdir -p $(CARGO_TMP_DIR)
+	$(CARGO_ENV) cargo check --workspace
 
-clippy: ensure-hooks
-	cargo clippy --workspace -- -D warnings
+clippy:
+	@mkdir -p $(CARGO_TMP_DIR)
+	$(CARGO_ENV) cargo clippy --workspace -- -D warnings
 
 fmt: ensure-hooks
 	cargo sort --workspace

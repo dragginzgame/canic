@@ -165,10 +165,10 @@ Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
 - Build release WASMs: `make build`
 - Run the example suite: `make examples` or `cargo build -p canic --examples`
 
-Sandboxed builds can hit `Invalid cross-device link` during Cargo’s atomic renames. Pin the target/temp dirs to the workspace when sandboxed:
+The `make` targets pin `CARGO_TARGET_DIR`/`TMPDIR` to `target/tmp` to dodge `Invalid cross-device link` errors in sandboxed environments. If you prefer raw `cargo` invocations, mirror the same env:
 
 ```bash
-CARGO_TARGET_DIR=$PWD/target_tmp TMPDIR=$PWD/target_tmp cargo build -p canic --examples
+CARGO_TARGET_DIR=$PWD/target TMPDIR=$PWD/target/tmp cargo build -p canic --examples
 ```
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
