@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "convert_case",
  "derive_more",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.4.2"
+version = "0.4.6"
 dependencies = [
  "candid",
  "canic",
@@ -924,7 +924,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hex"
-version = "0.4.3"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 dependencies = [
