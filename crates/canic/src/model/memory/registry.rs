@@ -55,6 +55,7 @@ thread_local! {
     };
 }
 
+// public as it gets called from macros
 pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
     PENDING_REGISTRATIONS.with(|q| {
         q.borrow_mut().push((id, crate_name, label));
@@ -78,6 +79,7 @@ thread_local! {
     };
 }
 
+// public as it gets called from macros
 pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
     PENDING_RANGES.with(|q| q.borrow_mut().push((crate_name, start, end)));
 }
