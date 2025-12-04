@@ -19,7 +19,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.91.0"
 edition = "2024"
-version = "0.4.8"
+version = "0.4.9"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -36,10 +36,10 @@ base32 = "0.5"
 
 # ic core crates
 candid = { version = "0.10", default-features = false }
-canic = { version = "0.4.8", path = "crates/canic" }
-canic-internal = { version = "0.4.8", path = "crates/canic-internal" }
-canic-testkit = { version = "0.4.8", path = "crates/canic-testkit" }
-canic-utils = { version = "0.4.8", path = "crates/canic-utils" }
+canic = { version = "0.4.9", path = "crates/canic" }
+canic-internal = { version = "0.4.9", path = "crates/canic-internal" }
+canic-testkit = { version = "0.4.9", path = "crates/canic-testkit" }
+canic-utils = { version = "0.4.9", path = "crates/canic-utils" }
 
 # third-party crates
 convert_case = "0.10"

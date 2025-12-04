@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "convert_case",
  "derive_more",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "candid",
  "canic",
@@ -1621,9 +1621,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873"
+checksum = "a69bcab0ad47271a0234d9422b131806bf3968021e5dc9328caf2d4cd58557fc"
 dependencies = [
  "libc",
  "wasi",
