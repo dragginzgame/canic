@@ -137,15 +137,15 @@ impl<M: Memory> ShardingCore<M> {
     // Registry CRUD
     // ---------------------------
 
-    pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
+    pub(crate) fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
         self.registry.insert(pid, entry);
     }
 
-    pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
+    pub(crate) fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
         self.registry.get(pid)
     }
 
-    pub fn all_entries(&self) -> Vec<(Principal, ShardEntry)> {
+    pub(crate) fn all_entries(&self) -> Vec<(Principal, ShardEntry)> {
         self.registry
             .iter()
             .map(|e| (*e.key(), e.value()))
@@ -156,19 +156,19 @@ impl<M: Memory> ShardingCore<M> {
     // Assignments CRUD
     // ---------------------------
 
-    pub fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
+    pub(crate) fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
         self.assignments.insert(key, shard);
     }
 
-    pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
+    pub(crate) fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
         self.assignments.remove(key)
     }
 
-    pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
+    pub(crate) fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
         self.assignments.get(key)
     }
 
-    pub fn all_assignments(&self) -> Vec<(ShardKey, Principal)> {
+    pub(crate) fn all_assignments(&self) -> Vec<(ShardKey, Principal)> {
         self.assignments
             .iter()
             .map(|e| (e.key().clone(), e.value()))

@@ -64,7 +64,7 @@ pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
 /// Drain (and clear) all pending registrations.
 /// Intended to be called from the ops layer during init/post-upgrade.
 #[must_use]
-pub fn drain_pending_registrations() -> Vec<(u8, &'static str, &'static str)> {
+pub(crate) fn drain_pending_registrations() -> Vec<(u8, &'static str, &'static str)> {
     PENDING_REGISTRATIONS.with(|q| q.borrow_mut().drain(..).collect())
 }
 
@@ -85,7 +85,7 @@ pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
 /// Drain (and clear) all pending ranges.
 /// Intended to be called from the ops layer during init/post-upgrade.
 #[must_use]
-pub fn drain_pending_ranges() -> Vec<(&'static str, u8, u8)> {
+pub(crate) fn drain_pending_ranges() -> Vec<(&'static str, u8, u8)> {
     PENDING_RANGES.with(|q| q.borrow_mut().drain(..).collect())
 }
 
@@ -131,7 +131,7 @@ pub struct MemoryRange {
 
 impl MemoryRange {
     #[must_use]
-    pub fn new(crate_key: &str, start: u8, end: u8) -> Self {
+    pub(crate) fn new(crate_key: &str, start: u8, end: u8) -> Self {
         Self {
             crate_key: BoundedString256::new(crate_key),
             start,
@@ -160,7 +160,7 @@ pub struct MemoryRegistryEntry {
 
 impl MemoryRegistryEntry {
     #[must_use]
-    pub fn new(label: &str) -> Self {
+    pub(crate) fn new(label: &str) -> Self {
         Self {
             label: BoundedString256::new(label),
             created_at: now_secs(),
@@ -286,7 +286,7 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub fn export() -> MemoryRegistryView {
+    pub(crate) fn export() -> MemoryRegistryView {
         MEMORY_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (*entry.key(), entry.value()))
@@ -295,7 +295,7 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub fn export_ranges() -> Vec<(String, MemoryRange)> {
+    pub(crate) fn export_ranges() -> Vec<(String, MemoryRange)> {
         MEMORY_RANGES.with_borrow(|ranges| {
             ranges
                 .iter()
