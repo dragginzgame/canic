@@ -39,21 +39,7 @@ pub type AppSubnetRegistryView = Vec<(Principal, AppSubnet)>;
 
 impl AppSubnetRegistry {
     #[must_use]
-    pub fn get(subnet_pid: Principal) -> Option<AppSubnet> {
-        APP_SUBNET_REGISTRY.with_borrow(|map| map.get(&subnet_pid))
-    }
-
-    #[must_use]
     pub fn export() -> AppSubnetRegistryView {
         APP_SUBNET_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
-    }
-
-    pub fn import(data: AppSubnetRegistryView) {
-        APP_SUBNET_REGISTRY.with_borrow_mut(|map| {
-            map.clear();
-            for (pid, subnet) in data {
-                map.insert(pid, subnet);
-            }
-        });
     }
 }

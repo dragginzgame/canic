@@ -128,11 +128,13 @@ macro_rules! from_to_string {
 }
 
 impl Error {
+    /// Build a custom error from a string without defining a new variant.
     #[must_use]
     pub fn custom<S: Into<String>>(s: S) -> Self {
         Self::CustomError(s.into())
     }
 
+    /// Build a test error to avoid extra dev-only dependencies.
     #[must_use]
     pub fn test<S: Into<String>>(s: S) -> Self {
         Self::TestError(s.into())

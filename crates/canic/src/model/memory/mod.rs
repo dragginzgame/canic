@@ -10,8 +10,8 @@ pub mod state;
 pub mod topology;
 pub mod types;
 
-pub use env::Env;
-pub use registry::{MemoryRegistry, MemoryRegistryError};
+pub(crate) use env::Env;
+pub use registry::MemoryRegistryError;
 pub use types::*;
 
 use crate::{

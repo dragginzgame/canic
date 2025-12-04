@@ -22,10 +22,11 @@ eager_static! {
 /// AppDirectory
 ///
 
-pub struct AppDirectory;
+pub(crate) struct AppDirectory;
 
 impl AppDirectory {
     #[must_use]
+    #[expect(dead_code)]
     pub fn get(ty: &CanisterType) -> Option<PrincipalList> {
         APP_DIRECTORY.with_borrow(|map| map.get(ty))
     }

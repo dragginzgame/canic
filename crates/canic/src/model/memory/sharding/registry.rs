@@ -39,39 +39,17 @@ impl ShardingRegistry {
     // Lifecycle
     // -----------------------------------------------------------------------
 
-    /// Clears all shard and tenant assignments (for tests or full reset).
+    #[cfg(test)]
     pub fn clear() {
-        Self::with_mut(ShardingCore::clear);
-    }
-
-    /// Returns the total number of shard entries.
-    #[must_use]
-    pub fn count() -> u64 {
-        Self::with(|s| s.all_entries().len() as u64)
-    }
-
-    /// Removes a shard entry from the registry. The shard must be empty.
-    #[must_use]
-    pub fn remove(shard_pid: Principal) -> Option<ShardEntry> {
-        Self::with_mut(|s| s.remove_entry(&shard_pid))
+        Self::with_mut(|core| {
+            core.registry.clear();
+            core.assignments.clear();
+        });
     }
 
     // -----------------------------------------------------------------------
     // Queries
     // -----------------------------------------------------------------------
-
-    /// Lookup the shard principal that backs a specific slot (if any).
-    #[must_use]
-    pub fn shard_for_slot(pool: &str, slot: u32) -> Option<Principal> {
-        Self::with(|s| {
-            s.all_entries()
-                .into_iter()
-                .find(|(_, entry)| {
-                    entry.pool == pool && entry.has_assigned_slot() && entry.slot == slot
-                })
-                .map(|(pid, _)| pid)
-        })
-    }
 
     /// Lookup the slot index for a given shard principal.
     #[must_use]

@@ -19,6 +19,7 @@ pub enum GuardError {
     AppReadonly,
 }
 
+/// Guard for query calls; allows controllers and rejects when the app is disabled.
 pub fn guard_query() -> Result<(), String> {
     if is_controller(&msg_caller()) {
         return Ok(());
@@ -30,6 +31,7 @@ pub fn guard_query() -> Result<(), String> {
     }
 }
 
+/// Guard for update calls; allows controllers and blocks readonly/disabled states.
 pub fn guard_update() -> Result<(), String> {
     if is_controller(&msg_caller()) {
         return Ok(());

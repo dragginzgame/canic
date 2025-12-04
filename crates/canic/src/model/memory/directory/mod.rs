@@ -1,8 +1,8 @@
 pub mod app;
 pub mod subnet;
 
-pub use app::AppDirectory;
-pub use subnet::SubnetDirectory;
+pub(crate) use app::AppDirectory;
+pub(crate) use subnet::SubnetDirectory;
 
 use crate::{
     impl_storable_unbounded,

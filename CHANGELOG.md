@@ -5,7 +5,8 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-############################ canic ################################
+## [Unreleased]
+- made the memory data structures pub(crate), and removed unused code
 
 ## [0.4.7] - 2025-12-04
 - Fixed canister signature verification panic on short (10-byte) canister principals by constructing the DER-encoded public key with the signing seed and adding an auth-specific `verify_auth_token` helper so domain/seed live in one place.

@@ -120,7 +120,7 @@ impl_storable_unbounded!(LogEntry);
 /// StableLog
 ///
 
-pub struct StableLog;
+pub(crate) struct StableLog;
 
 impl StableLog {
     // -------- Append --------
@@ -165,30 +165,6 @@ impl StableLog {
         topic.as_ref().map(|t| t.to_string().to_case(Case::Snake))
     }
 
-    // -------- Single reads --------
-
-    #[must_use]
-    pub fn get(index: u64) -> Option<LogEntry> {
-        with_log(|log| log.get(index))
-    }
-
-    #[must_use]
-    pub fn first() -> Option<LogEntry> {
-        with_log(StableLogImpl::first)
-    }
-
-    #[must_use]
-    pub fn last() -> Option<LogEntry> {
-        with_log(StableLogImpl::last)
-    }
-
-    // -------- Pagination --------
-
-    #[must_use]
-    pub fn entries_page(offset: u64, limit: u64) -> Vec<(usize, LogEntry)> {
-        Self::entries_page_filtered(None, None, None, offset, limit).0
-    }
-
     #[must_use]
     pub fn entries_page_filtered(
         crate_name: Option<&str>,
@@ -214,64 +190,6 @@ impl StableLog {
 
             (entries, total)
         })
-    }
-
-    #[must_use]
-    pub fn tail(limit: u64) -> Vec<(usize, LogEntry)> {
-        let len = Self::len();
-        let offset = len.saturating_sub(limit);
-        Self::entries_page(offset, limit)
-    }
-
-    #[must_use]
-    pub fn entries() -> Vec<(usize, LogEntry)> {
-        with_log(|log| log.iter().enumerate().collect())
-    }
-
-    #[must_use]
-    pub fn entries_from(start: u64) -> Vec<(usize, LogEntry)> {
-        let start = start as usize;
-        with_log(|log| log.iter().enumerate().skip(start).collect())
-    }
-
-    // -------- Bulk --------
-
-    pub fn clear_below(min_level: Level) {
-        let retained: Vec<_> =
-            with_log(|log| log.iter().filter(|e| e.level >= min_level).collect());
-
-        with_log_mut(|log| *log = create_log());
-
-        with_log(|log| {
-            for entry in retained {
-                let _ = log.append(&entry);
-            }
-        });
-    }
-
-    pub fn clear() {
-        with_log_mut(|log| *log = create_log());
-    }
-
-    // -------- Introspection --------
-
-    #[must_use]
-    pub fn len() -> u64 {
-        with_log(StableLogImpl::len)
-    }
-
-    #[must_use]
-    pub fn is_empty() -> bool {
-        Self::len() == 0
-    }
-
-    #[must_use]
-    pub fn size_bytes() -> (u64, u64) {
-        with_log(|log| (log.index_size_bytes(), log.data_size_bytes()))
-    }
-
-    pub fn iter() -> impl Iterator<Item = LogEntry> {
-        with_log(|log| log.iter().collect::<Vec<_>>()).into_iter()
     }
 }
 

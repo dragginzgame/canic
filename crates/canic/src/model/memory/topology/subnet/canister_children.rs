@@ -33,19 +33,6 @@ impl SubnetCanisterChildren {
         SUBNET_CANISTER_CHILDREN.with_borrow(|map| map.get(pid))
     }
 
-    /// Lookup all children of a given type
-    #[must_use]
-    pub fn find_by_type(ty: &CanisterType) -> Vec<CanisterSummary> {
-        SUBNET_CANISTER_CHILDREN.with_borrow(|map| {
-            map.iter()
-                .filter_map(|e| {
-                    let value = e.value();
-                    if value.ty == *ty { Some(value) } else { None }
-                })
-                .collect()
-        })
-    }
-
     /// Lookup the first child of a given type
     #[must_use]
     pub fn find_first_by_type(ty: &CanisterType) -> Option<CanisterSummary> {
@@ -55,11 +42,6 @@ impl SubnetCanisterChildren {
                 if value.ty == *ty { Some(value) } else { None }
             })
         })
-    }
-
-    /// Clear all children
-    pub fn clear() {
-        SUBNET_CANISTER_CHILDREN.with_borrow_mut(BTreeMap::clear);
     }
 
     /// Export state

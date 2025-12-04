@@ -56,7 +56,7 @@ impl_storable_bounded!(EnvData, 256, true);
 /// Env
 ///
 
-pub struct Env;
+pub(crate) struct Env;
 
 impl Env {
     // ---- Prime Root PID ----
@@ -148,14 +148,6 @@ impl Env {
     #[must_use]
     pub fn get_parent_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().parent_pid)
-    }
-
-    pub fn set_parent_pid(pid: Principal) {
-        ENV.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            data.parent_pid = Some(pid);
-            cell.set(data);
-        });
     }
 
     // ---- Import / Export ----
