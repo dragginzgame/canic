@@ -262,17 +262,31 @@ async fn install_canister(
         subnet_directory: SubnetDirectoryOps::export(),
     };
 
-    // Install code
-    install_code(
+    let module_hash = wasm.module_hash();
+
+    // Register before install so init hooks can observe the registry; roll back on failure.
+    // otherwise if the init() tries to create a canister via root, it will panic
+    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, module_hash.clone());
+
+    if let Err(err) = install_code(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),
         (payload, extra_arg),
     )
-    .await?;
+    .await
+    {
+        let removed = SubnetCanisterRegistryOps::remove(&pid);
+        if removed.is_none() {
+            log!(
+                Topic::CanisterLifecycle,
+                Warn,
+                "⚠️ install_canister rollback: {pid} missing from registry after failed install"
+            );
+        }
 
-    // register only if the wasm install succeeds
-    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, wasm.module_hash());
+        return Err(err);
+    }
 
     log!(
         Topic::CanisterLifecycle,
