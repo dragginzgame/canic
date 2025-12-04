@@ -5,12 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.4.9] - 2025-12-04
+- Removed the auth-specific `verify_auth_token`; callers now pass the signing domain and seed into `ops::signature::verify` when validating tokens.
+
 ## [0.4.8] - 2025-12-04
 - made the memory data structures pub(crate), and removed unused code
 - commented more public facing functions
 
 ## [0.4.7] - 2025-12-04
-- Fixed canister signature verification panic on short (10-byte) canister principals by constructing the DER-encoded public key with the signing seed and adding an auth-specific `verify_auth_token` helper so domain/seed live in one place.
+- Fixed canister signature verification panic on short (10-byte) canister principals by constructing the DER-encoded public key with the signing seed
 
 ## [0.4.6] - 2025-12-03 - e2e Tests
 - AppDirectory now rebuilds from the registry on root (not just prime root) while children read their stable snapshot, keeping directory queries consistent everywhere.
