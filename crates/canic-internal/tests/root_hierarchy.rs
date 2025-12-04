@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
 use canic::{
-    model::memory::CanisterEntry,
+    model::memory::{CanisterEntry, CanisterSummary},
     ops::model::memory::directory::DirectoryPageDto,
     types::{CanisterType, SubnetType, TC},
 };
@@ -248,4 +248,53 @@ fn directories_are_consistent_across_canisters() {
             "subnet directory mismatch for {ty}"
         );
     }
+}
+
+#[test]
+fn subnet_children_matches_registry_on_root() {
+    let Some(setup) = setup_root() else {
+        eprintln!(
+            "skipping subnet_children_matches_registry_on_root — \
+             run `make test` to build canisters or set {ROOT_WASM_ENV}"
+        );
+        return;
+    };
+
+    let Setup {
+        pic,
+        root_id,
+        registry,
+    } = setup;
+
+    let mut expected_children: Vec<CanisterSummary> = registry
+        .values()
+        .filter(|entry| entry.parent_pid == Some(root_id))
+        .map(|entry| CanisterSummary {
+            pid: entry.pid,
+            ty: entry.ty.clone(),
+            parent_pid: entry.parent_pid,
+        })
+        .collect();
+
+    assert!(
+        !expected_children.is_empty(),
+        "registry should contain root children"
+    );
+
+    let mut page: canic::ops::model::memory::topology::SubnetCanisterChildrenPage = pic
+        .query_call(root_id, "canic_subnet_canister_children", (0u64, 100u64))
+        .expect("query root subnet children");
+
+    expected_children.sort_by(|a, b| a.ty.cmp(&b.ty));
+    page.children.sort_by(|a, b| a.ty.cmp(&b.ty));
+
+    assert_eq!(
+        page.total,
+        expected_children.len() as u64,
+        "reported total mismatch"
+    );
+    assert_eq!(
+        page.children, expected_children,
+        "child list from endpoint must match registry"
+    );
 }
