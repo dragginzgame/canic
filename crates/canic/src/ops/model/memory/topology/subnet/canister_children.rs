@@ -73,7 +73,7 @@ impl SubnetCanisterChildrenOps {
 /// Page of subnet canister children.
 ///
 
-#[derive(CandidType, Serialize, Deserialize, Debug)]
+#[derive(CandidType, Debug, Deserialize, Serialize)]
 pub struct SubnetCanisterChildrenPage {
     pub total: u64,
     pub offset: u64,

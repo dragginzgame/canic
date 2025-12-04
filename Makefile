@@ -147,12 +147,16 @@ clippy:
 	@mkdir -p $(CARGO_TMP_DIR)
 	$(CARGO_ENV) cargo clippy --workspace -- -D warnings
 
-fmt: ensure-hooks
+fmt: ensure-hooks fmt-core
+
+fmt-core:
 	cargo sort --workspace
 	cargo sort-derives
 	cargo fmt --all
 
-fmt-check: ensure-hooks
+fmt-check: ensure-hooks fmt-check-core
+
+fmt-check-core:
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check

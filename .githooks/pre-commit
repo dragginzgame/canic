@@ -6,8 +6,8 @@ if ! git diff --cached --name-only --diff-filter=ACM | grep -E '\\.rs$|^Cargo\\.
   exit 0
 fi
 
-# Auto-format before checks (includes cargo fmt + cargo sort)
-make fmt
+# Auto-format before checks (matches `make fmt` without ensure-hooks)
+make fmt-core
 
 # Stage any formatting changes so they are included in the commit
 if ! git diff --quiet; then
@@ -16,6 +16,6 @@ if ! git diff --quiet; then
 fi
 
 # Run checks
-make fmt-check
+make fmt-check-core
 
 echo "Pre-commit checks passed."
