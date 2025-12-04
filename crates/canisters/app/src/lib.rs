@@ -23,7 +23,7 @@ async fn verify(
     signature_cbor: Vec<u8>,
     issuer_pid: Principal,
 ) -> Result<String, Error> {
-    signature::verify(&message, &signature_cbor, issuer_pid)?;
+    signature::verify_auth_token(&message, &signature_cbor, issuer_pid)?;
 
     // 3️⃣ Parse the AuthToken from CBOR
     let token: AuthToken = signature::parse_message(&message)?;

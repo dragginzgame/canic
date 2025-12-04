@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ############################ canic ################################
 
+## [0.4.7] - 2025-12-04
+- Fixed canister signature verification panic on short (10-byte) canister principals by constructing the DER-encoded public key with the signing seed and adding an auth-specific `verify_auth_token` helper so domain/seed live in one place.
 
 ## [0.4.6] - 2025-12-03 - e2e Tests
 - AppDirectory now rebuilds from the registry on root (not just prime root) while children read their stable snapshot, keeping directory queries consistent everywhere.
