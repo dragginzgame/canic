@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.4.13] - 2025-12-04
+- Added the `canic-cdk` crate as a curated façade over `ic-cdk`, `candid`, timers, and management canister APIs.
+- Moved `impl_storable_*` macros and MiniCBOR serialize/deserialize helpers into `canic-utils` so external crates can depend on utilities without pulling in the full Canic stack.
+
 ## [0.4.12] - 2025-12-04
 - Removed the auth-specific `verify_auth_token`; callers now pass the signing domain and seed into `ops::signature::verify` when validating tokens.
 - Fixed `canic_subnet_canister_children` on root by rebuilding the view from the registry instead of the empty local snapshot.

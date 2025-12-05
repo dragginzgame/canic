@@ -7,7 +7,7 @@ use crate::{
         memory::VirtualMemory,
     },
     config::{Config, schema::LogConfig},
-    eager_static, ic_memory, impl_storable_unbounded,
+    eager_static, ic_memory,
     log::Level,
     model::memory::{
         MemoryError,
@@ -15,7 +15,7 @@ use crate::{
     },
     utils::{
         case::{Case, Casing},
-        time,
+        impl_storable_unbounded, time,
     },
 };
 use candid::CandidType;

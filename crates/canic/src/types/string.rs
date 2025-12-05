@@ -4,7 +4,7 @@
 //! tables where size caps matter.
 //!
 
-use crate::impl_storable_bounded;
+use crate::utils::impl_storable_bounded;
 use candid::CandidType;
 use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
@@ -111,7 +111,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::structures::Storable,
-        serialize::{deserialize, serialize},
+        utils::serialize::{deserialize, serialize},
     };
 
     #[test]

@@ -1,6 +1,5 @@
 //! CANIC crate utilities for multi-canister apps on the Internet Computer.
 pub mod auth;
-pub mod cdk;
 pub mod config;
 pub mod env;
 pub mod guard;
@@ -10,10 +9,10 @@ pub mod macros;
 pub mod model;
 pub mod ops;
 pub mod runtime;
-pub mod serialize;
 pub mod spec;
 pub mod types;
 
+pub use ::canic_cdk as cdk;
 pub use ::canic_utils as utils;
 
 pub mod export {
@@ -147,7 +146,6 @@ from_to_string!(env::EnvError, ConfigError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
-from_to_string!(serialize::SerializeError, SerializeError);
 
 from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);

@@ -24,6 +24,7 @@ pub enum Level {
 #[derive(Clone, Copy, Display, Eq, PartialEq)]
 pub enum Topic {
     App,
+    Auth,
     CanisterLifecycle,
     CanisterReserve,
     CanisterState,

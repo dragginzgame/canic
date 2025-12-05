@@ -203,6 +203,7 @@ version = "0.4.12"
 dependencies = [
  "base32 0.5.1",
  "candid",
+ "canic-cdk",
  "canic-utils",
  "crc32fast",
  "criterion",
@@ -212,7 +213,6 @@ dependencies = [
  "hex",
  "ic-canister-sig-creation",
  "ic-cdk",
- "ic-cdk-timers",
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
  "icrc-ledger-types",
@@ -225,6 +225,20 @@ dependencies = [
  "thiserror 2.0.17",
  "toml",
  "ulid",
+]
+
+[[package]]
+name = "canic-cdk"
+version = "0.4.12"
+dependencies = [
+ "candid",
+ "derive_more",
+ "ic-canister-sig-creation",
+ "ic-cdk",
+ "ic-cdk-timers",
+ "ic-signature-verification",
+ "ic-stable-structures 0.7.2",
+ "icrc-ledger-types",
 ]
 
 [[package]]
@@ -252,10 +266,14 @@ dependencies = [
 name = "canic-utils"
 version = "0.4.12"
 dependencies = [
+ "canic-cdk",
  "convert_case",
  "derive_more",
  "ic-cdk",
+ "minicbor-serde",
+ "serde",
  "sha2",
+ "thiserror 2.0.17",
  "tinyrand",
  "xxhash-rust",
 ]
