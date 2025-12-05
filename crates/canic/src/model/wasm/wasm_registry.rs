@@ -1,8 +1,5 @@
 use crate::{
-    Error, log,
-    log::Topic,
-    model::ModelError,
-    types::{CanisterType, WasmModule},
+    Error, core::types::WasmModule, log, log::Topic, model::ModelError, types::CanisterType,
 };
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;

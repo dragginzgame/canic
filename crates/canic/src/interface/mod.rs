@@ -12,11 +12,14 @@ pub mod prelude {
             call::Call,
             candid::CandidType,
         },
+        core::{
+            types::{Account, Cycles, Int, Nat, Principal, Subaccount},
+            utils::time::now_secs,
+        },
         interface::InterfaceError,
         log,
         log::Level,
-        types::{Account, CanisterType, Cycles, Int, Nat, Principal, Subaccount},
-        utils::time::now_secs,
+        types::CanisterType,
     };
     pub use serde::{Deserialize, Serialize};
 }

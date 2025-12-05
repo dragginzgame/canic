@@ -10,13 +10,13 @@ pub use crate::model::memory::scaling::ScalingRegistryView;
 use crate::{
     Error, ThisError,
     config::schema::ScalePool,
+    core::utils::time::now_secs,
     model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
         config::ConfigOps,
         model::memory::MemoryOpsError,
         request::{CreateCanisterParent, create_canister_request},
     },
-    utils::time::now_secs,
 };
 use candid::Principal;
 

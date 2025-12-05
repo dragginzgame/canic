@@ -1,4 +1,4 @@
-use canic::types::{Account, Principal, Ulid};
+use canic::core::types::{Account, Principal, Ulid};
 
 pub mod pic;
 

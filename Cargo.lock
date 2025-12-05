@@ -201,30 +201,24 @@ dependencies = [
 name = "canic"
 version = "0.5.0"
 dependencies = [
- "base32 0.5.1",
  "candid",
  "canic-cdk",
- "canic-utils",
- "crc32fast",
+ "canic-core",
  "criterion",
  "ctor",
- "defer",
  "derive_more",
- "hex",
  "ic-canister-sig-creation",
  "ic-cdk",
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
  "icrc-ledger-types",
  "minicbor-serde",
- "num-traits",
  "remain",
  "serde",
  "serde_bytes",
  "sha2",
  "thiserror 2.0.17",
  "toml",
- "ulid",
 ]
 
 [[package]]
@@ -239,6 +233,30 @@ dependencies = [
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
  "icrc-ledger-types",
+]
+
+[[package]]
+name = "canic-core"
+version = "0.5.0"
+dependencies = [
+ "base32 0.5.1",
+ "candid",
+ "canic-cdk",
+ "convert_case",
+ "crc32fast",
+ "defer",
+ "derive_more",
+ "hex",
+ "ic-cdk",
+ "minicbor-serde",
+ "num-traits",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "thiserror 2.0.17",
+ "tinyrand",
+ "ulid",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -260,22 +278,6 @@ dependencies = [
  "derive_more",
  "pocket-ic",
  "serde",
-]
-
-[[package]]
-name = "canic-utils"
-version = "0.5.0"
-dependencies = [
- "canic-cdk",
- "convert_case",
- "derive_more",
- "ic-cdk",
- "minicbor-serde",
- "serde",
- "sha2",
- "thiserror 2.0.17",
- "tinyrand",
- "xxhash-rust",
 ]
 
 [[package]]

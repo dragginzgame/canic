@@ -29,11 +29,12 @@ pub mod prelude {
             call::Call,
             candid::CandidType,
         },
+        core::types::{Cycles, Int, Nat, Principal, Subaccount},
         interface::{InterfaceError, ic::call_and_decode},
         log,
         log::Level,
         ops::OpsError,
-        types::{CanisterType, Cycles, Int, Nat, Principal, Subaccount},
+        types::CanisterType,
     };
     pub use serde::{Deserialize, Serialize};
 }

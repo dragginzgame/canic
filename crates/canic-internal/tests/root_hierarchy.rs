@@ -1,9 +1,10 @@
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
 use canic::{
+    core::types::TC,
     model::memory::{CanisterEntry, CanisterSummary},
     ops::model::memory::directory::DirectoryPageDto,
-    types::{CanisterType, SubnetType, TC},
+    types::{CanisterType, SubnetType},
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, PicBuilder};
@@ -71,7 +72,7 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
 struct Setup {
     pic: Pic,
-    root_id: canic::types::Principal,
+    root_id: canic::core::types::Principal,
     registry: HashMap<CanisterType, CanisterEntry>,
 }
 

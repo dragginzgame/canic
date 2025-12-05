@@ -1,9 +1,9 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    core::types::Cycles,
     eager_static, ic_memory, log,
     log::Topic,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
-    types::Cycles,
 };
 use std::cell::RefCell;
 

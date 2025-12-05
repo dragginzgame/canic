@@ -7,15 +7,18 @@ use crate::{
         memory::VirtualMemory,
     },
     config::{Config, schema::LogConfig},
+    core::{
+        impl_storable_unbounded,
+        utils::{
+            case::{Case, Casing},
+            time,
+        },
+    },
     eager_static, ic_memory,
     log::Level,
     model::memory::{
         MemoryError,
         id::log::{LOG_DATA_ID, LOG_INDEX_ID},
-    },
-    utils::{
-        case::{Case, Casing},
-        impl_storable_unbounded, time,
     },
 };
 use candid::CandidType;

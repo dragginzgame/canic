@@ -68,7 +68,7 @@ macro_rules! log {
             .map(|ty| ty.to_string())
             .unwrap_or_else(|_| "...".to_string());
 
-        let ty_disp = $crate::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);
+        let ty_disp = $crate::core::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);
         let ty_centered = format!("{:^9}", ty_disp);
 
         let final_msg = if let Some(t) = topic_opt {

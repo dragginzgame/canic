@@ -16,6 +16,7 @@ use crate::{
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::Config,
+    core::types::{Cycles, Principal, TC},
     interface::ic::get_cycles,
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
@@ -24,7 +25,6 @@ use crate::{
         config::ConfigOps,
         prelude::*,
     },
-    types::{Cycles, Principal, TC},
 };
 use std::{cell::RefCell, time::Duration};
 

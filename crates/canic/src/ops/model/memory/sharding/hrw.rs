@@ -6,7 +6,7 @@
 //!
 //! Used by [`ShardAllocator`] or [`ShardingPolicyOps`] when assigning tenants.
 
-use crate::utils::hash::hash_u64;
+use crate::core::utils::hash::hash_u64;
 use candid::Principal;
 
 /// HRW-based shard selector.

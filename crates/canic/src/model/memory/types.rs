@@ -1,4 +1,4 @@
-use crate::{types::CanisterType, utils::impl_storable_bounded};
+use crate::{core::impl_storable_bounded, types::CanisterType};
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;

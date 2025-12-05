@@ -13,7 +13,8 @@ pub mod sns;
 pub mod prelude {
     pub use crate::{
         cdk::candid::{CandidType, Principal},
-        types::{Account, CanisterType, Cycles, Int, Nat, Subaccount},
+        core::types::{Account, Cycles, Int, Nat, Subaccount},
+        types::CanisterType,
     };
     pub use serde::Deserialize;
     pub use serde_bytes::ByteBuf;
