@@ -32,7 +32,10 @@ async fn verify(
     let expiry = token.exp;
 
     // 4️⃣ Expiry check
-    assert!(expiry > now_secs(), "token expired");
+    let now = now_secs();
+    if expiry <= now {
+        return Err(Error::custom("token expired"));
+    }
 
     // from here, `user` is the verified authenticated user
     Ok(format!(
