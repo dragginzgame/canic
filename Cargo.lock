@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "derive_more",
@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "canic-cdk",
  "convert_case",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "candid",
  "canic",
