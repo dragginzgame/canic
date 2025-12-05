@@ -5,8 +5,8 @@ pub(crate) use app::AppDirectory;
 pub(crate) use subnet::SubnetDirectory;
 
 use crate::{
-    impl_storable_unbounded,
     types::{CanisterType, Principal},
+    utils::impl_storable_unbounded,
 };
 use candid::CandidType;
 use derive_more::{Deref, DerefMut};

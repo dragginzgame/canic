@@ -8,6 +8,8 @@
 use crate::{
     Error,
     cdk::api::{canister_self, msg_caller},
+    log,
+    log::Topic,
     ops::model::memory::{
         EnvOps,
         directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -84,7 +86,16 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
     }
 
     for rule in rules {
-        rule(caller).await?; // early return on failure
+        if let Err(err) = rule(caller).await {
+            let err_msg = err.to_string();
+            log!(
+                Topic::Auth,
+                Warn,
+                "auth failed (all) caller={caller}: {err_msg}"
+            );
+
+            return Err(err);
+        }
     }
 
     Ok(())
@@ -109,7 +120,15 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
         }
     }
 
-    Err(last_error.unwrap_or_else(|| AuthError::InvalidState.into()))
+    let err = last_error.unwrap_or_else(|| AuthError::InvalidState.into());
+    let err_msg = err.to_string();
+    log!(
+        Topic::Auth,
+        Warn,
+        "auth failed (any) caller={caller}: {err_msg}"
+    );
+
+    Err(err)
 }
 
 /// Enforce that every supplied rule future succeeds for the current caller.

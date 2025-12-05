@@ -1,5 +1,5 @@
 [package]
-name = "canic-utils"
+name = "canic-cdk"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -11,16 +11,14 @@ categories = { workspace = true }
 publish = true
 
 [dependencies]
-convert_case = { workspace = true }
+candid = { workspace = true }
 derive_more = { workspace = true }
+ic-canister-sig-creation = { workspace = true }
 ic-cdk = { workspace = true }
-canic-cdk = { workspace = true }
-sha2 = { workspace = true }
-tinyrand = { workspace = true }
-thiserror = { workspace = true }
-serde = { workspace = true }
-minicbor-serde = { workspace = true }
-xxhash-rust = { workspace = true }
+ic-cdk-timers = { workspace = true }
+ic-signature-verification = { workspace = true }
+ic-stable-structures = { workspace = true }
+icrc-ledger-types = { workspace = true }
 
 [lints]
 workspace = true

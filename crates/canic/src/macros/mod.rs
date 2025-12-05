@@ -11,7 +11,6 @@ pub mod endpoints;
 pub mod memory;
 pub mod runtime;
 pub mod start;
-pub mod storable;
 
 /// Run `$body` during process start-up using `ctor`.
 ///

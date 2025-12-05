@@ -4,9 +4,10 @@ pub(crate) use registry::ShardingRegistry;
 
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    eager_static, ic_memory, impl_storable_bounded,
+    eager_static, ic_memory,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     types::{BoundedString32, BoundedString128, CanisterType, Principal},
+    utils::impl_storable_bounded,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
