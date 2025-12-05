@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.4.13] - 2025-12-04
+## [0.5.0] - canic-cdk breaking change - 2025-12-04
 - Added the `canic-cdk` crate as a curated façade over `ic-cdk`, `candid`, timers, and management canister APIs.
 - Moved `impl_storable_*` macros and MiniCBOR serialize/deserialize helpers into `canic-utils` so external crates can depend on utilities without pulling in the full Canic stack.
 
