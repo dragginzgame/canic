@@ -5,13 +5,12 @@ use crate::{
         futures::spawn,
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
+    core::{types::Cycles, utils::time::now_secs},
     interface::ic::canister_cycle_balance,
     log,
     log::Topic,
     model::memory::cycles::CycleTracker,
     ops::{config::ConfigOps, model::memory::EnvOps},
-    types::Cycles,
-    utils::time::now_secs,
 };
 use candid::CandidType;
 use serde::Serialize;

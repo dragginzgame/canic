@@ -3,10 +3,10 @@ use crate::{
         api::canister_self,
         structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     },
+    core::impl_storable_bounded,
     eager_static, ic_memory,
     model::memory::id::ENV_ID,
     types::{CanisterType, SubnetType},
-    utils::impl_storable_bounded,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};

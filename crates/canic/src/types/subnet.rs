@@ -1,4 +1,4 @@
-use crate::utils::impl_storable_bounded;
+use crate::core::impl_storable_bounded;
 use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};

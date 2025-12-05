@@ -4,9 +4,8 @@ use crate::{
         BTreeMap as StableBTreeMap, DefaultMemoryImpl,
         memory::{MemoryId, VirtualMemory},
     },
+    core::{impl_storable_bounded, types::BoundedString256, utils::time::now_secs},
     model::memory::{MEMORY_MANAGER, MEMORY_RANGES_ID, MEMORY_REGISTRY_ID, MemoryError},
-    types::BoundedString256,
-    utils::{impl_storable_bounded, time::now_secs},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

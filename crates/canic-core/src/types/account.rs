@@ -1,5 +1,5 @@
+use crate::cdk::icrc_ledger_types::icrc1::account::Account as IcrcAccount;
 use candid::{CandidType, Principal};
-use icrc_ledger_types::icrc1::account::Account as IcrcAccount;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
@@ -7,6 +7,14 @@ use std::{
     hash::{Hash, Hasher},
     str::FromStr,
 };
+
+///
+/// Subaccount
+///
+
+pub type Subaccount = [u8; 32];
+
+pub const DEFAULT_SUBACCOUNT: &Subaccount = &[0; 32];
 
 ///
 /// Account
@@ -17,10 +25,6 @@ use std::{
 /// Code ported from icrc-ledger-types as we don't want to include that one, it's out of
 /// date and has a lot of extra dependencies
 ///
-
-pub type Subaccount = [u8; 32];
-
-pub const DEFAULT_SUBACCOUNT: &Subaccount = &[0; 32];
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Account {

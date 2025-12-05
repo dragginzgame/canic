@@ -51,9 +51,8 @@ pub fn pool_metrics(pool: &str) -> PoolMetrics {
 mod tests {
     use super::*;
     use crate::{
-        model::memory::sharding::ShardKey,
-        ops::model::memory::sharding::ShardingRegistryOps,
-        types::{CanisterType, Principal},
+        core::types::Principal, model::memory::sharding::ShardKey,
+        ops::model::memory::sharding::ShardingRegistryOps, types::CanisterType,
     };
 
     fn p(id: u8) -> Principal {

@@ -1,6 +1,7 @@
 use crate::{
     config::schema::{ConfigSchemaError, Validate},
-    types::{CanisterType, Cycles, TC},
+    core::types::{Cycles, TC},
+    types::CanisterType,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

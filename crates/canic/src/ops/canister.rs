@@ -8,6 +8,7 @@ use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
+    core::types::Cycles,
     interface::{
         ic::{deposit_cycles, get_cycles, install_code, uninstall_code},
         prelude::*,
@@ -29,7 +30,6 @@ use crate::{
         },
         wasm::WasmOps,
     },
-    types::Cycles,
 };
 use candid::Principal;
 

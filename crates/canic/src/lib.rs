@@ -13,11 +13,10 @@ pub mod spec;
 pub mod types;
 
 pub use ::canic_cdk as cdk;
-pub use ::canic_utils as utils;
+pub use ::canic_core as core;
 
 pub mod export {
     pub use ::ctor;
-    pub use ::defer;
 }
 
 pub use thiserror::Error as ThisError;
@@ -35,9 +34,10 @@ pub mod prelude {
             candid::CandidType,
             export_candid, init, query, update,
         },
+        core::{perf, perf_start},
         guard::{guard_query, guard_update},
-        ic_memory, log, perf, perf_start,
-        types::{CanisterType, Cycles},
+        ic_memory, log,
+        types::CanisterType,
     };
 }
 

@@ -1,10 +1,8 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    core::{impl_storable_unbounded, types::Cycles, utils::time::now_secs},
     eager_static, ic_memory,
     model::memory::id::root::CANISTER_RESERVE_ID,
-    types::Cycles,
-    utils::impl_storable_unbounded,
-    utils::time::now_secs,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};

@@ -1,11 +1,11 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    core::utils::time::now_secs,
     eager_static, ic_memory,
     model::memory::{
         CanisterEntry, CanisterSummary, id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID,
     },
     types::CanisterType,
-    utils::time::now_secs,
 };
 use candid::Principal;
 use std::cell::RefCell;

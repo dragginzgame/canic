@@ -4,8 +4,7 @@
 //! tables where size caps matter.
 //!
 
-use crate::utils::impl_storable_bounded;
-use candid::CandidType;
+use crate::{cdk::candid::CandidType, impl_storable_bounded};
 use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;

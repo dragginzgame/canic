@@ -1,8 +1,9 @@
 use crate::{
     cdk::api::canister_self,
+    core::types::Principal,
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
     ops::model::memory::{env::EnvOps, topology::SubnetCanisterRegistryOps},
-    types::{CanisterType, Principal},
+    types::CanisterType,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

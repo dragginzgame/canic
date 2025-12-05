@@ -59,8 +59,7 @@ fn pagination_bounds(total: u64, offset: u64, limit: u64) -> (usize, usize) {
 mod tests {
     use super::{DirectoryView, paginate};
     use crate::{
-        model::memory::directory::PrincipalList,
-        types::{CanisterType, Principal},
+        core::types::Principal, model::memory::directory::PrincipalList, types::CanisterType,
     };
 
     fn p(id: u8) -> Principal {

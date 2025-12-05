@@ -1,8 +1,4 @@
-use crate::{
-    Error,
-    model::wasm::WasmRegistry,
-    types::{CanisterType, WasmModule},
-};
+use crate::{Error, core::types::WasmModule, model::wasm::WasmRegistry, types::CanisterType};
 
 ///
 /// WasmOps

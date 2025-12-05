@@ -1,13 +1,13 @@
 use crate::{
     Error,
     cdk::mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
+    core::utils::wasm::get_wasm_hash,
     interface::{
         ic::{canister_status, install_code},
         prelude::*,
     },
     log,
     log::Topic,
-    utils::wasm::get_wasm_hash,
 };
 
 ///

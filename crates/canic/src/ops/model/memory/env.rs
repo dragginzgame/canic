@@ -1,8 +1,9 @@
 use crate::{
     Error, ThisError,
+    core::types::Principal,
     model::memory::Env,
     ops::model::memory::MemoryOpsError,
-    types::{CanisterType, Principal, SubnetType},
+    types::{CanisterType, SubnetType},
 };
 
 pub use crate::model::memory::env::EnvData;
