@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "derive_more",
@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "canic-cdk",
  "convert_case",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.4.13"
+version = "0.5.0"
 dependencies = [
  "candid",
  "canic",
@@ -569,9 +569,9 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb230974aaf0aca4d71665bed0aca156cf43b764fcb9583b69c6c3e686f35e72"
+checksum = "424e0138278faeb2b401f174ad17e715c829512d74f3d1e81eb43365c2e0590e"
 dependencies = [
  "ctor-proc-macro",
  "dtor",
@@ -759,9 +759,9 @@ checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
 
 [[package]]
 name = "flate2"
-version = "1.1.5"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe33edd8e85a12a67454e37f8c75e730830d83e313556ab9ebf9ee7fbeb3bfb"
+checksum = "a2152dbcb980c05735e2a651d96011320a949eb31a0c8b38b72645ce97dec676"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
