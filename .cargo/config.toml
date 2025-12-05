@@ -1,3 +1,7 @@
+[build]
+# Keep target outputs sandbox-friendly and on the workspace filesystem.
+target-dir = "target/local"
+
 [env]
-# Avoid cross-device link errors in temp dirs during builds/tests.
-CARGO_TARGET_TMPDIR = { value = "target/tmp", relative = true }
+# Keep Cargo's temp dir on the same filesystem as target-dir to avoid cross-device link errors.
+CARGO_TARGET_TMPDIR = { value = "target/local/tmp", relative = true }

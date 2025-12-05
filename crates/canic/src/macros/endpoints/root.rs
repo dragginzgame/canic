@@ -51,6 +51,8 @@ macro_rules! canic_endpoints_root {
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
+            auth_require_any!(::canic::auth::is_root, ::canic::auth::is_controller)?;
+
             $crate::interface::ic::canister_status(pid).await
         }
 

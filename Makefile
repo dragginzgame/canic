@@ -3,8 +3,8 @@
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
-CARGO_TARGET_DIR := $(CURDIR)/target
-CARGO_TMP_DIR := $(CURDIR)/target/tmp
+CARGO_TARGET_DIR := $(CURDIR)/target/local
+CARGO_TMP_DIR := $(CARGO_TARGET_DIR)/tmp
 
 export CARGO_TARGET_DIR
 export TMPDIR := $(CARGO_TMP_DIR)

@@ -7,6 +7,7 @@
 
 use canic::{
     Error,
+    auth::is_controller,
     ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
 };
@@ -96,6 +97,8 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+    auth_require_all!(is_controller)?;
+
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 

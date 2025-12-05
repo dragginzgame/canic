@@ -7,6 +7,7 @@
 
 use canic::{
     Error,
+    auth::is_controller,
     ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
 };
@@ -25,6 +26,8 @@ async fn canic_upgrade() {}
 // create_blank
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+    auth_require_all!(is_controller)?;
+
     create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
