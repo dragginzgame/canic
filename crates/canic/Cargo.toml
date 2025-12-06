@@ -19,13 +19,13 @@ ic = ["canic-core/ic"]
 
 [dependencies]
 candid = { workspace = true }
-canic-core = { workspace = true }
-canic-types = { workspace = true }
-canic-macros = { workspace = true }
 canic-cdk = { workspace = true }
-ic-cdk = { workspace = true }
+canic-core = { workspace = true }
+canic-macros = { workspace = true }
 canic-memory = { workspace = true }
+canic-types = { workspace = true }
 canic-utils = { workspace = true }
+ic-cdk = { workspace = true }
 
 [lints]
 workspace = true
