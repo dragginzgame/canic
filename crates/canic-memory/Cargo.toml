@@ -1,0 +1,22 @@
+[package]
+name = "canic-memory"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+candid = { workspace = true }
+serde = { workspace = true }
+ctor = { workspace = true }
+canic-core = { workspace = true }
+canic-cdk = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,14 +3,8 @@
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
-CARGO_TARGET_DIR := $(CURDIR)/target/local
-CARGO_TMP_DIR := $(CARGO_TARGET_DIR)/tmp
-
-export CARGO_TARGET_DIR
-export TMPDIR := $(CARGO_TMP_DIR)
-
-# Combined environment prefix for Cargo commands
-CARGO_ENV := CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" TMPDIR="$(CARGO_TMP_DIR)"
+# in case we need to use this
+CARGO_ENV :=
 
 # Check for clean git state
 ensure-clean:
@@ -118,7 +112,6 @@ release: ensure-clean
 test: test-canisters test-unit
 
 test-unit:
-	@mkdir -p $(CARGO_TMP_DIR)
 	$(CARGO_ENV) cargo test --workspace
 
 test-canisters:
@@ -136,15 +129,12 @@ test-canisters:
 #
 
 build:
-	@mkdir -p $(CARGO_TMP_DIR)
 	$(CARGO_ENV) cargo build --workspace --release
 
 check: ensure-hooks fmt
-	@mkdir -p $(CARGO_TMP_DIR)
 	$(CARGO_ENV) cargo check --workspace
 
 clippy:
-	@mkdir -p $(CARGO_TMP_DIR)
 	$(CARGO_ENV) cargo clippy --workspace -- -D warnings
 
 fmt: ensure-hooks fmt-core

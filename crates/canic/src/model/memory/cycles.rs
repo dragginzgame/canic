@@ -1,10 +1,11 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     core::types::Cycles,
-    eager_static, ic_memory, log,
+    eager_static, log,
     log::Topic,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
 };
+use canic_memory::ic_memory;
 use std::cell::RefCell;
 
 //

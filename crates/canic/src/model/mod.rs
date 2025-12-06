@@ -2,11 +2,7 @@ pub mod icrc;
 pub mod memory;
 pub mod wasm;
 
-use crate::{
-    cdk::api::performance_counter,
-    model::{memory::MemoryError, wasm::WasmRegistryError},
-};
-use std::cell::RefCell;
+use crate::model::{memory::MemoryError, wasm::WasmRegistryError};
 use thiserror::Error as ThisError;
 
 ///
@@ -20,8 +16,4 @@ pub enum ModelError {
 
     #[error(transparent)]
     WasmRegistryError(#[from] WasmRegistryError),
-}
-
-thread_local! {
-    pub static PERF_LAST: RefCell<u64> = RefCell::new(performance_counter(1));
 }

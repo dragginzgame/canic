@@ -2,7 +2,6 @@ pub mod cycles;
 pub mod directory;
 pub mod env;
 pub mod log;
-pub mod registry;
 pub mod reserve;
 pub mod scaling;
 pub mod sharding;
@@ -10,24 +9,15 @@ pub mod state;
 pub mod topology;
 pub mod types;
 
+pub use canic_memory::MemoryRegistryError;
 pub(crate) use env::Env;
-pub use registry::MemoryRegistryError;
 pub use types::*;
 
 use crate::{
     Error,
-    cdk::structures::{DefaultMemoryImpl, memory::MemoryManager},
     model::{ModelError, memory::log::LogError},
 };
-use std::cell::RefCell;
 use thiserror::Error as ThisError;
-
-///
-/// Reserved for the registry system itself
-///
-
-pub(crate) const MEMORY_REGISTRY_ID: u8 = 0;
-pub(crate) const MEMORY_RANGES_ID: u8 = 1;
 
 ///
 /// CANIC is only allowed to allocate within this inclusive range.
@@ -100,22 +90,6 @@ pub(crate) mod id {
         pub const SHARDING_REGISTRY_ID: u8 = 27;
         pub const SHARDING_ASSIGNMENT_ID: u8 = 28;
     }
-}
-
-//
-// MEMORY_MANAGER
-//
-
-thread_local! {
-
-    ///
-    /// Define MEMORY_MANAGER thread-locally for the entire scope
-    ///
-
-    pub static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
-        RefCell::new(MemoryManager::init(
-            DefaultMemoryImpl::default()
-        ));
 }
 
 ///
