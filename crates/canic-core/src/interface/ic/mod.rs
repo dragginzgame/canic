@@ -15,8 +15,8 @@ use crate::{
     cdk::{
         call::Call,
         mgmt::{
-            self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DepositCyclesArgs,
-            InstallCodeArgs, UninstallCodeArgs, WasmModule,
+            self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult,
+            DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs, UninstallCodeArgs, WasmModule,
         },
     },
     env::nns::NNS_REGISTRY_CANISTER,
@@ -120,6 +120,15 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
     };
 
     mgmt::uninstall_code(&args).await.map_err(Error::from)
+}
+
+/// Deletes a canister (code + controllers) via the management canister.
+pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
+    let args = DeleteCanisterArgs {
+        canister_id: canister_pid,
+    };
+
+    mgmt::delete_canister(&args).await.map_err(Error::from)
 }
 
 //

@@ -85,9 +85,28 @@ pub async fn root_cascade_topology() -> Result<(), Error> {
     let root_pid = canister_self();
     let bundle = TopologyBundle::root()?;
 
+    let mut failures = 0;
     for child in SubnetCanisterRegistryOps::children(root_pid) {
         let child_bundle = TopologyBundle::for_child(root_pid, child.pid, &bundle.subtree, &bundle);
-        send_bundle(&child.pid, &child_bundle).await?;
+        if let Err(err) = send_bundle(&child.pid, &child_bundle).await {
+            failures += 1;
+
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.topology: failed to cascade to {}: {}",
+                child.pid,
+                err
+            );
+        }
+    }
+
+    if failures > 0 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology: {failures} child cascade(s) failed; continuing"
+        );
     }
 
     Ok(())
@@ -102,9 +121,29 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 
     // Direct children of self (freshly imported during save_state)
     let self_pid = canister_self();
+    let mut failures = 0;
     for child in SubnetCanisterChildrenOps::export() {
         let child_bundle = TopologyBundle::for_child(self_pid, child.pid, &bundle.subtree, bundle);
-        send_bundle(&child.pid, &child_bundle).await?;
+
+        if let Err(err) = send_bundle(&child.pid, &child_bundle).await {
+            failures += 1;
+
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.topology: failed to cascade to {}: {}",
+                child.pid,
+                err
+            );
+        }
+    }
+
+    if failures > 0 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology: {failures} child cascade(s) failed; continuing"
+        );
     }
 
     Ok(())
@@ -130,11 +169,7 @@ fn save_topology(bundle: &TopologyBundle) -> Result<(), Error> {
 /// Low-level bundle sender used by cascade helpers.
 async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
     let debug = bundle.debug();
-    log!(
-        Topic::CanisterState,
-        Info,
-        "💦 sync.topology: [{debug}] -> {pid}"
-    );
+    log!(Topic::Sync, Info, "💦 sync.topology: [{debug}] -> {pid}");
 
     call_and_decode::<Result<(), Error>>(*pid, "canic_sync_topology", bundle).await?
 }
