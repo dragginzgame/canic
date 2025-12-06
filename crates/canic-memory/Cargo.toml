@@ -12,10 +12,10 @@ publish = true
 
 [dependencies]
 candid = { workspace = true }
-serde = { workspace = true }
-ctor = { workspace = true }
-canic-core = { workspace = true }
 canic-cdk = { workspace = true }
+canic-core = { workspace = true }
+ctor = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]
