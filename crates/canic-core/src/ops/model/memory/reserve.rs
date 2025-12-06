@@ -20,9 +20,11 @@ use crate::{
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
-        canister::{create_canister, uninstall_canister},
+        canister::{create_canister, sync_directories_from_registry, uninstall_canister},
         config::ConfigOps,
+        model::memory::topology::SubnetCanisterRegistryOps,
         prelude::*,
+        sync::topology::root_cascade_topology,
     },
     types::{Cycles, Principal, TC},
 };
@@ -165,7 +167,10 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
 pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    // uninstall
+    // keep the registry entry around for logging or rollback if a later step fails
+    let registry_entry = SubnetCanisterRegistryOps::get(canister_pid);
+
+    // uninstall but keep the canister alive so it can be repurposed
     uninstall_canister(canister_pid).await?;
 
     // reset controllers to the configured set (+ root) before reuse
@@ -180,6 +185,27 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
         settings,
     })
     .await?;
+
+    // remove from registry after we know we control it again
+    if let Some(entry) = SubnetCanisterRegistryOps::remove(&canister_pid) {
+        log!(
+            Topic::CanisterReserve,
+            Ok,
+            "🗑️  reserve_import_canister: removed {} ({}) from registry",
+            canister_pid,
+            entry.ty
+        );
+    } else if registry_entry.is_some() {
+        log!(
+            Topic::CanisterReserve,
+            Warn,
+            "⚠️ reserve_import_canister: {canister_pid} missing from registry during import"
+        );
+    }
+
+    // cascade topology + directories so children observe the removal
+    root_cascade_topology().await?;
+    sync_directories_from_registry().await?;
 
     // register to Reserve
     let cycles = get_cycles(canister_pid).await?;

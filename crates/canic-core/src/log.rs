@@ -32,6 +32,7 @@ pub enum Topic {
     Init,
     Memory,
     Sharding,
+    Sync,
     Topology,
     Wasm,
 }

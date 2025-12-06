@@ -9,12 +9,15 @@ use crate::{
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     interface::{
-        ic::{deposit_cycles, get_cycles, install_code, uninstall_code},
+        ic::{
+            delete_canister as mgmt_delete_canister, deposit_cycles, get_cycles, install_code,
+            uninstall_code,
+        },
         prelude::*,
     },
     log::Topic,
     ops::{
-        CanisterInitPayload,
+        CanisterInitPayload, OpsError,
         config::ConfigOps,
         model::memory::{
             EnvOps,
@@ -119,41 +122,53 @@ pub async fn create_and_install_canister(
 // ===========================================================================
 //
 
-/// Uninstall and delete an existing canister.
+/// Delete an existing canister.
 ///
 /// PHASES:
 /// 0. Uninstall code
-/// 1. Remove from SubnetCanisterRegistry
-/// 2. Cascade topology
-/// 3. Sync directories
-pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
+/// 1. Delete via management canister
+/// 2. Remove from SubnetCanisterRegistry
+/// 3. Cascade topology
+/// 4. Sync directories
+pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
+    OpsError::require_root()?;
+
     // Phase 0: uninstall code
     uninstall_code(pid).await?;
 
-    // Phase 1: remove registry record
-    let removed = SubnetCanisterRegistryOps::remove(&pid);
-    if let Some(c) = removed {
-        log!(
+    // Phase 1: delete the canister
+    mgmt_delete_canister(pid).await?;
+
+    // Phase 2: remove registry record
+    match SubnetCanisterRegistryOps::remove(&pid) {
+        Some(c) => log!(
             Topic::CanisterLifecycle,
             Ok,
-            "🗑️ uninstall_canister: {} ({})",
+            "🗑️ delete_canister: {} ({})",
             pid,
             c.ty
-        );
-    } else {
-        log!(
+        ),
+        None => log!(
             Topic::CanisterLifecycle,
             Warn,
-            "🗑️ uninstall_canister: {pid} not in registry"
-        );
-        return Ok(());
+            "🗑️ delete_canister: {pid} not in registry"
+        ),
     }
 
-    // Phase 2: cascade topology
+    // Phase 3: cascade topology
     root_cascade_topology().await?;
 
-    // Phase 3: sync directories
+    // Phase 4: sync directories
     sync_directories_from_registry().await?;
+
+    Ok(())
+}
+
+/// Uninstall code from a canister without deleting it.
+pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
+    uninstall_code(pid).await?;
+
+    log!(Topic::CanisterLifecycle, Ok, "🗑️ uninstall_canister: {pid}");
 
     Ok(())
 }

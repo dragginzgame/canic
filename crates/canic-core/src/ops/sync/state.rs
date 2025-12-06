@@ -108,7 +108,7 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
 
     if bundle.is_empty() {
         log!(
-            Topic::CanisterState,
+            Topic::Sync,
             Info,
             "💦 sync.state: root_cascade skipped (empty bundle)"
         );
@@ -116,8 +116,26 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     }
 
     let root_pid = canister_self();
+    let mut failures = 0;
     for child in SubnetCanisterRegistryOps::children(root_pid) {
-        send_bundle(&child.pid, &bundle).await?;
+        if let Err(err) = send_bundle(&child.pid, &bundle).await {
+            failures += 1;
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.state: failed to cascade to {}: {}",
+                child.pid,
+                err
+            );
+        }
+    }
+
+    if failures > 0 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.state: {failures} child cascade(s) failed; continuing"
+        );
     }
 
     Ok(())
@@ -131,8 +149,26 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     // update local state
     save_state(bundle)?;
 
+    let mut failures = 0;
     for child in SubnetCanisterChildrenOps::export() {
-        send_bundle(&child.pid, bundle).await?;
+        if let Err(err) = send_bundle(&child.pid, bundle).await {
+            failures += 1;
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.state: failed to cascade to {}: {}",
+                child.pid,
+                err
+            );
+        }
+    }
+
+    if failures > 0 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.state: {failures} child cascade(s) failed; continuing"
+        );
     }
 
     Ok(())
@@ -164,11 +200,7 @@ fn save_state(bundle: &StateBundle) -> Result<(), Error> {
 /// Low-level bundle sender.
 async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let debug = bundle.debug();
-    log!(
-        Topic::CanisterState,
-        Info,
-        "💦 sync.state: {debug} -> {pid}"
-    );
+    log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
 
     call_and_decode::<Result<(), Error>>(*pid, "canic_sync_state", bundle).await?
 }

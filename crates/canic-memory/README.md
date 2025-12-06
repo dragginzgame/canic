@@ -1,13 +1,24 @@
 # canic-memory
 
-Shared stable-memory utilities extracted from the Canic toolkit. This crate can be used on its own by any IC canister crate (including non-Canic projects) to:
+Shared stable-memory helpers you can drop into any IC canister, even if you are not using the rest of Canic. It keeps you honest about which IDs you use and makes TLS-backed stable structures initialize in a predictable order.
 
-- manage stable-memory segments via a shared `MemoryManager`
-- declare and validate per-crate memory ID ranges
-- register stable structures declaratively with macros
-- force eager initialization of thread-local statics that allocate memory
+What you get:
+- Reserve and validate a per-crate stable-memory ID range.
+- One place to register stable structures (`ic_memory!` + registry).
+- Eager TLS init so thread-locals that allocate memory are ready before entrypoints.
+- Zero dependency on the `canic` crate (only `canic-types`, `canic-utils`, `canic-macros`, `canic-cdk`).
 
-It depends on `canic-types` (bounded types), `canic-utils` (time/serialize helpers), `canic-macros` (storable helpers), and `canic-cdk` (IC stable-structures glue). There is **no dependency on the `canic` crate**.
+Sample boot logs when everything is wired correctly:
+```
+17:27:24.796 [...] [Init] 🔧 --------------------- 'canic v0.5.3 -----------------------
+17:27:24.796 [...] [Init] 🏁 init: root (Prime)
+17:27:24.796 [...] [Memory] 💾 memory.range: canic-core [5-30] (15/26 slots used)
+17:27:24.796 [...] [Wasm] 📄 registry.insert: app (1013.10 KB)
+...
+17:27:26.879 [...] [CanisterLifecycle] ⚡ create_canister: nssc3-p7777-77777-aaawa-cai (5.000 TC)
+17:27:27.549 [...] [Init] 🏁 init: app
+17:27:27.549 [...] [Memory] 💾 memory.range: canic-core [5-30] (15/26 slots used)
+```
 
 ## Modules
 
@@ -44,7 +55,7 @@ thread_local! {
 
 ### Flush pending registrations during startup
 
-Call the ops helper once during your init/post-upgrade flow to validate ranges and IDs and apply any pending registrations queued by macros:
+Call the ops helper once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros:
 
 ```rust
 use canic_memory::ops::MemoryRegistryOps;
@@ -64,7 +75,12 @@ fn init_memory() {
 
 ### Eagerly initialize thread-locals that allocate memory
 
-When you wrap stable structures in `thread_local!`, make sure they initialize deterministically before your canister entrypoints execute:
+Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar) spins up the first time an endpoint is called, you get:
+- unpredictable init order (especially across upgrades),
+- memory allocations happening under a user call instead of during init,
+- possible panics if the registry/ranges were not flushed yet.
+
+`eager_static!` and `eager_init!` make TLS setup a deliberate part of your init flow: run `init_eager_tls()` → run `eager_init!` blocks → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
 
 ```rust
 use canic_memory::{eager_init, eager_static, runtime::init_eager_tls};
