@@ -20,7 +20,7 @@ use crate::{
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
-        canister::{create_canister, uninstall_and_delete_canister},
+        canister::{create_canister, uninstall_canister},
         config::ConfigOps,
         prelude::*,
     },
@@ -165,8 +165,8 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
 pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    // uninstall and delete
-    uninstall_and_delete_canister(canister_pid).await?;
+    // uninstall
+    uninstall_canister(canister_pid).await?;
 
     // reset controllers to the configured set (+ root) before reuse
     let mut controllers = Config::get().controllers.clone();

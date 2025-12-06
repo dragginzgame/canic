@@ -15,6 +15,7 @@ publish = true
 
 [dependencies]
 canic-cdk = { workspace = true }
+convert_case = { workspace = true }
 defer = { workspace = true }
 derive_more = { workspace = true }
 minicbor-serde = { workspace = true }
@@ -23,7 +24,6 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tinyrand = { workspace = true }
 xxhash-rust = { workspace = true }
-convert_case = { workspace = true }
 
 [lints]
 workspace = true

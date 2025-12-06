@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Skip if no staged Rust or Cargo files
-if ! git diff --cached --name-only --diff-filter=ACM | grep -E '\\.rs$|^Cargo\\.toml$|^Cargo\\.lock$' -q; then
-  exit 0
-fi
-
 # Auto-format before checks (matches `make fmt` without ensure-hooks)
 make fmt-core
 

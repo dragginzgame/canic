@@ -126,7 +126,7 @@ pub async fn create_and_install_canister(
 /// 1. Remove from SubnetCanisterRegistry
 /// 2. Cascade topology
 /// 3. Sync directories
-pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
+pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
     // Phase 0: uninstall code
     uninstall_code(pid).await?;
 
@@ -136,7 +136,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "🗑️ delete_canister: {} ({})",
+            "🗑️ uninstall_canister: {} ({})",
             pid,
             c.ty
         );
@@ -144,7 +144,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
         log!(
             Topic::CanisterLifecycle,
             Warn,
-            "🗑️ delete_canister: {pid} not in registry"
+            "🗑️ uninstall_canister: {pid} not in registry"
         );
         return Ok(());
     }
