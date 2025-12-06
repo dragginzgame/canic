@@ -8,8 +8,10 @@
 use candid::Principal;
 use canic::{
     Error,
-    auth::is_controller,
-    ops::model::memory::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
+    core::{
+        auth::is_controller,
+        ops::model::memory::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
+    },
     prelude::*,
 };
 use canic_internal::canister::SHARD_HUB;

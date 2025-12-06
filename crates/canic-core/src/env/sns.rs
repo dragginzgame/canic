@@ -53,7 +53,6 @@ pub enum SnsRole {
 pub enum SnsType {
     Alice,
     Catalyze,
-    CecilTheLion,
     DecideAi,
     Dragginz,
     GoldDao,
@@ -64,11 +63,11 @@ pub enum SnsType {
     Neutrinite,
     Nuance,
     OpenChat,
-    Origyn,
     PokedBots,
     Sneed,
     Swampies,
     TacoDao,
+    Tendies,
     Trax,
 }
 
@@ -158,13 +157,6 @@ define_sns_table! {
         ledger:     "uf2wh-taaaa-aaaaq-aabna-cai",
     },
 
-    CecilTheLion {
-        root:       "ju4gz-6iaaa-aaaaq-aaeva-cai",
-        governance: "jt5an-tqaaa-aaaaq-aaevq-cai",
-        index:      "jiy4i-jiaaa-aaaaq-aaexa-cai",
-        ledger:     "jg2ra-syaaa-aaaaq-aaewa-cai",
-    },
-
     DecideAi {
         root:       "x4kx5-ziaaa-aaaaq-aabeq-cai",
         governance: "xvj4b-paaaa-aaaaq-aabfa-cai",
@@ -235,13 +227,6 @@ define_sns_table! {
         ledger:     "2ouva-viaaa-aaaaq-aaamq-cai",
     },
 
-    Origyn      {
-        root:       "leu43-oiaaa-aaaaq-aadgq-cai",
-        governance: "lnxxh-yaaaa-aaaaq-aadha-cai",
-        index:      "jqkzp-liaaa-aaaaq-aadiq-cai",
-        ledger:     "lkwrt-vyaaa-aaaaq-aadhq-cai",
-    },
-
     PokedBots {
         root:       "nb7he-piaaa-aaaaq-aadqq-cai",
         governance: "ni4my-zaaaa-aaaaq-aadra-cai",
@@ -268,6 +253,13 @@ define_sns_table! {
         governance: "lhdfz-wqaaa-aaaaq-aae3q-cai",
         index:      "kepm7-ciaaa-aaaaq-aae5a-cai",
         ledger:     "kknbx-zyaaa-aaaaq-aae4a-cai",
+    },
+
+    Tendies {
+        root:       "kwj3g-oyaaa-aaaaq-aae6a-cai",
+        governance: "kri5s-daaaa-aaaaq-aae6q-cai",
+        index:      "bb4ce-dyaaa-aaaaq-aafaa-cai",
+        ledger:     "kylwo-viaaa-aaaaq-aae7a-cai",
     },
 
     Trax {
