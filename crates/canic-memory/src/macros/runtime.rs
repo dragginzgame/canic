@@ -18,8 +18,7 @@ macro_rules! eager_init {
 ///
 /// Expands to a `thread_local!` block and ensures the TLS slot is accessed
 /// during the eager-init phase so subsequent calls observe a fully
-/// initialized value. Use this for caches that must exist before canister
-/// entry points run.
+/// initialized value.
 #[macro_export]
 macro_rules! eager_static {
     ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
@@ -27,13 +26,11 @@ macro_rules! eager_static {
             $vis static $name: $ty = $init;
         }
 
-        // A simple wrapper function that forces TLS initialization.
-        fn __touch_tls() {
-            $name.with(|_| {});
-        }
-
         $crate::eager_init!({
-            $crate::runtime::defer_tls_initializer(__touch_tls);
+            // Capture the TLS accessor and register a closure that forces initialization.
+            $crate::runtime::defer_tls_initializer(|| {
+                $name.with(|_| {});
+            });
         });
     };
 }
