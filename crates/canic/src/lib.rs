@@ -8,12 +8,12 @@ pub mod log;
 pub mod macros;
 pub mod model;
 pub mod ops;
-pub mod runtime;
 pub mod spec;
 pub mod types;
 
 pub use ::canic_cdk as cdk;
 pub use ::canic_core as core;
+pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 
 pub mod export {
     pub use ::ctor;
@@ -36,7 +36,7 @@ pub mod prelude {
         },
         core::{perf, perf_start},
         guard::{guard_query, guard_update},
-        ic_memory, log,
+        log,
         types::CanisterType,
     };
 }

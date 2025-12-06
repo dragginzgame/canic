@@ -6,6 +6,7 @@ members = [
     "crates/canic-core",
     "crates/canic-internal",
     "crates/canic-testkit",
+    "crates/canic-memory",
     "crates/canisters/app",
     "crates/canisters/auth",
     "crates/canisters/blank",
@@ -42,6 +43,7 @@ canic-cdk = { version = "0.5.1", path = "crates/canic-cdk" }
 canic-core = { version = "0.5.1", path = "crates/canic-core" }
 canic-internal = { version = "0.5.1", path = "crates/canic-internal" }
 canic-testkit = { version = "0.5.1", path = "crates/canic-testkit" }
+canic-memory = { version = "0.5.1", path = "crates/canic-memory" }
 convert_case = "0.10"
 crc32fast = "1.5"
 criterion = "0.8"
@@ -105,6 +107,7 @@ canic-cdk = { path = "crates/canic-cdk" }
 canic-core = { path = "crates/canic-core" }
 canic-internal = { path = "crates/canic-internal" }
 canic-testkit = { path = "crates/canic-testkit" }
+canic-memory = { path = "crates/canic-memory" }
 
 # profiles
 [profile.dev]

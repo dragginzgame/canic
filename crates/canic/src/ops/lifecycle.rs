@@ -15,9 +15,9 @@ use crate::{
             topology::SubnetCanisterRegistryOps,
         },
     },
-    runtime,
     types::{CanisterType, SubnetType},
 };
+use canic_memory::runtime::init_eager_tls;
 
 /// root_init
 /// Bootstraps the root canister runtime and environment.
@@ -36,7 +36,7 @@ pub fn root_init(identity: SubnetIdentity) {
     log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
 
     // init
-    runtime::init_eager_tls();
+    init_eager_tls();
     MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---
@@ -73,7 +73,7 @@ pub fn root_init(identity: SubnetIdentity) {
 pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 post_upgrade: root");
-    runtime::init_eager_tls();
+    init_eager_tls();
     MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---
@@ -87,7 +87,7 @@ pub fn root_post_upgrade() {
 pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 init: {}", canister_type);
-    runtime::init_eager_tls();
+    init_eager_tls();
     MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Payload registration ---
@@ -103,7 +103,7 @@ pub fn nonroot_init(canister_type: CanisterType, payload: CanisterInitPayload) {
 pub fn nonroot_post_upgrade(canister_type: CanisterType) {
     // --- Phase 1: Init base systems ---
     log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_type);
-    runtime::init_eager_tls();
+    init_eager_tls();
     MemoryRegistryOps::init_memory().unwrap();
 
     // --- Phase 2: Env registration ---

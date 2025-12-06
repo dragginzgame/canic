@@ -1,23 +1,18 @@
-pub use crate::model::memory::registry::{MemoryRange, MemoryRegistryView};
+pub use canic_memory::{MemoryRange, MemoryRegistryEntry, MemoryRegistryView};
 
 use crate::{
     CRATE_NAME, Error, ThisError, log,
     log::Topic,
-    model::memory::{
-        CANIC_MEMORY_MAX, CANIC_MEMORY_MIN,
-        registry::{
-            MemoryRegistry, MemoryRegistryEntry, MemoryRegistryError, drain_pending_ranges,
-            drain_pending_registrations,
-        },
-    },
+    model::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
     ops::model::memory::MemoryOpsError,
+};
+use canic_memory::{
+    MemoryRegistryError,
+    ops::{MemoryRegistryOps as BaseRegistryOps, MemoryRegistrySummary},
 };
 
 ///
 /// MemoryRegistryOpsError
-///
-/// Map model-level memory registry errors into the crate-level Error.
-/// This keeps the mapping at the ops boundary instead of inside the model.
 ///
 
 #[derive(Debug, ThisError)]
@@ -36,6 +31,7 @@ impl From<MemoryRegistryOpsError> for Error {
 /// MemoryRegistryOps
 /// Ops wrapper around the global memory registry.
 ///
+
 pub struct MemoryRegistryOps;
 
 impl MemoryRegistryOps {
@@ -46,35 +42,22 @@ impl MemoryRegistryOps {
     /// - Applies all deferred registrations (sorted by ID).
     /// - Emits summary logs per range.
     pub fn init_memory() -> Result<(), Error> {
-        // 1. reserve internal range
-        MemoryRegistry::reserve_range(CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)?;
+        let summary = BaseRegistryOps::init_memory(Some((
+            CRATE_NAME,
+            CANIC_MEMORY_MIN,
+            CANIC_MEMORY_MAX,
+        )))
+        .map_err(MemoryRegistryOpsError::from)?;
 
-        // 2. flush all pending ranges
-        let mut ranges = drain_pending_ranges();
-        // deterministic order (optional)
-        ranges.sort_by_key(|(_, start, _)| *start);
-        for (crate_name, start, end) in ranges {
-            MemoryRegistry::reserve_range(crate_name, start, end)?;
-        }
-
-        // 3. flush all pending registrations
-        let mut regs = drain_pending_registrations();
-        regs.sort_by_key(|(id, _, _)| *id);
-        for (id, crate_name, label) in regs {
-            MemoryRegistry::register(id, crate_name, label)?;
-        }
-
-        // 4. log summary
-        Self::log_summary();
+        Self::log_summary(&summary);
 
         Ok(())
     }
 
-    fn log_summary() {
-        let ranges = MemoryRegistry::export_ranges();
-        let entries = MemoryRegistry::export();
+    fn log_summary(summary: &MemoryRegistrySummary) {
+        let entries = &summary.entries;
 
-        for (crate_name, range) in ranges {
+        for (crate_name, range) in &summary.ranges {
             let count = entries.iter().filter(|(id, _)| range.contains(*id)).count();
 
             log!(
@@ -92,16 +75,16 @@ impl MemoryRegistryOps {
 
     #[must_use]
     pub fn export() -> MemoryRegistryView {
-        MemoryRegistry::export()
+        BaseRegistryOps::export()
     }
 
     #[must_use]
     pub fn export_ranges() -> Vec<(String, MemoryRange)> {
-        MemoryRegistry::export_ranges()
+        BaseRegistryOps::export_ranges()
     }
 
     #[must_use]
     pub fn get(id: u8) -> Option<MemoryRegistryEntry> {
-        MemoryRegistry::get(id)
+        BaseRegistryOps::get(id)
     }
 }

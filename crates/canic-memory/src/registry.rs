@@ -1,16 +1,21 @@
-use crate::{
-    Error,
-    cdk::structures::{
-        BTreeMap as StableBTreeMap, DefaultMemoryImpl,
-        memory::{MemoryId, VirtualMemory},
-    },
-    core::{impl_storable_bounded, types::BoundedString256, utils::time::now_secs},
-    model::memory::{MEMORY_MANAGER, MEMORY_RANGES_ID, MEMORY_REGISTRY_ID, MemoryError},
-};
+//! NOTE: All stable registry access is TLS-thread-local.
+//! This ensures atomicity on the IC’s single-threaded execution model.
+use crate::manager::MEMORY_MANAGER;
 use candid::CandidType;
+use canic_cdk::structures::{
+    BTreeMap as StableBTreeMap, DefaultMemoryImpl,
+    memory::{MemoryId, VirtualMemory},
+};
+use canic_core::{impl_storable_bounded, types::BoundedString256, utils::time::now_secs};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
+
+///
+/// Reserved for the registry system itself
+///
+pub const MEMORY_REGISTRY_ID: u8 = 0;
+pub const MEMORY_RANGES_ID: u8 = 1;
 
 //
 // MEMORY_REGISTRY
@@ -63,7 +68,7 @@ pub fn defer_register(id: u8, crate_name: &'static str, label: &'static str) {
 /// Drain (and clear) all pending registrations.
 /// Intended to be called from the ops layer during init/post-upgrade.
 #[must_use]
-pub(crate) fn drain_pending_registrations() -> Vec<(u8, &'static str, &'static str)> {
+pub fn drain_pending_registrations() -> Vec<(u8, &'static str, &'static str)> {
     PENDING_REGISTRATIONS.with(|q| q.borrow_mut().drain(..).collect())
 }
 
@@ -85,7 +90,7 @@ pub fn defer_reserve_range(crate_name: &'static str, start: u8, end: u8) {
 /// Drain (and clear) all pending ranges.
 /// Intended to be called from the ops layer during init/post-upgrade.
 #[must_use]
-pub(crate) fn drain_pending_ranges() -> Vec<(&'static str, u8, u8)> {
+pub fn drain_pending_ranges() -> Vec<(&'static str, u8, u8)> {
     PENDING_RANGES.with(|q| q.borrow_mut().drain(..).collect())
 }
 
@@ -101,6 +106,9 @@ pub enum MemoryRegistryError {
     #[error("crate `{0}` already has a reserved range")]
     DuplicateRange(String),
 
+    #[error("crate `{0}` provided invalid range {1}-{2} (start > end)")]
+    InvalidRange(String, u8, u8),
+
     #[error("crate `{0}` attempted to register ID {1}, but it is outside its allowed ranges")]
     OutOfRange(String, u8),
 
@@ -111,16 +119,9 @@ pub enum MemoryRegistryError {
     NoRange(String),
 }
 
-impl From<MemoryRegistryError> for Error {
-    fn from(err: MemoryRegistryError) -> Self {
-        MemoryError::from(err).into()
-    }
-}
-
 ///
 /// MemoryRange
 ///
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRange {
     pub crate_key: BoundedString256,
@@ -180,7 +181,7 @@ pub type MemoryRegistryView = Vec<(u8, MemoryRegistryEntry)>;
 /// MemoryRegistry
 ///
 
-pub(crate) struct MemoryRegistry;
+pub struct MemoryRegistry;
 
 impl MemoryRegistry {
     /// Register an ID, enforcing crate’s allowed range.
@@ -216,6 +217,7 @@ impl MemoryRegistry {
                     label.to_string(),
                 ));
             }
+
             // idempotent case
             return Ok(());
         }
@@ -233,10 +235,10 @@ impl MemoryRegistry {
     /// Pure domain/model-level function, no logging or unwrap.
     pub fn reserve_range(crate_name: &str, start: u8, end: u8) -> Result<(), MemoryRegistryError> {
         if start > end {
-            // Slightly overloaded use of OutOfRange, but matches existing semantics.
-            return Err(MemoryRegistryError::OutOfRange(
+            return Err(MemoryRegistryError::InvalidRange(
                 crate_name.to_string(),
                 start,
+                end,
             ));
         }
 
@@ -286,7 +288,7 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub(crate) fn export() -> MemoryRegistryView {
+    pub fn export() -> MemoryRegistryView {
         MEMORY_REGISTRY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (*entry.key(), entry.value()))
@@ -295,12 +297,95 @@ impl MemoryRegistry {
     }
 
     #[must_use]
-    pub(crate) fn export_ranges() -> Vec<(String, MemoryRange)> {
+    pub fn export_ranges() -> Vec<(String, MemoryRange)> {
         MEMORY_RANGES.with_borrow(|ranges| {
             ranges
                 .iter()
                 .map(|e| (e.key().clone(), e.value()))
                 .collect()
         })
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn reset_for_tests() {
+    MEMORY_REGISTRY.with_borrow_mut(StableBTreeMap::clear);
+    MEMORY_RANGES.with_borrow_mut(StableBTreeMap::clear);
+    PENDING_REGISTRATIONS.with(|q| q.borrow_mut().clear());
+    PENDING_RANGES.with(|q| q.borrow_mut().clear());
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserve_range_happy_path_and_reject_overlap() {
+        reset_for_tests();
+        MemoryRegistry::reserve_range("crate_a", 10, 20).unwrap();
+
+        // Overlap with existing should error
+        let err = MemoryRegistry::reserve_range("crate_b", 15, 25).unwrap_err();
+        matches!(err, MemoryRegistryError::Overlap(_, _, _, _, _, _));
+
+        // Disjoint should succeed
+        MemoryRegistry::reserve_range("crate_b", 30, 40).unwrap();
+
+        let ranges = MemoryRegistry::export_ranges();
+        assert_eq!(ranges.len(), 2);
+    }
+
+    #[test]
+    fn reserve_range_rejects_invalid_order() {
+        reset_for_tests();
+        let err = MemoryRegistry::reserve_range("crate_a", 5, 4).unwrap_err();
+        matches!(err, MemoryRegistryError::InvalidRange(_, _, _));
+        assert!(MemoryRegistry::export_ranges().is_empty());
+    }
+
+    #[test]
+    fn register_id_requires_range_and_checks_bounds() {
+        reset_for_tests();
+        MemoryRegistry::reserve_range("crate_a", 1, 3).unwrap();
+
+        // Out of range
+        let err = MemoryRegistry::register(5, "crate_a", "Foo").unwrap_err();
+        matches!(err, MemoryRegistryError::OutOfRange(_, _));
+
+        // Happy path
+        MemoryRegistry::register(2, "crate_a", "Foo").unwrap();
+
+        // Idempotent same label
+        MemoryRegistry::register(2, "crate_a", "Foo").unwrap();
+
+        // Different label should error
+        let err = MemoryRegistry::register(2, "crate_a", "Bar").unwrap_err();
+        matches!(err, MemoryRegistryError::AlreadyRegistered(_, _, _));
+
+        let view = MemoryRegistry::export();
+        assert_eq!(view.len(), 1);
+        assert_eq!(view[0].0, 2);
+    }
+
+    #[test]
+    fn pending_queues_drain_in_order() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 1, 2);
+        defer_reserve_range("crate_b", 3, 4);
+        defer_register(1, "crate_a", "A1");
+        defer_register(3, "crate_b", "B3");
+
+        let ranges = drain_pending_ranges();
+        assert_eq!(ranges, vec![("crate_a", 1, 2), ("crate_b", 3, 4)]);
+        let regs = drain_pending_registrations();
+        assert_eq!(regs, vec![(1, "crate_a", "A1"), (3, "crate_b", "B3")]);
+
+        // queues are empty after drain
+        assert!(drain_pending_ranges().is_empty());
+        assert!(drain_pending_registrations().is_empty());
     }
 }

@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.2] - 2025-12-06
+- Split stable-memory plumbing into the new `canic-memory` crate (manager, registry, eager TLS, macros) and re-exported its macros/runtime from `canic`; added registry/eager-init tests and ops wrapper for initialization.
+
 ## [0.5.1] - 2025-12-05
 - Moved general-purpose wrappers (Account, Cycles, BoundedString, WasmModule, ULID) into `canic-core::types` and slimmed `canic::types` to topology roles.
 

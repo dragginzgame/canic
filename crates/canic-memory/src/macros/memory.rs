@@ -1,7 +1,7 @@
 /// Declare a stable-memory slot backed by the Canic memory registry.
 ///
 /// The macro enqueues a registration for later validation (during
-/// `force_init_all_tls`) and immediately returns the
+/// `init_eager_tls`) and immediately returns the
 /// [`VirtualMemory`](crate::cdk::structures::memory::VirtualMemory)
 /// handle so callers can wrap it in `Cell`, `BTreeMap`, and other structures.
 /// Memory IDs are automatically namespaced per crate via `CARGO_PKG_NAME`.
@@ -13,14 +13,14 @@ macro_rules! ic_memory {
         let _type_check: Option<$label> = None;
 
         // Enqueue this memory ID registration for deferred validation.
-        $crate::model::memory::registry::defer_register(
+        $crate::registry::defer_register(
             $id,
             env!("CARGO_PKG_NAME"),
             stringify!($label),
         );
 
         // Return the stable memory handle immediately for further wrapping.
-        $crate::model::memory::MEMORY_MANAGER
+        $crate::manager::MEMORY_MANAGER
             .with_borrow_mut(|mgr| mgr.get($crate::cdk::structures::memory::MemoryId::new($id)))
     }};
 }
@@ -33,8 +33,8 @@ macro_rules! ic_memory {
 macro_rules! ic_memory_range {
     ($start:expr, $end:expr) => {{
         // Enqueue this range reservation. The actual check/insert happens in
-        // `force_init_all_tls()`. This guarantees the reservation is made
+        // `init_eager_tls()`. This guarantees the reservation is made
         // before any memory IDs from this range are registered.
-        $crate::model::memory::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
+        $crate::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
     }};
 }

@@ -45,6 +45,7 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
     - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
     - `src/types/` – topology wrappers for canister and subnet roles.
     - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
+  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates. See `crates/canic-memory/README.md` for details.
   - `canic-core/` – shared types (BoundedString, Cycles, ULID, WASM wrappers), MiniCBOR serialization, perf/storable macros, and deterministic utilities; re-exported via `canic::core` for host and canister code.
   - `canic-cdk/` – curated IC CDK façade used by `canic`/`canic-core` (management, timers, stable-structures glue).
   - `canisters/` – reference canisters that exercise the library end to end:
@@ -167,11 +168,7 @@ Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
 - Build release WASMs: `make build`
 - Run the example suite: `make examples` or `cargo build -p canic --examples`
 
-The `make` targets pin `CARGO_TARGET_DIR`/`TMPDIR` to `target/tmp` to dodge `Invalid cross-device link` errors in sandboxed environments. If you prefer raw `cargo` invocations, mirror the same env:
-
-```bash
-CARGO_TARGET_DIR=$PWD/target TMPDIR=$PWD/target/tmp cargo build -p canic --examples
-```
+Workspace Cargo config (`.cargo/config.toml`) points builds at `target/local` to avoid cross-device link errors in some sandboxes. If you prefer the default `target/`, remove/override that setting and re-run `cargo clean` before building. Use a matching `TMPDIR` on the same filesystem if you still hit `Invalid cross-device link`.
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

@@ -18,6 +18,7 @@ ic = []
 candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-core = { workspace = true }
+canic-memory = { workspace = true }
 ctor = { workspace = true }
 derive_more = { workspace = true }
 ic-canister-sig-creation = { workspace = true }
