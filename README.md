@@ -64,7 +64,6 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
   - `env/` – local environment utilities (e.g., shared env updates).
 - `.github/workflows/` – CI pipelines (fmt, clippy, tests, release).
 - `.githooks/` – optional git hooks; `pre-commit` formats and runs cargo sort before committing.
-- `.cargo/` – workspace Cargo config that pins the tmp dir to avoid cross-device link errors when sandboxed.
 
 ## Getting Started
 
@@ -133,7 +132,7 @@ Canic enforces clear separation between storage, transient state, orchestration 
 
 ### Sharding 📦
 
-`canic::ops::ext::sharding` assigns tenants to shard canisters according to a `ShardingPolicy` (initial capacity, max shards, growth thresholds). Admin work flows through a single controller-only endpoint:
+`canic::ops::ext::sharding` assigns tenants to shard canisters according to a `ShardingPolicy` (per-shard capacity and max shard count, using HRW to pick a shard). Admin work flows through a single controller-only endpoint:
 
 ```rust
 canic_sharding_admin(cmd: canic::ops::ext::sharding::AdminCommand)
@@ -170,8 +169,6 @@ Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
 - Test: `make test`
 - Build release WASMs: `make build`
 - Run the example suite: `make examples` or `cargo build -p canic --examples`
-
-Workspace Cargo config (`.cargo/config.toml`) points builds at `target/local` to avoid cross-device link errors in some sandboxes. If you prefer the default `target/`, remove/override that setting and re-run `cargo clean` before building. Use a matching `TMPDIR` on the same filesystem if you still hit `Invalid cross-device link`.
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

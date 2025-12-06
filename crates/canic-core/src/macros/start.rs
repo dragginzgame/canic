@@ -37,11 +37,11 @@
 macro_rules! start {
     ($canister_type:expr) => {
         #[::canic::cdk::init]
-        fn init(payload: ::canic::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::core::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::ops::lifecycle::nonroot_init($canister_type, payload);
+            ::canic::core::ops::lifecycle::nonroot_init($canister_type, payload);
 
             // timers — async body, no spawn()
             let _ =
@@ -56,7 +56,7 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::ops::lifecycle::nonroot_post_upgrade($canister_type);
+            ::canic::core::ops::lifecycle::nonroot_post_upgrade($canister_type);
 
             // timers — async body, no spawn()
             let _ =

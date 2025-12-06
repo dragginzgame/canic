@@ -72,15 +72,13 @@ Each child table configures a logical canister type within the subnet.
 
 #### Scaling Pools
 
-Scaling pools model interchangeable workers that scale up/down with load.
+Scaling pools model interchangeable workers with simple bounds on how many to keep alive.
 
 ```
 [subnets.<name>.canisters.<type>.scaling.pools.<pool>]
 canister_type = "worker_type"
 policy.min_workers = 2
 policy.max_workers = 16
-policy.scale_up_threshold_pct = 70
-policy.scale_down_threshold_pct = 25
 ```
 
 Fields:
@@ -88,8 +86,6 @@ Fields:
 - `canister_type` – canister type that represents workers in this pool.
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`).
-- `policy.scale_up_threshold_pct` – utilisation percentage that triggers scale-up (default `75`).
-- `policy.scale_down_threshold_pct` – utilisation percentage that triggers scale-down (default `25`).
 
 #### Sharding Pools
 
@@ -98,17 +94,15 @@ Sharding pools manage stateful shards that own tenant partitions.
 ```
 [subnets.<name>.canisters.<type>.sharding.pools.<pool>]
 canister_type = "shard_type"
-policy.initial_capacity = 100
+policy.capacity = 1000
 policy.max_shards = 64
-policy.strategy = "balanced"
 ```
 
 Fields:
 
 - `canister_type` – canister type that implements the shard.
-- `policy.initial_capacity` – number of shards to create at startup (default `100`).
-- `policy.max_shards` – maximum shard count (default `64`).
-- `policy.strategy` – tenant assignment strategy (`"balanced"` or `"hrw"`, default `"balanced"`).
+- `policy.capacity` – per-shard capacity (default `1000`).
+- `policy.max_shards` – maximum shard count (default `4`).
 
 ---
 
@@ -142,7 +136,8 @@ topup.amount = "5T"
 
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
 canister_type = "shard"
-policy.initial_capacity = 100
+policy.capacity = 100
+policy.max_shards = 8
 
 [subnets.general]
 
