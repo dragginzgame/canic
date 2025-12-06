@@ -6,7 +6,9 @@ use canic_cdk::structures::{
     BTreeMap as StableBTreeMap, DefaultMemoryImpl,
     memory::{MemoryId, VirtualMemory},
 };
-use canic_core::{impl_storable_bounded, types::BoundedString256, utils::time::now_secs};
+use canic_macros::impl_storable_bounded;
+use canic_types::BoundedString256;
+use canic_utils::time::now_secs;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;

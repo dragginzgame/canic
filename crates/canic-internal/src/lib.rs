@@ -1,7 +1,7 @@
 pub mod canister;
 
 use candid::CandidType;
-use canic::core::types::Principal;
+use canic::types::Principal;
 use serde::Deserialize;
 
 ///

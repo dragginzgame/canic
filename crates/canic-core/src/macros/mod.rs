@@ -1,2 +1,5 @@
-pub mod perf;
-pub mod storable;
+//! Public macro entry points used across Canic.
+
+pub mod build;
+pub mod endpoints;
+pub mod start;

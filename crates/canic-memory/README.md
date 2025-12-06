@@ -7,7 +7,7 @@ Shared stable-memory utilities extracted from the Canic toolkit. This crate can 
 - register stable structures declaratively with macros
 - force eager initialization of thread-local statics that allocate memory
 
-It depends only on `canic-core` (for bounded types/storable macros) and `canic-cdk` (for the IC stable-structures glue). There is **no dependency on the `canic` crate**.
+It depends on `canic-types` (bounded types), `canic-utils` (time/serialize helpers), `canic-macros` (storable helpers), and `canic-cdk` (IC stable-structures glue). There is **no dependency on the `canic` crate**.
 
 ## Modules
 
@@ -113,4 +113,4 @@ fn reserves_and_registers() {
 
 - The macros automatically namespace memory IDs by crate (`CARGO_PKG_NAME`) when validating ranges.
 - If you don't want an initial range, omit it and rely solely on `ic_memory_range!` calls before `init_memory`.
-- Consumers outside Canic can import only `canic-memory` and `canic-core`/`canic-cdk`; the rest of the stack is optional.
+- Consumers outside Canic can import only `canic-memory` plus `canic-types`/`canic-utils`/`canic-macros` and `canic-cdk`; the rest of the stack is optional.

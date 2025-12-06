@@ -7,8 +7,10 @@
 
 use canic::{
     Error,
-    auth::is_controller,
-    ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+    core::{
+        auth::is_controller,
+        ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+    },
     prelude::*,
 };
 use canic_internal::canister;
@@ -24,7 +26,7 @@ async fn canic_install() {}
 async fn canic_upgrade() {}
 
 // WASMS
-pub static WASMS: &[(CanisterType, &[u8])] = &[
+pub static WASMS: &[(CanisterRole, &[u8])] = &[
     (
         canister::APP,
         #[cfg(canic_github_ci)]

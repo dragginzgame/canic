@@ -1,7 +1,7 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::{model::memory::CanisterEntry, types::CanisterType};
+use canic::core::{ids::CanisterRole, model::memory::CanisterEntry};
 use canic_internal::canister;
 use pocket_ic::PocketIc;
 
@@ -73,7 +73,7 @@ fn root_auto_creates_expected_canisters() {
         Decode!(&res, Vec<CanisterEntry>).expect("decode registry entries");
 
     let expected = [
-        (CanisterType::ROOT, None),
+        (CanisterRole::ROOT, None),
         (canister::AUTH, Some(root_id)),
         (canister::BLANK, Some(root_id)),
         (canister::SCALE_HUB, Some(root_id)),

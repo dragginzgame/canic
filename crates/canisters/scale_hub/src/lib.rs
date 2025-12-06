@@ -7,7 +7,8 @@
 
 use candid::Principal;
 use canic::{
-    Error, auth::is_controller, ops::model::memory::scaling::ScalingRegistryOps, prelude::*,
+    core::{Error, auth::is_controller, ops::model::memory::scaling::ScalingRegistryOps},
+    prelude::*,
 };
 use canic_internal::canister::SCALE_HUB;
 
