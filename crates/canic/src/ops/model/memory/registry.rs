@@ -42,12 +42,9 @@ impl MemoryRegistryOps {
     /// - Applies all deferred registrations (sorted by ID).
     /// - Emits summary logs per range.
     pub fn init_memory() -> Result<(), Error> {
-        let summary = BaseRegistryOps::init_memory(Some((
-            CRATE_NAME,
-            CANIC_MEMORY_MIN,
-            CANIC_MEMORY_MAX,
-        )))
-        .map_err(MemoryRegistryOpsError::from)?;
+        let summary =
+            BaseRegistryOps::init_memory(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
+                .map_err(MemoryRegistryOpsError::from)?;
 
         Self::log_summary(&summary);
 
