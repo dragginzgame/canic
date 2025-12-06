@@ -1,7 +1,8 @@
 use candid::{CandidType, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
-    Error, core::types::Principal, model::memory::topology::SubnetIdentity,
-    ops::CanisterInitPayload, types::CanisterType,
+    Error,
+    core::{ids::CanisterRole, model::memory::topology::SubnetIdentity, ops::CanisterInitPayload},
+    types::Principal,
 };
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
@@ -51,7 +52,7 @@ impl Pic {
     /// Install a canister with the given type and wasm bytes
     pub fn create_and_install_canister(
         &self,
-        ty: CanisterType,
+        ty: CanisterRole,
         wasm: Vec<u8>,
     ) -> Result<Principal, Error> {
         // Create and fund the canister
@@ -109,7 +110,7 @@ impl Pic {
 /// --------------------------------------
 /// install_args helper
 /// --------------------------------------
-fn install_args(ty: CanisterType) -> Result<Vec<u8>, Error> {
+fn install_args(ty: CanisterRole) -> Result<Vec<u8>, Error> {
     let args = if ty.is_root() {
         // Provide a deterministic subnet principal for PocketIC runs
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);

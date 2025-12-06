@@ -100,7 +100,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - bug fixes as expected
 
 ## [0.2.0] - 2025-10-13 - PRIME Subnet
-- Added the SubnetType, so we can have a Prime Subnet and others
+- Added the SubnetRole, so we can have a Prime Subnet and others
 - Added an Env cell so each canister remembers its root, subnet, parent, and type IDs.
 - Split topology storage into dedicated directory modules and updated the ops helpers to use them.
 - AppDirectory is now an App-level canister directory
@@ -180,7 +180,7 @@ with audit logs; new coverage test ensures idempotency.
 `expires_at`).
 
 ## [0.7.3] - Partition Registry v2
-- now you can configure multiple pools each with a different CanisterType
+- now you can configure multiple pools each with a different CanisterRole
 
 ## [0.7.0] - Partition Registry
 - partition registry v1 added and tested
@@ -264,14 +264,14 @@ adding canister IDs to config
 
 ## [0.3.7] - 2025-08-21
 - ic-stable-structures bumped to 0.7.0
-- CanisterType in prelude
+- CanisterRole in prelude
 - fixed auth race condition
 - added the CanisterPool structure to root only
 - added uninstall_canister to the interface::ic
 
 ## [0.3.4] - 2025-08-20
 - relaxed the restriction that directory canisters can only be created under root
-- changed CanisterType to an enum
+- changed CanisterRole to an enum
 
 ## [0.3.3] - 2025-08-19
 - 💥CanisterUpgrade, Create, Cycles requests now all return their appropriate responses, not an enum

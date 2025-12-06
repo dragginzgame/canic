@@ -5,11 +5,11 @@
 #[cfg(feature = "ic")]
 mod canister {
     #![allow(unexpected_cfgs)]
+    use canic::core::ids::CanisterRole;
     use canic::prelude::*;
-    use canic::types::CanisterType;
 
     // Set up a minimal root canister with default hooks.
-    canic::start_root!();
+    canic_core::start_root!();
 
     #[expect(clippy::unused_async)]
     async fn canic_setup() {}
@@ -17,7 +17,7 @@ mod canister {
     async fn canic_upgrade() {}
 
     // Minimal WASMS set required by the macro; empty in this example.
-    pub static WASMS: &[(CanisterType, &[u8])] = &[];
+    pub static WASMS: &[(CanisterRole, &[u8])] = &[];
 
     #[update]
     async fn ping() -> String {

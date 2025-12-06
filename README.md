@@ -31,7 +31,8 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
 
 - `assets/` – documentation media (logo and shared imagery).
 - `crates/` – workspace crates.
-  - `canic/` – orchestration façade used inside canisters.
+  - `canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-types`, `canic-utils`, `canic-macros`, and `canic-cdk` for consumers.
+  - `canic-core/` – orchestration crate used inside canisters.
     - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
     - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
     - `src/config/` – configuration loaders, validators, and schema helpers.
@@ -46,8 +47,10 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
     - `src/types/` – topology wrappers for canister and subnet roles.
     - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
   - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates. See `crates/canic-memory/README.md` for details.
-  - `canic-core/` – shared types (BoundedString, Cycles, ULID, WASM wrappers), MiniCBOR serialization, perf/storable macros, and deterministic utilities; re-exported via `canic::core` for host and canister code.
-  - `canic-cdk/` – curated IC CDK façade used by `canic`/`canic-core` (management, timers, stable-structures glue).
+  - `canic-types/` – shared wrappers (BoundedString, Cycles, ULID, WASM) plus candid aliases used across the stack.
+  - `canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing) used by macros and canisters.
+  - `canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.
+  - `canic-cdk/` – curated IC CDK façade used by `canic`, `canic-types`, and `canic-utils` (management, timers, stable-structures glue).
   - `canisters/` – reference canisters that exercise the library end to end:
     - `root/` orchestrator tying together shards, scaling, and reserve flows.
     - `app/` – sample application canister used in integration flows.
@@ -114,7 +117,7 @@ See `crates/canisters/root` and the hub/shard reference canisters under `crates/
 
 ### 4. Define your topology
 
-Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister types, then nests `[subnets.<name>.canisters.<type>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention in seconds. The full schema lives in `CONFIG.md`.
+Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention in seconds. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
 
 ## Layered Architecture
 
@@ -174,7 +177,7 @@ Workspace Cargo config (`.cargo/config.toml`) points builds at `target/local` to
 
 ## Examples
 
-Explore the runnable examples under `crates/canic/examples/`:
+Explore the runnable examples under `crates/canic-core/examples/`:
 
 - `auth_rules.rs` – compose guard policies.
 - `minimal_root.rs` – bootstrap a bare-bones orchestrator.
@@ -182,7 +185,7 @@ Explore the runnable examples under `crates/canic/examples/`:
 - `shard_lifecycle.rs` – simulate register/assign/drain/rebalance operations.
 
 ```bash
-cargo run -p canic --example auth_rules
+cargo run -p canic-core --example auth_rules
 ```
 
 ## Project Status & Contributing

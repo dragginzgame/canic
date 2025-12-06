@@ -1,0 +1,29 @@
+[package]
+name = "canic-utils"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = { workspace = true }
+documentation = "https://docs.rs/canic-utils"
+homepage = "https://github.com/dragginzgame/canic"
+repository = "https://github.com/dragginzgame/canic"
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+canic-cdk = { workspace = true }
+defer = { workspace = true }
+derive_more = { workspace = true }
+minicbor-serde = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tinyrand = { workspace = true }
+xxhash-rust = { workspace = true }
+convert_case = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,10 +1,12 @@
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
 use canic::{
-    core::types::TC,
-    model::memory::{CanisterEntry, CanisterSummary},
-    ops::model::memory::directory::DirectoryPageDto,
-    types::{CanisterType, SubnetType},
+    core::{
+        ids::{CanisterRole, SubnetRole},
+        model::memory::{CanisterEntry, CanisterSummary},
+        ops::model::memory::directory::DirectoryPageDto,
+    },
+    types::TC,
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, PicBuilder};
@@ -72,8 +74,8 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
 struct Setup {
     pic: Pic,
-    root_id: canic::core::types::Principal,
-    registry: HashMap<CanisterType, CanisterEntry>,
+    root_id: canic::types::Principal,
+    registry: HashMap<CanisterRole, CanisterEntry>,
 }
 
 fn setup_root() -> Option<Setup> {
@@ -85,7 +87,7 @@ fn setup_root() -> Option<Setup> {
         .build();
 
     let root_id = pic
-        .create_and_install_canister(CanisterType::ROOT, root_wasm)
+        .create_and_install_canister(CanisterRole::ROOT, root_wasm)
         .expect("install root canister");
 
     // Fund root so it can create children using its configured cycle targets.
@@ -130,7 +132,7 @@ fn root_builds_hierarchy_and_exposes_env() {
     } = setup;
 
     let expected = [
-        (CanisterType::ROOT, None),
+        (CanisterRole::ROOT, None),
         (canister::APP, Some(root_id)),
         (canister::AUTH, Some(root_id)),
         (canister::SCALE_HUB, Some(root_id)),
@@ -157,7 +159,7 @@ fn root_builds_hierarchy_and_exposes_env() {
             .get(&child_ty)
             .unwrap_or_else(|| panic!("missing {child_ty} entry in registry"));
 
-        let env: canic::model::memory::env::EnvData = pic
+        let env: canic::core::model::memory::env::EnvData = pic
             .query_call(entry.pid, "canic_env", ())
             .expect("query child env");
 
@@ -175,7 +177,7 @@ fn root_builds_hierarchy_and_exposes_env() {
         );
         assert_eq!(
             env.subnet_type,
-            Some(SubnetType::PRIME),
+            Some(SubnetRole::PRIME),
             "env subnet type for {child_ty}",
         );
 
@@ -282,7 +284,7 @@ fn subnet_children_matches_registry_on_root() {
         "registry should contain root children"
     );
 
-    let mut page: canic::ops::model::memory::topology::SubnetCanisterChildrenPage = pic
+    let mut page: canic::core::ops::model::memory::topology::SubnetCanisterChildrenPage = pic
         .query_call(root_id, "canic_subnet_canister_children", (0u64, 100u64))
         .expect("query root subnet children");
 

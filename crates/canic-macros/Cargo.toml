@@ -1,0 +1,20 @@
+[package]
+name = "canic-macros"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = { workspace = true }
+documentation = "https://docs.rs/canic-macros"
+homepage = "https://github.com/dragginzgame/canic"
+repository = "https://github.com/dragginzgame/canic"
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+canic-utils = { workspace = true }
+
+[lints]
+workspace = true

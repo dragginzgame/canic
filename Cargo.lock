@@ -204,22 +204,11 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-core",
+ "canic-macros",
  "canic-memory",
- "criterion",
- "ctor",
- "derive_more",
- "ic-canister-sig-creation",
+ "canic-types",
+ "canic-utils",
  "ic-cdk",
- "ic-signature-verification",
- "ic-stable-structures 0.7.2",
- "icrc-ledger-types",
- "minicbor-serde",
- "remain",
- "serde",
- "serde_bytes",
- "sha2",
- "thiserror 2.0.17",
- "toml",
 ]
 
 [[package]]
@@ -240,24 +229,27 @@ dependencies = [
 name = "canic-core"
 version = "0.5.3"
 dependencies = [
- "base32 0.5.1",
  "candid",
  "canic-cdk",
- "convert_case",
- "crc32fast",
- "defer",
+ "canic-macros",
+ "canic-memory",
+ "canic-types",
+ "canic-utils",
+ "criterion",
+ "ctor",
  "derive_more",
- "hex",
+ "ic-canister-sig-creation",
  "ic-cdk",
+ "ic-signature-verification",
+ "ic-stable-structures 0.7.2",
+ "icrc-ledger-types",
  "minicbor-serde",
- "num-traits",
+ "remain",
  "serde",
  "serde_bytes",
  "sha2",
  "thiserror 2.0.17",
- "tinyrand",
- "ulid",
- "xxhash-rust",
+ "toml",
 ]
 
 [[package]]
@@ -271,12 +263,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-macros"
+version = "0.5.3"
+dependencies = [
+ "canic-utils",
+]
+
+[[package]]
 name = "canic-memory"
 version = "0.5.3"
 dependencies = [
  "candid",
  "canic-cdk",
- "canic-core",
+ "canic-macros",
+ "canic-types",
+ "canic-utils",
  "ctor",
  "serde",
  "thiserror 2.0.17",
@@ -291,6 +292,40 @@ dependencies = [
  "derive_more",
  "pocket-ic",
  "serde",
+]
+
+[[package]]
+name = "canic-types"
+version = "0.5.3"
+dependencies = [
+ "base32 0.5.1",
+ "candid",
+ "canic-cdk",
+ "canic-macros",
+ "canic-utils",
+ "crc32fast",
+ "derive_more",
+ "hex",
+ "num-traits",
+ "serde",
+ "serde_bytes",
+ "ulid",
+]
+
+[[package]]
+name = "canic-utils"
+version = "0.5.3"
+dependencies = [
+ "canic-cdk",
+ "convert_case",
+ "defer",
+ "derive_more",
+ "minicbor-serde",
+ "serde",
+ "sha2",
+ "thiserror 2.0.17",
+ "tinyrand",
+ "xxhash-rust",
 ]
 
 [[package]]
