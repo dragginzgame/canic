@@ -13,11 +13,7 @@ macro_rules! ic_memory {
         let _type_check: Option<$label> = None;
 
         // Enqueue this memory ID registration for deferred validation.
-        $crate::registry::defer_register(
-            $id,
-            env!("CARGO_PKG_NAME"),
-            stringify!($label),
-        );
+        $crate::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label));
 
         // Return the stable memory handle immediately for further wrapping.
         $crate::manager::MEMORY_MANAGER
