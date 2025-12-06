@@ -5,6 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.4] - 2025-12-08
+- Hardened reserve imports: uninstall first, reset controllers, then remove from registry and recascade before registering into the reserve pool.
+- Added a management delete wrapper and explicit delete path separate from uninstall.
+- `impl_storable_*` macros now panic with contextual messages on (de)serialization errors and ship basic round-trip/corrupt-data tests.
+- Refreshed `canic-memory` README with simpler “why/how” guidance, boot log example, and clearer eager TLS rationale.
+
 ## [0.5.2] - 2025-12-06
 - Split stable-memory plumbing into the new `canic-memory` crate (manager, registry, eager TLS, macros) and re-exported its macros/runtime from `canic`; added registry/eager-init tests and ops wrapper for initialization.
 
