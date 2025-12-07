@@ -14,7 +14,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 ## Highlights
 
-- 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic_build!`, and `canic_build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
+- 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic::build!`, and `canic::build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
 - 🪶 **Core utilities** – `canic::core` exposes perf counters, bounded types, MiniCBOR serializers, and deterministic utilities without pulling in the full ops stack.
 - 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
 - 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and reserve policies validated straight from `canic.toml`.
@@ -46,7 +46,7 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
     - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
     - `src/types/` – topology wrappers for canister and subnet roles.
     - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
-  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates. See `crates/canic-memory/README.md` for details.
+  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates
   - `canic-types/` – shared wrappers (BoundedString, Cycles, ULID, WASM) plus candid aliases used across the stack.
   - `canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing) used by macros and canisters.
   - `canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.

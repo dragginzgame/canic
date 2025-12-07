@@ -18,6 +18,7 @@ use crate::{
         time,
     },
 };
+
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -53,7 +54,7 @@ fn with_log_mut<R>(f: impl FnOnce(&mut StableLogStorage) -> R) -> R {
     LOG.with_borrow_mut(|l| f(l))
 }
 
-fn log_config() -> LogConfig {
+pub(crate) fn log_config() -> LogConfig {
     Config::try_get().map(|c| c.log.clone()).unwrap_or_default()
 }
 
@@ -153,7 +154,6 @@ impl StableLog {
             return Ok(0);
         }
 
-        apply_retention(&cfg)?;
         with_log(|log| log.append(&entry))
             .map_err(LogError::from)
             .map_err(Error::from)
@@ -193,7 +193,11 @@ impl StableLog {
     }
 }
 
-fn apply_retention(cfg: &LogConfig) -> Result<(), Error> {
+// apply_retention
+// currently using the local config
+pub(crate) fn apply_retention() -> Result<(), Error> {
+    let cfg = log_config();
+
     if cfg.max_entries == 0 {
         with_log_mut(|log| *log = create_log());
         return Ok(());

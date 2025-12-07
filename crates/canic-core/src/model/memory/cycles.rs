@@ -21,7 +21,6 @@ eager_static! {
 
 /// constants
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
-const PURGE_INTERVAL: u64 = 1_000; // purge every 1000 inserts
 
 ///
 /// CycleTrackerView
@@ -39,15 +38,11 @@ pub type CycleTrackerView = Vec<(u64, Cycles)>;
 
 pub(crate) struct CycleTracker {
     map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>,
-    insert_count: u64,
 }
 
 impl CycleTracker {
     pub const fn new(map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>) -> Self {
-        Self {
-            map,
-            insert_count: 0,
-        }
+        Self { map }
     }
 
     // -------- PUBLIC API (model-facing) -------- //
@@ -60,6 +55,12 @@ impl CycleTracker {
     #[must_use]
     pub(crate) fn record(now: u64, cycles: u128) -> bool {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles))
+    }
+
+    /// Purge entries older than the retention window using the shared tracker.
+    #[must_use]
+    pub(crate) fn purge(now: u64) -> usize {
+        CYCLE_TRACKER.with_borrow_mut(|t| t.purge_inner(now))
     }
 
     #[must_use]
@@ -79,18 +80,8 @@ impl CycleTracker {
 
     // -------- INTERNAL MAP OPERATIONS -------- //
 
-    fn insert(&mut self, now: u64, cycles: u128) -> bool {
-        self.map.insert(now, cycles);
-        self.insert_count += 1;
-
-        if self.insert_count.is_multiple_of(PURGE_INTERVAL) {
-            self.purge(now);
-        }
-
-        true
-    }
-
-    fn purge(&mut self, now: u64) -> usize {
+    /// Remove entries older than the retention window.
+    fn purge_inner(&mut self, now: u64) -> usize {
         let cutoff = now.saturating_sub(RETAIN_SECS);
         let mut purged = 0;
 
@@ -112,5 +103,11 @@ impl CycleTracker {
         }
 
         purged
+    }
+
+    fn insert(&mut self, now: u64, cycles: u128) -> bool {
+        self.map.insert(now, cycles);
+
+        true
     }
 }

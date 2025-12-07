@@ -162,6 +162,7 @@ macro_rules! auth_require_any {
 // -----------------------------------------------------------------------------
 
 /// Ensure the caller matches the subnet directory entry recorded for `ty`.
+/// Use for admin endpoints that expect specific app directory canisters.
 #[must_use]
 pub fn is_app_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
@@ -176,6 +177,7 @@ pub fn is_app_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleRes
 }
 
 /// Ensure the caller matches the subnet directory entry recorded for `ty`.
+/// Use for admin endpoints that expect specific subnet directory canisters.
 #[must_use]
 pub fn is_subnet_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
@@ -190,6 +192,7 @@ pub fn is_subnet_directory_type(caller: Principal, ty: CanisterRole) -> AuthRule
 }
 
 /// Require that the caller is a direct child of the current canister.
+/// Protects child-only endpoints (e.g., sync) from sibling/root callers.
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -200,6 +203,7 @@ pub fn is_child(caller: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller controls the current canister.
+/// Allows controller-only maintenance calls.
 #[must_use]
 pub fn is_controller(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -212,6 +216,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller equals the configured root canister.
+/// Gate root-only operations (e.g., topology mutations).
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -226,6 +231,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller is the root or a registered parent canister.
+/// Use on child sync endpoints to enforce parent-only calls.
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -240,6 +246,7 @@ pub fn is_parent(caller: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller equals the provided `expected` principal.
+/// Handy for single-tenant or pre-registered callers.
 #[must_use]
 pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -252,6 +259,7 @@ pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller is the currently executing canister.
+/// For self-calls only.
 #[must_use]
 pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -266,6 +274,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
 /// Require that the caller is registered as an canister on this
 /// subnet
 /// *** ONLY ON ROOT FOR NOW ***
+/// Ensures only registered canisters call root orchestration endpoints.
 #[must_use]
 pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
@@ -277,6 +286,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 }
 
 /// Require that the caller appears in the active whitelist (IC deployments).
+/// No-op on local builds; enforces whitelist on IC.
 #[must_use]
 #[allow(unused_variables)]
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {

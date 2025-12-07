@@ -73,6 +73,16 @@ impl ConfigModel {
         self.subnets.get(ty).cloned()
     }
 
+    /// Test-only: baseline config with a prime subnet so validation succeeds.
+    #[cfg(test)]
+    #[must_use]
+    pub fn test_default() -> Self {
+        let mut cfg = Self::default();
+        cfg.subnets
+            .insert(SubnetRole::PRIME, SubnetConfig::default());
+        cfg
+    }
+
     /// Return true if the given principal is present in the whitelist.
     #[must_use]
     pub fn is_whitelisted(&self, principal: &Principal) -> bool {

@@ -14,6 +14,7 @@ pub mod lifecycle;
 pub mod model;
 pub mod request;
 pub mod root;
+pub mod service;
 pub mod signature;
 pub mod sync;
 pub mod types;

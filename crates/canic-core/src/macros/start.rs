@@ -105,9 +105,16 @@ macro_rules! start_root {
             let _ =
                 ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), async move {
                     ::canic::core::ops::root::root_set_subnet_id().await;
-                    ::canic::core::ops::root::root_create_canisters()
-                        .await
-                        .unwrap();
+
+                    // attempt to create canisters
+                    if let Err(err) = ::canic::core::ops::root::root_create_canisters().await {
+                        $crate::log!(
+                            $crate::log::Topic::Init,
+                            Error,
+                            "root_create_canisters failed: {err}"
+                        );
+                        return;
+                    }
 
                     canic_setup().await;
                     canic_install().await;
