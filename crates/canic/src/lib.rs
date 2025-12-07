@@ -3,7 +3,7 @@
 ///
 /// RE-EXPORTS
 ///
-pub use canic_core::{Error, build, build_root, start, start_root};
+pub use canic_core::{Error, build, build_root, log, log::Level, start, start_root};
 pub use canic_macros::{impl_storable_bounded, impl_storable_unbounded, perf_start};
 pub use canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 
