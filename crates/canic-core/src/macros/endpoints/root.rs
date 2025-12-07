@@ -96,7 +96,7 @@ macro_rules! canic_endpoints_root {
             Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
         }
 
-        #[update]
+        #[::canic::cdk::update]
         async fn canic_reserve_create_canister()
         -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
@@ -104,7 +104,7 @@ macro_rules! canic_endpoints_root {
             ::canic::core::ops::model::memory::reserve::reserve_create_canister().await
         }
 
-        #[update]
+        #[::canic::cdk::update]
         async fn canic_reserve_import_canister(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<(), ::canic::Error> {

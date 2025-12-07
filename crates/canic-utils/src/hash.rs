@@ -21,13 +21,13 @@ use xxhash_rust::xxh3::{xxh3_64, xxh3_128};
 
 pub use xxhash_rust::xxh3::Xxh3;
 
-// hash_u64
+/// Return a u64 hash from the provided bytes using the xxh3 hash algorithm.
 #[must_use]
 pub fn hash_u64(bytes: &[u8]) -> u64 {
     xxh3_64(bytes)
 }
 
-// hash_u128
+/// Return a u128 hash from the provided bytes using the xxh3 hash algorithm.
 #[must_use]
 pub fn hash_u128(bytes: &[u8]) -> u128 {
     xxh3_128(bytes)

@@ -5,7 +5,17 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.4] - 2025-12-08
+## [0.5.6] - 2025-12-07
+### Added
+- One timer service entry point to start all background jobs (logs, cycle tracker, reserve) per canister role.
+- Info-level tick logs for retention and cycle tracking so you can see timers firing.
+
+### Fixed
+- Root init no longer traps if auto-creating canisters fails; it now logs the error and keeps running.
+- Log retention moved to a timer instead of every write, keeping logging cheap while still cleaning up.
+- Cycle tracker purge now runs on the timer loop instead of a modulus counter, aligning all cleanup on scheduled ticks.
+
+## [0.5.4] - 2025-12-06
 - Hardened reserve imports: uninstall first, reset controllers, then remove from registry and recascade before registering into the reserve pool.
 - Added a management delete wrapper and explicit delete path separate from uninstall.
 - `impl_storable_*` macros now panic with contextual messages on (de)serialization errors and ship basic round-trip/corrupt-data tests.
@@ -428,3 +438,5 @@ it's also sent via canister create args
 
 ## [0.1.0]
 - ITS ALIVE!11!1!!
+## [Unreleased]
+

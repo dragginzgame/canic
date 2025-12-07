@@ -15,7 +15,7 @@ use crate::{
         mgmt::{self, CanisterSettings, UpdateSettingsArgs},
         timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
-    config::Config,
+    config::{Config, schema::SubnetConfig},
     interface::ic::get_cycles,
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
@@ -23,12 +23,13 @@ use crate::{
         canister::{create_canister, sync_directories_from_registry, uninstall_canister},
         config::ConfigOps,
         model::memory::topology::SubnetCanisterRegistryOps,
+        model::{OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY},
         prelude::*,
         sync::topology::root_cascade_topology,
     },
     types::{Cycles, Principal, TC},
 };
-use std::{cell::RefCell, time::Duration};
+use std::cell::RefCell;
 
 //
 // TIMER
@@ -41,12 +42,6 @@ thread_local! {
 ///
 /// Constants
 ///
-
-/// Wait 30 seconds till we start so the auto-create finishes
-const RESERVE_INIT_DELAY: Duration = Duration::new(30, 0);
-
-/// Check every 30 minutes if we need to create more canisters
-const RESERVE_CHECK_TIMER: Duration = Duration::from_secs(30 * 60);
 
 /// Default cycle balance for freshly created reserve canisters (5 T cycles).
 const RESERVE_CANISTER_CYCLES: u128 = 5 * TC;
@@ -66,10 +61,14 @@ impl CanisterReserveOps {
                 return;
             }
 
-            let id = set_timer(RESERVE_INIT_DELAY, async {
+            let Some(_cfg) = Self::enabled_subnet_config() else {
+                return;
+            };
+
+            let id = set_timer(OPS_RESERVE_INIT_DELAY, async {
                 let _ = Self::check();
 
-                let interval_id = set_timer_interval(RESERVE_CHECK_TIMER, || async {
+                let interval_id = set_timer_interval(OPS_RESERVE_CHECK_INTERVAL, || async {
                     let _ = Self::check();
                 });
 
@@ -149,6 +148,29 @@ impl CanisterReserveOps {
     pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
         CanisterReserve::pop_first()
     }
+
+    /// Return Some(subnet config) when reserve management is enabled for this subnet.
+    fn enabled_subnet_config() -> Option<SubnetConfig> {
+        match ConfigOps::current_subnet() {
+            Ok(cfg) if cfg.reserve.minimum_size > 0 => Some(cfg),
+            Ok(_) => {
+                log!(
+                    Topic::CanisterReserve,
+                    Info,
+                    "reserve timer not started: minimum_size is 0"
+                );
+                None
+            }
+            Err(e) => {
+                log!(
+                    Topic::CanisterState,
+                    Warn,
+                    "⚠️ reserve timer not started: config unavailable ({e})"
+                );
+                None
+            }
+        }
+    }
 }
 
 /// Create an empty reserve canister controlled by root.
@@ -219,4 +241,37 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
     CanisterReserve::register(canister_pid, cycles);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::Config, config::schema::ConfigModel, ids::SubnetRole, ops::model::memory::EnvOps,
+    };
+
+    #[test]
+    fn start_skips_when_minimum_size_zero() {
+        CanisterReserveOps::stop();
+        Config::reset_for_tests();
+        let cfg = ConfigModel::test_default();
+        Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
+        EnvOps::set_subnet_type(SubnetRole::PRIME);
+
+        assert!(CanisterReserveOps::enabled_subnet_config().is_none());
+    }
+
+    #[test]
+    fn start_runs_when_minimum_size_nonzero() {
+        CanisterReserveOps::stop();
+        let mut cfg = ConfigModel::test_default();
+        let subnet = cfg.subnets.entry(SubnetRole::PRIME).or_default();
+        subnet.reserve.minimum_size = 1;
+
+        Config::reset_for_tests();
+        Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
+        EnvOps::set_subnet_type(SubnetRole::PRIME);
+
+        assert!(CanisterReserveOps::enabled_subnet_config().is_some());
+    }
 }

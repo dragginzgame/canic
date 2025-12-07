@@ -10,11 +10,13 @@ use crate::{
 pub struct Icrc10Ops;
 
 impl Icrc10Ops {
+    /// Return the supported standards as `(name, url)` tuples.
     #[must_use]
     pub fn supported_standards() -> Vec<(String, String)> {
         Icrc10Registry::supported_standards()
     }
 
+    /// Check whether a standard is registered.
     #[must_use]
     pub fn is_registered(standard: Icrc10Standard) -> bool {
         Icrc10Registry::is_registered(standard)
@@ -28,6 +30,7 @@ impl Icrc10Ops {
 pub struct Icrc21Ops;
 
 impl Icrc21Ops {
+    /// Register a consent message handler for a method.
     pub fn register<F>(method: &str, handler: F)
     where
         F: Fn(ConsentMessageRequest) -> crate::spec::icrc::icrc21::ConsentMessageResponse + 'static,
@@ -35,6 +38,7 @@ impl Icrc21Ops {
         Icrc21Registry::register(method, handler);
     }
 
+    /// Register a consent message generator for a method (static message).
     pub fn register_static_with<F>(method: &str, generator: F)
     where
         F: Fn(&ConsentMessageRequest) -> String + 'static,
@@ -42,6 +46,7 @@ impl Icrc21Ops {
         Icrc21Registry::register_static_with(method, generator);
     }
 
+    /// Generate a consent message using registered handlers.
     #[must_use]
     pub fn consent_message(
         req: ConsentMessageRequest,

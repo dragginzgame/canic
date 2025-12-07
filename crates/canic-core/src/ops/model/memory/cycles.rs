@@ -9,7 +9,11 @@ use crate::{
     log,
     log::Topic,
     model::memory::cycles::CycleTracker,
-    ops::{config::ConfigOps, model::memory::EnvOps},
+    ops::{
+        config::ConfigOps,
+        model::memory::EnvOps,
+        model::{OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY},
+    },
     types::Cycles,
     utils::time::now_secs,
 };
@@ -29,11 +33,8 @@ thread_local! {
 /// Constants
 ///
 
-/// Wait 10 seconds till we start so the auto-create finishes
-const TRACKER_INIT_DELAY: Duration = Duration::new(10, 0);
-
-// Check every 10 mintues
-const TRACKER_INTERVAL_SECS: Duration = Duration::from_secs(60 * 10);
+// Check every 10 minutes
+const TRACKER_INTERVAL_SECS: Duration = OPS_CYCLE_TRACK_INTERVAL;
 
 ///
 /// CycleTrackerPage
@@ -60,11 +61,12 @@ impl CycleTrackerOps {
                 return;
             }
 
-            let init = set_timer(TRACKER_INIT_DELAY, async {
+            let init = set_timer(OPS_INIT_DELAY, async {
                 let _ = Self::track();
 
                 let interval = set_timer_interval(TRACKER_INTERVAL_SECS, || async {
                     let _ = Self::track();
+                    let _ = Self::purge();
                 });
 
                 TIMER.with_borrow_mut(|slot| *slot = Some(interval));
@@ -94,6 +96,13 @@ impl CycleTrackerOps {
         }
 
         CycleTracker::record(ts, cycles)
+    }
+
+    /// Purge old entries based on the retention window.
+    #[must_use]
+    pub fn purge() -> bool {
+        let now = now_secs();
+        CycleTracker::purge(now) > 0
     }
 
     fn check_auto_topup() {

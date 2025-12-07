@@ -14,41 +14,31 @@ use tinyrand::{Rand, Seeded, StdRand};
 pub static STD_RAND: LazyLock<Mutex<StdRand>> =
     LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
 
-///
 /// Produce an 8-bit random value (samples from `next_u16`).
-///
 #[must_use]
 pub fn next_u8() -> u8 {
     (next_u16() & 0xFF) as u8
 }
 
-///
 /// Produce a 16-bit random value from the shared RNG.
-///
 #[must_use]
 pub fn next_u16() -> u16 {
     STD_RAND.lock().expect("mutex").next_u16()
 }
 
-///
 /// Produce a 32-bit random value from the shared RNG.
-///
 #[must_use]
 pub fn next_u32() -> u32 {
     STD_RAND.lock().expect("mutex").next_u32()
 }
 
-///
 /// Produce a 64-bit random value from the shared RNG.
-///
 #[must_use]
 pub fn next_u64() -> u64 {
     STD_RAND.lock().expect("mutex").next_u64()
 }
 
-///
 /// Produce a 128-bit random value from the shared RNG.
-///
 #[must_use]
 pub fn next_u128() -> u128 {
     STD_RAND.lock().expect("mutex").next_u128()

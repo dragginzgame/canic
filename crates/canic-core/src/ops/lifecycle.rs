@@ -7,14 +7,13 @@ use crate::{
     model::memory::topology::SubnetIdentity,
     ops::{
         CanisterInitPayload,
-        model::memory::cycles::CycleTrackerOps,
         model::memory::{
             EnvOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             registry::MemoryRegistryOps,
-            reserve::CanisterReserveOps,
             topology::SubnetCanisterRegistryOps,
         },
+        service::TimerService,
     },
 };
 use canic_memory::runtime::init_eager_tls;
@@ -65,8 +64,9 @@ pub fn root_init(identity: SubnetIdentity) {
     SubnetCanisterRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
-    CycleTrackerOps::start();
-    CanisterReserveOps::start();
+    if let Err(err) = TimerService::start_all_root() {
+        log!(Topic::Init, Warn, "timer startup failed (root): {err}");
+    }
 }
 
 /// root_post_upgrade
@@ -79,8 +79,9 @@ pub fn root_post_upgrade() {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    CycleTrackerOps::start();
-    CanisterReserveOps::start();
+    if let Err(err) = TimerService::start_all_root() {
+        log!(Topic::Init, Warn, "timer startup failed (root): {err}");
+    }
 }
 
 /// nonroot_init
@@ -96,7 +97,9 @@ pub fn nonroot_init(canister_type: CanisterRole, payload: CanisterInitPayload) {
     SubnetDirectoryOps::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
-    CycleTrackerOps::start();
+    if let Err(err) = TimerService::start_all() {
+        log!(Topic::Init, Warn, "timer startup failed (nonroot): {err}");
+    }
 }
 
 /// nonroot_post_upgrade
@@ -109,5 +112,7 @@ pub fn nonroot_post_upgrade(canister_type: CanisterRole) {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    CycleTrackerOps::start();
+    if let Err(err) = TimerService::start_all() {
+        log!(Topic::Init, Warn, "timer startup failed (nonroot): {err}");
+    }
 }

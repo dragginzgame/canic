@@ -1,10 +1,21 @@
 use crate::{
     Error,
-    log::Level,
-    model::memory::log::{LogEntry, StableLog},
+    cdk::timers::{TimerId, clear_timer, set_timer, set_timer_interval},
+    log,
+    log::{Level, Topic},
+    model::memory::log::{LogEntry, StableLog, apply_retention},
+    ops::model::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
 };
 use candid::CandidType;
 use serde::Serialize;
+use std::{cell::RefCell, time::Duration};
+
+thread_local! {
+    static RETENTION_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+}
+
+/// How often to enforce retention after the first sweep.
+const RETENTION_INTERVAL: Duration = OPS_LOG_RETENTION_INTERVAL;
 
 ///
 /// LogEntryDto
@@ -50,6 +61,48 @@ pub struct LogPageDto {
 pub struct LogOps;
 
 impl LogOps {
+    /// Start periodic log retention sweeps. Safe to call multiple times.
+    pub fn start_retention() {
+        RETENTION_TIMER.with_borrow_mut(|slot| {
+            if slot.is_some() {
+                return;
+            }
+
+            let init = set_timer(OPS_INIT_DELAY, async {
+                let _ = Self::retain();
+
+                let interval = set_timer_interval(RETENTION_INTERVAL, || async {
+                    let _ = Self::retain();
+                });
+
+                RETENTION_TIMER.with_borrow_mut(|slot| *slot = Some(interval));
+            });
+
+            *slot = Some(init);
+        });
+    }
+
+    /// Stop periodic retention sweeps.
+    pub fn stop_retention() {
+        RETENTION_TIMER.with_borrow_mut(|slot| {
+            if let Some(id) = slot.take() {
+                clear_timer(id);
+            }
+        });
+    }
+
+    /// Run a retention sweep immediately.
+    #[must_use]
+    pub fn retain() -> bool {
+        match apply_retention() {
+            Ok(()) => true,
+            Err(err) => {
+                log!(Topic::Memory, Warn, "log retention failed: {err}");
+                false
+            }
+        }
+    }
+
     /// Append a log entry to stable storage.
     pub fn append<T: ToString, M: AsRef<str>>(
         crate_name: &str,
