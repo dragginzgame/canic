@@ -8,6 +8,7 @@
 use crate::{
     Error,
     interface::ic::{canister::upgrade_canister, deposit_cycles},
+    log::Topic,
     ops::{
         canister::create_and_install_canister,
         model::memory::topology::subnet::SubnetCanisterRegistryOps,
@@ -74,29 +75,45 @@ pub async fn response(req: Request) -> Result<Response, Error> {
 // create_canister_response
 async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
     let caller = msg_caller();
+    let role = req.canister_role.clone();
+    let parent_desc = format!("{:?}", &req.parent);
 
-    // Look up parent
-    let parent_pid = match &req.parent {
-        CreateCanisterParent::Canister(pid) => *pid,
-        CreateCanisterParent::Root => canister_self(),
-        CreateCanisterParent::ThisCanister => caller,
+    let result: Result<Response, Error> = (|| async {
+        // Look up parent
+        let parent_pid = match &req.parent {
+            CreateCanisterParent::Canister(pid) => *pid,
+            CreateCanisterParent::Root => canister_self(),
+            CreateCanisterParent::ThisCanister => caller,
 
-        CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
-            .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
+            CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
+                .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
 
-        CreateCanisterParent::Directory(ty) => {
-            SubnetCanisterRegistryOps::try_get_type(ty)
-                .map_err(|_| RequestOpsError::CanisterRoleNotFound(ty.clone()))?
-                .pid
-        }
-    };
+            CreateCanisterParent::Directory(ty) => {
+                SubnetCanisterRegistryOps::try_get_type(ty)
+                    .map_err(|_| RequestOpsError::CanisterRoleNotFound(ty.clone()))?
+                    .pid
+            }
+        };
 
-    let new_canister_pid =
-        create_and_install_canister(&req.canister_role, parent_pid, req.extra_arg.clone()).await?;
+        let new_canister_pid =
+            create_and_install_canister(&req.canister_role, parent_pid, req.extra_arg.clone())
+                .await?;
 
-    Ok(Response::CreateCanister(CreateCanisterResponse {
-        new_canister_pid,
-    }))
+        Ok(Response::CreateCanister(CreateCanisterResponse {
+            new_canister_pid,
+        }))
+    })()
+    .await;
+
+    if let Err(err) = &result {
+        log!(
+            Topic::CanisterLifecycle,
+            Warn,
+            "create_canister_response failed (caller={caller}, role={role}, parent={parent_desc}): {err}"
+        );
+    }
+
+    result
 }
 
 // upgrade_canister_response

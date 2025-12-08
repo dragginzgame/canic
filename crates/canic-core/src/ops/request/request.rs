@@ -2,6 +2,7 @@ use crate::{
     Error,
     cdk::call::Call,
     ids::CanisterRole,
+    log::Topic,
     ops::{
         model::memory::{EnvOps, topology::SubnetCanisterChildrenOps},
         prelude::*,
@@ -95,6 +96,11 @@ where
     A: CandidType + Send + Sync,
 {
     let encoded = extra.map(|v| encode_one(v)).transpose()?;
+    let role = canister_role.clone();
+    let parent_desc = format!("{:?}", &parent);
+    let caller_ty = EnvOps::try_get_canister_type()
+        .map(|ty| ty.to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
 
     // build request
     let q = Request::CreateCanister(CreateCanisterRequest {
@@ -103,9 +109,26 @@ where
         extra_arg: encoded,
     });
 
-    match request(q).await? {
-        Response::CreateCanister(res) => Ok(res),
-        _ => Err(RequestOpsError::InvalidResponseType.into()),
+    match request(q).await {
+        Ok(Response::CreateCanister(res)) => Ok(res),
+        Ok(_) => {
+            log!(
+                Topic::CanisterLifecycle,
+                Warn,
+                "create_canister_request: invalid response type (caller={caller_ty}, role={role}, parent={parent_desc})"
+            );
+
+            Err(RequestOpsError::InvalidResponseType.into())
+        }
+        Err(err) => {
+            log!(
+                Topic::CanisterLifecycle,
+                Warn,
+                "create_canister_request failed (caller={caller_ty}, role={role}, parent={parent_desc}): {err}"
+            );
+
+            Err(err)
+        }
     }
 }
 

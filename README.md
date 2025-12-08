@@ -21,7 +21,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
-- 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers.
+ - 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers; provisioning calls log caller/parent context on create_canister_request failures to simplify bootstrap debugging.
 - ♻️ **Lifecycle helpers** – shard policies, reserve pools, scaling helpers, and sync cascades keep fleets healthy.
 - 🧪 **Ready for CI** – Rust 2024 edition, MSRV 1.91, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
