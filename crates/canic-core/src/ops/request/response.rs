@@ -78,7 +78,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
     let role = req.canister_role.clone();
     let parent_desc = format!("{:?}", &req.parent);
 
-    let result: Result<Response, Error> = (|| async {
+    let result: Result<Response, Error> = async {
         // Look up parent
         let parent_pid = match &req.parent {
             CreateCanisterParent::Canister(pid) => *pid,
@@ -102,7 +102,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         Ok(Response::CreateCanister(CreateCanisterResponse {
             new_canister_pid,
         }))
-    })()
+    }
     .await;
 
     if let Err(err) = &result {
