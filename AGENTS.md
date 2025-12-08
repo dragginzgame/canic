@@ -21,7 +21,7 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 
 ### Core Commands
 - **Format**: `cargo fmt --all` (must run before commit/PR).
-- **Lint**: `make clippy` (`cargo clippy --workspace -- -D warnings`).
+- **Lint**: `make clippy` (`cargo clippy --workspace --all-targets --all-features -- -D warnings`).
 - **Test**: `make test` (`cargo test --workspace`).
 - **Build**: `make build` for release builds.
 - **Check**: `make check` for type-check only.

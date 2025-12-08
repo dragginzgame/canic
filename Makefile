@@ -135,7 +135,7 @@ check: ensure-hooks fmt
 	$(CARGO_ENV) cargo check --workspace
 
 clippy:
-	$(CARGO_ENV) cargo clippy --workspace -- -D warnings
+	$(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 fmt: ensure-hooks fmt-core
 
