@@ -5,12 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.7] - 2025-12-08
+- Added caller/parent context logs for create_canister_request and the root handler so bootstrap failures during repeated create calls surface clearly.
+
 ## [0.5.6] - 2025-12-07
 ### Added
 - One timer service entry point to start all background jobs (logs, cycle tracker, reserve) per canister role.
 - Info-level tick logs for retention and cycle tracking so you can see timers firing.
 
 ### Fixed
+
 - Root init no longer traps if auto-creating canisters fails; it now logs the error and keeps running.
 - Log retention moved to a timer instead of every write, keeping logging cheap while still cleaning up.
 - Cycle tracker purge now runs on the timer loop instead of a modulus counter, aligning all cleanup on scheduled ticks.
@@ -439,4 +443,3 @@ it's also sent via canister create args
 ## [0.1.0]
 - ITS ALIVE!11!1!!
 ## [Unreleased]
-
