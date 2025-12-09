@@ -28,7 +28,7 @@ use crate::{
         },
         sync::{
             state::{StateBundle, root_cascade_state},
-            topology::root_cascade_topology,
+            topology::{root_cascade_topology, root_cascade_topology_for_pid},
         },
         wasm::WasmOps,
     },
@@ -108,7 +108,7 @@ pub async fn create_and_install_canister(
     }
 
     // Phase 3: update topology
-    root_cascade_topology().await?;
+    root_cascade_topology_for_pid(pid).await?;
 
     // Phase 4: sync directories (triggers its own cascade)
     sync_directories_from_registry().await?;
