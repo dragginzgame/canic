@@ -5,12 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+- added more types to ICRC2 (Allowance, TransferFromArgs, etc.)
+
 ## [0.5.8] - 2025-12-09
 - Reduced topology cascade complexity: subtree extraction now builds a parent→children index once and reuses it for all child bundles, and registry subtrees walk the stable map directly without repeated scans. This keeps syncs near linear even with hundreds of canisters.
 
 ## [0.5.7] - 2025-12-08
 - Added caller/parent context logs for create_canister_request and the root handler so bootstrap failures during repeated create calls surface clearly.
-
 
 ## [0.5.6] - 2025-12-07
 ### Added
@@ -18,7 +20,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Info-level tick logs for retention and cycle tracking so you can see timers firing.
 
 ### Fixed
-
 - Root init no longer traps if auto-creating canisters fails; it now logs the error and keeps running.
 - Log retention moved to a timer instead of every write, keeping logging cheap while still cleaning up.
 - Cycle tracker purge now runs on the timer loop instead of a modulus counter, aligning all cleanup on scheduled ticks.
