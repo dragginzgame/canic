@@ -65,15 +65,6 @@ impl SubnetCanisterRegistryOps {
     }
 
     #[must_use]
-    pub(crate) fn is_in_subtree(
-        root_pid: Principal,
-        entry: &CanisterSummary,
-        all: &[CanisterSummary],
-    ) -> bool {
-        SubnetCanisterRegistry::is_in_subtree(root_pid, entry, all)
-    }
-
-    #[must_use]
     pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntry> {
         SubnetCanisterRegistry::remove(pid)
     }
