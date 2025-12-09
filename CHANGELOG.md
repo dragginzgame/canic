@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.9]
+## [0.5.10]
 - added a wrapper around performance_counter
 - added more types to ICRC2 (Allowance, TransferFromArgs, etc.)
 
