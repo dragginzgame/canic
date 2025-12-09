@@ -5,8 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.8] - 2025-12-09
+- Reduced topology cascade complexity: subtree extraction now builds a parent→children index once and reuses it for all child bundles, and registry subtrees walk the stable map directly without repeated scans. This keeps syncs near linear even with hundreds of canisters.
+
 ## [0.5.7] - 2025-12-08
 - Added caller/parent context logs for create_canister_request and the root handler so bootstrap failures during repeated create calls surface clearly.
+
 
 ## [0.5.6] - 2025-12-07
 ### Added

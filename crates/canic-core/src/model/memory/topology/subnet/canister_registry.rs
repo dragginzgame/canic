@@ -8,7 +8,7 @@ use crate::{
     utils::time::now_secs,
 };
 use candid::Principal;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 //
 // SUBNET_CANISTER_REGISTRY
@@ -156,28 +156,37 @@ impl SubnetCanisterRegistry {
     /// the original canister (if found) plus all its descendants.
     #[must_use]
     pub fn subtree(pid: Principal) -> Vec<CanisterSummary> {
-        let mut result = vec![];
+        let entries: Vec<CanisterEntry> = Self::export();
 
-        if let Some(entry) = Self::get(pid) {
-            result.push(entry.into());
+        let mut children: HashMap<Principal, Vec<CanisterEntry>> = HashMap::new();
+        let mut root: Option<CanisterEntry> = None;
+
+        for e in entries {
+            if e.pid == pid {
+                root = Some(e.clone());
+            }
+
+            if let Some(parent) = e.parent_pid {
+                children.entry(parent).or_default().push(e);
+            }
         }
 
+        let Some(root) = root else { return vec![] };
+
+        let mut result = vec![root];
         let mut stack = vec![pid];
 
         while let Some(current) = stack.pop() {
-            let children = Self::with_entries(|iter| {
-                iter.filter_map(|entry| {
-                    let value = entry.value();
-                    (value.parent_pid == Some(current)).then(|| CanisterSummary::from(value))
-                })
-                .collect::<Vec<_>>()
-            });
-
-            stack.extend(children.iter().map(|c| c.pid));
-            result.extend(children);
+            if let Some(kids) = children.get(&current) {
+                for child in kids {
+                    stack.push(child.pid);
+                    result.push(child.clone());
+                }
+            }
         }
 
-        result
+        // Final output → summaries
+        result.into_iter().map(CanisterSummary::from).collect()
     }
 
     /// Return true if `entry` is part of the subtree rooted at `root_pid`.
@@ -191,12 +200,17 @@ impl SubnetCanisterRegistry {
             return true;
         }
 
+        let parent_map: HashMap<Principal, Principal> = all
+            .iter()
+            .filter_map(|e| e.parent_pid.map(|parent| (e.pid, parent)))
+            .collect();
+
         let mut current = entry.parent_pid;
         while let Some(pid) = current {
             if pid == root_pid {
                 return true;
             }
-            current = all.iter().find(|e| e.pid == pid).and_then(|e| e.parent_pid);
+            current = parent_map.get(&pid).copied();
         }
 
         false
@@ -215,5 +229,82 @@ impl SubnetCanisterRegistry {
     #[cfg(test)]
     pub fn clear_for_tests() {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::CanisterRole;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn sort_by_pid(entries: &mut [CanisterSummary]) {
+        entries.sort_by(|a, b| a.pid.as_slice().cmp(b.pid.as_slice()));
+    }
+
+    fn register_tree() {
+        SubnetCanisterRegistry::clear_for_tests();
+
+        // root
+        SubnetCanisterRegistry::register_root(p(1));
+
+        // children of root
+        SubnetCanisterRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![]);
+        SubnetCanisterRegistry::register(p(3), &CanisterRole::new("beta"), p(1), vec![]);
+
+        // grandchildren under alpha
+        SubnetCanisterRegistry::register(p(4), &CanisterRole::new("alpha-a"), p(2), vec![]);
+        SubnetCanisterRegistry::register(p(5), &CanisterRole::new("alpha-b"), p(2), vec![]);
+
+        // great-grandchild under alpha-b
+        SubnetCanisterRegistry::register(p(6), &CanisterRole::new("alpha-b-i"), p(5), vec![]);
+
+        // child under beta
+        SubnetCanisterRegistry::register(p(7), &CanisterRole::new("beta-a"), p(3), vec![]);
+    }
+
+    #[test]
+    fn subtree_handles_unbalanced_tree() {
+        register_tree();
+
+        let mut subtree = SubnetCanisterRegistry::subtree(p(2));
+        sort_by_pid(&mut subtree);
+
+        let expected: Vec<Principal> = vec![p(2), p(4), p(5), p(6)];
+        let actual: Vec<Principal> = subtree.into_iter().map(|e| e.pid).collect();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn is_in_subtree_uses_parent_chain_map() {
+        register_tree();
+
+        let full_tree = SubnetCanisterRegistry::subtree(p(1));
+        let leaf = full_tree.iter().find(|e| e.pid == p(6)).unwrap();
+        let sibling = full_tree.iter().find(|e| e.pid == p(7)).unwrap();
+
+        assert!(SubnetCanisterRegistry::is_in_subtree(
+            p(2),
+            leaf,
+            &full_tree
+        ));
+        assert!(!SubnetCanisterRegistry::is_in_subtree(
+            p(2),
+            sibling,
+            &full_tree
+        ));
+        assert!(SubnetCanisterRegistry::is_in_subtree(
+            p(1),
+            sibling,
+            &full_tree
+        ));
     }
 }
