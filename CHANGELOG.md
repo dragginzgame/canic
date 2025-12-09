@@ -5,12 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.11] - 2025-12-10
+- Topology syncs are now branch-targeted when creating canisters: root cascades only the affected subtree, retries once per hop, and falls back to a full cascade on errors. Large cascades log warnings so noisy fan-outs are visible.
+
 ## [0.5.10]
 - added a wrapper around performance_counter
 - added more types to ICRC2 (Allowance, TransferFromArgs, etc.)
 
 ## [0.5.8] - 2025-12-09
 - Reduced topology cascade complexity: subtree extraction now builds a parent→children index once and reuses it for all child bundles, and registry subtrees walk the stable map directly without repeated scans. This keeps syncs near linear even with hundreds of canisters.
+- Added targeted topology cascade from root so creates only cascade the affected branch (root→child→…→leaf), with retries and a safe fallback to full cascade if any hop fails.
 
 ## [0.5.7] - 2025-12-08
 - Added caller/parent context logs for create_canister_request and the root handler so bootstrap failures during repeated create calls surface clearly.

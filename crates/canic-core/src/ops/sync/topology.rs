@@ -93,8 +93,18 @@ pub async fn root_cascade_topology() -> Result<(), Error> {
     let bundle = TopologyBundle::root()?;
     let index = SubtreeIndex::new(&bundle.subtree);
 
+    let children = SubnetCanisterRegistryOps::children(root_pid);
+    let child_count = children.len();
+    if child_count > 20 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology: large root cascade to {child_count} children"
+        );
+    }
+
     let mut failures = 0;
-    for child in SubnetCanisterRegistryOps::children(root_pid) {
+    for child in children {
         let child_bundle = TopologyBundle::for_child_indexed(root_pid, child.pid, &bundle, &index);
         if let Err(err) = send_bundle(&child.pid, &child_bundle).await {
             failures += 1;
@@ -120,6 +130,66 @@ pub async fn root_cascade_topology() -> Result<(), Error> {
     Ok(())
 }
 
+/// Cascade only the branch that contains `target_pid` (best effort; falls back to full cascade).
+pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
+    OpsError::require_root()?;
+
+    let root_pid = canister_self();
+    let bundle = TopologyBundle::root()?;
+    let index = SubtreeIndex::new(&bundle.subtree);
+
+    let path_up = collect_branch_path(target_pid, &index, root_pid);
+    if path_up.is_empty() {
+        return root_cascade_topology().await;
+    }
+
+    let mut path_down = path_up.clone();
+    path_down.reverse(); // root_child -> ... -> target
+
+    let root_child = *path_down.first().unwrap();
+    let depth = path_down.len();
+    if depth > 20 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology (targeted): large branch depth {depth}"
+        );
+    }
+    let path_str = path_down
+        .iter()
+        .map(Principal::to_text)
+        .collect::<Vec<_>>()
+        .join("→");
+
+    log!(
+        Topic::Sync,
+        Info,
+        "🔀 sync.topology (targeted): root_child={root_child} depth={depth} path=[{path_str}]"
+    );
+
+    let mut parent_pid = root_pid;
+    let mut parent_bundle = bundle;
+
+    for pid in path_down {
+        let child_bundle =
+            TopologyBundle::for_child_indexed(parent_pid, pid, &parent_bundle, &index);
+
+        if let Err(err) = send_bundle_with_retry(&pid, &child_bundle).await {
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.topology (targeted): fallback to full cascade after error: {err}"
+            );
+            return root_cascade_topology().await;
+        }
+
+        parent_pid = pid;
+        parent_bundle = child_bundle;
+    }
+
+    Ok(())
+}
+
 /// Cascade from a child: trim bundle to the child’s subtree and forward.
 pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
@@ -131,7 +201,17 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
     let self_pid = canister_self();
     let index = SubtreeIndex::new(&bundle.subtree);
     let mut failures = 0;
-    for child in SubnetCanisterChildrenOps::export() {
+    let children = SubnetCanisterChildrenOps::export();
+    let child_count = children.len();
+    if child_count > 20 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology: large nonroot cascade to {child_count} children"
+        );
+    }
+
+    for child in children {
         let child_bundle = TopologyBundle::for_child_indexed(self_pid, child.pid, bundle, &index);
 
         if let Err(err) = send_bundle(&child.pid, &child_bundle).await {
@@ -213,6 +293,10 @@ impl SubtreeIndex {
             children_by_parent,
         }
     }
+
+    fn parent_of(&self, pid: Principal) -> Option<Principal> {
+        self.by_pid.get(&pid).and_then(|entry| entry.parent_pid)
+    }
 }
 
 fn collect_child_subtree(child_pid: Principal, index: &SubtreeIndex) -> Vec<CanisterSummary> {
@@ -230,6 +314,48 @@ fn collect_child_subtree(child_pid: Principal, index: &SubtreeIndex) -> Vec<Cani
     }
 
     result
+}
+
+fn collect_branch_path(
+    mut target_pid: Principal,
+    index: &SubtreeIndex,
+    root_pid: Principal,
+) -> Vec<Principal> {
+    let mut path = vec![target_pid];
+
+    loop {
+        let Some(parent) = index.parent_of(target_pid) else {
+            return vec![];
+        };
+
+        if parent == root_pid {
+            path.push(parent);
+            break;
+        }
+
+        path.push(parent);
+        target_pid = parent;
+    }
+
+    path
+}
+
+async fn send_bundle_with_retry(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
+    match send_bundle(pid, bundle).await {
+        Ok(()) => Ok(()),
+        Err(first_err) => {
+            if let Err(second_err) = send_bundle(pid, bundle).await {
+                Err(second_err)
+            } else {
+                log!(
+                    Topic::Sync,
+                    Warn,
+                    "🔁 sync.topology (targeted): retry to {pid} succeeded after: {first_err}"
+                );
+                Ok(())
+            }
+        }
+    }
 }
 
 ///
@@ -279,5 +405,26 @@ mod tests {
         let actual: Vec<Principal> = child_subtree.into_iter().map(|e| e.pid).collect();
 
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn collect_branch_path_includes_root_child() {
+        let root = p(1);
+        let hub = p(2);
+        let instance = p(3);
+        let ledger = p(4);
+
+        let subtree = vec![
+            summary(root, None),
+            summary(hub, Some(root)),
+            summary(instance, Some(hub)),
+            summary(ledger, Some(instance)),
+        ];
+
+        let index = SubtreeIndex::new(&subtree);
+        let path = collect_branch_path(ledger, &index, root);
+
+        // path is [target, parent, ..., root_child]
+        assert_eq!(path, vec![ledger, instance, hub, root]);
     }
 }
