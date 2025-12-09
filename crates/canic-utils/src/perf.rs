@@ -7,7 +7,8 @@ thread_local! {
 
 // wrapper around performance_counter just in case
 #[must_use]
-pub const fn perf_counter() -> u64 {
+#[allow(clippy::missing_const_for_fn)]
+pub fn perf_counter() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
         performance_counter(1)
