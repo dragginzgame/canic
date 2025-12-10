@@ -36,6 +36,9 @@ reserve.minimum_size = 3
 # --- Auth ---
 [subnets.prime.canisters.auth]
 
+# --- Blank ---
+[subnets.prime.canisters.blank]
+
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
 topup.threshold = "10T"

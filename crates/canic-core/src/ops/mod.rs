@@ -11,6 +11,7 @@ pub mod canister;
 pub mod config;
 pub mod icrc;
 pub mod lifecycle;
+pub mod lifecycle_orchestrator;
 pub mod metrics;
 pub mod model;
 pub mod request;
