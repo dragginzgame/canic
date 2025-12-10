@@ -9,11 +9,10 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             api::{canister_self, msg_caller},
-            call::Call,
             candid::CandidType,
         },
         ids::CanisterRole,
-        interface::InterfaceError,
+        interface::{InterfaceError, ic::call::Call},
         log,
         log::Level,
         types::{Account, Cycles, Int, Nat, Principal, Subaccount},

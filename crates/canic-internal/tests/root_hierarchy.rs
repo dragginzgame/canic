@@ -5,6 +5,7 @@ use canic::{
         ids::{CanisterRole, SubnetRole},
         model::memory::{CanisterEntry, CanisterSummary},
         ops::model::memory::directory::DirectoryPageDto,
+        ops::model::memory::topology::subnet::SubnetCanisterChildrenPage,
     },
     types::TC,
 };
@@ -299,5 +300,69 @@ fn subnet_children_matches_registry_on_root() {
     assert_eq!(
         page.children, expected_children,
         "child list from endpoint must match registry"
+    );
+}
+
+#[test]
+fn worker_topology_cascades_through_parent() {
+    let Some(setup) = setup_root() else {
+        eprintln!(
+            "skipping worker_topology_cascades_through_parent — \
+             run `make test` to build canisters or set {ROOT_WASM_ENV}"
+        );
+        return;
+    };
+
+    let Setup {
+        mut pic,
+        root_id,
+        registry,
+    } = setup;
+
+    let scale_hub = registry
+        .get(&canister::SCALE_HUB)
+        .expect("scale_hub present in registry");
+
+    // Create a worker via the scale_hub canister.
+    let worker_pid: Result<Result<canic::types::Principal, canic::Error>, canic::Error> =
+        pic.update_call(scale_hub.pid, "create_worker", ());
+    let worker_pid = worker_pid
+        .expect("create worker via scale_hub (transport)")
+        .expect("create worker via scale_hub (app)");
+
+    // Allow any async cascades to settle.
+    for _ in 0..10 {
+        pic.tick();
+    }
+
+    // Registry on root should show the worker as a child of scale_hub.
+    let registry_after: Vec<CanisterEntry> = pic
+        .query_call(root_id, "canic_subnet_canister_registry", ())
+        .expect("registry after worker creation");
+    let worker_entry = registry_after
+        .iter()
+        .find(|entry| entry.pid == worker_pid)
+        .expect("worker present in registry after creation");
+    assert_eq!(
+        worker_entry.parent_pid,
+        Some(scale_hub.pid),
+        "worker should be registered under scale_hub"
+    );
+
+    // Scale_hub's view of its children should include the worker (auth is parent-only).
+    let mut children_page: SubnetCanisterChildrenPage = pic
+        .query_call(
+            scale_hub.pid,
+            "canic_subnet_canister_children",
+            (0u64, 100u64),
+        )
+        .expect("scale_hub subnet children");
+    children_page
+        .children
+        .retain(|c| c.parent_pid == Some(scale_hub.pid));
+
+    assert!(
+        children_page.children.iter().any(|c| c.pid == worker_pid),
+        "scale_hub children should include the new worker"
     );
 }

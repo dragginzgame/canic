@@ -7,6 +7,7 @@ use crate::{
     },
     log,
     log::Topic,
+    model::metrics::{MetricKind, MetricsState},
     utils::wasm::get_wasm_hash,
 };
 
@@ -28,6 +29,8 @@ pub async fn create_canister(
     let canister_pid = mgmt::create_canister_with_extra_cycles(&cc_args, cycles.to_u128())
         .await?
         .canister_id;
+
+    MetricsState::increment(MetricKind::CreateCanister);
 
     Ok(canister_pid)
 }

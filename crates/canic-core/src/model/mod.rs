@@ -1,5 +1,6 @@
 pub mod icrc;
 pub mod memory;
+pub mod metrics;
 pub mod wasm;
 
 use crate::model::{memory::MemoryError, wasm::WasmRegistryError};

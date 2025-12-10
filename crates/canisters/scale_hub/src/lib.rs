@@ -7,7 +7,7 @@
 
 use candid::Principal;
 use canic::{
-    core::{Error, auth::is_controller, ops::model::memory::scaling::ScalingRegistryOps},
+    core::{Error, ops::model::memory::scaling::ScalingRegistryOps},
     prelude::*,
 };
 use canic_internal::canister::SCALE_HUB;
@@ -29,20 +29,18 @@ async fn canic_upgrade() {}
 //
 
 /// Create a new worker in the given pool.
+/// no authentication needed as for canic testing
 #[update]
 async fn create_worker() -> Result<Principal, Error> {
-    auth_require_all!(is_controller)?;
-
     let worker_pid = ScalingRegistryOps::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
 }
 
 /// Dry-run the worker creation decision using config-driven policy.
+/// no authentication needed as for canic testing
 #[query]
 async fn plan_create_worker() -> Result<bool, Error> {
-    auth_require_all!(is_controller)?;
-
     // Example: return whether scaling policy says "yes, spawn"
     let plan = ScalingRegistryOps::plan_create_worker(POOL_NAME)?;
 

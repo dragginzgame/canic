@@ -1,8 +1,8 @@
 use crate::{
     Error,
-    cdk::{api::canister_self, call::Call},
+    cdk::api::canister_self,
     env::nns::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
-    interface::ic::derive_subaccount,
+    interface::ic::{call::Call, derive_subaccount},
     spec::{
         ic::cycles::{IcpXdrConversionRateResponse, NotifyTopUpArgs},
         icrc::icrc1::Icrc1TransferArgs,

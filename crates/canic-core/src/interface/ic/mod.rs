@@ -1,6 +1,7 @@
 //! IC Interfaces
 //! Thin wrappers around the management canister and network-specific helpers.
 
+pub mod call;
 pub mod canister;
 pub mod cycles;
 pub mod helper;
@@ -12,17 +13,15 @@ pub use helper::*;
 
 use crate::{
     Error,
-    cdk::{
-        call::Call,
-        mgmt::{
-            self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult,
-            DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs, UninstallCodeArgs, WasmModule,
-        },
+    cdk::mgmt::{
+        self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DeleteCanisterArgs,
+        DepositCyclesArgs, InstallCodeArgs, UninstallCodeArgs, WasmModule,
     },
     env::nns::NNS_REGISTRY_CANISTER,
     interface::prelude::*,
     log,
     log::Topic,
+    model::metrics::{MetricKind, MetricsState},
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
@@ -37,7 +36,10 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
         canister_id: canister_pid,
     };
 
-    mgmt::canister_status(&args).await.map_err(Error::from)
+    let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
+    MetricsState::increment(MetricKind::CanisterStatus);
+
+    Ok(status)
 }
 
 //
@@ -57,7 +59,11 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
     };
     mgmt::deposit_cycles(&args, cycles)
         .await
-        .map_err(Error::from)
+        .map_err(Error::from)?;
+
+    MetricsState::increment(MetricKind::DepositCycles);
+
+    Ok(())
 }
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
@@ -110,7 +116,18 @@ pub async fn install_code<T: ArgumentEncoder>(
         arg,
     };
 
-    mgmt::install_code(&install_args).await.map_err(Error::from)
+    mgmt::install_code(&install_args)
+        .await
+        .map_err(Error::from)?;
+
+    let metric_kind = match mode {
+        CanisterInstallMode::Install => MetricKind::InstallCode,
+        CanisterInstallMode::Reinstall => MetricKind::ReinstallCode,
+        CanisterInstallMode::Upgrade(_) => MetricKind::UpgradeCode,
+    };
+    MetricsState::increment(metric_kind);
+
+    Ok(())
 }
 
 /// Uninstalls code from a canister.
@@ -119,7 +136,10 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
         canister_id: canister_pid,
     };
 
-    mgmt::uninstall_code(&args).await.map_err(Error::from)
+    mgmt::uninstall_code(&args).await.map_err(Error::from)?;
+    MetricsState::increment(MetricKind::UninstallCode);
+
+    Ok(())
 }
 
 /// Deletes a canister (code + controllers) via the management canister.
@@ -128,7 +148,10 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
         canister_id: canister_pid,
     };
 
-    mgmt::delete_canister(&args).await.map_err(Error::from)
+    mgmt::delete_canister(&args).await.map_err(Error::from)?;
+    MetricsState::increment(MetricKind::DeleteCanister);
+
+    Ok(())
 }
 
 //

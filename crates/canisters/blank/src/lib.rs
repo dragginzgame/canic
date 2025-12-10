@@ -7,10 +7,7 @@
 
 use canic::{
     Error,
-    core::{
-        auth::is_controller,
-        ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
-    },
+    core::ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
 };
 use canic_internal::canister::BLANK;
@@ -25,11 +22,10 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-// create_blank
+/// create_blank
+/// no authentication needed as its for local canic testing
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    auth_require_all!(is_controller)?;
-
     create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 

@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    cdk::call::Call,
     env::sns::{SnsRole, SnsType},
     interface::prelude::*,
     spec::sns::{ListNeurons, ListNeuronsResponse, Neuron, NeuronId},
@@ -56,10 +55,11 @@ pub async fn list_sns_neurons_for_principal_page(
         limit: page_size,
     };
 
-    let res = Call::unbounded_wait(gov_canister, "list_neurons")
+    let response = Call::unbounded_wait(gov_canister, "list_neurons")
         .with_arg(list_neurons_arg)
-        .await?
-        .candid::<ListNeuronsResponse>()?;
+        .await?;
+
+    let res = response.candid::<ListNeuronsResponse>()?;
 
     Ok(res)
 }

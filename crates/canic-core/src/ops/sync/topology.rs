@@ -85,7 +85,12 @@ pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), 
     // Upward path: [target, parent, ..., root_child, root]
     let path = collect_branch_path(target_pid, &index, root_pid);
     if path.is_empty() {
-        return root_cascade_topology().await;
+        log!(
+            Topic::Sync,
+            Warn,
+            "sync.topology: no branch path to {target_pid}, skipping targeted cascade"
+        );
+        return Ok(());
     }
 
     // Descending: [root, root_child, ..., target]
@@ -93,33 +98,36 @@ pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), 
 
     // Must begin with root
     if down.first().copied() != Some(root_pid) {
-        return root_cascade_topology().await;
+        log!(
+            Topic::Sync,
+            Warn,
+            "sync.topology: branch path for {target_pid} does not start at root, skipping targeted cascade"
+        );
+        return Ok(());
     }
 
     // Skip root itself
     down.remove(0);
     if down.is_empty() {
-        return root_cascade_topology().await;
+        return Ok(());
     }
 
-    log_path(&down);
-
-    // Walk root->child->...->target
-    let mut parent_pid = root_pid;
-    let mut parent_bundle = bundle;
-
-    for pid in down {
-        let child_bundle = TopologyBundle::for_child(parent_pid, pid, &parent_bundle, &index);
-        if let Err(err) = send_bundle(&pid, &child_bundle).await {
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.topology: cascade fail: {err}; fallback"
-            );
-            return root_cascade_topology().await;
-        }
-        parent_pid = pid;
-        parent_bundle = child_bundle;
+    // Hand off to the first child; that branch will cascade onward via non-root logic.
+    let first_child = down.remove(0);
+    let child_bundle = TopologyBundle::for_child(root_pid, first_child, &bundle, &index);
+    if let Err(err) = send_bundle(&first_child, &child_bundle).await {
+        log!(
+            Topic::Sync,
+            Warn,
+            "sync.topology: failed targeted cascade to first child {first_child}: {err}"
+        );
+    } else {
+        log!(
+            Topic::Sync,
+            Info,
+            "sync.topology: delegated targeted cascade to {first_child} (depth={})",
+            down.len() + 1
+        );
     }
 
     Ok(())
@@ -190,16 +198,6 @@ fn warn_large(n: usize, label: &str) {
             "sync.topology: large {label} fanout: {n}"
         );
     }
-}
-
-fn log_path(path: &[Principal]) {
-    let depth = path.len();
-    let s = path
-        .iter()
-        .map(Principal::to_text)
-        .collect::<Vec<_>>()
-        .join("→");
-    log!(Topic::Sync, Info, "sync.topology: depth={depth} path=[{s}]");
 }
 
 fn save_topology(bundle: &TopologyBundle) {

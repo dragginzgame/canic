@@ -7,10 +7,7 @@
 
 use canic::{
     Error,
-    core::{
-        auth::is_controller,
-        ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
-    },
+    core::ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     prelude::*,
 };
 use canic_internal::canister;
@@ -78,12 +75,8 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
     ),
 ];
 
-///
-/// ENDPOINTS
-///
-
-// convert_icp_to_cycles
 /*
+// convert_icp_to_cycles
 #[update]
 #[allow(clippy::cast_possible_truncation)]
 async fn convert_icp_to_cycles() -> Result<(), Error> {
@@ -96,11 +89,11 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
     canic::interface::ic::cycles::get_icp_xdr_conversion_rate().await
 }
 */
-// create_blank
+
+/// create_blank
+/// no authentication needed as its for local canic testing
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    auth_require_all!(is_controller)?;
-
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
