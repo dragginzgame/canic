@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.11] - 2025-12-10
+## [0.5.13] - 2025-12-10
 - Topology syncs are now branch-targeted when creating canisters: root cascades only the affected subtree, retries once per hop, and falls back to a full cascade on errors. Large cascades log warnings so noisy fan-outs are visible.
 
 ## [0.5.10]
