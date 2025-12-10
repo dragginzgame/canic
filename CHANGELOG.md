@@ -5,7 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.13] - 2025-12-10
+## [0.5.13] - 2025-12-11 - Canic Metrics
+- Wrapped cross-canister call construction so `CanisterCall` metrics are recorded centrally without scattered increments.
+- Targeted topology cascades now delegate to the first child (letting the branch fan out) to honor parent-only auth and cut hop count.
+- Added PocketIC coverage for worker creation ensuring new workers register under `scale_hub` and appear in its child view.
+
+## [0.5.12] - 2025-12-10
 - Topology syncs are now branch-targeted when creating canisters: root cascades only the affected subtree, retries once per hop, and falls back to a full cascade on errors. Large cascades log warnings so noisy fan-outs are visible.
 
 ## [0.5.10]

@@ -11,6 +11,7 @@ pub mod canister;
 pub mod config;
 pub mod icrc;
 pub mod lifecycle;
+pub mod metrics;
 pub mod model;
 pub mod request;
 pub mod root;
@@ -27,11 +28,13 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             api::{canister_self, msg_caller},
-            call::Call,
             candid::CandidType,
         },
         ids::CanisterRole,
-        interface::{InterfaceError, ic::call_and_decode},
+        interface::{
+            InterfaceError,
+            ic::{call::Call, call_and_decode},
+        },
         log,
         log::Level,
         ops::OpsError,

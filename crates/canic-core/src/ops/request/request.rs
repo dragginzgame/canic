@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    cdk::call::Call,
     ids::CanisterRole,
     log::Topic,
     ops::{

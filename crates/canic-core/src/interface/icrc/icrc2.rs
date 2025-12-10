@@ -1,6 +1,5 @@
 use crate::{
-    Error, cdk::call::Call, env::nns::ICP_LEDGER_CANISTER, interface::prelude::*,
-    spec::icrc::icrc2::AllowanceArgs,
+    Error, env::nns::ICP_LEDGER_CANISTER, interface::prelude::*, spec::icrc::icrc2::AllowanceArgs,
 };
 
 ///
