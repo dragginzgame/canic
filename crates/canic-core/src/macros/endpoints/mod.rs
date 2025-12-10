@@ -85,8 +85,8 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         async fn canic_metrics()
-        -> Result<::canic::core::ops::metrics::MetricsSnapshot, ::canic::Error> {
-            Ok(::canic::core::ops::metrics::MetricsOps::snapshot())
+        -> ::canic::core::ops::metrics::MetricsReport {
+            ::canic::core::ops::metrics::MetricsOps::report()
         }
 
         //
