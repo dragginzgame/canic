@@ -7,17 +7,16 @@
 
 use crate::{
     Error,
-    interface::ic::{canister::upgrade_canister, deposit_cycles},
+    interface::ic::deposit_cycles,
     log::Topic,
     ops::{
-        canister::create_and_install_canister,
+        lifecycle_orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         model::memory::topology::subnet::SubnetCanisterRegistryOps,
         prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
-        wasm::WasmOps,
     },
 };
 
@@ -95,9 +94,16 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             }
         };
 
-        let new_canister_pid =
-            create_and_install_canister(&req.canister_role, parent_pid, req.extra_arg.clone())
-                .await?;
+        let event = LifecycleEvent::Create {
+            ty: req.canister_role.clone(),
+            parent: parent_pid,
+            extra_arg: req.extra_arg.clone(),
+        };
+
+        let result = CanisterLifecycleOrchestrator::apply(event).await?;
+        let new_canister_pid = result
+            .new_canister_pid
+            .ok_or_else(|| Error::custom("create_canister: missing new pid"))?;
 
         Ok(Response::CreateCanister(CreateCanisterResponse {
             new_canister_pid,
@@ -127,9 +133,10 @@ async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Respo
     }
 
     // Use the registry's type to avoid trusting request payload.
-    let wasm = WasmOps::try_get(&registry_entry.ty)?;
-    upgrade_canister(registry_entry.pid, wasm.bytes()).await?;
-    SubnetCanisterRegistryOps::update_module_hash(registry_entry.pid, wasm.module_hash())?;
+    let event = LifecycleEvent::Upgrade {
+        pid: registry_entry.pid,
+    };
+    CanisterLifecycleOrchestrator::apply(event).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
 }

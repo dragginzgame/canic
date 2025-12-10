@@ -8,10 +8,7 @@
 use candid::Principal;
 use canic::{
     Error,
-    core::{
-        auth::is_controller,
-        ops::model::memory::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
-    },
+    core::ops::model::memory::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
     prelude::*,
 };
 use canic_internal::canister::SHARD_HUB;
@@ -32,10 +29,9 @@ async fn canic_upgrade() {}
 // ENDPOINTS
 //
 
+// don't need authentication as this is a local canic test
 #[update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
-    auth_require_all!(is_controller)?;
-
     let shard_pid = ShardingOps::assign_to_pool(POOL_NAME, pid).await?;
 
     Ok(shard_pid)
@@ -44,8 +40,6 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 /// Dry-run the player registration decision using config-driven policy.
 #[query]
 async fn plan_register_principal(pid: Principal) -> Result<ShardingPlan, Error> {
-    auth_require_all!(is_controller)?;
-
     let plan = ShardingPolicyOps::plan_assign_to_pool(POOL_NAME, pid)?;
 
     Ok(plan)

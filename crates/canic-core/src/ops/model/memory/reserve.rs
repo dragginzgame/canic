@@ -190,7 +190,7 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
     OpsError::require_root()?;
 
     // keep the registry entry around for logging or rollback if a later step fails
-    let registry_entry = SubnetCanisterRegistryOps::get(canister_pid);
+    let mut registry_entry = SubnetCanisterRegistryOps::get(canister_pid);
     let parent_pid = registry_entry.as_ref().and_then(|entry| entry.parent_pid);
 
     // uninstall but keep the canister alive so it can be repurposed
@@ -218,6 +218,7 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
             canister_pid,
             entry.ty
         );
+        registry_entry = Some(entry);
     } else if registry_entry.is_some() {
         log!(
             Topic::CanisterReserve,
@@ -250,7 +251,7 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
             "ℹ️ reserve_import_canister: no parent recorded for {canister_pid}; skipping targeted topology cascade"
         );
     }
-    sync_directories_from_registry().await?;
+    sync_directories_from_registry(registry_entry.as_ref().map(|e| &e.ty)).await?;
 
     // register to Reserve
     let cycles = get_cycles(canister_pid).await?;

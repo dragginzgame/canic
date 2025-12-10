@@ -44,20 +44,36 @@ use canic_types::Cycles;
 
 /// Rebuild AppDirectory and SubnetDirectory from the registry,
 /// import them directly, and cascade state exactly once.
-pub(crate) async fn sync_directories_from_registry() -> Result<(), Error> {
+/// When `updated_ty` is provided, only include the sections that list that type.
+pub(crate) async fn sync_directories_from_registry(
+    updated_ty: Option<&CanisterRole>,
+) -> Result<(), Error> {
     let mut bundle = StateBundle::default();
+    let cfg = Config::get();
 
-    // App directory is rebuilt on root then cascaded
-    let app_view = AppDirectoryOps::root_build_view();
-    AppDirectoryOps::import(app_view.clone());
-    bundle.app_directory = Some(app_view);
+    // did a directory change?
+    let include_app = updated_ty.is_none_or(|ty| cfg.app_directory.contains(ty));
+    let include_subnet = updated_ty.is_none_or(|ty| {
+        ConfigOps::current_subnet()
+            .map(|c| c.subnet_directory.contains(ty))
+            // default to true if config is unavailable to avoid skipping a needed rebuild
+            .unwrap_or(true)
+    });
 
-    // Subnet directory is always present
-    let subnet_view = SubnetDirectoryOps::root_build_view();
-    SubnetDirectoryOps::import(subnet_view.clone());
-    bundle.subnet_directory = Some(subnet_view);
+    if include_app {
+        let app_view = AppDirectoryOps::root_build_view();
+        AppDirectoryOps::import(app_view.clone());
+        bundle.app_directory = Some(app_view);
+    }
+
+    if include_subnet {
+        let subnet_view = SubnetDirectoryOps::root_build_view();
+        SubnetDirectoryOps::import(subnet_view.clone());
+        bundle.subnet_directory = Some(subnet_view);
+    }
 
     // Cascade the new directory state once
+    // it won't do anything if the bundle is empty
     root_cascade_state(bundle).await?;
 
     Ok(())
@@ -107,12 +123,6 @@ pub async fn create_and_install_canister(
         return Err(err);
     }
 
-    // Phase 3: update topology
-    root_cascade_topology_for_pid(pid).await?;
-
-    // Phase 4: sync directories (triggers its own cascade)
-    sync_directories_from_registry().await?;
-
     Ok(pid)
 }
 
@@ -130,7 +140,9 @@ pub async fn create_and_install_canister(
 /// 2. Remove from SubnetCanisterRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
-pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
+pub async fn delete_canister(
+    pid: Principal,
+) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
     OpsError::require_root()?;
     let parent_pid = SubnetCanisterRegistryOps::get_parent(pid);
 
@@ -141,7 +153,8 @@ pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
     mgmt_delete_canister(pid).await?;
 
     // Phase 2: remove registry record
-    match SubnetCanisterRegistryOps::remove(&pid) {
+    let removed_entry = SubnetCanisterRegistryOps::remove(&pid);
+    match &removed_entry {
         Some(c) => log!(
             Topic::CanisterLifecycle,
             Ok,
@@ -156,35 +169,7 @@ pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
         ),
     }
 
-    // Phase 3: cascade topology (targeted to the affected branch)
-    if let Some(parent_pid) = parent_pid {
-        if parent_pid == canister_self() {
-            log!(
-                Topic::Sync,
-                Info,
-                "💦 sync.topology: parent is root for {pid}, no downstream cascade needed"
-            );
-        } else if SubnetCanisterRegistryOps::get(parent_pid).is_some() {
-            root_cascade_topology_for_pid(parent_pid).await?;
-        } else {
-            log!(
-                Topic::Sync,
-                Warn,
-                "💦 sync.topology: parent {parent_pid} missing after removal of {pid}, skipping cascade"
-            );
-        }
-    } else {
-        log!(
-            Topic::Sync,
-            Warn,
-            "💦 sync.topology: no parent recorded for {pid}, skipping targeted cascade"
-        );
-    }
-
-    // Phase 4: sync directories
-    sync_directories_from_registry().await?;
-
-    Ok(())
+    Ok((removed_entry.map(|e| e.ty), parent_pid))
 }
 
 /// Uninstall code from a canister without deleting it.
@@ -335,3 +320,6 @@ async fn install_canister(
 
     Ok(())
 }
+
+//
+// ===========================================================================
