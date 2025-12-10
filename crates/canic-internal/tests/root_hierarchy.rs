@@ -314,7 +314,7 @@ fn worker_topology_cascades_through_parent() {
     };
 
     let Setup {
-        mut pic,
+        pic,
         root_id,
         registry,
     } = setup;

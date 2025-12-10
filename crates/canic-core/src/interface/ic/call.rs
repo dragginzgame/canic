@@ -1,6 +1,6 @@
 use crate::{
     cdk::call::Call as IcCall,
-    model::metrics::{MetricKind, MetricsState},
+    model::metrics::{IccMetrics, MetricKind, MetricsState},
     types::Principal,
 };
 
@@ -16,6 +16,7 @@ impl Call {
     #[must_use]
     pub fn unbounded_wait(canister_id: Principal, method: &str) -> IcCall<'_, '_> {
         MetricsState::increment(MetricKind::CanisterCall);
+        IccMetrics::increment(canister_id, method);
 
         IcCall::unbounded_wait(canister_id, method)
     }
