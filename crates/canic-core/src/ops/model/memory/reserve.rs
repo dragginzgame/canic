@@ -25,7 +25,7 @@ use crate::{
         model::memory::topology::SubnetCanisterRegistryOps,
         model::{OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY},
         prelude::*,
-        sync::topology::root_cascade_topology,
+        sync::topology::root_cascade_topology_for_pid,
     },
     types::{Cycles, Principal, TC},
 };
@@ -191,6 +191,7 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
 
     // keep the registry entry around for logging or rollback if a later step fails
     let registry_entry = SubnetCanisterRegistryOps::get(canister_pid);
+    let parent_pid = registry_entry.as_ref().and_then(|entry| entry.parent_pid);
 
     // uninstall but keep the canister alive so it can be repurposed
     uninstall_canister(canister_pid).await?;
@@ -226,7 +227,29 @@ pub async fn reserve_import_canister(canister_pid: Principal) -> Result<(), Erro
     }
 
     // cascade topology + directories so children observe the removal
-    root_cascade_topology().await?;
+    if let Some(parent_pid) = parent_pid {
+        if parent_pid == canister_self() {
+            log!(
+                Topic::CanisterReserve,
+                Info,
+                "ℹ️ reserve_import_canister: parent is root for {canister_pid}; skipping topology cascade"
+            );
+        } else if SubnetCanisterRegistryOps::get(parent_pid).is_some() {
+            root_cascade_topology_for_pid(parent_pid).await?;
+        } else {
+            log!(
+                Topic::CanisterReserve,
+                Warn,
+                "⚠️ reserve_import_canister: parent {parent_pid} missing from registry; skipping targeted topology cascade"
+            );
+        }
+    } else {
+        log!(
+            Topic::CanisterReserve,
+            Info,
+            "ℹ️ reserve_import_canister: no parent recorded for {canister_pid}; skipping targeted topology cascade"
+        );
+    }
     sync_directories_from_registry().await?;
 
     // register to Reserve

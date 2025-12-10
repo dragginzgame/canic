@@ -28,7 +28,7 @@ use crate::{
         },
         sync::{
             state::{StateBundle, root_cascade_state},
-            topology::{root_cascade_topology, root_cascade_topology_for_pid},
+            topology::root_cascade_topology_for_pid,
         },
         wasm::WasmOps,
     },
@@ -132,6 +132,7 @@ pub async fn create_and_install_canister(
 /// 4. Sync directories
 pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
+    let parent_pid = SubnetCanisterRegistryOps::get_parent(pid);
 
     // Phase 0: uninstall code
     uninstall_code(pid).await?;
@@ -155,8 +156,30 @@ pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
         ),
     }
 
-    // Phase 3: cascade topology
-    root_cascade_topology().await?;
+    // Phase 3: cascade topology (targeted to the affected branch)
+    if let Some(parent_pid) = parent_pid {
+        if parent_pid == canister_self() {
+            log!(
+                Topic::Sync,
+                Info,
+                "💦 sync.topology: parent is root for {pid}, no downstream cascade needed"
+            );
+        } else if SubnetCanisterRegistryOps::get(parent_pid).is_some() {
+            root_cascade_topology_for_pid(parent_pid).await?;
+        } else {
+            log!(
+                Topic::Sync,
+                Warn,
+                "💦 sync.topology: parent {parent_pid} missing after removal of {pid}, skipping cascade"
+            );
+        }
+    } else {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.topology: no parent recorded for {pid}, skipping targeted cascade"
+        );
+    }
 
     // Phase 4: sync directories
     sync_directories_from_registry().await?;
