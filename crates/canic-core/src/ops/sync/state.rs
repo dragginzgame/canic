@@ -116,8 +116,18 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     }
 
     let root_pid = canister_self();
+    let children = SubnetCanisterRegistryOps::children(root_pid);
+    let child_count = children.len();
+    if child_count > 10 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.state: large root cascade to {child_count} children"
+        );
+    }
+
     let mut failures = 0;
-    for child in SubnetCanisterRegistryOps::children(root_pid) {
+    for child in children {
         if let Err(err) = send_bundle(&child.pid, &bundle).await {
             failures += 1;
             log!(
@@ -149,8 +159,18 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     // update local state
     save_state(bundle)?;
 
+    let children = SubnetCanisterChildrenOps::export();
+    let child_count = children.len();
+    if child_count > 10 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.state: large nonroot cascade to {child_count} children"
+        );
+    }
+
     let mut failures = 0;
-    for child in SubnetCanisterChildrenOps::export() {
+    for child in children {
         if let Err(err) = send_bundle(&child.pid, bundle).await {
             failures += 1;
             log!(
