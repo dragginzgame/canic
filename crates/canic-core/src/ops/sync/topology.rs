@@ -3,6 +3,7 @@
 //! Extracts relevant topology subsets and propagates them so each canister
 //! maintains an up-to-date view of its children and parent chain.
 
+use super::warn_if_large;
 use crate::{
     Error,
     log::Topic,
@@ -22,35 +23,26 @@ use std::collections::HashMap;
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologyBundle {
-    pub subtree: Vec<CanisterSummary>,
     pub parents: Vec<CanisterSummary>,
+    pub children_map: HashMap<Principal, Vec<CanisterSummary>>,
 }
 
 impl TopologyBundle {
-    pub fn root() -> Result<Self, Error> {
-        let root = SubnetCanisterRegistryOps::get_type(&CanisterRole::ROOT)
-            .ok_or(SyncOpsError::RootNotFound)?;
-        Ok(Self {
-            subtree: SubnetCanisterRegistryOps::subtree(root.pid),
-            parents: vec![root.into()],
-        })
-    }
+    pub fn for_target(target_pid: Principal) -> Result<Self, Error> {
+        let parents = parent_chain(target_pid)?;
 
-    #[must_use]
-    pub fn for_child(
-        parent_pid: Principal,
-        child_pid: Principal,
-        base: &Self,
-        index: &SubtreeIndex,
-    ) -> Self {
-        let mut parents = base.parents.clone();
-        if let Some(parent) = index.by_pid.get(&parent_pid) {
-            parents.push(parent.clone());
+        let mut children_map = HashMap::new();
+
+        // Add children of every ancestor in the chain (root → ... → target)
+        for parent in &parents {
+            let children = SubnetCanisterRegistryOps::children(parent.pid);
+            children_map.insert(parent.pid, children);
         }
-        Self {
-            subtree: collect_child_subtree(child_pid, index),
+
+        Ok(Self {
             parents,
-        }
+            children_map,
+        })
     }
 }
 
@@ -63,13 +55,9 @@ impl TopologyBundle {
 pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
+    let bundle = TopologyBundle::for_target(target_pid)?;
     let root_pid = canister_self();
-    let bundle = TopologyBundle::root()?;
-    let index = SubtreeIndex::new(&bundle.subtree);
-
-    // Upward path: [target, parent, ..., root_child, root]
-    let path = collect_branch_path(target_pid, &index, root_pid);
-    if path.is_empty() {
+    let Some(first_child) = next_child_on_path(root_pid, &bundle.parents) else {
         log!(
             Topic::Sync,
             Warn,
@@ -77,31 +65,9 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
         );
 
         return Ok(());
-    }
+    };
 
-    // Descending: [root, root_child, ..., target]
-    let mut down: Vec<_> = path.into_iter().rev().collect();
-
-    // Must begin with root
-    if down.first().copied() != Some(root_pid) {
-        log!(
-            Topic::Sync,
-            Warn,
-            "sync.topology: branch path for {target_pid} does not start at root, skipping targeted cascade"
-        );
-
-        return Ok(());
-    }
-
-    // Skip root itself
-    down.remove(0);
-    if down.is_empty() {
-        return Ok(());
-    }
-
-    // Hand off to the first child; that branch will cascade onward via non-root logic.
-    let first_child = down.remove(0);
-    let child_bundle = TopologyBundle::for_child(root_pid, first_child, &bundle, &index);
+    let child_bundle = slice_bundle_for_child(first_child, &bundle);
     if let Err(err) = send_bundle(&first_child, &child_bundle).await {
         log!(
             Topic::Sync,
@@ -112,8 +78,7 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
         log!(
             Topic::Sync,
             Info,
-            "sync.topology: delegated targeted cascade to {first_child} (depth={})",
-            down.len() + 1
+            "sync.topology: delegated targeted cascade to {first_child}"
         );
     }
 
@@ -128,14 +93,22 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 
 pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
-    save_topology(bundle);
-
     let self_pid = canister_self();
-    let index = SubtreeIndex::new(&bundle.subtree);
-    let children = SubnetCanisterChildrenOps::export();
-    warn_large(children.len(), "nonroot");
 
-    cascade_children(self_pid, bundle, &index, children).await
+    let children = bundle
+        .children_map
+        .get(&self_pid)
+        .cloned()
+        .unwrap_or_default();
+    warn_if_large("nonroot fanout", children.len());
+    SubnetCanisterChildrenOps::import(children);
+
+    if let Some(next_pid) = next_child_on_path(self_pid, &bundle.parents) {
+        let next_bundle = slice_bundle_for_child(next_pid, bundle);
+        send_bundle(&next_pid, &next_bundle).await?;
+    }
+
+    Ok(())
 }
 
 //
@@ -144,59 +117,24 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 // ===========================================================================
 //
 
-async fn cascade_children(
-    parent_pid: Principal,
-    bundle: &TopologyBundle,
-    index: &SubtreeIndex,
-    children: Vec<CanisterSummary>,
-) -> Result<(), Error> {
-    let mut failures = 0;
+fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
+    let mut chain = Vec::new();
 
-    for child in children {
-        let child_bundle = TopologyBundle::for_child(parent_pid, child.pid, bundle, index);
-        if let Err(err) = send_bundle(&child.pid, &child_bundle).await {
-            failures += 1;
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.topology: failed cascade to {}: {}",
-                child.pid,
-                err
-            );
-        }
+    loop {
+        let Some(entry) = SubnetCanisterRegistryOps::get(pid) else {
+            return Err(SyncOpsError::CanisterNotFound(pid).into());
+        };
+
+        chain.push(entry.clone().into());
+
+        let Some(parent) = entry.parent_pid else {
+            break;
+        };
+        pid = parent;
     }
 
-    if failures > 0 {
-        log!(
-            Topic::Sync,
-            Warn,
-            "sync.topology: {failures} cascade(s) failed"
-        );
-    }
-
-    Ok(())
-}
-
-fn warn_large(n: usize, label: &str) {
-    if n > 10 {
-        log!(
-            Topic::Sync,
-            Warn,
-            "sync.topology: large {label} fanout: {n}"
-        );
-    }
-}
-
-fn save_topology(bundle: &TopologyBundle) {
-    let self_pid = canister_self();
-    let direct: Vec<_> = bundle
-        .subtree
-        .iter()
-        .filter(|e| e.parent_pid == Some(self_pid))
-        .cloned()
-        .collect();
-
-    SubnetCanisterChildrenOps::import(direct);
+    chain.reverse();
+    Ok(chain)
 }
 
 async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
@@ -205,71 +143,44 @@ async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Err
 
 //
 // ===========================================================================
-//  INDEX + TRAVERSAL
+//  PATH HELPERS
 // ===========================================================================
 //
 
-pub struct SubtreeIndex {
-    by_pid: HashMap<Principal, CanisterSummary>,
-    children_by_parent: HashMap<Principal, Vec<Principal>>,
+fn next_child_on_path(self_pid: Principal, parents: &[CanisterSummary]) -> Option<Principal> {
+    let idx = parents.iter().position(|p| p.pid == self_pid)?;
+    parents.get(idx + 1).map(|p| p.pid)
 }
 
-impl SubtreeIndex {
-    fn new(subtree: &[CanisterSummary]) -> Self {
-        let mut by_pid: HashMap<Principal, CanisterSummary> = HashMap::new();
-        let mut children_by_parent: HashMap<Principal, Vec<Principal>> = HashMap::new();
+fn slice_bundle_for_child(next_pid: Principal, bundle: &TopologyBundle) -> TopologyBundle {
+    // Slice parents chain so we start at the next hop
+    let mut sliced_parents = Vec::new();
+    let mut include = false;
 
-        for entry in subtree {
-            by_pid.insert(entry.pid, entry.clone());
-            if let Some(p) = entry.parent_pid {
-                children_by_parent.entry(p).or_default().push(entry.pid);
-            }
+    for parent in &bundle.parents {
+        if parent.pid == next_pid {
+            include = true;
         }
-
-        Self {
-            by_pid,
-            children_by_parent,
+        if include {
+            sliced_parents.push(parent.clone());
         }
     }
 
-    fn parent_of(&self, pid: Principal) -> Option<Principal> {
-        self.by_pid.get(&pid).and_then(|e| e.parent_pid)
-    }
-}
-
-fn collect_child_subtree(root: Principal, index: &SubtreeIndex) -> Vec<CanisterSummary> {
-    let mut result = Vec::new();
-    let mut stack = vec![root];
-
-    while let Some(pid) = stack.pop() {
-        if let Some(entry) = index.by_pid.get(&pid) {
-            result.push(entry.clone());
-        }
-        if let Some(children) = index.children_by_parent.get(&pid) {
-            stack.extend(children.iter().copied());
-        }
+    // Slice children_map so it includes only nodes in the sliced chain
+    let mut sliced_children_map = HashMap::new();
+    for parent in &sliced_parents {
+        let children = bundle
+            .children_map
+            .get(&parent.pid)
+            .cloned()
+            .unwrap_or_default();
+        sliced_children_map.insert(parent.pid, children);
     }
 
-    result
-}
-
-fn collect_branch_path(
-    mut pid: Principal,
-    index: &SubtreeIndex,
-    root_pid: Principal,
-) -> Vec<Principal> {
-    let mut path = vec![pid];
-    loop {
-        let Some(p) = index.parent_of(pid) else {
-            return Vec::new();
-        };
-        path.push(p);
-        if p == root_pid {
-            break;
-        }
-        pid = p;
+    TopologyBundle {
+        parents: sliced_parents,
+        children_map: sliced_children_map,
     }
-    path
 }
 
 //
@@ -296,51 +207,45 @@ mod tests {
     }
 
     #[test]
-    fn subtree_descendants() {
-        let root = p(1);
-        let a = p(2);
-        let b = p(3);
-        let a1 = p(4);
-        let a2 = p(5);
-        let a2c = p(6);
-
-        let st = vec![
-            s(root, None),
-            s(a, Some(root)),
-            s(b, Some(root)),
-            s(a1, Some(a)),
-            s(a2, Some(a)),
-            s(a2c, Some(a2)),
-        ];
-
-        let index = SubtreeIndex::new(&st);
-        let mut out = collect_child_subtree(a, &index);
-        out.sort_by_key(|e| e.pid.as_slice().to_vec());
-
-        assert_eq!(
-            out.into_iter().map(|e| e.pid).collect::<Vec<_>>(),
-            vec![a, a1, a2, a2c]
-        );
-    }
-
-    #[test]
-    fn branch_path() {
+    fn next_child_from_chain() {
         let root = p(1);
         let hub = p(2);
         let inst = p(3);
         let ledg = p(4);
 
-        let st = vec![
+        let parents = vec![
             s(root, None),
             s(hub, Some(root)),
             s(inst, Some(hub)),
             s(ledg, Some(inst)),
         ];
 
-        let index = SubtreeIndex::new(&st);
-        assert_eq!(
-            collect_branch_path(ledg, &index, root),
-            vec![ledg, inst, hub, root]
-        );
+        assert_eq!(next_child_on_path(root, &parents), Some(hub));
+        assert_eq!(next_child_on_path(hub, &parents), Some(inst));
+        assert_eq!(next_child_on_path(ledg, &parents), None);
+    }
+
+    #[test]
+    fn slice_bundle_trims_prefix_children() {
+        let root = p(1);
+        let hub = p(2);
+        let inst = p(3);
+
+        let parents = vec![s(root, None), s(hub, Some(root)), s(inst, Some(hub))];
+        let mut children_map = HashMap::new();
+        children_map.insert(root, vec![s(hub, Some(root))]);
+        children_map.insert(hub, vec![s(inst, Some(hub))]);
+        children_map.insert(inst, vec![]);
+
+        let bundle = TopologyBundle {
+            parents,
+            children_map,
+        };
+
+        let sliced = slice_bundle_for_child(hub, &bundle);
+
+        assert!(!sliced.children_map.contains_key(&root));
+        assert!(sliced.children_map.contains_key(&hub));
+        assert!(sliced.children_map.contains_key(&inst));
     }
 }

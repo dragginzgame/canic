@@ -3,6 +3,7 @@
 //! Bundles snapshot portions of `AppState`, `SubnetState`, and the directory
 //! views, ships them across the topology, and replays them on recipients.
 
+use super::warn_if_large;
 use crate::{
     Error,
     log::Topic,
@@ -119,13 +120,7 @@ pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error>
     let root_pid = canister_self();
     let children = SubnetCanisterRegistryOps::children(root_pid);
     let child_count = children.len();
-    if child_count > 10 {
-        log!(
-            Topic::Sync,
-            Warn,
-            "💦 sync.state: large root cascade to {child_count} children"
-        );
-    }
+    warn_if_large("root state cascade", child_count);
 
     let mut failures = 0;
     for child in children {
@@ -167,13 +162,7 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
 
     let children = SubnetCanisterChildrenOps::export();
     let child_count = children.len();
-    if child_count > 10 {
-        log!(
-            Topic::Sync,
-            Warn,
-            "💦 sync.state: large nonroot cascade to {child_count} children"
-        );
-    }
+    warn_if_large("nonroot state cascade", child_count);
 
     let mut failures = 0;
     for child in children {

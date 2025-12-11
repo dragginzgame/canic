@@ -3,8 +3,10 @@
 pub mod state;
 pub mod topology;
 
-use crate::{Error, ThisError, ops::OpsError};
+use crate::{Error, ThisError, log, log::Topic, ops::OpsError};
 use candid::Principal;
+
+const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 
 ///
 /// SyncOpsError
@@ -23,5 +25,21 @@ pub enum SyncOpsError {
 impl From<SyncOpsError> for Error {
     fn from(err: SyncOpsError) -> Self {
         OpsError::from(err).into()
+    }
+}
+
+///
+/// Helpers
+///
+
+fn warn_if_large(label: &str, count: usize) {
+    if count > SYNC_CALL_WARN_THRESHOLD {
+        log!(
+            Topic::Sync,
+            Warn,
+            "sync: large {}: {} entries",
+            label,
+            count
+        );
     }
 }

@@ -8,142 +8,166 @@ use crate::{
         icrc::icrc1::Icrc1TransferArgs,
     },
     types::{Account, Nat, Principal, Subaccount},
-    utils::time::now_secs,
+    utils::time::now_nanos,
 };
 
-///
-/// get_icp_xdr_conversion_rate
+//
+// ===========================================================================
+//  PUBLIC API
+// ===========================================================================
+//
+
 /// Fetch the ICP↔︎XDR conversion rate from the Cycles Minting Canister.
 ///
+/// Returns **ICP per XDR** (not XDR per ICP).
 pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
-    let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate").await?;
+    let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate")
+        .await
+        .map_err(|e| Error::custom(format!("CMC.get_icp_xdr_conversion_rate failed: {e:?}")))?;
 
-    let rate_info: IcpXdrConversionRateResponse = res.candid()?;
+    let rate_info: IcpXdrConversionRateResponse = res
+        .candid()
+        .map_err(|e| Error::custom(format!("decode error: {e:?}")))?;
 
-    // Extract the conversion rate (XDR per ICP) and invert to get ICP per XDR.
+    // Convert permyriad XDR/ICP → ICP/XDR
     #[allow(clippy::cast_precision_loss)]
-    let xdr_per_icp = rate_info.data.xdr_permyriad_per_icp as f64 / 10000.0;
-    let icp_per_xdr = 1.0 / xdr_per_icp;
+    let xdr_per_icp = rate_info.data.xdr_permyriad_per_icp as f64 / 10_000.0;
 
-    Ok(icp_per_xdr)
+    if xdr_per_icp <= 0.0 {
+        return Err(Error::custom(format!(
+            "invalid rate from CMC: xdr_per_icp={xdr_per_icp}"
+        )));
+    }
+
+    Ok(1.0 / xdr_per_icp)
 }
 
-///
-/// convert_icp_to_cycles
-/// uses the Cycles Minting Canister
-///
+/// Convert a required number of cycles into ICP, transfer ICP to the CMC,
+/// then notify CMC to mint cycles and deliver them to the caller canister.
 pub async fn convert_icp_to_cycles(
     icp_ledger_account: Account,
     cycles_needed: u64,
 ) -> Result<(), Error> {
-    // Step 1: Calculate ICP amount needed
-    // Get current ICP/XDR conversion rate from CMC
-    let conversion_rate = get_icp_xdr_conversion_rate().await?;
-    let icp_needed = calculate_icp_for_cycles(cycles_needed, conversion_rate);
+    //
+    // Step 1: Fetch conversion rate and compute ICP needed (with buffer)
+    //
+    let icp_per_xdr = get_icp_xdr_conversion_rate().await?;
+    let icp_needed_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
 
-    // Step 2: Generate unique subaccount for this transaction
-    let root_principal = canister_self();
-    let subaccount = derive_subaccount(&root_principal, "convert_cycles");
+    //
+    // Step 2: Generate dedicated subaccount for this conversion
+    //
+    let caller = canister_self();
+    let subaccount = derive_subaccount(&caller, "convert_cycles");
 
-    // Step 3: Transfer ICP to CMC with unique subaccount
-    let transfer_block_index =
-        transfer_icp_to_cmc(icp_ledger_account, subaccount, icp_needed).await?;
+    //
+    // Step 3: Transfer ICP to CMC
+    //
+    let block_index = transfer_icp_to_cmc(icp_ledger_account, subaccount, icp_needed_e8s).await?;
 
-    // Step 4: Notify CMC to convert ICP to cycles and send to root canister
-    notify_cycles_minting_canister(transfer_block_index, root_principal, subaccount).await?;
+    //
+    // Step 4: Notify CMC to mint cycles and send to this canister
+    //
+    notify_cycles_minting_canister(block_index, caller).await?;
 
     Ok(())
 }
 
-/// Calculates the ICP amount (in e8s) required to obtain a given number of cycles.
+//
+// ===========================================================================
+//  INTERNAL HELPERS
+// ===========================================================================
+//
+
+/// Calculates the ICP (in e8s) required to mint the given number of cycles.
 ///
-/// - `cycles_needed`: number of cycles required.
-/// - `icp_per_xdr`: current exchange rate (ICP per XDR).
+/// Rate interpretation: `icp_per_xdr = ICP / XDR`.
 ///
-/// 1 XDR = 1e12 cycles.
-/// Adds a 5% buffer to account for rate fluctuations.
-#[allow(clippy::cast_sign_loss)]
-#[allow(clippy::cast_precision_loss)]
+/// 1 XDR mints 1_000_000_000_000 (1e12) cycles.
+///
+/// A 5% buffer is included to accommodate temporary rate fluctuations.
 #[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_sign_loss)]
 fn calculate_icp_for_cycles(cycles_needed: u64, icp_per_xdr: f64) -> u64 {
     const CYCLES_PER_XDR: f64 = 1_000_000_000_000.0;
     const E8S_PER_ICP: f64 = 100_000_000.0;
-    const BUFFER_FACTOR: f64 = 1.05; // +5%
+    const BUFFER: f64 = 1.05;
 
-    let xdr_needed = cycles_needed as f64 / CYCLES_PER_XDR;
-    let icp_needed = xdr_needed * icp_per_xdr * BUFFER_FACTOR;
-    let icp_e8s = (icp_needed * E8S_PER_ICP).round();
+    let xdr_required = cycles_needed as f64 / CYCLES_PER_XDR;
+    let icp_required = xdr_required * icp_per_xdr * BUFFER;
 
-    icp_e8s as u64
+    (icp_required * E8S_PER_ICP).round() as u64
 }
 
-/// Transfer ICP to Cycles Minting Canister
+/// Perform ICRC-1 ICP transfer into the CMC’s ledger account.
 async fn transfer_icp_to_cmc(
     from_account: Account,
-    subaccount: Subaccount,
-    icp_amount: u64,
+    deposit_subaccount: Subaccount,
+    icp_amount_e8s: u64,
 ) -> Result<u64, Error> {
-    let transfer_args = Icrc1TransferArgs {
+    let args = Icrc1TransferArgs {
         from_subaccount: from_account.subaccount,
         to: Account {
             owner: *CYCLES_MINTING_CANISTER,
-            subaccount: Some(subaccount),
+            subaccount: Some(deposit_subaccount),
         },
-        amount: Nat::from(icp_amount),
-        fee: None, // Use default fee
+        amount: Nat::from(icp_amount_e8s),
+        fee: None,
         memo: Some(b"cycle_conversion".to_vec()),
-        created_at_time: Some(now_secs()),
+        created_at_time: Some(now_nanos()),
     };
 
-    let call_result = Call::unbounded_wait(*ICP_LEDGER_CANISTER, "icrc1_transfer")
-        .with_args(&(transfer_args,))
-        .await;
+    let raw = Call::unbounded_wait(*ICP_LEDGER_CANISTER, "icrc1_transfer")
+        .with_args(&(args,))
+        .await
+        .map_err(|e| Error::custom(format!("ICP ledger transfer failed: {e:?}")))?;
 
-    match call_result {
-        Ok(res) => {
-            let transfer_result: Result<Nat, Nat> = res
-                .candid()
-                .map_err(|e| Error::custom(format!("Failed to decode transfer result: {e}")))?;
+    // The ICRC-1 ledger returns Result<Nat, Nat>.
+    let result: Result<Nat, Nat> = raw
+        .candid()
+        .map_err(|e| Error::custom(format!("Failed to decode icrc1_transfer(): {e:?}")))?;
 
-            match transfer_result {
-                Ok(block_index) => {
-                    let block_u64: u64 = block_index
-                        .0
-                        .try_into()
-                        .map_err(|_| Error::custom("Block index too large".to_string()))?;
-                    Ok(block_u64)
-                }
-                Err(e) => Err(Error::custom(format!("ICP transfer failed: {e}"))),
-            }
-        }
-        Err(e) => Err(Error::custom(format!("Failed to transfer ICP: {e}"))),
+    match result {
+        Ok(block) => block
+            .0
+            .try_into()
+            .map_err(|_| Error::custom("transfer block index does not fit into u64")),
+        Err(err_code) => Err(Error::custom(format!(
+            "ICP transfer rejected by ledger: {err_code}"
+        ))),
     }
 }
 
-/// Notify CMC to convert ICP to cycles
+/// Notify the Cycles Minting Canister to convert previously deposited ICP.
+///
+/// The CMC reads the deposit subaccount from the ledger block.
 async fn notify_cycles_minting_canister(
     block_index: u64,
-    controller: Principal,
-    _subaccount: Subaccount,
+    recipient: Principal,
 ) -> Result<(), Error> {
-    let notify_args = NotifyTopUpArgs {
+    let args = NotifyTopUpArgs {
         block_index,
-        canister_id: controller, // Send cycles to root canister
+        canister_id: recipient,
     };
 
-    let call_result = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "notify_top_up")
-        .with_args(&(notify_args,))
-        .await;
+    let raw = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "notify_top_up")
+        .with_args(&(args,))
+        .await
+        .map_err(|e| Error::custom(format!("CMC.notify_top_up transport failure: {e:?}")))?;
 
-    match call_result {
-        Ok(_) => Ok(()),
-        Err(e) => Err(Error::custom(format!("Failed to notify CMC: {e}"))),
-    }
+    let method_result: Result<(), Error> = raw
+        .candid()
+        .map_err(|e| Error::custom(format!("decode failure in notify_top_up: {e:?}")))?;
+
+    method_result.map_err(|e| Error::custom(format!("CMC rejected notify_top_up: {e:?}")))
 }
 
-///
-/// TESTS
-///
+//
+// ===========================================================================
+//  TESTS
+// ===========================================================================
+//
 
 #[cfg(test)]
 mod tests {
@@ -151,13 +175,9 @@ mod tests {
 
     #[test]
     fn calculates_icp_for_cycles_with_buffer() {
-        // Need 2e12 cycles (2 XDR) with a rate of 0.8 XDR/ICP → 1.25 ICP/XDR.
-        // With the 5% buffer we expect ~2.625 ICP = 262_500_000 e8s.
-        let cycles_needed = 2_000_000_000_000u64;
-        let icp_per_xdr = 1.25_f64;
-
+        let cycles_needed = 2_000_000_000_000u64; // 2 XDR
+        let icp_per_xdr = 1.25_f64; // XDR costs 1.25 ICP
         let icp_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
-
-        assert_eq!(icp_e8s, 262_500_000);
+        assert_eq!(icp_e8s, 262_500_000); // 2 * 1.25 * 1.05 = 2.625 ICP
     }
 }

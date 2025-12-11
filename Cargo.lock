@@ -243,7 +243,6 @@ dependencies = [
  "ic-cdk",
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
- "icrc-ledger-types",
  "minicbor-serde",
  "remain",
  "serde",

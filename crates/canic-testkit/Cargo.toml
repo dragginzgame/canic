@@ -6,6 +6,9 @@ version = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
+documentation = "https://docs.rs/canic-testkit"
+homepage = "https://github.com/dragginzgame/canic"
+repository = "https://github.com/dragginzgame/canic"
 keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
