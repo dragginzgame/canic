@@ -1,11 +1,13 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    eager_static, ic_memory, impl_storable_unbounded,
+    eager_static, ic_memory,
+    ids::CanisterRole,
+    impl_storable_unbounded,
     model::memory::id::root::CANISTER_RESERVE_ID,
-    types::Cycles,
+    types::{Cycles, Principal},
     utils::time::now_secs,
 };
-use candid::{CandidType, Principal};
+use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -34,6 +36,12 @@ pub type CanisterReserveView = Vec<(Principal, CanisterReserveEntry)>;
 pub struct CanisterReserveEntry {
     pub created_at: u64,
     pub cycles: Cycles,
+    #[serde(default)]
+    pub ty: Option<CanisterRole>,
+    #[serde(default)]
+    pub parent: Option<Principal>,
+    #[serde(default)]
+    pub module_hash: Option<Vec<u8>>,
 }
 
 impl_storable_unbounded!(CanisterReserveEntry);
@@ -46,10 +54,19 @@ pub(crate) struct CanisterReserve;
 
 impl CanisterReserve {
     /// Register a canister into the reserve.
-    pub(crate) fn register(pid: Principal, cycles: Cycles) {
+    pub(crate) fn register(
+        pid: Principal,
+        cycles: Cycles,
+        ty: Option<CanisterRole>,
+        parent: Option<Principal>,
+        module_hash: Option<Vec<u8>>,
+    ) {
         let entry = CanisterReserveEntry {
             created_at: now_secs(),
             cycles,
+            ty,
+            parent,
+            module_hash,
         };
 
         CANISTER_RESERVE.with_borrow_mut(|map| {
@@ -67,6 +84,18 @@ impl CanisterReserve {
                 .map(|entry| *entry.key())?;
             map.remove(&min_pid).map(|entry| (min_pid, entry))
         })
+    }
+
+    /// Return true if the reserve contains the given canister.
+    #[must_use]
+    pub(crate) fn contains(pid: &Principal) -> bool {
+        CANISTER_RESERVE.with_borrow(|map| map.contains_key(pid))
+    }
+
+    /// Remove a specific canister from the reserve, returning its entry.
+    #[must_use]
+    pub(crate) fn take(pid: &Principal) -> Option<CanisterReserveEntry> {
+        CANISTER_RESERVE.with_borrow_mut(|map| map.remove(pid))
     }
 
     /// Remove a specific canister from the reserve.
@@ -122,8 +151,8 @@ mod tests {
         let p1 = pid(1);
         let p2 = pid(2);
 
-        CanisterReserve::register(p1, 100u128.into());
-        CanisterReserve::register(p2, 200u128.into());
+        CanisterReserve::register(p1, 100u128.into(), None, None, None);
+        CanisterReserve::register(p2, 200u128.into(), None, None, None);
 
         let view = CanisterReserve::export();
         assert_eq!(view.len(), 2);
@@ -142,8 +171,8 @@ mod tests {
         let p1 = pid(1);
         let p2 = pid(2);
 
-        CanisterReserve::register(p1, 123u128.into());
-        CanisterReserve::register(p2, 456u128.into());
+        CanisterReserve::register(p1, 123u128.into(), None, None, None);
+        CanisterReserve::register(p2, 456u128.into(), None, None, None);
 
         let removed = CanisterReserve::remove(&p1).unwrap();
         assert_eq!(removed.cycles, 123u128.into());
@@ -158,7 +187,7 @@ mod tests {
     fn clear_resets_reserve() {
         CanisterReserve::clear();
 
-        CanisterReserve::register(pid(1), 10u128.into());
+        CanisterReserve::register(pid(1), 10u128.into(), None, None, None);
         assert!(!CanisterReserve::is_empty());
 
         CanisterReserve::clear();

@@ -13,6 +13,7 @@ use crate::{
         },
         prelude::*,
     },
+    types::PageRequest,
 };
 use std::collections::BTreeMap;
 
@@ -60,8 +61,8 @@ impl AppDirectoryOps {
     }
 
     #[must_use]
-    pub fn page(offset: u64, limit: u64) -> DirectoryPageDto {
-        paginate(Self::resolve_view(), offset, limit)
+    pub fn page(request: PageRequest) -> DirectoryPageDto {
+        paginate(Self::resolve_view(), request)
     }
 
     /// Build AppDirectory from the registry.

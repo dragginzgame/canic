@@ -14,7 +14,7 @@ use crate::{
         model::memory::EnvOps,
         model::{OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY},
     },
-    types::Cycles,
+    types::{Cycles, PageRequest},
     utils::time::now_secs,
 };
 use candid::CandidType;
@@ -132,8 +132,8 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn page(offset: u64, limit: u64) -> CycleTrackerPage {
-        let entries = CycleTracker::entries(offset, limit);
+    pub fn page(request: PageRequest) -> CycleTrackerPage {
+        let entries = CycleTracker::entries(request);
         let total = CycleTracker::len();
 
         CycleTrackerPage { entries, total }

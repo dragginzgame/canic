@@ -5,6 +5,7 @@ use crate::{
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
     ops::model::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
+    types::PageRequest,
 };
 use candid::CandidType;
 use serde::Serialize;
@@ -121,15 +122,15 @@ impl LogOps {
         crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
-        offset: u64,
-        limit: u64,
+        request: PageRequest,
     ) -> LogPageDto {
+        let request = request.clamped();
+
         let (raw_entries, total) = StableLog::entries_page_filtered(
             crate_name.as_deref(),
             topic.as_deref(),
             min_level,
-            offset,
-            limit,
+            request,
         );
 
         let entries = raw_entries

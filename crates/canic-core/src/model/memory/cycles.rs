@@ -3,7 +3,7 @@ use crate::{
     eager_static, log,
     log::Topic,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
-    types::Cycles,
+    types::{Cycles, PageRequest},
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;
@@ -64,9 +64,11 @@ impl CycleTracker {
     }
 
     #[must_use]
-    pub(crate) fn entries(offset: u64, limit: u64) -> CycleTrackerView {
-        let offset = usize::try_from(offset).unwrap_or(usize::MAX);
-        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+    pub(crate) fn entries(request: PageRequest) -> CycleTrackerView {
+        let request = request.clamped();
+
+        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
 
         CYCLE_TRACKER.with_borrow(|t| {
             t.map

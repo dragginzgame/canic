@@ -14,7 +14,7 @@ macro_rules! canic_endpoints_root {
             ::canic::core::ops::model::memory::state::AppStateOps::command(cmd)?;
 
             let bundle = ::canic::core::ops::sync::state::StateBundle::new().with_app_state();
-            ::canic::core::ops::sync::state::root_cascade_state(bundle).await?;
+            ::canic::core::ops::sync::state::cascade_root_state(bundle).await?;
 
             Ok(())
         }
@@ -97,7 +97,7 @@ macro_rules! canic_endpoints_root {
         }
 
         #[::canic::cdk::update]
-        async fn canic_reserve_create_canister()
+        async fn canic_reserve_create_empty()
         -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
 
@@ -105,12 +105,23 @@ macro_rules! canic_endpoints_root {
         }
 
         #[::canic::cdk::update]
-        async fn canic_reserve_import_canister(
+        async fn canic_reserve_recycle(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<(), ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
 
-            ::canic::core::ops::model::memory::reserve::reserve_import_canister(pid).await
+            ::canic::core::ops::model::memory::reserve::recycle_via_orchestrator(pid).await
+        }
+
+        #[::canic::cdk::update]
+        async fn canic_reserve_import(
+            pid: ::canic::cdk::candid::Principal,
+        ) -> Result<(), ::canic::Error> {
+            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
+
+            ::canic::core::ops::model::memory::reserve::reserve_import_canister(pid)
+                .await
+                .map(|_| ())
         }
     };
 }

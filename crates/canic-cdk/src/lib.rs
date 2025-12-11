@@ -17,9 +17,7 @@
 ///
 pub use candid;
 pub use ic_canister_sig_creation as canister_sig_creation;
-pub use ic_cdk::api;
-pub use ic_cdk::management_canister as mgmt;
-pub use ic_cdk::*;
+pub use ic_cdk::{api, management_canister as mgmt, *};
 pub use ic_cdk_timers as timers;
 pub use ic_signature_verification as signature_verification;
 pub use icrc_ledger_types;
