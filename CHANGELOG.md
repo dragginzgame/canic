@@ -5,9 +5,17 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.15] - 2025-12-11
+## [0.5.16] - 2025-12-11 - O(n^2) -> O(n)
+### Fixed
+- Decode `notify_top_up` responses from the CMC and surface errors instead of treating any reply as success, so failed cycle top-ups no longer appear successful.
+
+### Changed
+- Topology sync bundles now carry only the parent chain and per-node direct children (no full subtree), removing the quadratic fanout cost and matching the stored parent/child snapshot.
+
+## [0.5.15] - 2025-12-11 - Canister Lifecycle Orchestrator
 - simplified the reserve-pool subsystem to make canister recycling more reliable and easier to maintain.
 - A new internal utility (recycle_via_orchestrator) integrates cleanly with the orchestrator so that recycling automatically triggers topology/directory updates when required.
+- changed (limit, offset) endpoint arguments to use a unified struct
 
 ## [0.5.14] - 2025-12-10 - Icc / System Metrics
 - split Metrics into two types, System and Inter-canister calls

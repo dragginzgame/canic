@@ -30,7 +30,6 @@ ic-canister-sig-creation = { workspace = true }
 ic-cdk = { workspace = true }
 ic-signature-verification = { workspace = true }
 ic-stable-structures = { workspace = true }
-icrc-ledger-types = { workspace = true }
 minicbor-serde = { workspace = true }
 remain = { workspace = true }
 serde = { workspace = true }
