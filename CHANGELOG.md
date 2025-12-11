@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.15] - 2025-12-11
+- simplified the reserve-pool subsystem to make canister recycling more reliable and easier to maintain.
+- A new internal utility (recycle_via_orchestrator) integrates cleanly with the orchestrator so that recycling automatically triggers topology/directory updates when required.
+
 ## [0.5.14] - 2025-12-10 - Icc / System Metrics
 - split Metrics into two types, System and Inter-canister calls
 - Pagination queries now take a `PageRequest` (with defaults and a 1,000 item cap) instead of raw `offset`/`limit` pairs for logs, directories, cycle tracker, and topology children.
