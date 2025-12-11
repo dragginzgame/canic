@@ -55,11 +55,11 @@ pub struct AppState;
 
 impl AppState {
     #[must_use]
-    pub fn get_mode() -> AppMode {
+    pub(crate) fn get_mode() -> AppMode {
         APP_STATE.with_borrow(|cell| cell.get().mode)
     }
 
-    pub fn set_mode(mode: AppMode) {
+    pub(crate) fn set_mode(mode: AppMode) {
         APP_STATE.with_borrow_mut(|cell| {
             let mut data = *cell.get();
             data.mode = mode;
@@ -67,12 +67,12 @@ impl AppState {
         });
     }
 
-    pub fn import(data: AppStateData) {
+    pub(crate) fn import(data: AppStateData) {
         APP_STATE.with_borrow_mut(|cell| cell.set(data));
     }
 
     #[must_use]
-    pub fn export() -> AppStateData {
+    pub(crate) fn export() -> AppStateData {
         APP_STATE.with_borrow(|cell| *cell.get())
     }
 }

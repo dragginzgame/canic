@@ -1,7 +1,6 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    ids::CanisterRole,
     model::memory::{CanisterSummary, id::topology::subnet::SUBNET_CANISTER_CHILDREN_ID},
 };
 use candid::Principal;
@@ -27,31 +26,14 @@ eager_static! {
 pub struct SubnetCanisterChildren;
 
 impl SubnetCanisterChildren {
-    /// Lookup a child by principal
-    #[must_use]
-    pub fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
-        SUBNET_CANISTER_CHILDREN.with_borrow(|map| map.get(pid))
-    }
-
-    /// Lookup the first child of a given type
-    #[must_use]
-    pub fn find_first_by_type(ty: &CanisterRole) -> Option<CanisterSummary> {
-        SUBNET_CANISTER_CHILDREN.with_borrow(|map| {
-            map.iter().find_map(|e| {
-                let value = e.value();
-                if value.ty == *ty { Some(value) } else { None }
-            })
-        })
-    }
-
     /// Export state
     #[must_use]
-    pub fn export() -> Vec<CanisterSummary> {
+    pub(crate) fn export() -> Vec<CanisterSummary> {
         SUBNET_CANISTER_CHILDREN.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
     /// Import state (replace everything)
-    pub fn import(data: Vec<CanisterSummary>) {
+    pub(crate) fn import(data: Vec<CanisterSummary>) {
         SUBNET_CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear();
             for entry in data {

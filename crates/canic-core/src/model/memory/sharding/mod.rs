@@ -42,7 +42,7 @@ impl ShardKey {
     pub const STORABLE_MAX_SIZE: u32 = 160;
 
     #[must_use]
-    pub fn new(pool: &str, tenant: &str) -> Self {
+    pub(crate) fn new(pool: &str, tenant: &str) -> Self {
         Self {
             pool: pool.try_into().unwrap(),
             tenant: tenant.try_into().unwrap(),
@@ -74,7 +74,13 @@ impl ShardEntry {
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
     #[must_use]
-    pub fn new(pool: &str, slot: u32, ty: CanisterRole, capacity: u32, created_at: u64) -> Self {
+    pub(crate) fn new(
+        pool: &str,
+        slot: u32,
+        ty: CanisterRole,
+        capacity: u32,
+        created_at: u64,
+    ) -> Self {
         Self {
             slot,
             canister_type: ty,

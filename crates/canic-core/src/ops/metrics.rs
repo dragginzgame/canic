@@ -1,6 +1,7 @@
 pub use crate::model::metrics::{
-    IccMetricEntry, IccMetrics, IccMetricsSnapshot, MetricEntry, MetricKind, MetricsReport,
-    MetricsSnapshot, MetricsState, SystemMetrics,
+    HttpMetricEntry, HttpMetrics, HttpMetricsSnapshot, IccMetricEntry, IccMetrics,
+    IccMetricsSnapshot, MetricsReport, SystemMetricEntry, SystemMetricKind, SystemMetrics,
+    SystemMetricsSnapshot,
 };
 
 ///
@@ -11,14 +12,9 @@ pub use crate::model::metrics::{
 pub struct MetricsOps;
 
 impl MetricsOps {
-    /// Increment a metric counter.
-    pub fn record(kind: MetricKind) {
-        SystemMetrics::record(kind);
-    }
-
     /// Export the current metrics snapshot.
     #[must_use]
-    pub fn system_snapshot() -> MetricsSnapshot {
+    pub fn system_snapshot() -> SystemMetricsSnapshot {
         SystemMetrics::snapshot()
     }
 
@@ -28,12 +24,19 @@ impl MetricsOps {
         IccMetrics::snapshot()
     }
 
+    /// Export the current HTTP metrics snapshot.
+    #[must_use]
+    pub fn http_snapshot() -> HttpMetricsSnapshot {
+        HttpMetrics::snapshot()
+    }
+
     /// Export combined metrics (actions + ICC).
     #[must_use]
     pub fn report() -> MetricsReport {
         MetricsReport {
             system: Self::system_snapshot(),
             icc: Self::icc_snapshot(),
+            http: Self::http_snapshot(),
         }
     }
 }

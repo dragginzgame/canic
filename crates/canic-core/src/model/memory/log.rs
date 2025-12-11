@@ -105,7 +105,7 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
-    pub fn new(crate_name: &str, level: Level, topic: Option<&str>, msg: &str) -> Self {
+    pub(crate) fn new(crate_name: &str, level: Level, topic: Option<&str>, msg: &str) -> Self {
         Self {
             crate_name: crate_name.to_string(),
             created_at: time::now_secs(),
@@ -127,7 +127,7 @@ pub(crate) struct StableLog;
 impl StableLog {
     // -------- Append --------
 
-    pub fn append<T, M>(
+    pub(crate) fn append<T, M>(
         crate_name: &str,
         topic: Option<T>,
         level: Level,
@@ -148,7 +148,7 @@ impl StableLog {
         Self::append_entry(entry)
     }
 
-    pub fn append_entry(entry: LogEntry) -> Result<u64, Error> {
+    pub(crate) fn append_entry(entry: LogEntry) -> Result<u64, Error> {
         let cfg = log_config();
 
         if cfg.max_entries == 0 {
@@ -167,7 +167,7 @@ impl StableLog {
     }
 
     #[must_use]
-    pub fn entries_page_filtered(
+    pub(crate) fn entries_page_filtered(
         crate_name: Option<&str>,
         topic: Option<&str>,
         min_level: Option<Level>,

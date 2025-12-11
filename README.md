@@ -18,6 +18,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - 🪶 **Core utilities** – `canic::core` exposes perf counters, bounded types, MiniCBOR serializers, and deterministic utilities without pulling in the full ops stack.
 - 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
 - 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and reserve policies validated straight from `canic.toml`.
+- 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per-node direct children, validate roots/cycles, and fail fast to avoid quadratic fan-out.
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.

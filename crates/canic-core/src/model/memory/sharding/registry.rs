@@ -40,7 +40,7 @@ impl ShardingRegistry {
     // -----------------------------------------------------------------------
 
     #[cfg(test)]
-    pub fn clear() {
+    pub(crate) fn clear() {
         Self::with_mut(|core| {
             core.registry.clear();
             core.assignments.clear();
@@ -53,7 +53,7 @@ impl ShardingRegistry {
 
     /// Lookup the slot index for a given shard principal.
     #[must_use]
-    pub fn slot_for_shard(pool: &str, shard: Principal) -> Option<u32> {
+    pub(crate) fn slot_for_shard(pool: &str, shard: Principal) -> Option<u32> {
         Self::with(|s| s.get_entry(&shard)).and_then(|entry| {
             if entry.pool == pool && entry.has_assigned_slot() {
                 Some(entry.slot)
@@ -65,13 +65,13 @@ impl ShardingRegistry {
 
     /// Returns the shard assigned to the given tenant (if any).
     #[must_use]
-    pub fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
+    pub(crate) fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
         Self::with(|s| s.get_assignment(&ShardKey::new(pool, tenant)))
     }
 
     /// Lists all tenants currently assigned to the specified shard.
     #[must_use]
-    pub fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<String> {
+    pub(crate) fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<String> {
         Self::with(|s| {
             s.all_assignments()
                 .into_iter()
@@ -83,7 +83,7 @@ impl ShardingRegistry {
 
     /// Exports all shard entries (for inspection or snapshot purposes).
     #[must_use]
-    pub fn export() -> Vec<(Principal, ShardEntry)> {
+    pub(crate) fn export() -> Vec<(Principal, ShardEntry)> {
         Self::with(ShardingCore::all_entries)
     }
 }

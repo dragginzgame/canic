@@ -36,12 +36,12 @@ impl_storable_bounded!(SubnetStateData, 32, true);
 pub struct SubnetState;
 
 impl SubnetState {
-    pub fn import(data: SubnetStateData) {
+    pub(crate) fn import(data: SubnetStateData) {
         SUBNET_STATE.with_borrow_mut(|cell| cell.set(data));
     }
 
     #[must_use]
-    pub fn export() -> SubnetStateData {
+    pub(crate) fn export() -> SubnetStateData {
         SUBNET_STATE.with_borrow(|cell| *cell.get())
     }
 }
