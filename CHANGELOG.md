@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.18] - Unreleased
+### Added
+- Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
+
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added
 - Ops-level `http_get` helper for JSON GETs that records HTTP outcall metrics alongside the system counters.
@@ -13,9 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - Metrics reporting now distinguishes HTTP outcalls and the main metrics façade is called `SystemMetrics`.
 
-## [0.5.18] - Unreleased
-### Added
-- Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
+
 
 ## [0.5.16] - 2025-12-11 - O(n^2) -> O(n)
 ### Fixed
