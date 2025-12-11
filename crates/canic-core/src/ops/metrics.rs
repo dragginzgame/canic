@@ -1,7 +1,7 @@
 pub use crate::model::metrics::{
     HttpMetricEntry, HttpMetrics, HttpMetricsSnapshot, IccMetricEntry, IccMetrics,
     IccMetricsSnapshot, MetricsReport, SystemMetricEntry, SystemMetricKind, SystemMetrics,
-    SystemMetricsSnapshot,
+    SystemMetricsSnapshot, TimerMetricEntry, TimerMetrics, TimerMetricsSnapshot,
 };
 
 ///
@@ -30,13 +30,20 @@ impl MetricsOps {
         IccMetrics::snapshot()
     }
 
-    /// Export combined metrics (actions + ICC).
+    /// Export the current timer metrics snapshot.
+    #[must_use]
+    pub fn timer_snapshot() -> TimerMetricsSnapshot {
+        TimerMetrics::snapshot()
+    }
+
+    /// Export combined metrics (system + ICC + HTTP + timers).
     #[must_use]
     pub fn report() -> MetricsReport {
         MetricsReport {
             system: Self::system_snapshot(),
             http: Self::http_snapshot(),
             icc: Self::icc_snapshot(),
+            timer: Self::timer_snapshot(),
         }
     }
 }

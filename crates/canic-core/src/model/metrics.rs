@@ -8,6 +8,7 @@ thread_local! {
     static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());
     static ICC_METRICS: RefCell<HashMap<IccMetricKey, u64>> = RefCell::new(HashMap::new());
     static HTTP_METRICS: RefCell<HashMap<HttpMetricKey, u64>> = RefCell::new(HashMap::new());
+    static TIMER_METRICS: RefCell<HashMap<TimerMetricKey, u64>> = RefCell::new(HashMap::new());
 }
 
 // -----------------------------------------------------------------------------
@@ -35,6 +36,7 @@ pub enum SystemMetricKind {
     HttpOutcall,
     InstallCode,
     ReinstallCode,
+    TimerScheduled,
     UninstallCode,
     UpgradeCode,
 }
@@ -103,6 +105,43 @@ pub struct HttpMetricEntry {
 pub type HttpMetricsSnapshot = Vec<HttpMetricEntry>;
 
 ///
+/// TimerMode
+///
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub enum TimerMode {
+    Interval,
+    Once,
+}
+
+///
+/// TimerMetricKey
+/// Uniquely identifies a timer by mode + delay (ms) + label.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct TimerMetricKey {
+    pub mode: TimerMode,
+    pub delay_ms: u64,
+    pub label: String,
+}
+
+///
+/// TimerMetricEntry
+/// Snapshot entry pairing a timer mode/delay with its count.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct TimerMetricEntry {
+    pub mode: TimerMode,
+    pub delay_ms: u64,
+    pub label: String,
+    pub count: u64,
+}
+
+///
+/// TimerMetricsSnapshot
+///
+pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
+
+///
 /// IccMetricsSnapshot
 ///
 
@@ -110,7 +149,7 @@ pub type IccMetricsSnapshot = Vec<IccMetricEntry>;
 
 ///
 /// MetricsReport
-/// Composite metrics view bundling action, ICC, and HTTP counters.
+/// Composite metrics view bundling action, ICC, HTTP, and timer counters.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
@@ -118,6 +157,7 @@ pub struct MetricsReport {
     pub system: SystemMetricsSnapshot,
     pub icc: IccMetricsSnapshot,
     pub http: HttpMetricsSnapshot,
+    pub timer: TimerMetricsSnapshot,
 }
 
 // -----------------------------------------------------------------------------
@@ -164,6 +204,7 @@ impl SystemMetrics {
 /// IccMetrics
 /// Volatile counters for inter-canister calls keyed by target + method.
 ///
+
 pub struct IccMetrics;
 
 impl IccMetrics {
@@ -204,6 +245,7 @@ impl IccMetrics {
 /// HttpMetrics
 /// Volatile counters for HTTP outcalls keyed by method + URL.
 ///
+
 pub struct HttpMetrics;
 
 impl HttpMetrics {
@@ -235,6 +277,49 @@ impl HttpMetrics {
     #[cfg(test)]
     pub fn reset() {
         HTTP_METRICS.with_borrow_mut(HashMap::clear);
+    }
+}
+
+///
+/// TimerMetrics
+/// Volatile counters for timers keyed by mode + delay.
+///
+pub struct TimerMetrics;
+
+impl TimerMetrics {
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn increment(mode: TimerMode, delay: std::time::Duration, label: &str) {
+        let delay_ms = delay.as_millis().min(u128::from(u64::MAX)) as u64;
+
+        TIMER_METRICS.with_borrow_mut(|counts| {
+            let key = TimerMetricKey {
+                mode,
+                delay_ms,
+                label: label.to_string(),
+            };
+            let entry = counts.entry(key).or_insert(0);
+            *entry = entry.saturating_add(1);
+        });
+    }
+
+    #[must_use]
+    pub fn snapshot() -> TimerMetricsSnapshot {
+        TIMER_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(key, count)| TimerMetricEntry {
+                    mode: key.mode,
+                    delay_ms: key.delay_ms,
+                    label: key.label.clone(),
+                    count: *count,
+                })
+                .collect()
+        })
+    }
+
+    #[cfg(test)]
+    pub fn reset() {
+        TIMER_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -315,6 +400,35 @@ mod tests {
         );
         assert_eq!(
             map.remove(&("GET".to_string(), "https://example.com/b".to_string())),
+            Some(1)
+        );
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn timer_metrics_track_mode_delay_and_label() {
+        TimerMetrics::reset();
+
+        TimerMetrics::increment(TimerMode::Once, std::time::Duration::from_secs(1), "once:a");
+        TimerMetrics::increment(TimerMode::Once, std::time::Duration::from_secs(1), "once:a");
+        TimerMetrics::increment(
+            TimerMode::Interval,
+            std::time::Duration::from_millis(500),
+            "interval:b",
+        );
+
+        let snapshot = TimerMetrics::snapshot();
+        let mut map: HashMap<(TimerMode, u64, String), u64> = snapshot
+            .into_iter()
+            .map(|entry| ((entry.mode, entry.delay_ms, entry.label), entry.count))
+            .collect();
+
+        assert_eq!(
+            map.remove(&(TimerMode::Once, 1_000, "once:a".to_string())),
+            Some(2)
+        );
+        assert_eq!(
+            map.remove(&(TimerMode::Interval, 500, "interval:b".to_string())),
             Some(1)
         );
         assert!(map.is_empty());
