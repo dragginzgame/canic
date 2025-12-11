@@ -25,6 +25,7 @@ pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 /// SystemMetricKind
 /// Enumerates the resource-heavy actions we track.
 ///
+
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[remain::sorted]
 pub enum SystemMetricKind {
@@ -139,6 +140,7 @@ pub struct TimerMetricEntry {
 ///
 /// TimerMetricsSnapshot
 ///
+
 pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
 
 ///
@@ -284,6 +286,7 @@ impl HttpMetrics {
 /// TimerMetrics
 /// Volatile counters for timers keyed by mode + delay.
 ///
+
 pub struct TimerMetrics;
 
 impl TimerMetrics {
