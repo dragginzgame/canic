@@ -148,8 +148,10 @@ Command variants cover register, audit, drain, rebalance, and decommission flows
 
 ### Directory Views 📇
 
-- `canic_app_directory()` returns the prime root directory view for operator dashboards.
-- `canic_subnet_directory()` exposes the per-subnet directory so children can discover peers.
+- `canic_app_directory(PageRequest)` returns the prime root directory view for operator dashboards.
+- `canic_subnet_directory(PageRequest)` exposes the per-subnet directory so children can discover peers.
+
+Use `PageRequest::DEFAULT` or `PageRequest::bounded(limit, offset)` to avoid passing raw integers into queries.
 
 ### ICRC Support 📚
 

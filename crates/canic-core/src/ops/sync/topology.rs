@@ -16,11 +16,9 @@ use crate::{
 };
 use std::collections::HashMap;
 
-//
-// ===========================================================================
-//  BUNDLES
-// ===========================================================================
-//
+///
+/// TopologyBundle
+///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologyBundle {
@@ -62,20 +60,7 @@ impl TopologyBundle {
 // ===========================================================================
 //
 
-pub async fn root_cascade_topology() -> Result<(), Error> {
-    OpsError::require_root()?;
-
-    let root_pid = canister_self();
-    let bundle = TopologyBundle::root()?;
-    let index = SubtreeIndex::new(&bundle.subtree);
-
-    let children = SubnetCanisterRegistryOps::children(root_pid);
-    warn_large(children.len(), "root");
-
-    cascade_children(root_pid, &bundle, &index, children).await
-}
-
-pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
+pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
     let root_pid = canister_self();
@@ -90,6 +75,7 @@ pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), 
             Warn,
             "sync.topology: no branch path to {target_pid}, skipping targeted cascade"
         );
+
         return Ok(());
     }
 
@@ -103,6 +89,7 @@ pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), 
             Warn,
             "sync.topology: branch path for {target_pid} does not start at root, skipping targeted cascade"
         );
+
         return Ok(());
     }
 

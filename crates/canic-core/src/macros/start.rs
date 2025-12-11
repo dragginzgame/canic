@@ -41,7 +41,7 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::core::ops::lifecycle::nonroot_init($canister_type, payload);
+            ::canic::core::ops::runtime::nonroot_init($canister_type, payload);
 
             // timers — async body, no spawn()
             let _ =
@@ -56,7 +56,7 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::core::ops::lifecycle::nonroot_post_upgrade($canister_type);
+            ::canic::core::ops::runtime::nonroot_post_upgrade($canister_type);
 
             // timers — async body, no spawn()
             let _ =
@@ -83,7 +83,7 @@ macro_rules! start {
 ///
 /// It generates the `init` and `post_upgrade` hooks required by the IC, loads embedded
 /// configuration, imports the root `WASMS` bundle, and runs pre- and post-upgrade logic
-/// in [`ops::lifecycle`].
+/// in [`ops::runtime_lifecycle`].
 ///
 /// Use this for the root orchestrator canister only. Other canisters should use
 /// [`macro@canic::start`].
@@ -96,7 +96,7 @@ macro_rules! start_root {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::core::ops::lifecycle::root_init(identity);
+            ::canic::core::ops::runtime::root_init(identity);
 
             // import wasms
             ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
@@ -127,7 +127,7 @@ macro_rules! start_root {
             ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
 
             // ops
-            ::canic::core::ops::lifecycle::root_post_upgrade();
+            ::canic::core::ops::runtime::root_post_upgrade();
 
             // timers
             let _ =

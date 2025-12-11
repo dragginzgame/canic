@@ -23,18 +23,25 @@ use crate::{
             EnvOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::EnvData,
-            reserve::{CanisterReserveOps, reserve_import_canister},
+            reserve::CanisterReserveOps,
             topology::SubnetCanisterRegistryOps,
         },
-        sync::{
-            state::{StateBundle, root_cascade_state},
-            topology::root_cascade_topology_for_pid,
-        },
+        sync::state::StateBundle,
         wasm::WasmOps,
     },
 };
 use candid::Principal;
 use canic_types::Cycles;
+use thiserror::Error as ThisError;
+
+#[derive(Debug, ThisError)]
+pub enum ProvisioningError {
+    #[error(transparent)]
+    Other(#[from] Error),
+
+    #[error("install failed for {pid}: {source}")]
+    InstallFailed { pid: Principal, source: Error },
+}
 
 //
 // ===========================================================================
@@ -43,11 +50,11 @@ use canic_types::Cycles;
 //
 
 /// Rebuild AppDirectory and SubnetDirectory from the registry,
-/// import them directly, and cascade state exactly once.
+/// import them directly, and return the resulting state bundle.
 /// When `updated_ty` is provided, only include the sections that list that type.
-pub(crate) async fn sync_directories_from_registry(
+pub(crate) async fn rebuild_directories_from_registry(
     updated_ty: Option<&CanisterRole>,
-) -> Result<(), Error> {
+) -> Result<StateBundle, Error> {
     let mut bundle = StateBundle::default();
     let cfg = Config::get();
 
@@ -72,11 +79,7 @@ pub(crate) async fn sync_directories_from_registry(
         bundle.subnet_directory = Some(subnet_view);
     }
 
-    // Cascade the new directory state once
-    // it won't do anything if the bundle is empty
-    root_cascade_state(bundle).await?;
-
-    Ok(())
+    Ok(bundle)
 }
 
 //
@@ -96,7 +99,7 @@ pub async fn create_and_install_canister(
     ty: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, Error> {
+) -> Result<Principal, ProvisioningError> {
     // must have WASM module registered
     WasmOps::try_get(ty)?;
 
@@ -105,22 +108,7 @@ pub async fn create_and_install_canister(
 
     // Phase 2: installation
     if let Err(err) = install_canister(pid, ty, parent_pid, extra_arg).await {
-        let err_msg = err.to_string();
-        log!(
-            Topic::CanisterLifecycle,
-            Warn,
-            "⚠️ install_canister failed for {pid}: {err_msg}"
-        );
-
-        if let Err(recycle_err) = reserve_import_canister(pid).await {
-            log!(
-                Topic::CanisterReserve,
-                Warn,
-                "⚠️ failed to recycle {pid} into reserve after install failure: {recycle_err}"
-            );
-        }
-
-        return Err(err);
+        return Err(ProvisioningError::InstallFailed { pid, source: err });
     }
 
     Ok(pid)

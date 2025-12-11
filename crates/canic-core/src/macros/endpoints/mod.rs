@@ -71,11 +71,10 @@ macro_rules! canic_endpoints {
             crate_name: Option<String>,
             topic: Option<String>,
             min_level: Option<::canic::core::log::Level>,
-            offset: u64,
-            limit: u64,
+            page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::log::LogPageDto {
             ::canic::core::ops::model::memory::log::LogOps::page(
-                crate_name, topic, min_level, offset, limit,
+                crate_name, topic, min_level, page,
             )
         }
 
@@ -109,18 +108,16 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         fn canic_app_directory(
-            offset: u64,
-            limit: u64,
+            page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::directory::DirectoryPageDto {
-            $crate::ops::model::memory::directory::AppDirectoryOps::page(offset, limit)
+            $crate::ops::model::memory::directory::AppDirectoryOps::page(page)
         }
 
         #[::canic::cdk::query]
         fn canic_subnet_directory(
-            offset: u64,
-            limit: u64,
+            page: ::canic::core::types::PageRequest,
         ) -> Result<::canic::core::ops::model::memory::directory::DirectoryPageDto, ::canic::Error> {
-            $crate::ops::model::memory::directory::SubnetDirectoryOps::page(offset, limit)
+            $crate::ops::model::memory::directory::SubnetDirectoryOps::page(page)
         }
 
         //
@@ -129,11 +126,10 @@ macro_rules! canic_endpoints {
 
         #[::canic::cdk::query]
         fn canic_subnet_canister_children(
-            offset: u64,
-            limit: u64,
+            page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenPage {
             ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenOps::page(
-                offset, limit,
+                page,
             )
         }
 
@@ -144,10 +140,9 @@ macro_rules! canic_endpoints {
         // canic_cycle_tracker
         #[::canic::cdk::query]
         fn canic_cycle_tracker(
-            offset: u64,
-            limit: u64,
+            page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::cycles::CycleTrackerPage {
-            $crate::ops::model::memory::cycles::CycleTrackerOps::page(offset, limit)
+            $crate::ops::model::memory::cycles::CycleTrackerOps::page(page)
         }
 
         //

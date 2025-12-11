@@ -7,7 +7,7 @@ use canic::{
         ops::model::memory::directory::DirectoryPageDto,
         ops::model::memory::topology::subnet::SubnetCanisterChildrenPage,
     },
-    types::TC,
+    types::{PageRequest, TC},
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, PicBuilder};
@@ -209,10 +209,14 @@ fn directories_are_consistent_across_canisters() {
     let print_counts = true;
 
     let root_app_dir: DirectoryPageDto = pic
-        .query_call(root_id, "canic_app_directory", (0u64, 100u64))
+        .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
         .expect("root app directory");
     let root_subnet_dir: Result<DirectoryPageDto, canic::Error> = pic
-        .query_call(root_id, "canic_subnet_directory", (0u64, 100u64))
+        .query_call(
+            root_id,
+            "canic_subnet_directory",
+            (PageRequest::new(100, 0),),
+        )
         .expect("root subnet directory");
     let root_subnet_dir =
         root_subnet_dir.unwrap_or_else(|err| panic!("root subnet directory result: {err}"));
@@ -227,10 +231,18 @@ fn directories_are_consistent_across_canisters() {
 
     for (ty, entry) in registry.iter().filter(|(ty, _)| !ty.is_root()) {
         let app_dir: DirectoryPageDto = pic
-            .query_call(entry.pid, "canic_app_directory", (0u64, 100u64))
+            .query_call(
+                entry.pid,
+                "canic_app_directory",
+                (PageRequest::new(100, 0),),
+            )
             .expect("child app directory");
         let subnet_dir: Result<DirectoryPageDto, canic::Error> = pic
-            .query_call(entry.pid, "canic_subnet_directory", (0u64, 100u64))
+            .query_call(
+                entry.pid,
+                "canic_subnet_directory",
+                (PageRequest::new(100, 0),),
+            )
             .expect("child subnet directory");
         let subnet_dir = subnet_dir
             .unwrap_or_else(|err| panic!("child subnet directory result for {ty}: {err}"));
@@ -286,7 +298,11 @@ fn subnet_children_matches_registry_on_root() {
     );
 
     let mut page: canic::core::ops::model::memory::topology::SubnetCanisterChildrenPage = pic
-        .query_call(root_id, "canic_subnet_canister_children", (0u64, 100u64))
+        .query_call(
+            root_id,
+            "canic_subnet_canister_children",
+            (PageRequest::new(100, 0),),
+        )
         .expect("query root subnet children");
 
     expected_children.sort_by(|a, b| a.ty.cmp(&b.ty));
@@ -354,7 +370,7 @@ fn worker_topology_cascades_through_parent() {
         .query_call(
             scale_hub.pid,
             "canic_subnet_canister_children",
-            (0u64, 100u64),
+            (PageRequest::new(100, 0),),
         )
         .expect("scale_hub subnet children");
     children_page

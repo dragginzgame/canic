@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.5.14] - 2025-12-10 - Icc / System Metrics
 - split Metrics into two types, System and Inter-canister calls
+- Pagination queries now take a `PageRequest` (with defaults and a 1,000 item cap) instead of raw `offset`/`limit` pairs for logs, directories, cycle tracker, and topology children.
 
 ## [0.5.13] - 2025-12-10 - Canic Metrics
 - Wrapped cross-canister call construction so `CanisterCall` metrics are recorded centrally without scattered increments.

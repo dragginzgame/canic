@@ -13,6 +13,7 @@ use crate::{
         MemoryError,
         id::log::{LOG_DATA_ID, LOG_INDEX_ID},
     },
+    types::PageRequest,
     utils::{
         case::{Case, Casing},
         time,
@@ -170,11 +171,11 @@ impl StableLog {
         crate_name: Option<&str>,
         topic: Option<&str>,
         min_level: Option<Level>,
-        offset: u64,
-        limit: u64,
+        request: PageRequest,
     ) -> (Vec<(usize, LogEntry)>, u64) {
-        let offset = offset as usize;
-        let limit = limit as usize;
+        let request = request.clamped();
+        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
         let topic_norm: Option<String> = Self::normalize_topic(topic);
         let topic_norm = topic_norm.as_deref();
 

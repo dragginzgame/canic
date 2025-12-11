@@ -10,12 +10,14 @@ pub use canic_utils as utils;
 
 mod account;
 mod cycles;
+mod page;
 mod string;
 mod ulid;
 mod wasm;
 
 pub use account::*;
 pub use cycles::*;
+pub use page::*;
 pub use string::*;
 pub use ulid::*;
 pub use wasm::*;

@@ -10,8 +10,8 @@ use crate::{
     interface::ic::deposit_cycles,
     log::Topic,
     ops::{
-        lifecycle_orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         model::memory::topology::subnet::SubnetCanisterRegistryOps,
+        orchestration::root_orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,

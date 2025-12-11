@@ -11,6 +11,7 @@ use crate::{
             topology::SubnetCanisterRegistryOps,
         },
     },
+    types::PageRequest,
 };
 use std::collections::BTreeMap;
 
@@ -54,8 +55,8 @@ impl SubnetDirectoryOps {
             .ok_or_else(|| SubnetDirectoryOpsError::NotFound(role.clone()).into())
     }
 
-    pub fn page(offset: u64, limit: u64) -> Result<DirectoryPageDto, Error> {
-        Ok(paginate(Self::resolve_view(), offset, limit))
+    pub fn page(request: PageRequest) -> Result<DirectoryPageDto, Error> {
+        Ok(paginate(Self::resolve_view(), request))
     }
 
     #[must_use]

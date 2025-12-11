@@ -3,6 +3,7 @@ use crate::{
     config::schema::ConfigModel,
     log::Level,
     model::memory::log::{LogEntry, StableLog, apply_retention},
+    types::PageRequest,
     utils::time,
 };
 
@@ -32,7 +33,8 @@ fn retention_trims_old_and_excess_entries() {
 
     apply_retention().unwrap();
 
-    let (entries, total) = StableLog::entries_page_filtered(None, None, None, 0, 10);
+    let (entries, total) =
+        StableLog::entries_page_filtered(None, None, None, PageRequest::new(10, 0));
     assert_eq!(total, 2);
     let msgs: Vec<_> = entries.into_iter().map(|(_, e)| e.message).collect();
     assert!(msgs.contains(&"fresh1".to_string()));

@@ -103,7 +103,7 @@ impl StateBundle {
 
 /// Cascade from root: distribute the state bundle to direct children.
 /// No-op when the bundle is empty.
-pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
+pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
     if bundle.is_empty() {
@@ -112,6 +112,7 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
             Info,
             "💦 sync.state: root_cascade skipped (empty bundle)"
         );
+
         return Ok(());
     }
 
@@ -149,6 +150,11 @@ pub async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+/// Public wrapper for root state cascades to keep the internal entrypoint crate-private.
+pub async fn cascade_root_state(bundle: StateBundle) -> Result<(), Error> {
+    root_cascade_state(bundle).await
 }
 
 /// Cascade from a child: forward the bundle to direct children.

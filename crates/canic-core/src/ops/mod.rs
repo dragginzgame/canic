@@ -7,15 +7,15 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
-pub mod canister;
 pub mod config;
 pub mod icrc;
-pub mod lifecycle;
-pub mod lifecycle_orchestrator;
 pub mod metrics;
+pub mod mgmt;
 pub mod model;
+pub mod orchestration;
 pub mod request;
 pub mod root;
+pub mod runtime;
 pub mod service;
 pub mod signature;
 pub mod sync;
