@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added
 - Ops-level `http_get` helper for JSON GETs that records HTTP outcall metrics alongside the system counters.
+- Timer metrics wrapper to record scheduled timers (once + interval) and track their cadence alongside other system metrics.
 
 ### Changed
 - Metrics reporting now distinguishes HTTP outcalls and the main metrics façade is called `SystemMetrics`.

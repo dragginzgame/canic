@@ -13,10 +13,12 @@ use crate::{
         api::canister_self,
         futures::spawn,
         mgmt::{self, CanisterSettings, UpdateSettingsArgs},
-        timers::{TimerId, clear_timer, set_timer, set_timer_interval},
     },
     config::{Config, schema::SubnetConfig},
-    interface::ic::get_cycles,
+    interface::ic::{
+        get_cycles,
+        timer::{Timer, TimerId},
+    },
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
@@ -56,12 +58,13 @@ impl CanisterReserveOps {
                 return;
             };
 
-            let id = set_timer(OPS_RESERVE_INIT_DELAY, async {
+            let id = Timer::set(OPS_RESERVE_INIT_DELAY, "reserve:init", async {
                 let _ = Self::check();
 
-                let interval_id = set_timer_interval(OPS_RESERVE_CHECK_INTERVAL, || async {
-                    let _ = Self::check();
-                });
+                let interval_id =
+                    Timer::set_interval(OPS_RESERVE_CHECK_INTERVAL, "reserve:interval", || async {
+                        let _ = Self::check();
+                    });
 
                 TIMER.with_borrow_mut(|slot| *slot = Some(interval_id));
             });
@@ -74,7 +77,7 @@ impl CanisterReserveOps {
     pub fn stop() {
         TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                clear_timer(id);
+                Timer::clear(id);
             }
         });
     }

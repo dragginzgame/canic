@@ -44,11 +44,14 @@ macro_rules! start {
             ::canic::core::ops::runtime::nonroot_init($canister_type, payload);
 
             // timers — async body, no spawn()
-            let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+            let _ = ::canic::core::interface::ic::timer::Timer::set(
+                ::std::time::Duration::from_secs(0),
+                "startup:init",
+                async move {
                     canic_setup().await;
                     canic_install(args).await;
-                });
+                },
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -59,11 +62,14 @@ macro_rules! start {
             ::canic::core::ops::runtime::nonroot_post_upgrade($canister_type);
 
             // timers — async body, no spawn()
-            let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+            let _ = ::canic::core::interface::ic::timer::Timer::set(
+                ::std::time::Duration::from_secs(0),
+                "startup:upgrade",
+                async move {
                     canic_setup().await;
                     canic_upgrade().await;
-                });
+                },
+            );
         }
 
         ::canic::core::canic_endpoints!();
@@ -102,8 +108,10 @@ macro_rules! start_root {
             ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
 
             // timers
-            let _ =
-                ::canic::cdk::timers::set_timer(std::time::Duration::from_secs(0), async move {
+            let _ = ::canic::core::interface::ic::timer::Timer::set(
+                std::time::Duration::from_secs(0),
+                "startup:root",
+                async move {
                     ::canic::core::ops::root::root_set_subnet_id().await;
 
                     // attempt to create canisters
@@ -118,7 +126,8 @@ macro_rules! start_root {
 
                     canic_setup().await;
                     canic_install().await;
-                });
+                },
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -130,11 +139,14 @@ macro_rules! start_root {
             ::canic::core::ops::runtime::root_post_upgrade();
 
             // timers
-            let _ =
-                ::canic::cdk::timers::set_timer(::std::time::Duration::from_secs(0), async move {
+            let _ = ::canic::core::interface::ic::timer::Timer::set(
+                ::std::time::Duration::from_secs(0),
+                "startup:root-upgrade",
+                async move {
                     canic_setup().await;
                     canic_upgrade().await;
-                });
+                },
+            );
         }
 
         ::canic::core::canic_endpoints!();

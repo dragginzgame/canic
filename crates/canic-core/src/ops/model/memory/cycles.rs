@@ -1,11 +1,11 @@
 pub use crate::model::memory::cycles::CycleTrackerView;
 
 use crate::{
-    cdk::{
-        futures::spawn,
-        timers::{TimerId, clear_timer, set_timer, set_timer_interval},
+    cdk::futures::spawn,
+    interface::ic::{
+        canister_cycle_balance,
+        timer::{Timer, TimerId},
     },
-    interface::ic::canister_cycle_balance,
     log,
     log::Topic,
     model::memory::cycles::CycleTracker,
@@ -61,13 +61,14 @@ impl CycleTrackerOps {
                 return;
             }
 
-            let init = set_timer(OPS_INIT_DELAY, async {
+            let init = Timer::set(OPS_INIT_DELAY, "cycles:init", async {
                 let _ = Self::track();
 
-                let interval = set_timer_interval(TRACKER_INTERVAL_SECS, || async {
-                    let _ = Self::track();
-                    let _ = Self::purge();
-                });
+                let interval =
+                    Timer::set_interval(TRACKER_INTERVAL_SECS, "cycles:interval", || async {
+                        let _ = Self::track();
+                        let _ = Self::purge();
+                    });
 
                 TIMER.with_borrow_mut(|slot| *slot = Some(interval));
             });
@@ -80,7 +81,7 @@ impl CycleTrackerOps {
     pub fn stop() {
         TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                clear_timer(id);
+                Timer::clear(id);
             }
         });
     }

@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    cdk::timers::{TimerId, clear_timer, set_timer, set_timer_interval},
+    interface::ic::timer::{Timer, TimerId},
     log,
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
@@ -69,12 +69,13 @@ impl LogOps {
                 return;
             }
 
-            let init = set_timer(OPS_INIT_DELAY, async {
+            let init = Timer::set(OPS_INIT_DELAY, "log_retention:init", async {
                 let _ = Self::retain();
 
-                let interval = set_timer_interval(RETENTION_INTERVAL, || async {
-                    let _ = Self::retain();
-                });
+                let interval =
+                    Timer::set_interval(RETENTION_INTERVAL, "log_retention:interval", || async {
+                        let _ = Self::retain();
+                    });
 
                 RETENTION_TIMER.with_borrow_mut(|slot| *slot = Some(interval));
             });
@@ -87,7 +88,7 @@ impl LogOps {
     pub fn stop_retention() {
         RETENTION_TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                clear_timer(id);
+                Timer::clear(id);
             }
         });
     }
