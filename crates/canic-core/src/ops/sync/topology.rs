@@ -1,11 +1,17 @@
 //! Topology synchronization helpers.
 //!
-//! Extracts relevant topology subsets and propagates them so each canister
-//! maintains an up-to-date view of its children and parent chain.
+//! Propagates topology snapshots along a targeted branch.
+//!
+//! Bundles carry a trimmed parent chain and the per-node direct children for
+//! that chain only. Each hop receives a suffix of the chain (starting at self),
+//! validates it (cycle/root termination checks), imports its direct children,
+//! and forwards a further-trimmed bundle to the next hop. Failures are logged
+//! and abort the cascade rather than continuing with partial data.
 
 use super::warn_if_large;
 use crate::{
     Error,
+    ids::CanisterRole,
     log::Topic,
     model::memory::CanisterSummary,
     ops::{
@@ -15,7 +21,7 @@ use crate::{
         sync::SyncOpsError,
     },
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 ///
 /// TopologyBundle
@@ -55,9 +61,29 @@ impl TopologyBundle {
 pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    let bundle = TopologyBundle::for_target(target_pid)?;
+    let bundle = match TopologyBundle::for_target(target_pid) {
+        Ok(bundle) => bundle,
+        Err(err) => {
+            log!(
+                Topic::Sync,
+                Error,
+                "sync.topology: failed to build bundle for target {target_pid}: {err}"
+            );
+            return Err(err);
+        }
+    };
     let root_pid = canister_self();
-    let Some(first_child) = next_child_on_path(root_pid, &bundle.parents) else {
+    let Some(first_child) = (match next_child_on_path(root_pid, &bundle.parents) {
+        Ok(next) => next,
+        Err(err) => {
+            log!(
+                Topic::Sync,
+                Error,
+                "sync.topology: invalid parent chain for {target_pid}: {err}"
+            );
+            return Err(err);
+        }
+    }) else {
         log!(
             Topic::Sync,
             Warn,
@@ -67,7 +93,17 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
         return Ok(());
     };
 
-    let child_bundle = slice_bundle_for_child(first_child, &bundle);
+    let child_bundle = match slice_bundle_for_child(first_child, &bundle) {
+        Ok(b) => b,
+        Err(err) => {
+            log!(
+                Topic::Sync,
+                Error,
+                "sync.topology: failed to slice bundle for child {first_child}: {err}"
+            );
+            return Err(err);
+        }
+    };
     if let Err(err) = send_bundle(&first_child, &child_bundle).await {
         log!(
             Topic::Sync,
@@ -95,6 +131,19 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
     OpsError::deny_root()?;
     let self_pid = canister_self();
 
+    let next = match next_child_on_path(self_pid, &bundle.parents) {
+        Ok(next) => next,
+        Err(err) => {
+            log!(
+                Topic::Sync,
+                Error,
+                "sync.topology: rejecting bundle for {self_pid} (invalid parent chain len={}): {err}",
+                bundle.parents.len()
+            );
+            return Err(err);
+        }
+    };
+
     let children = bundle
         .children_map
         .get(&self_pid)
@@ -103,8 +152,18 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
     warn_if_large("nonroot fanout", children.len());
     SubnetCanisterChildrenOps::import(children);
 
-    if let Some(next_pid) = next_child_on_path(self_pid, &bundle.parents) {
-        let next_bundle = slice_bundle_for_child(next_pid, bundle);
+    if let Some(next_pid) = next {
+        let next_bundle = match slice_bundle_for_child(next_pid, bundle) {
+            Ok(b) => b,
+            Err(err) => {
+                log!(
+                    Topic::Sync,
+                    Error,
+                    "sync.topology: failed to slice bundle for child {next_pid}: {err}"
+                );
+                return Err(err);
+            }
+        };
         send_bundle(&next_pid, &next_bundle).await?;
     }
 
@@ -118,16 +177,29 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 //
 
 fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
+    let registry_len = SubnetCanisterRegistryOps::export().len();
     let mut chain = Vec::new();
+    let mut seen: HashSet<Principal> = HashSet::new();
 
     loop {
+        if !seen.insert(pid) {
+            return Err(SyncOpsError::ParentChainCycle(pid).into());
+        }
+
         let Some(entry) = SubnetCanisterRegistryOps::get(pid) else {
             return Err(SyncOpsError::CanisterNotFound(pid).into());
         };
 
+        if seen.len() > registry_len {
+            return Err(SyncOpsError::ParentChainTooLong(seen.len()).into());
+        }
+
         chain.push(entry.clone().into());
 
         let Some(parent) = entry.parent_pid else {
+            if entry.ty != CanisterRole::ROOT {
+                return Err(SyncOpsError::ParentChainNotRootTerminated(pid).into());
+            }
             break;
         };
         pid = parent;
@@ -147,12 +219,25 @@ async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Err
 // ===========================================================================
 //
 
-fn next_child_on_path(self_pid: Principal, parents: &[CanisterSummary]) -> Option<Principal> {
-    let idx = parents.iter().position(|p| p.pid == self_pid)?;
-    parents.get(idx + 1).map(|p| p.pid)
+fn next_child_on_path(
+    self_pid: Principal,
+    parents: &[CanisterSummary],
+) -> Result<Option<Principal>, Error> {
+    let Some(first) = parents.first() else {
+        return Err(SyncOpsError::InvalidParentChain.into());
+    };
+
+    if first.pid != self_pid {
+        return Err(SyncOpsError::ParentChainMissingSelf(self_pid).into());
+    }
+
+    Ok(parents.get(1).map(|p| p.pid))
 }
 
-fn slice_bundle_for_child(next_pid: Principal, bundle: &TopologyBundle) -> TopologyBundle {
+fn slice_bundle_for_child(
+    next_pid: Principal,
+    bundle: &TopologyBundle,
+) -> Result<TopologyBundle, Error> {
     // Slice parents chain so we start at the next hop
     let mut sliced_parents = Vec::new();
     let mut include = false;
@@ -166,6 +251,10 @@ fn slice_bundle_for_child(next_pid: Principal, bundle: &TopologyBundle) -> Topol
         }
     }
 
+    if sliced_parents.is_empty() {
+        return Err(SyncOpsError::NextHopNotFound(next_pid).into());
+    }
+
     // Slice children_map so it includes only nodes in the sliced chain
     let mut sliced_children_map = HashMap::new();
     for parent in &sliced_parents {
@@ -177,10 +266,10 @@ fn slice_bundle_for_child(next_pid: Principal, bundle: &TopologyBundle) -> Topol
         sliced_children_map.insert(parent.pid, children);
     }
 
-    TopologyBundle {
+    Ok(TopologyBundle {
         parents: sliced_parents,
         children_map: sliced_children_map,
-    }
+    })
 }
 
 //
@@ -192,7 +281,11 @@ fn slice_bundle_for_child(next_pid: Principal, bundle: &TopologyBundle) -> Topol
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::CanisterRole;
+    use crate::{
+        ids::CanisterRole,
+        model::memory::{CanisterEntry, topology::SubnetCanisterRegistry},
+        utils::time::now_secs,
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -220,9 +313,9 @@ mod tests {
             s(ledg, Some(inst)),
         ];
 
-        assert_eq!(next_child_on_path(root, &parents), Some(hub));
-        assert_eq!(next_child_on_path(hub, &parents), Some(inst));
-        assert_eq!(next_child_on_path(ledg, &parents), None);
+        assert_eq!(next_child_on_path(root, &parents).unwrap(), Some(hub));
+        assert_eq!(next_child_on_path(hub, &parents[1..]).unwrap(), Some(inst));
+        assert_eq!(next_child_on_path(ledg, &parents[3..]).unwrap(), None);
     }
 
     #[test]
@@ -242,10 +335,53 @@ mod tests {
             children_map,
         };
 
-        let sliced = slice_bundle_for_child(hub, &bundle);
+        let sliced = slice_bundle_for_child(hub, &bundle).unwrap();
 
         assert!(!sliced.children_map.contains_key(&root));
         assert!(sliced.children_map.contains_key(&hub));
         assert!(sliced.children_map.contains_key(&inst));
+    }
+
+    #[test]
+    fn next_child_errors_when_missing_self() {
+        let root = p(1);
+        let hub = p(2);
+
+        let parents = vec![s(root, None), s(hub, Some(root))];
+        assert!(next_child_on_path(p(42), &parents).is_err());
+    }
+
+    #[test]
+    fn parent_chain_rejects_cycle() {
+        SubnetCanisterRegistry::clear_for_tests();
+        let root = p(1);
+        let hub = p(2);
+
+        SubnetCanisterRegistryOps::register_root(root);
+        SubnetCanisterRegistryOps::register(hub, &CanisterRole::new("hub"), hub, vec![]);
+
+        let err = TopologyBundle::for_target(hub).unwrap_err();
+        assert!(err.to_string().contains("cycle"));
+    }
+
+    #[test]
+    fn parent_chain_requires_root_termination() {
+        SubnetCanisterRegistry::clear_for_tests();
+        let orphan = p(9);
+        let ty = CanisterRole::new("orphan");
+
+        SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
+            pid: orphan,
+            ty,
+            parent_pid: None,
+            module_hash: None,
+            created_at: now_secs(),
+        });
+
+        let err = TopologyBundle::for_target(orphan).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("parent chain did not terminate at root")
+        );
     }
 }

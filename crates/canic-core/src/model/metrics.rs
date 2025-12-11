@@ -5,8 +5,9 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::types::Principal;
 
 thread_local! {
-    static METRIC_COUNTS: RefCell<HashMap<MetricKind, u64>> = RefCell::new(HashMap::new());
+    static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());
     static ICC_METRICS: RefCell<HashMap<IccMetricKey, u64>> = RefCell::new(HashMap::new());
+    static HTTP_METRICS: RefCell<HashMap<HttpMetricKey, u64>> = RefCell::new(HashMap::new());
 }
 
 // -----------------------------------------------------------------------------
@@ -14,36 +15,38 @@ thread_local! {
 // -----------------------------------------------------------------------------
 
 ///
-/// MetricsSnapshot
+/// SystemMetricsSnapshot
 ///
 
-pub type MetricsSnapshot = Vec<MetricEntry>;
+pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 
 ///
-/// MetricKind
+/// SystemMetricKind
 /// Enumerates the resource-heavy actions we track.
 ///
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub enum MetricKind {
+#[remain::sorted]
+pub enum SystemMetricKind {
+    CanisterCall,
+    CanisterStatus,
     CreateCanister,
-    InstallCode,
-    ReinstallCode,
-    UpgradeCode,
-    UninstallCode,
     DeleteCanister,
     DepositCycles,
-    CanisterStatus,
-    CanisterCall,
+    HttpOutcall,
+    InstallCode,
+    ReinstallCode,
+    UninstallCode,
+    UpgradeCode,
 }
 
 ///
-/// MetricEntry
+/// SystemMetricEntry
 /// Snapshot entry pairing a metric kind with its count.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct MetricEntry {
-    pub kind: MetricKind,
+pub struct SystemMetricEntry {
+    pub kind: SystemMetricKind,
     pub count: u64,
 }
 
@@ -51,6 +54,7 @@ pub struct MetricEntry {
 /// IccMetricKey
 /// Uniquely identifies an inter-canister call by target + method.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct IccMetricKey {
     pub target: Principal,
@@ -61,6 +65,7 @@ pub struct IccMetricKey {
 /// IccMetricEntry
 /// Snapshot entry pairing a target/method with its count.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct IccMetricEntry {
     pub target: Principal,
@@ -69,18 +74,50 @@ pub struct IccMetricEntry {
 }
 
 ///
+/// HttpMetricKey
+/// Uniquely identifies an HTTP outcall by method + URL.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct HttpMetricKey {
+    pub method: String,
+    pub url: String,
+}
+
+///
+/// HttpMetricEntry
+/// Snapshot entry pairing a method/url with its count.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct HttpMetricEntry {
+    pub method: String,
+    pub url: String,
+    pub count: u64,
+}
+
+///
+/// HttpMetricsSnapshot
+///
+
+pub type HttpMetricsSnapshot = Vec<HttpMetricEntry>;
+
+///
 /// IccMetricsSnapshot
 ///
+
 pub type IccMetricsSnapshot = Vec<IccMetricEntry>;
 
 ///
 /// MetricsReport
-/// Composite metrics view bundling action and ICC counters.
+/// Composite metrics view bundling action, ICC, and HTTP counters.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct MetricsReport {
-    pub system: MetricsSnapshot,
+    pub system: SystemMetricsSnapshot,
     pub icc: IccMetricsSnapshot,
+    pub http: HttpMetricsSnapshot,
 }
 
 // -----------------------------------------------------------------------------
@@ -88,15 +125,16 @@ pub struct MetricsReport {
 // -----------------------------------------------------------------------------
 
 ///
-/// MetricsState
-/// Volatile counters for resource-using IC actions.
+/// SystemMetrics
+/// Thin facade over the action metrics counters.
 ///
-pub struct MetricsState;
 
-impl MetricsState {
+pub struct SystemMetrics;
+
+impl SystemMetrics {
     /// Increment a counter and return the new value.
-    pub fn increment(kind: MetricKind) {
-        METRIC_COUNTS.with_borrow_mut(|counts| {
+    pub fn increment(kind: SystemMetricKind) {
+        SYSTEM_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(kind).or_insert(0);
             *entry = entry.saturating_add(1);
         });
@@ -104,11 +142,11 @@ impl MetricsState {
 
     /// Return a snapshot of all counters.
     #[must_use]
-    pub fn snapshot() -> Vec<MetricEntry> {
-        METRIC_COUNTS.with_borrow(|counts| {
+    pub fn snapshot() -> Vec<SystemMetricEntry> {
+        SYSTEM_METRICS.with_borrow(|counts| {
             counts
                 .iter()
-                .map(|(kind, count)| MetricEntry {
+                .map(|(kind, count)| SystemMetricEntry {
                     kind: *kind,
                     count: *count,
                 })
@@ -118,24 +156,7 @@ impl MetricsState {
 
     #[cfg(test)]
     pub fn reset() {
-        METRIC_COUNTS.with_borrow_mut(HashMap::clear);
-    }
-}
-
-///
-/// SystemMetrics
-/// Thin facade over the action metrics counters.
-///
-pub struct SystemMetrics;
-
-impl SystemMetrics {
-    pub fn record(kind: MetricKind) {
-        MetricsState::increment(kind);
-    }
-
-    #[must_use]
-    pub fn snapshot() -> MetricsSnapshot {
-        MetricsState::snapshot()
+        SYSTEM_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -180,6 +201,44 @@ impl IccMetrics {
 }
 
 ///
+/// HttpMetrics
+/// Volatile counters for HTTP outcalls keyed by method + URL.
+///
+pub struct HttpMetrics;
+
+impl HttpMetrics {
+    pub fn increment(method: &str, url: &str) {
+        HTTP_METRICS.with_borrow_mut(|counts| {
+            let key = HttpMetricKey {
+                method: method.to_string(),
+                url: url.to_string(),
+            };
+            let entry = counts.entry(key).or_insert(0);
+            *entry = entry.saturating_add(1);
+        });
+    }
+
+    #[must_use]
+    pub fn snapshot() -> HttpMetricsSnapshot {
+        HTTP_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(key, count)| HttpMetricEntry {
+                    method: key.method.clone(),
+                    url: key.url.clone(),
+                    count: *count,
+                })
+                .collect()
+        })
+    }
+
+    #[cfg(test)]
+    pub fn reset() {
+        HTTP_METRICS.with_borrow_mut(HashMap::clear);
+    }
+}
+
+///
 /// TESTS
 ///
 
@@ -190,21 +249,21 @@ mod tests {
 
     #[test]
     fn increments_and_snapshots() {
-        MetricsState::reset();
+        SystemMetrics::reset();
 
-        MetricsState::increment(MetricKind::CreateCanister);
-        MetricsState::increment(MetricKind::CreateCanister);
-        MetricsState::increment(MetricKind::InstallCode);
+        SystemMetrics::increment(SystemMetricKind::CreateCanister);
+        SystemMetrics::increment(SystemMetricKind::CreateCanister);
+        SystemMetrics::increment(SystemMetricKind::InstallCode);
 
-        let snapshot = MetricsState::snapshot();
-        let as_map: HashMap<MetricKind, u64> = snapshot
+        let snapshot = SystemMetrics::snapshot();
+        let as_map: HashMap<SystemMetricKind, u64> = snapshot
             .into_iter()
             .map(|entry| (entry.kind, entry.count))
             .collect();
 
-        assert_eq!(as_map.get(&MetricKind::CreateCanister), Some(&2));
-        assert_eq!(as_map.get(&MetricKind::InstallCode), Some(&1));
-        assert!(!as_map.contains_key(&MetricKind::CanisterCall));
+        assert_eq!(as_map.get(&SystemMetricKind::CreateCanister), Some(&2));
+        assert_eq!(as_map.get(&SystemMetricKind::InstallCode), Some(&1));
+        assert!(!as_map.contains_key(&SystemMetricKind::CanisterCall));
     }
 
     #[test]
@@ -228,6 +287,36 @@ mod tests {
         assert_eq!(map.remove(&(t1, "foo".to_string())), Some(2));
         assert_eq!(map.remove(&(t1, "bar".to_string())), Some(1));
         assert_eq!(map.remove(&(t2, "foo".to_string())), Some(1));
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn http_metrics_track_method_and_url() {
+        HttpMetrics::reset();
+
+        HttpMetrics::increment("GET", "https://example.com/a");
+        HttpMetrics::increment("GET", "https://example.com/a");
+        HttpMetrics::increment("POST", "https://example.com/a");
+        HttpMetrics::increment("GET", "https://example.com/b");
+
+        let snapshot = HttpMetrics::snapshot();
+        let mut map: HashMap<(String, String), u64> = snapshot
+            .into_iter()
+            .map(|entry| ((entry.method, entry.url), entry.count))
+            .collect();
+
+        assert_eq!(
+            map.remove(&("GET".to_string(), "https://example.com/a".to_string())),
+            Some(2)
+        );
+        assert_eq!(
+            map.remove(&("POST".to_string(), "https://example.com/a".to_string())),
+            Some(1)
+        );
+        assert_eq!(
+            map.remove(&("GET".to_string(), "https://example.com/b".to_string())),
+            Some(1)
+        );
         assert!(map.is_empty());
     }
 }

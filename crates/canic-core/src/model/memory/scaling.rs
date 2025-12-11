@@ -54,7 +54,7 @@ pub(crate) struct ScalingRegistry;
 
 impl ScalingRegistry {
     /// Insert or update a worker entry
-    pub fn insert(pid: Principal, entry: WorkerEntry) {
+    pub(crate) fn insert(pid: Principal, entry: WorkerEntry) {
         SCALING_REGISTRY.with_borrow_mut(|map| {
             map.insert(pid, entry);
         });
@@ -62,7 +62,7 @@ impl ScalingRegistry {
 
     /// Lookup all workers in a given pool
     #[must_use]
-    pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
+    pub(crate) fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
         SCALING_REGISTRY.with_borrow(|map| {
             map.iter()
                 .filter(|e| e.value().pool == pool)
@@ -73,7 +73,7 @@ impl ScalingRegistry {
 
     /// Export full registry
     #[must_use]
-    pub fn export() -> Vec<(Principal, WorkerEntry)> {
+    pub(crate) fn export() -> Vec<(Principal, WorkerEntry)> {
         SCALING_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
     }
 }

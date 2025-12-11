@@ -56,19 +56,19 @@ impl SubnetCanisterRegistry {
 
     /// Returns a canister entry for the given [`Principal`], if present.
     #[must_use]
-    pub fn get(pid: Principal) -> Option<CanisterEntry> {
+    pub(crate) fn get(pid: Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
     /// Returns the parent PID for a given canister, if recorded.
     #[must_use]
-    pub fn get_parent(pid: Principal) -> Option<Principal> {
+    pub(crate) fn get_parent(pid: Principal) -> Option<Principal> {
         Self::get(pid)?.parent_pid
     }
 
     /// Finds the first canister with the given [`CanisterRole`].
     #[must_use]
-    pub fn get_type(ty: &CanisterRole) -> Option<CanisterEntry> {
+    pub(crate) fn get_type(ty: &CanisterRole) -> Option<CanisterEntry> {
         Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.ty == ty))
     }
 
@@ -77,7 +77,7 @@ impl SubnetCanisterRegistry {
     //
 
     /// Registers a new non-root canister with its parent and module hash.
-    pub fn register(
+    pub(crate) fn register(
         pid: Principal,
         ty: &CanisterRole,
         parent_pid: Principal,
@@ -95,7 +95,7 @@ impl SubnetCanisterRegistry {
     }
 
     /// Register the root canister itself (no parent, no module hash).
-    pub fn register_root(pid: Principal) {
+    pub(crate) fn register_root(pid: Principal) {
         let entry = CanisterEntry {
             pid,
             ty: CanisterRole::ROOT,
@@ -116,7 +116,7 @@ impl SubnetCanisterRegistry {
 
     /// Update the recorded module hash for a canister, returning whether it existed.
     #[must_use]
-    pub fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
+    pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
             if let Some(mut entry) = reg.get(&pid) {
                 entry.module_hash = Some(module_hash);
@@ -130,7 +130,7 @@ impl SubnetCanisterRegistry {
 
     /// Removes a canister entry by principal.
     #[must_use]
-    pub fn remove(pid: &Principal) -> Option<CanisterEntry> {
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntry> {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
@@ -142,7 +142,7 @@ impl SubnetCanisterRegistry {
     ///
     /// This only traverses **one level down**.
     #[must_use]
-    pub fn children(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn children(pid: Principal) -> Vec<CanisterSummary> {
         Self::with_entries(|iter| {
             iter.filter_map(|entry| {
                 let value = entry.value();
@@ -155,7 +155,7 @@ impl SubnetCanisterRegistry {
     /// Returns the entire subtree rooted at `pid`:
     /// the original canister (if found) plus all its descendants.
     #[must_use]
-    pub fn subtree(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn subtree(pid: Principal) -> Vec<CanisterSummary> {
         let entries: Vec<CanisterEntry> = Self::export();
 
         let mut children: HashMap<Principal, Vec<CanisterEntry>> = HashMap::new();
@@ -191,7 +191,8 @@ impl SubnetCanisterRegistry {
 
     /// Return true if `entry` is part of the subtree rooted at `root_pid`.
     #[must_use]
-    pub fn is_in_subtree(
+    #[cfg(test)]
+    pub(crate) fn is_in_subtree(
         root_pid: Principal,
         entry: &CanisterSummary,
         all: &[CanisterSummary],
@@ -222,13 +223,20 @@ impl SubnetCanisterRegistry {
 
     /// Returns all canister entries as a vector.
     #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
+    pub(crate) fn export() -> Vec<CanisterEntry> {
         Self::with_entries(|iter| iter.map(|e| e.value()).collect())
     }
 
     #[cfg(test)]
-    pub fn clear_for_tests() {
+    pub(crate) fn clear_for_tests() {
         SUBNET_CANISTER_REGISTRY.with_borrow_mut(BTreeMap::clear);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn insert_for_tests(entry: CanisterEntry) {
+        SUBNET_CANISTER_REGISTRY.with_borrow_mut(|reg| {
+            reg.insert(entry.pid, entry);
+        });
     }
 }
 

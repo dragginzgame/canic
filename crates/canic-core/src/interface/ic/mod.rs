@@ -21,7 +21,7 @@ use crate::{
     interface::prelude::*,
     log,
     log::Topic,
-    model::metrics::{MetricKind, MetricsState},
+    model::metrics::{SystemMetricKind, SystemMetrics},
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
@@ -37,7 +37,7 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     };
 
     let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
-    MetricsState::increment(MetricKind::CanisterStatus);
+    SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
     Ok(status)
 }
@@ -61,7 +61,7 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
         .await
         .map_err(Error::from)?;
 
-    MetricsState::increment(MetricKind::DepositCycles);
+    SystemMetrics::increment(SystemMetricKind::DepositCycles);
 
     Ok(())
 }
@@ -121,11 +121,11 @@ pub async fn install_code<T: ArgumentEncoder>(
         .map_err(Error::from)?;
 
     let metric_kind = match mode {
-        CanisterInstallMode::Install => MetricKind::InstallCode,
-        CanisterInstallMode::Reinstall => MetricKind::ReinstallCode,
-        CanisterInstallMode::Upgrade(_) => MetricKind::UpgradeCode,
+        CanisterInstallMode::Install => SystemMetricKind::InstallCode,
+        CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
+        CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
     };
-    MetricsState::increment(metric_kind);
+    SystemMetrics::increment(metric_kind);
 
     Ok(())
 }
@@ -137,7 +137,7 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
     };
 
     mgmt::uninstall_code(&args).await.map_err(Error::from)?;
-    MetricsState::increment(MetricKind::UninstallCode);
+    SystemMetrics::increment(SystemMetricKind::UninstallCode);
 
     Ok(())
 }
@@ -149,7 +149,7 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
     };
 
     mgmt::delete_canister(&args).await.map_err(Error::from)?;
-    MetricsState::increment(MetricKind::DeleteCanister);
+    SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
     Ok(())
 }

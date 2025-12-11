@@ -39,7 +39,7 @@ pub type AppSubnetRegistryView = Vec<(Principal, AppSubnet)>;
 
 impl AppSubnetRegistry {
     #[must_use]
-    pub fn export() -> AppSubnetRegistryView {
+    pub(crate) fn export() -> AppSubnetRegistryView {
         APP_SUBNET_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
     }
 }

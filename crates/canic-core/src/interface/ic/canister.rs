@@ -7,7 +7,7 @@ use crate::{
     },
     log,
     log::Topic,
-    model::metrics::{MetricKind, MetricsState},
+    model::metrics::{SystemMetricKind, SystemMetrics},
     utils::wasm::get_wasm_hash,
 };
 
@@ -30,7 +30,7 @@ pub async fn create_canister(
         .await?
         .canister_id;
 
-    MetricsState::increment(MetricKind::CreateCanister);
+    SystemMetrics::increment(SystemMetricKind::CreateCanister);
 
     Ok(canister_pid)
 }
