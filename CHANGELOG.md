@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - Metrics reporting now distinguishes HTTP outcalls and the main metrics façade is called `SystemMetrics`.
 
+## [0.5.18] - Unreleased
+### Added
+- Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
+
 ## [0.5.16] - 2025-12-11 - O(n^2) -> O(n)
 ### Fixed
 - Decode `notify_top_up` responses from the CMC and surface errors instead of treating any reply as success, so failed cycle top-ups no longer appear successful.
