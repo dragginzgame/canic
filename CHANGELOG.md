@@ -5,6 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.17] - 2025-12-11 - HTTP Metrics
+### Added
+- Ops-level `http_get` helper for JSON GETs that records HTTP outcall metrics alongside the system counters.
+
+### Changed
+- Metrics reporting now distinguishes HTTP outcalls and the main metrics façade is called `SystemMetrics`.
+
 ## [0.5.16] - 2025-12-11 - O(n^2) -> O(n)
 ### Fixed
 - Decode `notify_top_up` responses from the CMC and surface errors instead of treating any reply as success, so failed cycle top-ups no longer appear successful.
