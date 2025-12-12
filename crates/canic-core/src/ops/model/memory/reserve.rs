@@ -24,9 +24,12 @@ use crate::{
     ops::{
         config::ConfigOps,
         mgmt::{create_canister, uninstall_canister},
-        model::memory::topology::SubnetCanisterRegistryOps,
-        model::{OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY},
+        model::{
+            OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY,
+            memory::topology::SubnetCanisterRegistryOps,
+        },
         prelude::*,
+        timer::TimerOps,
     },
     types::{Cycles, Principal, TC},
 };
@@ -58,13 +61,16 @@ impl CanisterReserveOps {
                 return;
             };
 
-            let id = Timer::set(OPS_RESERVE_INIT_DELAY, "reserve:init", async {
+            let id = TimerOps::set(OPS_RESERVE_INIT_DELAY, "reserve:init", async {
                 let _ = Self::check();
 
-                let interval_id =
-                    Timer::set_interval(OPS_RESERVE_CHECK_INTERVAL, "reserve:interval", || async {
+                let interval_id = TimerOps::set_interval(
+                    OPS_RESERVE_CHECK_INTERVAL,
+                    "reserve:interval",
+                    || async {
                         let _ = Self::check();
-                    });
+                    },
+                );
 
                 TIMER.with_borrow_mut(|slot| *slot = Some(interval_id));
             });

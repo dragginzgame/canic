@@ -1,13 +1,10 @@
-use crate::{
-    cdk::timers::{
-        clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
-        set_timer_interval as cdk_set_timer_interval,
-    },
-    model::metrics::{SystemMetricKind, SystemMetrics, TimerMetrics, TimerMode},
+use crate::cdk::timers::{
+    clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
+    set_timer_interval as cdk_set_timer_interval,
 };
 
 pub use crate::cdk::timers::TimerId;
-use std::{future::Future, time::Duration};
+use std::{cell::RefCell, future::Future, rc::Rc, time::Duration};
 
 ///
 /// Timer
@@ -16,27 +13,26 @@ use std::{future::Future, time::Duration};
 pub struct Timer;
 
 impl Timer {
-    /// Schedule a one-shot timer and record metrics.
-    pub fn set(delay: Duration, label: &str, task: impl Future<Output = ()> + 'static) -> TimerId {
-        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::increment(TimerMode::Once, delay, label);
-
+    pub fn set(delay: Duration, task: impl Future<Output = ()> + 'static) -> TimerId {
         cdk_set_timer(delay, task)
     }
 
-    /// Schedule a repeating timer and record metrics.
-    pub fn set_interval<F, Fut>(interval: Duration, label: &str, task: F) -> TimerId
+    pub fn set_interval<F, Fut>(interval: Duration, task: F) -> TimerId
     where
         F: FnMut() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::increment(TimerMode::Interval, interval, label);
+        let task = Rc::new(RefCell::new(task));
 
-        cdk_set_timer_interval(interval, task)
+        cdk_set_timer_interval(interval, move || {
+            let task = Rc::clone(&task);
+            async move {
+                let fut = { (task.borrow_mut())() };
+                fut.await;
+            }
+        })
     }
 
-    /// Clear a timer without recording metrics.
     pub fn clear(id: TimerId) {
         cdk_clear_timer(id);
     }
