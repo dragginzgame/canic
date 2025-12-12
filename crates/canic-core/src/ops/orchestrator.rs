@@ -1,9 +1,10 @@
 use crate::{
-    Error,
+    Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
     interface::ic::{canister::upgrade_canister, install_code},
     ops::{
+        OpsError,
         mgmt::{
             ProvisioningError, create_and_install_canister, delete_canister,
             rebuild_directories_from_registry,
@@ -17,6 +18,55 @@ use crate::{
         wasm::WasmOps,
     },
 };
+
+///
+/// OrchestratorError
+///
+
+#[derive(Debug, ThisError)]
+pub enum OrchestratorError {
+    #[error("parent {0} not found in registry")]
+    ParentNotFound(Principal),
+
+    #[error("registry entry missing for {0}")]
+    RegistryEntryMissing(Principal),
+
+    #[error("registry type mismatch for {pid}: expected {expected}, found {found}")]
+    RegistryTypeMismatch {
+        pid: Principal,
+        expected: CanisterRole,
+        found: CanisterRole,
+    },
+
+    #[error("registry parent mismatch for {pid}: expected {expected}, found {found:?}")]
+    RegistryParentMismatch {
+        pid: Principal,
+        expected: Principal,
+        found: Option<Principal>,
+    },
+
+    #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
+    ImmediateParentMismatch {
+        pid: Principal,
+        expected: Principal,
+        found: Option<Principal>,
+    },
+
+    #[error("cannot delete {pid}: subtree is not empty ({size} nodes)")]
+    SubtreeNotEmpty { pid: Principal, size: usize },
+
+    #[error("module hash mismatch for {0}")]
+    ModuleHashMismatch(Principal),
+
+    #[error("app directory diverged from registry")]
+    AppDirectoryDiverged,
+
+    #[error("subnet directory diverged from registry")]
+    SubnetDirectoryDiverged,
+
+    #[error("canister {0} unexpectedly present in reserve")]
+    InReserve(Principal),
+}
 
 ///
 /// LifecycleEvent
@@ -69,7 +119,10 @@ impl LifecycleResult {
     }
 }
 
-/// Main orchestrator.
+///
+/// CanisterLifestyleOrchestrator
+///
+
 pub struct CanisterLifecycleOrchestrator;
 
 impl CanisterLifecycleOrchestrator {
@@ -257,97 +310,115 @@ async fn cascade_all(
 // Invariants
 // -----------------------------------------------------------------------------
 
-fn assert_parent_exists(parent_pid: Principal) -> Result<(), Error> {
+fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorError> {
     SubnetCanisterRegistryOps::get(parent_pid)
-        .ok_or_else(|| Error::custom(format!("parent {parent_pid} not found in registry")))?;
+        .ok_or(OrchestratorError::ParentNotFound(parent_pid))?;
     Ok(())
 }
 
-fn assert_registry_role(pid: Principal, expected_ty: &CanisterRole) -> Result<(), Error> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or_else(|| Error::custom(format!("registry entry missing for {pid}")))?;
+fn assert_registry_role(
+    pid: Principal,
+    expected_ty: &CanisterRole,
+) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
     if &entry.ty == expected_ty {
         Ok(())
     } else {
-        Err(Error::custom(format!(
-            "registry type mismatch for {pid}: expected {expected_ty}, found {}",
-            entry.ty
-        )))
+        Err(OrchestratorError::RegistryTypeMismatch {
+            pid,
+            expected: expected_ty.clone(),
+            found: entry.ty,
+        })
     }
 }
 
-fn assert_registry_parent(pid: Principal, expected_parent: Principal) -> Result<(), Error> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or_else(|| Error::custom(format!("registry entry missing for {pid}")))?;
+fn assert_registry_parent(
+    pid: Principal,
+    expected_parent: Principal,
+) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
     if entry.parent_pid == Some(expected_parent) {
         Ok(())
     } else {
-        Err(Error::custom(format!(
-            "registry parent mismatch for {pid}: expected {expected_parent}, found {:?}",
-            entry.parent_pid
-        )))
+        Err(OrchestratorError::RegistryParentMismatch {
+            pid,
+            expected: expected_parent,
+            found: entry.parent_pid,
+        })
     }
 }
 
 /// Verify that the canister’s immediate parent matches expectations. This is
 /// stricter and clearer than subtree-membership checks.
-fn assert_immediate_parent(pid: Principal, expected_parent: Principal) -> Result<(), Error> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or_else(|| Error::custom(format!("registry entry missing for {pid}")))?;
+fn assert_immediate_parent(
+    pid: Principal,
+    expected_parent: Principal,
+) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
+
     match entry.parent_pid {
         Some(pp) if pp == expected_parent => Ok(()),
-        other => Err(Error::custom(format!(
-            "immediate-parent mismatch: canister {pid} expects parent {expected_parent}, got {other:?}",
-        ))),
+        other => Err(OrchestratorError::ImmediateParentMismatch {
+            pid,
+            expected: expected_parent,
+            found: other,
+        }),
     }
 }
 
-fn assert_no_children(pid: Principal) -> Result<(), Error> {
+fn assert_no_children(pid: Principal) -> Result<(), OrchestratorError> {
     let subtree = SubnetCanisterRegistryOps::subtree(pid);
 
     // subtree always contains the node itself
     if subtree.len() > 1 {
-        return Err(Error::custom(format!(
-            "cannot delete {pid}: subtree is not empty ({} nodes)",
-            subtree.len()
-        )));
+        return Err(OrchestratorError::SubtreeNotEmpty {
+            pid,
+            size: subtree.len(),
+        });
     }
 
     Ok(())
 }
 
-fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), Error> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or_else(|| Error::custom(format!("registry entry missing for {pid}")))?;
+fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
     if entry.module_hash == Some(expected_hash) {
         Ok(())
     } else {
-        Err(Error::custom(format!("module hash mismatch for {pid}")))
+        Err(OrchestratorError::ModuleHashMismatch(pid))
     }
 }
 
-fn assert_directories_match_registry() -> Result<(), Error> {
+fn assert_directories_match_registry() -> Result<(), OrchestratorError> {
     let app_built = AppDirectoryOps::root_build_view();
     let app_exported = AppDirectoryOps::export();
     if app_built != app_exported {
-        return Err(Error::custom("app directory diverged from registry"));
+        return Err(OrchestratorError::AppDirectoryDiverged);
     }
 
     let subnet_built = SubnetDirectoryOps::root_build_view();
     let subnet_exported = SubnetDirectoryOps::export();
     if subnet_built != subnet_exported {
-        return Err(Error::custom("subnet directory diverged from registry"));
+        return Err(OrchestratorError::SubnetDirectoryDiverged);
     }
 
     Ok(())
 }
 
-fn assert_not_in_reserve(pid: Principal) -> Result<(), Error> {
+fn assert_not_in_reserve(pid: Principal) -> Result<(), OrchestratorError> {
     if CanisterReserveOps::contains(&pid) {
-        Err(Error::custom(format!(
-            "canister {pid} unexpectedly present in reserve"
-        )))
+        Err(OrchestratorError::InReserve(pid))
     } else {
         Ok(())
+    }
+}
+
+impl From<OrchestratorError> for Error {
+    fn from(err: OrchestratorError) -> Self {
+        OpsError::from(err).into()
     }
 }

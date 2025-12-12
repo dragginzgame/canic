@@ -8,7 +8,7 @@
 pub use crate::model::memory::reserve::CanisterReserveView;
 
 use crate::{
-    Error,
+    Error, ThisError,
     cdk::{
         api::canister_self,
         futures::spawn,
@@ -35,6 +35,21 @@ use crate::{
     types::{Cycles, TC},
 };
 use std::cell::RefCell;
+
+#[derive(Debug, ThisError)]
+pub enum ReserveOpsError {
+    #[error("reserve entry missing for {pid}")]
+    ReserveEntryMissing { pid: Principal },
+
+    #[error("missing type for reserve entry {pid}")]
+    MissingType { pid: Principal },
+
+    #[error("missing parent for reserve entry {pid}")]
+    MissingParent { pid: Principal },
+
+    #[error("missing module hash for reserve entry {pid}")]
+    MissingModuleHash { pid: Principal },
+}
 
 //
 // TIMER
@@ -265,16 +280,13 @@ pub async fn reserve_recycle_canister(
 pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Principal), Error> {
     OpsError::require_root()?;
 
-    let entry = CanisterReserve::take(&pid)
-        .ok_or_else(|| Error::custom(format!("reserve entry missing for {pid}")))?;
+    let entry = CanisterReserve::take(&pid).ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
 
-    let ty = entry.ty.ok_or_else(|| Error::custom("missing type"))?;
-    let parent = entry
-        .parent
-        .ok_or_else(|| Error::custom("missing parent"))?;
+    let ty = entry.ty.ok_or(ReserveOpsError::MissingType { pid })?;
+    let parent = entry.parent.ok_or(ReserveOpsError::MissingParent { pid })?;
     let hash = entry
         .module_hash
-        .ok_or_else(|| Error::custom("missing module hash"))?;
+        .ok_or(ReserveOpsError::MissingModuleHash { pid })?;
 
     // Reset controllers before placing back into registry.
     let mut controllers = Config::get().controllers.clone();
@@ -298,13 +310,17 @@ pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Pr
 
 /// Recycles a canister via the orchestrator. Triggers topology and directory cascades.
 pub async fn recycle_via_orchestrator(pid: Principal) -> Result<(), Error> {
-    use crate::ops::orchestration::root_orchestrator::{
-        CanisterLifecycleOrchestrator, LifecycleEvent,
-    };
+    use crate::ops::orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent};
 
     CanisterLifecycleOrchestrator::apply(LifecycleEvent::RecycleToReserve { pid })
         .await
         .map(|_| ())
+}
+
+impl From<ReserveOpsError> for Error {
+    fn from(err: ReserveOpsError) -> Self {
+        OpsError::from(err).into()
+    }
 }
 
 //

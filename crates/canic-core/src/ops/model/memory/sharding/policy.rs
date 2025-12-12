@@ -76,7 +76,6 @@ impl ShardingPolicyOps {
     // -----------------------------------------------------------------------
 
     /// Validate whether a pool may create a new shard under its policy.
-    #[inline]
     pub(crate) fn check_create_allowed(
         metrics: &PoolMetrics,
         policy: &ShardPoolPolicy,

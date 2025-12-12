@@ -38,7 +38,6 @@ impl SubnetCanisterRegistry {
     // Internal helper
     //
 
-    #[inline]
     fn with_entries<F, R>(f: F) -> R
     where
         F: FnOnce(

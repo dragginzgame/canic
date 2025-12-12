@@ -47,7 +47,7 @@ pub async fn list_sns_neurons_for_principal_page(
     page_size: u32,
     start_at: Option<NeuronId>,
 ) -> Result<ListNeuronsResponse, Error> {
-    let gov_canister = sns.principal(SnsRole::Governance)?;
+    let gov_canister = sns.principal(SnsRole::Governance);
 
     let list_neurons_arg = ListNeurons {
         of_principal: Some(owner),

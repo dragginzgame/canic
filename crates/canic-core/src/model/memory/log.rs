@@ -179,16 +179,24 @@ impl StableLog {
         let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
         let topic_norm: Option<String> = Self::normalize_topic(topic);
         let topic_norm = topic_norm.as_deref();
+        let offset_u64 = u64::try_from(offset).unwrap_or(u64::MAX);
 
         with_log(|log| {
-            // Collect entire filtered list IN ORDER (once)
-            let items: Vec<(usize, LogEntry)> =
-                iter_filtered(log, crate_name, topic_norm, min_level).collect();
+            let mut total = 0u64;
+            let mut entries: Vec<(usize, LogEntry)> = Vec::new();
 
-            let total = items.len() as u64;
+            for (idx, entry) in iter_filtered(log, crate_name, topic_norm, min_level) {
+                if total < offset_u64 {
+                    total = total.saturating_add(1);
+                    continue;
+                }
 
-            // Slice the requested window
-            let entries = items.into_iter().skip(offset).take(limit).collect();
+                if entries.len() < limit {
+                    entries.push((idx, entry));
+                }
+
+                total = total.saturating_add(1);
+            }
 
             (entries, total)
         })
@@ -207,6 +215,14 @@ pub(crate) fn apply_retention() -> Result<(), Error> {
 
     let now = time::now_secs();
     let max_entries = cfg.max_entries as usize;
+
+    // Fast path: no age filter and we are already within limits.
+    if cfg.max_age_secs.is_none() {
+        let current_len = with_log(|log| log.len() as usize);
+        if current_len <= max_entries {
+            return Ok(());
+        }
+    }
 
     // Load all entries once
     let mut retained: Vec<LogEntry> = with_log(|log| log.iter().collect());

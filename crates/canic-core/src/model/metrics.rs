@@ -252,10 +252,16 @@ pub struct HttpMetrics;
 
 impl HttpMetrics {
     pub fn increment(method: &str, url: &str) {
+        Self::increment_with_label(method, url, None);
+    }
+
+    pub fn increment_with_label(method: &str, url: &str, label: Option<&str>) {
+        let label = Self::label_for(url, label);
+
         HTTP_METRICS.with_borrow_mut(|counts| {
             let key = HttpMetricKey {
                 method: method.to_string(),
-                url: url.to_string(),
+                url: label,
             };
             let entry = counts.entry(key).or_insert(0);
             *entry = entry.saturating_add(1);
@@ -274,6 +280,29 @@ impl HttpMetrics {
                 })
                 .collect()
         })
+    }
+
+    fn label_for(url: &str, label: Option<&str>) -> String {
+        if let Some(label) = label {
+            return label.to_string();
+        }
+
+        Self::normalize(url)
+    }
+
+    fn normalize(url: &str) -> String {
+        let without_fragment = url.split('#').next().unwrap_or(url);
+        let without_query = without_fragment
+            .split('?')
+            .next()
+            .unwrap_or(without_fragment);
+
+        let candidate = without_query.trim();
+        if candidate.is_empty() {
+            url.to_string()
+        } else {
+            candidate.to_string()
+        }
     }
 
     #[cfg(test)]
@@ -441,13 +470,13 @@ mod tests {
     }
 
     #[test]
-    fn http_metrics_track_method_and_url() {
+    fn http_metrics_track_method_and_url_normalized() {
         HttpMetrics::reset();
 
-        HttpMetrics::increment("GET", "https://example.com/a");
-        HttpMetrics::increment("GET", "https://example.com/a");
-        HttpMetrics::increment("POST", "https://example.com/a");
-        HttpMetrics::increment("GET", "https://example.com/b");
+        HttpMetrics::increment("GET", "https://example.com/a?query=1#frag");
+        HttpMetrics::increment("GET", "https://example.com/a?query=2");
+        HttpMetrics::increment("POST", "https://example.com/a?query=3");
+        HttpMetrics::increment("GET", "https://example.com/b#x");
 
         let snapshot = HttpMetrics::snapshot();
         let mut map: HashMap<(String, String), u64> = snapshot
@@ -466,6 +495,34 @@ mod tests {
         assert_eq!(
             map.remove(&("GET".to_string(), "https://example.com/b".to_string())),
             Some(1)
+        );
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn http_metrics_allow_custom_labels() {
+        HttpMetrics::reset();
+
+        HttpMetrics::increment_with_label(
+            "GET",
+            "https://example.com/search?q=abc",
+            Some("search"),
+        );
+        HttpMetrics::increment_with_label(
+            "GET",
+            "https://example.com/search?q=def",
+            Some("search"),
+        );
+
+        let snapshot = HttpMetrics::snapshot();
+        let mut map: HashMap<(String, String), u64> = snapshot
+            .into_iter()
+            .map(|entry| ((entry.method, entry.url), entry.count))
+            .collect();
+
+        assert_eq!(
+            map.remove(&("GET".to_string(), "search".to_string())),
+            Some(2)
         );
         assert!(map.is_empty());
     }

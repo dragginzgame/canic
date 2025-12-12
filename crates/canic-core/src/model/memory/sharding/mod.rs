@@ -110,7 +110,6 @@ impl ShardEntry {
         }
     }
 
-    #[inline]
     const fn slot_default() -> u32 {
         Self::UNASSIGNED_SLOT
     }

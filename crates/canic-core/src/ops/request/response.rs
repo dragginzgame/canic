@@ -11,7 +11,7 @@ use crate::{
     log::Topic,
     ops::{
         model::memory::topology::subnet::SubnetCanisterRegistryOps,
-        orchestration::root_orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
+        orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
@@ -103,7 +103,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         let result = CanisterLifecycleOrchestrator::apply(event).await?;
         let new_canister_pid = result
             .new_canister_pid
-            .ok_or_else(|| Error::custom("create_canister: missing new pid"))?;
+            .ok_or(RequestOpsError::MissingNewCanisterPid)?;
 
         Ok(Response::CreateCanister(CreateCanisterResponse {
             new_canister_pid,

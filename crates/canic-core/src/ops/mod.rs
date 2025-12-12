@@ -13,7 +13,7 @@ pub mod icrc;
 pub mod metrics;
 pub mod mgmt;
 pub mod model;
-pub mod orchestration;
+pub mod orchestrator;
 pub mod perf;
 pub mod request;
 pub mod root;
@@ -79,6 +79,12 @@ pub enum OpsError {
 
     #[error(transparent)]
     SyncOpsError(#[from] sync::SyncOpsError),
+
+    #[error(transparent)]
+    OrchestratorError(#[from] orchestrator::OrchestratorError),
+
+    #[error(transparent)]
+    ReserveOpsError(#[from] model::memory::reserve::ReserveOpsError),
 }
 
 impl OpsError {

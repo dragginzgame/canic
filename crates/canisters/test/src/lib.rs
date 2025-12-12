@@ -43,32 +43,6 @@ async fn test() -> Result<(), Error> {
     Ok(())
 }
 
-/// Run a small perf-instrumented workload and return the snapshot.
-#[update]
-async fn test_perf() -> PerfSnapshot {
-    // Track total instructions for this call
-    perf_defer!();
-
-    // Reset the baseline for intra-call checkpoints
-    perf!("baseline");
-
-    let mut acc = 0u64;
-    for i in 0..10_000 {
-        acc = acc.wrapping_add(i);
-    }
-    perf!("workload_one");
-
-    for chunk in 0..5 {
-        acc = acc.wrapping_add(chunk * 11);
-        for _ in 0..500 {
-            acc = acc.rotate_left(3).wrapping_add(0xA5A5 ^ acc);
-        }
-    }
-    perf!("workload_two");
-
-    PerfOps::snapshot(PageRequest::DEFAULT)
-}
-
 //
 // timers
 //
