@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics; interval timers increment on every tick.
 - `canic_perf` diagnostic query and instruction aggregation for timer executions (labels + total instructions) to inspect timer cost without inflating main metrics.
 - Added `timer!` and `timer_interval!` macros that auto-label timers with `module_path::function` and route through `TimerOps` for perf recording.
-- bumped rust to 1.91.1
+- bumped rust to 1.92.0
 
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added
