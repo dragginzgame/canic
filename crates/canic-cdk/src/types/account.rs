@@ -1,9 +1,11 @@
+use crate::icrc_ledger_types::icrc1::account::Account as IcrcAccount;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
     hash::{Hash, Hasher},
+    str::FromStr,
 };
 
 ///
@@ -16,9 +18,6 @@ pub const DEFAULT_SUBACCOUNT: &Subaccount = &[0; 32];
 
 ///
 /// Account
-///
-/// [Account](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-3/README.md#value)
-/// representation of ledgers supporting the ICRC-1 standard.
 ///
 /// Code ported from icrc-ledger-types as we don't want to include that one, it's out of
 /// date and has a lot of extra dependencies
@@ -64,6 +63,16 @@ impl Display for Account {
 }
 
 impl Eq for Account {}
+
+impl FromStr for Account {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let acc = IcrcAccount::from_str(s).map_err(|e| e.to_string())?;
+
+        Ok(Self::new(acc.owner, acc.subaccount))
+    }
+}
 
 impl PartialEq for Account {
     fn eq(&self, other: &Self) -> bool {
