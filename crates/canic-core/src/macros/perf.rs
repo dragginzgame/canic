@@ -37,7 +37,7 @@ macro_rules! perf {
 /// with manual checkpoints logged via [`macro@perf`] to track both cumulative and incremental
 /// usage.
 #[macro_export]
-macro_rules! perf_start {
+macro_rules! perf_defer {
     () => {
         $crate::export::defer::defer!({
             let end = $crate::cdk::api::performance_counter(1);

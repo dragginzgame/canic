@@ -17,7 +17,8 @@
                 "auth",
                 "blank",
                 "scale_hub",
-                "shard_hub"
+                "shard_hub",
+                "test"
             ]
         },
         "app": {
@@ -109,6 +110,19 @@
             "candid": ".dfx/local/canisters/shard/shard.did",
             "build": "bash -c 'scripts/app/build.sh shard'",
             "wasm": ".dfx/local/canisters/shard/shard.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
+            ]
+        },
+        "test": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/test/test.did",
+            "build": "bash -c 'scripts/app/build.sh test'",
+            "wasm": ".dfx/local/canisters/test/test.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

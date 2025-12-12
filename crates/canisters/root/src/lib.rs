@@ -73,6 +73,13 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
         #[cfg(not(canic_github_ci))]
         include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz"),
     ),
+    (
+        canister::TEST,
+        #[cfg(canic_github_ci)]
+        &[],
+        #[cfg(not(canic_github_ci))]
+        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
+    ),
 ];
 
 /*
@@ -95,25 +102,6 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 #[update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
-}
-
-/// test_perf
-/// just checks to see if the perf macros compile
-#[ic_cdk::update]
-async fn test_perf() {
-    // Start the cumulative measurement for the call
-    perf_start!();
-
-    //
-    // First workload
-    //
-    perf!("starting workload 1");
-    let mut acc1 = 0u64;
-    for i in 0..50_000 {
-        acc1 = acc1.wrapping_add(i);
-    }
-
-    perf!("end");
 }
 
 // end

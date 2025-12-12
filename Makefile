@@ -120,6 +120,8 @@ test-canisters:
 		( dfx build --all ); \
 		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
 		( dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
+		( dfx canister install test --mode=reinstall -y --argument '(record { env = record { prime_root_pid = null; subnet_type = null; subnet_pid = null; root_pid = null; canister_type = opt "test"; parent_pid = null }; app_directory = vec {}; subnet_directory = vec {} }, null)' ); \
+		( dfx canister call test test ); \
 	else \
 		echo "Skipping canister tests (dfx not installed)"; \
 	fi

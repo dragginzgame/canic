@@ -3,7 +3,7 @@
 ///
 /// RE-EXPORTS
 ///
-pub use canic_core::{Error, build, build_root, log, log::Level, perf_start, start, start_root};
+pub use canic_core::{Error, build, build_root, log, log::Level, perf_defer, start, start_root};
 pub use canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 pub use canic_utils::{impl_storable_bounded, impl_storable_unbounded};
 
@@ -39,7 +39,7 @@ pub mod prelude {
             auth_require_all, auth_require_any,
             guard::{guard_query, guard_update},
             ids::CanisterRole,
-            log, perf, perf_start,
+            log, perf, perf_defer, timer, timer_interval,
         },
     };
 }
