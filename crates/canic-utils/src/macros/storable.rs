@@ -19,7 +19,7 @@ macro_rules! impl_storable_bounded {
                 };
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                let bytes = $crate::utils::serialize::serialize(self).unwrap_or_else(|e| {
+                let bytes = $crate::serialize::serialize(self).unwrap_or_else(|e| {
                     panic!("impl_storable_bounded: serialize failed: {e}");
                 });
 
@@ -27,13 +27,13 @@ macro_rules! impl_storable_bounded {
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::serialize::serialize(&self).unwrap_or_else(|e| {
+                $crate::serialize::serialize(&self).unwrap_or_else(|e| {
                     panic!("impl_storable_bounded: serialize failed: {e}");
                 })
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::serialize::deserialize(&bytes).unwrap_or_else(|e| {
+                $crate::serialize::deserialize(&bytes).unwrap_or_else(|e| {
                     panic!("impl_storable_bounded: deserialize failed: {e}");
                 })
             }
@@ -51,7 +51,7 @@ macro_rules! impl_storable_unbounded {
                 $crate::cdk::structures::storable::Bound::Unbounded;
 
             fn to_bytes(&self) -> ::std::borrow::Cow<'_, [u8]> {
-                let bytes = $crate::utils::serialize::serialize(self).unwrap_or_else(|e| {
+                let bytes = $crate::serialize::serialize(self).unwrap_or_else(|e| {
                     panic!("impl_storable_unbounded: serialize failed: {e}");
                 });
 
@@ -59,13 +59,13 @@ macro_rules! impl_storable_unbounded {
             }
 
             fn into_bytes(self) -> Vec<u8> {
-                $crate::utils::serialize::serialize(&self).unwrap_or_else(|e| {
+                $crate::serialize::serialize(&self).unwrap_or_else(|e| {
                     panic!("impl_storable_unbounded: serialize failed: {e}");
                 })
             }
 
             fn from_bytes(bytes: ::std::borrow::Cow<'_, [u8]>) -> Self {
-                $crate::utils::serialize::deserialize(&bytes).unwrap_or_else(|e| {
+                $crate::serialize::deserialize(&bytes).unwrap_or_else(|e| {
                     panic!("impl_storable_unbounded: deserialize failed: {e}");
                 })
             }

@@ -9,10 +9,10 @@ pub mod log;
 pub mod macros;
 pub mod model;
 pub mod ops;
+pub mod perf;
 pub mod spec;
 
 pub use ::canic_cdk as cdk;
-pub use ::canic_macros::{impl_storable_bounded, impl_storable_unbounded, perf, perf_start};
 pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 pub use ::canic_types as types;
 pub use ::canic_utils as utils;

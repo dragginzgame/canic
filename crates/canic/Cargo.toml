@@ -21,7 +21,6 @@ ic = ["canic-core/ic"]
 candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-core = { workspace = true }
-canic-macros = { workspace = true }
 canic-memory = { workspace = true }
 canic-types = { workspace = true }
 canic-utils = { workspace = true }

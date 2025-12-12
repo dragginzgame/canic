@@ -1,7 +1,8 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    eager_static, ic_memory, impl_storable_bounded,
+    eager_static, ic_memory,
     model::memory::id::state::SUBNET_STATE_ID,
+    utils::impl_storable_bounded,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

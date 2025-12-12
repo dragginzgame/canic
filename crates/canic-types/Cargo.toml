@@ -17,7 +17,6 @@ publish = true
 base32 = { workspace = true }
 candid = { workspace = true }
 canic-cdk = { workspace = true }
-canic-macros = { workspace = true }
 canic-utils = { workspace = true }
 crc32fast = { workspace = true }
 derive_more = { workspace = true }

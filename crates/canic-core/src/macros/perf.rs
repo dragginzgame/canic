@@ -13,13 +13,15 @@ macro_rules! perf {
             let delta = now.saturating_sub(then);
             *last.borrow_mut() = now;
 
+            let label = format!($($label)*);
             let delta_fmt = $crate::utils::instructions::format_instructions(delta);
             let now_fmt = $crate::utils::instructions::format_instructions(now);
 
+            $crate::utils::perf::record(&label, delta);
             $crate::cdk::println!(
                 "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),
-                format!($($label)*),
+                label,
                 delta_fmt,
                 now_fmt
             );

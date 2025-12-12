@@ -5,8 +5,8 @@
 //! submodules.
 
 pub use canic_cdk as cdk;
-pub use canic_macros::{impl_storable_bounded, impl_storable_unbounded};
 pub use canic_utils as utils;
+pub use canic_utils::macros::*;
 
 mod account;
 mod cycles;

@@ -204,7 +204,6 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-core",
- "canic-macros",
  "canic-memory",
  "canic-types",
  "canic-utils",
@@ -231,7 +230,6 @@ version = "0.5.18"
 dependencies = [
  "candid",
  "canic-cdk",
- "canic-macros",
  "canic-memory",
  "canic-types",
  "canic-utils",
@@ -265,21 +263,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-macros"
-version = "0.5.18"
-dependencies = [
- "canic-cdk",
- "canic-utils",
- "serde",
-]
-
-[[package]]
 name = "canic-memory"
 version = "0.5.18"
 dependencies = [
  "candid",
  "canic-cdk",
- "canic-macros",
  "canic-types",
  "canic-utils",
  "ctor",
@@ -305,7 +293,6 @@ dependencies = [
  "base32 0.5.1",
  "candid",
  "canic-cdk",
- "canic-macros",
  "canic-utils",
  "crc32fast",
  "derive_more",
@@ -322,7 +309,6 @@ version = "0.5.18"
 dependencies = [
  "canic-cdk",
  "convert_case",
- "defer",
  "derive_more",
  "minicbor-serde",
  "serde",
@@ -677,12 +663,6 @@ name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
-
-[[package]]
-name = "defer"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
 
 [[package]]
 name = "deranged"

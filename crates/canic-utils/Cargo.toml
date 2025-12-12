@@ -16,7 +16,6 @@ publish = true
 [dependencies]
 canic-cdk = { workspace = true }
 convert_case = { workspace = true }
-defer = { workspace = true }
 derive_more = { workspace = true }
 minicbor-serde = { workspace = true }
 serde = { workspace = true }

@@ -5,8 +5,8 @@ use crate::{
     },
     eager_static, ic_memory,
     ids::{CanisterRole, SubnetRole},
-    impl_storable_bounded,
     model::memory::id::ENV_ID,
+    utils::impl_storable_bounded,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
