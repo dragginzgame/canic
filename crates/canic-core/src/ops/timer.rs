@@ -4,7 +4,7 @@ use crate::{
     interface::ic::timer::Timer,
     model::metrics::{SystemMetricKind, SystemMetrics, TimerMetrics, TimerMode},
     ops::perf::PerfOps,
-    utils::perf::perf_counter,
+    perf::perf_counter,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, time::Duration};
 

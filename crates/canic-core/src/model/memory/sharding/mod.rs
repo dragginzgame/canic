@@ -6,9 +6,9 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    impl_storable_bounded,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     types::{BoundedString32, BoundedString128, Principal},
+    utils::impl_storable_bounded,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

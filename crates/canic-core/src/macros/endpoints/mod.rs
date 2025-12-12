@@ -89,8 +89,10 @@ macro_rules! canic_endpoints {
         }
 
         #[::canic::cdk::query]
-        async fn canic_perf() -> ::canic::core::ops::perf::PerfSnapshot {
-            ::canic::core::ops::perf::PerfOps::snapshot()
+        fn canic_perf(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::ops::perf::PerfSnapshot {
+            ::canic::core::ops::perf::PerfOps::snapshot(page)
         }
 
         //

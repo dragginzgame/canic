@@ -5,10 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.18] - Unreleased
-### Added
+## [0.5.19] - Perf Metrics
 - Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
 - `canic_perf` diagnostic query and instruction aggregation for timer executions (labels + total instructions) to inspect timer cost without inflating main metrics.
+- removed the canic-macros crate as perf should be in core, and impl_storable_* in utils
 
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added
