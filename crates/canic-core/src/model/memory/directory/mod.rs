@@ -4,8 +4,8 @@ pub mod subnet;
 pub(crate) use app::AppDirectory;
 pub(crate) use subnet::SubnetDirectory;
 
-use crate::{ids::CanisterRole, types::Principal, utils::impl_storable_unbounded};
-use candid::CandidType;
+use crate::{ids::CanisterRole, memory::impl_storable_unbounded};
+use candid::{CandidType, Principal};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 

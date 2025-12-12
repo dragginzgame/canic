@@ -1,23 +1,24 @@
 #![allow(clippy::cast_possible_truncation)]
 use crate::{
     Error, ThisError,
-    cdk::structures::{
-        DefaultMemoryImpl,
-        log::{Log as StableLogImpl, WriteError},
-        memory::VirtualMemory,
+    cdk::{
+        structures::{
+            DefaultMemoryImpl,
+            log::{Log as StableLogImpl, WriteError},
+            memory::VirtualMemory,
+        },
+        utils::time,
     },
     config::{Config, schema::LogConfig},
     eager_static, ic_memory,
     log::Level,
+    memory::impl_storable_unbounded,
     model::memory::{
         MemoryError,
         id::log::{LOG_DATA_ID, LOG_INDEX_ID},
     },
     types::PageRequest,
-    utils::{
-        case::{Case, Casing},
-        impl_storable_unbounded, time,
-    },
+    utils::case::{Case, Casing},
 };
 
 use candid::CandidType;

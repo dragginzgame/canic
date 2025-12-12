@@ -1,8 +1,6 @@
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
-
-use crate::types::Principal;
 
 thread_local! {
     static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());

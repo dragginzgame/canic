@@ -1,9 +1,9 @@
 use crate::{
     Error,
+    cdk::utils::time::now_secs,
     ids::CanisterRole,
     model::memory::sharding::{ShardEntry, ShardKey, ShardingRegistry},
     ops::model::memory::sharding::ShardingOpsError,
-    utils::time::now_secs,
 };
 use candid::Principal;
 use std::collections::BTreeSet;

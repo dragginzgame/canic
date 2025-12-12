@@ -1,8 +1,8 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
+    memory::impl_storable_bounded,
     model::memory::id::topology::app::APP_SUBNET_REGISTRY_ID,
-    utils::impl_storable_bounded,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};

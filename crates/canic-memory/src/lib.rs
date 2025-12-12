@@ -10,6 +10,7 @@ pub mod manager;
 pub mod ops;
 pub mod registry;
 pub mod runtime;
+pub mod serialize;
 
 // export cdk
 pub use ::canic_cdk as cdk;

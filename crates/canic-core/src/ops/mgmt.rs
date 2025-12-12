@@ -4,6 +4,7 @@
 //! scaling out the topology: reserving cycles, recording registry state,
 //! installing WASM modules, and cascading state updates to descendants.
 
+use crate::types::Cycles;
 use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
@@ -31,7 +32,6 @@ use crate::{
     },
 };
 use candid::Principal;
-use canic_types::Cycles;
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]

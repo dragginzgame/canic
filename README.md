@@ -32,8 +32,8 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
 
 - `assets/` – documentation media (logo and shared imagery).
 - `crates/` – workspace crates.
-  - `canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-types`, `canic-utils`, `canic-macros`, and `canic-cdk` for consumers.
-  - `canic-core/` – orchestration crate used inside canisters.
+- `canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-utils`, and `canic-cdk` for consumers.
+- `canic-core/` – orchestration crate used inside canisters.
     - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
     - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
     - `src/config/` – configuration loaders, validators, and schema helpers.
@@ -45,13 +45,12 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
     - `src/ops/` – orchestration/business logic bridging model to endpoints.
     - `src/runtime.rs` – runtime glue shared by macros.
     - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
-    - `src/types/` – topology wrappers for canister and subnet roles.
+    - `types` – re-exported wrappers for accounts, cycles, bounded strings, ULIDs, WASM helpers, etc. under `canic::core::types`.
     - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
-  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates
-  - `canic-types/` – shared wrappers (BoundedString, Cycles, ULID, WASM) plus candid aliases used across the stack.
-  - `canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing) used by macros and canisters.
+  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
+  - `canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing, bounded types) used by macros and canisters.
   - `canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.
-  - `canic-cdk/` – curated IC CDK façade used by `canic`, `canic-types`, and `canic-utils` (management, timers, stable-structures glue).
+  - `canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable-structures glue).
   - `canisters/` – reference canisters that exercise the library end to end:
     - `root/` orchestrator tying together shards, scaling, and reserve flows.
     - `app/` – sample application canister used in integration flows.
@@ -162,6 +161,8 @@ The base endpoint bundle includes:
 - `icrc21_canister_call_consent_message(request)`
 
 Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
+
+The `Account` textual encoding matches the ICRC reference (CRC32 → base32, no padding) so checksums align with `icrc-ledger-types`; use `Display`/`FromStr` instead of hand-rolling account strings.
 
 ## Tooling & DX
 

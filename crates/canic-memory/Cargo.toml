@@ -17,8 +17,8 @@ publish = true
 candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-types = { workspace = true }
-canic-utils = { workspace = true }
 ctor = { workspace = true }
+minicbor-serde = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

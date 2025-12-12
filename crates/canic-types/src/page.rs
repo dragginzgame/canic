@@ -1,4 +1,4 @@
-use canic_cdk::candid::CandidType;
+use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///

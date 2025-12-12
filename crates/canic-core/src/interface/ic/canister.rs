@@ -1,6 +1,9 @@
 use crate::{
     Error,
-    cdk::mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
+    cdk::{
+        mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
+        utils::wasm::get_wasm_hash,
+    },
     interface::{
         ic::{canister_status, install_code},
         prelude::*,
@@ -8,7 +11,6 @@ use crate::{
     log,
     log::Topic,
     model::metrics::{SystemMetricKind, SystemMetrics},
-    utils::wasm::get_wasm_hash,
 };
 
 ///

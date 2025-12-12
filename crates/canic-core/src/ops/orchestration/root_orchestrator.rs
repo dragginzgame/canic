@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    cdk::{api::canister_self, mgmt::CanisterInstallMode},
+    cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
     interface::ic::{canister::upgrade_canister, install_code},
     ops::{
@@ -16,7 +16,6 @@ use crate::{
         sync::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         wasm::WasmOps,
     },
-    types::Principal,
 };
 
 ///

@@ -3,12 +3,15 @@ mod registry;
 pub(crate) use registry::ShardingRegistry;
 
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::{
+        structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+        types::Principal,
+    },
     eager_static, ic_memory,
     ids::CanisterRole,
+    memory::impl_storable_bounded,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-    types::{BoundedString32, BoundedString128, Principal},
-    utils::impl_storable_bounded,
+    types::{BoundedString32, BoundedString128},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

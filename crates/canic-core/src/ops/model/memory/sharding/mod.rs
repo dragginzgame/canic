@@ -8,8 +8,8 @@ pub(crate) use metrics::{PoolMetrics, pool_metrics};
 pub use {assign::*, policy::*, registry::*};
 
 use crate::{
-    Error, ThisError, model::memory::sharding::ShardEntry, ops::model::memory::MemoryOpsError,
-    types::Principal,
+    Error, ThisError, cdk::types::Principal, model::memory::sharding::ShardEntry,
+    ops::model::memory::MemoryOpsError,
 };
 
 ///

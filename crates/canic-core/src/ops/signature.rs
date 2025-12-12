@@ -12,15 +12,15 @@
 //!
 
 use crate::{
-    Error, ThisError, cdk::api::certified_data_set, ops::OpsError, types::Principal,
-    utils::serialize::deserialize,
+    Error, ThisError,
+    cdk::{api::certified_data_set, types::Principal},
+    ops::OpsError,
 };
 use ic_canister_sig_creation::{
     CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,
     signature_map::{CanisterSigInputs, LABEL_SIG, SignatureMap},
 };
 use ic_signature_verification::verify_canister_sig;
-use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 
 thread_local! {
@@ -137,21 +137,6 @@ pub fn verify(
     .map_err(|_| SignatureOpsError::InvalidSignature)?;
 
     Ok(())
-}
-
-///
-/// Parses CBOR-encoded message bytes into a strongly-typed value `T`.
-///
-/// This is a thin convenience wrapper over [`deserialize`], ensuring that
-/// all token deserialization uses the same canonical CBOR implementation.
-///
-pub fn parse_message<T>(message: &[u8]) -> Result<T, Error>
-where
-    T: DeserializeOwned,
-{
-    let token = deserialize::<T>(message).map_err(|_| SignatureOpsError::CannotParseTokens)?;
-
-    Ok(token)
 }
 
 ///

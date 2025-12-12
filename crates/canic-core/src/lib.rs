@@ -13,6 +13,7 @@ pub mod perf;
 pub mod spec;
 
 pub use ::canic_cdk as cdk;
+pub use ::canic_memory as memory;
 pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 pub use ::canic_types as types;
 pub use ::canic_utils as utils;

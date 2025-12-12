@@ -4,15 +4,17 @@
 /// RE-EXPORTS
 ///
 pub use canic_core::{Error, build, build_root, log, log::Level, perf_defer, start, start_root};
-pub use canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
-pub use canic_utils::{impl_storable_bounded, impl_storable_unbounded};
+pub use canic_memory::{
+    eager_init, eager_static, ic_memory, ic_memory_range, impl_storable_bounded,
+    impl_storable_unbounded,
+};
 
 ///
 /// SUB-CRATES
 ///
 pub use canic_cdk as cdk;
 pub use canic_core as core;
-pub use canic_types as types;
+pub use canic_core::types;
 pub use canic_utils as utils;
 
 ///

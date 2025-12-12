@@ -14,14 +14,18 @@ categories = { workspace = true }
 publish = true
 
 [dependencies]
+base32 = { workspace = true }
 candid = { workspace = true }
+crc32fast = { workspace = true }
 derive_more = { workspace = true }
+hex = { workspace = true }
 ic-canister-sig-creation = { workspace = true }
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic-signature-verification = { workspace = true }
 ic-stable-structures = { workspace = true }
-icrc-ledger-types = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true

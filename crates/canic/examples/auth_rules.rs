@@ -1,7 +1,7 @@
 // Example: composing and referencing auth rules.
 // This example compiles on the host without executing IC calls.
 
-use canic::core::{auth, types::Principal};
+use canic::{cdk::types::Principal, core::auth};
 
 fn main() {
     // Build a rule future (not awaited here).

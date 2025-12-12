@@ -282,9 +282,9 @@ fn slice_bundle_for_child(
 mod tests {
     use super::*;
     use crate::{
+        cdk::utils::time::now_secs,
         ids::CanisterRole,
         model::memory::{CanisterEntry, topology::SubnetCanisterRegistry},
-        utils::time::now_secs,
     };
 
     fn p(id: u8) -> Principal {

@@ -1,11 +1,9 @@
-use crate::cdk::icrc_ledger_types::icrc1::account::Account as IcrcAccount;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
     hash::{Hash, Hasher},
-    str::FromStr,
 };
 
 ///
@@ -82,16 +80,6 @@ impl From<Principal> for Account {
     }
 }
 
-impl FromStr for Account {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let acc = IcrcAccount::from_str(s).map_err(|e| e.to_string())?;
-
-        Ok(Self::new(acc.owner, acc.subaccount))
-    }
-}
-
 impl Hash for Account {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.owner.hash(state);
@@ -122,4 +110,24 @@ fn full_account_checksum(owner: &[u8], subaccount: &[u8]) -> String {
     let checksum = crc32hasher.finalize().to_be_bytes();
 
     base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &checksum).to_lowercase()
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subaccount_checksum_matches_reference() {
+        // Values lifted from icrc-ledger-types, base32(crc32(owner + subaccount)) of
+        // 0x01 bytes (owner) plus 0x02 bytes (subaccount).
+        let owner = [0x01; 29];
+        let subaccount = [0x02; 32];
+
+        let checksum = full_account_checksum(owner.as_slice(), subaccount.as_slice());
+        assert_eq!(checksum, "izgikni");
+    }
 }
