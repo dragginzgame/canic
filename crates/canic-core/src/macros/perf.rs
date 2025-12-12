@@ -7,7 +7,7 @@
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
-        $crate::utils::perf::PERF_LAST.with(|last| {
+        $crate::perf::PERF_LAST.with(|last| {
             let now = $crate::cdk::api::performance_counter(1);
             let then = *last.borrow();
             let delta = now.saturating_sub(then);
@@ -17,7 +17,7 @@ macro_rules! perf {
             let delta_fmt = $crate::utils::instructions::format_instructions(delta);
             let now_fmt = $crate::utils::instructions::format_instructions(now);
 
-            $crate::utils::perf::record(&label, delta);
+            $crate::perf::record(&label, delta);
             $crate::cdk::println!(
                 "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),

@@ -19,6 +19,7 @@ pub use ::canic_utils as utils;
 
 pub mod export {
     pub use ::ctor;
+    pub use ::defer;
 }
 
 pub use thiserror::Error as ThisError;
