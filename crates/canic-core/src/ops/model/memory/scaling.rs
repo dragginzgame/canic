@@ -9,6 +9,7 @@ pub use crate::model::memory::scaling::ScalingRegistryView;
 
 use crate::{
     Error, ThisError,
+    cdk::utils::time::now_secs,
     config::schema::ScalePool,
     model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
@@ -16,7 +17,6 @@ use crate::{
         model::memory::MemoryOpsError,
         request::{CreateCanisterParent, create_canister_request},
     },
-    utils::time::now_secs,
 };
 use candid::Principal;
 

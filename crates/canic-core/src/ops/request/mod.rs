@@ -11,7 +11,7 @@ mod response;
 pub use request::*;
 pub use response::*;
 
-use crate::{Error, ThisError, ids::CanisterRole, ops::OpsError, types::Principal};
+use crate::{Error, ThisError, cdk::types::Principal, ids::CanisterRole, ops::OpsError};
 
 ///
 /// RequestOpsError

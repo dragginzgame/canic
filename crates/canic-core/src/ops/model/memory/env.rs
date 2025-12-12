@@ -1,9 +1,9 @@
 use crate::{
     Error, ThisError,
+    cdk::types::Principal,
     ids::{CanisterRole, SubnetRole},
     model::memory::Env,
     ops::model::memory::MemoryOpsError,
-    types::Principal,
 };
 
 pub use crate::model::memory::env::EnvData;

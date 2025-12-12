@@ -4,14 +4,14 @@
 //! tables where size caps matter.
 //!
 
-use crate::{cdk::candid::CandidType, utils::impl_storable_bounded};
+use candid::CandidType;
+use canic_cdk::structures::{Storable, storable::Bound};
 use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::{borrow::Cow, convert::TryFrom};
 
 ///
 /// BoundedString
-///
 /// String wrapper enforcing a compile-time maximum length, with serde and
 /// storage trait implementations.
 ///
@@ -61,13 +61,6 @@ pub type BoundedString64 = BoundedString<64>;
 pub type BoundedString128 = BoundedString<128>;
 pub type BoundedString256 = BoundedString<256>;
 
-impl_storable_bounded!(BoundedString8, 8, false);
-impl_storable_bounded!(BoundedString16, 16, false);
-impl_storable_bounded!(BoundedString32, 32, false);
-impl_storable_bounded!(BoundedString64, 64, false);
-impl_storable_bounded!(BoundedString128, 128, false);
-impl_storable_bounded!(BoundedString256, 256, false);
-
 // Fallible Into<String> back
 impl<const N: u32> From<BoundedString<N>> for String {
     fn from(b: BoundedString<N>) -> Self {
@@ -101,6 +94,34 @@ impl<const N: u32> TryFrom<&str> for BoundedString<N> {
     }
 }
 
+impl<const N: u32> Storable for BoundedString<N> {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: N,
+        is_fixed_size: false,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.0.as_bytes().to_vec())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.into_bytes()
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let bytes = bytes.as_ref();
+
+        assert!(
+            bytes.len() <= N as usize,
+            "Stored string exceeds BoundedString<{N}> bound"
+        );
+
+        let s = String::from_utf8(bytes.to_vec()).expect("Stored BoundedString is not valid UTF-8");
+
+        Self(s)
+    }
+}
+
 ///
 /// TESTS
 ///
@@ -108,10 +129,6 @@ impl<const N: u32> TryFrom<&str> for BoundedString<N> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::structures::Storable,
-        utils::serialize::{deserialize, serialize},
-    };
 
     #[test]
     fn create_within_bounds() {
@@ -136,34 +153,5 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert!(a < c); // "abc" < "def"
-    }
-
-    #[test]
-    fn serialize_and_deserialize_roundtrip() {
-        let original = BoundedString32::new("roundtrip test".to_string());
-
-        // to bytes
-        let bytes = serialize(&original).unwrap();
-
-        // back
-        let decoded: BoundedString32 = deserialize(&bytes).unwrap();
-
-        assert_eq!(original, decoded);
-    }
-
-    #[test]
-    fn storable_impl_to_bytes_and_from_bytes() {
-        let original = BoundedString64::new("hello world".to_string());
-
-        let bytes = serialize(&original).unwrap();
-        let cow = std::borrow::Cow::Owned(bytes);
-
-        // Storable trait methods
-        let stored = <BoundedString64 as Storable>::from_bytes(cow);
-
-        assert_eq!(original, stored);
-
-        let owned = original.clone().into_bytes();
-        assert_eq!(deserialize::<BoundedString64>(&owned).unwrap(), original);
     }
 }

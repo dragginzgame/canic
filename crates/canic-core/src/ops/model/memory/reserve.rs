@@ -13,6 +13,7 @@ use crate::{
         api::canister_self,
         futures::spawn,
         mgmt::{self, CanisterSettings, UpdateSettingsArgs},
+        types::Principal,
     },
     config::{Config, schema::SubnetConfig},
     interface::ic::{
@@ -31,7 +32,7 @@ use crate::{
         prelude::*,
         timer::TimerOps,
     },
-    types::{Cycles, Principal, TC},
+    types::{Cycles, TC},
 };
 use std::cell::RefCell;
 

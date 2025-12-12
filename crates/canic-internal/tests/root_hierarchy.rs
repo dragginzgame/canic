@@ -1,11 +1,14 @@
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
 use canic::{
+    Error,
+    cdk::types::Principal,
     core::{
         ids::{CanisterRole, SubnetRole},
         model::memory::{CanisterEntry, CanisterSummary},
-        ops::model::memory::directory::DirectoryPageDto,
-        ops::model::memory::topology::subnet::SubnetCanisterChildrenPage,
+        ops::model::memory::{
+            directory::DirectoryPageDto, topology::subnet::SubnetCanisterChildrenPage,
+        },
     },
     types::{PageRequest, TC},
 };
@@ -75,7 +78,7 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
 struct Setup {
     pic: Pic,
-    root_id: canic::types::Principal,
+    root_id: Principal,
     registry: HashMap<CanisterRole, CanisterEntry>,
 }
 
@@ -211,7 +214,7 @@ fn directories_are_consistent_across_canisters() {
     let root_app_dir: DirectoryPageDto = pic
         .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
         .expect("root app directory");
-    let root_subnet_dir: Result<DirectoryPageDto, canic::Error> = pic
+    let root_subnet_dir: Result<DirectoryPageDto, Error> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
@@ -237,7 +240,7 @@ fn directories_are_consistent_across_canisters() {
                 (PageRequest::new(100, 0),),
             )
             .expect("child app directory");
-        let subnet_dir: Result<DirectoryPageDto, canic::Error> = pic
+        let subnet_dir: Result<DirectoryPageDto, Error> = pic
             .query_call(
                 entry.pid,
                 "canic_subnet_directory",
@@ -340,7 +343,7 @@ fn worker_topology_cascades_through_parent() {
         .expect("scale_hub present in registry");
 
     // Create a worker via the scale_hub canister.
-    let worker_pid: Result<Result<canic::types::Principal, canic::Error>, canic::Error> =
+    let worker_pid: Result<Result<Principal, Error>, Error> =
         pic.update_call(scale_hub.pid, "create_worker", ());
     let worker_pid = worker_pid
         .expect("create worker via scale_hub (transport)")

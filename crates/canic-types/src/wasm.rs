@@ -1,9 +1,4 @@
-//!
-//! Lightweight wrapper for statically embedded WASM modules, providing helper
-//! methods for hashing and metadata used by registry components.
-//!
-
-use crate::utils::wasm::get_wasm_hash;
+use canic_cdk::utils::wasm::get_wasm_hash;
 
 ///
 /// WasmModule

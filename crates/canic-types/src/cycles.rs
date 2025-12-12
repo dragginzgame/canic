@@ -5,7 +5,7 @@
 //! with derived math traits and serde helpers.
 //!
 
-use candid::{CandidType, Nat};
+use canic_cdk::{candid::CandidType, types::Nat};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize, de::Deserializer};
@@ -113,39 +113,40 @@ impl From<Cycles> for Nat {
 }
 
 // Human-input parser: "10K", "1.5T", etc.
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
 impl FromStr for Cycles {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut num = String::new();
         let mut suf = String::new();
-        let mut seen_dot = false;
-
-        for ch in s.chars() {
-            if ch.is_ascii_digit() || (ch == '.' && !seen_dot) {
-                if ch == '.' {
-                    seen_dot = true;
+        let mut suf_count = 0;
+        for c in s.chars() {
+            if c.is_ascii_digit() || c == '.' {
+                if suf_count > 0 {
+                    return Err("invalid suffix".to_string());
                 }
-                num.push(ch);
+                num.push(c);
+            } else if suf_count >= 2 {
+                return Err("invalid suffix".to_string());
             } else {
-                suf.push(ch);
+                suf.push(c);
+                suf_count += 1;
             }
         }
 
-        let n: f64 = num
-            .parse::<f64>()
-            .map_err(|e| format!("Invalid number '{num}': {e}"))?;
+        let mut n = num.parse::<f64>().map_err(|e| e.to_string())?;
+        match suf.as_str() {
+            "" => {}
+            "K" => n *= KC as f64,
+            "M" => n *= MC as f64,
+            "B" => n *= BC as f64,
+            "T" => n *= TC as f64,
+            "Q" => n *= QC as f64,
+            _ => return Err("invalid suffix".to_string()),
+        }
 
-        let mul = match suf.as_str() {
-            "K" => 1_000_f64,
-            "M" => 1_000_000_f64,
-            "B" => 1_000_000_000_f64,
-            "T" => 1_000_000_000_000_f64,
-            "Q" => 1_000_000_000_000_000_f64,
-            "" => 1.0,
-            _ => return Err(format!("Unknown suffix '{suf}'")),
-        };
-
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Ok(Self::new((n * mul) as u128))
+        Ok(Self::new(n as u128))
     }
 }

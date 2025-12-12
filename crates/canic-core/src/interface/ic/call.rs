@@ -1,7 +1,6 @@
 use crate::{
-    cdk::call::Call as IcCall,
+    cdk::{call::Call as IcCall, candid::Principal},
     model::metrics::{IccMetrics, SystemMetricKind, SystemMetrics},
-    types::Principal,
 };
 
 ///

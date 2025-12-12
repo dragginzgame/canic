@@ -3,7 +3,7 @@
 //! Provides a shared RNG for tests and lightweight sampling (non-cryptographic).
 //!
 
-use crate::time::now_nanos;
+use canic_cdk::utils::time::now_nanos;
 use std::sync::{LazyLock, Mutex};
 use tinyrand::{Rand, Seeded, StdRand};
 

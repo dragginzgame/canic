@@ -4,8 +4,7 @@
 //! These functions provide **fast, deterministic, non-cryptographic hashes**
 //! that work reliably on the Internet Computer.
 //!
-//! They are used across both **canic** (runtime layer) and **mimic**
-//! (framework layer) for tasks that require uniform and reproducible hashing
+//! They are used across **canic** for tasks that require uniform and reproducible hashing
 //! such as:
 //!   - routing / sharding decisions,
 //!   - cache keys or internal identifiers,

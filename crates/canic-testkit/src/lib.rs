@@ -1,6 +1,10 @@
-use canic::types::{Account, Principal, Ulid};
+use canic::cdk::types::{Account, Principal};
 
 pub mod pic;
+
+///
+/// Fake
+///
 
 pub struct Fake;
 
@@ -23,14 +27,6 @@ impl Fake {
         buf[..4].copy_from_slice(&seed.to_be_bytes());
 
         Principal::from_slice(&buf)
-    }
-
-    #[must_use]
-    pub fn ulid(seed: u32) -> Ulid {
-        let mut buf = [0u8; 16];
-        buf[..4].copy_from_slice(&seed.to_be_bytes());
-
-        Ulid::from_bytes(buf)
     }
 }
 
@@ -66,18 +62,5 @@ mod tests {
 
         let bytes = p1.as_slice();
         assert_eq!(bytes.len(), 29, "Principal must be 29 bytes");
-    }
-
-    #[test]
-    fn fake_ulid_is_deterministic_and_unique() {
-        let u1 = Fake::ulid(1234);
-        let u2 = Fake::ulid(1234);
-        let v = Fake::ulid(5678);
-
-        assert_eq!(u1, u2, "Fake::ulid should be deterministic");
-        assert_ne!(u1, v, "Fake::ulid should differ for different seeds");
-
-        let bytes = u1.to_bytes();
-        assert_eq!(bytes.len(), 16, "ULID must be 16 bytes");
     }
 }

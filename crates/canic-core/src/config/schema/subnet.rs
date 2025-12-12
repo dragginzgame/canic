@@ -1,8 +1,8 @@
+use crate::types::{Cycles, TC};
 use crate::{
     config::schema::{ConfigSchemaError, Validate},
     ids::CanisterRole,
 };
-use canic_types::{Cycles, TC};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

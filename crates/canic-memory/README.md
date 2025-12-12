@@ -6,7 +6,7 @@ What you get:
 - Reserve and validate a per-crate stable-memory ID range.
 - One place to register stable structures (`ic_memory!` + registry).
 - Eager TLS init so thread-locals that allocate memory are ready before entrypoints.
-- Zero dependency on the `canic` crate (only `canic-types`, `canic-utils`,  `canic-cdk`).
+- Zero dependency on the `canic` crate (only `canic-utils` and `canic-cdk`).
 
 Sample boot logs when everything is wired correctly:
 ```
@@ -129,4 +129,4 @@ fn reserves_and_registers() {
 
 - The macros automatically namespace memory IDs by crate (`CARGO_PKG_NAME`) when validating ranges.
 - If you don't want an initial range, omit it and rely solely on `ic_memory_range!` calls before `init_memory`.
-- Consumers outside Canic can import only `canic-memory` plus `canic-types`/`canic-utils` and `canic-cdk`; the rest of the stack is optional.
+- Consumers outside Canic can import only `canic-memory` plus `canic-utils` and `canic-cdk`; the rest of the stack is optional.

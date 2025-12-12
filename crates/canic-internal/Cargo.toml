@@ -11,9 +11,7 @@ categories = { workspace = true }
 publish = false
 
 [dependencies]
-candid = { workspace = true }
 canic = { workspace = true }
-serde = { workspace = true }
 
 [dev-dependencies]
 canic-testkit = { workspace = true }

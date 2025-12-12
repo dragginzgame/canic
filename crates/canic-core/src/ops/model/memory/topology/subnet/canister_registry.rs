@@ -2,10 +2,10 @@ pub use crate::model::memory::topology::SubnetCanisterRegistryView;
 
 use crate::{
     Error, ThisError,
+    cdk::types::Principal,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, topology::SubnetCanisterRegistry},
     ops::model::memory::topology::TopologyOpsError,
-    types::Principal,
 };
 
 ///

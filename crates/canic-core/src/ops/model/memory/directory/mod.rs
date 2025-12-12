@@ -53,7 +53,9 @@ fn pagination_bounds(total: u64, request: PageRequest) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::{DirectoryView, PageRequest, paginate};
-    use crate::{ids::CanisterRole, model::memory::directory::PrincipalList, types::Principal};
+    use crate::{
+        cdk::types::Principal, ids::CanisterRole, model::memory::directory::PrincipalList,
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

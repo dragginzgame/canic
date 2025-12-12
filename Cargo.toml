@@ -22,7 +22,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.91.0"
+rust-version = "1.91.1"
 edition = "2024"
 version = "0.5.19"
 license = "MIT"
@@ -62,7 +62,6 @@ ic-cdk-timers = "1.0"
 ic-management-canister-types = "0.3.3"
 ic-signature-verification = "0.2"
 ic-stable-structures = "0.7.2"
-icrc-ledger-types = "0.1.12"
 minicbor-serde = { version = "0.6", features = ["alloc"] }
 num-traits = "0.2"
 pocket-ic = "11.0"
@@ -74,9 +73,6 @@ sha2 = "0.10"
 thiserror = "2.0"
 tinyrand = "0.5"
 toml = "0.9"
-
-# removed std because it imports rand; serde feature doesn't compile with std
-ulid = { version = "1.2", default-features = false }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # shared clippy rules
@@ -111,10 +107,10 @@ wildcard_imports = "allow"
 canic = { path = "crates/canic" }
 canic-core = { path = "crates/canic-core" }
 canic-cdk = { path = "crates/canic-cdk" }
-canic-types = { path = "crates/canic-types" }
 canic-utils = { path = "crates/canic-utils" }
 canic-internal = { path = "crates/canic-internal" }
 canic-testkit = { path = "crates/canic-testkit" }
+canic-types = { path = "crates/canic-types" }
 canic-memory = { path = "crates/canic-memory" }
 
 # profiles

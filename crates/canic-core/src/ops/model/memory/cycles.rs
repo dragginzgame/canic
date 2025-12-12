@@ -1,7 +1,7 @@
 pub use crate::model::memory::cycles::CycleTrackerView;
 
 use crate::{
-    cdk::futures::spawn,
+    cdk::{futures::spawn, utils::time::now_secs},
     interface::ic::{
         canister_cycle_balance,
         timer::{Timer, TimerId},
@@ -16,7 +16,6 @@ use crate::{
         timer::TimerOps,
     },
     types::{Cycles, PageRequest},
-    utils::time::now_secs,
 };
 use candid::CandidType;
 use serde::Serialize;

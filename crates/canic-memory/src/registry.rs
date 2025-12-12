@@ -1,13 +1,15 @@
 //! NOTE: All stable registry access is TLS-thread-local.
 //! This ensures atomicity on the IC’s single-threaded execution model.
-use crate::manager::MEMORY_MANAGER;
+use crate::{impl_storable_bounded, manager::MEMORY_MANAGER};
 use candid::CandidType;
-use canic_cdk::structures::{
-    BTreeMap as StableBTreeMap, DefaultMemoryImpl,
-    memory::{MemoryId, VirtualMemory},
+use canic_cdk::{
+    structures::{
+        BTreeMap as StableBTreeMap, DefaultMemoryImpl,
+        memory::{MemoryId, VirtualMemory},
+    },
+    utils::time::now_secs,
 };
 use canic_types::BoundedString256;
-use canic_utils::{impl_storable_bounded, time::now_secs};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -123,6 +125,7 @@ pub enum MemoryRegistryError {
 ///
 /// MemoryRange
 ///
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRange {
     pub crate_key: BoundedString256,
