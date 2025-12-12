@@ -7,8 +7,8 @@ license = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
 documentation = "https://docs.rs/canic-utils"
-homepage = "https://github.com/dragginzgame/canic"
-repository = "https://github.com/dragginzgame/canic"
+homepage = { workspace = true }
+repository = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
