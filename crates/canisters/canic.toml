@@ -26,8 +26,8 @@ icrc21 = true # Enable ICRC-21 capability
 #  PRIME SUBNET
 # ================================================================
 [subnets.prime]
-auto_create = ["app", "auth", "scale_hub", "shard_hub"]
-subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
+auto_create = ["app", "auth", "scale_hub", "shard_hub", "test"]
+subnet_directory = ["app", "auth", "scale_hub", "shard_hub", "test"]
 reserve.minimum_size = 3
 
 # --- App ---
@@ -68,6 +68,8 @@ policy.max_shards = 4
 topup.threshold = "10T"
 topup.amount = "5T"
 
+# --- Test ---
+[subnets.prime.canisters.test]
 
 # ================================================================
 #  GENERAL SUBNET

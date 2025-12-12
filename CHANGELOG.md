@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.5.19] - Perf Metrics
 - Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
 - `canic_perf` diagnostic query and instruction aggregation for timer executions (labels + total instructions) to inspect timer cost without inflating main metrics.
+- Added `timer!` and `timer_interval!` macros that auto-label timers with `module_path::function` and route through `TimerOps` for perf recording.
 - removed the canic-macros crate as perf should be in core, and impl_storable_* in utils
+
+## [0.5.18] - Perf Timer Macros
+- Timer metrics now get pre-registered on schedule and increment on every execution, so `canic_metrics.timer` shows interval timers immediately and counts ticks over time.
 
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added
@@ -17,8 +21,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - Metrics reporting now distinguishes HTTP outcalls and the main metrics façade is called `SystemMetrics`.
-
-
 
 ## [0.5.16] - 2025-12-11 - O(n^2) -> O(n)
 ### Fixed

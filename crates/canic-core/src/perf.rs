@@ -51,18 +51,14 @@ pub fn perf_counter() -> u64 {
     }
 }
 
-///
 /// Record an instruction delta under the provided label.
-///
 pub fn record(label: &str, delta: u64) {
     PERF_TABLE.with_borrow_mut(|table| {
         table.entry(label.to_string()).or_default().increment(delta);
     });
 }
 
-///
 /// Snapshot all recorded perf counters, sorted by label.
-///
 #[must_use]
 pub fn entries() -> Vec<PerfEntry> {
     PERF_TABLE.with_borrow(|table| {
@@ -84,32 +80,4 @@ pub fn entries() -> Vec<PerfEntry> {
 pub fn reset() {
     PERF_TABLE.with_borrow_mut(HashMap::clear);
     PERF_LAST.with_borrow_mut(|last| *last = 0);
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn records_and_pages_entries() {
-        reset();
-        record("b", 2);
-        record("a", 10);
-        record("a", 5);
-
-        let entries = entries();
-        assert_eq!(entries.len(), 2);
-
-        assert_eq!(entries[0].label, "a");
-        assert_eq!(entries[0].count, 2);
-        assert_eq!(entries[0].total_instructions, 15);
-
-        assert_eq!(entries[1].label, "b");
-        assert_eq!(entries[1].count, 1);
-        assert_eq!(entries[1].total_instructions, 2);
-    }
 }

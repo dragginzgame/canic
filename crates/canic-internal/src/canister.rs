@@ -14,3 +14,4 @@ pub const SCALE_HUB: CanisterRole = CanisterRole::new("scale_hub");
 pub const SCALE: CanisterRole = CanisterRole::new("scale");
 pub const SHARD_HUB: CanisterRole = CanisterRole::new("shard_hub");
 pub const SHARD: CanisterRole = CanisterRole::new("shard");
+pub const TEST: CanisterRole = CanisterRole::new("test");

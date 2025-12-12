@@ -25,9 +25,11 @@ impl TimerOps {
         let label = label.into();
 
         SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::increment(TimerMode::Once, delay, &label);
+        TimerMetrics::ensure(TimerMode::Once, delay, &label);
 
         Timer::set(delay, async move {
+            TimerMetrics::increment(TimerMode::Once, delay, &label);
+
             let start = perf_counter();
             task.await;
             let end = perf_counter();
@@ -46,15 +48,18 @@ impl TimerOps {
         let label = label.into();
 
         SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::increment(TimerMode::Interval, interval, &label);
+        TimerMetrics::ensure(TimerMode::Interval, interval, &label);
 
         let task = Rc::new(RefCell::new(task));
 
         Timer::set_interval(interval, move || {
             let label = label.clone();
+            let interval = interval;
             let task = Rc::clone(&task);
 
             async move {
+                TimerMetrics::increment(TimerMode::Interval, interval, &label);
+
                 let start = perf_counter();
                 let fut = { (task.borrow_mut())() };
                 fut.await;
