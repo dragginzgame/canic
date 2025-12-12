@@ -118,6 +118,7 @@ pub enum TimerMode {
 /// TimerMetricKey
 /// Uniquely identifies a timer by mode + delay (ms) + label.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
@@ -129,6 +130,7 @@ pub struct TimerMetricKey {
 /// TimerMetricEntry
 /// Snapshot entry pairing a timer mode/delay with its count.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct TimerMetricEntry {
     pub mode: TimerMode,

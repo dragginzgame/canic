@@ -4,7 +4,10 @@ use crate::{
     log,
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
-    ops::model::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
+    ops::{
+        model::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
+        timer::TimerOps,
+    },
     types::PageRequest,
 };
 use candid::CandidType;
@@ -69,13 +72,16 @@ impl LogOps {
                 return;
             }
 
-            let init = Timer::set(OPS_INIT_DELAY, "log_retention:init", async {
+            let init = TimerOps::set(OPS_INIT_DELAY, "log_retention:init", async {
                 let _ = Self::retain();
 
-                let interval =
-                    Timer::set_interval(RETENTION_INTERVAL, "log_retention:interval", || async {
+                let interval = TimerOps::set_interval(
+                    RETENTION_INTERVAL,
+                    "log_retention:interval",
+                    || async {
                         let _ = Self::retain();
-                    });
+                    },
+                );
 
                 RETENTION_TIMER.with_borrow_mut(|slot| *slot = Some(interval));
             });

@@ -44,12 +44,13 @@ macro_rules! start {
             ::canic::core::ops::runtime::nonroot_init($canister_type, payload);
 
             // timers — async body, no spawn()
-            let _ = ::canic::core::interface::ic::timer::Timer::set(
-                ::std::time::Duration::from_secs(0),
+            let install_args = args;
+            let _ = ::canic::core::ops::timer::TimerOps::set(
+                ::std::time::Duration::ZERO,
                 "startup:init",
                 async move {
                     canic_setup().await;
-                    canic_install(args).await;
+                    canic_install(install_args).await;
                 },
             );
         }
@@ -62,8 +63,8 @@ macro_rules! start {
             ::canic::core::ops::runtime::nonroot_post_upgrade($canister_type);
 
             // timers — async body, no spawn()
-            let _ = ::canic::core::interface::ic::timer::Timer::set(
-                ::std::time::Duration::from_secs(0),
+            let _ = ::canic::core::ops::timer::TimerOps::set(
+                ::std::time::Duration::ZERO,
                 "startup:upgrade",
                 async move {
                     canic_setup().await;
@@ -108,8 +109,8 @@ macro_rules! start_root {
             ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
 
             // timers
-            let _ = ::canic::core::interface::ic::timer::Timer::set(
-                std::time::Duration::from_secs(0),
+            let _ = ::canic::core::ops::timer::TimerOps::set(
+                std::time::Duration::ZERO,
                 "startup:root",
                 async move {
                     ::canic::core::ops::root::root_set_subnet_id().await;
@@ -139,8 +140,8 @@ macro_rules! start_root {
             ::canic::core::ops::runtime::root_post_upgrade();
 
             // timers
-            let _ = ::canic::core::interface::ic::timer::Timer::set(
-                ::std::time::Duration::from_secs(0),
+            let _ = ::canic::core::ops::timer::TimerOps::set(
+                ::std::time::Duration::ZERO,
                 "startup:root-upgrade",
                 async move {
                     canic_setup().await;

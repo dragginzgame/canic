@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.5.18] - Unreleased
 ### Added
 - Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics.
+- `canic_perf` diagnostic query and instruction aggregation for timer executions (labels + total instructions) to inspect timer cost without inflating main metrics.
 
 ## [0.5.17] - 2025-12-11 - HTTP Metrics
 ### Added

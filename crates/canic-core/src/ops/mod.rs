@@ -14,12 +14,14 @@ pub mod metrics;
 pub mod mgmt;
 pub mod model;
 pub mod orchestration;
+pub mod perf;
 pub mod request;
 pub mod root;
 pub mod runtime;
 pub mod service;
 pub mod signature;
 pub mod sync;
+pub mod timer;
 pub mod types;
 pub mod wasm;
 

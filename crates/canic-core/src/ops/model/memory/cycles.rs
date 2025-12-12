@@ -13,6 +13,7 @@ use crate::{
         config::ConfigOps,
         model::memory::EnvOps,
         model::{OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY},
+        timer::TimerOps,
     },
     types::{Cycles, PageRequest},
     utils::time::now_secs,
@@ -61,11 +62,11 @@ impl CycleTrackerOps {
                 return;
             }
 
-            let init = Timer::set(OPS_INIT_DELAY, "cycles:init", async {
+            let init = TimerOps::set(OPS_INIT_DELAY, "cycles:init", async {
                 let _ = Self::track();
 
                 let interval =
-                    Timer::set_interval(TRACKER_INTERVAL_SECS, "cycles:interval", || async {
+                    TimerOps::set_interval(TRACKER_INTERVAL_SECS, "cycles:interval", || async {
                         let _ = Self::track();
                         let _ = Self::purge();
                     });

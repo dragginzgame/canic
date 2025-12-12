@@ -88,6 +88,11 @@ macro_rules! canic_endpoints {
             ::canic::core::ops::metrics::MetricsOps::report()
         }
 
+        #[::canic::cdk::query]
+        async fn canic_perf() -> ::canic::core::ops::perf::PerfSnapshot {
+            ::canic::core::ops::perf::PerfOps::snapshot()
+        }
+
         //
         // STATE
         //
