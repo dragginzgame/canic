@@ -22,7 +22,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.91.1"
+rust-version = "1.92.0"
 edition = "2024"
 version = "0.5.21"
 license = "MIT"
