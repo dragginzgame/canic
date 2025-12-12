@@ -7,7 +7,7 @@
 #[macro_export]
 macro_rules! eager_init {
     ($body:block) => {
-        #[ $crate::export::ctor::ctor(anonymous, crate_path = $crate::export::ctor) ]
+        #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]
         fn __canic_eager_init() {
             $body
         }

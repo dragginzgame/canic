@@ -15,9 +15,19 @@ pub async fn http_get<T: DeserializeOwned>(
     url: &str,
     headers: &[(String, String)],
 ) -> Result<T, Error> {
+    http_get_with_label(url, headers, None).await
+}
+
+/// http_get_with_label
+/// HTTP GET with optional stable metric label.
+pub async fn http_get_with_label<T: DeserializeOwned>(
+    url: &str,
+    headers: &[(String, String)],
+    label: Option<&str>,
+) -> Result<T, Error> {
     // record metrics up front so attempts are counted
     SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-    HttpMetrics::increment("GET", url);
+    HttpMetrics::increment_with_label("GET", url, label);
 
     let headers: Vec<HttpHeader> = headers
         .iter()

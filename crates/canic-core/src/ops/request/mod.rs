@@ -35,6 +35,9 @@ pub enum RequestOpsError {
     #[error("invalid response type")]
     InvalidResponseType,
 
+    #[error("create_canister: missing new pid")]
+    MissingNewCanisterPid,
+
     #[error("cannot find the root canister")]
     RootNotFound,
 }

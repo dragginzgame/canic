@@ -56,7 +56,6 @@ impl HrwSelector {
     }
 
     /// Deterministic HRW score = hash(tenant || shard).
-    #[inline]
     fn hrw_score(tenant: &str, shard: &Principal) -> u64 {
         let mut bytes = Vec::with_capacity(tenant.len() + shard.as_slice().len());
         bytes.extend_from_slice(tenant.as_bytes());
@@ -65,7 +64,6 @@ impl HrwSelector {
         hash_u64(&bytes)
     }
 
-    #[inline]
     fn hrw_score_slot(pool: &str, tenant: &str, slot: u32) -> u64 {
         let mut bytes =
             Vec::with_capacity(pool.len() + tenant.len() + std::mem::size_of::<u32>() + 1);

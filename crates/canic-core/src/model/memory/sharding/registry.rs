@@ -19,7 +19,6 @@ impl ShardingRegistry {
     // Core Access Helpers
     // -----------------------------------------------------------------------
 
-    #[inline]
     pub(crate) fn with<F, R>(f: F) -> R
     where
         F: FnOnce(&ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
@@ -27,7 +26,6 @@ impl ShardingRegistry {
         SHARDING_CORE.with_borrow(f)
     }
 
-    #[inline]
     pub(crate) fn with_mut<F, R>(f: F) -> R
     where
         F: FnOnce(&mut ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,

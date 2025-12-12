@@ -1,17 +1,54 @@
 use crate::{
-    Error,
+    Error, ThisError,
     cdk::{
         api::canister_self,
         types::{Account, Nat, Principal, Subaccount},
         utils::time::now_nanos,
     },
     env::nns::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
-    interface::ic::{call::Call, derive_subaccount},
+    interface::{
+        InterfaceError,
+        ic::{call::Call, derive_subaccount},
+    },
     spec::{
         ic::cycles::{IcpXdrConversionRateResponse, NotifyTopUpArgs},
         icrc::icrc1::Icrc1TransferArgs,
     },
 };
+
+///
+/// CyclesInterfaceError
+///
+
+#[derive(Debug, ThisError)]
+pub enum CyclesInterfaceError {
+    #[error("CMC.get_icp_xdr_conversion_rate failed: {0}")]
+    ConversionRateFetchFailed(String),
+
+    #[error("invalid rate from CMC: xdr_per_icp={rate}")]
+    InvalidRate { rate: f64 },
+
+    #[error("ICP transfer rejected by ledger: {0}")]
+    LedgerRejected(String),
+
+    #[error("ICP ledger transfer failed: {0}")]
+    LedgerTransferFailed(String),
+
+    #[error("CMC.notify_top_up transport failure: {0}")]
+    NotifyTopUpTransportFailed(String),
+
+    #[error("CMC rejected notify_top_up: {0}")]
+    NotifyTopUpRejected(String),
+
+    #[error("transfer block index does not fit into u64")]
+    TransferBlockIndexTooLarge,
+}
+
+impl From<CyclesInterfaceError> for Error {
+    fn from(err: CyclesInterfaceError) -> Self {
+        InterfaceError::CyclesInterfaceError(err).into()
+    }
+}
 
 //
 // ===========================================================================
@@ -25,20 +62,18 @@ use crate::{
 pub async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
     let res = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate")
         .await
-        .map_err(|e| Error::custom(format!("CMC.get_icp_xdr_conversion_rate failed: {e:?}")))?;
+        .map_err(|e| CyclesInterfaceError::ConversionRateFetchFailed(format!("{e:?}")))?;
 
     let rate_info: IcpXdrConversionRateResponse = res
         .candid()
-        .map_err(|e| Error::custom(format!("decode error: {e:?}")))?;
+        .map_err(|e| CyclesInterfaceError::ConversionRateFetchFailed(format!("{e:?}")))?;
 
     // Convert permyriad XDR/ICP → ICP/XDR
     #[allow(clippy::cast_precision_loss)]
     let xdr_per_icp = rate_info.data.xdr_permyriad_per_icp as f64 / 10_000.0;
 
     if xdr_per_icp <= 0.0 {
-        return Err(Error::custom(format!(
-            "invalid rate from CMC: xdr_per_icp={xdr_per_icp}"
-        )));
+        return Err(CyclesInterfaceError::InvalidRate { rate: xdr_per_icp }.into());
     }
 
     Ok(1.0 / xdr_per_icp)
@@ -99,7 +134,13 @@ fn calculate_icp_for_cycles(cycles_needed: u64, icp_per_xdr: f64) -> u64 {
     let xdr_required = cycles_needed as f64 / CYCLES_PER_XDR;
     let icp_required = xdr_required * icp_per_xdr * BUFFER;
 
-    (icp_required * E8S_PER_ICP).round() as u64
+    if cycles_needed == 0 {
+        return 0;
+    }
+
+    // Use ceil to avoid under-funding (rounding to zero) when requests are tiny.
+    let icp_e8s = (icp_required * E8S_PER_ICP).ceil() as u64;
+    icp_e8s.max(1)
 }
 
 /// Perform ICRC-1 ICP transfer into the CMC’s ledger account.
@@ -123,21 +164,20 @@ async fn transfer_icp_to_cmc(
     let raw = Call::unbounded_wait(*ICP_LEDGER_CANISTER, "icrc1_transfer")
         .with_args(&(args,))
         .await
-        .map_err(|e| Error::custom(format!("ICP ledger transfer failed: {e:?}")))?;
+        .map_err(|e| CyclesInterfaceError::LedgerTransferFailed(format!("{e:?}")))?;
 
     // The ICRC-1 ledger returns Result<Nat, Nat>.
-    let result: Result<Nat, Nat> = raw
-        .candid()
-        .map_err(|e| Error::custom(format!("Failed to decode icrc1_transfer(): {e:?}")))?;
+    let result: Result<Nat, Nat> = raw.candid()?;
 
     match result {
-        Ok(block) => block
-            .0
-            .try_into()
-            .map_err(|_| Error::custom("transfer block index does not fit into u64")),
-        Err(err_code) => Err(Error::custom(format!(
-            "ICP transfer rejected by ledger: {err_code}"
-        ))),
+        Ok(block) => {
+            let idx: u64 = block
+                .0
+                .try_into()
+                .map_err(|_| CyclesInterfaceError::TransferBlockIndexTooLarge)?;
+            Ok(idx)
+        }
+        Err(err_code) => Err(CyclesInterfaceError::LedgerRejected(format!("{err_code}")).into()),
     }
 }
 
@@ -156,20 +196,16 @@ async fn notify_cycles_minting_canister(
     let raw = Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "notify_top_up")
         .with_args(&(args,))
         .await
-        .map_err(|e| Error::custom(format!("CMC.notify_top_up transport failure: {e:?}")))?;
+        .map_err(|e| CyclesInterfaceError::NotifyTopUpTransportFailed(format!("{e:?}")))?;
 
-    let method_result: Result<(), Error> = raw
-        .candid()
-        .map_err(|e| Error::custom(format!("decode failure in notify_top_up: {e:?}")))?;
+    let method_result: Result<(), Error> = raw.candid()?;
 
-    method_result.map_err(|e| Error::custom(format!("CMC rejected notify_top_up: {e:?}")))
+    method_result.map_err(|e| CyclesInterfaceError::NotifyTopUpRejected(format!("{e:?}")).into())
 }
 
-//
-// ===========================================================================
-//  TESTS
-// ===========================================================================
-//
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {
@@ -181,5 +217,23 @@ mod tests {
         let icp_per_xdr = 1.25_f64; // XDR costs 1.25 ICP
         let icp_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
         assert_eq!(icp_e8s, 262_500_000); // 2 * 1.25 * 1.05 = 2.625 ICP
+    }
+
+    #[test]
+    fn calculates_icp_never_zero_for_positive_cycles() {
+        let cycles_needed = 1u64; // extremely small request
+        let icp_per_xdr = 1.0_f64;
+
+        let icp_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
+        assert_eq!(icp_e8s, 1);
+    }
+
+    #[test]
+    fn calculates_icp_zero_for_zero_cycles() {
+        let cycles_needed = 0u64;
+        let icp_per_xdr = 1.0_f64;
+
+        let icp_e8s = calculate_icp_for_cycles(cycles_needed, icp_per_xdr);
+        assert_eq!(icp_e8s, 0);
     }
 }

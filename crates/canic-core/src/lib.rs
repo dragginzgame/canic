@@ -18,7 +18,10 @@ pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
 pub use ::canic_types as types;
 pub use ::canic_utils as utils;
 
-pub mod export {
+/// Internal re-exports required for macro expansion.
+/// Not part of the public API.
+#[doc(hidden)]
+pub mod __reexports {
     pub use ::ctor;
     pub use ::defer;
 }
@@ -54,9 +57,6 @@ pub enum Error {
 
     #[error("{0}")]
     CustomError(String),
-
-    #[error("{0}")]
-    EnvError(String),
 
     #[error("{0}")]
     InterfaceError(String),
@@ -135,7 +135,6 @@ impl Error {
 
 from_to_string!(auth::AuthError, AuthError);
 from_to_string!(config::ConfigError, ConfigError);
-from_to_string!(env::EnvError, EnvError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);

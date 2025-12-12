@@ -2,6 +2,7 @@ pub use crate::perf::PerfEntry;
 
 use crate::{cdk::candid::CandidType, perf, types::PageRequest};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 ///
 /// PerfSnapshot
@@ -22,7 +23,7 @@ pub struct PerfOps;
 
 impl PerfOps {
     pub(crate) fn record(label: &str, delta: u64) {
-        perf::record(label, delta);
+        perf::record(Cow::Borrowed(label), delta);
     }
 
     #[must_use]

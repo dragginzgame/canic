@@ -1,23 +1,36 @@
-/// Log elapsed instruction counts since the last `perf!` invocation.
+/// Log elapsed instruction counts since the last `perf!` invocation in this thread.
 ///
-/// Records the delta in instructions between calls and emits a
-/// [`Log::Perf`](crate::Log::Perf)
-/// entry with the provided label (any tokens accepted by `format!`). Use this
-/// to highlight hot paths in long-running maintenance tasks.
+/// - Uses a thread-local `PERF_LAST` snapshot.
+/// - Computes `delta = now - last`.
+/// - Records the delta under the provided label (aggregated via `perf::record`).
+/// - Prints a human-readable line for debugging.
+///
+/// Intended usage:
+/// - Long-running maintenance tasks where you want *checkpoints* in a single call.
+/// - Pair with `perf_scope!` to also capture the *full call total* at scope exit.
+///
+/// Notes:
+/// - On non-wasm targets, `perf_counter()` returns 0, so this becomes a no-op-ish
+///   counter (still records 0 deltas); this keeps unit tests compiling cleanly.
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
         $crate::perf::PERF_LAST.with(|last| {
-            let now = $crate::cdk::api::performance_counter(1);
+            // Use the wrapper so non-wasm builds compile.
+            let now = $crate::perf::perf_counter();
             let then = *last.borrow();
             let delta = now.saturating_sub(then);
+
+            // Update last checkpoint.
             *last.borrow_mut() = now;
 
+            // Format label + pretty-print counters.
             let label = format!($($label)*);
             let delta_fmt = $crate::utils::instructions::format_instructions(delta);
             let now_fmt = $crate::utils::instructions::format_instructions(now);
 
-            $crate::perf::record(&label, delta);
+            // ❌ NO structured recording here
+            // ✔️ Debug log only
             $crate::cdk::println!(
                 "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),
@@ -29,21 +42,15 @@ macro_rules! perf {
     }};
 }
 
-/// Record a single-call instruction counter snapshot when the surrounding
-/// scope exits.
-///
-/// Expands to a `defer!` guard that logs the total instructions consumed in
-/// the enclosing scope, tagged as [`Log::Perf`](crate::Log::Perf). Pair this
-/// with manual checkpoints logged via [`macro@perf`] to track both cumulative and incremental
-/// usage.
 #[macro_export]
-macro_rules! perf_defer {
-    () => {
-        $crate::export::defer::defer!({
-            let end = $crate::cdk::api::performance_counter(1);
-            let end_fmt = $crate::utils::instructions::format_instructions(end);
+macro_rules! perf_scope {
+    ($($label:tt)*) => {{
+        let __perf_label = format!($($label)*);
 
-            $crate::cdk::println!("{} used {}i in this call", module_path!(), end_fmt,)
+        let _perf_scope_guard = $crate::__reexports::defer::defer!({
+            let __perf_end = $crate::perf::perf_counter();
+            ::canic::log!(Info, "perf_scope defer: {}", __perf_end);
+            $crate::perf::record(__perf_label.into(), __perf_end);
         });
-    };
+    }};
 }
