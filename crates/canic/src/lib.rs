@@ -39,10 +39,8 @@ pub mod prelude {
             export_candid, init,
         },
         core::{
-            auth_require_all, auth_require_any,
-            guard::{guard_query, guard_update},
-            ids::CanisterRole,
-            log, perf, perf_scope, timer, timer_interval,
+            auth_require_all, auth_require_any, ids::CanisterRole, log, perf, perf_scope, timer,
+            timer_interval,
         },
         macros::{canic_query, canic_update},
     };
