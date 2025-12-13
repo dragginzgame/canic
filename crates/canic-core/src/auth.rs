@@ -288,17 +288,13 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 /// Require that the caller appears in the active whitelist (IC deployments).
 /// No-op on local builds; enforces whitelist on IC.
 #[must_use]
-#[allow(unused_variables)]
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        #[cfg(feature = "ic")]
-        {
-            use crate::config::Config;
-            let cfg = Config::get();
+        use crate::config::Config;
+        let cfg = Config::get();
 
-            if !cfg.is_whitelisted(&caller) {
-                Err(AuthError::NotWhitelisted(caller))?;
-            }
+        if !cfg.is_whitelisted(&caller) {
+            Err(AuthError::NotWhitelisted(caller))?;
         }
 
         Ok(())

@@ -5,6 +5,7 @@ members = [
     "crates/canic-cdk",
     "crates/canic-core",
     "crates/canic-internal",
+    "crates/canic-macros",
     "crates/canic-memory",
     "crates/canic-testkit",
     "crates/canic-types",
@@ -45,6 +46,7 @@ canic = { version = "0.5.21", path = "crates/canic" }
 canic-cdk = { version = "0.5.21", path = "crates/canic-cdk" }
 canic-core = { version = "0.5.21", path = "crates/canic-core" }
 canic-internal = { version = "0.5.21", path = "crates/canic-internal" }
+canic-macros = { version = "0.5.21", path = "crates/canic-macros" }
 canic-memory = { version = "0.5.21", path = "crates/canic-memory" }
 canic-testkit = { version = "0.5.21", path = "crates/canic-testkit" }
 canic-types = { version = "0.5.21", path = "crates/canic-types" }
@@ -66,11 +68,14 @@ icrc-ledger-types = "0.1.12"
 minicbor-serde = { version = "0.6", features = ["alloc"] }
 num-traits = "0.2"
 pocket-ic = "11.0"
+proc-macro2 = "1.0"
+quote = "1.0"
 remain = "0.2"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 serde_json = "1.0"
 sha2 = "0.10"
+syn = "2.0"
 thiserror = "2.0"
 tinyrand = "0.5"
 toml = "0.9"
@@ -106,13 +111,14 @@ wildcard_imports = "allow"
 # --------------------------------------------------------------------
 [patch.crates-io]
 canic = { path = "crates/canic" }
-canic-core = { path = "crates/canic-core" }
 canic-cdk = { path = "crates/canic-cdk" }
-canic-utils = { path = "crates/canic-utils" }
+canic-core = { path = "crates/canic-core" }
 canic-internal = { path = "crates/canic-internal" }
+canic-macros = { path = "crates/canic-macros" }
+canic-memory = { path = "crates/canic-memory" }
 canic-testkit = { path = "crates/canic-testkit" }
 canic-types = { path = "crates/canic-types" }
-canic-memory = { path = "crates/canic-memory" }
+canic-utils = { path = "crates/canic-utils" }
 
 # profiles
 [profile.dev]

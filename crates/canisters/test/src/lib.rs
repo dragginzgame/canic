@@ -31,7 +31,7 @@ async fn canic_upgrade() {}
 //
 
 /// main test endpoint for things that can fail
-#[update]
+#[canic_update]
 async fn test() -> Result<(), Error> {
     Ok(())
 }

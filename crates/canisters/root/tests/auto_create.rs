@@ -9,10 +9,6 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 const ROOT_WASM_RELATIVE: &str = "../../../../.dfx/local/canisters/root/root.wasm.gz";
 
 fn load_root_wasm() -> Option<Vec<u8>> {
-    if cfg!(canic_github_ci) {
-        return None;
-    }
-
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let default_path = manifest_dir.join(ROOT_WASM_RELATIVE);
 

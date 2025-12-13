@@ -250,7 +250,11 @@ impl MemoryRegistry {
 
         // 1. Check for conflicts (existing ranges)
         let conflict = MEMORY_RANGES.with_borrow(|ranges| {
-            if ranges.contains_key(&crate_key) {
+            if let Some(existing) = ranges.get(&crate_key) {
+                if existing.start == start && existing.end == end {
+                    return None;
+                }
+
                 return Some(MemoryRegistryError::DuplicateRange(crate_key.clone()));
             }
 

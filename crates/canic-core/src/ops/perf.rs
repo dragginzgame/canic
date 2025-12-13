@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 ///
 /// PerfSnapshot
-/// Paginated view of perf counters keyed by label.
+/// Paginated view of perf counters keyed by kind (endpoint vs timer).
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
@@ -23,7 +23,7 @@ pub struct PerfOps;
 
 impl PerfOps {
     pub(crate) fn record(label: &str, delta: u64) {
-        perf::record(Cow::Borrowed(label), delta);
+        perf::record_timer(Cow::Borrowed(label), delta);
     }
 
     #[must_use]

@@ -30,7 +30,7 @@ async fn canic_upgrade() {}
 //
 
 // don't need authentication as this is a local canic test
-#[update]
+#[canic_update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
     let shard_pid = ShardingOps::assign_to_pool(POOL_NAME, pid).await?;
 
@@ -38,7 +38,7 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 }
 
 /// Dry-run the player registration decision using config-driven policy.
-#[query]
+#[canic_query]
 async fn plan_register_principal(pid: Principal) -> Result<ShardingPlan, Error> {
     let plan = ShardingPolicyOps::plan_assign_to_pool(POOL_NAME, pid)?;
 

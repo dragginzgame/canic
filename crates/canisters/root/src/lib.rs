@@ -23,64 +23,61 @@ async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
+//
 // WASMS
+//
+
+#[cfg(target_arch = "wasm32")]
+const APP_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/app/app.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const APP_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const AUTH_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/auth/auth.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const AUTH_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const BLANK_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const BLANK_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const SCALE_HUB_WASM: &[u8] =
+    include_bytes!("../../../../.dfx/local/canisters/scale_hub/scale_hub.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const SCALE_HUB_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const SCALE_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/scale/scale.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const SCALE_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const SHARD_HUB_WASM: &[u8] =
+    include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const SHARD_HUB_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const SHARD_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const SHARD_WASM: &[u8] = &[];
+
+#[cfg(target_arch = "wasm32")]
+const TEST_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz");
+#[cfg(not(target_arch = "wasm32"))]
+const TEST_WASM: &[u8] = &[];
+
 pub static WASMS: &[(CanisterRole, &[u8])] = &[
-    (
-        canister::APP,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/app/app.wasm.gz"),
-    ),
-    (
-        canister::AUTH,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/auth/auth.wasm.gz"),
-    ),
-    (
-        canister::BLANK,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz"),
-    ),
-    (
-        canister::SCALE_HUB,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/scale_hub/scale_hub.wasm.gz"),
-    ),
-    (
-        canister::SCALE,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/scale/scale.wasm.gz"),
-    ),
-    (
-        canister::SHARD_HUB,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz"),
-    ),
-    (
-        canister::SHARD,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz"),
-    ),
-    (
-        canister::TEST,
-        #[cfg(canic_github_ci)]
-        &[],
-        #[cfg(not(canic_github_ci))]
-        include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz"),
-    ),
+    (canister::APP, APP_WASM),
+    (canister::AUTH, AUTH_WASM),
+    (canister::BLANK, BLANK_WASM),
+    (canister::SCALE_HUB, SCALE_HUB_WASM),
+    (canister::SCALE, SCALE_WASM),
+    (canister::SHARD_HUB, SHARD_HUB_WASM),
+    (canister::SHARD, SHARD_WASM),
+    (canister::TEST, TEST_WASM),
 ];
 
 /*
@@ -100,20 +97,15 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 
 /// create_blank
 /// no authentication needed as its for local canic testing
-#[update]
+#[canic_update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    perf_scope!("test");
-
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
 /// stress_perf
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
-#[update]
+#[canic_update]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
-    // Measure total cost of the endpoint
-    perf_scope!("endpoint:stress_perf");
-
     let mut acc: u64 = 0;
     let mut map: HashMap<u64, u64> = HashMap::with_capacity(rounds as usize);
 

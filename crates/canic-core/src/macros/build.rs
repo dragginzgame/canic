@@ -2,35 +2,17 @@
 
 /// Embed the shared Canic configuration into a canister crate's build script.
 ///
-/// Reads the provided TOML file (relative to the workspace root), validates it
-/// using [`Config`](crate::config::Config), exposes relevant `cfg` flags, and
-/// sets `CANIC_CONFIG_PATH` for later use by `include_str!`. Canister crates
-/// typically invoke this from `build.rs`.
+/// Reads the provided TOML file (relative to the crate manifest dir), validates it
+/// using [`Config`](crate::config::Config), and sets `CANIC_CONFIG_PATH` for
+/// later use by `include_str!`. Canister crates typically invoke this from
+/// `build.rs`.
 #[macro_export]
 macro_rules! build {
     ($file:expr) => {{
         $crate::__canic_build_internal! {
             $file,
             |cfg_str, cfg_path, cfg| {
-                use canic::core::{log, log::Level, ids::CanisterRole};
-                use std::path::PathBuf;
-
-                // Infer canister name from directory structure: .../canisters/<name>/...
-                let canister_dir = {
-                    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-
-                    manifest_dir
-                        .ancestors()
-                        .find(|p| p.file_name().map_or(false, |n| n == "canisters"))
-                        .and_then(|canisters_dir| manifest_dir.strip_prefix(canisters_dir).ok())
-                        .and_then(|rel| rel.components().next())
-                        .and_then(|c| c.as_os_str().to_str())
-                        .map(|s| s.to_string())
-                        .or_else(|| std::env::var("CARGO_BIN_NAME").ok())
-                        .or_else(|| std::env::var("CARGO_PKG_NAME").ok())
-                        .expect("cannot infer canister name; place crate under canisters/<name>/ or set CARGO_BIN_NAME")
-                };
-
+                let _ = (&cfg_str, &cfg_path, &cfg);
             }
         }
     }};
@@ -38,60 +20,62 @@ macro_rules! build {
 
 /// Embed the shared configuration for the root orchestrator canister.
 ///
-/// Performs the same validation as [`macro@canic_build`] and also marks the
-/// build with the `canic_root` cfg.
+/// Performs the same validation as [`macro@build`].
 #[macro_export]
 macro_rules! build_root {
     ($file:expr) => {{
         $crate::__canic_build_internal! {
             $file,
-            |_cfg_str, _cfg_path, _cfg| {
-                // Mark this build as the root canister
-                println!("cargo:rustc-cfg=canic_root");
-            }
+            |_cfg_str, _cfg_path, _cfg| {}
         }
     }};
 }
 
-/// Internal helper shared by [`macro@canic_build`] and
-/// [`macro@canic_build_root`].
+/// Internal helper shared by [`macro@build`] and [`macro@build_root`].
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_build_internal {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
-        // Use the workspace root so every crate gets the same base
-        let ws_root = std::env::var("CARGO_WORKSPACE_ROOT")
-            .unwrap_or_else(|_| std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        const DEFAULT_CANIC_TOML: &str = r#"controllers = []
+app_directory = []
 
-        let $cfg_path = std::path::PathBuf::from(ws_root).join($file);
+[subnets.prime]
+"#;
 
-        // check config file exists (fails the build early if invalid)
-        let $cfg_str = std::fs::read_to_string(&$cfg_path)
-            .unwrap_or_else(|e| panic!("Failed to read {}: {}", $cfg_path.display(), e));
+        let mut emitted_config_path = false;
+
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let $cfg_path = std::path::PathBuf::from(manifest_dir).join($file);
+        println!("cargo:rerun-if-changed={}", $cfg_path.display());
+        if let Some(parent) = $cfg_path.parent() {
+            println!("cargo:rerun-if-changed={}", parent.display());
+        }
+
+        let $cfg_str = match std::fs::read_to_string(&$cfg_path) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+                let fallback = out_dir.join("canic.default.toml");
+                std::fs::write(&fallback, DEFAULT_CANIC_TOML).expect("write default canic config");
+                println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", fallback.display());
+                println!("cargo:rerun-if-changed={}", fallback.display());
+                emitted_config_path = true;
+                DEFAULT_CANIC_TOML.to_string()
+            }
+            Err(e) => panic!("Failed to read {}: {}", $cfg_path.display(), e),
+        };
 
         // Init Config
         let $cfg = canic::core::config::Config::init_from_toml(&$cfg_str)
             .expect("Invalid Canic config");
 
-        // declare the cfg names
-        println!("cargo:rustc-check-cfg=cfg(canic)");
-        println!("cargo:rustc-check-cfg=cfg(canic_github_ci)");
-        println!("cargo:rustc-check-cfg=cfg(canic_root)");
-
-        // everything gets the top level marker
-        println!("cargo:rustc-cfg=canic");
-
-        // Auto-enable the cfg when running under GitHub Actions.
-        if std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true") {
-            println!("cargo:rustc-cfg=canic_github_ci");
-        }
-
         // Run the extra body (per-canister or nothing)
         $body
 
-        // Export an ABSOLUTE path for include_str!
-        let abs = $cfg_path.canonicalize().expect("canonicalize canic config path");
-        println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", abs.display());
-        println!("cargo:rerun-if-changed={}", abs.display());
+        if !emitted_config_path {
+            let abs = $cfg_path.canonicalize().expect("canonicalize canic config path");
+            println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", abs.display());
+            println!("cargo:rerun-if-changed={}", abs.display());
+        }
     }};
 }

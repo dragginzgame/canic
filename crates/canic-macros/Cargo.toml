@@ -1,31 +1,25 @@
 [package]
-name = "canic"
+name = "canic-macros"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
-documentation = "https://docs.rs/canic"
+documentation = "https://docs.rs/canic-macros"
 homepage = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[features]
-default = []
-ic = ["canic-core/ic"]
+[lib]
+proc-macro = true
 
 [dependencies]
-candid = { workspace = true }
-canic-cdk = { workspace = true }
-canic-core = { workspace = true }
-canic-macros = { workspace = true }
-canic-memory = { workspace = true }
-canic-types = { workspace = true }
-canic-utils = { workspace = true }
-ic-cdk = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
 
 [lints]
 workspace = true

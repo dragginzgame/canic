@@ -30,7 +30,7 @@ async fn canic_upgrade() {}
 
 /// Create a new worker in the given pool.
 /// no authentication needed as for canic testing
-#[update]
+#[canic_update]
 async fn create_worker() -> Result<Principal, Error> {
     let worker_pid = ScalingRegistryOps::create_worker(POOL_NAME).await?;
 
@@ -39,7 +39,7 @@ async fn create_worker() -> Result<Principal, Error> {
 
 /// Dry-run the worker creation decision using config-driven policy.
 /// no authentication needed as for canic testing
-#[query]
+#[canic_query]
 async fn plan_create_worker() -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
     let plan = ScalingRegistryOps::plan_create_worker(POOL_NAME)?;

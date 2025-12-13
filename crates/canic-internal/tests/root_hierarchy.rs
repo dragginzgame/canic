@@ -36,16 +36,11 @@ const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 /// Priority order:
 /// 1. `$CANIC_ROOT_WASM` if set.
 /// 2. Default local path under `.dfx`.
-/// 3. Return `None` on GitHub Actions (because wasm is not built in CI).
+/// 3. Return `None` when no wasm is available.
 ///
 /// This allows running tests without `make test` while still supporting
 /// end-to-end PIC tests on local machines.
 fn load_root_wasm() -> Option<Vec<u8>> {
-    // CI environments skip PIC wasm-dependent tests.
-    if option_env!("GITHUB_ACTIONS") == Some("true") {
-        return None;
-    }
-
     // Construct the default `.dfx` candidate path.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let default_path = manifest_dir.join(ROOT_WASM_RELATIVE);

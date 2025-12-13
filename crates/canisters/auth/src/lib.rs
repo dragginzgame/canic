@@ -17,7 +17,7 @@ async fn canic_upgrade() {}
 // ENDPOINTS
 //
 
-#[update]
+#[canic_update]
 fn authenticate_caller() -> Vec<u8> {
     // step 1: prepare the signature
     signature::prepare(b"domain", b"user-auth", b"hello");
@@ -26,7 +26,7 @@ fn authenticate_caller() -> Vec<u8> {
     signature::root_hash()
 }
 
-#[query]
+#[canic_query]
 fn get_auth_signature() -> Option<Vec<u8>> {
     signature::get(b"domain", b"user-auth", b"hello")
 }

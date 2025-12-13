@@ -84,7 +84,7 @@ Every canister crate should declare a config file (default name: `canic.toml`). 
 ```rust
 // Root canister build.rs
 fn main() {
-    canic::canic_build_root!("../canic.toml");
+    canic::build_root!("../canic.toml");
 }
 ```
 
@@ -95,7 +95,7 @@ fn main() {
 }
 ```
 
-The macro validates the TOML during compilation, emits the right `cfg` flags (such as `canic` and `canic_root`), and exposes the canonical config path via `CANIC_CONFIG_PATH`.
+The macro validates the TOML during compilation and exposes the canonical config path via `CANIC_CONFIG_PATH`.
 
 ### 3. Bootstrap your canister
 
