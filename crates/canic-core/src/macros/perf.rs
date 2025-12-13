@@ -62,8 +62,7 @@ macro_rules! perf_scope {
         let _perf_scope_guard = $crate::__reexports::defer::defer(move || {
             let __perf_end = $crate::perf::perf_counter();
 
-      //      $crate::log!(Info, "perf 0 : {}", canic_cdk::api::performance_counter(0));
-      //      $crate::log!(Info, "perf 1 : {}", canic_cdk::api::performance_counter(1));
+      //      $crate::log!(Info, "perf: [0] {}, [1] {}", canic_cdk::api::performance_counter(0), canic_cdk::api::performance_counter(1));
 
             $crate::perf::record_endpoint(__perf_label.into(), __perf_end);
         });

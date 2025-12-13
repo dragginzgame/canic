@@ -7,6 +7,7 @@
 
 use crate::{
     Error,
+    access::AccessError,
     cdk::api::{canister_self, msg_caller},
     ids::CanisterRole,
     log,
@@ -21,10 +22,12 @@ use candid::Principal;
 use std::pin::Pin;
 use thiserror::Error as ThisError;
 
-/// Error returned by authorization rule checks.
+///
+/// AuthError
 ///
 /// Each variant captures the principal that failed a rule (where relevant),
 /// making it easy to emit actionable diagnostics in logs.
+///
 
 #[derive(Debug, ThisError)]
 pub enum AuthError {
@@ -65,6 +68,12 @@ pub enum AuthError {
 
     #[error("caller '{0}' is not on the whitelist")]
     NotWhitelisted(Principal),
+}
+
+impl From<AuthError> for Error {
+    fn from(err: AuthError) -> Self {
+        AccessError::AuthError(err).into()
+    }
 }
 
 /// Callable issuing an authorization decision for a given caller.

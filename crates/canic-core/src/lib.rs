@@ -1,9 +1,8 @@
 //! CANIC crate utilities for multi-canister apps on the Internet Computer.
-pub mod auth;
+pub mod access;
 pub mod config;
 pub mod dispatch;
 pub mod env;
-pub mod guard;
 pub mod ids;
 pub mod interface;
 pub mod log;
@@ -51,7 +50,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(CandidType, Debug, Deserialize, ThisError)]
 pub enum Error {
     #[error("{0}")]
-    AuthError(String),
+    AccessError(String),
 
     #[error("{0}")]
     ConfigError(String),
@@ -134,7 +133,7 @@ impl Error {
     }
 }
 
-from_to_string!(auth::AuthError, AuthError);
+from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(model::ModelError, ModelError);
