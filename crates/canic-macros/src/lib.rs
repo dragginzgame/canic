@@ -115,6 +115,7 @@ fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> 
             })
         }
     };
+
     quote! {
         #cdk_attr
         #vis #wrapper_sig {
