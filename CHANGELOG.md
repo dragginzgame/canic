@@ -5,8 +5,26 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.5.22] - 2025-12-12
-- removed EnvError, made all the SNS principals panic on build if invalid
+## [0.5.22] - 2025-12-13
+### Added
+- CI now builds all canister `.wasm` artifacts (and deterministic `.wasm.gz` via `gzip -n`) into `.dfx/local/canisters/...` before running `fmt`, `clippy`, and tests.
+- New `canic-macros` crate with `#[canic_query]` / `#[canic_update]` proc-macro attributes.
+- Centralized endpoint dispatch wrappers (sync + async query/update) to unify perf instrumentation and future endpoint hooks.
+
+### Changed
+- Config loading is now unconditional in lifecycle; build scripts always provide `CANIC_CONFIG_PATH`, generating a minimal default config when the repo config file is missing.
+- Perf instrumentation switched to call-context instruction counter (`ic0.performance_counter(1)`); perf aggregation is now keyed by kind (`Endpoint(name)` vs `Timer(label)`) to avoid label collisions.
+- Whitelist enforcement now always consults `Config` (no longer gated behind `feature = "ic"`).
+- Root canister embeds dependent canister `.wasm.gz` on `wasm32` builds (non-wasm builds use empty slices).
+
+### Fixed
+- `perf_scope!` now reliably records at scope exit (RAII guard lifetime/shadowing).
+- Stable memory range initialization is idempotent when re-registering the same initial range (prevents upgrade traps).
+
+### Removed
+- `EnvError`; SNS principals now fail-fast on build if invalid.
+- All custom cfg-based CI conditionals (notably `cfg(canic_github_ci)`) and related build-script cfg emissions.
+- Dead `DFX_NETWORK` network helper.
 
 ## [0.5.21] - Perf & Types Consolidation
 - Labeled timer metrics: `TimerMetrics` now records mode, delay, and a caller-provided label so scheduled tasks can be distinguished in metrics; interval timers increment on every tick.
