@@ -7,14 +7,7 @@
 
 use std::time::Duration;
 
-use canic::{
-    Error,
-    core::{
-        ops::perf::{PerfOps, PerfSnapshot},
-        types::PageRequest,
-    },
-    prelude::*,
-};
+use canic::{Error, prelude::*};
 use canic_internal::canister::TEST;
 
 //

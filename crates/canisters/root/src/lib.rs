@@ -130,8 +130,6 @@ async fn stress_perf(rounds: u32) -> Result<u64, Error> {
         acc = acc.wrapping_add(x);
     }
 
-    perf!("a");
-
     // Phase 2: repeated traversal + mutation
     for _ in 0..4 {
         for (k, v) in &mut map {
@@ -141,14 +139,10 @@ async fn stress_perf(rounds: u32) -> Result<u64, Error> {
         }
     }
 
-    perf!("b");
-
     // Phase 3: reduction pass
     for (k, v) in map {
         acc ^= k.wrapping_mul(v.rotate_left(7));
     }
-
-    perf!("c");
 
     // Phase 4: allocate memory
     let mut v = Vec::new();
