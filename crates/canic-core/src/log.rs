@@ -22,6 +22,7 @@ pub enum Level {
 ///
 
 #[derive(Clone, Copy, Display, Eq, PartialEq)]
+#[remain::sorted]
 pub enum Topic {
     App,
     Auth,
@@ -31,6 +32,7 @@ pub enum Topic {
     Cycles,
     Init,
     Memory,
+    Perf,
     Sharding,
     Sync,
     Topology,
