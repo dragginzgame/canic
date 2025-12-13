@@ -44,13 +44,13 @@ macro_rules! perf {
 
 #[macro_export]
 macro_rules! perf_scope {
-    ($($label:tt)*) => {{
+    ($($label:tt)*) => {
         let __perf_label = format!($($label)*);
 
-        let _perf_scope_guard = $crate::__reexports::defer::defer!({
+        let _perf_scope_guard = $crate::__reexports::defer::defer(move || {
             let __perf_end = $crate::perf::perf_counter();
             ::canic::log!(Info, "perf_scope defer: {}", __perf_end);
             $crate::perf::record(__perf_label.into(), __perf_end);
         });
-    }};
+    };
 }
