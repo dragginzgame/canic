@@ -28,6 +28,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Build canister wasm artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .dfx/local/canisters
+
+          for canister in app auth blank scale scale_hub shard shard_hub test; do
+            cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
+            mkdir -p ".dfx/local/canisters/${canister}"
+            cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"
+            gzip -n -c ".dfx/local/canisters/${canister}/${canister}.wasm" > ".dfx/local/canisters/${canister}/${canister}.wasm.gz"
+          done
+
+          cargo build --target wasm32-unknown-unknown -p canister_root --locked
+          mkdir -p .dfx/local/canisters/root
+          cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
+          gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked
@@ -51,6 +70,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Build canister wasm artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .dfx/local/canisters
+
+          for canister in app auth blank scale scale_hub shard shard_hub test; do
+            cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
+            mkdir -p ".dfx/local/canisters/${canister}"
+            cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"
+            gzip -n -c ".dfx/local/canisters/${canister}/${canister}.wasm" > ".dfx/local/canisters/${canister}/${canister}.wasm.gz"
+          done
+
+          cargo build --target wasm32-unknown-unknown -p canister_root --locked
+          mkdir -p .dfx/local/canisters/root
+          cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
+          gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked

@@ -24,7 +24,7 @@ async fn canic_upgrade() {}
 
 /// create_blank
 /// no authentication needed as its for local canic testing
-#[update]
+#[canic_update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None).await
 }

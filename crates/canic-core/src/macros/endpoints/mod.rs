@@ -12,7 +12,7 @@ macro_rules! canic_endpoints {
         //
 
         // ic_cycles_accept
-        #[::canic::cdk::update]
+        #[canic_update]
         fn ic_cycles_accept(max_amount: u128) -> u128 {
             $crate::cdk::api::msg_cycles_accept(max_amount)
         }
@@ -21,12 +21,12 @@ macro_rules! canic_endpoints {
         // ICRC ENDPOINTS
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
             $crate::ops::icrc::Icrc10Ops::supported_standards()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::core::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::core::spec::icrc::icrc21::ConsentMessageResponse {
@@ -37,17 +37,17 @@ macro_rules! canic_endpoints {
         // CANISTER HELPERS
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_canister_cycle_balance() -> u128 {
             $crate::cdk::api::canister_cycle_balance()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_canister_version() -> u64 {
             $crate::cdk::api::canister_version()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_time() -> u64 {
             $crate::cdk::api::time()
         }
@@ -56,17 +56,17 @@ macro_rules! canic_endpoints {
         // MEMORY
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_memory_registry() -> ::canic::core::ops::model::memory::registry::MemoryRegistryView {
             $crate::ops::model::memory::registry::MemoryRegistryOps::export()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_env() -> ::canic::core::ops::model::memory::env::EnvData {
             $crate::ops::model::memory::EnvOps::export()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_log(
             crate_name: Option<String>,
             topic: Option<String>,
@@ -82,13 +82,13 @@ macro_rules! canic_endpoints {
         // METRICS
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn canic_metrics()
         -> ::canic::core::ops::metrics::MetricsReport {
             ::canic::core::ops::metrics::MetricsOps::report()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_perf(
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::perf::PerfSnapshot {
@@ -99,12 +99,12 @@ macro_rules! canic_endpoints {
         // STATE
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_app_state() -> ::canic::core::ops::model::memory::state::AppStateData {
             $crate::ops::model::memory::state::AppStateOps::export()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_subnet_state() -> ::canic::core::ops::model::memory::state::SubnetStateData {
             $crate::ops::model::memory::state::SubnetStateOps::export()
         }
@@ -113,14 +113,14 @@ macro_rules! canic_endpoints {
         // DIRECTORY VIEWS
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_app_directory(
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::directory::DirectoryPageDto {
             $crate::ops::model::memory::directory::AppDirectoryOps::page(page)
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::core::types::PageRequest,
         ) -> Result<::canic::core::ops::model::memory::directory::DirectoryPageDto, ::canic::Error> {
@@ -131,7 +131,7 @@ macro_rules! canic_endpoints {
         // TOPOLOGY
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenPage {
@@ -144,8 +144,7 @@ macro_rules! canic_endpoints {
         // CYCLES
         //
 
-        // canic_cycle_tracker
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::ops::model::memory::cycles::CycleTrackerPage {
@@ -156,8 +155,7 @@ macro_rules! canic_endpoints {
         // SCALING
         //
 
-        // canic_scaling_registry
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn canic_scaling_registry()
         -> Result<::canic::core::ops::model::memory::scaling::ScalingRegistryView, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
@@ -169,8 +167,7 @@ macro_rules! canic_endpoints {
         // SHARDING
         //
 
-        // canic_sharding_registry
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn canic_sharding_registry()
         -> Result<::canic::core::ops::model::memory::sharding::ShardingRegistryDto, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
@@ -182,22 +179,22 @@ macro_rules! canic_endpoints {
         // ICTS
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn icts_name() -> String {
             env!("CARGO_PKG_NAME").to_string()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn icts_version() -> String {
             env!("CARGO_PKG_VERSION").to_string()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn icts_description() -> String {
             env!("CARGO_PKG_DESCRIPTION").to_string()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn icts_metadata() -> Vec<(String, String)> {
             vec![
                 ("name".to_string(), icts_name()),
@@ -206,7 +203,7 @@ macro_rules! canic_endpoints {
             ]
         }
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn icts_canister_status()
         -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
             use $crate::cdk::{

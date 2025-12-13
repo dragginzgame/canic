@@ -204,6 +204,7 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-core",
+ "canic-macros",
  "canic-memory",
  "canic-types",
  "canic-utils",
@@ -264,6 +265,15 @@ version = "0.5.21"
 dependencies = [
  "canic",
  "canic-testkit",
+]
+
+[[package]]
+name = "canic-macros"
+version = "0.5.21"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
 ]
 
 [[package]]

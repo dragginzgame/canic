@@ -2,7 +2,6 @@
 ///
 /// - Uses a thread-local `PERF_LAST` snapshot.
 /// - Computes `delta = now - last`.
-/// - Records the delta under the provided label (aggregated via `perf::record`).
 /// - Prints a human-readable line for debugging.
 ///
 /// Intended usage:
@@ -62,9 +61,11 @@ macro_rules! perf_scope {
         // in async functions).
         let _perf_scope_guard = $crate::__reexports::defer::defer(move || {
             let __perf_end = $crate::perf::perf_counter();
-            ::canic::log!(Info, "perf_scope defer: {}", __perf_end);
 
-            $crate::perf::record(__perf_label.into(), __perf_end);
+      //      $crate::log!(Info, "perf 0 : {}", canic_cdk::api::performance_counter(0));
+      //      $crate::log!(Info, "perf 1 : {}", canic_cdk::api::performance_counter(1));
+
+            $crate::perf::record_endpoint(__perf_label.into(), __perf_end);
         });
     };
 }

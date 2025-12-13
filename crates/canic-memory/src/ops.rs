@@ -93,6 +93,15 @@ mod tests {
     }
 
     #[test]
+    fn init_memory_is_idempotent_for_same_initial_range() {
+        reset_for_tests();
+
+        MemoryRegistryOps::init_memory(Some(("crate_a", 1, 3))).expect("first init should succeed");
+        MemoryRegistryOps::init_memory(Some(("crate_a", 1, 3)))
+            .expect("second init should succeed");
+    }
+
+    #[test]
     fn init_memory_returns_error_on_conflict() {
         reset_for_tests();
         defer_reserve_range("crate_a", 1, 3);

@@ -5,7 +5,7 @@ macro_rules! canic_endpoints_root {
         // canic_app
         // modify app-level state
         // eventually this will cascade down from an orchestrator canister
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_app(
             cmd: ::canic::core::ops::model::memory::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
@@ -20,7 +20,7 @@ macro_rules! canic_endpoints_root {
         }
 
         // canic_canister_upgrade
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::core::ops::request::UpgradeCanisterResponse, ::canic::Error> {
@@ -34,7 +34,7 @@ macro_rules! canic_endpoints_root {
         // canic_response
         // root's way to respond to a generic request from another canister
         // has to come from a direct child canister
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_response(
             request: ::canic::core::ops::request::Request,
         ) -> Result<::canic::core::ops::request::Response, ::canic::Error> {
@@ -47,7 +47,7 @@ macro_rules! canic_endpoints_root {
 
         // canic_canister_status
         // this can be called via root as root is the master controller
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
@@ -63,7 +63,7 @@ macro_rules! canic_endpoints_root {
         // CONFIG
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn canic_config() -> Result<String, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
 
@@ -74,13 +74,13 @@ macro_rules! canic_endpoints_root {
         // REGISTRIES
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_app_subnet_registry()
         -> ::canic::core::ops::model::memory::topology::AppSubnetRegistryView {
             $crate::ops::model::memory::topology::AppSubnetRegistryOps::export()
         }
 
-        #[::canic::cdk::query]
+        #[canic_query]
         fn canic_subnet_canister_registry()
         -> ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterRegistryView {
             $crate::ops::model::memory::topology::SubnetCanisterRegistryOps::export()
@@ -90,13 +90,13 @@ macro_rules! canic_endpoints_root {
         // CANISTER RESERVE
         //
 
-        #[::canic::cdk::query]
+        #[canic_query]
         async fn canic_reserve_list()
         -> Result<::canic::core::ops::model::memory::reserve::CanisterReserveView, ::canic::Error> {
             Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
         }
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_reserve_create_empty()
         -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
             $crate::auth_require_any!(::canic::core::auth::is_controller)?;
@@ -104,7 +104,7 @@ macro_rules! canic_endpoints_root {
             ::canic::core::ops::model::memory::reserve::reserve_create_canister().await
         }
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_reserve_recycle(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<(), ::canic::Error> {
@@ -113,7 +113,7 @@ macro_rules! canic_endpoints_root {
             ::canic::core::ops::model::memory::reserve::recycle_via_orchestrator(pid).await
         }
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_reserve_import(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<(), ::canic::Error> {
@@ -134,7 +134,7 @@ macro_rules! canic_endpoints_nonroot {
         // SYNC
         //
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_sync_state(
             bundle: ::canic::core::ops::sync::state::StateBundle,
         ) -> Result<(), ::canic::Error> {
@@ -143,7 +143,7 @@ macro_rules! canic_endpoints_nonroot {
             $crate::ops::sync::state::nonroot_cascade_state(&bundle).await
         }
 
-        #[::canic::cdk::update]
+        #[canic_update]
         async fn canic_sync_topology(
             bundle: ::canic::core::ops::sync::topology::TopologyBundle,
         ) -> Result<(), ::canic::Error> {

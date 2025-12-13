@@ -14,6 +14,7 @@ pub use canic_memory::{
 ///
 pub use canic_cdk as cdk;
 pub use canic_core as core;
+pub use canic_macros as macros;
 pub use canic_types as types;
 pub use canic_utils as utils;
 
@@ -35,7 +36,7 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            export_candid, init, query, update,
+            export_candid, init,
         },
         core::{
             auth_require_all, auth_require_any,
@@ -43,5 +44,6 @@ pub mod prelude {
             ids::CanisterRole,
             log, perf, perf_scope, timer, timer_interval,
         },
+        macros::{canic_query, canic_update},
     };
 }

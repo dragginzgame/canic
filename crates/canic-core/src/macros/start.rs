@@ -169,11 +169,8 @@ macro_rules! start_root {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_load_config {
-    () => {
-        #[cfg(canic)]
-        {
-            let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
-            $crate::config::Config::init_from_toml(config_str).unwrap();
-        }
-    };
+    () => {{
+        let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
+        $crate::config::Config::init_from_toml(config_str).unwrap();
+    }};
 }
