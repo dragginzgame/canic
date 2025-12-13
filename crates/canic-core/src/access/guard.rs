@@ -1,7 +1,6 @@
 use crate::{
     Error, ThisError,
     access::AccessError,
-    cdk::api::{is_controller, msg_caller},
     model::memory::state::{AppMode, AppState},
 };
 
@@ -27,14 +26,9 @@ impl From<GuardError> for Error {
 /// Validate access for query calls.
 ///
 /// Rules:
-/// - Controllers are always allowed.
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_query() -> Result<(), Error> {
-    if is_controller(&msg_caller()) {
-        return Ok(());
-    }
-
     match AppState::get_mode() {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
         AppMode::Disabled => Err(GuardError::AppDisabled.into()),
@@ -44,15 +38,10 @@ pub fn guard_query() -> Result<(), Error> {
 /// Validate access for update calls.
 ///
 /// Rules:
-/// - Controllers are always allowed.
 /// - Enabled mode permits updates.
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
 pub fn guard_update() -> Result<(), Error> {
-    if is_controller(&msg_caller()) {
-        return Ok(());
-    }
-
     match AppState::get_mode() {
         AppMode::Enabled => Ok(()),
         AppMode::Readonly => Err(GuardError::AppReadonly.into()),

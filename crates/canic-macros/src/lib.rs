@@ -13,7 +13,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{ItemFn, Meta, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
+use syn::{Expr, ItemFn, Meta, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 // -----------------------------------------------------------------------------
 // Macros
@@ -38,6 +38,19 @@ pub fn canic_update(attr: TokenStream, item: TokenStream) -> TokenStream {
 enum EndpointKind {
     Query,
     Update,
+}
+
+#[derive(Clone)]
+enum AuthSpec {
+    Any(Vec<Expr>),
+    All(Vec<Expr>),
+}
+
+struct ParsedArgs {
+    forwarded: Vec<TokenStream2>,
+    app_guard: bool,
+    user_guard: bool,
+    auth: Option<AuthSpec>,
 }
 
 // -----------------------------------------------------------------------------
@@ -68,28 +81,36 @@ fn return_type_supports_app_guard(sig: &syn::Signature) -> bool {
 ///
 /// Supported special arguments:
 /// - `app` or `app = true|false`
+/// - `auth_any(rule, ...)`
+/// - `auth_all(rule, ...)`
 ///
 /// All other arguments are forwarded verbatim to the underlying
 /// IC CDK attribute.
-fn parse_forwarded_args(
-    attr: TokenStream,
-    orig_name: &syn::Ident,
-) -> Result<(Vec<TokenStream2>, bool), TokenStream> {
-    let attr: TokenStream2 = attr.into();
-
+fn parse_forwarded_args(attr: TokenStream2, orig_name: &syn::Ident) -> syn::Result<ParsedArgs> {
     // Attempt structured parsing first so we can reason about arguments.
     let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
         // If parsing fails but tokens are present, fall back to raw forwarding.
         // This keeps compatibility with CDK arguments we don't explicitly model.
         if attr.is_empty() {
-            return Ok((Vec::new(), false));
+            return Ok(ParsedArgs {
+                forwarded: Vec::new(),
+                app_guard: false,
+                user_guard: false,
+                auth: None,
+            });
         }
 
-        return Ok((vec![attr], false));
+        return Ok(ParsedArgs {
+            forwarded: vec![attr],
+            app_guard: false,
+            user_guard: false,
+            auth: None,
+        });
     };
 
     let mut app_guard = None::<bool>;
     let mut user_guard = None::<Meta>;
+    let mut auth = None::<AuthSpec>;
     let mut forwarded = Vec::<TokenStream2>::new();
 
     for meta in metas {
@@ -101,11 +122,10 @@ fn parse_forwarded_args(
                 if let Some(prev) = app_guard
                     && prev != new
                 {
-                    return Err(
-                        syn::Error::new_spanned(orig_name, "conflicting `app` values")
-                            .to_compile_error()
-                            .into(),
-                    );
+                    return Err(syn::Error::new_spanned(
+                        orig_name,
+                        "conflicting `app` values",
+                    ));
                 }
 
                 app_guard = Some(new);
@@ -123,9 +143,7 @@ fn parse_forwarded_args(
                             return Err(syn::Error::new_spanned(
                                 orig_name,
                                 "conflicting `app` values",
-                            )
-                            .to_compile_error()
-                            .into());
+                            ));
                         }
 
                         app_guard = Some(new);
@@ -134,20 +152,66 @@ fn parse_forwarded_args(
                         return Err(syn::Error::new_spanned(
                             nv,
                             "expected `app` or `app = true|false`",
-                        )
-                        .to_compile_error()
-                        .into());
+                        ));
                     }
                 },
                 _ => {
                     return Err(syn::Error::new_spanned(
                         nv,
                         "expected `app` or `app = true|false`",
-                    )
-                    .to_compile_error()
-                    .into());
+                    ));
                 }
             },
+
+            // `#[canic_* (auth_any(rule, ...))]`
+            // Backwards compat: also accept `any(...)`.
+            Meta::List(list) if list.path.is_ident("auth_any") || list.path.is_ident("any") => {
+                if auth.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        list,
+                        "conflicting authorization composition; use only one of `auth_any(...)` or `auth_all(...)`",
+                    ));
+                }
+
+                let rules = Punctuated::<Expr, Token![,]>::parse_terminated
+                    .parse2(list.tokens.clone())?
+                    .into_iter()
+                    .collect::<Vec<_>>();
+
+                if rules.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        list,
+                        "`auth_any(...)` requires at least one rule",
+                    ));
+                }
+
+                auth = Some(AuthSpec::Any(rules));
+            }
+
+            // `#[canic_* (auth_all(rule, ...))]`
+            // Backwards compat: also accept `all(...)`.
+            Meta::List(list) if list.path.is_ident("auth_all") || list.path.is_ident("all") => {
+                if auth.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        list,
+                        "conflicting authorization composition; use only one of `auth_any(...)` or `auth_all(...)`",
+                    ));
+                }
+
+                let rules = Punctuated::<Expr, Token![,]>::parse_terminated
+                    .parse2(list.tokens.clone())?
+                    .into_iter()
+                    .collect::<Vec<_>>();
+
+                if rules.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        list,
+                        "`auth_all(...)` requires at least one rule",
+                    ));
+                }
+
+                auth = Some(AuthSpec::All(rules));
+            }
 
             // Explicit `guard = ...` is forwarded unchanged, but tracked
             // so we can prevent invalid combinations.
@@ -168,12 +232,49 @@ fn parse_forwarded_args(
         return Err(syn::Error::new_spanned(
             orig_name,
             "`app` cannot be combined with an explicit `guard = ...`",
-        )
-        .to_compile_error()
-        .into());
+        ));
     }
 
-    Ok((forwarded, app_guard))
+    // Prevent ordering bypass via CDK guards when auth is present.
+    if auth.is_some() && user_guard.is_some() {
+        return Err(syn::Error::new_spanned(
+            orig_name,
+            "`auth_any(...)` / `auth_all(...)` cannot be combined with `guard = ...`",
+        ));
+    }
+
+    Ok(ParsedArgs {
+        forwarded,
+        app_guard,
+        user_guard: user_guard.is_some(),
+        auth,
+    })
+}
+
+fn extract_arg_idents(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
+    let mut args = Vec::new();
+
+    for input in &sig.inputs {
+        match input {
+            syn::FnArg::Typed(pat) => match &*pat.pat {
+                syn::Pat::Ident(ident) => args.push(quote!(#ident)),
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        &pat.pat,
+                        "canic endpoints do not support destructuring parameters",
+                    ));
+                }
+            },
+            syn::FnArg::Receiver(receiver) => {
+                return Err(syn::Error::new_spanned(
+                    receiver,
+                    "canic endpoints must not take `self`",
+                ));
+            }
+        }
+    }
+
+    Ok(args)
 }
 
 // -----------------------------------------------------------------------------
@@ -199,10 +300,13 @@ fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> 
     func.sig.ident = impl_name.clone();
 
     // Parse attribute arguments.
-    let (forwarded, app_guard) = match parse_forwarded_args(attr, &orig_name) {
+    let parsed = match parse_forwarded_args(attr.into(), &orig_name) {
         Ok(v) => v,
-        Err(err) => return err,
+        Err(err) => return err.to_compile_error().into(),
     };
+    let forwarded = parsed.forwarded;
+    let app_guard = parsed.app_guard;
+    let auth = parsed.auth;
 
     // Select the IC CDK attribute.
     let cdk_attr = match kind {
@@ -262,19 +366,61 @@ fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> 
         quote!()
     };
 
+    // Optional auth injection.
+    let auth_stmt = match auth {
+        Some(AuthSpec::Any(rules)) => {
+            if !asyncness {
+                return syn::Error::new_spanned(
+                    &orig_sig.ident,
+                    "`auth_any(...)` authorization requires `async fn` endpoints",
+                )
+                .to_compile_error()
+                .into();
+            }
+
+            if !return_type_supports_app_guard(&orig_sig) {
+                return syn::Error::new_spanned(
+                    &orig_sig.output,
+                    "authorized endpoints must return `Result<_, _>` so authorization can use `?`",
+                )
+                .to_compile_error()
+                .into();
+            }
+
+            quote!(::canic::core::auth_require_any!(#(#rules),*)?;)
+        }
+        Some(AuthSpec::All(rules)) => {
+            if !asyncness {
+                return syn::Error::new_spanned(
+                    &orig_sig.ident,
+                    "`auth_all(...)` authorization requires `async fn` endpoints",
+                )
+                .to_compile_error()
+                .into();
+            }
+
+            if !return_type_supports_app_guard(&orig_sig) {
+                return syn::Error::new_spanned(
+                    &orig_sig.output,
+                    "authorized endpoints must return `Result<_, _>` so authorization can use `?`",
+                )
+                .to_compile_error()
+                .into();
+            }
+
+            quote!(::canic::core::auth_require_all!(#(#rules),*)?;)
+        }
+        None => quote!(),
+    };
+
+    // Policy stage placeholder (always emitted to guarantee ordering).
+    let policy_stmt = quote!(::canic::core::policy::policy_noop(););
+
     // Extract argument identifiers for forwarding.
-    let args = orig_sig.inputs.iter().map(|arg| match arg {
-        syn::FnArg::Typed(pat) => {
-            let ident = match &*pat.pat {
-                syn::Pat::Ident(ident) => &ident.ident,
-                _ => panic!("canic endpoints do not support destructuring parameters"),
-            };
-            quote!(#ident)
-        }
-        syn::FnArg::Receiver(_) => {
-            panic!("canic endpoints must not take `self`")
-        }
-    });
+    let args = match extract_arg_idents(&orig_sig) {
+        Ok(v) => v,
+        Err(err) => return err.to_compile_error().into(),
+    };
 
     // Construct the call into the internal implementation.
     let call = if asyncness {
@@ -296,10 +442,93 @@ fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> 
         #cdk_attr
         #vis #wrapper_sig {
             #guard_stmt
+            #auth_stmt
+            #policy_stmt
             #call
         }
 
         #func
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    fn parse_ok(attr: TokenStream2) -> ParsedArgs {
+        parse_forwarded_args(attr, &syn::Ident::new("f", proc_macro2::Span::call_site()))
+            .expect("parse args")
+    }
+
+    #[test]
+    fn parses_any_rules() {
+        let parsed = parse_ok(quote!(auth_any(foo, bar)));
+        assert!(!parsed.app_guard);
+        assert!(parsed.forwarded.is_empty());
+        assert!(matches!(parsed.auth, Some(AuthSpec::Any(rules)) if rules.len() == 2));
+    }
+
+    #[test]
+    fn rejects_any_empty() {
+        let err = parse_forwarded_args(
+            quote!(auth_any()),
+            &syn::Ident::new("f", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("requires at least one rule"));
+    }
+
+    #[test]
+    fn rejects_mixed_any_all() {
+        let err = parse_forwarded_args(
+            quote!(auth_any(foo), auth_all(bar)),
+            &syn::Ident::new("f", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("conflicting authorization composition")
+        );
+    }
+
+    #[test]
+    fn rejects_auth_with_cdk_guard() {
+        let err = parse_forwarded_args(
+            quote!(auth_any(foo), guard = my_guard),
+            &syn::Ident::new("f", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("cannot be combined"));
+    }
+
+    #[test]
+    fn accepts_legacy_any_all() {
+        let parsed = parse_ok(quote!(any(foo)));
+        assert!(matches!(parsed.auth, Some(AuthSpec::Any(rules)) if rules.len() == 1));
+
+        let parsed = parse_ok(quote!(all(foo)));
+        assert!(matches!(parsed.auth, Some(AuthSpec::All(rules)) if rules.len() == 1));
+    }
+
+    #[test]
+    fn rejects_destructuring_params() {
+        let sig: syn::Signature = syn::parse2(quote!(
+            fn f((a, b): (u8, u8)) {}
+        ))
+        .unwrap();
+        let err = extract_arg_idents(&sig).unwrap_err();
+        assert!(err.to_string().contains("do not support destructuring"));
+    }
+
+    #[test]
+    fn rejects_self_receiver() {
+        let sig: syn::Signature = syn::parse2(quote!(
+            fn f(&self) {}
+        ))
+        .unwrap();
+        let err = extract_arg_idents(&sig).unwrap_err();
+        assert!(err.to_string().contains("must not take `self`"));
+    }
 }
