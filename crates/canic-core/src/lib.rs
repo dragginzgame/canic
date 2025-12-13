@@ -1,5 +1,11 @@
 //! CANIC crate utilities for multi-canister apps on the Internet Computer.
 pub mod access;
+
+// -----------------------------------------------------------------------------
+// Phase 0: path coherence re-exports (no behavior change)
+// -----------------------------------------------------------------------------
+
+pub use access::{auth, guard, policy};
 pub mod config;
 pub mod dispatch;
 pub mod env;

@@ -12,3 +12,9 @@ impl From<PolicyError> for Error {
         AccessError::PolicyError(err).into()
     }
 }
+
+// -----------------------------------------------------------------------------
+// Phase 1: minimal policy stage placeholder
+// -----------------------------------------------------------------------------
+
+pub fn policy_noop() {}
