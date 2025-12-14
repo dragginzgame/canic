@@ -67,8 +67,8 @@ macro_rules! log {
         let crate_name = env!("CARGO_PKG_NAME");
         let _ = $crate::ops::model::memory::log::LogOps::append(crate_name, topic_opt, level, &message);
 
-        let ty_raw = $crate::ops::model::memory::env::EnvOps::try_get_canister_type()
-            .map(|ty| ty.to_string())
+        let ty_raw = $crate::ops::model::memory::env::EnvOps::try_get_canister_role()
+            .map(|role| role.to_string())
             .unwrap_or_else(|_| "...".to_string());
 
         let ty_disp = $crate::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);

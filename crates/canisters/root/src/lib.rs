@@ -97,14 +97,14 @@ async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
 
 /// create_blank
 /// Controller-only helper for local Canic testing.
-#[canic_update(app, auth_any(::canic::core::auth::is_controller))]
+#[canic_update(app, auth_any(is_controller))]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
 /// stress_perf
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
-#[canic_update(app, auth_any(::canic::core::auth::is_controller))]
+#[canic_update(app, auth_any(is_controller))]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
     let mut acc: u64 = 0;
     let mut map: HashMap<u64, u64> = HashMap::with_capacity(rounds as usize);

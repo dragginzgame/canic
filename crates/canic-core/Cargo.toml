@@ -13,10 +13,6 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[features]
-default = []
-ic = []
-
 [dependencies]
 candid = { workspace = true }
 canic-cdk = { workspace = true }

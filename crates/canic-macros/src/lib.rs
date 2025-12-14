@@ -1,315 +1,459 @@
 //! Canic proc macros.
 //!
-//! These macros provide thin, opinionated wrappers around IC CDK endpoint
-//! attributes (`#[query]`, `#[update]`), routed through `canic::cdk::*` to
-//! ensure a stable import surface.
+//! Thin, opinionated wrappers around IC CDK endpoint attributes
+//! (`#[query]`, `#[update]`), routed through `canic::cdk::*`.
 //!
-//! Responsibilities handled here:
-//! - Attribute forwarding to the IC CDK
-//! - Optional app-level guard injection
-//! - Uniform dispatch (sync/async, query/update)
-//! - Preserving the user-facing function signature
+//! Pipeline enforced by generated wrappers:
+//!   guard → auth → policy → dispatch
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{Expr, ItemFn, Meta, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
+use syn::{
+    Expr, Ident, ItemFn, Meta, Path, Token, parse::Parser, parse_macro_input,
+    punctuated::Punctuated,
+};
 
-// -----------------------------------------------------------------------------
-// Macros
-// -----------------------------------------------------------------------------
+//
+// ============================================================================
+// Public entry points
+// ============================================================================
+//
 
 #[proc_macro_attribute]
 pub fn canic_query(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand_endpoint(EndpointKind::Query, attr, item)
+    expand_entry(EndpointKind::Query, attr, item)
 }
 
 #[proc_macro_attribute]
 pub fn canic_update(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand_endpoint(EndpointKind::Update, attr, item)
+    expand_entry(EndpointKind::Update, attr, item)
 }
 
-// -----------------------------------------------------------------------------
-// Internal types
-// -----------------------------------------------------------------------------
+//
+// ============================================================================
+// Shared internal types
+// ============================================================================
+//
 
-/// Distinguishes which IC CDK attribute and dispatch path to use.
 #[derive(Clone, Copy)]
 enum EndpointKind {
     Query,
     Update,
 }
 
-#[derive(Clone)]
-enum AuthSpec {
-    Any(Vec<Expr>),
-    All(Vec<Expr>),
-}
+//
+// ============================================================================
+// parse — attribute grammar only
+// ============================================================================
+//
 
-struct ParsedArgs {
-    forwarded: Vec<TokenStream2>,
-    app_guard: bool,
-    user_guard: bool,
-    auth: Option<AuthSpec>,
-}
+mod parse {
+    use super::*;
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
+    #[derive(Clone, Debug)]
+    pub enum AuthSpec {
+        Any(Vec<Expr>),
+        All(Vec<Expr>),
+    }
 
-/// Returns `true` if the function's return type is `Result<_, _>`.
-///
-/// This is required when injecting app guards so that we can use `?`
-/// without altering the user-visible signature.
-fn return_type_supports_app_guard(sig: &syn::Signature) -> bool {
-    let syn::ReturnType::Type(_, ty) = &sig.output else {
-        return false;
-    };
+    #[derive(Debug)]
+    pub struct ParsedArgs {
+        pub forwarded: Vec<TokenStream2>,
+        pub app_guard: bool,
+        pub user_guard: bool,
+        pub auth: Option<AuthSpec>,
+        pub policies: Vec<Path>,
+    }
 
-    let syn::Type::Path(ty) = &**ty else {
-        return false;
-    };
-
-    ty.path
-        .segments
-        .last()
-        .is_some_and(|seg| seg.ident == "Result")
-}
-
-/// Parse and classify arguments passed to `#[canic_query(...)]` or
-/// `#[canic_update(...)]`.
-///
-/// Supported special arguments:
-/// - `app` or `app = true|false`
-/// - `auth_any(rule, ...)`
-/// - `auth_all(rule, ...)`
-///
-/// All other arguments are forwarded verbatim to the underlying
-/// IC CDK attribute.
-fn parse_forwarded_args(attr: TokenStream2, orig_name: &syn::Ident) -> syn::Result<ParsedArgs> {
-    // Attempt structured parsing first so we can reason about arguments.
-    let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
-        // If parsing fails but tokens are present, fall back to raw forwarding.
-        // This keeps compatibility with CDK arguments we don't explicitly model.
-        if attr.is_empty() {
+    pub fn parse_args(attr: TokenStream2, orig_name: &Ident) -> syn::Result<ParsedArgs> {
+        let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
+            if attr.is_empty() {
+                return Ok(empty());
+            }
             return Ok(ParsedArgs {
-                forwarded: Vec::new(),
-                app_guard: false,
-                user_guard: false,
-                auth: None,
+                forwarded: vec![attr],
+                ..empty()
             });
+        };
+
+        let mut forwarded = Vec::new();
+        let mut app_guard = None::<bool>;
+        let mut user_guard = false;
+        let mut auth = None::<AuthSpec>;
+        let mut policies = Vec::<Path>::new();
+
+        for meta in metas {
+            match meta {
+                // app
+                Meta::Path(path) if path.is_ident("app") => {
+                    set_bool(&mut app_guard, true, orig_name)?;
+                }
+
+                // app = true|false
+                Meta::NameValue(nv) if nv.path.is_ident("app") => {
+                    let val = extract_bool(&nv)?;
+                    set_bool(&mut app_guard, val, orig_name)?;
+                }
+
+                // guard(app) or guard(app = bool)
+                Meta::List(list) if list.path.is_ident("guard") => {
+                    let inner = Punctuated::<Meta, Token![,]>::parse_terminated
+                        .parse2(list.tokens.clone())?
+                        .into_iter()
+                        .collect::<Vec<_>>();
+
+                    if inner.len() != 1 {
+                        return Err(syn::Error::new_spanned(
+                            list,
+                            "`guard(...)` expects exactly one argument",
+                        ));
+                    }
+
+                    match &inner[0] {
+                        Meta::Path(p) if p.is_ident("app") => {
+                            set_bool(&mut app_guard, true, orig_name)?;
+                        }
+                        Meta::NameValue(nv) if nv.path.is_ident("app") => {
+                            let val = extract_bool(nv)?;
+                            set_bool(&mut app_guard, val, orig_name)?;
+                        }
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                list,
+                                "only `guard(app)` is supported",
+                            ));
+                        }
+                    }
+                }
+
+                // auth_any / any
+                Meta::List(list) if list.path.is_ident("auth_any") || list.path.is_ident("any") => {
+                    if auth.is_some() {
+                        return Err(conflicting_auth(&list));
+                    }
+                    let rules = parse_rules(&list)?;
+                    auth = Some(AuthSpec::Any(rules));
+                }
+
+                // auth_all / all
+                Meta::List(list) if list.path.is_ident("auth_all") || list.path.is_ident("all") => {
+                    if auth.is_some() {
+                        return Err(conflicting_auth(&list));
+                    }
+                    let rules = parse_rules(&list)?;
+                    auth = Some(AuthSpec::All(rules));
+                }
+
+                // explicit CDK guard = ...
+                Meta::NameValue(nv) if nv.path.is_ident("guard") => {
+                    user_guard = true;
+                    forwarded.push(quote!(#nv));
+                }
+
+                // policy(...)
+                Meta::List(list) if list.path.is_ident("policy") => {
+                    let parsed = Punctuated::<Path, Token![,]>::parse_terminated
+                        .parse2(list.tokens.clone())?
+                        .into_iter()
+                        .collect::<Vec<_>>();
+
+                    if parsed.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            list,
+                            "`policy(...)` expects at least one policy",
+                        ));
+                    }
+
+                    policies.extend(parsed);
+                }
+
+                _ => forwarded.push(quote!(#meta)),
+            }
         }
 
-        return Ok(ParsedArgs {
-            forwarded: vec![attr],
+        Ok(ParsedArgs {
+            forwarded,
+            app_guard: app_guard.unwrap_or(false),
+            user_guard,
+            auth,
+            policies,
+        })
+    }
+
+    const fn empty() -> ParsedArgs {
+        ParsedArgs {
+            forwarded: Vec::new(),
             app_guard: false,
             user_guard: false,
             auth: None,
-        });
-    };
-
-    let mut app_guard = None::<bool>;
-    let mut user_guard = None::<Meta>;
-    let mut auth = None::<AuthSpec>;
-    let mut forwarded = Vec::<TokenStream2>::new();
-
-    for meta in metas {
-        match meta {
-            // `#[canic_* (app)]`
-            Meta::Path(path) if path.is_ident("app") => {
-                let new = true;
-
-                if let Some(prev) = app_guard
-                    && prev != new
-                {
-                    return Err(syn::Error::new_spanned(
-                        orig_name,
-                        "conflicting `app` values",
-                    ));
-                }
-
-                app_guard = Some(new);
-            }
-
-            // `#[canic_* (app = true|false)]`
-            Meta::NameValue(ref nv) if nv.path.is_ident("app") => match &nv.value {
-                syn::Expr::Lit(expr) => match &expr.lit {
-                    syn::Lit::Bool(b) => {
-                        let new = b.value;
-
-                        if let Some(prev) = app_guard
-                            && prev != new
-                        {
-                            return Err(syn::Error::new_spanned(
-                                orig_name,
-                                "conflicting `app` values",
-                            ));
-                        }
-
-                        app_guard = Some(new);
-                    }
-                    _ => {
-                        return Err(syn::Error::new_spanned(
-                            nv,
-                            "expected `app` or `app = true|false`",
-                        ));
-                    }
-                },
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        nv,
-                        "expected `app` or `app = true|false`",
-                    ));
-                }
-            },
-
-            // `#[canic_* (auth_any(rule, ...))]`
-            // Backwards compat: also accept `any(...)`.
-            Meta::List(list) if list.path.is_ident("auth_any") || list.path.is_ident("any") => {
-                if auth.is_some() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "conflicting authorization composition; use only one of `auth_any(...)` or `auth_all(...)`",
-                    ));
-                }
-
-                let rules = Punctuated::<Expr, Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())?
-                    .into_iter()
-                    .collect::<Vec<_>>();
-
-                if rules.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "`auth_any(...)` requires at least one rule",
-                    ));
-                }
-
-                auth = Some(AuthSpec::Any(rules));
-            }
-
-            // `#[canic_* (auth_all(rule, ...))]`
-            // Backwards compat: also accept `all(...)`.
-            Meta::List(list) if list.path.is_ident("auth_all") || list.path.is_ident("all") => {
-                if auth.is_some() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "conflicting authorization composition; use only one of `auth_any(...)` or `auth_all(...)`",
-                    ));
-                }
-
-                let rules = Punctuated::<Expr, Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())?
-                    .into_iter()
-                    .collect::<Vec<_>>();
-
-                if rules.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "`auth_all(...)` requires at least one rule",
-                    ));
-                }
-
-                auth = Some(AuthSpec::All(rules));
-            }
-
-            // Explicit `guard = ...` is forwarded unchanged, but tracked
-            // so we can prevent invalid combinations.
-            Meta::NameValue(nv) if nv.path.is_ident("guard") => {
-                user_guard = Some(Meta::NameValue(nv.clone()));
-                forwarded.push(quote!(#nv));
-            }
-
-            // Any other arguments are forwarded verbatim to the CDK.
-            _ => forwarded.push(quote!(#meta)),
+            policies: Vec::new(),
         }
     }
 
-    let app_guard = app_guard.unwrap_or(false);
+    fn parse_rules(list: &syn::MetaList) -> syn::Result<Vec<Expr>> {
+        let rules = Punctuated::<Expr, Token![,]>::parse_terminated
+            .parse2(list.tokens.clone())?
+            .into_iter()
+            .collect::<Vec<_>>();
 
-    // Prevent ambiguous guard semantics.
-    if app_guard && user_guard.is_some() {
-        return Err(syn::Error::new_spanned(
-            orig_name,
-            "`app` cannot be combined with an explicit `guard = ...`",
-        ));
+        if rules.is_empty() {
+            return Err(syn::Error::new_spanned(
+                list,
+                "authorization requires at least one rule",
+            ));
+        }
+
+        Ok(rules)
     }
 
-    // Prevent ordering bypass via CDK guards when auth is present.
-    if auth.is_some() && user_guard.is_some() {
-        return Err(syn::Error::new_spanned(
-            orig_name,
-            "`auth_any(...)` / `auth_all(...)` cannot be combined with `guard = ...`",
-        ));
+    fn extract_bool(nv: &syn::MetaNameValue) -> syn::Result<bool> {
+        match &nv.value {
+            Expr::Lit(lit) => match &lit.lit {
+                syn::Lit::Bool(b) => Ok(b.value),
+                _ => Err(syn::Error::new_spanned(nv, "expected boolean")),
+            },
+            _ => Err(syn::Error::new_spanned(nv, "expected boolean")),
+        }
     }
 
-    Ok(ParsedArgs {
-        forwarded,
-        app_guard,
-        user_guard: user_guard.is_some(),
-        auth,
-    })
+    fn set_bool(slot: &mut Option<bool>, val: bool, ident: &Ident) -> syn::Result<()> {
+        if let Some(prev) = *slot
+            && prev != val
+        {
+            return Err(syn::Error::new_spanned(ident, "conflicting `app` values"));
+        }
+        *slot = Some(val);
+
+        Ok(())
+    }
+
+    fn conflicting_auth(list: &syn::MetaList) -> syn::Error {
+        syn::Error::new_spanned(list, "conflicting authorization composition")
+    }
 }
 
-fn extract_arg_idents(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
-    let mut args = Vec::new();
+//
+// ============================================================================
+// validate — semantic constraints
+// ============================================================================
+//
 
-    for input in &sig.inputs {
-        match input {
-            syn::FnArg::Typed(pat) => match &*pat.pat {
-                syn::Pat::Ident(ident) => args.push(quote!(#ident)),
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        &pat.pat,
-                        "canic endpoints do not support destructuring parameters",
-                    ));
-                }
-            },
-            syn::FnArg::Receiver(receiver) => {
+mod validate {
+    use super::*;
+    use parse::{AuthSpec, ParsedArgs};
+
+    pub struct ValidatedArgs {
+        pub forwarded: Vec<TokenStream2>,
+        pub app_guard: bool,
+        pub auth: Option<AuthSpec>,
+        pub policies: Vec<Path>,
+    }
+
+    pub fn validate(
+        parsed: ParsedArgs,
+        sig: &syn::Signature,
+        asyncness: bool,
+    ) -> syn::Result<ValidatedArgs> {
+        if parsed.app_guard && parsed.user_guard {
+            return Err(syn::Error::new_spanned(
+                &sig.ident,
+                "`app` cannot be combined with `guard = ...`",
+            ));
+        }
+
+        if parsed.auth.is_some() && parsed.user_guard {
+            return Err(syn::Error::new_spanned(
+                &sig.ident,
+                "authorization cannot be combined with `guard = ...`",
+            ));
+        }
+
+        if parsed.auth.is_some() {
+            if !asyncness {
                 return Err(syn::Error::new_spanned(
-                    receiver,
-                    "canic endpoints must not take `self`",
+                    &sig.ident,
+                    "authorization requires `async fn`",
+                ));
+            }
+            if !returns_result(sig) {
+                return Err(syn::Error::new_spanned(
+                    &sig.output,
+                    "authorized endpoints must return `Result<_, _>`",
                 ));
             }
         }
+
+        if parsed.app_guard && !returns_result(sig) {
+            return Err(syn::Error::new_spanned(
+                &sig.output,
+                "`app` guard requires `Result<_, _>`",
+            ));
+        }
+
+        if !parsed.policies.is_empty() && !returns_result(sig) {
+            return Err(syn::Error::new_spanned(
+                &sig.output,
+                "`policy(...)` requires `Result<_, _>`",
+            ));
+        }
+
+        Ok(ValidatedArgs {
+            forwarded: parsed.forwarded,
+            app_guard: parsed.app_guard,
+            auth: parsed.auth,
+            policies: parsed.policies,
+        })
     }
 
-    Ok(args)
+    fn returns_result(sig: &syn::Signature) -> bool {
+        let syn::ReturnType::Type(_, ty) = &sig.output else {
+            return false;
+        };
+        let syn::Type::Path(ty) = &**ty else {
+            return false;
+        };
+        ty.path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "Result")
+    }
 }
 
-// -----------------------------------------------------------------------------
-// Core expansion logic
-// -----------------------------------------------------------------------------
+//
+// ============================================================================
+// expand — code generation only
+// ============================================================================
+//
 
-fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Parse the user function.
-    let mut func: ItemFn = parse_macro_input!(item as ItemFn);
+mod expand {
+    use super::*;
+    use parse::AuthSpec;
+    use validate::ValidatedArgs;
 
-    // Clone signature components before mutating the function.
-    let orig_sig = func.sig.clone();
-    let orig_name = orig_sig.ident.clone();
-    let vis = func.vis.clone();
-    let inputs = orig_sig.inputs.clone();
-    let output = orig_sig.output.clone();
-    let asyncness = orig_sig.asyncness.is_some();
+    pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream {
+        let orig_sig = func.sig.clone();
+        let orig_name = orig_sig.ident.clone();
+        let vis = func.vis.clone();
+        let inputs = orig_sig.inputs.clone();
+        let output = orig_sig.output.clone();
+        let asyncness = orig_sig.asyncness.is_some();
 
-    // Internal implementation function name.
-    let impl_name = format_ident!("__canic_impl_{}", orig_name);
+        let impl_name = format_ident!("__canic_impl_{}", orig_name);
+        func.sig.ident = impl_name.clone();
 
-    // Rename the user function to the internal implementation.
-    func.sig.ident = impl_name.clone();
+        let cdk_attr = cdk_attr(kind, &args.forwarded);
 
-    // Parse attribute arguments.
-    let parsed = match parse_forwarded_args(attr.into(), &orig_name) {
-        Ok(v) => v,
-        Err(err) => return err.to_compile_error().into(),
-    };
-    let forwarded = parsed.forwarded;
-    let app_guard = parsed.app_guard;
-    let auth = parsed.auth;
+        let dispatch = match (kind, asyncness) {
+            (EndpointKind::Query, false) => quote!(::canic::core::dispatch::dispatch_query),
+            (EndpointKind::Query, true) => quote!(::canic::core::dispatch::dispatch_query_async),
+            (EndpointKind::Update, false) => quote!(::canic::core::dispatch::dispatch_update),
+            (EndpointKind::Update, true) => quote!(::canic::core::dispatch::dispatch_update_async),
+        };
 
-    // Select the IC CDK attribute.
-    let cdk_attr = match kind {
+        let wrapper_sig = syn::Signature {
+            ident: orig_name.clone(),
+            inputs,
+            output,
+            ..orig_sig.clone()
+        };
+
+        let label = orig_name.to_string();
+
+        let guard = if args.app_guard {
+            match kind {
+                EndpointKind::Query => {
+                    quote!(::canic::core::guard::guard_app_query()?;)
+                }
+                EndpointKind::Update => {
+                    quote!(::canic::core::guard::guard_app_update()?;)
+                }
+            }
+        } else {
+            quote!()
+        };
+
+        let auth = match args.auth {
+            Some(AuthSpec::Any(rules)) => {
+                quote!(::canic::core::auth_require_any!(#(#rules),*)?;)
+            }
+            Some(AuthSpec::All(rules)) => {
+                quote!(::canic::core::auth_require_all!(#(#rules),*)?;)
+            }
+            None => quote!(),
+        };
+
+        let policy = if args.policies.is_empty() {
+            quote!()
+        } else {
+            let checks = args.policies.iter().map(|policy_path| {
+                if policy_path.leading_colon.is_none() && policy_path.segments.len() == 1 {
+                    let ident = &policy_path.segments[0].ident;
+                    quote!(::canic::core::policy::#ident()?;)
+                } else {
+                    quote!(#policy_path()?;)
+                }
+            });
+            quote!(#(#checks)*)
+        };
+
+        let call_args = extract_args(&orig_sig).unwrap();
+
+        let call = if asyncness {
+            quote! {
+                #dispatch(#label, || async move {
+                    #impl_name(#(#call_args),*).await
+                }).await
+            }
+        } else {
+            quote! {
+                #dispatch(#label, || {
+                    #impl_name(#(#call_args),*)
+                })
+            }
+        };
+
+        quote! {
+            #cdk_attr
+            #vis #wrapper_sig {
+                #guard
+                #auth
+                #policy
+                #call
+            }
+
+            #func
+        }
+        .into()
+    }
+
+    fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
+        let mut out = Vec::new();
+        for input in &sig.inputs {
+            match input {
+                syn::FnArg::Typed(pat) => match &*pat.pat {
+                    syn::Pat::Ident(id) => out.push(quote!(#id)),
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            &pat.pat,
+                            "destructuring parameters not supported",
+                        ));
+                    }
+                },
+                syn::FnArg::Receiver(r) => {
+                    return Err(syn::Error::new_spanned(
+                        r,
+                        "`self` not supported in canic endpoints",
+                    ));
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
+    match kind {
         EndpointKind::Query => {
             if forwarded.is_empty() {
                 quote!(#[::canic::cdk::query])
@@ -324,211 +468,29 @@ fn expand_endpoint(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> 
                 quote!(#[::canic::cdk::update(#(#forwarded),*)])
             }
         }
-    };
-
-    // Select the appropriate dispatch helper.
-    let dispatch = match (kind, asyncness) {
-        (EndpointKind::Query, false) => quote!(::canic::core::dispatch::dispatch_query),
-        (EndpointKind::Query, true) => quote!(::canic::core::dispatch::dispatch_query_async),
-        (EndpointKind::Update, false) => quote!(::canic::core::dispatch::dispatch_update),
-        (EndpointKind::Update, true) => quote!(::canic::core::dispatch::dispatch_update_async),
-    };
-
-    // Reconstruct the public wrapper signature.
-    let wrapper_sig = syn::Signature {
-        ident: orig_name.clone(),
-        inputs,
-        output,
-        ..orig_sig.clone()
-    };
-
-    // Label used for dispatch / perf instrumentation.
-    // NOTE: This currently allocates; consider switching to a `LitStr`
-    // to guarantee a `'static` label and avoid runtime formatting.
-    let label = orig_name.to_string();
-
-    // Optional app guard injection.
-    let guard_stmt = if app_guard {
-        if !return_type_supports_app_guard(&orig_sig) {
-            return syn::Error::new_spanned(
-                &orig_sig.output,
-                "`app` endpoints must return `Result<_, _>` so the guard can use `?`",
-            )
-            .to_compile_error()
-            .into();
-        }
-
-        match kind {
-            EndpointKind::Query => quote!(::canic::core::guard::guard_query()?;),
-            EndpointKind::Update => quote!(::canic::core::guard::guard_update()?;),
-        }
-    } else {
-        quote!()
-    };
-
-    // Optional auth injection.
-    let auth_stmt = match auth {
-        Some(AuthSpec::Any(rules)) => {
-            if !asyncness {
-                return syn::Error::new_spanned(
-                    &orig_sig.ident,
-                    "`auth_any(...)` authorization requires `async fn` endpoints",
-                )
-                .to_compile_error()
-                .into();
-            }
-
-            if !return_type_supports_app_guard(&orig_sig) {
-                return syn::Error::new_spanned(
-                    &orig_sig.output,
-                    "authorized endpoints must return `Result<_, _>` so authorization can use `?`",
-                )
-                .to_compile_error()
-                .into();
-            }
-
-            quote!(::canic::core::auth_require_any!(#(#rules),*)?;)
-        }
-        Some(AuthSpec::All(rules)) => {
-            if !asyncness {
-                return syn::Error::new_spanned(
-                    &orig_sig.ident,
-                    "`auth_all(...)` authorization requires `async fn` endpoints",
-                )
-                .to_compile_error()
-                .into();
-            }
-
-            if !return_type_supports_app_guard(&orig_sig) {
-                return syn::Error::new_spanned(
-                    &orig_sig.output,
-                    "authorized endpoints must return `Result<_, _>` so authorization can use `?`",
-                )
-                .to_compile_error()
-                .into();
-            }
-
-            quote!(::canic::core::auth_require_all!(#(#rules),*)?;)
-        }
-        None => quote!(),
-    };
-
-    // Policy stage placeholder (always emitted to guarantee ordering).
-    let policy_stmt = quote!(::canic::core::policy::policy_noop(););
-
-    // Extract argument identifiers for forwarding.
-    let args = match extract_arg_idents(&orig_sig) {
-        Ok(v) => v,
-        Err(err) => return err.to_compile_error().into(),
-    };
-
-    // Construct the call into the internal implementation.
-    let call = if asyncness {
-        quote! {
-            #dispatch(#label, || async move {
-                #impl_name(#(#args),*).await
-            }).await
-        }
-    } else {
-        quote! {
-            #dispatch(#label, || {
-                #impl_name(#(#args),*)
-            })
-        }
-    };
-
-    // Final expansion.
-    quote! {
-        #cdk_attr
-        #vis #wrapper_sig {
-            #guard_stmt
-            #auth_stmt
-            #policy_stmt
-            #call
-        }
-
-        #func
     }
-    .into()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quote::quote;
+//
+// ============================================================================
+// Entry dispatcher
+// ============================================================================
+//
 
-    fn parse_ok(attr: TokenStream2) -> ParsedArgs {
-        parse_forwarded_args(attr, &syn::Ident::new("f", proc_macro2::Span::call_site()))
-            .expect("parse args")
-    }
+fn expand_entry(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> TokenStream {
+    let func = parse_macro_input!(item as ItemFn);
+    let sig = func.sig.clone();
+    let asyncness = sig.asyncness.is_some();
 
-    #[test]
-    fn parses_any_rules() {
-        let parsed = parse_ok(quote!(auth_any(foo, bar)));
-        assert!(!parsed.app_guard);
-        assert!(parsed.forwarded.is_empty());
-        assert!(matches!(parsed.auth, Some(AuthSpec::Any(rules)) if rules.len() == 2));
-    }
+    let parsed = match parse::parse_args(attr.into(), &sig.ident) {
+        Ok(v) => v,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-    #[test]
-    fn rejects_any_empty() {
-        let err = parse_forwarded_args(
-            quote!(auth_any()),
-            &syn::Ident::new("f", proc_macro2::Span::call_site()),
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("requires at least one rule"));
-    }
+    let validated = match validate::validate(parsed, &sig, asyncness) {
+        Ok(v) => v,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-    #[test]
-    fn rejects_mixed_any_all() {
-        let err = parse_forwarded_args(
-            quote!(auth_any(foo), auth_all(bar)),
-            &syn::Ident::new("f", proc_macro2::Span::call_site()),
-        )
-        .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("conflicting authorization composition")
-        );
-    }
-
-    #[test]
-    fn rejects_auth_with_cdk_guard() {
-        let err = parse_forwarded_args(
-            quote!(auth_any(foo), guard = my_guard),
-            &syn::Ident::new("f", proc_macro2::Span::call_site()),
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("cannot be combined"));
-    }
-
-    #[test]
-    fn accepts_legacy_any_all() {
-        let parsed = parse_ok(quote!(any(foo)));
-        assert!(matches!(parsed.auth, Some(AuthSpec::Any(rules)) if rules.len() == 1));
-
-        let parsed = parse_ok(quote!(all(foo)));
-        assert!(matches!(parsed.auth, Some(AuthSpec::All(rules)) if rules.len() == 1));
-    }
-
-    #[test]
-    fn rejects_destructuring_params() {
-        let sig: syn::Signature = syn::parse2(quote!(
-            fn f((a, b): (u8, u8)) {}
-        ))
-        .unwrap();
-        let err = extract_arg_idents(&sig).unwrap_err();
-        assert!(err.to_string().contains("do not support destructuring"));
-    }
-
-    #[test]
-    fn rejects_self_receiver() {
-        let sig: syn::Signature = syn::parse2(quote!(
-            fn f(&self) {}
-        ))
-        .unwrap();
-        let err = extract_arg_idents(&sig).unwrap_err();
-        assert!(err.to_string().contains("must not take `self`"));
-    }
+    expand::expand(kind, validated, func)
 }

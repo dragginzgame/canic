@@ -155,11 +155,9 @@ macro_rules! canic_endpoints {
         // SCALING
         //
 
-        #[canic_query]
+        #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_scaling_registry()
         -> Result<::canic::core::ops::model::memory::scaling::ScalingRegistryView, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
             Ok($crate::ops::model::memory::scaling::ScalingRegistryOps::export())
         }
 
@@ -167,11 +165,9 @@ macro_rules! canic_endpoints {
         // SHARDING
         //
 
-        #[canic_query]
+        #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_sharding_registry()
         -> Result<::canic::core::ops::model::memory::sharding::ShardingRegistryDto, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
             Ok($crate::ops::model::memory::sharding::ShardingPolicyOps::export())
         }
 
@@ -203,23 +199,23 @@ macro_rules! canic_endpoints {
             ]
         }
 
-        #[canic_update]
+        #[canic_update(policy(is_prime_subnet))]
         async fn icts_canister_status()
-        -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
+        -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::Error> {
             use $crate::cdk::{
                 api::canister_self,
                 management_canister::{CanisterStatusArgs, canister_status},
             };
 
             if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
-                return Err("Unauthorized".to_string());
+                return Err(::canic::Error::custom("Unauthorized"));
             }
 
             canister_status(&CanisterStatusArgs {
                 canister_id: canister_self(),
             })
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| ::canic::Error::custom(e.to_string()))
         }
     };
 }

@@ -34,7 +34,13 @@ use crate::{
     },
     types::{Cycles, TC},
 };
+use candid::CandidType;
+use serde::Deserialize;
 use std::cell::RefCell;
+
+///
+/// ReserveOpsError
+///
 
 #[derive(Debug, ThisError)]
 pub enum ReserveOpsError {
@@ -49,6 +55,28 @@ pub enum ReserveOpsError {
 
     #[error("missing module hash for reserve entry {pid}")]
     MissingModuleHash { pid: Principal },
+}
+
+///
+/// CanisterReserveAdminCommand
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CanisterReserveAdminCommand {
+    CreateEmpty,
+    Recycle { pid: Principal },
+    Import { pid: Principal },
+}
+
+///
+/// CanisterReserveAdminResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CanisterReserveAdminResponse {
+    Created { pid: Principal },
+    Recycled,
+    Imported,
 }
 
 //
@@ -160,6 +188,28 @@ impl CanisterReserveOps {
     #[must_use]
     pub fn export() -> CanisterReserveView {
         CanisterReserve::export()
+    }
+
+    pub async fn admin(
+        cmd: CanisterReserveAdminCommand,
+    ) -> Result<CanisterReserveAdminResponse, Error> {
+        match cmd {
+            CanisterReserveAdminCommand::CreateEmpty => {
+                let pid = reserve_create_canister().await?;
+
+                Ok(CanisterReserveAdminResponse::Created { pid })
+            }
+            CanisterReserveAdminCommand::Recycle { pid } => {
+                recycle_via_orchestrator(pid).await?;
+
+                Ok(CanisterReserveAdminResponse::Recycled)
+            }
+            CanisterReserveAdminCommand::Import { pid } => {
+                let _ = reserve_import_canister(pid).await?;
+
+                Ok(CanisterReserveAdminResponse::Imported)
+            }
+        }
     }
 
     /// Pops the first entry in the reserve.
@@ -340,7 +390,7 @@ mod tests {
         Config::reset_for_tests();
         let cfg = ConfigModel::test_default();
         Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
-        EnvOps::set_subnet_type(SubnetRole::PRIME);
+        EnvOps::set_subnet_role(SubnetRole::PRIME);
 
         assert!(CanisterReserveOps::enabled_subnet_config().is_none());
     }
@@ -354,7 +404,7 @@ mod tests {
 
         Config::reset_for_tests();
         Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
-        EnvOps::set_subnet_type(SubnetRole::PRIME);
+        EnvOps::set_subnet_role(SubnetRole::PRIME);
 
         assert!(CanisterReserveOps::enabled_subnet_config().is_some());
     }

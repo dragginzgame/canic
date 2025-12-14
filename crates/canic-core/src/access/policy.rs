@@ -1,11 +1,14 @@
-use crate::{Error, ThisError, access::AccessError};
+use crate::{Error, ThisError, access::AccessError, ops::model::memory::env::EnvOps};
 
 ///
 /// PolicyError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum PolicyError {}
+pub enum PolicyError {
+    #[error("this endpoint is only available on the prime subnet")]
+    NotPrimeSubnet,
+}
 
 impl From<PolicyError> for Error {
     fn from(err: PolicyError) -> Self {
@@ -13,8 +16,14 @@ impl From<PolicyError> for Error {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Phase 1: minimal policy stage placeholder
-// -----------------------------------------------------------------------------
+///
+/// Policies
+///
 
-pub fn policy_noop() {}
+pub fn is_prime_subnet() -> Result<(), Error> {
+    if EnvOps::is_prime_subnet() {
+        Ok(())
+    } else {
+        Err(PolicyError::NotPrimeSubnet.into())
+    }
+}

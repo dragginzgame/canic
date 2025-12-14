@@ -163,7 +163,7 @@ fn root_builds_hierarchy_and_exposes_env() {
             .expect("query child env");
 
         assert_eq!(
-            env.canister_type,
+            env.canister_role,
             Some(child_ty.clone()),
             "env canister type for {child_ty}",
         );
@@ -175,7 +175,7 @@ fn root_builds_hierarchy_and_exposes_env() {
             "env prime root for {child_ty}",
         );
         assert_eq!(
-            env.subnet_type,
+            env.subnet_role,
             Some(SubnetRole::PRIME),
             "env subnet type for {child_ty}",
         );

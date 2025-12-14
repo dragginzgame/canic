@@ -47,29 +47,24 @@ impl EnvOps {
         Env::import(env);
     }
 
-    pub fn set_canister_type(ty: CanisterRole) {
-        Env::set_canister_type(ty);
-    }
-
-    pub fn set_root_pid(pid: Principal) {
-        Env::set_root_pid(pid);
-    }
-
     pub fn set_prime_root_pid(pid: Principal) {
         Env::set_prime_root_pid(pid);
+    }
+
+    pub fn set_subnet_role(role: SubnetRole) {
+        Env::set_subnet_role(role);
     }
 
     pub fn set_subnet_pid(pid: Principal) {
         Env::set_subnet_pid(pid);
     }
 
-    pub fn set_subnet_type(ty: SubnetRole) {
-        Env::set_subnet_type(ty);
+    pub fn set_root_pid(pid: Principal) {
+        Env::set_root_pid(pid);
     }
 
-    #[must_use]
-    pub fn is_root() -> bool {
-        Env::is_root()
+    pub fn set_canister_role(role: CanisterRole) {
+        Env::set_canister_role(role);
     }
 
     #[must_use]
@@ -77,14 +72,24 @@ impl EnvOps {
         Env::is_prime_root()
     }
 
-    pub fn try_get_subnet_type() -> Result<SubnetRole, Error> {
-        let ty = Env::get_subnet_type().ok_or(EnvOpsError::SubnetRoleUnavailable)?;
+    #[must_use]
+    pub fn is_prime_subnet() -> bool {
+        Env::is_prime_subnet()
+    }
+
+    #[must_use]
+    pub fn is_root() -> bool {
+        Env::is_root()
+    }
+
+    pub fn try_get_subnet_role() -> Result<SubnetRole, Error> {
+        let ty = Env::get_subnet_role().ok_or(EnvOpsError::SubnetRoleUnavailable)?;
 
         Ok(ty)
     }
 
-    pub fn try_get_canister_type() -> Result<CanisterRole, Error> {
-        let ty = Env::get_canister_type().ok_or(EnvOpsError::CanisterRoleUnavailable)?;
+    pub fn try_get_canister_role() -> Result<CanisterRole, Error> {
+        let ty = Env::get_canister_role().ok_or(EnvOpsError::CanisterRoleUnavailable)?;
 
         Ok(ty)
     }

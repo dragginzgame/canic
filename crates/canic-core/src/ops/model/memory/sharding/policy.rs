@@ -297,8 +297,8 @@ mod tests {
         "#;
 
         Config::init_from_toml(toml).unwrap();
-        EnvOps::set_subnet_type(SubnetRole::PRIME);
-        EnvOps::set_canister_type(CanisterRole::from("manager"));
+        EnvOps::set_subnet_role(SubnetRole::PRIME);
+        EnvOps::set_canister_role(CanisterRole::from("manager"));
     }
 
     #[test]

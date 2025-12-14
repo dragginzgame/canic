@@ -40,23 +40,23 @@ pub fn root_init(identity: SubnetIdentity) {
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
-    EnvOps::set_canister_type(CanisterRole::ROOT);
+    EnvOps::set_canister_role(CanisterRole::ROOT);
     EnvOps::set_root_pid(self_pid);
 
     match identity {
         SubnetIdentity::Prime => {
             EnvOps::set_prime_root_pid(self_pid);
-            EnvOps::set_subnet_type(SubnetRole::PRIME);
+            EnvOps::set_subnet_role(SubnetRole::PRIME);
             EnvOps::set_subnet_pid(self_pid);
         }
         SubnetIdentity::Standard(params) => {
             EnvOps::set_prime_root_pid(params.prime_root_pid);
-            EnvOps::set_subnet_type(params.subnet_type);
+            EnvOps::set_subnet_role(params.subnet_type);
             EnvOps::set_subnet_pid(self_pid);
         }
         SubnetIdentity::Manual(subnet_pid) => {
             EnvOps::set_prime_root_pid(self_pid);
-            EnvOps::set_subnet_type(SubnetRole::PRIME);
+            EnvOps::set_subnet_role(SubnetRole::PRIME);
             EnvOps::set_subnet_pid(subnet_pid);
         }
     }

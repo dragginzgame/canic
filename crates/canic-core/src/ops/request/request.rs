@@ -97,8 +97,8 @@ where
     let encoded = extra.map(|v| encode_one(v)).transpose()?;
     let role = canister_role.clone();
     let parent_desc = format!("{:?}", &parent);
-    let caller_ty =
-        EnvOps::try_get_canister_type().map_or_else(|_| "unknown".to_string(), |ty| ty.to_string());
+    let caller_ty = EnvOps::try_get_canister_role()
+        .map_or_else(|_| "unknown".to_string(), |role| role.to_string());
 
     // build request
     let q = Request::CreateCanister(CreateCanisterRequest {

@@ -61,13 +61,13 @@ impl ConfigOps {
 
     /// Get a canister configuration inside a specific subnet.
     pub fn try_get_canister(
-        subnet_type: &SubnetRole,
-        canister_type: &CanisterRole,
+        subnet_role: &SubnetRole,
+        canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, Error> {
-        let subnet_cfg = Self::try_get_subnet(subnet_type)?;
+        let subnet_cfg = Self::try_get_subnet(subnet_role)?;
 
-        let canister_cfg = subnet_cfg.get_canister(canister_type).ok_or_else(|| {
-            ConfigOpsError::CanisterNotFound(canister_type.to_string(), subnet_type.to_string())
+        let canister_cfg = subnet_cfg.get_canister(canister_role).ok_or_else(|| {
+            ConfigOpsError::CanisterNotFound(canister_role.to_string(), subnet_role.to_string())
         })?;
 
         Ok(canister_cfg)
@@ -75,29 +75,29 @@ impl ConfigOps {
 
     /// Fetch the configuration record for the *current* subnet.
     pub fn current_subnet() -> Result<SubnetConfig, Error> {
-        let subnet_type = EnvOps::try_get_subnet_type()?;
+        let subnet_role = EnvOps::try_get_subnet_role()?;
 
         // delegate lookup to ConfigOps
-        let subnet_cfg = Self::try_get_subnet(&subnet_type)?;
+        let subnet_cfg = Self::try_get_subnet(&subnet_role)?;
 
         Ok(subnet_cfg)
     }
 
     pub fn current_canister() -> Result<CanisterConfig, Error> {
-        let subnet_type = EnvOps::try_get_subnet_type()?;
-        let canister_type = EnvOps::try_get_canister_type()?;
+        let subnet_role = EnvOps::try_get_subnet_role()?;
+        let canister_role = EnvOps::try_get_canister_role()?;
 
         // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = Self::try_get_canister(&subnet_type, &canister_type)?;
+        let canister_cfg = Self::try_get_canister(&subnet_role, &canister_role)?;
 
         Ok(canister_cfg)
     }
 
-    pub fn current_subnet_canister(canister_type: &CanisterRole) -> Result<CanisterConfig, Error> {
-        let subnet_type = EnvOps::try_get_subnet_type()?;
+    pub fn current_subnet_canister(canister_role: &CanisterRole) -> Result<CanisterConfig, Error> {
+        let subnet_role = EnvOps::try_get_subnet_role()?;
 
         // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = Self::try_get_canister(&subnet_type, canister_type)?;
+        let canister_cfg = Self::try_get_canister(&subnet_role, canister_role)?;
 
         Ok(canister_cfg)
     }
