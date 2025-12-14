@@ -316,12 +316,7 @@ mod expand {
 
         let cdk_attr = cdk_attr(kind, &args.forwarded);
 
-        let dispatch = match (kind, asyncness) {
-            (EndpointKind::Query, false) => quote!(::canic::core::dispatch::dispatch_query),
-            (EndpointKind::Query, true) => quote!(::canic::core::dispatch::dispatch_query_async),
-            (EndpointKind::Update, false) => quote!(::canic::core::dispatch::dispatch_update),
-            (EndpointKind::Update, true) => quote!(::canic::core::dispatch::dispatch_update_async),
-        };
+        let dispatch = dispatch(kind, asyncness);
 
         let wrapper_sig = syn::Signature {
             ident: orig_name.clone(),
@@ -332,51 +327,13 @@ mod expand {
 
         let label = orig_name.to_string();
 
-        let guard = if args.app_guard {
-            match kind {
-                EndpointKind::Query => {
-                    quote!(::canic::core::guard::guard_app_query()?;)
-                }
-                EndpointKind::Update => {
-                    quote!(::canic::core::guard::guard_app_update()?;)
-                }
-            }
-        } else {
-            quote!()
-        };
-
-        let auth = match args.auth {
-            Some(AuthSpec::Any(rules)) => {
-                quote!(::canic::core::auth_require_any!(#(#rules),*)?;)
-            }
-            Some(AuthSpec::All(rules)) => {
-                quote!(::canic::core::auth_require_all!(#(#rules),*)?;)
-            }
-            None => quote!(),
-        };
-
-        let policy = if args.policies.is_empty() {
-            quote!()
-        } else {
-            let checks = args.policies.iter().map(|expr| quote!(#expr().await?;));
-            quote!(#(#checks)*)
-        };
+        let guard = guard(kind, args.app_guard, &label);
+        let auth = auth(args.auth.as_ref(), &label);
+        let policy = policy(&args.policies, &label);
 
         let call_args = extract_args(&orig_sig).unwrap();
 
-        let call = if asyncness {
-            quote! {
-                #dispatch(#label, || async move {
-                    #impl_name(#(#call_args),*).await
-                }).await
-            }
-        } else {
-            quote! {
-                #dispatch(#label, || {
-                    #impl_name(#(#call_args),*)
-                })
-            }
-        };
+        let call = call(asyncness, dispatch, &label, impl_name, &call_args);
 
         quote! {
             #cdk_attr
@@ -390,6 +347,113 @@ mod expand {
             #func
         }
         .into()
+    }
+
+    fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
+        match (kind, asyncness) {
+            (EndpointKind::Query, false) => quote!(::canic::core::dispatch::dispatch_query),
+            (EndpointKind::Query, true) => quote!(::canic::core::dispatch::dispatch_query_async),
+            (EndpointKind::Update, false) => quote!(::canic::core::dispatch::dispatch_update),
+            (EndpointKind::Update, true) => quote!(::canic::core::dispatch::dispatch_update_async),
+        }
+    }
+
+    fn record_access_denied(label: &String, kind: TokenStream2) -> TokenStream2 {
+        quote! {
+            ::canic::core::ops::metrics::AccessMetrics::increment(#label, #kind);
+        }
+    }
+
+    fn guard(kind: EndpointKind, enabled: bool, label: &String) -> TokenStream2 {
+        if !enabled {
+            return quote!();
+        }
+
+        let metric = record_access_denied(
+            label,
+            quote!(::canic::core::ops::metrics::AccessMetricKind::Guard),
+        );
+
+        match kind {
+            EndpointKind::Query => quote! {
+                if let Err(err) = ::canic::core::guard::guard_app_query() {
+                    #metric
+                    return Err(err);
+                }
+            },
+            EndpointKind::Update => quote! {
+                if let Err(err) = ::canic::core::guard::guard_app_update() {
+                    #metric
+                    return Err(err);
+                }
+            },
+        }
+    }
+
+    fn auth(auth: Option<&AuthSpec>, label: &String) -> TokenStream2 {
+        let metric = record_access_denied(
+            label,
+            quote!(::canic::core::ops::metrics::AccessMetricKind::Auth),
+        );
+
+        match auth {
+            Some(AuthSpec::Any(rules)) => quote! {
+                if let Err(err) = ::canic::core::auth_require_any!(#(#rules),*) {
+                    #metric
+                    return Err(err);
+                }
+            },
+            Some(AuthSpec::All(rules)) => quote! {
+                if let Err(err) = ::canic::core::auth_require_all!(#(#rules),*) {
+                    #metric
+                    return Err(err);
+                }
+            },
+            None => quote!(),
+        }
+    }
+
+    fn policy(policies: &[Expr], label: &String) -> TokenStream2 {
+        if policies.is_empty() {
+            return quote!();
+        }
+
+        let metric = record_access_denied(
+            label,
+            quote!(::canic::core::ops::metrics::AccessMetricKind::Policy),
+        );
+
+        let checks = policies.iter().map(|expr| {
+            quote! {
+                if let Err(err) = #expr().await {
+                    #metric
+                    return Err(err);
+                }
+            }
+        });
+        quote!(#(#checks)*)
+    }
+
+    fn call(
+        asyncness: bool,
+        dispatch: TokenStream2,
+        label: &String,
+        impl_name: syn::Ident,
+        call_args: &[TokenStream2],
+    ) -> TokenStream2 {
+        if asyncness {
+            quote! {
+                #dispatch(#label, || async move {
+                    #impl_name(#(#call_args),*).await
+                }).await
+            }
+        } else {
+            quote! {
+                #dispatch(#label, || {
+                    #impl_name(#(#call_args),*)
+                })
+            }
+        }
     }
 
     fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {

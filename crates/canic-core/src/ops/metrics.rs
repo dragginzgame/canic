@@ -1,7 +1,8 @@
 pub use crate::model::metrics::{
-    HttpMetricEntry, HttpMetrics, HttpMetricsSnapshot, IccMetricEntry, IccMetrics,
-    IccMetricsSnapshot, MetricsReport, SystemMetricEntry, SystemMetricKind, SystemMetrics,
-    SystemMetricsSnapshot, TimerMetricEntry, TimerMetrics, TimerMetricsSnapshot,
+    AccessMetricEntry, AccessMetricKind, AccessMetrics, AccessMetricsSnapshot, HttpMetricEntry,
+    HttpMetrics, HttpMetricsSnapshot, IccMetricEntry, IccMetrics, IccMetricsSnapshot,
+    MetricsReport, SystemMetricEntry, SystemMetricKind, SystemMetrics, SystemMetricsSnapshot,
+    TimerMetricEntry, TimerMetrics, TimerMetricsSnapshot,
 };
 
 ///
@@ -36,6 +37,12 @@ impl MetricsOps {
         TimerMetrics::snapshot()
     }
 
+    /// Export the current access metrics snapshot.
+    #[must_use]
+    pub fn access_snapshot() -> AccessMetricsSnapshot {
+        AccessMetrics::snapshot()
+    }
+
     /// Export combined metrics (system + ICC + HTTP + timers).
     #[must_use]
     pub fn report() -> MetricsReport {
@@ -44,6 +51,7 @@ impl MetricsOps {
             http: Self::http_snapshot(),
             icc: Self::icc_snapshot(),
             timer: Self::timer_snapshot(),
+            access: Self::access_snapshot(),
         }
     }
 }
