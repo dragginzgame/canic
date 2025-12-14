@@ -83,9 +83,43 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        async fn canic_metrics()
-        -> ::canic::core::ops::metrics::MetricsReport {
-            ::canic::core::ops::metrics::MetricsOps::report()
+        fn canic_metrics_system() -> ::canic::core::ops::metrics::SystemMetricsSnapshot {
+            ::canic::core::ops::metrics::MetricsOps::system_snapshot()
+        }
+
+        #[canic_query]
+        fn canic_metrics_icc(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::ops::metrics::MetricsPageDto<::canic::core::ops::metrics::IccMetricEntry>
+        {
+            ::canic::core::ops::metrics::MetricsOps::icc_page(page)
+        }
+
+        #[canic_query]
+        fn canic_metrics_http(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+            ::canic::core::ops::metrics::HttpMetricEntry,
+        > {
+            ::canic::core::ops::metrics::MetricsOps::http_page(page)
+        }
+
+        #[canic_query]
+        fn canic_metrics_timer(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+            ::canic::core::ops::metrics::TimerMetricEntry,
+        > {
+            ::canic::core::ops::metrics::MetricsOps::timer_page(page)
+        }
+
+        #[canic_query]
+        fn canic_metrics_access(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+            ::canic::core::ops::metrics::AccessMetricEntry,
+        > {
+            ::canic::core::ops::metrics::MetricsOps::access_page(page)
         }
 
         #[canic_query]

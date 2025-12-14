@@ -5,6 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+- Split metrics queries into per-metric endpoints: `canic_metrics_system`, `canic_metrics_icc(page)`, `canic_metrics_http(page)`, `canic_metrics_timer(page)`, `canic_metrics_access(page)`.
+
+### Removed
+- Removed the aggregated `canic_metrics` endpoint and `MetricsReport` type.
+
 ## [0.5.22] - 2025-12-13
 ### Added
 - CI now builds all canister `.wasm` artifacts (and deterministic `.wasm.gz` via `gzip -n`) into `.dfx/local/canisters/...` before running `fmt`, `clippy`, and tests.

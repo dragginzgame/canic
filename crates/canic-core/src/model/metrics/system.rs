@@ -21,7 +21,9 @@ pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 /// Enumerates the resource-heavy actions we track.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(
+    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[remain::sorted]
 pub enum SystemMetricKind {
     CanisterCall,
