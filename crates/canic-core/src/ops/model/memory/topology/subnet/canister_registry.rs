@@ -17,8 +17,8 @@ pub enum SubnetCanisterRegistryOpsError {
     #[error("canister {0} not found in registry")]
     NotFound(Principal),
 
-    #[error("canister type {0} not found in registry")]
-    TypeNotFound(CanisterRole),
+    #[error("canister role {0} not found in registry")]
+    RoleNotFound(CanisterRole),
 }
 
 impl From<SubnetCanisterRegistryOpsError> for Error {
@@ -50,8 +50,8 @@ impl SubnetCanisterRegistryOps {
     }
 
     #[must_use]
-    pub fn get_type(ty: &CanisterRole) -> Option<CanisterEntry> {
-        SubnetCanisterRegistry::get_type(ty)
+    pub fn get_type(role: &CanisterRole) -> Option<CanisterEntry> {
+        SubnetCanisterRegistry::get_type(role)
     }
 
     #[must_use]
@@ -71,11 +71,11 @@ impl SubnetCanisterRegistryOps {
 
     pub(crate) fn register(
         pid: Principal,
-        ty: &CanisterRole,
+        role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
     ) {
-        SubnetCanisterRegistry::register(pid, ty, parent_pid, module_hash);
+        SubnetCanisterRegistry::register(pid, role, parent_pid, module_hash);
     }
 
     pub(crate) fn register_root(pid: Principal) {
@@ -91,10 +91,10 @@ impl SubnetCanisterRegistryOps {
     }
 
     pub fn try_get_type(
-        ty: &CanisterRole,
+        role: &CanisterRole,
     ) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
-        SubnetCanisterRegistry::get_type(ty)
-            .ok_or_else(|| SubnetCanisterRegistryOpsError::TypeNotFound(ty.clone()))
+        SubnetCanisterRegistry::get_type(role)
+            .ok_or_else(|| SubnetCanisterRegistryOpsError::RoleNotFound(role.clone()))
     }
 
     pub(crate) fn update_module_hash(

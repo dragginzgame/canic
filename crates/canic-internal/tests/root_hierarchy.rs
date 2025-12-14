@@ -104,7 +104,7 @@ fn setup_root() -> Option<Setup> {
 
     let registry = registry
         .into_iter()
-        .map(|entry| (entry.ty.clone(), entry))
+        .map(|entry| (entry.role.clone(), entry))
         .collect();
 
     Some(Setup {
@@ -285,7 +285,7 @@ fn subnet_children_matches_registry_on_root() {
         .filter(|entry| entry.parent_pid == Some(root_id))
         .map(|entry| CanisterSummary {
             pid: entry.pid,
-            ty: entry.ty.clone(),
+            role: entry.role.clone(),
             parent_pid: entry.parent_pid,
         })
         .collect();
@@ -303,8 +303,8 @@ fn subnet_children_matches_registry_on_root() {
         )
         .expect("query root subnet children");
 
-    expected_children.sort_by(|a, b| a.ty.cmp(&b.ty));
-    page.children.sort_by(|a, b| a.ty.cmp(&b.ty));
+    expected_children.sort_by(|a, b| a.role.cmp(&b.role));
+    page.children.sort_by(|a, b| a.role.cmp(&b.role));
 
     assert_eq!(
         page.total,

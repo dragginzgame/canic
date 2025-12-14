@@ -49,10 +49,10 @@ impl SubnetCanisterChildrenOps {
 
     /// Lookup the first child of a given type
     #[must_use]
-    pub fn find_first_by_type(ty: &CanisterRole) -> Option<CanisterSummary> {
+    pub fn find_first_by_type(role: &CanisterRole) -> Option<CanisterSummary> {
         Self::resolve_children()
             .into_iter()
-            .find(|child| &child.ty == ty)
+            .find(|child| &child.role == role)
     }
 
     #[must_use]

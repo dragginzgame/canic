@@ -40,7 +40,7 @@ pub struct CanisterReserveEntry {
     pub created_at: u64,
     pub cycles: Cycles,
     #[serde(default)]
-    pub ty: Option<CanisterRole>,
+    pub role: Option<CanisterRole>,
     #[serde(default)]
     pub parent: Option<Principal>,
     #[serde(default)]
@@ -60,14 +60,14 @@ impl CanisterReserve {
     pub(crate) fn register(
         pid: Principal,
         cycles: Cycles,
-        ty: Option<CanisterRole>,
+        role: Option<CanisterRole>,
         parent: Option<Principal>,
         module_hash: Option<Vec<u8>>,
     ) {
         let entry = CanisterReserveEntry {
             created_at: now_secs(),
             cycles,
-            ty,
+            role,
             parent,
             module_hash,
         };

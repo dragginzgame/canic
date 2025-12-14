@@ -53,16 +53,16 @@ pub enum ProvisioningError {
 /// import them directly, and return the resulting state bundle.
 /// When `updated_ty` is provided, only include the sections that list that type.
 pub(crate) async fn rebuild_directories_from_registry(
-    updated_ty: Option<&CanisterRole>,
+    updated_role: Option<&CanisterRole>,
 ) -> Result<StateBundle, Error> {
     let mut bundle = StateBundle::default();
     let cfg = Config::get();
 
     // did a directory change?
-    let include_app = updated_ty.is_none_or(|ty| cfg.app_directory.contains(ty));
-    let include_subnet = updated_ty.is_none_or(|ty| {
+    let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
+    let include_subnet = updated_role.is_none_or(|role| {
         ConfigOps::current_subnet()
-            .map(|c| c.subnet_directory.contains(ty))
+            .map(|c| c.subnet_directory.contains(role))
             // default to true if config is unavailable to avoid skipping a needed rebuild
             .unwrap_or(true)
     });
@@ -96,18 +96,18 @@ pub(crate) async fn rebuild_directories_from_registry(
 /// 3. Register canister in SubnetCanisterRegistry
 /// 4. Cascade topology + sync directories
 pub async fn create_and_install_canister(
-    ty: &CanisterRole,
+    role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<Principal, ProvisioningError> {
     // must have WASM module registered
-    WasmOps::try_get(ty)?;
+    WasmOps::try_get(role)?;
 
     // Phase 1: allocation
-    let pid = allocate_canister(ty).await?;
+    let pid = allocate_canister(role).await?;
 
     // Phase 2: installation
-    if let Err(err) = install_canister(pid, ty, parent_pid, extra_arg).await {
+    if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
         return Err(ProvisioningError::InstallFailed { pid, source: err });
     }
 
@@ -148,7 +148,7 @@ pub async fn delete_canister(
             Ok,
             "🗑️ delete_canister: {} ({})",
             pid,
-            c.ty
+            c.role
         ),
         None => log!(
             Topic::CanisterLifecycle,
@@ -157,7 +157,7 @@ pub async fn delete_canister(
         ),
     }
 
-    Ok((removed_entry.map(|e| e.ty), parent_pid))
+    Ok((removed_entry.map(|e| e.role), parent_pid))
 }
 
 /// Uninstall code from a canister without deleting it.
@@ -178,9 +178,9 @@ pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
 /// Allocate a canister ID and ensure it meets the initial cycle target.
 ///
 /// Reuses a canister from the reserve if available; otherwise creates a new one.
-pub async fn allocate_canister(ty: &CanisterRole) -> Result<Principal, Error> {
+pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
     // use ConfigOps for a clean, ops-layer config lookup
-    let cfg = ConfigOps::current_subnet_canister(ty)?;
+    let cfg = ConfigOps::current_subnet_canister(role)?;
 
     let target = cfg.initial_cycles;
 

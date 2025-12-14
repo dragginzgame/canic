@@ -20,6 +20,7 @@ impl From<PolicyError> for Error {
 /// Policies
 ///
 
+#[allow(clippy::unused_async)]
 pub async fn is_prime_subnet() -> Result<(), Error> {
     if EnvOps::is_prime_subnet() {
         Ok(())

@@ -95,7 +95,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
         };
 
         let event = LifecycleEvent::Create {
-            ty: req.canister_role.clone(),
+            role: req.canister_role.clone(),
             parent: parent_pid,
             extra_arg: req.extra_arg.clone(),
         };

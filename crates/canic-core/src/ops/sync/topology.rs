@@ -197,7 +197,7 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
         chain.push(entry.clone().into());
 
         let Some(parent) = entry.parent_pid else {
-            if entry.ty != CanisterRole::ROOT {
+            if entry.role != CanisterRole::ROOT {
                 return Err(SyncOpsError::ParentChainNotRootTerminated(pid).into());
             }
             break;
@@ -294,7 +294,7 @@ mod tests {
     fn s(pid: Principal, parent_pid: Option<Principal>) -> CanisterSummary {
         CanisterSummary {
             pid,
-            ty: CanisterRole::new("test"),
+            role: CanisterRole::new("test"),
             parent_pid,
         }
     }
@@ -368,11 +368,11 @@ mod tests {
     fn parent_chain_requires_root_termination() {
         SubnetCanisterRegistry::clear_for_tests();
         let orphan = p(9);
-        let ty = CanisterRole::new("orphan");
+        let role = CanisterRole::new("orphan");
 
         SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
             pid: orphan,
-            ty,
+            role,
             parent_pid: None,
             module_hash: None,
             created_at: now_secs(),

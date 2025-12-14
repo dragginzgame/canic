@@ -73,10 +73,10 @@ impl AppDirectoryOps {
         let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();
 
         for entry in entries {
-            let ty = entry.ty.clone();
+            let role = entry.role.clone();
 
-            if cfg.app_directory.contains(&ty) {
-                map.entry(ty).or_default().0.push(entry.pid);
+            if cfg.app_directory.contains(&role) {
+                map.entry(role).or_default().0.push(entry.pid);
             }
         }
 
@@ -84,13 +84,13 @@ impl AppDirectoryOps {
     }
 
     /// Fetch principals for a canister type from the current AppDirectory.
-    pub fn try_get(ty: &CanisterRole) -> Result<PrincipalList, Error> {
-        let target = ty.clone();
+    pub fn try_get(role: &CanisterRole) -> Result<PrincipalList, Error> {
+        let target = role.clone();
         let view = Self::resolve_view();
         let entry = view
             .into_iter()
             .find_map(|(t, pids)| (t == target).then_some(pids))
-            .ok_or_else(|| AppDirectoryOpsError::NotFound(ty.clone()))?;
+            .ok_or_else(|| AppDirectoryOpsError::NotFound(role.clone()))?;
 
         Ok(entry)
     }

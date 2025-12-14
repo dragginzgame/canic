@@ -79,10 +79,10 @@ impl SubnetDirectoryOps {
         let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();
 
         for entry in entries {
-            let ty = entry.ty.clone();
+            let role = entry.role.clone();
 
-            if subnet_cfg.subnet_directory.contains(&ty) {
-                map.entry(ty).or_default().0.push(entry.pid);
+            if subnet_cfg.subnet_directory.contains(&role) {
+                map.entry(role).or_default().0.push(entry.pid);
             }
         }
 

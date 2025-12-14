@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn sharding_pool_references_must_exist_in_subnet() {
-        let managing_ty: CanisterRole = "shard_hub".into();
+        let managing_role: CanisterRole = "shard_hub".into();
         let mut canisters = BTreeMap::new();
 
         let mut sharding = ShardingConfig::default();
@@ -324,7 +324,7 @@ mod tests {
             ..Default::default()
         };
 
-        canisters.insert(managing_ty, manager_cfg);
+        canisters.insert(managing_role, manager_cfg);
 
         let subnet = SubnetConfig {
             canisters,
@@ -338,14 +338,14 @@ mod tests {
 
     #[test]
     fn sharding_pool_policy_requires_positive_capacity_and_shards() {
-        let managing_ty: CanisterRole = "shard_hub".into();
+        let managing_role: CanisterRole = "shard_hub".into();
         let mut canisters = BTreeMap::new();
 
         let mut sharding = ShardingConfig::default();
         sharding.pools.insert(
             "primary".into(),
             ShardPool {
-                canister_type: managing_ty.clone(),
+                canister_type: managing_role.clone(),
                 policy: ShardPoolPolicy {
                     capacity: 0,
                     max_shards: 0,
@@ -354,7 +354,7 @@ mod tests {
         );
 
         canisters.insert(
-            managing_ty,
+            managing_role,
             CanisterConfig {
                 sharding: Some(sharding),
                 ..Default::default()
