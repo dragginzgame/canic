@@ -9,10 +9,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{
-    Expr, Ident, ItemFn, Meta, Path, Token, parse::Parser, parse_macro_input,
-    punctuated::Punctuated,
-};
+use syn::{Expr, ItemFn, Meta, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 //
 // ============================================================================
@@ -63,11 +60,13 @@ mod parse {
         pub app_guard: bool,
         pub user_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Path>,
+        pub policies: Vec<Expr>,
     }
 
-    pub fn parse_args(attr: TokenStream2, orig_name: &Ident) -> syn::Result<ParsedArgs> {
+    pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
+            // If the attr doesn't parse as Meta list, fall back to forwarding raw tokens to the CDK.
+            // This preserves compatibility with CDK syntax we don't model.
             if attr.is_empty() {
                 return Ok(empty());
             }
@@ -78,57 +77,47 @@ mod parse {
         };
 
         let mut forwarded = Vec::new();
-        let mut app_guard = None::<bool>;
+        let mut app_guard = false;
         let mut user_guard = false;
         let mut auth = None::<AuthSpec>;
-        let mut policies = Vec::<Path>::new();
+        let mut policies = Vec::<Expr>::new();
 
         for meta in metas {
             match meta {
-                // app
-                Meta::Path(path) if path.is_ident("app") => {
-                    set_bool(&mut app_guard, true, orig_name)?;
-                }
-
-                // app = true|false
-                Meta::NameValue(nv) if nv.path.is_ident("app") => {
-                    let val = extract_bool(&nv)?;
-                    set_bool(&mut app_guard, val, orig_name)?;
-                }
-
-                // guard(app) or guard(app = bool)
+                // guard(...)
+                //
+                // Canic-specific guard stage. Top-level `app` is no longer accepted.
                 Meta::List(list) if list.path.is_ident("guard") => {
                     let inner = Punctuated::<Meta, Token![,]>::parse_terminated
                         .parse2(list.tokens.clone())?
                         .into_iter()
                         .collect::<Vec<_>>();
 
-                    if inner.len() != 1 {
+                    if inner.is_empty() {
                         return Err(syn::Error::new_spanned(
                             list,
-                            "`guard(...)` expects exactly one argument",
+                            "`guard(...)` expects at least one argument (e.g., `guard(app)`)",
                         ));
                     }
 
-                    match &inner[0] {
-                        Meta::Path(p) if p.is_ident("app") => {
-                            set_bool(&mut app_guard, true, orig_name)?;
-                        }
-                        Meta::NameValue(nv) if nv.path.is_ident("app") => {
-                            let val = extract_bool(nv)?;
-                            set_bool(&mut app_guard, val, orig_name)?;
-                        }
-                        _ => {
-                            return Err(syn::Error::new_spanned(
-                                list,
-                                "only `guard(app)` is supported",
-                            ));
+                    // For now, support only guard(app). You can widen this later.
+                    for item in inner {
+                        match item {
+                            Meta::Path(p) if p.is_ident("app") => {
+                                app_guard = true;
+                            }
+                            other => {
+                                return Err(syn::Error::new_spanned(
+                                    other,
+                                    "only `guard(app)` is supported",
+                                ));
+                            }
                         }
                     }
                 }
 
-                // auth_any / any
-                Meta::List(list) if list.path.is_ident("auth_any") || list.path.is_ident("any") => {
+                // auth_any(...)
+                Meta::List(list) if list.path.is_ident("auth_any") => {
                     if auth.is_some() {
                         return Err(conflicting_auth(&list));
                     }
@@ -136,8 +125,8 @@ mod parse {
                     auth = Some(AuthSpec::Any(rules));
                 }
 
-                // auth_all / all
-                Meta::List(list) if list.path.is_ident("auth_all") || list.path.is_ident("all") => {
+                // auth_all(...)
+                Meta::List(list) if list.path.is_ident("auth_all") => {
                     if auth.is_some() {
                         return Err(conflicting_auth(&list));
                     }
@@ -145,15 +134,11 @@ mod parse {
                     auth = Some(AuthSpec::All(rules));
                 }
 
-                // explicit CDK guard = ...
-                Meta::NameValue(nv) if nv.path.is_ident("guard") => {
-                    user_guard = true;
-                    forwarded.push(quote!(#nv));
-                }
-
                 // policy(...)
+                //
+                // Parse as Expr so you can do policy(local_only()), policy(max_rounds(rounds, 10_000)), etc.
                 Meta::List(list) if list.path.is_ident("policy") => {
-                    let parsed = Punctuated::<Path, Token![,]>::parse_terminated
+                    let parsed = Punctuated::<Expr, Token![,]>::parse_terminated
                         .parse2(list.tokens.clone())?
                         .into_iter()
                         .collect::<Vec<_>>();
@@ -161,26 +146,34 @@ mod parse {
                     if parsed.is_empty() {
                         return Err(syn::Error::new_spanned(
                             list,
-                            "`policy(...)` expects at least one policy",
+                            "`policy(...)` expects at least one policy expression",
                         ));
                     }
 
                     policies.extend(parsed);
                 }
 
+                // explicit CDK guard = ...
+                //
+                // We still forward it, but track that it exists so validation can ban combinations.
+                Meta::NameValue(nv) if nv.path.is_ident("guard") => {
+                    user_guard = true;
+                    forwarded.push(quote!(#nv));
+                }
+
+                // Everything else is forwarded to the CDK attribute unchanged.
                 _ => forwarded.push(quote!(#meta)),
             }
         }
 
         Ok(ParsedArgs {
             forwarded,
-            app_guard: app_guard.unwrap_or(false),
+            app_guard,
             user_guard,
             auth,
             policies,
         })
     }
-
     const fn empty() -> ParsedArgs {
         ParsedArgs {
             forwarded: Vec::new(),
@@ -207,27 +200,6 @@ mod parse {
         Ok(rules)
     }
 
-    fn extract_bool(nv: &syn::MetaNameValue) -> syn::Result<bool> {
-        match &nv.value {
-            Expr::Lit(lit) => match &lit.lit {
-                syn::Lit::Bool(b) => Ok(b.value),
-                _ => Err(syn::Error::new_spanned(nv, "expected boolean")),
-            },
-            _ => Err(syn::Error::new_spanned(nv, "expected boolean")),
-        }
-    }
-
-    fn set_bool(slot: &mut Option<bool>, val: bool, ident: &Ident) -> syn::Result<()> {
-        if let Some(prev) = *slot
-            && prev != val
-        {
-            return Err(syn::Error::new_spanned(ident, "conflicting `app` values"));
-        }
-        *slot = Some(val);
-
-        Ok(())
-    }
-
     fn conflicting_auth(list: &syn::MetaList) -> syn::Error {
         syn::Error::new_spanned(list, "conflicting authorization composition")
     }
@@ -247,7 +219,7 @@ mod validate {
         pub forwarded: Vec<TokenStream2>,
         pub app_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Path>,
+        pub policies: Vec<Expr>,
     }
 
     pub fn validate(
@@ -386,14 +358,7 @@ mod expand {
         let policy = if args.policies.is_empty() {
             quote!()
         } else {
-            let checks = args.policies.iter().map(|policy_path| {
-                if policy_path.leading_colon.is_none() && policy_path.segments.len() == 1 {
-                    let ident = &policy_path.segments[0].ident;
-                    quote!(::canic::core::policy::#ident()?;)
-                } else {
-                    quote!(#policy_path()?;)
-                }
-            });
+            let checks = args.policies.iter().map(|expr| quote!(#expr().await?;));
             quote!(#(#checks)*)
         };
 
@@ -482,7 +447,7 @@ fn expand_entry(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> Tok
     let sig = func.sig.clone();
     let asyncness = sig.asyncness.is_some();
 
-    let parsed = match parse::parse_args(attr.into(), &sig.ident) {
+    let parsed = match parse::parse_args(attr.into()) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error().into(),
     };
