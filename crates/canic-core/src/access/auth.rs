@@ -173,14 +173,14 @@ macro_rules! auth_require_any {
 /// Ensure the caller matches the subnet directory entry recorded for `ty`.
 /// Use for admin endpoints that expect specific app directory canisters.
 #[must_use]
-pub fn is_app_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleResult {
+pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = AppDirectoryOps::try_get(&ty)?;
+        let pids = AppDirectoryOps::try_get(&role)?;
 
         if pids.contains(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotAppDirectoryType(caller, ty.clone()))?
+            Err(AuthError::NotAppDirectoryType(caller, role.clone()))?
         }
     })
 }
@@ -188,14 +188,14 @@ pub fn is_app_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleRes
 /// Ensure the caller matches the subnet directory entry recorded for `ty`.
 /// Use for admin endpoints that expect specific subnet directory canisters.
 #[must_use]
-pub fn is_subnet_directory_type(caller: Principal, ty: CanisterRole) -> AuthRuleResult {
+pub fn is_subnet_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = SubnetDirectoryOps::try_get(&ty)?;
+        let pids = SubnetDirectoryOps::try_get(&role)?;
 
         if pids.contains(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotSubnetDirectoryType(caller, ty.clone()))?
+            Err(AuthError::NotSubnetDirectoryType(caller, role.clone()))?
         }
     })
 }

@@ -51,7 +51,7 @@ impl Pic {
     /// Install a canister with the given type and wasm bytes
     pub fn create_and_install_canister(
         &self,
-        ty: CanisterRole,
+        role: CanisterRole,
         wasm: Vec<u8>,
     ) -> Result<Principal, Error> {
         // Create and fund the canister
@@ -59,7 +59,7 @@ impl Pic {
         self.add_cycles(canister_id, 1_000_000_000_000);
 
         // Install
-        let init_bytes = install_args(ty)?;
+        let init_bytes = install_args(role)?;
         self.0.install_canister(canister_id, wasm, init_bytes, None);
 
         Ok(canister_id)
@@ -109,8 +109,8 @@ impl Pic {
 /// --------------------------------------
 /// install_args helper
 /// --------------------------------------
-fn install_args(ty: CanisterRole) -> Result<Vec<u8>, Error> {
-    let args = if ty.is_root() {
+fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
+    let args = if role.is_root() {
         // Provide a deterministic subnet principal for PocketIC runs
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
         encode_one(SubnetIdentity::Manual(subnet_pid))

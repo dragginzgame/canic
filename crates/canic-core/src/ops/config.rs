@@ -51,10 +51,10 @@ pub struct ConfigOps;
 
 impl ConfigOps {
     /// Fetch a subnet configuration by type.
-    pub fn try_get_subnet(ty: &SubnetRole) -> Result<SubnetConfig, Error> {
+    pub fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
         let subnet_cfg = Config::get()
-            .get_subnet(ty)
-            .ok_or_else(|| ConfigOpsError::SubnetNotFound(ty.to_string()))?;
+            .get_subnet(role)
+            .ok_or_else(|| ConfigOpsError::SubnetNotFound(role.to_string()))?;
 
         Ok(subnet_cfg)
     }

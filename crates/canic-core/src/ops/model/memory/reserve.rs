@@ -255,7 +255,7 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
 /// Moves a canister into the reserve after uninstalling and resetting controllers.
 async fn move_into_reserve(
     pid: Principal,
-    removed_ty: Option<CanisterRole>,
+    removed_role: Option<CanisterRole>,
     parent_pid: Option<Principal>,
     module_hash: Option<Vec<u8>>,
 ) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
@@ -275,9 +275,9 @@ async fn move_into_reserve(
 
     let cycles = get_cycles(pid).await?;
 
-    CanisterReserve::register(pid, cycles, removed_ty.clone(), parent_pid, module_hash);
+    CanisterReserve::register(pid, cycles, removed_role.clone(), parent_pid, module_hash);
 
-    Ok((removed_ty, parent_pid))
+    Ok((removed_role, parent_pid))
 }
 
 //
@@ -293,12 +293,12 @@ pub async fn reserve_import_canister(
 
     let entry = SubnetCanisterRegistryOps::get(pid);
     let parent = entry.as_ref().and_then(|e| e.parent_pid);
-    let ty = entry.as_ref().map(|e| e.ty.clone());
+    let role = entry.as_ref().map(|e| e.role.clone());
     let hash = entry.as_ref().and_then(|e| e.module_hash.clone());
 
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
-    move_into_reserve(pid, ty, parent, hash).await
+    move_into_reserve(pid, role, parent, hash).await
 }
 
 //
@@ -314,12 +314,12 @@ pub async fn reserve_recycle_canister(
 
     let entry = SubnetCanisterRegistryOps::get(pid);
     let parent = entry.as_ref().and_then(|e| e.parent_pid);
-    let ty = entry.as_ref().map(|e| e.ty.clone());
+    let role = entry.as_ref().map(|e| e.role.clone());
     let hash = entry.as_ref().and_then(|e| e.module_hash.clone());
 
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
-    move_into_reserve(pid, ty, parent, hash).await
+    move_into_reserve(pid, role, parent, hash).await
 }
 
 //
@@ -332,7 +332,7 @@ pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Pr
 
     let entry = CanisterReserve::take(&pid).ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
 
-    let ty = entry.ty.ok_or(ReserveOpsError::MissingType { pid })?;
+    let role = entry.role.ok_or(ReserveOpsError::MissingType { pid })?;
     let parent = entry.parent.ok_or(ReserveOpsError::MissingParent { pid })?;
     let hash = entry
         .module_hash
@@ -350,8 +350,8 @@ pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Pr
     })
     .await?;
 
-    SubnetCanisterRegistryOps::register(pid, &ty, parent, hash);
-    Ok((ty, parent))
+    SubnetCanisterRegistryOps::register(pid, &role, parent, hash);
+    Ok((role, parent))
 }
 
 //

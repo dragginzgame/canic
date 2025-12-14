@@ -75,7 +75,7 @@ pub enum OrchestratorError {
 
 pub enum LifecycleEvent {
     Create {
-        ty: CanisterRole,
+        role: CanisterRole,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     },
@@ -137,13 +137,13 @@ impl CanisterLifecycleOrchestrator {
             // CREATE
             // -----------------------------------------------------------------
             LifecycleEvent::Create {
-                ty,
+                role,
                 parent,
                 extra_arg,
             } => {
                 assert_parent_exists(parent)?;
 
-                let pid = match create_and_install_canister(&ty, parent, extra_arg).await {
+                let pid = match create_and_install_canister(&role, parent, extra_arg).await {
                     Ok(pid) => pid,
                     Err(ProvisioningError::InstallFailed { pid, source }) => {
                         let _ = reserve_recycle_canister(pid).await;
@@ -152,14 +152,14 @@ impl CanisterLifecycleOrchestrator {
                     Err(ProvisioningError::Other(err)) => return Err(err),
                 };
 
-                assert_registry_role(pid, &ty)?;
+                assert_registry_role(pid, &role)?;
                 assert_registry_parent(pid, parent)?;
                 assert_immediate_parent(pid, parent)?;
                 assert_not_in_reserve(pid)?;
 
                 // Topology: targeted cascade rooted at the newly created canister.
                 // This is always non-root.
-                cascade_all(Some(&ty), Some(pid)).await?;
+                cascade_all(Some(&role), Some(pid)).await?;
 
                 Ok(LifecycleResult::created(pid))
             }
@@ -195,7 +195,7 @@ impl CanisterLifecycleOrchestrator {
             // -----------------------------------------------------------------
             LifecycleEvent::Upgrade { pid } => {
                 let entry = SubnetCanisterRegistryOps::try_get(pid)?;
-                let wasm = WasmOps::try_get(&entry.ty)?;
+                let wasm = WasmOps::try_get(&entry.role)?;
 
                 if let Some(parent_pid) = entry.parent_pid {
                     assert_parent_exists(parent_pid)?;
@@ -215,7 +215,7 @@ impl CanisterLifecycleOrchestrator {
             // -----------------------------------------------------------------
             LifecycleEvent::Reinstall { pid } => {
                 let entry = SubnetCanisterRegistryOps::try_get(pid)?;
-                let wasm = WasmOps::try_get(&entry.ty)?;
+                let wasm = WasmOps::try_get(&entry.role)?;
 
                 if let Some(parent_pid) = entry.parent_pid {
                     assert_parent_exists(parent_pid)?;
@@ -287,7 +287,7 @@ impl CanisterLifecycleOrchestrator {
 ///   used as the *target* of a **targeted** topology cascade. This must never
 ///   be the root PID.
 async fn cascade_all(
-    ty: Option<&CanisterRole>,
+    role: Option<&CanisterRole>,
     topology_target: Option<Principal>,
 ) -> Result<(), Error> {
     // Topology: targeted cascade only, never full-root.
@@ -297,7 +297,7 @@ async fn cascade_all(
 
     // Directories + state: driven by type; this can be global-ish, but is
     // independent of topology targeting semantics.
-    if let Some(ty) = ty {
+    if let Some(ty) = role {
         let bundle = rebuild_directories_from_registry(Some(ty)).await?;
         root_cascade_state(bundle).await?;
         assert_directories_match_registry()?;
@@ -318,17 +318,17 @@ fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorError> 
 
 fn assert_registry_role(
     pid: Principal,
-    expected_ty: &CanisterRole,
+    expected_role: &CanisterRole,
 ) -> Result<(), OrchestratorError> {
     let entry =
         SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
-    if &entry.ty == expected_ty {
+    if &entry.role == expected_role {
         Ok(())
     } else {
         Err(OrchestratorError::RegistryTypeMismatch {
             pid,
-            expected: expected_ty.clone(),
-            found: entry.ty,
+            expected: expected_role.clone(),
+            found: entry.role,
         })
     }
 }

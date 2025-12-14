@@ -69,8 +69,8 @@ impl SubnetCanisterRegistry {
 
     /// Finds the first canister with the given [`CanisterRole`].
     #[must_use]
-    pub(crate) fn get_type(ty: &CanisterRole) -> Option<CanisterEntry> {
-        Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.ty == ty))
+    pub(crate) fn get_type(role: &CanisterRole) -> Option<CanisterEntry> {
+        Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.role == role))
     }
 
     //
@@ -80,13 +80,13 @@ impl SubnetCanisterRegistry {
     /// Registers a new non-root canister with its parent and module hash.
     pub(crate) fn register(
         pid: Principal,
-        ty: &CanisterRole,
+        role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
     ) {
         let entry = CanisterEntry {
             pid,
-            ty: ty.clone(),
+            role: role.clone(),
             parent_pid: Some(parent_pid),
             module_hash: Some(module_hash),
             created_at: now_secs(),
@@ -99,7 +99,7 @@ impl SubnetCanisterRegistry {
     pub(crate) fn register_root(pid: Principal) {
         let entry = CanisterEntry {
             pid,
-            ty: CanisterRole::ROOT,
+            role: CanisterRole::ROOT,
             parent_pid: None,
             module_hash: None,
             created_at: now_secs(),

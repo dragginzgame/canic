@@ -35,12 +35,12 @@ pub struct WasmRegistry {}
 
 impl WasmRegistry {
     #[must_use]
-    pub(crate) fn get(ty: &CanisterRole) -> Option<WasmModule> {
-        WASM_REGISTRY.with_borrow(|reg| reg.get(ty).cloned())
+    pub(crate) fn get(role: &CanisterRole) -> Option<WasmModule> {
+        WASM_REGISTRY.with_borrow(|reg| reg.get(role).cloned())
     }
 
-    pub(crate) fn try_get(ty: &CanisterRole) -> Result<WasmModule, Error> {
-        Self::get(ty).ok_or_else(|| WasmRegistryError::WasmNotFound(ty.clone()).into())
+    pub(crate) fn try_get(role: &CanisterRole) -> Result<WasmModule, Error> {
+        Self::get(role).ok_or_else(|| WasmRegistryError::WasmNotFound(role.clone()).into())
     }
 
     #[allow(clippy::cast_precision_loss)]

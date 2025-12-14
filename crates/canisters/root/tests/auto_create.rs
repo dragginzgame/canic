@@ -76,12 +76,12 @@ fn root_auto_creates_expected_canisters() {
         (canister::SHARD_HUB, Some(root_id)),
     ];
 
-    for (ty, parent) in expected {
+    for (role, parent) in expected {
         let entry = registry
             .iter()
-            .find(|entry| entry.ty == ty)
-            .unwrap_or_else(|| panic!("missing {ty} entry"));
+            .find(|entry| entry.role == role)
+            .unwrap_or_else(|| panic!("missing {role} entry"));
 
-        assert_eq!(entry.parent_pid, parent, "unexpected parent for {ty}");
+        assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");
     }
 }

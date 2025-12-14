@@ -61,7 +61,7 @@ pub enum CreateCanisterParent {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
-    pub canister_type: CanisterRole,
+    pub canister_role: CanisterRole,
 }
 
 ///
@@ -141,7 +141,7 @@ pub async fn upgrade_canister_request(
     // send the request
     let q = Request::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: canister.pid,
-        canister_type: canister.ty,
+        canister_role: canister.role,
     });
 
     match request(q).await? {
