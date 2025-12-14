@@ -199,7 +199,7 @@ macro_rules! canic_endpoints {
             ]
         }
 
-        #[canic_update(policy(is_prime_subnet))]
+        #[canic_update]
         async fn icts_canister_status()
         -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::Error> {
             use $crate::cdk::{

@@ -20,7 +20,7 @@ impl From<PolicyError> for Error {
 /// Policies
 ///
 
-pub fn is_prime_subnet() -> Result<(), Error> {
+pub async fn is_prime_subnet() -> Result<(), Error> {
     if EnvOps::is_prime_subnet() {
         Ok(())
     } else {
