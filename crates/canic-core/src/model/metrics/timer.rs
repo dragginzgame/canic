@@ -10,7 +10,9 @@ thread_local! {
 /// TimerMode
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(
+    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
 pub enum TimerMode {
     Interval,
     Once,
