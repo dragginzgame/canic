@@ -19,6 +19,8 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 /// dynamic values allocate only when needed.
 ///
 
+const ROOT_ROLE: &str = "root";
+
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
@@ -26,7 +28,7 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 pub struct CanisterRole(pub Cow<'static, str>);
 
 impl CanisterRole {
-    pub const ROOT: Self = Self(Cow::Borrowed("root"));
+    pub const ROOT: Self = Self(Cow::Borrowed(ROOT_ROLE));
 
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
@@ -46,7 +48,7 @@ impl CanisterRole {
     /// Returns true if this type represents the built-in ROOT canister.
     #[must_use]
     pub fn is_root(&self) -> bool {
-        self.0.as_ref() == "root"
+        self.0.as_ref() == ROOT_ROLE
     }
 
     /// Convert into an owned string (avoids an extra allocation for owned variants).

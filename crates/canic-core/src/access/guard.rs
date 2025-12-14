@@ -10,10 +10,10 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum GuardError {
-    #[error("app is disabled")]
+    #[error("application is disabled")]
     AppDisabled,
 
-    #[error("app is readonly")]
+    #[error("application is in readonly mode")]
     AppReadonly,
 }
 
@@ -28,7 +28,7 @@ impl From<GuardError> for Error {
 /// Rules:
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
-pub fn guard_query() -> Result<(), Error> {
+pub fn guard_app_query() -> Result<(), Error> {
     match AppState::get_mode() {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
         AppMode::Disabled => Err(GuardError::AppDisabled.into()),
@@ -41,7 +41,7 @@ pub fn guard_query() -> Result<(), Error> {
 /// - Enabled mode permits updates.
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
-pub fn guard_update() -> Result<(), Error> {
+pub fn guard_app_update() -> Result<(), Error> {
     match AppState::get_mode() {
         AppMode::Enabled => Ok(()),
         AppMode::Readonly => Err(GuardError::AppReadonly.into()),

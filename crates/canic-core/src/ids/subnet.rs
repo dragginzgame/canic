@@ -13,6 +13,8 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 /// dynamic values allocate only when needed.
 ///
 
+const PRIME_ROLE: &str = "prime";
+
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
@@ -20,7 +22,7 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 pub struct SubnetRole(pub Cow<'static, str>);
 
 impl SubnetRole {
-    pub const PRIME: Self = Self(Cow::Borrowed("prime"));
+    pub const PRIME: Self = Self(Cow::Borrowed(PRIME_ROLE));
 
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
@@ -40,7 +42,7 @@ impl SubnetRole {
     /// Returns true if this type represents the built-in ROOT canister.
     #[must_use]
     pub fn is_prime(&self) -> bool {
-        self.0.as_ref() == "prime"
+        self.0.as_ref() == PRIME_ROLE
     }
 
     /// Convert into an owned string (avoids an extra allocation for owned variants).

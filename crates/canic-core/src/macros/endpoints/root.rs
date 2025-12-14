@@ -5,12 +5,10 @@ macro_rules! canic_endpoints_root {
         // canic_app
         // modify app-level state
         // eventually this will cascade down from an orchestrator canister
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_app(
             cmd: ::canic::core::ops::model::memory::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
             ::canic::core::ops::model::memory::state::AppStateOps::command(cmd)?;
 
             let bundle = ::canic::core::ops::sync::state::StateBundle::new().with_app_state();
@@ -20,12 +18,10 @@ macro_rules! canic_endpoints_root {
         }
 
         // canic_canister_upgrade
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::core::ops::request::UpgradeCanisterResponse, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
             let res = $crate::ops::request::upgrade_canister_request(canister_pid).await?;
 
             Ok(res)
@@ -34,12 +30,10 @@ macro_rules! canic_endpoints_root {
         // canic_response
         // root's way to respond to a generic request from another canister
         // has to come from a direct child canister
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_registered_to_subnet))]
         async fn canic_response(
             request: ::canic::core::ops::request::Request,
         ) -> Result<::canic::core::ops::request::Response, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_registered_to_subnet)?;
-
             let response = $crate::ops::request::response(request).await?;
 
             Ok(response)
@@ -47,15 +41,10 @@ macro_rules! canic_endpoints_root {
 
         // canic_canister_status
         // this can be called via root as root is the master controller
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_root, ::canic::core::auth::is_controller))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
-            auth_require_any!(
-                ::canic::core::auth::is_root,
-                ::canic::core::auth::is_controller
-            )?;
-
             $crate::interface::ic::canister_status(pid).await
         }
 
@@ -63,10 +52,8 @@ macro_rules! canic_endpoints_root {
         // CONFIG
         //
 
-        #[canic_query]
+        #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_config() -> Result<String, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
             $crate::config::Config::to_toml()
         }
 
@@ -96,32 +83,14 @@ macro_rules! canic_endpoints_root {
             Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
         }
 
-        #[canic_update]
-        async fn canic_reserve_create_empty()
-        -> Result<::canic::cdk::candid::Principal, ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
-            ::canic::core::ops::model::memory::reserve::reserve_create_canister().await
-        }
-
-        #[canic_update]
-        async fn canic_reserve_recycle(
-            pid: ::canic::cdk::candid::Principal,
-        ) -> Result<(), ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
-            ::canic::core::ops::model::memory::reserve::recycle_via_orchestrator(pid).await
-        }
-
-        #[canic_update]
-        async fn canic_reserve_import(
-            pid: ::canic::cdk::candid::Principal,
-        ) -> Result<(), ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_controller)?;
-
-            ::canic::core::ops::model::memory::reserve::reserve_import_canister(pid)
-                .await
-                .map(|_| ())
+        #[canic_update(auth_any(::canic::core::auth::is_controller))]
+        async fn canic_reserve_admin(
+            cmd: ::canic::core::ops::model::memory::reserve::CanisterReserveAdminCommand,
+        ) -> Result<
+            ::canic::core::ops::model::memory::reserve::CanisterReserveAdminResponse,
+            ::canic::Error,
+        > {
+            ::canic::core::ops::model::memory::reserve::CanisterReserveOps::admin(cmd).await
         }
     };
 }
@@ -134,21 +103,17 @@ macro_rules! canic_endpoints_nonroot {
         // SYNC
         //
 
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_parent))]
         async fn canic_sync_state(
             bundle: ::canic::core::ops::sync::state::StateBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_parent)?;
-
             $crate::ops::sync::state::nonroot_cascade_state(&bundle).await
         }
 
-        #[canic_update]
+        #[canic_update(auth_any(::canic::core::auth::is_parent))]
         async fn canic_sync_topology(
             bundle: ::canic::core::ops::sync::topology::TopologyBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::auth_require_any!(::canic::core::auth::is_parent)?;
-
             $crate::ops::sync::topology::nonroot_cascade_topology(&bundle).await
         }
     };

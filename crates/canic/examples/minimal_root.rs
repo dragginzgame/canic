@@ -2,7 +2,6 @@
 // Example: minimal root canister scaffold.
 // Compile with `--features ic` to include the canister module.
 
-#[cfg(feature = "ic")]
 mod canister {
     use canic::{core::ids::CanisterRole, prelude::*};
 

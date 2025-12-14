@@ -250,20 +250,20 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
 #[allow(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,
-    ty: &CanisterRole,
+    role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), Error> {
     // Fetch and register WASM
-    let wasm = WasmOps::try_get(ty)?;
+    let wasm = WasmOps::try_get(role)?;
 
     // Construct init payload
     let env = EnvData {
         prime_root_pid: Some(EnvOps::try_get_prime_root_pid()?),
-        subnet_type: Some(EnvOps::try_get_subnet_type()?),
+        subnet_role: Some(EnvOps::try_get_subnet_role()?),
         subnet_pid: Some(EnvOps::try_get_subnet_pid()?),
         root_pid: Some(EnvOps::try_get_root_pid()?),
-        canister_type: Some(ty.clone()),
+        canister_role: Some(role.clone()),
         parent_pid: Some(parent_pid),
     };
 
@@ -277,7 +277,7 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    SubnetCanisterRegistryOps::register(pid, ty, parent_pid, module_hash.clone());
+    SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone());
 
     if let Err(err) = install_code(
         CanisterInstallMode::Install,
@@ -302,7 +302,7 @@ async fn install_canister(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ install_canister: {pid} ({ty}, {:.2} KiB)",
+        "⚡ install_canister: {pid} ({role}, {:.2} KiB)",
         wasm.len() as f64 / 1_024.0,
     );
 

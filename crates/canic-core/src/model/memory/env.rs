@@ -42,12 +42,12 @@ pub struct EnvData {
     pub prime_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_type: Option<SubnetRole>,
+    pub subnet_role: Option<SubnetRole>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
     // canister
-    pub canister_type: Option<CanisterRole>,
+    pub canister_role: Option<CanisterRole>,
     pub parent_pid: Option<Principal>,
 }
 
@@ -60,7 +60,10 @@ impl_storable_bounded!(EnvData, 256, true);
 pub(crate) struct Env;
 
 impl Env {
+    //
     // ---- Prime Root PID ----
+    //
+
     #[must_use]
     pub(crate) fn get_prime_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().prime_root_pid)
@@ -81,21 +84,32 @@ impl Env {
         prime_root_pid.is_some() && prime_root_pid == Self::get_root_pid()
     }
 
+    //
     // ---- Subnet Type ----
+    //
+
     #[must_use]
-    pub(crate) fn get_subnet_type() -> Option<SubnetRole> {
-        ENV.with_borrow(|cell| cell.get().subnet_type.clone())
+    pub(crate) fn get_subnet_role() -> Option<SubnetRole> {
+        ENV.with_borrow(|cell| cell.get().subnet_role.clone())
     }
 
-    pub(crate) fn set_subnet_type(ty: SubnetRole) {
+    pub(crate) fn set_subnet_role(role: SubnetRole) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            data.subnet_type = Some(ty);
+            data.subnet_role = Some(role);
             cell.set(data);
         });
     }
 
+    #[must_use]
+    pub(crate) fn is_prime_subnet() -> bool {
+        Self::get_subnet_role().is_some_and(|r| r.is_prime())
+    }
+
+    //
     // ---- Subnet PID ----
+    //
+
     #[must_use]
     pub(crate) fn get_subnet_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().subnet_pid)
@@ -109,7 +123,9 @@ impl Env {
         });
     }
 
+    //
     // ---- Root PID ----
+    //
 
     #[must_use]
     pub(crate) fn get_root_pid() -> Option<Principal> {
@@ -129,29 +145,36 @@ impl Env {
         Self::get_root_pid() == Some(canister_self())
     }
 
+    //
     // ---- Canister Type ----
+    //
 
     #[must_use]
-    pub(crate) fn get_canister_type() -> Option<CanisterRole> {
-        ENV.with_borrow(|cell| cell.get().canister_type.clone())
+    pub(crate) fn get_canister_role() -> Option<CanisterRole> {
+        ENV.with_borrow(|cell| cell.get().canister_role.clone())
     }
 
-    /// Set/replace the current canister type.
-    pub(crate) fn set_canister_type(ty: CanisterRole) {
+    /// Set/replace the current canister role.
+    pub(crate) fn set_canister_role(role: CanisterRole) {
         ENV.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            data.canister_type = Some(ty);
+            data.canister_role = Some(role);
             cell.set(data);
         });
     }
 
+    //
     // ---- Parent PID ----
+    //
+
     #[must_use]
     pub(crate) fn get_parent_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().parent_pid)
     }
 
+    //
     // ---- Import / Export ----
+    //
 
     /// Import a complete EnvData record, replacing any existing state.
     pub(crate) fn import(data: EnvData) {
