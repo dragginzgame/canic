@@ -378,13 +378,13 @@ mod expand {
 
     fn record_access_denied(label: &String, kind: TokenStream2) -> TokenStream2 {
         quote! {
-            ::canic::core::ops::metrics::AccessMetrics::increment(#label, #kind);
+            ::canic::core::ops::runtime::metrics::AccessMetrics::increment(#label, #kind);
         }
     }
 
     fn attempted(label: &String) -> TokenStream2 {
         quote! {
-            ::canic::core::ops::metrics::EndpointAttemptMetrics::increment_attempted(#label);
+            ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_attempted(#label);
         }
     }
 
@@ -395,7 +395,7 @@ mod expand {
 
         let metric = record_access_denied(
             label,
-            quote!(::canic::core::ops::metrics::AccessMetricKind::Guard),
+            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Guard),
         );
 
         match kind {
@@ -417,7 +417,7 @@ mod expand {
     fn auth(auth: Option<&AuthSpec>, label: &String) -> TokenStream2 {
         let metric = record_access_denied(
             label,
-            quote!(::canic::core::ops::metrics::AccessMetricKind::Auth),
+            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Auth),
         );
 
         match auth {
@@ -444,7 +444,7 @@ mod expand {
 
         let metric = record_access_denied(
             label,
-            quote!(::canic::core::ops::metrics::AccessMetricKind::Policy),
+            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Policy),
         );
 
         let checks = policies.iter().map(|expr| {
@@ -484,9 +484,9 @@ mod expand {
         let result_metrics = if returns_result {
             quote! {
                 if out.is_ok() {
-                    ::canic::core::ops::metrics::EndpointResultMetrics::increment_ok(#label);
+                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_ok(#label);
                 } else {
-                    ::canic::core::ops::metrics::EndpointResultMetrics::increment_err(#label);
+                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_err(#label);
                 }
             }
         } else {
@@ -496,7 +496,7 @@ mod expand {
         quote! {
             {
                 let out = #call;
-                ::canic::core::ops::metrics::EndpointAttemptMetrics::increment_completed(#label);
+                ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_completed(#label);
                 #result_metrics
                 out
             }

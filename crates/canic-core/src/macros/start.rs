@@ -113,10 +113,12 @@ macro_rules! start_root {
                 std::time::Duration::ZERO,
                 "startup:root",
                 async move {
-                    ::canic::core::ops::root::root_set_subnet_id().await;
+                    ::canic::core::ops::bootstrap::root::root_set_subnet_id().await;
 
                     // attempt to create canisters
-                    if let Err(err) = ::canic::core::ops::root::root_create_canisters().await {
+                    if let Err(err) =
+                        ::canic::core::ops::bootstrap::root::root_create_canisters().await
+                    {
                         $crate::log!(
                             $crate::log::Topic::Init,
                             Error,

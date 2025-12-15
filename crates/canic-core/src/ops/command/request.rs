@@ -1,17 +1,52 @@
 use crate::{
-    Error,
+    Error, ThisError,
     ids::CanisterRole,
     log::Topic,
     ops::{
-        prelude::*,
-        request::{
-            CreateCanisterResponse, CyclesResponse, RequestOpsError, Response,
-            UpgradeCanisterResponse,
+        command::{
+            CommandOpsError,
+            response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
         },
+        prelude::*,
         storage::{env::EnvOps, topology::SubnetCanisterChildrenOps},
     },
 };
 use candid::encode_one;
+
+///
+/// RequestOpsError
+/// Errors produced during request dispatch or response handling
+///
+
+#[derive(Debug, ThisError)]
+pub enum RequestOpsError {
+    #[error("canister type {0} not found")]
+    CanisterRoleNotFound(CanisterRole),
+
+    #[error("child canister {0} not found")]
+    ChildNotFound(Principal),
+
+    #[error("canister {0} is not a child of caller {1}")]
+    NotChildOfCaller(Principal, Principal),
+
+    #[error("canister {0}'s parent was not found")]
+    ParentNotFound(Principal),
+
+    #[error("invalid response type")]
+    InvalidResponseType,
+
+    #[error("create_canister: missing new pid")]
+    MissingNewCanisterPid,
+
+    #[error("cannot find the root canister")]
+    RootNotFound,
+}
+
+impl From<RequestOpsError> for Error {
+    fn from(err: RequestOpsError) -> Self {
+        CommandOpsError::from(err).into()
+    }
+}
 
 ///
 /// Request

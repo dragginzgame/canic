@@ -3,10 +3,10 @@ use crate::{
     cdk::api::canister_self,
     log::Topic,
     ops::{
+        command::request::{CreateCanisterParent, create_canister_request},
         config::ConfigOps,
         ic::get_current_subnet_pid,
         prelude::*,
-        request::{CreateCanisterParent, create_canister_request},
         storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
     },
 };

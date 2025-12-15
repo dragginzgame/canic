@@ -7,7 +7,10 @@
 
 use canic::{
     Error,
-    core::ops::request::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+    core::ops::command::{
+        request::{CreateCanisterParent, create_canister_request},
+        response::CreateCanisterResponse,
+    },
     prelude::*,
 };
 use canic_internal::canister::BLANK;

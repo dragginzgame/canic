@@ -1,8 +1,10 @@
 use crate::{
     Error,
     ops::{
-        OpsError, cycles::CycleTrackerOps, log::LogOps, reserve::CanisterReserveOps,
+        OpsError,
+        runtime::{cycles::CycleTrackerOps, log::LogOps},
         storage::env::EnvOps,
+        subsystem::reserve::CanisterReserveOps,
     },
 };
 

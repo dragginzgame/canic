@@ -6,7 +6,7 @@
 pub mod state;
 pub mod topology;
 
-use crate::{Error, ThisError, log, log::Topic, ops::OpsError};
+use crate::{Error, ThisError, log, log::Topic, ops::orchestration::OrchestrationOpsError};
 use candid::Principal;
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
@@ -45,7 +45,7 @@ pub enum CascadeOpsError {
 
 impl From<CascadeOpsError> for Error {
     fn from(err: CascadeOpsError) -> Self {
-        OpsError::from(err).into()
+        OrchestrationOpsError::from(err).into()
     }
 }
 

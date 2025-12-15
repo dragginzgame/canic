@@ -57,8 +57,8 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_memory_registry() -> ::canic::core::ops::storage::registry::MemoryRegistryView {
-            $crate::ops::storage::registry::MemoryRegistryOps::export()
+        fn canic_memory_registry() -> ::canic::core::ops::storage::memory::MemoryRegistryView {
+            $crate::ops::storage::memory::MemoryRegistryOps::export()
         }
 
         #[canic_query]
@@ -72,8 +72,8 @@ macro_rules! canic_endpoints {
             topic: Option<String>,
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::log::LogEntryDto> {
-            ::canic::core::ops::log::LogOps::page(crate_name, topic, min_level, page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::log::LogEntryDto> {
+            ::canic::core::ops::runtime::log::LogOps::page(crate_name, topic, min_level, page)
         }
 
         //
@@ -81,52 +81,52 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_metrics_system() -> ::canic::core::ops::metrics::SystemMetricsSnapshot {
-            ::canic::core::ops::metrics::MetricsOps::system_snapshot()
+        fn canic_metrics_system() -> ::canic::core::ops::runtime::metrics::SystemMetricsSnapshot {
+            ::canic::core::ops::runtime::metrics::MetricsOps::system_snapshot()
         }
 
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::IccMetricEntry> {
-            ::canic::core::ops::metrics::MetricsOps::icc_page(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::IccMetricEntry> {
+            ::canic::core::ops::runtime::metrics::MetricsOps::icc_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::HttpMetricEntry> {
-            ::canic::core::ops::metrics::MetricsOps::http_page(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::HttpMetricEntry> {
+            ::canic::core::ops::runtime::metrics::MetricsOps::http_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_timer(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::TimerMetricEntry> {
-            ::canic::core::ops::metrics::MetricsOps::timer_page(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::TimerMetricEntry> {
+            ::canic::core::ops::runtime::metrics::MetricsOps::timer_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_access(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::AccessMetricEntry> {
-            ::canic::core::ops::metrics::MetricsOps::access_page(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::AccessMetricEntry> {
+            ::canic::core::ops::runtime::metrics::MetricsOps::access_page(page)
         }
 
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::perf::PerfEntry> {
-            ::canic::core::ops::perf::PerfOps::snapshot(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::perf::PerfEntry> {
+            ::canic::core::ops::runtime::perf::PerfOps::snapshot(page)
         }
 
         // derived_view
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::EndpointHealthEntry> {
-            ::canic::core::ops::metrics::MetricsOps::endpoint_health_page_excluding(
+        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::EndpointHealthEntry> {
+            ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
                 page,
                 Some("canic_metrics_endpoint_health"),
             )
@@ -192,7 +192,7 @@ macro_rules! canic_endpoints {
         fn canic_cycle_tracker(
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::dto::Page<(u64, ::canic::core::types::Cycles)> {
-            $crate::ops::cycles::CycleTrackerOps::page(page)
+            $crate::ops::runtime::cycles::CycleTrackerOps::page(page)
         }
 
         //
@@ -201,8 +201,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::ops::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::ops::scaling::ScalingRegistryOps::export())
+        -> Result<::canic::core::ops::placement::scaling::ScalingRegistryView, ::canic::Error> {
+            Ok($crate::ops::placement::scaling::ScalingRegistryOps::export())
         }
 
         //
@@ -211,8 +211,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::core::ops::sharding::ShardingRegistryDto, ::canic::Error> {
-            Ok($crate::ops::sharding::ShardingPolicyOps::export())
+        -> Result<::canic::core::ops::placement::sharding::ShardingRegistryDto, ::canic::Error> {
+            Ok($crate::ops::placement::sharding::ShardingPolicyOps::export())
         }
 
         //

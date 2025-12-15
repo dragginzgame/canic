@@ -23,6 +23,9 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum IcOpsError {
     #[error(transparent)]
+    ProvisionOpsError(#[from] provision::ProvisionOpsError),
+
+    #[error(transparent)]
     SignatureOpsError(#[from] signature::SignatureOpsError),
 }
 

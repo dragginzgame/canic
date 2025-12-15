@@ -16,7 +16,7 @@ use crate::{
     model::memory::CanisterSummary,
     ops::{
         OpsError,
-        cascade::CascadeOpsError,
+        orchestration::cascade::CascadeOpsError,
         prelude::*,
         storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
     },
