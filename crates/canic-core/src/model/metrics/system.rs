@@ -6,16 +6,6 @@ thread_local! {
     static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());
 }
 
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
-
-///
-/// SystemMetricsSnapshot
-///
-
-pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
-
 ///
 /// SystemMetricKind
 /// Enumerates the resource-heavy actions we track.
@@ -36,6 +26,7 @@ pub enum SystemMetricKind {
     ReinstallCode,
     TimerScheduled,
     UninstallCode,
+    UpdateSettings,
     UpgradeCode,
 }
 
@@ -49,6 +40,12 @@ pub struct SystemMetricEntry {
     pub kind: SystemMetricKind,
     pub count: u64,
 }
+
+///
+/// SystemMetricsSnapshot
+///
+
+pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 
 ///
 /// SystemMetrics

@@ -1,9 +1,8 @@
 pub mod schema;
 
-use crate::Error;
+use crate::{Error, ThisError};
 use schema::{ConfigSchemaError, Validate};
 use std::{cell::RefCell, sync::Arc};
-use thiserror::Error as ThisError;
 
 pub use schema::ConfigModel;
 

@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    dto::Page,
     interface::ic::timer::{Timer, TimerId},
     log,
     log::{Level, Topic},
@@ -11,7 +12,7 @@ use crate::{
     types::PageRequest,
 };
 use candid::CandidType;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, time::Duration};
 
 thread_local! {
@@ -25,7 +26,7 @@ const RETENTION_INTERVAL: Duration = OPS_LOG_RETENTION_INTERVAL;
 /// LogEntryDto
 ///
 
-#[derive(CandidType, Clone, Debug, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntryDto {
     pub index: u64,
     pub created_at: u64,
@@ -46,16 +47,6 @@ impl LogEntryDto {
             message: entry.message,
         }
     }
-}
-
-///
-/// LogPageDto
-///
-
-#[derive(CandidType, Serialize)]
-pub struct LogPageDto {
-    pub entries: Vec<LogEntryDto>,
-    pub total: u64,
 }
 
 ///
@@ -130,7 +121,7 @@ impl LogOps {
         topic: Option<String>,
         min_level: Option<Level>,
         request: PageRequest,
-    ) -> LogPageDto {
+    ) -> Page<LogEntryDto> {
         let request = request.clamped();
 
         let (raw_entries, total) = StableLog::entries_page_filtered(
@@ -145,6 +136,6 @@ impl LogOps {
             .map(|(i, entry)| LogEntryDto::from_pair(i, entry))
             .collect();
 
-        LogPageDto { entries, total }
+        Page { entries, total }
     }
 }

@@ -72,7 +72,7 @@ macro_rules! canic_endpoints {
             topic: Option<String>,
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::model::memory::log::LogPageDto {
+        ) -> ::canic::core::dto::Page<::canic::core::ops::model::memory::log::LogEntryDto> {
             ::canic::core::ops::model::memory::log::LogOps::page(
                 crate_name, topic, min_level, page,
             )
@@ -90,7 +90,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::metrics::MetricsPageDto<::canic::core::ops::metrics::IccMetricEntry>
+           ) -> ::canic::core::dto::Page<::canic::core::ops::metrics::IccMetricEntry>
         {
             ::canic::core::ops::metrics::MetricsOps::icc_page(page)
         }
@@ -98,7 +98,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+        ) -> ::canic::core::dto::Page<
             ::canic::core::ops::metrics::HttpMetricEntry,
         > {
             ::canic::core::ops::metrics::MetricsOps::http_page(page)
@@ -107,7 +107,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_timer(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+        ) -> ::canic::core::dto::Page<
             ::canic::core::ops::metrics::TimerMetricEntry,
         > {
             ::canic::core::ops::metrics::MetricsOps::timer_page(page)
@@ -116,17 +116,33 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_access(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::metrics::MetricsPageDto<
+        ) -> ::canic::core::dto::Page<
             ::canic::core::ops::metrics::AccessMetricEntry,
         > {
             ::canic::core::ops::metrics::MetricsOps::access_page(page)
         }
 
+        // metrics, but lives in the perf module
         #[canic_query]
-        fn canic_perf(
+        fn canic_metrics_perf(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::perf::PerfSnapshot {
+        ) -> ::canic::core::dto::Page<
+            ::canic::core::ops::perf::PerfEntry,
+        > {
             ::canic::core::ops::perf::PerfOps::snapshot(page)
+        }
+
+        // derived_view
+        #[canic_query]
+        fn canic_metrics_endpoint_health(
+            page: ::canic::core::types::PageRequest,
+        ) -> ::canic::core::dto::Page<
+            ::canic::core::ops::metrics::EndpointHealthEntry,
+        > {
+            ::canic::core::ops::metrics::MetricsOps::endpoint_health_page_excluding(
+                page,
+                Some("canic_metrics_endpoint_health"),
+            )
         }
 
         //
@@ -150,14 +166,23 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_app_directory(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::model::memory::directory::DirectoryPageDto {
+        ) -> ::canic::core::dto::Page<(
+            ::canic::core::ids::CanisterRole,
+            ::canic::core::model::memory::directory::PrincipalList,
+        )> {
             $crate::ops::model::memory::directory::AppDirectoryOps::page(page)
         }
 
         #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::core::types::PageRequest,
-        ) -> Result<::canic::core::ops::model::memory::directory::DirectoryPageDto, ::canic::Error> {
+        ) -> Result<
+            ::canic::core::dto::Page<(
+                ::canic::core::ids::CanisterRole,
+                ::canic::core::model::memory::directory::PrincipalList,
+            )>,
+            ::canic::Error,
+        > {
             $crate::ops::model::memory::directory::SubnetDirectoryOps::page(page)
         }
 
@@ -168,7 +193,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenPage {
+        ) -> ::canic::core::dto::Page<::canic::core::model::memory::CanisterSummary> {
             ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenOps::page(
                 page,
             )
@@ -181,7 +206,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::ops::model::memory::cycles::CycleTrackerPage {
+        ) -> ::canic::core::dto::Page<(u64, ::canic::core::types::Cycles)> {
             $crate::ops::model::memory::cycles::CycleTrackerOps::page(page)
         }
 

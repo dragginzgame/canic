@@ -12,18 +12,16 @@ use crate::{
     cdk::{
         api::canister_self,
         futures::spawn,
-        mgmt::{self, CanisterSettings, UpdateSettingsArgs},
+        mgmt::{CanisterSettings, UpdateSettingsArgs},
         types::Principal,
     },
     config::{Config, schema::SubnetConfig},
-    interface::ic::{
-        get_cycles,
-        timer::{Timer, TimerId},
-    },
+    interface::ic::timer::{Timer, TimerId},
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
         config::ConfigOps,
+        ic::{get_cycles, update_settings},
         mgmt::{create_canister, uninstall_canister},
         model::{
             OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY,
@@ -264,7 +262,7 @@ async fn move_into_reserve(
     // Reset controllers to root-configured set.
     let mut controllers = Config::get().controllers.clone();
     controllers.push(canister_self());
-    mgmt::update_settings(&UpdateSettingsArgs {
+    update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
             controllers: Some(controllers),
@@ -341,7 +339,7 @@ pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Pr
     // Reset controllers before placing back into registry.
     let mut controllers = Config::get().controllers.clone();
     controllers.push(canister_self());
-    mgmt::update_settings(&UpdateSettingsArgs {
+    update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
             controllers: Some(controllers),

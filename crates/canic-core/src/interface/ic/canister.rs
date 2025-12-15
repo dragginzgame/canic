@@ -1,16 +1,7 @@
 use crate::{
     Error,
-    cdk::{
-        mgmt::{self, CanisterInstallMode, CanisterSettings, CreateCanisterArgs},
-        utils::wasm::get_wasm_hash,
-    },
-    interface::{
-        ic::{canister_status, install_code},
-        prelude::*,
-    },
-    log,
-    log::Topic,
-    model::metrics::{SystemMetricKind, SystemMetrics},
+    cdk::mgmt::{self, CanisterSettings, CreateCanisterArgs},
+    interface::prelude::*,
 };
 
 ///
@@ -32,35 +23,5 @@ pub async fn create_canister(
         .await?
         .canister_id;
 
-    SystemMetrics::increment(SystemMetricKind::CreateCanister);
-
     Ok(canister_pid)
-}
-
-///
-/// upgrade_canister
-/// Install the provided wasm when it differs from the current module hash.
-///
-pub async fn upgrade_canister(canister_pid: Principal, bytes: &[u8]) -> Result<(), Error> {
-    // module_hash
-    let canister_status = canister_status(canister_pid).await?;
-    if canister_status.module_hash == Some(get_wasm_hash(bytes)) {
-        Err(InterfaceError::WasmHashMatches)?;
-    }
-
-    // args
-    install_code(CanisterInstallMode::Upgrade(None), canister_pid, bytes, ()).await?;
-
-    // debug
-    #[allow(clippy::cast_precision_loss)]
-    let bytes_fmt = bytes.len() as f64 / 1_000.0;
-    log!(
-        Topic::CanisterLifecycle,
-        Ok,
-        "canister_upgrade: {} ({} KB) upgraded",
-        canister_pid,
-        bytes_fmt,
-    );
-
-    Ok(())
 }

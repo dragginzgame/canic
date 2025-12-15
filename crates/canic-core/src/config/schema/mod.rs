@@ -5,14 +5,13 @@ pub use log::*;
 pub use subnet::*;
 
 use crate::{
-    Error,
+    Error, ThisError,
     config::ConfigError,
     ids::{CanisterRole, SubnetRole},
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error as ThisError;
 
 ///
 /// ConfigSchemaError

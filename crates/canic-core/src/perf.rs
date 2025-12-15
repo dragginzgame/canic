@@ -12,8 +12,12 @@ use std::{borrow::Cow, cell::RefCell, collections::HashMap};
 
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
-    pub static PERF_LAST: RefCell<u64> =
-        RefCell::new(perf_counter());
+    #[cfg(not(test))]
+    pub static PERF_LAST: RefCell<u64> = RefCell::new(perf_counter());
+
+    // Unit tests run outside a canister context, so `perf_counter()` would trap.
+    #[cfg(test)]
+    pub static PERF_LAST: RefCell<u64> = const { RefCell::new(0) };
 
     /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
     static PERF_TABLE: RefCell<HashMap<PerfKey, PerfSlot>> = RefCell::new(HashMap::new());
@@ -48,6 +52,19 @@ pub fn perf_counter() -> u64 {
 }
 
 ///
+/// PerfKey
+/// splitting up by Timer type to avoid confusing string comparisons
+///
+
+#[derive(
+    CandidType, Clone, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+)]
+pub enum PerfKey {
+    Endpoint(String),
+    Timer(String),
+}
+
+///
 /// PerfSlot
 ///
 
@@ -62,19 +79,6 @@ impl PerfSlot {
         self.count = self.count.saturating_add(1);
         self.total_instructions = self.total_instructions.saturating_add(delta);
     }
-}
-
-///
-/// PerfKey
-/// splitting up by Timer type to avoid confusing string comparisons
-///
-
-#[derive(
-    CandidType, Clone, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-)]
-pub enum PerfKey {
-    Endpoint(String),
-    Timer(String),
 }
 
 ///

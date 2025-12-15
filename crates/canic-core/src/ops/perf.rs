@@ -1,19 +1,7 @@
 pub use crate::perf::PerfEntry;
 
-use crate::{cdk::candid::CandidType, perf, types::PageRequest};
-use serde::{Deserialize, Serialize};
+use crate::{dto::Page, perf, types::PageRequest};
 use std::borrow::Cow;
-
-///
-/// PerfSnapshot
-/// Paginated view of perf counters keyed by kind (endpoint vs timer).
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct PerfSnapshot {
-    pub entries: Vec<PerfEntry>,
-    pub total: u64,
-}
 
 ///
 /// PerfOps
@@ -27,7 +15,7 @@ impl PerfOps {
     }
 
     #[must_use]
-    pub fn snapshot(request: PageRequest) -> PerfSnapshot {
+    pub fn snapshot(request: PageRequest) -> Page<PerfEntry> {
         let request = request.clamped();
         let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
@@ -36,6 +24,6 @@ impl PerfOps {
         let total = entries.len() as u64;
         let entries = entries.into_iter().skip(offset).take(limit).collect();
 
-        PerfSnapshot { entries, total }
+        Page { entries, total }
     }
 }

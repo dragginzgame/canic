@@ -2,9 +2,9 @@ use crate::{
     Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
-    interface::ic::{canister::upgrade_canister, install_code},
     ops::{
         OpsError,
+        ic::{install_code, upgrade_canister},
         mgmt::{
             ProvisioningError, create_and_install_canister, delete_canister,
             rebuild_directories_from_registry,

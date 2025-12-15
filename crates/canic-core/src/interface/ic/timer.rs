@@ -1,9 +1,9 @@
+pub use crate::cdk::timers::TimerId;
+
 use crate::cdk::timers::{
     clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
     set_timer_interval as cdk_set_timer_interval,
 };
-
-pub use crate::cdk::timers::TimerId;
 use std::{cell::RefCell, future::Future, rc::Rc, time::Duration};
 
 ///

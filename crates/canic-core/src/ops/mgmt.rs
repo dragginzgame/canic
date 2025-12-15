@@ -9,17 +9,15 @@ use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
-    interface::{
-        ic::{
-            delete_canister as mgmt_delete_canister, deposit_cycles, get_cycles, install_code,
-            uninstall_code,
-        },
-        prelude::*,
-    },
+    interface::prelude::*,
     log::Topic,
     ops::{
         CanisterInitPayload, OpsError,
         config::ConfigOps,
+        ic::{
+            create_canister as ic_create_canister, delete_canister as mgmt_delete_canister,
+            deposit_cycles, get_cycles, install_code, uninstall_code,
+        },
         model::memory::{
             EnvOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -229,7 +227,7 @@ pub(crate) async fn create_canister(cycles: Cycles) -> Result<Principal, Error> 
     let mut controllers = Config::get().controllers.clone();
     controllers.push(canister_self()); // root always controls
 
-    let pid = crate::interface::ic::canister::create_canister(controllers, cycles.clone()).await?;
+    let pid = ic_create_canister(controllers, cycles.clone()).await?;
 
     log!(
         Topic::CanisterLifecycle,

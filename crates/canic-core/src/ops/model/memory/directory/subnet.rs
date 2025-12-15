@@ -1,14 +1,12 @@
 use crate::{
     Error, ThisError,
+    dto::Page,
     ids::CanisterRole,
     model::memory::directory::{DirectoryView, PrincipalList, SubnetDirectory},
     ops::{
         config::ConfigOps,
         model::memory::{
-            MemoryOpsError,
-            directory::{DirectoryPageDto, paginate},
-            env::EnvOps,
-            topology::SubnetCanisterRegistryOps,
+            MemoryOpsError, directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps,
         },
     },
     types::PageRequest,
@@ -55,7 +53,7 @@ impl SubnetDirectoryOps {
             .ok_or_else(|| SubnetDirectoryOpsError::NotFound(role.clone()).into())
     }
 
-    pub fn page(request: PageRequest) -> Result<DirectoryPageDto, Error> {
+    pub fn page(request: PageRequest) -> Result<Page<(CanisterRole, PrincipalList)>, Error> {
         Ok(paginate(Self::resolve_view(), request))
     }
 

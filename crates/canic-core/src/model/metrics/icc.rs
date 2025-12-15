@@ -7,6 +7,35 @@ thread_local! {
 }
 
 ///
+/// IccMetricKey
+/// Uniquely identifies an inter-canister call by target + method.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct IccMetricKey {
+    pub target: Principal,
+    pub method: String,
+}
+
+///
+/// IccMetricEntry
+/// Snapshot entry pairing a target/method with its count.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct IccMetricEntry {
+    pub target: Principal,
+    pub method: String,
+    pub count: u64,
+}
+
+///
+/// IccMetricsSnapshot
+///
+
+pub type IccMetricsSnapshot = Vec<IccMetricEntry>;
+
+///
 /// IccMetrics
 /// Volatile counters for inter-canister calls keyed by target + method.
 ///
@@ -48,36 +77,11 @@ impl IccMetrics {
 }
 
 ///
-/// IccMetricKey
-/// Uniquely identifies an inter-canister call by target + method.
+/// TESTS
 ///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct IccMetricKey {
-    pub target: Principal,
-    pub method: String,
-}
-
-///
-/// IccMetricEntry
-/// Snapshot entry pairing a target/method with its count.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct IccMetricEntry {
-    pub target: Principal,
-    pub method: String,
-    pub count: u64,
-}
-
-///
-/// IccMetricsSnapshot
-///
-
-pub type IccMetricsSnapshot = Vec<IccMetricEntry>;
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
