@@ -2,22 +2,6 @@ use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-#[doc(hidden)]
-pub fn __append_to_stable_log(
-    crate_name: &str,
-    topic: Option<&str>,
-    level: Level,
-    message: &str,
-) -> Result<u64, crate::Error> {
-    crate::model::memory::log::StableLog::append(crate_name, topic, level, message)
-}
-
-#[doc(hidden)]
-#[must_use]
-pub fn __canister_role_string() -> Option<String> {
-    crate::model::memory::Env::get_canister_role().map(|role| role.to_string())
-}
-
 ///
 /// Debug
 ///
@@ -107,4 +91,24 @@ macro_rules! log {
 
         $crate::cdk::println!("{line}");
     }};
+}
+
+///
+/// Helpers
+///
+
+#[doc(hidden)]
+pub fn __append_to_stable_log(
+    crate_name: &str,
+    topic: Option<&str>,
+    level: Level,
+    message: &str,
+) -> Result<u64, crate::Error> {
+    crate::model::memory::log::StableLog::append(crate_name, topic, level, message)
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn __canister_role_string() -> Option<String> {
+    crate::model::memory::Env::get_canister_role().map(|role| role.to_string())
 }

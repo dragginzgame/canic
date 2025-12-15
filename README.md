@@ -122,10 +122,11 @@ Populate `canic.toml` with subnet definitions, directory membership, and per-can
 Canic enforces clear separation between storage, transient state, orchestration logic, and public endpoints:
 
 - `model::memory` – stable data backed by `ic-stable-structures` (e.g. shard registries, reserve pools).
-- `model::memory::state` – volatile caches and session stores that reset on upgrade.
+- `model::memory::state` – stable canister state/settings persisted across upgrades (e.g. `AppState`, `SubnetState`).
+- `model::*` (non-memory) – volatile in-process registries/caches that reset on upgrade (e.g. WASM registry, metrics registries).
 - `ops/` – business logic tying state + memory together (sharding policies, scaling flows, reserve management).
 - `endpoints/` – macro-generated IC entrypoints that delegate to `ops/` and keep boundary code minimal.
-- Temporary exception (target revisit in ~2 weeks): when no ops façade exists yet, read-only queries may pull directly from `memory/` or `state/`; mutations should still flow through `ops/`.
+- Temporary exception (target revisit in ~2 weeks): when no ops façade exists yet, read-only queries may pull directly from stable storage (`model::memory`) or runtime registries (`model::*`); mutations should still flow through `ops/`.
 
 ## Capabilities & Endpoints
 
@@ -159,7 +160,7 @@ The base endpoint bundle includes:
 - `icrc10_supported_standards()`
 - `icrc21_canister_call_consent_message(request)`
 
-Register consent messages via `state::icrc::Icrc21Registry` for rich UX flows.
+Register consent messages via `model::icrc::Icrc21Registry` (or the `ops::ic::icrc` helpers) for rich UX flows.
 
 The `Account` textual encoding matches the ICRC reference (CRC32 → base32, no padding) so checksums align with `icrc-ledger-types`; use `Display`/`FromStr` instead of hand-rolling account strings.
 
