@@ -7,7 +7,10 @@ use crate::{
         clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
         set_timer_interval as cdk_set_timer_interval,
     },
-    model::metrics::{SystemMetricKind, SystemMetrics, TimerMetrics, TimerMode},
+    model::metrics::{
+        system::{SystemMetricKind, SystemMetrics},
+        timer::{TimerMetrics, TimerMode},
+    },
     ops::perf::PerfOps,
     perf::perf_counter,
 };

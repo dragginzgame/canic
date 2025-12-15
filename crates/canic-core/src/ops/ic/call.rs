@@ -2,7 +2,10 @@
 
 use crate::{
     cdk::{call::Call as IcCall, candid::Principal},
-    model::metrics::{IccMetrics, SystemMetricKind, SystemMetrics},
+    model::metrics::{
+        icc::IccMetrics,
+        system::{SystemMetricKind, SystemMetrics},
+    },
 };
 
 ///

@@ -3,7 +3,10 @@
 use crate::{
     Error,
     cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, http_request},
-    model::metrics::{HttpMetrics, SystemMetricKind, SystemMetrics},
+    model::metrics::{
+        http::HttpMetrics,
+        system::{SystemMetricKind, SystemMetrics},
+    },
 };
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
@@ -13,6 +16,7 @@ const MAX_RESPONSE_BYTES: u64 = 200_000;
 ///
 /// http_get
 /// Generic helper for HTTP GET with JSON response.
+///
 pub async fn http_get<T: DeserializeOwned>(
     url: &str,
     headers: &[(String, String)],

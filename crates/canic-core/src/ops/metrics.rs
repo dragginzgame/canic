@@ -1,10 +1,4 @@
-pub use crate::model::metrics::{
-    AccessMetricEntry, AccessMetricKind, AccessMetrics, AccessMetricsSnapshot,
-    EndpointAttemptMetricEntry, EndpointAttemptMetrics, EndpointResultMetricEntry,
-    EndpointResultMetrics, HttpMetricEntry, HttpMetrics, HttpMetricsSnapshot, IccMetricEntry,
-    IccMetrics, IccMetricsSnapshot, SystemMetricEntry, SystemMetricKind, SystemMetrics,
-    SystemMetricsSnapshot, TimerMetricEntry, TimerMetrics, TimerMetricsSnapshot,
-};
+pub use crate::model::metrics::{access::*, endpoint::*, http::*, icc::*, system::*, timer::*};
 use crate::{
     dto::Page,
     perf::{PerfKey, entries as perf_entries},
@@ -244,13 +238,7 @@ fn perf_endpoint_snapshot() -> HashMap<String, (u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        model::metrics::{
-            AccessMetricKind, AccessMetrics, EndpointAttemptMetrics, EndpointResultMetrics,
-        },
-        perf,
-        types::PageRequest,
-    };
+    use crate::{perf, types::PageRequest};
 
     #[test]
     fn endpoint_health_joins_tables() {
