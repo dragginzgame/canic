@@ -4,6 +4,7 @@ use crate::{
     ids::CanisterRole,
     ops::{
         OpsError,
+        cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         ic::{
             install_code,
             provisioning::{
@@ -17,7 +18,6 @@ use crate::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             topology::subnet::SubnetCanisterRegistryOps,
         },
-        sync::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         wasm::WasmOps,
     },
 };
