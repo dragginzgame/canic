@@ -1,0 +1,140 @@
+pub use crate::model::memory::cycles::CycleTrackerView;
+
+use crate::{
+    cdk::{futures::spawn, utils::time::now_secs},
+    dto::Page,
+    log,
+    log::Topic,
+    model::memory::cycles::CycleTracker,
+    ops::{
+        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
+        config::ConfigOps,
+        ic::{
+            canister_cycle_balance,
+            timer::{TimerId, TimerOps},
+        },
+        storage::env::EnvOps,
+    },
+    types::{Cycles, PageRequest},
+};
+use std::{cell::RefCell, time::Duration};
+
+//
+// TIMER
+//
+
+thread_local! {
+    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+}
+
+///
+/// Constants
+///
+
+// Check every 10 minutes
+const TRACKER_INTERVAL_SECS: Duration = OPS_CYCLE_TRACK_INTERVAL;
+
+///
+/// CycleTrackerOps
+///
+
+pub struct CycleTrackerOps;
+
+impl CycleTrackerOps {
+    /// Start recurring tracking every X seconds
+    /// Safe to call multiple times: only one loop will run.
+    pub fn start() {
+        TIMER.with_borrow_mut(|slot| {
+            if slot.is_some() {
+                return;
+            }
+
+            let init = TimerOps::set(OPS_INIT_DELAY, "cycles:init", async {
+                let _ = Self::track();
+
+                let interval =
+                    TimerOps::set_interval(TRACKER_INTERVAL_SECS, "cycles:interval", || async {
+                        let _ = Self::track();
+                        let _ = Self::purge();
+                    });
+
+                TIMER.with_borrow_mut(|slot| *slot = Some(interval));
+            });
+
+            *slot = Some(init);
+        });
+    }
+
+    /// Stop recurring tracking.
+    pub fn stop() {
+        TIMER.with_borrow_mut(|slot| {
+            if let Some(id) = slot.take() {
+                TimerOps::clear(id);
+            }
+        });
+    }
+
+    #[must_use]
+    pub fn track() -> bool {
+        let ts = now_secs();
+        let cycles = canister_cycle_balance().to_u128();
+
+        // only check for topup on non-root canisters
+        if !EnvOps::is_root() {
+            Self::check_auto_topup();
+        }
+
+        CycleTracker::record(ts, cycles)
+    }
+
+    /// Purge old entries based on the retention window.
+    #[must_use]
+    pub fn purge() -> bool {
+        let now = now_secs();
+        let purged = CycleTracker::purge(now);
+
+        if purged > 0 {
+            log!(
+                Topic::Cycles,
+                Info,
+                "cycle_tracker: purged {purged} old entries"
+            );
+        }
+
+        purged > 0
+    }
+
+    fn check_auto_topup() {
+        use crate::ops::request::cycles_request;
+
+        if let Ok(canister_cfg) = ConfigOps::current_canister()
+            && let Some(topup) = canister_cfg.topup
+        {
+            let cycles = canister_cycle_balance();
+
+            if cycles < topup.threshold {
+                spawn(async move {
+                    match cycles_request(topup.amount.to_u128()).await {
+                        Ok(res) => log!(
+                            Topic::Cycles,
+                            Ok,
+                            "💫 requested {}, topped up by {}, now {}",
+                            topup.amount,
+                            Cycles::from(res.cycles_transferred),
+                            canister_cycle_balance()
+                        ),
+                        Err(e) => log!(Topic::Cycles, Error, "💫 failed to request cycles: {e}"),
+                    }
+                });
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
+        let entries = CycleTracker::entries(request);
+        let total = CycleTracker::len();
+
+        Page { entries, total }
+    }
+}

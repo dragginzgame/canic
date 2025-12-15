@@ -7,9 +7,9 @@ macro_rules! canic_endpoints_root {
         // eventually this will cascade down from an orchestrator canister
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_app(
-            cmd: ::canic::core::ops::model::memory::state::AppCommand,
+            cmd: ::canic::core::ops::storage::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
-            ::canic::core::ops::model::memory::state::AppStateOps::command(cmd)?;
+            ::canic::core::ops::storage::state::AppStateOps::command(cmd)?;
 
             let bundle = ::canic::core::ops::sync::state::StateBundle::new().with_app_state();
             ::canic::core::ops::sync::state::cascade_root_state(bundle).await?;
@@ -63,14 +63,14 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         fn canic_app_subnet_registry()
-        -> ::canic::core::ops::model::memory::topology::AppSubnetRegistryView {
-            $crate::ops::model::memory::topology::AppSubnetRegistryOps::export()
+        -> ::canic::core::ops::storage::topology::AppSubnetRegistryView {
+            $crate::ops::storage::topology::AppSubnetRegistryOps::export()
         }
 
         #[canic_query]
         fn canic_subnet_canister_registry()
-        -> ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterRegistryView {
-            $crate::ops::model::memory::topology::SubnetCanisterRegistryOps::export()
+        -> ::canic::core::ops::storage::topology::subnet::SubnetCanisterRegistryView {
+            $crate::ops::storage::topology::SubnetCanisterRegistryOps::export()
         }
 
         //
@@ -79,18 +79,15 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_reserve_list()
-        -> Result<::canic::core::ops::model::memory::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::ops::model::memory::reserve::CanisterReserveOps::export())
+        -> Result<::canic::core::ops::reserve::CanisterReserveView, ::canic::Error> {
+            Ok($crate::ops::reserve::CanisterReserveOps::export())
         }
 
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_reserve_admin(
-            cmd: ::canic::core::ops::model::memory::reserve::CanisterReserveAdminCommand,
-        ) -> Result<
-            ::canic::core::ops::model::memory::reserve::CanisterReserveAdminResponse,
-            ::canic::Error,
-        > {
-            ::canic::core::ops::model::memory::reserve::CanisterReserveOps::admin(cmd).await
+            cmd: ::canic::core::ops::reserve::CanisterReserveAdminCommand,
+        ) -> Result<::canic::core::ops::reserve::CanisterReserveAdminResponse, ::canic::Error> {
+            ::canic::core::ops::reserve::CanisterReserveOps::admin(cmd).await
         }
     };
 }

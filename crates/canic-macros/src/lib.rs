@@ -70,6 +70,7 @@ mod parse {
             if attr.is_empty() {
                 return Ok(empty());
             }
+
             return Ok(ParsedArgs {
                 forwarded: vec![attr],
                 ..empty()

@@ -1,10 +1,8 @@
 use crate::{
     Error,
     ops::{
-        OpsError,
-        model::memory::{
-            cycles::CycleTrackerOps, env::EnvOps, log::LogOps, reserve::CanisterReserveOps,
-        },
+        OpsError, cycles::CycleTrackerOps, log::LogOps, reserve::CanisterReserveOps,
+        storage::env::EnvOps,
     },
 };
 

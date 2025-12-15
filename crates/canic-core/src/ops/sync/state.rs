@@ -9,12 +9,12 @@ use crate::{
     log::Topic,
     ops::{
         OpsError,
-        model::memory::{
+        prelude::*,
+        storage::{
             directory::{AppDirectoryOps, DirectoryView, SubnetDirectoryOps},
             state::{AppStateData, AppStateOps, SubnetStateData, SubnetStateOps},
             topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
         },
-        prelude::*,
     },
 };
 

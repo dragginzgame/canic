@@ -10,13 +10,13 @@ use crate::{
     log::Topic,
     ops::{
         ic::deposit_cycles,
-        model::memory::topology::subnet::SubnetCanisterRegistryOps,
         orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,
         request::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
+        storage::topology::subnet::SubnetCanisterRegistryOps,
     },
 };
 

@@ -5,6 +5,7 @@ use std::{cell::RefCell, collections::HashMap};
 thread_local! {
     static ENDPOINT_ATTEMPT_METRICS: RefCell<HashMap<&'static str, EndpointAttemptCounts>> =
         RefCell::new(HashMap::new());
+
     static ENDPOINT_RESULT_METRICS: RefCell<HashMap<&'static str, EndpointResultCounts>> =
         RefCell::new(HashMap::new());
 }

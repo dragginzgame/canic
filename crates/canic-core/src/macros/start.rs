@@ -37,7 +37,7 @@
 macro_rules! start {
     ($canister_type:expr) => {
         #[::canic::cdk::init]
-        fn init(payload: ::canic::core::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::core::ops::storage::CanisterInitPayload, args: Option<Vec<u8>>) {
             ::canic::core::__canic_load_config!();
 
             // ops
@@ -45,7 +45,7 @@ macro_rules! start {
 
             // timers — async body, no spawn()
             let install_args = args;
-            let _ = ::canic::core::ops::timer::TimerOps::set(
+            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
                 ::std::time::Duration::ZERO,
                 "startup:init",
                 async move {
@@ -63,7 +63,7 @@ macro_rules! start {
             ::canic::core::ops::runtime::nonroot_post_upgrade($canister_type);
 
             // timers — async body, no spawn()
-            let _ = ::canic::core::ops::timer::TimerOps::set(
+            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
                 ::std::time::Duration::ZERO,
                 "startup:upgrade",
                 async move {
@@ -99,7 +99,7 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::ops::model::memory::topology::SubnetIdentity) {
+        fn init(identity: ::canic::core::ops::storage::topology::SubnetIdentity) {
             ::canic::core::__canic_load_config!();
 
             // ops
@@ -109,7 +109,7 @@ macro_rules! start_root {
             ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
 
             // timers
-            let _ = ::canic::core::ops::timer::TimerOps::set(
+            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
                 std::time::Duration::ZERO,
                 "startup:root",
                 async move {
@@ -140,7 +140,7 @@ macro_rules! start_root {
             ::canic::core::ops::runtime::root_post_upgrade();
 
             // timers
-            let _ = ::canic::core::ops::timer::TimerOps::set(
+            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
                 ::std::time::Duration::ZERO,
                 "startup:root-upgrade",
                 async move {

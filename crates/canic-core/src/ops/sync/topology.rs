@@ -16,8 +16,8 @@ use crate::{
     model::memory::CanisterSummary,
     ops::{
         OpsError,
-        model::memory::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
         prelude::*,
+        storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
         sync::SyncOpsError,
     },
 };

@@ -6,14 +6,14 @@ use crate::{
     log::Topic,
     model::memory::topology::SubnetIdentity,
     ops::{
-        model::memory::{
+        service::TimerService,
+        storage::{
             CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::EnvOps,
             registry::MemoryRegistryOps,
             topology::SubnetCanisterRegistryOps,
         },
-        service::TimerService,
     },
 };
 use canic_memory::runtime::init_eager_tls;
