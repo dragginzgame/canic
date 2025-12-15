@@ -6,9 +6,8 @@ use crate::{
     log::Topic,
     model::memory::topology::SubnetIdentity,
     ops::{
-        CanisterInitPayload,
         model::memory::{
-            EnvOps,
+            CanisterInitPayload, EnvOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             registry::MemoryRegistryOps,
             topology::SubnetCanisterRegistryOps,

@@ -11,9 +11,7 @@ pub mod call;
 pub mod config;
 pub mod http;
 pub mod ic;
-pub mod icrc;
 pub mod metrics;
-pub mod mgmt;
 pub mod model;
 pub mod orchestrator;
 pub mod perf;
@@ -21,13 +19,8 @@ pub mod request;
 pub mod root;
 pub mod runtime;
 pub mod service;
-pub mod signature;
 pub mod sync;
-pub mod timer;
-pub mod types;
 pub mod wasm;
-
-pub use types::*;
 
 /// Common imports for ops submodules and consumers.
 pub mod prelude {
@@ -35,15 +28,12 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            types::{Int, Nat, Principal, Subaccount},
+            types::{Account, Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
-        interface::InterfaceError,
         log,
         log::Level,
-        ops::OpsError,
-        ops::call::Call,
-        ops::ic::call_and_decode,
+        ops::{OpsError, call::Call, ic::call_and_decode},
         types::Cycles,
     };
     pub use serde::{Deserialize, Serialize};
@@ -70,13 +60,13 @@ pub enum OpsError {
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
+    IcOpsError(#[from] ic::IcOpsError),
+
+    #[error(transparent)]
     ModelOpsError(#[from] model::ModelOpsError),
 
     #[error(transparent)]
     RequestOpsError(#[from] request::RequestOpsError),
-
-    #[error(transparent)]
-    SignatureOpsError(#[from] signature::SignatureOpsError),
 
     #[error(transparent)]
     SyncOpsError(#[from] sync::SyncOpsError),

@@ -11,7 +11,6 @@ pub mod dispatch;
 pub mod dto;
 pub mod env;
 pub mod ids;
-pub mod interface;
 pub mod log;
 pub mod macros;
 pub mod model;
@@ -64,9 +63,6 @@ pub enum Error {
 
     #[error("{0}")]
     CustomError(String),
-
-    #[error("{0}")]
-    InterfaceError(String),
 
     #[error("{0}")]
     ModelError(String),
@@ -142,7 +138,6 @@ impl Error {
 
 from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
-from_to_string!(interface::InterfaceError, InterfaceError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
 from_to_string!(serde_json::Error, HttpDecode);

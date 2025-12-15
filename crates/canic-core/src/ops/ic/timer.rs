@@ -1,7 +1,12 @@
+#![allow(clippy::disallowed_methods)]
+
 pub use crate::cdk::timers::TimerId;
 
 use crate::{
-    interface::ic::timer::Timer,
+    cdk::timers::{
+        clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
+        set_timer_interval as cdk_set_timer_interval,
+    },
     model::metrics::{SystemMetricKind, SystemMetrics, TimerMetrics, TimerMode},
     ops::perf::PerfOps,
     perf::perf_counter,
@@ -27,7 +32,7 @@ impl TimerOps {
         SystemMetrics::increment(SystemMetricKind::TimerScheduled);
         TimerMetrics::ensure(TimerMode::Once, delay, &label);
 
-        Timer::set(delay, async move {
+        cdk_set_timer(delay, async move {
             TimerMetrics::increment(TimerMode::Once, delay, &label);
 
             let start = perf_counter();
@@ -52,7 +57,7 @@ impl TimerOps {
 
         let task = Rc::new(RefCell::new(task));
 
-        Timer::set_interval(interval, move || {
+        cdk_set_timer_interval(interval, move || {
             let label = label.clone();
             let interval = interval;
             let task = Rc::clone(&task);
@@ -68,5 +73,10 @@ impl TimerOps {
                 PerfOps::record(&label, end.saturating_sub(start));
             }
         })
+    }
+
+    /// Clears a previously scheduled timer.
+    pub fn clear(id: TimerId) {
+        cdk_clear_timer(id);
     }
 }

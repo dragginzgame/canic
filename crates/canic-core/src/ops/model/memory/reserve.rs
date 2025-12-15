@@ -16,19 +16,21 @@ use crate::{
         types::Principal,
     },
     config::{Config, schema::SubnetConfig},
-    interface::ic::timer::{Timer, TimerId},
     log::Topic,
     model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
     ops::{
         config::ConfigOps,
-        ic::{get_cycles, update_settings},
-        mgmt::{create_canister, uninstall_canister},
+        ic::{
+            get_cycles,
+            mgmt::{create_canister, uninstall_code},
+            timer::{TimerId, TimerOps},
+            update_settings,
+        },
         model::{
             OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY,
             memory::topology::SubnetCanisterRegistryOps,
         },
         prelude::*,
-        timer::TimerOps,
     },
     types::{Cycles, TC},
 };
@@ -42,17 +44,17 @@ use std::cell::RefCell;
 
 #[derive(Debug, ThisError)]
 pub enum ReserveOpsError {
-    #[error("reserve entry missing for {pid}")]
-    ReserveEntryMissing { pid: Principal },
-
-    #[error("missing type for reserve entry {pid}")]
-    MissingType { pid: Principal },
+    #[error("missing module hash for reserve entry {pid}")]
+    MissingModuleHash { pid: Principal },
 
     #[error("missing parent for reserve entry {pid}")]
     MissingParent { pid: Principal },
 
-    #[error("missing module hash for reserve entry {pid}")]
-    MissingModuleHash { pid: Principal },
+    #[error("missing type for reserve entry {pid}")]
+    MissingType { pid: Principal },
+
+    #[error("reserve entry missing for {pid}")]
+    ReserveEntryMissing { pid: Principal },
 }
 
 ///
@@ -125,7 +127,7 @@ impl CanisterReserveOps {
     pub fn stop() {
         TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                Timer::clear(id);
+                TimerOps::clear(id);
             }
         });
     }
@@ -257,7 +259,7 @@ async fn move_into_reserve(
     parent_pid: Option<Principal>,
     module_hash: Option<Vec<u8>>,
 ) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
-    uninstall_canister(pid).await?;
+    uninstall_code(pid).await?;
 
     // Reset controllers to root-configured set.
     let mut controllers = Config::get().controllers.clone();

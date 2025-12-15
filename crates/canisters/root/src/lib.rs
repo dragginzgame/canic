@@ -81,21 +81,6 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
     (canister::TEST, TEST_WASM),
 ];
 
-/*
-// convert_icp_to_cycles
-#[update]
-#[allow(clippy::cast_possible_truncation)]
-async fn convert_icp_to_cycles() -> Result<(), Error> {
-    canic::ops::ext::cycles::CycleTrackerOps::convert_caller_icp_to_cycles((TC * 2) as u64).await
-}
-
-// get_icp_xdr_conversion_rate
-#[query(composite)]
-async fn get_icp_xdr_conversion_rate() -> Result<f64, Error> {
-    canic::interface::ic::cycles::get_icp_xdr_conversion_rate().await
-}
-*/
-
 /// create_blank
 /// Controller-only helper for local Canic testing.
 #[canic_update(guard(app), auth_any(is_controller), policy(is_prime_subnet))]
