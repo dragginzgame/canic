@@ -7,16 +7,18 @@
 
 use crate::{
     Error,
-    cdk::mgmt::{
-        self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
-        CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
-        UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
+    cdk::{
+        mgmt::{
+            self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
+            CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
+            UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
+        },
+        utils::wasm::get_wasm_hash,
     },
-    cdk::utils::wasm::get_wasm_hash,
     env::nns::NNS_REGISTRY_CANISTER,
     log,
     log::Topic,
-    model::metrics::{SystemMetricKind, SystemMetrics},
+    model::metrics::system::{SystemMetricKind, SystemMetrics},
     ops::ic::call::Call,
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     types::Cycles,
