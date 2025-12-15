@@ -7,21 +7,15 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
-pub mod cascade;
+pub mod bootstrap;
+pub mod command;
 pub mod config;
-pub mod cycles;
 pub mod ic;
-pub mod log;
-pub mod metrics;
-pub mod orchestrator;
-pub mod perf;
+pub mod orchestration;
 pub mod placement;
-pub mod request;
-pub mod reserve;
-pub mod root;
 pub mod runtime;
-pub mod service;
 pub mod storage;
+pub mod subsystem;
 pub mod wasm;
 
 use std::time::Duration;
@@ -87,7 +81,7 @@ pub enum OpsError {
     IsRoot,
 
     #[error(transparent)]
-    CascadeOpsError(#[from] cascade::CascadeOpsError),
+    CommandOpsError(#[from] command::CommandOpsError),
 
     #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
@@ -96,16 +90,13 @@ pub enum OpsError {
     IcOpsError(#[from] ic::IcOpsError),
 
     #[error(transparent)]
-    RequestOpsError(#[from] request::RequestOpsError),
+    OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
 
     #[error(transparent)]
-    OrchestratorError(#[from] orchestrator::OrchestratorError),
-
-    #[error(transparent)]
-    ReserveOpsError(#[from] reserve::ReserveOpsError),
+    SubsystemOpsError(#[from] subsystem::SubsystemOpsError),
 }
 
 impl OpsError {

@@ -29,6 +29,7 @@ use crate::{
         },
         prelude::*,
         storage::topology::SubnetCanisterRegistryOps,
+        subsystem::SubsystemOpsError,
     },
     types::{Cycles, TC},
 };
@@ -53,6 +54,12 @@ pub enum ReserveOpsError {
 
     #[error("reserve entry missing for {pid}")]
     ReserveEntryMissing { pid: Principal },
+}
+
+impl From<ReserveOpsError> for Error {
+    fn from(err: ReserveOpsError) -> Self {
+        SubsystemOpsError::from(err).into()
+    }
 }
 
 ///
@@ -361,17 +368,11 @@ pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Pr
 
 /// Recycles a canister via the orchestrator. Triggers topology and directory cascades.
 pub async fn recycle_via_orchestrator(pid: Principal) -> Result<(), Error> {
-    use crate::ops::orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent};
+    use crate::ops::orchestration::orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent};
 
     CanisterLifecycleOrchestrator::apply(LifecycleEvent::RecycleToReserve { pid })
         .await
         .map(|_| ())
-}
-
-impl From<ReserveOpsError> for Error {
-    fn from(err: ReserveOpsError) -> Self {
-        OpsError::from(err).into()
-    }
 }
 
 //

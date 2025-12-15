@@ -105,7 +105,7 @@ impl CycleTrackerOps {
     }
 
     fn check_auto_topup() {
-        use crate::ops::request::cycles_request;
+        use crate::ops::command::request::cycles_request;
 
         if let Ok(canister_cfg) = ConfigOps::current_canister()
             && let Some(topup) = canister_cfg.topup

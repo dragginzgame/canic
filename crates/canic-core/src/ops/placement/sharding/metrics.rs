@@ -1,4 +1,4 @@
-use crate::model::memory::sharding::ShardingRegistry;
+use crate::ops::storage::sharding::ShardingRegistryOps;
 
 ///
 /// PoolMetrics
@@ -16,7 +16,7 @@ pub struct PoolMetrics {
 /// Compute pool-level metrics from the registry.
 #[must_use]
 pub fn pool_metrics(pool: &str) -> PoolMetrics {
-    let view = ShardingRegistry::export();
+    let view = ShardingRegistryOps::export();
     let mut active = 0;
     let mut cap = 0;
     let mut used = 0;
@@ -51,8 +51,7 @@ pub fn pool_metrics(pool: &str) -> PoolMetrics {
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::Principal, ids::CanisterRole, model::memory::sharding::ShardKey,
-        ops::storage::sharding::ShardingRegistryOps,
+        cdk::types::Principal, ids::CanisterRole, ops::storage::sharding::ShardingRegistryOps,
     };
 
     fn p(id: u8) -> Principal {
@@ -61,26 +60,15 @@ mod tests {
 
     #[test]
     fn pool_metrics_computation() {
-        ShardingRegistry::clear();
+        ShardingRegistryOps::clear_for_test();
         ShardingRegistryOps::create(p(1), "poolA", 0, &CanisterRole::new("alpha"), 10).unwrap();
         ShardingRegistryOps::create(p(2), "poolA", 1, &CanisterRole::new("alpha"), 20).unwrap();
 
-        ShardingRegistry::with_mut(|core| {
-            core.insert_assignment(ShardKey::new("poolA", "t1"), p(1));
-            core.insert_assignment(ShardKey::new("poolA", "t2"), p(1));
-            core.insert_assignment(ShardKey::new("poolA", "t3"), p(2));
-            core.insert_assignment(ShardKey::new("poolA", "t4"), p(2));
-            core.insert_assignment(ShardKey::new("poolA", "t5"), p(2));
-
-            if let Some(mut entry) = core.get_entry(&p(1)) {
-                entry.count = 2;
-                core.insert_entry(p(1), entry);
-            }
-            if let Some(mut entry) = core.get_entry(&p(2)) {
-                entry.count = 3;
-                core.insert_entry(p(2), entry);
-            }
-        });
+        ShardingRegistryOps::assign("poolA", "t1", p(1)).unwrap();
+        ShardingRegistryOps::assign("poolA", "t2", p(1)).unwrap();
+        ShardingRegistryOps::assign("poolA", "t3", p(2)).unwrap();
+        ShardingRegistryOps::assign("poolA", "t4", p(2)).unwrap();
+        ShardingRegistryOps::assign("poolA", "t5", p(2)).unwrap();
 
         let m = pool_metrics("poolA");
         assert_eq!(m.active_count, 2);

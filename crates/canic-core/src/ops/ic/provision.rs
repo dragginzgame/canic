@@ -8,8 +8,6 @@
 //! scaling out the topology: reserving cycles, recording registry state,
 //! installing WASM modules, and cascading state updates to descendants.
 
-use crate::ops::prelude::*;
-use crate::types::Cycles;
 use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
@@ -17,28 +15,41 @@ use crate::{
     log::Topic,
     ops::{
         OpsError,
-        cascade::state::StateBundle,
         config::ConfigOps,
-        reserve::CanisterReserveOps,
+        ic::IcOpsError,
+        orchestration::cascade::state::StateBundle,
+        prelude::*,
         storage::{
             CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::{EnvData, EnvOps},
             topology::SubnetCanisterRegistryOps,
         },
+        subsystem::reserve::CanisterReserveOps,
         wasm::WasmOps,
     },
+    types::Cycles,
 };
 use candid::Principal;
 use thiserror::Error as ThisError;
 
+///
+/// ProvisionOpsError
+///
+
 #[derive(Debug, ThisError)]
-pub enum ProvisioningError {
+pub enum ProvisionOpsError {
     #[error(transparent)]
     Other(#[from] Error),
 
     #[error("install failed for {pid}: {source}")]
     InstallFailed { pid: Principal, source: Error },
+}
+
+impl From<ProvisionOpsError> for Error {
+    fn from(err: ProvisionOpsError) -> Self {
+        IcOpsError::from(err).into()
+    }
 }
 
 //
@@ -97,7 +108,7 @@ pub async fn create_and_install_canister(
     role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, ProvisioningError> {
+) -> Result<Principal, Error> {
     // must have WASM module registered
     WasmOps::try_get(role)?;
 
@@ -106,7 +117,7 @@ pub async fn create_and_install_canister(
 
     // Phase 2: installation
     if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
-        return Err(ProvisioningError::InstallFailed { pid, source: err });
+        return Err(ProvisionOpsError::InstallFailed { pid, source: err }.into());
     }
 
     Ok(pid)

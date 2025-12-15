@@ -1,6 +1,6 @@
 pub mod directory;
 pub mod env;
-pub mod registry;
+pub mod memory;
 pub mod sharding;
 pub mod state;
 pub mod topology;
@@ -14,7 +14,8 @@ use crate::{
         storage::{
             directory::{AppDirectoryOpsError, DirectoryView, SubnetDirectoryOpsError},
             env::{EnvData, EnvOpsError},
-            registry::MemoryRegistryOpsError,
+            memory::MemoryRegistryOpsError,
+            sharding::ShardingRegistryOpsError,
             state::AppStateOpsError,
             topology::TopologyOpsError,
         },
@@ -40,6 +41,9 @@ pub enum StorageOpsError {
 
     #[error(transparent)]
     MemoryRegistryOpsError(#[from] MemoryRegistryOpsError),
+
+    #[error(transparent)]
+    ShardingRegistryOpsError(#[from] ShardingRegistryOpsError),
 
     #[error(transparent)]
     SubnetDirectoryOpsError(#[from] SubnetDirectoryOpsError),

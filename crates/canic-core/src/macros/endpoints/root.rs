@@ -11,8 +11,9 @@ macro_rules! canic_endpoints_root {
         ) -> Result<(), ::canic::Error> {
             ::canic::core::ops::storage::state::AppStateOps::command(cmd)?;
 
-            let bundle = ::canic::core::ops::sync::state::StateBundle::new().with_app_state();
-            ::canic::core::ops::sync::state::cascade_root_state(bundle).await?;
+            let bundle = ::canic::core::ops::orchestration::cascade::state::StateBundle::new()
+                .with_app_state();
+            ::canic::core::ops::orchestration::cascade::state::cascade_root_state(bundle).await?;
 
             Ok(())
         }
@@ -21,8 +22,9 @@ macro_rules! canic_endpoints_root {
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
-        ) -> Result<::canic::core::ops::request::UpgradeCanisterResponse, ::canic::Error> {
-            let res = $crate::ops::request::upgrade_canister_request(canister_pid).await?;
+        ) -> Result<::canic::core::ops::command::response::UpgradeCanisterResponse, ::canic::Error>
+        {
+            let res = $crate::ops::command::request::upgrade_canister_request(canister_pid).await?;
 
             Ok(res)
         }
@@ -32,9 +34,9 @@ macro_rules! canic_endpoints_root {
         // has to come from a direct child canister
         #[canic_update(auth_any(::canic::core::auth::is_registered_to_subnet))]
         async fn canic_response(
-            request: ::canic::core::ops::request::Request,
-        ) -> Result<::canic::core::ops::request::Response, ::canic::Error> {
-            let response = $crate::ops::request::response(request).await?;
+            request: ::canic::core::ops::command::request::Request,
+        ) -> Result<::canic::core::ops::command::response::Response, ::canic::Error> {
+            let response = $crate::ops::command::response::response(request).await?;
 
             Ok(response)
         }
@@ -79,15 +81,18 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_reserve_list()
-        -> Result<::canic::core::ops::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::ops::reserve::CanisterReserveOps::export())
+        -> Result<::canic::core::ops::subsystem::reserve::CanisterReserveView, ::canic::Error> {
+            Ok($crate::ops::subsystem::reserve::CanisterReserveOps::export())
         }
 
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_reserve_admin(
-            cmd: ::canic::core::ops::reserve::CanisterReserveAdminCommand,
-        ) -> Result<::canic::core::ops::reserve::CanisterReserveAdminResponse, ::canic::Error> {
-            ::canic::core::ops::reserve::CanisterReserveOps::admin(cmd).await
+            cmd: ::canic::core::ops::subsystem::reserve::CanisterReserveAdminCommand,
+        ) -> Result<
+            ::canic::core::ops::subsystem::reserve::CanisterReserveAdminResponse,
+            ::canic::Error,
+        > {
+            ::canic::core::ops::subsystem::reserve::CanisterReserveOps::admin(cmd).await
         }
     };
 }
@@ -102,16 +107,16 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(auth_any(::canic::core::auth::is_parent))]
         async fn canic_sync_state(
-            bundle: ::canic::core::ops::sync::state::StateBundle,
+            bundle: ::canic::core::ops::orchestration::cascade::state::StateBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::ops::sync::state::nonroot_cascade_state(&bundle).await
+            $crate::ops::orchestration::cascade::state::nonroot_cascade_state(&bundle).await
         }
 
         #[canic_update(auth_any(::canic::core::auth::is_parent))]
         async fn canic_sync_topology(
-            bundle: ::canic::core::ops::sync::topology::TopologyBundle,
+            bundle: ::canic::core::ops::orchestration::cascade::topology::TopologyBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::ops::sync::topology::nonroot_cascade_topology(&bundle).await
+            $crate::ops::orchestration::cascade::topology::nonroot_cascade_topology(&bundle).await
         }
     };
 }

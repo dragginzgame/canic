@@ -15,10 +15,9 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    model::memory::sharding::ShardingRegistry,
     ops::{
+        command::request::{CreateCanisterParent, create_canister_request},
         config::ConfigOps,
-        request::{CreateCanisterParent, create_canister_request},
         storage::sharding::ShardingRegistryOps,
     },
 };
@@ -97,7 +96,7 @@ impl ShardingOps {
             ShardingPlanState::AlreadyAssigned { pid } => {
                 let slot = plan
                     .target_slot
-                    .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
+                    .or_else(|| ShardingRegistryOps::slot_for_shard(pool, pid));
                 log!(
                     Topic::Sharding,
                     Info,
@@ -111,7 +110,7 @@ impl ShardingOps {
                 ShardingRegistryOps::assign(pool, tenant, pid)?;
                 let slot = plan
                     .target_slot
-                    .or_else(|| ShardingRegistry::slot_for_shard(pool, pid));
+                    .or_else(|| ShardingRegistryOps::slot_for_shard(pool, pid));
                 log!(
                     Topic::Sharding,
                     Info,
@@ -152,7 +151,7 @@ impl ShardingOps {
         limit: u32,
     ) -> Result<u32, Error> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
-        let tenants = ShardingRegistry::tenants_in_shard(pool, donor_shard_pid);
+        let tenants = ShardingRegistryOps::tenants_in_shard(pool, donor_shard_pid);
         let mut moved = 0u32;
 
         for tenant in tenants.iter().take(limit as usize) {
