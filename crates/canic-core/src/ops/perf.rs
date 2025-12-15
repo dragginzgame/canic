@@ -1,7 +1,6 @@
 pub use crate::perf::PerfEntry;
 
 use crate::{dto::Page, perf, types::PageRequest};
-use std::borrow::Cow;
 
 ///
 /// PerfOps
@@ -11,7 +10,7 @@ pub struct PerfOps;
 
 impl PerfOps {
     pub(crate) fn record(label: &str, delta: u64) {
-        perf::record_timer(Cow::Borrowed(label), delta);
+        perf::record_timer(label, delta);
     }
 
     #[must_use]

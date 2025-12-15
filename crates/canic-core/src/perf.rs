@@ -8,7 +8,7 @@
 
 use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
@@ -102,12 +102,12 @@ pub fn record(key: PerfKey, delta: u64) {
     });
 }
 
-pub fn record_endpoint(func: Cow<'_, str>, total_instructions: u64) {
-    record(PerfKey::Endpoint(func.into_owned()), total_instructions);
+pub fn record_endpoint(func: &str, total_instructions: u64) {
+    record(PerfKey::Endpoint(func.to_string()), total_instructions);
 }
 
-pub fn record_timer(label: Cow<'_, str>, delta_instructions: u64) {
-    record(PerfKey::Timer(label.into_owned()), delta_instructions);
+pub fn record_timer(label: &str, delta_instructions: u64) {
+    record(PerfKey::Timer(label.to_string()), delta_instructions);
 }
 
 /// Snapshot all recorded perf counters, sorted by key.

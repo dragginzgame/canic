@@ -64,7 +64,7 @@ macro_rules! perf_scope {
 
       //      $crate::log!(Info, "perf: [0] {}, [1] {}", canic_cdk::api::performance_counter(0), canic_cdk::api::performance_counter(1));
 
-            $crate::perf::record_endpoint(__perf_label.into(), __perf_end);
+            $crate::perf::record_endpoint(&__perf_label, __perf_end);
         });
     };
 }
