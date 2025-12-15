@@ -133,6 +133,10 @@ pub fn entries() -> Vec<PerfEntry> {
     })
 }
 
+///
+/// TESTS
+///
+
 #[cfg(test)]
 pub fn reset() {
     PERF_TABLE.with(|t| t.borrow_mut().clear());

@@ -63,30 +63,29 @@ AGENTS.md, CONFIG.md    # Contributor documentation
 
 ## 🧩 Module Layering
 
-We separate responsibilities into **three main layers**:
+We separate responsibilities into **four main layers**:
 
-### `memory/`
-- Stable storage across canister upgrades.
-- Wraps IC stable memory (`BTreeMap`).
-- Example: `memory/ext/sharding/registry.rs` (persistent shard registry).
+### `model/memory/`
+- Stable storage across canister upgrades (IC stable memory).
+- Includes stable “canister state” such as `AppState` / `SubnetState` (these are persistent).
+- Example: `crates/canic-core/src/model/memory/sharding/registry.rs`.
 
-### `state/`
-- Volatile in-memory state (cleared on upgrade).
-- WASM registry caching and consent message registries.
-- Example: `state/wasm.rs` (tracks registered WASM modules).
+### `model/*` (non-memory)
+- Volatile in-process registries/caches (cleared on upgrade).
+- Examples: `crates/canic-core/src/model/wasm/wasm_registry.rs`, `crates/canic-core/src/model/metrics/*`.
 
 ### `ops/`
-- Business logic layer above `memory/` and `state/`.
+- Business logic layer above stable storage (`model/memory`) and runtime registries/caches (`model/*`).
 - Responsible for:
   - Applying pool/shard policies.
   - Creating new canisters via management API.
   - Logging, cleanup cadence, authorization.
-- Example: `ops/ext/sharding.rs` orchestrates shard lifecycle.
+- Example: `crates/canic-core/src/ops/orchestrator.rs`.
 
 ### `endpoints/`
 - Public IC endpoints defined via macros (`canic_endpoints_*`).
 - Default rule: route mutations through `ops/` so policies stay centralized.
-- Temporary exception (target revisit in ~2 weeks): read-only queries may pull directly from `memory/` or `state/` when an ops façade does not yet exist.
+- Temporary exception (target revisit in ~2 weeks): read-only queries may pull directly from `model/memory` or runtime registries (`model/*`) when an ops façade does not yet exist.
 - Admin operations are grouped into a single update call per domain (e.g., `shard_admin`).
 
 ---
@@ -149,15 +148,15 @@ We separate responsibilities into **three main layers**:
 ## 🧭 Design Principles
 
 - Separation of concerns
-  - `memory/` → stable storage
-  - `state/` → volatile runtime state
+  - `model/memory/` → stable storage (incl. stable canister state)
+  - `model/*` → volatile runtime registries/caches
   - `ops/` → orchestration, policy, logging
   - `endpoints/` → IC boundary
 - Predictable lifecycles
   - Shards: register → assign → rebalance → drain → decommission
   - Delegation: register → track → revoke → cleanup
 - Minimal public APIs
-  - `memory/` and `state/` expose only essentials
+  - stable storage and registries expose only essentials
   - `ops/` is the sole entrypoint for canister endpoints
 
 ---
@@ -170,4 +169,4 @@ Before merging:
 - Run `make test`
 - Update `CHANGELOG.md` if user‑facing
 - Group admin endpoints under a single `*_admin` update call
-- Respect layering: endpoints → ops → state/memory
+- Respect layering: endpoints → ops → model (stable + runtime)

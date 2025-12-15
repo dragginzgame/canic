@@ -13,7 +13,7 @@ pub mod env;
 pub mod ids;
 pub mod log;
 pub mod macros;
-pub mod model;
+pub(crate) mod model;
 pub mod ops;
 pub mod perf;
 pub mod spec;
