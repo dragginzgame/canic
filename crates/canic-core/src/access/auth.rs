@@ -12,7 +12,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::model::memory::{
+    ops::storage::{
         directory::{AppDirectoryOps, SubnetDirectoryOps},
         env::EnvOps,
         topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},

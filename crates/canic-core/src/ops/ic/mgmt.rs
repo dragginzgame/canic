@@ -251,11 +251,11 @@ pub mod provisioning {
         ops::{
             OpsError,
             config::ConfigOps,
-            model::memory::{
+            reserve::CanisterReserveOps,
+            storage::{
                 CanisterInitPayload,
                 directory::{AppDirectoryOps, SubnetDirectoryOps},
                 env::{EnvData, EnvOps},
-                reserve::CanisterReserveOps,
                 topology::SubnetCanisterRegistryOps,
             },
             sync::state::StateBundle,

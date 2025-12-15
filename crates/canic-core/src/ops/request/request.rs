@@ -3,12 +3,12 @@ use crate::{
     ids::CanisterRole,
     log::Topic,
     ops::{
-        model::memory::{env::EnvOps, topology::SubnetCanisterChildrenOps},
         prelude::*,
         request::{
             CreateCanisterResponse, CyclesResponse, RequestOpsError, Response,
             UpgradeCanisterResponse,
         },
+        storage::{env::EnvOps, topology::SubnetCanisterChildrenOps},
     },
 };
 use candid::encode_one;

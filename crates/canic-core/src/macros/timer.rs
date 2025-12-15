@@ -16,7 +16,7 @@
 macro_rules! timer {
     ($delay:expr, $func:path $(, $($args:tt)*)? ) => {{
         let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::timer::TimerOps::set($delay, label, $func($($($args)*)?))
+        $crate::ops::ic::timer::TimerOps::set($delay, label, $func($($($args)*)?))
     }};
 }
 
@@ -32,6 +32,6 @@ macro_rules! timer {
 macro_rules! timer_interval {
     ($interval:expr, $func:path $(, $($args:tt)*)? ) => {{
         let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::timer::TimerOps::set_interval($interval, label, move || $func($($($args)*)?))
+        $crate::ops::ic::timer::TimerOps::set_interval($interval, label, move || $func($($($args)*)?))
     }};
 }

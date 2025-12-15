@@ -1,4 +1,4 @@
-use crate::{Error, ThisError, access::AccessError, ops::model::memory::env::EnvOps};
+use crate::{Error, ThisError, access::AccessError, ops::storage::env::EnvOps};
 
 ///
 /// PolicyError

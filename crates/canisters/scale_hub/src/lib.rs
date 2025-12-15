@@ -7,7 +7,7 @@
 
 use candid::Principal;
 use canic::{
-    core::{Error, ops::model::memory::scaling::ScalingRegistryOps},
+    core::{Error, ops::scaling::ScalingRegistryOps},
     prelude::*,
 };
 use canic_internal::canister::SCALE_HUB;

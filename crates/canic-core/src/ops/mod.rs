@@ -8,25 +8,47 @@
 //! here.
 
 pub mod config;
+pub mod cycles;
 pub mod ic;
+pub mod log;
 pub mod metrics;
-pub mod model;
 pub mod orchestrator;
 pub mod perf;
 pub mod request;
+pub mod reserve;
 pub mod root;
 pub mod runtime;
+pub mod scaling;
 pub mod service;
+pub mod sharding;
+pub mod storage;
 pub mod sync;
 pub mod wasm;
 
-// -----------------------------------------------------------------------------
-// Compatibility re-exports
-// -----------------------------------------------------------------------------
+use std::time::Duration;
 
-pub use ic::signature;
-pub use ic::{icrc, timer};
-pub use model::memory::CanisterInitPayload;
+///
+/// Constants
+///
+
+/// Shared initial delay for ops timers to allow init work to settle.
+pub const OPS_INIT_DELAY: Duration = Duration::from_secs(10);
+
+/// Shared cadence for cycle tracking (10 minutes).
+pub const OPS_CYCLE_TRACK_INTERVAL: Duration = Duration::from_secs(60 * 10);
+
+/// Shared cadence for log retention (10 minutes).
+pub const OPS_LOG_RETENTION_INTERVAL: Duration = Duration::from_secs(60 * 10);
+
+/// Reserve timer initial delay (30 seconds) before first check.
+pub const OPS_RESERVE_INIT_DELAY: Duration = Duration::from_secs(30);
+
+/// Reserve check cadence (30 minutes).
+pub const OPS_RESERVE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+///
+/// Prelude
+///
 
 /// Common imports for ops submodules and consumers.
 pub mod prelude {
@@ -48,7 +70,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::model::memory::env::EnvOps};
+use crate::{ThisError, ops::storage::env::EnvOps};
 
 ///
 /// OpsError
@@ -72,10 +94,10 @@ pub enum OpsError {
     IcOpsError(#[from] ic::IcOpsError),
 
     #[error(transparent)]
-    ModelOpsError(#[from] model::ModelOpsError),
+    RequestOpsError(#[from] request::RequestOpsError),
 
     #[error(transparent)]
-    RequestOpsError(#[from] request::RequestOpsError),
+    StorageOpsError(#[from] storage::StorageOpsError),
 
     #[error(transparent)]
     SyncOpsError(#[from] sync::SyncOpsError),
@@ -84,7 +106,7 @@ pub enum OpsError {
     OrchestratorError(#[from] orchestrator::OrchestratorError),
 
     #[error(transparent)]
-    ReserveOpsError(#[from] model::memory::reserve::ReserveOpsError),
+    ReserveOpsError(#[from] reserve::ReserveOpsError),
 }
 
 impl OpsError {

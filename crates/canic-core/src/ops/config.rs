@@ -7,7 +7,7 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     ops::{
         OpsError,
-        model::memory::env::{EnvOps, EnvOpsError},
+        storage::env::{EnvOps, EnvOpsError},
     },
 };
 use thiserror::Error as ThisError;

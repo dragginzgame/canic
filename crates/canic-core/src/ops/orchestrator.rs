@@ -12,9 +12,9 @@ use crate::{
             },
             upgrade_canister,
         },
-        model::memory::{
+        reserve::{CanisterReserveOps, reserve_export_canister, reserve_recycle_canister},
+        storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            reserve::{CanisterReserveOps, reserve_export_canister, reserve_recycle_canister},
             topology::subnet::SubnetCanisterRegistryOps,
         },
         sync::{state::root_cascade_state, topology::root_cascade_topology_for_pid},

@@ -2,7 +2,8 @@ use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::
 use canic::{
     Error,
     core::{
-        ids::CanisterRole, ops::CanisterInitPayload, ops::model::memory::topology::SubnetIdentity,
+        ids::CanisterRole,
+        ops::storage::{CanisterInitPayload, topology::SubnetIdentity},
     },
 };
 use derive_more::{Deref, DerefMut};

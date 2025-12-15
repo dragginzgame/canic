@@ -5,9 +5,9 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::get_current_subnet_pid,
-        model::memory::{env::EnvOps, topology::SubnetCanisterRegistryOps},
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},
+        storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
     },
 };
 

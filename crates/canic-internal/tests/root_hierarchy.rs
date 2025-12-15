@@ -6,9 +6,7 @@ use canic::{
     core::{
         dto::Page,
         ids::{CanisterRole, SubnetRole},
-        ops::model::memory::{
-            CanisterEntry, CanisterSummary, directory::PrincipalList, env::EnvData,
-        },
+        ops::storage::{CanisterEntry, CanisterSummary, directory::PrincipalList, env::EnvData},
     },
     types::{PageRequest, TC},
 };
