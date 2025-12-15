@@ -9,14 +9,15 @@ use sha2::{Digest, Sha256};
 /// Convenience wrapper that salts with wall-clock time and a string.
 ///
 #[must_use]
-pub fn derive_subaccount(principal: &Principal, salt: &str) -> Subaccount {
-    derive_subaccount_with(principal, now_secs(), salt.as_bytes())
+pub fn derive_subaccount(principal: &Principal, salt: impl AsRef<[u8]>) -> Subaccount {
+    derive_subaccount_with(principal, now_secs(), salt)
 }
 
 ///
 /// derive_subaccount_with
 /// Derive a deterministic subaccount from principal, timestamp, and salt bytes.
 ///
+#[must_use]
 pub fn derive_subaccount_with(
     principal: &Principal,
     timestamp: u64,

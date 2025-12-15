@@ -6,7 +6,7 @@
 //! return [`AuthRuleResult`].
 
 use crate::{
-    Error,
+    Error, ThisError,
     access::AccessError,
     cdk::api::{canister_self, msg_caller},
     ids::CanisterRole,
@@ -20,7 +20,6 @@ use crate::{
 };
 use candid::Principal;
 use std::pin::Pin;
-use thiserror::Error as ThisError;
 
 ///
 /// AuthError

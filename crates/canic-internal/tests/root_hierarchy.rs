@@ -4,11 +4,9 @@ use canic::{
     Error,
     cdk::types::Principal,
     core::{
+        dto::Page,
         ids::{CanisterRole, SubnetRole},
         model::memory::{CanisterEntry, CanisterSummary},
-        ops::model::memory::{
-            directory::DirectoryPageDto, topology::subnet::SubnetCanisterChildrenPage,
-        },
     },
     types::{PageRequest, TC},
 };
@@ -206,10 +204,19 @@ fn directories_are_consistent_across_canisters() {
     //    let print_counts = env::var("PRINT_DIR_COUNTS").is_ok();
     let print_counts = true;
 
-    let root_app_dir: DirectoryPageDto = pic
+    let root_app_dir: Page<(
+        CanisterRole,
+        canic::core::model::memory::directory::PrincipalList,
+    )> = pic
         .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
         .expect("root app directory");
-    let root_subnet_dir: Result<DirectoryPageDto, Error> = pic
+    let root_subnet_dir: Result<
+        Page<(
+            CanisterRole,
+            canic::core::model::memory::directory::PrincipalList,
+        )>,
+        Error,
+    > = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
@@ -228,14 +235,23 @@ fn directories_are_consistent_across_canisters() {
     }
 
     for (ty, entry) in registry.iter().filter(|(ty, _)| !ty.is_root()) {
-        let app_dir: DirectoryPageDto = pic
+        let app_dir: Page<(
+            CanisterRole,
+            canic::core::model::memory::directory::PrincipalList,
+        )> = pic
             .query_call(
                 entry.pid,
                 "canic_app_directory",
                 (PageRequest::new(100, 0),),
             )
             .expect("child app directory");
-        let subnet_dir: Result<DirectoryPageDto, Error> = pic
+        let subnet_dir: Result<
+            Page<(
+                CanisterRole,
+                canic::core::model::memory::directory::PrincipalList,
+            )>,
+            Error,
+        > = pic
             .query_call(
                 entry.pid,
                 "canic_subnet_directory",
@@ -295,7 +311,7 @@ fn subnet_children_matches_registry_on_root() {
         "registry should contain root children"
     );
 
-    let mut page: canic::core::ops::model::memory::topology::SubnetCanisterChildrenPage = pic
+    let mut page: Page<CanisterSummary> = pic
         .query_call(
             root_id,
             "canic_subnet_canister_children",
@@ -304,7 +320,7 @@ fn subnet_children_matches_registry_on_root() {
         .expect("query root subnet children");
 
     expected_children.sort_by(|a, b| a.role.cmp(&b.role));
-    page.children.sort_by(|a, b| a.role.cmp(&b.role));
+    page.entries.sort_by(|a, b| a.role.cmp(&b.role));
 
     assert_eq!(
         page.total,
@@ -312,7 +328,7 @@ fn subnet_children_matches_registry_on_root() {
         "reported total mismatch"
     );
     assert_eq!(
-        page.children, expected_children,
+        page.entries, expected_children,
         "child list from endpoint must match registry"
     );
 }
@@ -364,7 +380,7 @@ fn worker_topology_cascades_through_parent() {
     );
 
     // Scale_hub's view of its children should include the worker (auth is parent-only).
-    let mut children_page: SubnetCanisterChildrenPage = pic
+    let mut children_page: Page<CanisterSummary> = pic
         .query_call(
             scale_hub.pid,
             "canic_subnet_canister_children",
@@ -372,11 +388,11 @@ fn worker_topology_cascades_through_parent() {
         )
         .expect("scale_hub subnet children");
     children_page
-        .children
+        .entries
         .retain(|c| c.parent_pid == Some(scale_hub.pid));
 
     assert!(
-        children_page.children.iter().any(|c| c.pid == worker_pid),
+        children_page.entries.iter().any(|c| c.pid == worker_pid),
         "scale_hub children should include the new worker"
     );
 }

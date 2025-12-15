@@ -1,4 +1,5 @@
 use crate::perf_scope;
+use std::future::Future;
 
 /// Dispatch a synchronous query endpoint.
 pub fn dispatch_query<R>(label: &'static str, f: impl FnOnce() -> R) -> R {
@@ -9,7 +10,7 @@ pub fn dispatch_query<R>(label: &'static str, f: impl FnOnce() -> R) -> R {
 /// Dispatch an asynchronous query endpoint.
 pub async fn dispatch_query_async<R, F>(label: &'static str, f: impl FnOnce() -> F) -> R
 where
-    F: std::future::Future<Output = R>,
+    F: Future<Output = R>,
 {
     perf_scope!("{label}");
     f().await
@@ -24,7 +25,7 @@ pub fn dispatch_update<R>(label: &'static str, f: impl FnOnce() -> R) -> R {
 /// Dispatch an asynchronous update endpoint.
 pub async fn dispatch_update_async<R, F>(label: &'static str, f: impl FnOnce() -> F) -> R
 where
-    F: std::future::Future<Output = R>,
+    F: Future<Output = R>,
 {
     perf_scope!("{label}");
     f().await

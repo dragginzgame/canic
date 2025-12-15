@@ -6,33 +6,26 @@ pub use subnet::*;
 
 pub use crate::model::memory::directory::DirectoryView;
 
-use crate::types::PageRequest;
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
-
-///
-/// DirectoryPageDto
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DirectoryPageDto {
-    pub entries: DirectoryView,
-    pub total: u64,
-}
+use crate::{
+    dto::Page, ids::CanisterRole, model::memory::directory::PrincipalList, types::PageRequest,
+};
 
 ///
 /// Pagination
 ///
 
 #[must_use]
-pub(crate) fn paginate(view: DirectoryView, request: PageRequest) -> DirectoryPageDto {
+pub(crate) fn paginate(
+    view: DirectoryView,
+    request: PageRequest,
+) -> Page<(CanisterRole, PrincipalList)> {
     let request = request.clamped();
     let total = view.len() as u64;
     let (start, end) = pagination_bounds(total, request);
 
     let entries = view.into_iter().skip(start).take(end - start).collect();
 
-    DirectoryPageDto { entries, total }
+    Page { entries, total }
 }
 
 #[allow(clippy::cast_possible_truncation)]

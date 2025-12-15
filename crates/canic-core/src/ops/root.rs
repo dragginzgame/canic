@@ -1,10 +1,10 @@
 use crate::{
     Error,
     cdk::api::canister_self,
-    interface::ic::get_current_subnet_pid,
     log::Topic,
     ops::{
         config::ConfigOps,
+        ic::get_current_subnet_pid,
         model::memory::{EnvOps, topology::SubnetCanisterRegistryOps},
         prelude::*,
         request::{CreateCanisterParent, create_canister_request},

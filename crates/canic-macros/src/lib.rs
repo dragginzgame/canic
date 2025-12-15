@@ -310,6 +310,7 @@ mod expand {
         let inputs = orig_sig.inputs.clone();
         let output = orig_sig.output.clone();
         let asyncness = orig_sig.asyncness.is_some();
+        let returns_result = returns_result(&orig_sig);
 
         let impl_name = format_ident!("__canic_impl_{}", orig_name);
         func.sig.ident = impl_name.clone();
@@ -327,6 +328,7 @@ mod expand {
 
         let label = orig_name.to_string();
 
+        let attempted = attempted(&label);
         let guard = guard(kind, args.app_guard, &label);
         let auth = auth(args.auth.as_ref(), &label);
         let policy = policy(&args.policies, &label);
@@ -334,19 +336,34 @@ mod expand {
         let call_args = extract_args(&orig_sig).unwrap();
 
         let call = call(asyncness, dispatch, &label, impl_name, &call_args);
+        let completion = completion(&label, returns_result, call);
 
         quote! {
             #cdk_attr
             #vis #wrapper_sig {
+                #attempted
                 #guard
                 #auth
                 #policy
-                #call
+                #completion
             }
 
             #func
         }
         .into()
+    }
+
+    fn returns_result(sig: &syn::Signature) -> bool {
+        let syn::ReturnType::Type(_, ty) = &sig.output else {
+            return false;
+        };
+        let syn::Type::Path(ty) = &**ty else {
+            return false;
+        };
+        ty.path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "Result")
     }
 
     fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
@@ -361,6 +378,12 @@ mod expand {
     fn record_access_denied(label: &String, kind: TokenStream2) -> TokenStream2 {
         quote! {
             ::canic::core::ops::metrics::AccessMetrics::increment(#label, #kind);
+        }
+    }
+
+    fn attempted(label: &String) -> TokenStream2 {
+        quote! {
+            ::canic::core::ops::metrics::EndpointAttemptMetrics::increment_attempted(#label);
         }
     }
 
@@ -452,6 +475,29 @@ mod expand {
                 #dispatch(#label, || {
                     #impl_name(#(#call_args),*)
                 })
+            }
+        }
+    }
+
+    fn completion(label: &String, returns_result: bool, call: TokenStream2) -> TokenStream2 {
+        let result_metrics = if returns_result {
+            quote! {
+                if out.is_ok() {
+                    ::canic::core::ops::metrics::EndpointResultMetrics::increment_ok(#label);
+                } else {
+                    ::canic::core::ops::metrics::EndpointResultMetrics::increment_err(#label);
+                }
+            }
+        } else {
+            quote!()
+        };
+
+        quote! {
+            {
+                let out = #call;
+                ::canic::core::ops::metrics::EndpointAttemptMetrics::increment_completed(#label);
+                #result_metrics
+                out
             }
         }
     }

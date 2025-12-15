@@ -8,6 +8,7 @@ pub mod access;
 pub use access::{auth, guard, policy};
 pub mod config;
 pub mod dispatch;
+pub mod dto;
 pub mod env;
 pub mod ids;
 pub mod interface;

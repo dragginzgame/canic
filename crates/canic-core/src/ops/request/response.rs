@@ -7,9 +7,9 @@
 
 use crate::{
     Error,
-    interface::ic::deposit_cycles,
     log::Topic,
     ops::{
+        ic::deposit_cycles,
         model::memory::topology::subnet::SubnetCanisterRegistryOps,
         orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,

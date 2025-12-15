@@ -2,6 +2,7 @@ pub use crate::model::memory::cycles::CycleTrackerView;
 
 use crate::{
     cdk::{futures::spawn, utils::time::now_secs},
+    dto::Page,
     interface::ic::{
         canister_cycle_balance,
         timer::{Timer, TimerId},
@@ -17,8 +18,6 @@ use crate::{
     },
     types::{Cycles, PageRequest},
 };
-use candid::CandidType;
-use serde::Serialize;
 use std::{cell::RefCell, time::Duration};
 
 //
@@ -35,16 +34,6 @@ thread_local! {
 
 // Check every 10 minutes
 const TRACKER_INTERVAL_SECS: Duration = OPS_CYCLE_TRACK_INTERVAL;
-
-///
-/// CycleTrackerPage
-///
-
-#[derive(CandidType, Serialize)]
-pub struct CycleTrackerPage {
-    pub entries: CycleTrackerView,
-    pub total: u64,
-}
 
 ///
 /// CycleTrackerOps
@@ -133,10 +122,10 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn page(request: PageRequest) -> CycleTrackerPage {
+    pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
         let entries = CycleTracker::entries(request);
         let total = CycleTracker::len();
 
-        CycleTrackerPage { entries, total }
+        Page { entries, total }
     }
 }

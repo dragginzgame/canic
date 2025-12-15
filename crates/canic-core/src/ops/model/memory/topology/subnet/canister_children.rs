@@ -1,12 +1,11 @@
 use crate::{
     cdk::{api::canister_self, types::Principal},
+    dto::Page,
     ids::CanisterRole,
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
     ops::model::memory::{env::EnvOps, topology::SubnetCanisterRegistryOps},
     types::PageRequest,
 };
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 
 ///
 /// SubnetCanisterChildrenOps
@@ -28,15 +27,15 @@ impl SubnetCanisterChildrenOps {
     /// Return a paginated view of the canister's direct children.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
-    pub fn page(request: PageRequest) -> SubnetCanisterChildrenPage {
+    pub fn page(request: PageRequest) -> Page<CanisterSummary> {
         let request = request.clamped();
         let all_children = Self::resolve_children();
         let total = all_children.len() as u64;
         let start = request.offset.min(total) as usize;
         let end = request.offset.saturating_add(request.limit).min(total) as usize;
-        let children = all_children[start..end].to_vec();
+        let entries = all_children[start..end].to_vec();
 
-        SubnetCanisterChildrenPage { total, children }
+        Page { entries, total }
     }
 
     /// Lookup a child by principal
@@ -63,15 +62,4 @@ impl SubnetCanisterChildrenOps {
     pub(crate) fn import(children: Vec<CanisterSummary>) {
         SubnetCanisterChildren::import(children);
     }
-}
-
-///
-/// SubnetCanisterChildrenPage
-/// Page of subnet canister children.
-///
-
-#[derive(CandidType, Debug, Deserialize, Serialize)]
-pub struct SubnetCanisterChildrenPage {
-    pub total: u64,
-    pub children: Vec<CanisterSummary>,
 }

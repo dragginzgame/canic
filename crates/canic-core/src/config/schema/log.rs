@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+///
+/// Defaults
+///
+
 mod defaults {
     pub const fn max_entries() -> u64 {
         10_000

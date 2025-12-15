@@ -1,6 +1,7 @@
 use crate::{
     Error, ThisError,
     config::Config,
+    dto::Page,
     model::memory::{
         directory::{AppDirectory, PrincipalList},
         topology::SubnetCanisterRegistry,
@@ -8,7 +9,7 @@ use crate::{
     ops::{
         model::memory::{
             MemoryOpsError,
-            directory::{DirectoryPageDto, DirectoryView, paginate},
+            directory::{DirectoryView, paginate},
             env::EnvOps,
         },
         prelude::*,
@@ -61,7 +62,7 @@ impl AppDirectoryOps {
     }
 
     #[must_use]
-    pub fn page(request: PageRequest) -> DirectoryPageDto {
+    pub fn page(request: PageRequest) -> Page<(CanisterRole, PrincipalList)> {
         paginate(Self::resolve_view(), request)
     }
 

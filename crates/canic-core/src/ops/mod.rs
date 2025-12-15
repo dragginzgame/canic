@@ -7,8 +7,10 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
+pub mod call;
 pub mod config;
 pub mod http;
+pub mod ic;
 pub mod icrc;
 pub mod metrics;
 pub mod mgmt;
@@ -36,13 +38,12 @@ pub mod prelude {
             types::{Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
-        interface::{
-            InterfaceError,
-            ic::{call::Call, call_and_decode},
-        },
+        interface::InterfaceError,
         log,
         log::Level,
         ops::OpsError,
+        ops::call::Call,
+        ops::ic::call_and_decode,
         types::Cycles,
     };
     pub use serde::{Deserialize, Serialize};

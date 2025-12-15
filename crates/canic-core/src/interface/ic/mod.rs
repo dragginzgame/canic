@@ -5,7 +5,6 @@ pub mod call;
 pub mod canister;
 pub mod cycles;
 pub mod helper;
-pub mod icp;
 pub mod sns;
 pub mod timer;
 
@@ -15,13 +14,12 @@ use crate::{
     Error,
     cdk::mgmt::{
         self, CanisterInstallMode, CanisterStatusArgs, CanisterStatusResult, DeleteCanisterArgs,
-        DepositCyclesArgs, InstallCodeArgs, UninstallCodeArgs, WasmModule,
+        DepositCyclesArgs, InstallCodeArgs, UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
     },
     env::nns::NNS_REGISTRY_CANISTER,
     interface::prelude::*,
     log,
     log::Topic,
-    model::metrics::{SystemMetricKind, SystemMetrics},
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
@@ -37,7 +35,6 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
     };
 
     let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
-    SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
     Ok(status)
 }
@@ -60,8 +57,6 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
     mgmt::deposit_cycles(&args, cycles)
         .await
         .map_err(Error::from)?;
-
-    SystemMetrics::increment(SystemMetricKind::DepositCycles);
 
     Ok(())
 }
@@ -120,13 +115,6 @@ pub async fn install_code<T: ArgumentEncoder>(
         .await
         .map_err(Error::from)?;
 
-    let metric_kind = match mode {
-        CanisterInstallMode::Install => SystemMetricKind::InstallCode,
-        CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
-        CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
-    };
-    SystemMetrics::increment(metric_kind);
-
     Ok(())
 }
 
@@ -137,7 +125,6 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
     };
 
     mgmt::uninstall_code(&args).await.map_err(Error::from)?;
-    SystemMetrics::increment(SystemMetricKind::UninstallCode);
 
     Ok(())
 }
@@ -149,8 +136,17 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
     };
 
     mgmt::delete_canister(&args).await.map_err(Error::from)?;
-    SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
+    Ok(())
+}
+
+//
+// ─────────────────────────────── SETTINGS API ────────────────────────────────
+//
+
+/// Updates canister settings via the management canister.
+pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
+    mgmt::update_settings(args).await.map_err(Error::from)?;
     Ok(())
 }
 
