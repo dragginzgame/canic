@@ -1,13 +1,12 @@
 use crate::{
     Error,
     dto::Page,
-    interface::ic::timer::{Timer, TimerId},
     log,
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
     ops::{
+        ic::timer::{TimerId, TimerOps},
         model::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
-        timer::TimerOps,
     },
     types::PageRequest,
 };
@@ -85,7 +84,7 @@ impl LogOps {
     pub fn stop_retention() {
         RETENTION_TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                Timer::clear(id);
+                TimerOps::clear(id);
             }
         });
     }

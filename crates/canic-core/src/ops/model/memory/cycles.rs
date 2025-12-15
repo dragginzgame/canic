@@ -3,18 +3,17 @@ pub use crate::model::memory::cycles::CycleTrackerView;
 use crate::{
     cdk::{futures::spawn, utils::time::now_secs},
     dto::Page,
-    interface::ic::{
-        canister_cycle_balance,
-        timer::{Timer, TimerId},
-    },
     log,
     log::Topic,
     model::memory::cycles::CycleTracker,
     ops::{
         config::ConfigOps,
+        ic::{
+            canister_cycle_balance,
+            timer::{TimerId, TimerOps},
+        },
         model::memory::EnvOps,
         model::{OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY},
-        timer::TimerOps,
     },
     types::{Cycles, PageRequest},
 };
@@ -70,7 +69,7 @@ impl CycleTrackerOps {
     pub fn stop() {
         TIMER.with_borrow_mut(|slot| {
             if let Some(id) = slot.take() {
-                Timer::clear(id);
+                TimerOps::clear(id);
             }
         });
     }

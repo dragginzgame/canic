@@ -4,10 +4,13 @@ use crate::{
     ids::CanisterRole,
     ops::{
         OpsError,
-        ic::{install_code, upgrade_canister},
-        mgmt::{
-            ProvisioningError, create_and_install_canister, delete_canister,
-            rebuild_directories_from_registry,
+        ic::{
+            install_code,
+            mgmt::{
+                ProvisioningError, create_and_install_canister, delete_canister,
+                rebuild_directories_from_registry,
+            },
+            upgrade_canister,
         },
         model::memory::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},

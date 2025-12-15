@@ -38,11 +38,10 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
     - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
     - `src/config/` – configuration loaders, validators, and schema helpers.
     - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
-    - `src/interface/` – typed wrappers for IC management calls, ck-ledgers, and ICRC ledgers.
     - `src/log.rs` – logging macros.
     - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
     - `src/model/` – stable-memory registries plus volatile state caches that back the ops layer.
-    - `src/ops/` – orchestration/business logic bridging model to endpoints.
+    - `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
     - `src/runtime.rs` – runtime glue shared by macros.
     - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
     - `types` – re-exported wrappers for accounts, cycles, bounded strings, ULIDs, WASM helpers, etc. under `canic::core::types`.

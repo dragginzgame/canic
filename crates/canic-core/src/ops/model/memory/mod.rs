@@ -16,8 +16,8 @@ use crate::{
     ops::model::{
         ModelOpsError,
         memory::{
-            directory::{AppDirectoryOpsError, SubnetDirectoryOpsError},
-            env::EnvOpsError,
+            directory::{AppDirectoryOpsError, DirectoryView, SubnetDirectoryOpsError},
+            env::{EnvData, EnvOpsError},
             registry::MemoryRegistryOpsError,
             scaling::ScalingOpsError,
             sharding::ShardingOpsError,
@@ -26,6 +26,8 @@ use crate::{
         },
     },
 };
+use candid::CandidType;
+use serde::Deserialize;
 
 ///
 /// MemoryOpsError
@@ -61,5 +63,23 @@ pub enum MemoryOpsError {
 impl From<MemoryOpsError> for Error {
     fn from(err: MemoryOpsError) -> Self {
         ModelOpsError::MemoryOpsError(err).into()
+    }
+}
+
+///
+/// CanisterInitPayload
+///
+
+#[derive(CandidType, Debug, Default, Deserialize)]
+pub struct CanisterInitPayload {
+    pub env: EnvData,
+    pub app_directory: DirectoryView,
+    pub subnet_directory: DirectoryView,
+}
+
+impl CanisterInitPayload {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::default()
     }
 }

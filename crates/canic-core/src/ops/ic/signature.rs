@@ -14,7 +14,7 @@
 use crate::{
     Error, ThisError,
     cdk::{api::certified_data_set, types::Principal},
-    ops::OpsError,
+    ops::ic::IcOpsError,
 };
 use ic_canister_sig_creation::{
     CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,
@@ -47,7 +47,7 @@ pub enum SignatureOpsError {
 
 impl From<SignatureOpsError> for Error {
     fn from(err: SignatureOpsError) -> Self {
-        OpsError::from(err).into()
+        IcOpsError::from(err).into()
     }
 }
 
