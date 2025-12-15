@@ -7,6 +7,7 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
+pub mod cascade;
 pub mod config;
 pub mod cycles;
 pub mod ic;
@@ -14,15 +15,13 @@ pub mod log;
 pub mod metrics;
 pub mod orchestrator;
 pub mod perf;
+pub mod placement;
 pub mod request;
 pub mod reserve;
 pub mod root;
 pub mod runtime;
-pub mod scaling;
 pub mod service;
-pub mod sharding;
 pub mod storage;
-pub mod sync;
 pub mod wasm;
 
 use std::time::Duration;
@@ -88,6 +87,9 @@ pub enum OpsError {
     IsRoot,
 
     #[error(transparent)]
+    CascadeOpsError(#[from] cascade::CascadeOpsError),
+
+    #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
@@ -98,9 +100,6 @@ pub enum OpsError {
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
-
-    #[error(transparent)]
-    SyncOpsError(#[from] sync::SyncOpsError),
 
     #[error(transparent)]
     OrchestratorError(#[from] orchestrator::OrchestratorError),

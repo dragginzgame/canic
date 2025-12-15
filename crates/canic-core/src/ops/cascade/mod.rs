@@ -1,4 +1,7 @@
-//! Synchronization helpers for propagating state and topology snapshots.
+//! Cascade propagation.
+//!
+//! Pushes environment/topology/state changes from root to child canisters.
+//! This is orchestration logic (fanout), not storage and not placement strategy.
 
 pub mod state;
 pub mod topology;
@@ -9,12 +12,12 @@ use candid::Principal;
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 
 ///
-/// SyncOpsError
+/// CascadeOpsError
 /// Errors raised during synchronization
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SyncOpsError {
+pub enum CascadeOpsError {
     #[error("canister not found")]
     CanisterNotFound(Principal),
 
@@ -40,8 +43,8 @@ pub enum SyncOpsError {
     NextHopNotFound(Principal),
 }
 
-impl From<SyncOpsError> for Error {
-    fn from(err: SyncOpsError) -> Self {
+impl From<CascadeOpsError> for Error {
+    fn from(err: CascadeOpsError) -> Self {
         OpsError::from(err).into()
     }
 }

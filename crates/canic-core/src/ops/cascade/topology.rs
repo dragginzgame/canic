@@ -16,9 +16,9 @@ use crate::{
     model::memory::CanisterSummary,
     ops::{
         OpsError,
+        cascade::CascadeOpsError,
         prelude::*,
         storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
-        sync::SyncOpsError,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -183,22 +183,22 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
 
     loop {
         if !seen.insert(pid) {
-            return Err(SyncOpsError::ParentChainCycle(pid).into());
+            return Err(CascadeOpsError::ParentChainCycle(pid).into());
         }
 
         let Some(entry) = SubnetCanisterRegistryOps::get(pid) else {
-            return Err(SyncOpsError::CanisterNotFound(pid).into());
+            return Err(CascadeOpsError::CanisterNotFound(pid).into());
         };
 
         if seen.len() > registry_len {
-            return Err(SyncOpsError::ParentChainTooLong(seen.len()).into());
+            return Err(CascadeOpsError::ParentChainTooLong(seen.len()).into());
         }
 
         chain.push(entry.clone().into());
 
         let Some(parent) = entry.parent_pid else {
             if entry.role != CanisterRole::ROOT {
-                return Err(SyncOpsError::ParentChainNotRootTerminated(pid).into());
+                return Err(CascadeOpsError::ParentChainNotRootTerminated(pid).into());
             }
             break;
         };
@@ -224,11 +224,11 @@ fn next_child_on_path(
     parents: &[CanisterSummary],
 ) -> Result<Option<Principal>, Error> {
     let Some(first) = parents.first() else {
-        return Err(SyncOpsError::InvalidParentChain.into());
+        return Err(CascadeOpsError::InvalidParentChain.into());
     };
 
     if first.pid != self_pid {
-        return Err(SyncOpsError::ParentChainMissingSelf(self_pid).into());
+        return Err(CascadeOpsError::ParentChainMissingSelf(self_pid).into());
     }
 
     Ok(parents.get(1).map(|p| p.pid))
@@ -252,7 +252,7 @@ fn slice_bundle_for_child(
     }
 
     if sliced_parents.is_empty() {
-        return Err(SyncOpsError::NextHopNotFound(next_pid).into());
+        return Err(CascadeOpsError::NextHopNotFound(next_pid).into());
     }
 
     // Slice children_map so it includes only nodes in the sliced chain
