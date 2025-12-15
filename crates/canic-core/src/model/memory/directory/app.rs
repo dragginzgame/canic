@@ -22,7 +22,7 @@ eager_static! {
 /// AppDirectory
 ///
 
-pub(crate) struct AppDirectory;
+pub struct AppDirectory;
 
 impl AppDirectory {
     #[must_use]

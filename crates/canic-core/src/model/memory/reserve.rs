@@ -53,11 +53,11 @@ impl_storable_unbounded!(CanisterReserveEntry);
 /// CanisterReserve
 ///
 
-pub(crate) struct CanisterReserve;
+pub struct CanisterReserve;
 
 impl CanisterReserve {
     /// Register a canister into the reserve.
-    pub(crate) fn register(
+    pub fn register(
         pid: Principal,
         cycles: Cycles,
         role: Option<CanisterRole>,

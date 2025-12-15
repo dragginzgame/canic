@@ -3,7 +3,7 @@ use crate::{
     ids::CanisterRole,
     log::Topic,
     ops::{
-        model::memory::{EnvOps, topology::SubnetCanisterChildrenOps},
+        model::memory::{env::EnvOps, topology::SubnetCanisterChildrenOps},
         prelude::*,
         request::{
             CreateCanisterResponse, CyclesResponse, RequestOpsError, Response,

@@ -13,8 +13,8 @@ use crate::{
     log,
     log::Topic,
     ops::model::memory::{
-        EnvOps,
         directory::{AppDirectoryOps, SubnetDirectoryOps},
+        env::EnvOps,
         topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
     },
 };

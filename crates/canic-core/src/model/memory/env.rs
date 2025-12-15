@@ -57,7 +57,7 @@ impl_storable_bounded!(EnvData, 256, true);
 /// Env
 ///
 
-pub(crate) struct Env;
+pub struct Env;
 
 impl Env {
     //

@@ -7,8 +7,9 @@ use crate::{
     model::memory::topology::SubnetIdentity,
     ops::{
         model::memory::{
-            CanisterInitPayload, EnvOps,
+            CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
+            env::EnvOps,
             registry::MemoryRegistryOps,
             topology::SubnetCanisterRegistryOps,
         },

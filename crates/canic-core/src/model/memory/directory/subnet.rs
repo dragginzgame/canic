@@ -22,7 +22,7 @@ eager_static! {
 /// SubnetDirectory
 ///
 
-pub(crate) struct SubnetDirectory;
+pub struct SubnetDirectory;
 
 impl SubnetDirectory {
     #[must_use]

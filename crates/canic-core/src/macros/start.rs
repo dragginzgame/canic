@@ -99,7 +99,7 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::model::memory::topology::SubnetIdentity) {
+        fn init(identity: ::canic::core::ops::model::memory::topology::SubnetIdentity) {
             ::canic::core::__canic_load_config!();
 
             // ops

@@ -1,6 +1,6 @@
 mod registry;
 
-pub(crate) use registry::ShardingRegistry;
+pub use registry::*;
 
 use crate::{
     cdk::{
@@ -127,7 +127,7 @@ impl_storable_bounded!(ShardEntry, ShardEntry::STORABLE_MAX_SIZE, false);
 /// Registry + assignments
 ///
 
-pub(crate) struct ShardingCore<M: Memory> {
+pub struct ShardingCore<M: Memory> {
     registry: BTreeMap<Principal, ShardEntry, M>,
     assignments: BTreeMap<ShardKey, Principal, M>,
 }

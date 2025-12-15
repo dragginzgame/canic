@@ -12,7 +12,7 @@ pub mod topology;
 pub mod types;
 
 pub use canic_memory::MemoryRegistryError;
-pub(crate) use env::Env;
+pub use env::Env;
 pub use types::*;
 
 use crate::{
@@ -26,14 +26,14 @@ use thiserror::Error as ThisError;
 /// Keep small but with room for future expansion.
 ///
 
-pub(crate) const CANIC_MEMORY_MIN: u8 = 5;
-pub(crate) const CANIC_MEMORY_MAX: u8 = 30;
+pub const CANIC_MEMORY_MIN: u8 = 5;
+pub const CANIC_MEMORY_MAX: u8 = 30;
 
 ///
 /// CANIC Memory IDs (5-30)
 ///
 
-pub(crate) mod id {
+pub mod id {
     // environment
     // creation-only, and it stays immutable
     // all canisters get env

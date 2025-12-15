@@ -4,6 +4,8 @@ pub mod subnet;
 pub use app::*;
 pub use subnet::*;
 
+pub use crate::model::memory::topology::SubnetIdentity;
+
 use crate::{Error, ThisError, ops::model::memory::MemoryOpsError};
 
 ///
