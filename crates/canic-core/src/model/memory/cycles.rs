@@ -1,7 +1,6 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    eager_static, log,
-    log::Topic,
+    eager_static,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
     types::{Cycles, PageRequest},
 };
@@ -94,14 +93,6 @@ impl CycleTracker {
             } else {
                 break;
             }
-        }
-
-        if purged > 0 {
-            log!(
-                Topic::Cycles,
-                Info,
-                "cycle_tracker: purged {purged} old entries"
-            );
         }
 
         purged

@@ -6,7 +6,7 @@ use crate::{
         OpsError,
         ic::{
             install_code,
-            mgmt::{
+            provisioning::{
                 ProvisioningError, create_and_install_canister, delete_canister,
                 rebuild_directories_from_registry,
             },

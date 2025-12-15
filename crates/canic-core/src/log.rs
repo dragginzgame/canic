@@ -2,6 +2,22 @@ use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
+#[doc(hidden)]
+pub fn __append_to_stable_log(
+    crate_name: &str,
+    topic: Option<&str>,
+    level: Level,
+    message: &str,
+) -> Result<u64, crate::Error> {
+    crate::model::memory::log::StableLog::append(crate_name, topic, level, message)
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn __canister_role_string() -> Option<String> {
+    crate::model::memory::Env::get_canister_role().map(|role| role.to_string())
+}
+
 ///
 /// Debug
 ///
@@ -65,11 +81,9 @@ macro_rules! log {
 
         // append entry
         let crate_name = env!("CARGO_PKG_NAME");
-        let _ = $crate::ops::model::memory::log::LogOps::append(crate_name, topic_opt, level, &message);
+        let _ = $crate::log::__append_to_stable_log(crate_name, topic_opt, level, &message);
 
-        let ty_raw = $crate::ops::model::memory::env::EnvOps::try_get_canister_role()
-            .map(|role| role.to_string())
-            .unwrap_or_else(|_| "...".to_string());
+        let ty_raw = $crate::log::__canister_role_string().unwrap_or_else(|| "...".to_string());
 
         let ty_disp = $crate::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);
         let ty_centered = format!("{:^9}", ty_disp);

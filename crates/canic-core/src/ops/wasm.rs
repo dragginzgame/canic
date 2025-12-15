@@ -1,4 +1,6 @@
-use crate::{Error, ids::CanisterRole, model::wasm::WasmRegistry, types::WasmModule};
+use crate::{
+    Error, ids::CanisterRole, log, log::Topic, model::wasm::WasmRegistry, types::WasmModule,
+};
 
 ///
 /// WasmOps
@@ -20,7 +22,21 @@ impl WasmOps {
     }
 
     /// Import a static slice of (role, wasm bytes) at startup.
+    #[allow(clippy::cast_precision_loss)]
     pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
-        WasmRegistry::import(wasms);
+        for (role, bytes) in wasms {
+            let wasm = WasmModule::new(bytes);
+            let wasm_size = wasm.len();
+
+            WasmRegistry::insert(role, wasm);
+
+            log!(
+                Topic::Wasm,
+                Info,
+                "📄 registry.insert: {} ({:.2} KB)",
+                role,
+                wasm_size as f64 / 1000.0
+            );
+        }
     }
 }
