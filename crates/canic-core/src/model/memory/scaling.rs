@@ -50,7 +50,7 @@ pub type ScalingRegistryView = Vec<(Principal, WorkerEntry)>;
 ///
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct ScalingRegistry;
+pub struct ScalingRegistry;
 
 impl ScalingRegistry {
     /// Insert or update a worker entry

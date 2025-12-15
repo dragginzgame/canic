@@ -48,7 +48,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::model::memory::EnvOps};
+use crate::{ThisError, ops::model::memory::env::EnvOps};
 
 ///
 /// OpsError

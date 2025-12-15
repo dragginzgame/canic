@@ -4,11 +4,9 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-pub use crate::model::memory::directory::DirectoryView;
+pub use crate::model::memory::directory::{DirectoryView, PrincipalList};
 
-use crate::{
-    dto::Page, ids::CanisterRole, model::memory::directory::PrincipalList, types::PageRequest,
-};
+use crate::{dto::Page, ids::CanisterRole, types::PageRequest};
 
 ///
 /// Pagination

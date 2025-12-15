@@ -250,9 +250,9 @@ pub mod provisioning {
             OpsError,
             config::ConfigOps,
             model::memory::{
-                CanisterInitPayload, EnvOps,
+                CanisterInitPayload,
                 directory::{AppDirectoryOps, SubnetDirectoryOps},
-                env::EnvData,
+                env::{EnvData, EnvOps},
                 reserve::CanisterReserveOps,
                 topology::SubnetCanisterRegistryOps,
             },

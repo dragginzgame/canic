@@ -9,7 +9,7 @@ pub mod sharding;
 pub mod state;
 pub mod topology;
 
-pub use env::EnvOps;
+pub use crate::model::memory::{CanisterEntry, CanisterSummary};
 
 use crate::{
     Error, ThisError,
@@ -17,7 +17,7 @@ use crate::{
         ModelOpsError,
         memory::{
             directory::{AppDirectoryOpsError, DirectoryView, SubnetDirectoryOpsError},
-            env::{EnvData, EnvOpsError},
+            env::{EnvData, EnvOps, EnvOpsError},
             registry::MemoryRegistryOpsError,
             scaling::ScalingOpsError,
             sharding::ShardingOpsError,

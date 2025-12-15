@@ -1,7 +1,7 @@
-pub mod icrc;
-pub mod memory;
-pub mod metrics;
-pub mod wasm;
+pub(crate) mod icrc;
+pub(crate) mod memory;
+pub(crate) mod metrics;
+pub(crate) mod wasm;
 
 use crate::model::{memory::MemoryError, wasm::WasmRegistryError};
 use thiserror::Error as ThisError;

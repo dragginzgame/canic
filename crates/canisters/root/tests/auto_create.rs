@@ -1,7 +1,7 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::core::{ids::CanisterRole, model::memory::CanisterEntry};
+use canic::core::{ids::CanisterRole, ops::model::memory::CanisterEntry};
 use canic_internal::canister;
 use pocket_ic::PocketIc;
 
@@ -29,6 +29,10 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
     None
 }
+
+///
+/// TESTS
+///
 
 #[test]
 fn root_auto_creates_expected_canisters() {

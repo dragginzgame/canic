@@ -63,7 +63,7 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_env() -> ::canic::core::ops::model::memory::env::EnvData {
-            $crate::ops::model::memory::EnvOps::export()
+            $crate::ops::model::memory::env::EnvOps::export()
         }
 
         #[canic_query]
@@ -168,7 +168,7 @@ macro_rules! canic_endpoints {
             page: ::canic::core::types::PageRequest,
         ) -> ::canic::core::dto::Page<(
             ::canic::core::ids::CanisterRole,
-            ::canic::core::model::memory::directory::PrincipalList,
+            ::canic::core::ops::model::memory::directory::PrincipalList,
         )> {
             $crate::ops::model::memory::directory::AppDirectoryOps::page(page)
         }
@@ -179,7 +179,7 @@ macro_rules! canic_endpoints {
         ) -> Result<
             ::canic::core::dto::Page<(
                 ::canic::core::ids::CanisterRole,
-                ::canic::core::model::memory::directory::PrincipalList,
+                ::canic::core::ops::model::memory::directory::PrincipalList,
             )>,
             ::canic::Error,
         > {
@@ -193,7 +193,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::model::memory::CanisterSummary> {
+        ) -> ::canic::core::dto::Page<::canic::core::ops::model::memory::CanisterSummary> {
             ::canic::core::ops::model::memory::topology::subnet::SubnetCanisterChildrenOps::page(
                 page,
             )

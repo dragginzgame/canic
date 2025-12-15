@@ -1,7 +1,9 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     Error,
-    core::{ids::CanisterRole, model::memory::topology::SubnetIdentity, ops::CanisterInitPayload},
+    core::{
+        ids::CanisterRole, ops::CanisterInitPayload, ops::model::memory::topology::SubnetIdentity,
+    },
 };
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};

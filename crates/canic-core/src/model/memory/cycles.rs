@@ -35,7 +35,7 @@ pub type CycleTrackerView = Vec<(u64, Cycles)>;
 /// declare M: Memory as a generic right now, it breaks ic-stable-structures/other ic packages
 ///
 
-pub(crate) struct CycleTracker {
+pub struct CycleTracker {
     map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>,
 }
 

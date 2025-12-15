@@ -56,7 +56,7 @@ fn with_log_mut<R>(f: impl FnOnce(&mut StableLogStorage) -> R) -> R {
     LOG.with_borrow_mut(|l| f(l))
 }
 
-pub(crate) fn log_config() -> LogConfig {
+pub fn log_config() -> LogConfig {
     Config::try_get().map(|c| c.log.clone()).unwrap_or_default()
 }
 
@@ -123,7 +123,7 @@ impl_storable_unbounded!(LogEntry);
 /// StableLog
 ///
 
-pub(crate) struct StableLog;
+pub struct StableLog;
 
 impl StableLog {
     // -------- Append --------
@@ -205,7 +205,7 @@ impl StableLog {
 
 // apply_retention
 // currently using the local config
-pub(crate) fn apply_retention() -> Result<(), Error> {
+pub fn apply_retention() -> Result<(), Error> {
     let cfg = log_config();
 
     if cfg.max_entries == 0 {

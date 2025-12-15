@@ -1,8 +1,8 @@
 pub mod app;
 pub mod subnet;
 
-pub(crate) use app::AppDirectory;
-pub(crate) use subnet::SubnetDirectory;
+pub use app::AppDirectory;
+pub use subnet::SubnetDirectory;
 
 use crate::{ids::CanisterRole, memory::impl_storable_unbounded};
 use candid::{CandidType, Principal};
