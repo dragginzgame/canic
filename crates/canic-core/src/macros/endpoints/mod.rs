@@ -261,20 +261,14 @@ macro_rules! canic_endpoints {
         #[canic_update]
         async fn icts_canister_status()
         -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::Error> {
-            use $crate::cdk::{
-                api::canister_self,
-                management_canister::{CanisterStatusArgs, canister_status},
-            };
+            use $crate::cdk::api::canister_self;
+            use $crate::ops::ic::canister_status;
 
             if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
                 return Err(::canic::Error::custom("Unauthorized"));
             }
 
-            canister_status(&CanisterStatusArgs {
-                canister_id: canister_self(),
-            })
-            .await
-            .map_err(|e| ::canic::Error::custom(e.to_string()))
+            canister_status(canister_self()).await
         }
     };
 }

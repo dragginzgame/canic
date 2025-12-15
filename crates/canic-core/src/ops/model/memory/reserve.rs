@@ -242,7 +242,10 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
-    let pid = create_canister(cycles.clone()).await?;
+    let mut controllers = Config::get().controllers.clone();
+    controllers.push(canister_self());
+
+    let pid = create_canister(controllers, cycles.clone()).await?;
 
     CanisterReserve::register(pid, cycles, None, None, None);
     Ok(pid)

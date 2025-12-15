@@ -1,10 +1,10 @@
 //! Cross-cutting performance instrumentation.
 //!
 //! This module provides instruction-count measurement primitives used
-//! across interface, ops, timers, and background tasks.
+//! across endpoints, ops, timers, and background tasks.
 //!
 //! It is intentionally crate-level infrastructure, not part of the
-//! domain layering (interface → ops → model).
+//! domain layering (endpoints → ops → model).
 
 use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};

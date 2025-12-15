@@ -91,7 +91,17 @@ impl CycleTrackerOps {
     #[must_use]
     pub fn purge() -> bool {
         let now = now_secs();
-        CycleTracker::purge(now) > 0
+        let purged = CycleTracker::purge(now);
+
+        if purged > 0 {
+            log!(
+                Topic::Cycles,
+                Info,
+                "cycle_tracker: purged {purged} old entries"
+            );
+        }
+
+        purged > 0
     }
 
     fn check_auto_topup() {

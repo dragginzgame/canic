@@ -22,6 +22,14 @@ pub mod service;
 pub mod sync;
 pub mod wasm;
 
+// -----------------------------------------------------------------------------
+// Compatibility re-exports
+// -----------------------------------------------------------------------------
+
+pub use ic::signature;
+pub use ic::{icrc, timer};
+pub use model::memory::CanisterInitPayload;
+
 /// Common imports for ops submodules and consumers.
 pub mod prelude {
     pub use crate::{
