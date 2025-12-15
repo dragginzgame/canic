@@ -263,7 +263,7 @@ mod tests {
         EndpointAttemptMetrics::increment_attempted("a");
         EndpointAttemptMetrics::increment_completed("a");
         EndpointResultMetrics::increment_ok("a");
-        perf::record_endpoint("a".into(), 1_000);
+        perf::record_endpoint("a", 1_000);
 
         EndpointAttemptMetrics::increment_attempted("b");
         AccessMetrics::increment("b", AccessMetricKind::Auth);
