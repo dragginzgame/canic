@@ -117,8 +117,8 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_perf(
             page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::perf::PerfEntry> {
-            ::canic::core::ops::runtime::perf::PerfOps::snapshot(page)
+        ) -> ::canic::core::dto::Page<::canic::core::ops::perf::PerfEntry> {
+            ::canic::core::ops::perf::PerfOps::snapshot(page)
         }
 
         // derived_view

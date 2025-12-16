@@ -13,8 +13,8 @@ use crate::{
     config::schema::ScalePool,
     model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
-        command::request::{CreateCanisterParent, create_canister_request},
         config::ConfigOps,
+        rpc::{CreateCanisterParent, create_canister_request},
     },
 };
 use candid::Principal;

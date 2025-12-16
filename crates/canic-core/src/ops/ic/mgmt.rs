@@ -20,6 +20,7 @@ use crate::{
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
     ops::ic::call::Call,
+    ops::storage::CanisterInitPayload,
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     types::Cycles,
 };
@@ -147,6 +148,17 @@ pub async fn install_code<T: ArgumentEncoder>(
     SystemMetrics::increment(metric_kind);
 
     Ok(())
+}
+
+/// Installs or reinstalls a Canic non-root canister with the standard init args.
+pub async fn install_canic_code(
+    mode: CanisterInstallMode,
+    canister_pid: Principal,
+    wasm: &[u8],
+    payload: CanisterInitPayload,
+    extra_arg: Option<Vec<u8>>,
+) -> Result<(), Error> {
+    install_code(mode, canister_pid, wasm, (payload, extra_arg)).await
 }
 
 /// Upgrades a canister to the provided wasm when the module hash differs.

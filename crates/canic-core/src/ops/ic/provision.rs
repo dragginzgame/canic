@@ -33,6 +33,26 @@ use crate::{
 use candid::Principal;
 use thiserror::Error as ThisError;
 
+pub(crate) fn build_nonroot_init_payload(
+    role: &CanisterRole,
+    parent_pid: Principal,
+) -> Result<CanisterInitPayload, Error> {
+    let env = EnvData {
+        prime_root_pid: Some(EnvOps::try_get_prime_root_pid()?),
+        subnet_role: Some(EnvOps::try_get_subnet_role()?),
+        subnet_pid: Some(EnvOps::try_get_subnet_pid()?),
+        root_pid: Some(EnvOps::try_get_root_pid()?),
+        canister_role: Some(role.clone()),
+        parent_pid: Some(parent_pid),
+    };
+
+    Ok(CanisterInitPayload {
+        env,
+        app_directory: AppDirectoryOps::export(),
+        subnet_directory: SubnetDirectoryOps::export(),
+    })
+}
+
 ///
 /// ProvisionOpsError
 ///
@@ -137,11 +157,8 @@ pub async fn create_and_install_canister(
 /// 2. Remove from SubnetCanisterRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
-pub async fn delete_canister(
-    pid: Principal,
-) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
+pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
-    let parent_pid = SubnetCanisterRegistryOps::get_parent(pid);
 
     // Phase 0: uninstall code
     super::uninstall_code(pid).await?;
@@ -166,7 +183,7 @@ pub async fn delete_canister(
         ),
     }
 
-    Ok((removed_entry.map(|e| e.role), parent_pid))
+    Ok(())
 }
 
 /// Uninstall code from a canister without deleting it.
@@ -190,7 +207,6 @@ pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
 pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
     // use ConfigOps for a clean, ops-layer config lookup
     let cfg = ConfigOps::current_subnet_canister(role)?;
-
     let target = cfg.initial_cycles;
 
     // Reuse from reserve
@@ -266,21 +282,7 @@ async fn install_canister(
     // Fetch and register WASM
     let wasm = WasmOps::try_get(role)?;
 
-    // Construct init payload
-    let env = EnvData {
-        prime_root_pid: Some(EnvOps::try_get_prime_root_pid()?),
-        subnet_role: Some(EnvOps::try_get_subnet_role()?),
-        subnet_pid: Some(EnvOps::try_get_subnet_pid()?),
-        root_pid: Some(EnvOps::try_get_root_pid()?),
-        canister_role: Some(role.clone()),
-        parent_pid: Some(parent_pid),
-    };
-
-    let payload = CanisterInitPayload {
-        env,
-        app_directory: AppDirectoryOps::export(),
-        subnet_directory: SubnetDirectoryOps::export(),
-    };
+    let payload = build_nonroot_init_payload(role, parent_pid)?;
 
     let module_hash = wasm.module_hash();
 
@@ -288,11 +290,12 @@ async fn install_canister(
     // otherwise if the init() tries to create a canister via root, it will panic
     SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone());
 
-    if let Err(err) = super::install_code(
+    if let Err(err) = super::install_canic_code(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),
-        (payload, extra_arg),
+        payload,
+        extra_arg,
     )
     .await
     {

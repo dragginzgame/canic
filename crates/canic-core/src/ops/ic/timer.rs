@@ -11,7 +11,7 @@ use crate::{
         system::{SystemMetricKind, SystemMetrics},
         timer::{TimerMetrics, TimerMode},
     },
-    ops::runtime::perf::PerfOps,
+    ops::perf::PerfOps,
     perf::perf_counter,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, time::Duration};

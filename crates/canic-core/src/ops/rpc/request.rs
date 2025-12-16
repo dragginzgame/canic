@@ -1,14 +1,12 @@
 use crate::{
     Error, ThisError,
     ids::CanisterRole,
-    log::Topic,
     ops::{
-        command::{
-            CommandOpsError,
-            response::{CreateCanisterResponse, CyclesResponse, Response, UpgradeCanisterResponse},
-        },
         prelude::*,
-        storage::{env::EnvOps, topology::SubnetCanisterChildrenOps},
+        rpc::{
+            CreateCanisterResponse, CyclesResponse, Response, Rpc, RpcOpsError,
+            UpgradeCanisterResponse, execute_rpc,
+        },
     },
 };
 use candid::encode_one;
@@ -37,14 +35,11 @@ pub enum RequestOpsError {
 
     #[error("create_canister: missing new pid")]
     MissingNewCanisterPid,
-
-    #[error("cannot find the root canister")]
-    RootNotFound,
 }
 
 impl From<RequestOpsError> for Error {
     fn from(err: RequestOpsError) -> Self {
-        CommandOpsError::from(err).into()
+        RpcOpsError::from(err).into()
     }
 }
 
@@ -96,7 +91,6 @@ pub enum CreateCanisterParent {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
-    pub canister_role: CanisterRole,
 }
 
 ///
@@ -109,18 +103,10 @@ pub struct CyclesRequest {
     pub cycles: u128,
 }
 
-/// Send a request to the root canister and decode its response.
-async fn request(request: Request) -> Result<Response, Error> {
-    let root_pid = EnvOps::try_get_root_pid().map_err(|_| RequestOpsError::RootNotFound)?;
+///
+/// CreateCanister
+///
 
-    let call_response = Call::unbounded_wait(root_pid, "canic_response")
-        .with_arg(&request)
-        .await?;
-
-    call_response.candid::<Result<Response, Error>>()?
-}
-
-/// Ask root to create and install a canister of the given type.
 pub async fn create_canister_request<A>(
     canister_role: &CanisterRole,
     parent: CreateCanisterParent,
@@ -129,70 +115,101 @@ pub async fn create_canister_request<A>(
 where
     A: CandidType + Send + Sync,
 {
-    let encoded = extra.map(|v| encode_one(v)).transpose()?;
-    let role = canister_role.clone();
-    let parent_desc = format!("{:?}", &parent);
-    let caller_ty = EnvOps::try_get_canister_role()
-        .map_or_else(|_| "unknown".to_string(), |role| role.to_string());
+    let extra_arg = extra.map(encode_one).transpose()?;
 
-    // build request
-    let q = Request::CreateCanister(CreateCanisterRequest {
+    execute_rpc(CreateCanisterRpc {
         canister_role: canister_role.clone(),
         parent,
-        extra_arg: encoded,
-    });
+        extra_arg,
+    })
+    .await
+}
 
-    match request(q).await {
-        Ok(Response::CreateCanister(res)) => Ok(res),
-        Ok(_) => {
-            log!(
-                Topic::CanisterLifecycle,
-                Warn,
-                "create_canister_request: invalid response type (caller={caller_ty}, role={role}, parent={parent_desc})"
-            );
+pub struct CreateCanisterRpc {
+    pub canister_role: CanisterRole,
+    pub parent: CreateCanisterParent,
+    pub extra_arg: Option<Vec<u8>>,
+}
 
-            Err(RequestOpsError::InvalidResponseType.into())
-        }
-        Err(err) => {
-            log!(
-                Topic::CanisterLifecycle,
-                Warn,
-                "create_canister_request failed (caller={caller_ty}, role={role}, parent={parent_desc}): {err}"
-            );
+impl Rpc for CreateCanisterRpc {
+    type Response = CreateCanisterResponse;
 
-            Err(err)
+    fn into_request(self) -> Request {
+        Request::CreateCanister(CreateCanisterRequest {
+            canister_role: self.canister_role,
+            parent: self.parent,
+            extra_arg: self.extra_arg,
+        })
+    }
+
+    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+        match resp {
+            Response::CreateCanister(r) => Ok(r),
+            _ => Err(RequestOpsError::InvalidResponseType),
         }
     }
 }
 
+///
+/// UpgradeCanister
 /// Ask root to upgrade a child canister to its latest registered WASM.
+///
+
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
-    // check this is a valid child
-    let canister = SubnetCanisterChildrenOps::find_by_pid(&canister_pid)
-        .ok_or(RequestOpsError::ChildNotFound(canister_pid))?;
+    execute_rpc(UpgradeCanisterRpc { canister_pid }).await
+}
 
-    // send the request
-    let q = Request::UpgradeCanister(UpgradeCanisterRequest {
-        canister_pid: canister.pid,
-        canister_role: canister.role,
-    });
+pub struct UpgradeCanisterRpc {
+    pub canister_pid: Principal,
+}
 
-    match request(q).await? {
-        Response::UpgradeCanister(res) => Ok(res),
-        _ => Err(RequestOpsError::InvalidResponseType.into()),
+impl Rpc for UpgradeCanisterRpc {
+    type Response = UpgradeCanisterResponse;
+
+    fn into_request(self) -> Request {
+        Request::UpgradeCanister(UpgradeCanisterRequest {
+            canister_pid: self.canister_pid,
+        })
+    }
+
+    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+        match resp {
+            Response::UpgradeCanister(r) => Ok(r),
+            _ => Err(RequestOpsError::InvalidResponseType),
+        }
     }
 }
 
+///
+/// Cycles
 /// Request a cycle transfer from root to the current canister.
+///
+
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     OpsError::deny_root()?;
 
-    let q = Request::Cycles(CyclesRequest { cycles });
+    execute_rpc(CyclesRpc { cycles }).await
+}
 
-    match request(q).await? {
-        Response::Cycles(res) => Ok(res),
-        _ => Err(RequestOpsError::InvalidResponseType.into()),
+pub struct CyclesRpc {
+    pub cycles: u128,
+}
+
+impl Rpc for CyclesRpc {
+    type Response = CyclesResponse;
+
+    fn into_request(self) -> Request {
+        Request::Cycles(CyclesRequest {
+            cycles: self.cycles,
+        })
+    }
+
+    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+        match resp {
+            Response::Cycles(r) => Ok(r),
+            _ => Err(RequestOpsError::InvalidResponseType),
+        }
     }
 }

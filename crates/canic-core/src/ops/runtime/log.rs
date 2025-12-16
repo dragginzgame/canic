@@ -36,7 +36,7 @@ pub struct LogEntryDto {
 }
 
 impl LogEntryDto {
-    fn from_pair(index: usize, entry: LogEntry) -> Self {
+    fn from_indexed_entry(index: usize, entry: LogEntry) -> Self {
         Self {
             index: index as u64,
             created_at: entry.created_at,
@@ -90,6 +90,7 @@ impl LogOps {
     }
 
     /// Run a retention sweep immediately.
+    /// This enforces configured retention limits on stable logs.
     #[must_use]
     pub fn retain() -> bool {
         match apply_retention() {
@@ -102,12 +103,16 @@ impl LogOps {
     }
 
     /// Append a log entry to stable storage.
-    pub fn append<T: ToString, M: AsRef<str>>(
+    pub fn append<T, M>(
         crate_name: &str,
         topic: Option<T>,
         level: Level,
         message: M,
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, Error>
+    where
+        T: ToString,
+        M: AsRef<str>,
+    {
         StableLog::append(crate_name, topic, level, message)
     }
 
@@ -132,7 +137,7 @@ impl LogOps {
 
         let entries = raw_entries
             .into_iter()
-            .map(|(i, entry)| LogEntryDto::from_pair(i, entry))
+            .map(|(i, entry)| LogEntryDto::from_indexed_entry(i, entry))
             .collect();
 
         Page { entries, total }

@@ -34,9 +34,13 @@ impl From<SubnetCanisterRegistryOpsError> for Error {
 pub struct SubnetCanisterRegistryOps;
 
 impl SubnetCanisterRegistryOps {
-    #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
-        SubnetCanisterRegistry::export()
+    pub(crate) fn register(
+        pid: Principal,
+        role: &CanisterRole,
+        parent_pid: Principal,
+        module_hash: Vec<u8>,
+    ) {
+        SubnetCanisterRegistry::register(pid, role, parent_pid, module_hash);
     }
 
     #[must_use]
@@ -69,15 +73,6 @@ impl SubnetCanisterRegistryOps {
         SubnetCanisterRegistry::remove(pid)
     }
 
-    pub(crate) fn register(
-        pid: Principal,
-        role: &CanisterRole,
-        parent_pid: Principal,
-        module_hash: Vec<u8>,
-    ) {
-        SubnetCanisterRegistry::register(pid, role, parent_pid, module_hash);
-    }
-
     pub(crate) fn register_root(pid: Principal) {
         SubnetCanisterRegistry::register_root(pid);
     }
@@ -106,5 +101,10 @@ impl SubnetCanisterRegistryOps {
         } else {
             Err(SubnetCanisterRegistryOpsError::NotFound(pid))
         }
+    }
+
+    #[must_use]
+    pub fn export() -> Vec<CanisterEntry> {
+        SubnetCanisterRegistry::export()
     }
 }
