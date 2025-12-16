@@ -12,7 +12,9 @@ pub mod command;
 pub mod config;
 pub mod ic;
 pub mod orchestration;
+pub mod perf;
 pub mod placement;
+pub mod rpc;
 pub mod runtime;
 pub mod storage;
 pub mod subsystem;
@@ -81,9 +83,6 @@ pub enum OpsError {
     IsRoot,
 
     #[error(transparent)]
-    CommandOpsError(#[from] command::CommandOpsError),
-
-    #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
@@ -91,6 +90,9 @@ pub enum OpsError {
 
     #[error(transparent)]
     OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
+
+    #[error(transparent)]
+    RpcOpsError(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),

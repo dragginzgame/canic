@@ -9,13 +9,13 @@ use crate::{
     Error,
     log::Topic,
     ops::{
-        command::request::{
-            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
-            UpgradeCanisterRequest,
-        },
         ic::deposit_cycles,
         orchestration::orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,
+        rpc::{
+            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
+            UpgradeCanisterRequest,
+        },
         storage::topology::subnet::SubnetCanisterRegistryOps,
     },
 };
@@ -125,6 +125,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 // upgrade_canister_response
 async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
     let caller = msg_caller();
+
     let registry_entry = SubnetCanisterRegistryOps::try_get(req.canister_pid)
         .map_err(|_| RequestOpsError::ChildNotFound(req.canister_pid))?;
 
@@ -132,10 +133,10 @@ async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Respo
         return Err(RequestOpsError::NotChildOfCaller(req.canister_pid, caller).into());
     }
 
-    // Use the registry's type to avoid trusting request payload.
     let event = LifecycleEvent::Upgrade {
         pid: registry_entry.pid,
     };
+
     CanisterLifecycleOrchestrator::apply(event).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))

@@ -2,11 +2,14 @@ use crate::{
     Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
+    log,
+    log::Topic,
     ops::{
         ic::{
-            IcOpsError, install_code,
+            IcOpsError, install_canic_code,
             provision::{
-                create_and_install_canister, delete_canister, rebuild_directories_from_registry,
+                build_nonroot_init_payload, create_and_install_canister, delete_canister,
+                rebuild_directories_from_registry,
             },
             upgrade_canister,
         },
@@ -19,15 +22,12 @@ use crate::{
             topology::subnet::SubnetCanisterRegistryOps,
         },
         subsystem::reserve::{
-            CanisterReserveOps, reserve_export_canister, reserve_recycle_canister,
+            CanisterReserveOps, reserve_export_canister, reserve_import_canister,
+            reserve_recycle_canister,
         },
         wasm::WasmOps,
     },
 };
-
-///
-/// OrchestratorOpsError
-///
 
 #[derive(Debug, ThisError)]
 pub enum OrchestratorOpsError {
@@ -36,20 +36,6 @@ pub enum OrchestratorOpsError {
 
     #[error("registry entry missing for {0}")]
     RegistryEntryMissing(Principal),
-
-    #[error("registry type mismatch for {pid}: expected {expected}, found {found}")]
-    RegistryTypeMismatch {
-        pid: Principal,
-        expected: CanisterRole,
-        found: CanisterRole,
-    },
-
-    #[error("registry parent mismatch for {pid}: expected {expected}, found {found:?}")]
-    RegistryParentMismatch {
-        pid: Principal,
-        expected: Principal,
-        found: Option<Principal>,
-    },
 
     #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
     ImmediateParentMismatch {
@@ -73,6 +59,15 @@ pub enum OrchestratorOpsError {
     #[error("canister {0} unexpectedly present in reserve")]
     InReserve(Principal),
 
+    #[error("expected canister {0} to be in reserve")]
+    NotInReserve(Principal),
+
+    #[error("cannot perform init-based install for root canister {0}")]
+    RootInitNotSupported(Principal),
+
+    #[error("cannot build init payload for {0}: missing parent pid")]
+    MissingParentPid(Principal),
+
     #[error(transparent)]
     IcOpsError(#[from] IcOpsError),
 }
@@ -82,11 +77,6 @@ impl From<OrchestratorOpsError> for Error {
         OrchestrationOpsError::from(err).into()
     }
 }
-
-///
-/// LifecycleEvent
-/// Lifecycle events handled by the orchestrator
-///
 
 pub enum LifecycleEvent {
     Create {
@@ -103,18 +93,19 @@ pub enum LifecycleEvent {
     Reinstall {
         pid: Principal,
     },
+
+    /// Adopt a reserve canister into topology under `parent`.
+    /// Reserve export is a handoff; this event performs the attach + install.
     AdoptReserve {
         pid: Principal,
+        parent: Principal,
+        extra_arg: Option<Vec<u8>>,
     },
+
     RecycleToReserve {
         pid: Principal,
     },
 }
-
-///
-/// LifecycleResult
-/// Result of applying a lifecycle event.
-///
 
 #[derive(Default)]
 pub struct LifecycleResult {
@@ -134,17 +125,11 @@ impl LifecycleResult {
     }
 }
 
-///
-/// CanisterLifestyleOrchestrator
-///
-
 pub struct CanisterLifecycleOrchestrator;
 
 impl CanisterLifecycleOrchestrator {
-    /// Entry point for lifecycle orchestration.
     #[allow(clippy::too_many_lines)]
     pub async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
-        // Root PID for filtering topology cascades that would otherwise target root.
         let root_pid = canister_self();
 
         match event {
@@ -160,41 +145,32 @@ impl CanisterLifecycleOrchestrator {
 
                 let pid = create_and_install_canister(&role, parent, extra_arg).await?;
 
-                assert_registry_role(pid, &role)?;
-                assert_registry_parent(pid, parent)?;
                 assert_immediate_parent(pid, parent)?;
                 assert_not_in_reserve(pid)?;
 
-                // Topology: targeted cascade rooted at the newly created canister.
-                // This is always non-root.
                 cascade_all(Some(&role), Some(pid)).await?;
 
                 Ok(LifecycleResult::created(pid))
             }
 
             // -----------------------------------------------------------------
-            // DELETE
+            // DELETE (leaf-only)
             // -----------------------------------------------------------------
             LifecycleEvent::Delete { pid } => {
-                // New invariant: can only delete leaves
                 assert_no_children(pid)?;
 
-                let (removed_ty, parent_pid) = delete_canister(pid).await?;
+                // Snapshot BEFORE destructive delete.
+                let snap = snapshot_topology_required(pid)?;
 
-                // Topology cascade
-                // Use parent as target, unless parent is root (root never cascades)
-                let topology_target = parent_pid.filter(|p| *p != root_pid);
+                delete_canister(pid).await?;
 
-                cascade_all(
-                    removed_ty.as_ref(), // directory cascade triggered only if this type participates
-                    topology_target,     // targeted topology cascade
-                )
-                .await?;
+                let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
+                cascade_all(Some(&snap.role), topology_target).await?;
 
                 Ok(LifecycleResult {
                     new_canister_pid: None,
                     cascaded_topology: topology_target.is_some(),
-                    cascaded_directories: removed_ty.is_some(),
+                    cascaded_directories: true,
                 })
             }
 
@@ -223,15 +199,28 @@ impl CanisterLifecycleOrchestrator {
             // -----------------------------------------------------------------
             LifecycleEvent::Reinstall { pid } => {
                 let entry = SubnetCanisterRegistryOps::try_get(pid)?;
+                if entry.role == CanisterRole::ROOT {
+                    return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+                }
+
                 let wasm = WasmOps::try_get(&entry.role)?;
 
-                if let Some(parent_pid) = entry.parent_pid {
-                    assert_parent_exists(parent_pid)?;
-                    assert_immediate_parent(pid, parent_pid)?;
-                }
+                let parent_pid = entry
+                    .parent_pid
+                    .ok_or(OrchestratorOpsError::MissingParentPid(pid))?;
+                assert_parent_exists(parent_pid)?;
+                assert_immediate_parent(pid, parent_pid)?;
                 assert_not_in_reserve(pid)?;
 
-                install_code(CanisterInstallMode::Reinstall, entry.pid, wasm.bytes(), ()).await?;
+                let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
+                install_canic_code(
+                    CanisterInstallMode::Reinstall,
+                    entry.pid,
+                    wasm.bytes(),
+                    payload,
+                    None,
+                )
+                .await?;
                 SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
                 assert_module_hash(entry.pid, wasm.module_hash())?;
 
@@ -241,17 +230,65 @@ impl CanisterLifecycleOrchestrator {
             // -----------------------------------------------------------------
             // ADOPT FROM RESERVE
             // -----------------------------------------------------------------
-            LifecycleEvent::AdoptReserve { pid } => {
-                // After export, `pid` is attached to a parent in the registry.
-                let (ty, parent_pid) = reserve_export_canister(pid).await?;
+            LifecycleEvent::AdoptReserve {
+                pid,
+                parent,
+                extra_arg,
+            } => {
+                // Must currently be in reserve
+                assert_in_reserve(pid)?;
+                assert_parent_exists(parent)?;
 
+                // Export metadata from reserve (handoff)
+                let (role, stored_hash) = reserve_export_canister(pid).await?;
+
+                // No longer in reserve
                 assert_not_in_reserve(pid)?;
-                assert_parent_exists(parent_pid)?;
-                assert_immediate_parent(pid, parent_pid)?;
 
-                // Topology: targeted cascade on the adopted canister’s subtree.
-                // This is always non-root.
-                cascade_all(Some(&ty), Some(pid)).await?;
+                if role == CanisterRole::ROOT {
+                    try_return_to_reserve(pid, "adopt_reserve role=ROOT").await;
+                    return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+                }
+
+                let wasm = WasmOps::try_get(&role)?;
+
+                // Validate module hash matches what reserve expected (defensive)
+                if wasm.module_hash() != stored_hash {
+                    try_return_to_reserve(pid, "adopt_reserve module hash mismatch").await;
+                    return Err(OrchestratorOpsError::ModuleHashMismatch(pid).into());
+                }
+
+                // Attach before install so init hooks can observe the registry; roll back on failure.
+                SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash);
+
+                let payload = match build_nonroot_init_payload(&role, parent) {
+                    Ok(p) => p,
+                    Err(err) => {
+                        let _ = SubnetCanisterRegistryOps::remove(&pid);
+                        try_return_to_reserve(pid, "adopt_reserve payload build failed").await;
+                        return Err(err);
+                    }
+                };
+
+                if let Err(err) = install_canic_code(
+                    CanisterInstallMode::Install,
+                    pid,
+                    wasm.bytes(),
+                    payload,
+                    extra_arg,
+                )
+                .await
+                {
+                    let _ = SubnetCanisterRegistryOps::remove(&pid);
+                    try_return_to_reserve(pid, "adopt_reserve install failed").await;
+                    return Err(err);
+                }
+
+                // Postconditions
+                assert_immediate_parent(pid, parent)?;
+
+                // Targeted cascade on the newly adopted canister
+                cascade_all(Some(&role), Some(pid)).await?;
 
                 Ok(LifecycleResult {
                     new_canister_pid: None,
@@ -259,52 +296,59 @@ impl CanisterLifecycleOrchestrator {
                     cascaded_directories: true,
                 })
             }
-
             // -----------------------------------------------------------------
             // RECYCLE INTO RESERVE
             // -----------------------------------------------------------------
             LifecycleEvent::RecycleToReserve { pid } => {
-                // After recycle, `pid` is removed from the active topology; it may
-                // no longer appear in the registry subtree.
-                let (ty, parent_pid) = reserve_recycle_canister(pid).await?;
+                // Snapshot BEFORE destruction. If it wasn't in registry, that's a bug.
+                let snap = snapshot_topology_required(pid)?;
 
-                // Topology: same reasoning as DELETE — target the parent subtree,
-                // but only if parent is non-root. Root is never a cascade target.
-                let topology_target = parent_pid.filter(|p| *p != root_pid);
+                reserve_recycle_canister(pid).await?;
 
-                cascade_all(ty.as_ref(), topology_target).await?;
+                let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
+                cascade_all(Some(&snap.role), topology_target).await?;
 
                 Ok(LifecycleResult {
                     new_canister_pid: None,
                     cascaded_topology: topology_target.is_some(),
-                    cascaded_directories: ty.is_some(),
+                    cascaded_directories: true,
                 })
             }
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Unified Cascade Logic
-// -----------------------------------------------------------------------------
+//
+// Topology snapshotting: single source of parent/role for destructive operations.
+//
 
-/// Perform topology + directories + state cascades in correct order.
-///
-/// - `ty` controls whether directory rebuild is required.
-/// - `topology_target` is the canister whose branch changed and should be
-///   used as the *target* of a **targeted** topology cascade. This must never
-///   be the root PID.
+struct TopologySnapshot {
+    role: CanisterRole,
+    parent_pid: Option<Principal>,
+}
+
+fn snapshot_topology_required(pid: Principal) -> Result<TopologySnapshot, OrchestratorOpsError> {
+    let entry = SubnetCanisterRegistryOps::get(pid)
+        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+
+    Ok(TopologySnapshot {
+        role: entry.role,
+        parent_pid: entry.parent_pid,
+    })
+}
+
+//
+// Cascades
+//
+
 async fn cascade_all(
     role: Option<&CanisterRole>,
     topology_target: Option<Principal>,
 ) -> Result<(), Error> {
-    // Topology: targeted cascade only, never full-root.
     if let Some(target) = topology_target {
         root_cascade_topology_for_pid(target).await?;
     }
 
-    // Directories + state: driven by type; this can be global-ish, but is
-    // independent of topology targeting semantics.
     if let Some(ty) = role {
         let bundle = rebuild_directories_from_registry(Some(ty)).await?;
         root_cascade_state(bundle).await?;
@@ -314,9 +358,9 @@ async fn cascade_all(
     Ok(())
 }
 
-// -----------------------------------------------------------------------------
+//
 // Invariants
-// -----------------------------------------------------------------------------
+//
 
 fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorOpsError> {
     SubnetCanisterRegistryOps::get(parent_pid)
@@ -324,70 +368,14 @@ fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorOpsErro
     Ok(())
 }
 
-fn assert_registry_role(
-    pid: Principal,
-    expected_role: &CanisterRole,
-) -> Result<(), OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
-    if &entry.role == expected_role {
-        Ok(())
-    } else {
-        Err(OrchestratorOpsError::RegistryTypeMismatch {
-            pid,
-            expected: expected_role.clone(),
-            found: entry.role,
-        })
-    }
-}
-
-fn assert_registry_parent(
-    pid: Principal,
-    expected_parent: Principal,
-) -> Result<(), OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
-    if entry.parent_pid == Some(expected_parent) {
-        Ok(())
-    } else {
-        Err(OrchestratorOpsError::RegistryParentMismatch {
-            pid,
-            expected: expected_parent,
-            found: entry.parent_pid,
-        })
-    }
-}
-
-/// Verify that the canister’s immediate parent matches expectations. This is
-/// stricter and clearer than subtree-membership checks.
-fn assert_immediate_parent(
-    pid: Principal,
-    expected_parent: Principal,
-) -> Result<(), OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
-
-    match entry.parent_pid {
-        Some(pp) if pp == expected_parent => Ok(()),
-        other => Err(OrchestratorOpsError::ImmediateParentMismatch {
-            pid,
-            expected: expected_parent,
-            found: other,
-        }),
-    }
-}
-
 fn assert_no_children(pid: Principal) -> Result<(), OrchestratorOpsError> {
     let subtree = SubnetCanisterRegistryOps::subtree(pid);
-
-    // subtree always contains the node itself
     if subtree.len() > 1 {
         return Err(OrchestratorOpsError::SubtreeNotEmpty {
             pid,
             size: subtree.len(),
         });
     }
-
     Ok(())
 }
 
@@ -422,5 +410,40 @@ fn assert_not_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
         Err(OrchestratorOpsError::InReserve(pid))
     } else {
         Ok(())
+    }
+}
+
+fn assert_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
+    if CanisterReserveOps::contains(&pid) {
+        Ok(())
+    } else {
+        Err(OrchestratorOpsError::NotInReserve(pid))
+    }
+}
+
+fn assert_immediate_parent(
+    pid: Principal,
+    expected_parent: Principal,
+) -> Result<(), OrchestratorOpsError> {
+    let entry = SubnetCanisterRegistryOps::get(pid)
+        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+
+    match entry.parent_pid {
+        Some(pp) if pp == expected_parent => Ok(()),
+        other => Err(OrchestratorOpsError::ImmediateParentMismatch {
+            pid,
+            expected: expected_parent,
+            found: other,
+        }),
+    }
+}
+
+async fn try_return_to_reserve(pid: Principal, context: &str) {
+    if let Err(err) = reserve_import_canister(pid).await {
+        log!(
+            Topic::CanisterLifecycle,
+            Warn,
+            "failed to return {pid} to reserve after {context}: {err}"
+        );
     }
 }

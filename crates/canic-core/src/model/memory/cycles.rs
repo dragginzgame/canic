@@ -51,9 +51,8 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow(|t| t.map.len())
     }
 
-    #[must_use]
-    pub(crate) fn record(now: u64, cycles: u128) -> bool {
-        CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles))
+    pub(crate) fn record(now: u64, cycles: u128) {
+        CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles));
     }
 
     /// Purge entries older than the retention window using the shared tracker.

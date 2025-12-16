@@ -1,11 +1,16 @@
 //! Reserve pool lifecycle helpers.
 //!
 //! The root canister maintains a pool of empty or decommissioned canisters
-//! that can be quickly reassigned when scaling. Reserve entries store the
-//! canister’s cycles balance and any metadata required to reconstruct its
-//! registry state when reactivated.
+//! that can be quickly reassigned when scaling.
+//!
+//! INVARIANTS:
+//! - Reserve canisters are NOT part of topology
+//! - Reserve canisters have NO parent
+//! - Root is the sole controller
+//! - Importing a canister is destructive (code + controllers wiped)
+//! - Registry metadata is informational only while in reserve
 
-pub use crate::model::memory::reserve::CanisterReserveView;
+pub use crate::model::memory::reserve::{CanisterReserveEntry, CanisterReserveView};
 
 use crate::{
     Error, ThisError,
@@ -17,7 +22,7 @@ use crate::{
     },
     config::{Config, schema::SubnetConfig},
     log::Topic,
-    model::memory::reserve::{CanisterReserve, CanisterReserveEntry},
+    model::memory::reserve::CanisterReserve,
     ops::{
         OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY,
         config::ConfigOps,
@@ -43,17 +48,14 @@ use std::cell::RefCell;
 
 #[derive(Debug, ThisError)]
 pub enum ReserveOpsError {
+    #[error("reserve entry missing for {pid}")]
+    ReserveEntryMissing { pid: Principal },
+
     #[error("missing module hash for reserve entry {pid}")]
     MissingModuleHash { pid: Principal },
 
-    #[error("missing parent for reserve entry {pid}")]
-    MissingParent { pid: Principal },
-
     #[error("missing type for reserve entry {pid}")]
     MissingType { pid: Principal },
-
-    #[error("reserve entry missing for {pid}")]
-    ReserveEntryMissing { pid: Principal },
 }
 
 impl From<ReserveOpsError> for Error {
@@ -61,6 +63,10 @@ impl From<ReserveOpsError> for Error {
         SubsystemOpsError::from(err).into()
     }
 }
+
+//
+// ADMIN API
+//
 
 ///
 /// CanisterReserveAdminCommand
@@ -95,7 +101,42 @@ thread_local! {
 /// Default cycles allocated to freshly created reserve canisters.
 const RESERVE_CANISTER_CYCLES: u128 = 5 * TC;
 
-/// Operations for managing the reserve pool.
+//
+// INTERNAL HELPERS
+//
+
+/// Controller set for all reserve canisters (root-only).
+fn reserve_controllers() -> Vec<Principal> {
+    let mut controllers = Config::get().controllers.clone();
+    let root = canister_self();
+
+    if !controllers.contains(&root) {
+        controllers.push(root);
+    }
+
+    controllers
+}
+
+/// Reset a canister into a clean reserve state.
+async fn reset_into_reserve(pid: Principal) -> Result<Cycles, Error> {
+    uninstall_code(pid).await?;
+
+    update_settings(&UpdateSettingsArgs {
+        canister_id: pid,
+        settings: CanisterSettings {
+            controllers: Some(reserve_controllers()),
+            ..Default::default()
+        },
+    })
+    .await?;
+
+    get_cycles(pid).await
+}
+
+///
+/// CanisterReserveOps
+///
+
 pub struct CanisterReserveOps;
 
 impl CanisterReserveOps {
@@ -144,7 +185,7 @@ impl CanisterReserveOps {
             Ok(cfg) => cfg,
             Err(e) => {
                 log!(
-                    Topic::CanisterState,
+                    Topic::CanisterReserve,
                     Warn,
                     "cannot read subnet config: {e:?}"
                 );
@@ -159,7 +200,7 @@ impl CanisterReserveOps {
             let missing = (min_size - reserve_size).min(10);
 
             log!(
-                Topic::Cycles,
+                Topic::CanisterReserve,
                 Ok,
                 "reserve low: {reserve_size}/{min_size}, creating {missing}"
             );
@@ -189,34 +230,6 @@ impl CanisterReserveOps {
         0
     }
 
-    /// Full export of reserve contents.
-    #[must_use]
-    pub fn export() -> CanisterReserveView {
-        CanisterReserve::export()
-    }
-
-    pub async fn admin(
-        cmd: CanisterReserveAdminCommand,
-    ) -> Result<CanisterReserveAdminResponse, Error> {
-        match cmd {
-            CanisterReserveAdminCommand::CreateEmpty => {
-                let pid = reserve_create_canister().await?;
-
-                Ok(CanisterReserveAdminResponse::Created { pid })
-            }
-            CanisterReserveAdminCommand::Recycle { pid } => {
-                recycle_via_orchestrator(pid).await?;
-
-                Ok(CanisterReserveAdminResponse::Recycled)
-            }
-            CanisterReserveAdminCommand::Import { pid } => {
-                let _ = reserve_import_canister(pid).await?;
-
-                Ok(CanisterReserveAdminResponse::Imported)
-            }
-        }
-    }
-
     /// Pops the first entry in the reserve.
     #[must_use]
     pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
@@ -229,11 +242,35 @@ impl CanisterReserveOps {
         CanisterReserve::contains(pid)
     }
 
-    /// Returns the subnet configuration if reserve management is enabled.
+    /// Full export of reserve contents.
+    #[must_use]
+    pub fn export() -> CanisterReserveView {
+        CanisterReserve::export()
+    }
+
+    pub async fn admin(
+        cmd: CanisterReserveAdminCommand,
+    ) -> Result<CanisterReserveAdminResponse, Error> {
+        match cmd {
+            CanisterReserveAdminCommand::CreateEmpty => {
+                let pid = reserve_create_canister().await?;
+                Ok(CanisterReserveAdminResponse::Created { pid })
+            }
+            CanisterReserveAdminCommand::Recycle { pid } => {
+                reserve_recycle_canister(pid).await?;
+                Ok(CanisterReserveAdminResponse::Recycled)
+            }
+            CanisterReserveAdminCommand::Import { pid } => {
+                reserve_import_canister(pid).await?;
+                Ok(CanisterReserveAdminResponse::Imported)
+            }
+        }
+    }
+
     fn enabled_subnet_config() -> Option<SubnetConfig> {
         match ConfigOps::current_subnet() {
             Ok(cfg) if cfg.reserve.minimum_size > 0 => Some(cfg),
-            Ok(_) | Err(_) => None,
+            _ => None,
         }
     }
 }
@@ -242,124 +279,73 @@ impl CanisterReserveOps {
 // CREATE
 //
 
-/// Creates a new empty canister and adds it to the reserve pool.
+/// Creates a new empty reserve canister.
 pub async fn reserve_create_canister() -> Result<Principal, Error> {
     OpsError::require_root()?;
 
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
-    let mut controllers = Config::get().controllers.clone();
-    controllers.push(canister_self());
-
-    let pid = create_canister(controllers, cycles.clone()).await?;
+    let pid = create_canister(reserve_controllers(), cycles.clone()).await?;
 
     CanisterReserve::register(pid, cycles, None, None, None);
+
     Ok(pid)
 }
 
 //
-// SHARED INTERNAL HELPER
+// IMPORT / RECYCLE
 //
 
-/// Moves a canister into the reserve after uninstalling and resetting controllers.
-async fn move_into_reserve(
-    pid: Principal,
-    removed_role: Option<CanisterRole>,
-    parent_pid: Option<Principal>,
-    module_hash: Option<Vec<u8>>,
-) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
-    uninstall_code(pid).await?;
-
-    // Reset controllers to root-configured set.
-    let mut controllers = Config::get().controllers.clone();
-    controllers.push(canister_self());
-    update_settings(&UpdateSettingsArgs {
-        canister_id: pid,
-        settings: CanisterSettings {
-            controllers: Some(controllers),
-            ..Default::default()
-        },
-    })
-    .await?;
-
-    let cycles = get_cycles(pid).await?;
-
-    CanisterReserve::register(pid, cycles, removed_role.clone(), parent_pid, module_hash);
-
-    Ok((removed_role, parent_pid))
-}
-
-//
-// IMPORT
-//
-
-/// Imports a canister into the reserve. Used when the canister did not
-/// originate from this subnet’s lifecycle management.
-pub async fn reserve_import_canister(
-    pid: Principal,
-) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
+/// Import an arbitrary canister into the reserve (destructive).
+pub async fn reserve_import_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
-
-    let entry = SubnetCanisterRegistryOps::get(pid);
-    let parent = entry.as_ref().and_then(|e| e.parent_pid);
-    let role = entry.as_ref().map(|e| e.role.clone());
-    let hash = entry.as_ref().and_then(|e| e.module_hash.clone());
 
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
-    move_into_reserve(pid, role, parent, hash).await
+    let cycles = reset_into_reserve(pid).await?;
+    CanisterReserve::register(pid, cycles, None, None, None);
+
+    Ok(())
 }
 
-//
-// RECYCLE
-//
-
-/// Recycles a topology canister into the reserve. Used when retiring
-/// canisters that were originally managed by this subnet.
-pub async fn reserve_recycle_canister(
-    pid: Principal,
-) -> Result<(Option<CanisterRole>, Option<Principal>), Error> {
+/// Recycle a managed topology canister into the reserve.
+pub async fn reserve_recycle_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    let entry = SubnetCanisterRegistryOps::get(pid);
-    let parent = entry.as_ref().and_then(|e| e.parent_pid);
-    let role = entry.as_ref().map(|e| e.role.clone());
-    let hash = entry.as_ref().and_then(|e| e.module_hash.clone());
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
+
+    let role = Some(entry.role.clone());
+    let hash = entry.module_hash.clone();
 
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
-    move_into_reserve(pid, role, parent, hash).await
+    let cycles = reset_into_reserve(pid).await?;
+    CanisterReserve::register(pid, cycles, role, None, hash);
+
+    Ok(())
 }
 
 //
 // EXPORT
 //
 
-/// Reactivates a reserve canister and restores its registry entry.
-pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Principal), Error> {
+/// Removes a canister from the reserve and returns its stored metadata.
+///
+/// NOTE:
+/// - This does NOT attach the canister to topology.
+/// - This does NOT install code.
+/// - The caller is responsible for any reactivation workflow.
+pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Vec<u8>), Error> {
     OpsError::require_root()?;
 
     let entry = CanisterReserve::take(&pid).ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
 
     let role = entry.role.ok_or(ReserveOpsError::MissingType { pid })?;
-    let parent = entry.parent.ok_or(ReserveOpsError::MissingParent { pid })?;
     let hash = entry
         .module_hash
         .ok_or(ReserveOpsError::MissingModuleHash { pid })?;
 
-    // Reset controllers before placing back into registry.
-    let mut controllers = Config::get().controllers.clone();
-    controllers.push(canister_self());
-    update_settings(&UpdateSettingsArgs {
-        canister_id: pid,
-        settings: CanisterSettings {
-            controllers: Some(controllers),
-            ..Default::default()
-        },
-    })
-    .await?;
-
-    SubnetCanisterRegistryOps::register(pid, &role, parent, hash);
-    Ok((role, parent))
+    Ok((role, hash))
 }
 
 //

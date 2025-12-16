@@ -7,10 +7,9 @@
 
 use canic::{
     Error,
-    core::access::policy::is_prime_subnet,
-    core::ops::command::{
-        request::{CreateCanisterParent, create_canister_request},
-        response::CreateCanisterResponse,
+    core::{
+        access::policy::is_prime_subnet,
+        ops::rpc::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
     },
     prelude::*,
 };

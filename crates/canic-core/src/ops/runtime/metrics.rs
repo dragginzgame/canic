@@ -159,6 +159,8 @@ impl MetricsOps {
             })
             .map(|endpoint| {
                 let (attempted, completed) = attempts.get(&endpoint).copied().unwrap_or((0, 0));
+
+                // Aggregated access denials (auth + policy), per endpoint.
                 let denied = denied.get(&endpoint).copied().unwrap_or(0);
                 let (ok, err) = results.get(&endpoint).copied().unwrap_or((0, 0));
 
@@ -217,6 +219,14 @@ fn pagination_bounds(total: u64, request: PageRequest) -> (usize, usize) {
 // Joins
 // -----------------------------------------------------------------------------
 
+/// perf_endpoint_snapshot
+///
+/// NOTE:
+/// If perf_entries() ever returns multiple entries per endpoint (e.g.:
+/// multiple call sites
+/// multiple timers
+/// future instrumentation changes),
+/// you will silently overwrite earlier values.
 #[must_use]
 fn perf_endpoint_snapshot() -> HashMap<String, (u64, u64)> {
     let mut out = HashMap::<String, (u64, u64)>::new();
@@ -225,7 +235,10 @@ fn perf_endpoint_snapshot() -> HashMap<String, (u64, u64)> {
         let PerfKey::Endpoint(label) = &entry.key else {
             continue;
         };
-        out.insert(label.clone(), (entry.count, entry.total_instructions));
+
+        let slot = out.entry(label.clone()).or_insert((0, 0));
+        slot.0 = slot.0.saturating_add(entry.count);
+        slot.1 = slot.1.saturating_add(entry.total_instructions);
     }
 
     out

@@ -1,0 +1,58 @@
+mod request;
+mod response;
+
+pub use request::*;
+pub use response::*;
+
+use crate::{
+    Error, ThisError,
+    cdk::candid::CandidType,
+    ops::{OpsError, ic::call::Call, storage::env::EnvOps},
+};
+use serde::de::DeserializeOwned;
+
+///
+/// Rpc
+/// Typed RPC command binding a request variant to its response payload.
+///
+
+pub trait Rpc {
+    type Response: CandidType + DeserializeOwned;
+
+    fn into_request(self) -> Request;
+    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError>;
+}
+
+///
+/// RpcOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum RpcOpsError {
+    #[error("cannot find the root canister")]
+    RootNotFound,
+
+    #[error(transparent)]
+    RequestOpsError(#[from] request::RequestOpsError),
+}
+
+impl From<RpcOpsError> for Error {
+    fn from(err: RpcOpsError) -> Self {
+        OpsError::from(err).into()
+    }
+}
+
+// execute_rpc
+async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
+    let root_pid = EnvOps::try_get_root_pid().map_err(|_| RpcOpsError::RootNotFound)?;
+
+    let call_response = Call::unbounded_wait(root_pid, "canic_response")
+        .with_arg(rpc.into_request())
+        .await?;
+
+    let response = call_response.candid::<Result<Response, Error>>()??;
+
+    R::try_from_response(response)
+        .map_err(RpcOpsError::from)
+        .map_err(Error::from)
+}

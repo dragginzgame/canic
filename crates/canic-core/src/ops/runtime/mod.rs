@@ -1,7 +1,6 @@
 pub mod cycles;
 pub mod log;
 pub mod metrics;
-pub mod perf;
 
 use crate::{
     VERSION,

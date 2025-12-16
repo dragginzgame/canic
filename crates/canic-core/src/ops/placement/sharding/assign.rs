@@ -16,8 +16,8 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        command::request::{CreateCanisterParent, create_canister_request},
         config::ConfigOps,
+        rpc::{CreateCanisterParent, create_canister_request},
         storage::sharding::ShardingRegistryOps,
     },
 };
