@@ -1,7 +1,6 @@
 use crate::{
     Error, ThisError,
-    cdk::types::Principal,
-    cdk::utils::time::now_secs,
+    cdk::{types::Principal, utils::time::now_secs},
     ids::CanisterRole,
     model::memory::sharding::{ShardEntry, ShardKey, ShardingRegistry},
     ops::storage::StorageOpsError,

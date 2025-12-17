@@ -1,11 +1,10 @@
-pub use crate::model::memory::cycles::CycleTrackerView;
+pub use crate::ops::storage::cycles::CycleTrackerView;
 
 use crate::{
     cdk::{futures::spawn, utils::time::now_secs},
     dto::Page,
     log,
     log::Topic,
-    model::memory::cycles::CycleTracker,
     ops::{
         OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
         config::ConfigOps,
@@ -13,7 +12,7 @@ use crate::{
             canister_cycle_balance,
             timer::{TimerId, TimerOps},
         },
-        storage::env::EnvOps,
+        storage::{cycles::CycleTrackerStorageOps, env::EnvOps},
     },
     types::{Cycles, PageRequest},
 };
@@ -83,7 +82,7 @@ impl CycleTrackerOps {
             Self::evaluate_policies(cycles);
         }
 
-        CycleTracker::record(ts, cycles);
+        CycleTrackerStorageOps::record(ts, cycles);
     }
 
     fn evaluate_policies(cycles: u128) {
@@ -149,7 +148,7 @@ impl CycleTrackerOps {
     #[must_use]
     pub fn purge() -> bool {
         let now = now_secs();
-        let purged = CycleTracker::purge(now);
+        let purged = CycleTrackerStorageOps::purge(now);
 
         if purged > 0 {
             log!(
@@ -164,8 +163,8 @@ impl CycleTrackerOps {
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-        let entries = CycleTracker::entries(request);
-        let total = CycleTracker::len();
+        let entries = CycleTrackerStorageOps::entries(request);
+        let total = CycleTrackerStorageOps::len();
 
         Page { entries, total }
     }

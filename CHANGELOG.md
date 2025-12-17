@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.6.0] - Unreleased
+
+### Changed
+- Major internal refactor: removed the old `ops/` and `model/` interface layer; wrappers were removed or split between crates.
+- `canic-macros` endpoints now support three levels of endpoint security and automatically apply `perf_scope`.
+- Reserve subsystem refactor: move reserve orchestration into `ops::reserve` + `ops::service` and consolidate state access via `ops::storage`.
+
 ### Added
 - Split metrics queries into per-metric endpoints: `canic_metrics_system`, `canic_metrics_icc(page)`, `canic_metrics_http(page)`, `canic_metrics_timer(page)`, `canic_metrics_access(page)`.
 
@@ -216,6 +224,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.
 
 ############################ icu ######################################
+
+Legacy ICU changelog (pre crates.io rename). Preserved for reference; version numbers may overlap with Canic.
 
 ## [0.12.0] - 2025-09-28 - Scaling Canisters
 - so now in addition to Sharding you have Scaling which spins up and down a pool of canisters based
@@ -515,4 +525,3 @@ it's also sent via canister create args
 
 ## [0.1.0]
 - ITS ALIVE!11!1!!
-## [Unreleased]

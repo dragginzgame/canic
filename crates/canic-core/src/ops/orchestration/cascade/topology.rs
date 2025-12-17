@@ -13,12 +13,14 @@ use crate::{
     Error,
     ids::CanisterRole,
     log::Topic,
-    model::memory::CanisterSummary,
     ops::{
         OpsError,
         orchestration::cascade::CascadeOpsError,
         prelude::*,
-        storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        storage::{
+            CanisterSummary,
+            topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        },
     },
 };
 use std::collections::{HashMap, HashSet};

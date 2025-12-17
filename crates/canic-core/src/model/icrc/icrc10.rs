@@ -1,27 +1,7 @@
-use crate::{config::Config, spec::icrc::icrc10::Icrc10Standard};
-
-//
-// ICRC 10
-// formatting instructions for each standard
-//
-
-pub const ICRC_10_SUPPORTED_STANDARDS: &[(Icrc10Standard, &str, &str)] = &[
-    (
-        Icrc10Standard::Icrc10,
-        "ICRC-10",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10",
-    ),
-    (
-        Icrc10Standard::Icrc21,
-        "ICRC-21",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21",
-    ),
-    (
-        Icrc10Standard::Icrc103,
-        "ICRC-103",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-103",
-    ),
-];
+use crate::{
+    config::Config,
+    spec::icrc::icrc10::{ICRC_10_SUPPORTED_STANDARDS, Icrc10Standard},
+};
 
 ///
 /// Icrc10Registry
