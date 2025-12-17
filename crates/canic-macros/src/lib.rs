@@ -305,6 +305,7 @@ mod expand {
     use validate::ValidatedArgs;
 
     pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream {
+        let attrs = func.attrs.clone();
         let orig_sig = func.sig.clone();
         let orig_name = orig_sig.ident.clone();
         let vis = func.vis.clone();
@@ -340,7 +341,8 @@ mod expand {
         let completion = completion(&label, returns_result, call);
 
         quote! {
-            #cdk_attr
+           #(#attrs)*
+           #cdk_attr
             #vis #wrapper_sig {
                 #attempted
                 #guard

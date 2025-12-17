@@ -5,8 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.1]
+## [0.6.2]
 - added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
+- refactored testkit::pic so it uses a static variable for all tests (we were running out of chunks)
+- canic-macros weren't passing through clippy lints
 
 ## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 
