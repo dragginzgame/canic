@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - moved icrc out of ic in ops/ for consistency
 - changed canic-macros so that custom error types can be used as long as they have From<canic::Error>
 - made the Call wrapper accept any kind of principal (icydb works)
+- set up http_get so it's a namespace struct Http, and also used in the prelude.
 
 ## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 
