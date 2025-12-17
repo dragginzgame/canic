@@ -9,6 +9,17 @@ use canic::{
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
+use std::sync::OnceLock;
+
+///
+/// PIC
+///
+
+static PIC: OnceLock<Pic> = OnceLock::new();
+
+pub fn pic() -> &'static Pic {
+    PIC.get_or_init(|| PicBuilder::new().with_application_subnet().build())
+}
 
 ///
 /// PicBuilder

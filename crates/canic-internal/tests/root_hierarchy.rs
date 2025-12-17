@@ -1,5 +1,3 @@
-use std::{collections::HashMap, env, fs, io, path::PathBuf};
-
 use canic::{
     Error,
     cdk::types::Principal,
@@ -11,7 +9,8 @@ use canic::{
     types::{PageRequest, TC},
 };
 use canic_internal::canister;
-use canic_testkit::pic::{Pic, PicBuilder};
+use canic_testkit::pic::{Pic, pic};
+use std::{collections::HashMap, env, fs, io, path::PathBuf, sync::OnceLock};
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -69,61 +68,55 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 // TESTS
 // -----------------------------------------------------------------------------
 
+static SETUP: OnceLock<Setup> = OnceLock::new();
+
 struct Setup {
-    pic: Pic,
+    pic: &'static Pic,
     root_id: Principal,
     registry: HashMap<CanisterRole, CanisterEntry>,
 }
 
-fn setup_root() -> Option<Setup> {
-    let root_wasm = load_root_wasm()?;
+fn setup_root() -> &'static Setup {
+    SETUP.get_or_init(|| {
+        let root_wasm = load_root_wasm().expect("load root wasm");
 
-    let pic = PicBuilder::new().with_application_subnet().build();
+        let pic = pic();
 
-    let root_id = pic
-        .create_and_install_canister(CanisterRole::ROOT, root_wasm)
-        .expect("install root canister");
+        let root_id = pic
+            .create_and_install_canister(CanisterRole::ROOT, root_wasm)
+            .expect("install root canister");
 
-    // Fund root so it can create children using its configured cycle targets.
-    pic.add_cycles(root_id, 50 * TC);
+        // Fund root so it can create children using its configured cycle targets.
+        pic.add_cycles(root_id, 50 * TC);
 
-    // The root performs child installation via timers.
-    // Run timers enough times for root+children to finish bootstrapping.
-    for _ in 0..100 {
-        pic.tick();
-    }
+        // The root performs child installation via timers.
+        for _ in 0..100 {
+            pic.tick();
+        }
 
-    let registry: Vec<CanisterEntry> = pic
-        .query_call(root_id, "canic_subnet_canister_registry", ())
-        .expect("query registry");
+        let registry_vec: Vec<CanisterEntry> = pic
+            .query_call(root_id, "canic_subnet_canister_registry", ())
+            .expect("query registry");
 
-    let registry = registry
-        .into_iter()
-        .map(|entry| (entry.role.clone(), entry))
-        .collect();
+        let registry = registry_vec
+            .into_iter()
+            .map(|entry| (entry.role.clone(), entry))
+            .collect::<HashMap<_, _>>();
 
-    Some(Setup {
-        pic,
-        root_id,
-        registry,
+        Setup {
+            pic,
+            root_id,
+            registry,
+        }
     })
 }
-
 #[test]
 fn root_builds_hierarchy_and_exposes_env() {
-    let Some(setup) = setup_root() else {
-        eprintln!(
-            "skipping root_builds_hierarchy_and_exposes_env — \
-             run `make test` to build canisters or set {ROOT_WASM_ENV}"
-        );
-        return;
-    };
-
-    let Setup {
-        pic,
-        root_id,
-        registry: by_type,
-    } = setup;
+    // setup
+    let setup = setup_root();
+    let pic = setup.pic;
+    let root_id = setup.root_id;
+    let by_type = &setup.registry;
 
     let expected = [
         (CanisterRole::ROOT, None),
@@ -184,19 +177,11 @@ fn root_builds_hierarchy_and_exposes_env() {
 
 #[test]
 fn directories_are_consistent_across_canisters() {
-    let Some(setup) = setup_root() else {
-        eprintln!(
-            "skipping directories_are_consistent_across_canisters — \
-             run `make test` to build canisters or set {ROOT_WASM_ENV}"
-        );
-        return;
-    };
-
-    let Setup {
-        pic,
-        root_id,
-        registry,
-    } = setup;
+    // setup
+    let setup = setup_root();
+    let pic = setup.pic;
+    let root_id = setup.root_id;
+    let by_type = &setup.registry;
 
     //    let print_counts = env::var("PRINT_DIR_COUNTS").is_ok();
     let print_counts = true;
@@ -222,7 +207,7 @@ fn directories_are_consistent_across_canisters() {
         );
     }
 
-    for (ty, entry) in registry.iter().filter(|(ty, _)| !ty.is_root()) {
+    for (ty, entry) in by_type.iter().filter(|(ty, _)| !ty.is_root()) {
         let app_dir: Page<(CanisterRole, PrincipalList)> = pic
             .query_call(
                 entry.pid,
@@ -261,21 +246,13 @@ fn directories_are_consistent_across_canisters() {
 
 #[test]
 fn subnet_children_matches_registry_on_root() {
-    let Some(setup) = setup_root() else {
-        eprintln!(
-            "skipping subnet_children_matches_registry_on_root — \
-             run `make test` to build canisters or set {ROOT_WASM_ENV}"
-        );
-        return;
-    };
+    // setup
+    let setup = setup_root();
+    let pic = setup.pic;
+    let root_id = setup.root_id;
+    let by_type = &setup.registry;
 
-    let Setup {
-        pic,
-        root_id,
-        registry,
-    } = setup;
-
-    let mut expected_children: Vec<CanisterSummary> = registry
+    let mut expected_children: Vec<CanisterSummary> = by_type
         .values()
         .filter(|entry| entry.parent_pid == Some(root_id))
         .map(|entry| CanisterSummary {
@@ -314,21 +291,13 @@ fn subnet_children_matches_registry_on_root() {
 
 #[test]
 fn worker_topology_cascades_through_parent() {
-    let Some(setup) = setup_root() else {
-        eprintln!(
-            "skipping worker_topology_cascades_through_parent — \
-             run `make test` to build canisters or set {ROOT_WASM_ENV}"
-        );
-        return;
-    };
+    // setup
+    let setup = setup_root();
+    let pic = setup.pic;
+    let root_id = setup.root_id;
+    let by_type = &setup.registry;
 
-    let Setup {
-        pic,
-        root_id,
-        registry,
-    } = setup;
-
-    let scale_hub = registry
+    let scale_hub = by_type
         .get(&canister::SCALE_HUB)
         .expect("scale_hub present in registry");
 

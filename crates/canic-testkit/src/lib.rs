@@ -1,6 +1,6 @@
-use canic::cdk::types::{Account, Principal};
-
 pub mod pic;
+
+use canic::cdk::types::{Account, Principal};
 
 ///
 /// Fake
