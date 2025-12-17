@@ -5,12 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.2]
+## [0.6.4]
 - added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
 - refactored testkit::pic so it uses a static variable for all tests (we were running out of chunks)
 - canic-macros weren't passing through clippy lints
 - moved icrc out of ic in ops/ for consistency
 - changed canic-macros so that custom error types can be used as long as they have From<canic::Error>
+- made the Call wrapper accept any kind of principal (icydb works)
 
 ## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 
