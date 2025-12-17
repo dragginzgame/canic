@@ -1,8 +1,8 @@
-pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestResult};
+pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult};
 
 use crate::{
     Error,
-    cdk::mgmt::{HttpRequestArgs, http_request},
+    cdk::mgmt::http_request,
     model::metrics::{
         http::HttpMetrics,
         system::{SystemMetricKind, SystemMetrics},
