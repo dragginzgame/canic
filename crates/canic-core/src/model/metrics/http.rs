@@ -38,6 +38,7 @@ pub type HttpMetricsSnapshot = Vec<HttpMetricEntry>;
 ///
 /// HttpMetrics
 /// Volatile counters for HTTP outcalls keyed by method + URL.
+/// The label is a url override
 ///
 
 pub struct HttpMetrics;

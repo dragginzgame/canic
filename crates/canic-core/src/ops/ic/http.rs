@@ -1,4 +1,4 @@
-pub use crate::cdk::mgmt::{HttpHeader, HttpMethod};
+pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestResult};
 
 use crate::{
     Error,
@@ -25,19 +25,23 @@ impl Http {
         HttpMetrics::increment_with_label(verb, url, label);
     }
 
-    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
+    pub async fn get<T: DeserializeOwned>(
+        url: &str,
+        headers: impl AsRef<[(&str, &str)]>,
+    ) -> Result<T, Error> {
         Self::get_with_label(url, headers, None).await
     }
 
     pub async fn get_with_label<T: DeserializeOwned>(
         url: &str,
-        headers: &[(&str, &str)],
+        headers: impl AsRef<[(&str, &str)]>,
         label: Option<&str>,
     ) -> Result<T, Error> {
         // metrics
         Self::record_metrics("GET", url, label);
 
         let headers: Vec<HttpHeader> = headers
+            .as_ref()
             .iter()
             .map(|(name, value)| HttpHeader {
                 name: name.to_string(),
@@ -63,5 +67,23 @@ impl Http {
         }
 
         serde_json::from_slice(&res.body).map_err(Into::into)
+    }
+
+    pub async fn get_raw<T: DeserializeOwned>(
+        args: HttpRequestArgs,
+    ) -> Result<HttpRequestResult, Error> {
+        Self::get_raw_with_label(args, None).await
+    }
+
+    pub async fn get_raw_with_label(
+        args: HttpRequestArgs,
+        label: Option<&str>,
+    ) -> Result<HttpRequestResult, Error> {
+        // metrics
+        Self::record_metrics("GET", &args.url, label);
+
+        http_request(&args)
+            .await
+            .map_err(|e| crate::Error::HttpRequest(e.to_string()))
     }
 }
