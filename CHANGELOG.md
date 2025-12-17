@@ -5,9 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [0.6.1]
+- added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
 
-## [0.6.0] - Unreleased
+## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 
 ### Changed
 - Major internal refactor: removed the old `ops/` and `model/` interface layer; wrappers were removed or split between crates.
@@ -224,8 +225,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.
 
 ############################ icu ######################################
-
-Legacy ICU changelog (pre crates.io rename). Preserved for reference; version numbers may overlap with Canic.
 
 ## [0.12.0] - 2025-09-28 - Scaling Canisters
 - so now in addition to Sharding you have Scaling which spins up and down a pool of canisters based
