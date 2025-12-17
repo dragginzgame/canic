@@ -23,14 +23,14 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-            $crate::ops::ic::icrc::Icrc10Ops::supported_standards()
+            $crate::ops::icrc::Icrc10Ops::supported_standards()
         }
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::core::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::core::spec::icrc::icrc21::ConsentMessageResponse {
-            $crate::ops::ic::icrc::Icrc21Ops::consent_message(req)
+            $crate::ops::icrc::Icrc21Ops::consent_message(req)
         }
 
         //

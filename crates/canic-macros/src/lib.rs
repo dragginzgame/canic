@@ -252,7 +252,7 @@ mod validate {
             if !returns_result(sig) {
                 return Err(syn::Error::new_spanned(
                     &sig.output,
-                    "authorized endpoints must return `Result<_, _>`",
+                    "authorized endpoints must return `Result<_, From<canic::Error>>`",
                 ));
             }
         }
@@ -260,14 +260,14 @@ mod validate {
         if parsed.app_guard && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`app` guard requires `Result<_, _>`",
+                "`app` guard requires `Result<_, From<canic::Error>>`",
             ));
         }
 
         if !parsed.policies.is_empty() && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`policy(...)` requires `Result<_, _>`",
+                "`policy(...)` requires `Result<_, From<canic::Error>>`",
             ));
         }
 
@@ -404,13 +404,13 @@ mod expand {
             EndpointKind::Query => quote! {
                 if let Err(err) = ::canic::core::guard::guard_app_query() {
                     #metric
-                    return Err(err);
+                    return Err(err.into());
                 }
             },
             EndpointKind::Update => quote! {
                 if let Err(err) = ::canic::core::guard::guard_app_update() {
                     #metric
-                    return Err(err);
+                    return Err(err.into());
                 }
             },
         }
@@ -426,13 +426,13 @@ mod expand {
             Some(AuthSpec::Any(rules)) => quote! {
                 if let Err(err) = ::canic::core::auth_require_any!(#(#rules),*) {
                     #metric
-                    return Err(err);
+                    return Err(err.into());
                 }
             },
             Some(AuthSpec::All(rules)) => quote! {
                 if let Err(err) = ::canic::core::auth_require_all!(#(#rules),*) {
                     #metric
-                    return Err(err);
+                    return Err(err.into());
                 }
             },
             None => quote!(),
@@ -453,7 +453,7 @@ mod expand {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric
-                    return Err(err);
+                    return Err(err.into());
                 }
             }
         });

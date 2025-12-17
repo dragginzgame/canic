@@ -11,6 +11,7 @@ pub mod bootstrap;
 pub mod command;
 pub mod config;
 pub mod ic;
+pub mod icrc;
 pub mod orchestration;
 pub mod perf;
 pub mod placement;
