@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
 - refactored testkit::pic so it uses a static variable for all tests (we were running out of chunks)
 - canic-macros weren't passing through clippy lints
+- moved icrc out of ic in ops/ for consistency
+- changed canic-macros so that custom error types can be used as long as they have From<canic::Error>
 
 ## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 

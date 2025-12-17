@@ -6,7 +6,6 @@
 
 pub mod call;
 pub mod http;
-pub mod icrc;
 pub mod mgmt;
 pub mod provision;
 pub mod signature;
