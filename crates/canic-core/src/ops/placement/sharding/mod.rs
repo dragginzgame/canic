@@ -7,7 +7,7 @@ pub use crate::ops::storage::sharding::ShardingRegistryOps;
 pub use metrics::{PoolMetrics, pool_metrics};
 pub use {assign::*, policy::*};
 
-use crate::{Error, ThisError, cdk::types::Principal, model::memory::sharding::ShardEntry};
+use crate::{Error, ThisError, cdk::types::Principal, ops::storage::sharding::ShardEntry};
 
 ///
 /// ShardingOpsError

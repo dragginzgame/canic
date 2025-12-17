@@ -80,18 +80,15 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_reserve_list()
-        -> Result<::canic::core::ops::subsystem::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::ops::subsystem::reserve::CanisterReserveOps::export())
+        -> Result<::canic::core::ops::reserve::CanisterReserveView, ::canic::Error> {
+            Ok($crate::ops::reserve::ReserveOps::export())
         }
 
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
         async fn canic_reserve_admin(
-            cmd: ::canic::core::ops::subsystem::reserve::CanisterReserveAdminCommand,
-        ) -> Result<
-            ::canic::core::ops::subsystem::reserve::CanisterReserveAdminResponse,
-            ::canic::Error,
-        > {
-            ::canic::core::ops::subsystem::reserve::CanisterReserveOps::admin(cmd).await
+            cmd: ::canic::core::ops::reserve::ReserveAdminCommand,
+        ) -> Result<::canic::core::ops::reserve::ReserveAdminResponse, ::canic::Error> {
+            ::canic::core::ops::reserve::ReserveOps::admin(cmd).await
         }
     };
 }

@@ -22,9 +22,9 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
- - 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers; provisioning calls log caller/parent context on create_canister_request failures to simplify bootstrap debugging.
+- 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers; provisioning calls log caller/parent context on create_canister_request failures to simplify bootstrap debugging.
 - ♻️ **Lifecycle helpers** – shard policies, reserve pools, scaling helpers, and sync cascades keep fleets healthy.
-- 🧪 **Ready for CI** – Rust 2024 edition, MSRV 1.91, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
+- 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.92.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
 For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`verify`) instead of feeding raw principals into `ic-signature-verification`; `verify` builds the proper DER canister-sig public key and domain-prefixed message to avoid slice panics on short (10-byte) canister IDs. Pass the signing domain and seed from the caller rather than hardcoding them.
 
@@ -32,31 +32,31 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
 
 - `assets/` – documentation media (logo and shared imagery).
 - `crates/` – workspace crates.
-- `canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-utils`, and `canic-cdk` for consumers.
-- `canic-core/` – orchestration crate used inside canisters.
-    - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
-    - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
-    - `src/config/` – configuration loaders, validators, and schema helpers.
-    - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
-    - `src/log.rs` – logging macros.
-    - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
-    - `src/model/` – stable-memory registries plus volatile state caches that back the ops layer.
-    - `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
-    - `src/runtime.rs` – runtime glue shared by macros.
-    - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
-    - `types` – re-exported wrappers for accounts, cycles, bounded strings, ULIDs, WASM helpers, etc. under `canic::core::types`.
-    - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
-  - `canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
-  - `canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing, bounded types) used by macros and canisters.
-  - `canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.
-  - `canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable-structures glue).
-  - `canisters/` – reference canisters that exercise the library end to end:
-    - `root/` orchestrator tying together shards, scaling, and reserve flows.
-    - `app/` – sample application canister used in integration flows.
-    - `auth/` – auxiliary canister covering authorization patterns.
-    - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
-    - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
-    - `blank/` – minimal canister template.
+- `crates/canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-utils`, and `canic-cdk` for consumers.
+- `crates/canic-core/` – orchestration crate used inside canisters.
+  - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
+  - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
+  - `src/config/` – configuration loaders, validators, and schema helpers.
+  - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
+  - `src/log.rs` – logging macros.
+  - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
+  - `src/model/` – stable-memory registries plus volatile state caches that back the ops layer.
+  - `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
+  - `src/runtime.rs` – runtime glue shared by macros.
+  - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
+  - `types` – re-exported wrappers for accounts, cycles, bounded strings, ULIDs, WASM helpers, etc. under `canic::core::types`.
+  - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
+- `crates/canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
+- `crates/canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing, bounded types) used by macros and canisters.
+- `crates/canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.
+- `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable-structures glue).
+- `crates/canisters/` – reference canisters that exercise the library end to end:
+  - `root/` orchestrator tying together shards, scaling, and reserve flows.
+  - `app/` – sample application canister used in integration flows.
+  - `auth/` – auxiliary canister covering authorization patterns.
+  - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
+  - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
+  - `blank/` – minimal canister template.
 - `scripts/` – build, release, and environment helpers.
   - `app/` – dfx bootstrap scripts for the demo topology.
   - `ci/` – version bumping and security checks used by CI.
@@ -132,19 +132,17 @@ Canic enforces clear separation between storage, transient state, orchestration 
 
 ### Sharding 📦
 
-`canic::ops::ext::sharding` assigns tenants to shard canisters according to a `ShardingPolicy` (per-shard capacity and max shard count, using HRW to pick a shard). Admin work flows through a single controller-only endpoint:
+Sharding is configured via `canic.toml` and executed through the ops layer. The base endpoint bundle exposes a controller-only registry query for operator visibility:
 
 ```rust
-canic_sharding_admin(cmd: canic::ops::ext::sharding::AdminCommand)
-    -> Result<canic::ops::ext::sharding::AdminResult, canic::Error>
+canic_sharding_registry()
+    -> Result<canic::core::ops::placement::sharding::ShardingRegistryDto, canic::Error>
 ```
-
-Command variants cover register, audit, drain, rebalance, and decommission flows. Your application is responsible for data migration around these moves.
 
 ### Scaling & Reserve Pools ⚖️
 
 - `canic_scaling_registry()` provides controller insight into scaling pools via the shared endpoint bundle.
-- Root canisters manage spare capacity through `canic::ops::root::reserve` and the `canic_reserve_*` endpoints.
+- Root canisters manage spare capacity through `canic_reserve_list()` and the controller-only `canic_reserve_admin(cmd)` endpoint.
 
 ### Directory Views 📇
 
@@ -191,7 +189,7 @@ cargo run -p canic-core --example auth_rules
 
 ## Project Status & Contributing
 
-Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `VERSIONING.md`, and `RELEASE_GUIDE.md` for workflow expectations.
+Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `CONTRIBUTING.md`, and the CI scripts under `scripts/ci/` for workflow expectations.
 
 ## License
 

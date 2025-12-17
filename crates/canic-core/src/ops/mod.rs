@@ -14,10 +14,11 @@ pub mod ic;
 pub mod orchestration;
 pub mod perf;
 pub mod placement;
+pub mod reserve;
 pub mod rpc;
 pub mod runtime;
+pub mod service;
 pub mod storage;
-pub mod subsystem;
 pub mod wasm;
 
 use std::time::Duration;
@@ -92,13 +93,13 @@ pub enum OpsError {
     OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
 
     #[error(transparent)]
+    ReserveOpsError(#[from] reserve::ReserveOpsError),
+
+    #[error(transparent)]
     RpcOpsError(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
-
-    #[error(transparent)]
-    SubsystemOpsError(#[from] subsystem::SubsystemOpsError),
 }
 
 impl OpsError {

@@ -17,13 +17,12 @@ use crate::{
             OrchestrationOpsError,
             cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         },
+        reserve::{
+            ReserveOps, reserve_export_canister, reserve_import_canister, reserve_recycle_canister,
+        },
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             topology::subnet::SubnetCanisterRegistryOps,
-        },
-        subsystem::reserve::{
-            CanisterReserveOps, reserve_export_canister, reserve_import_canister,
-            reserve_recycle_canister,
         },
         wasm::WasmOps,
     },
@@ -406,7 +405,7 @@ fn assert_directories_match_registry() -> Result<(), OrchestratorOpsError> {
 }
 
 fn assert_not_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
-    if CanisterReserveOps::contains(&pid) {
+    if ReserveOps::contains(&pid) {
         Err(OrchestratorOpsError::InReserve(pid))
     } else {
         Ok(())
@@ -414,7 +413,7 @@ fn assert_not_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
 }
 
 fn assert_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
-    if CanisterReserveOps::contains(&pid) {
+    if ReserveOps::contains(&pid) {
         Ok(())
     } else {
         Err(OrchestratorOpsError::NotInReserve(pid))

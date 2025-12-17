@@ -10,7 +10,7 @@
 //! - Importing a canister is destructive (code + controllers wiped)
 //! - Registry metadata is informational only while in reserve
 
-pub use crate::model::memory::reserve::{CanisterReserveEntry, CanisterReserveView};
+pub use crate::ops::storage::reserve::{CanisterReserveEntry, CanisterReserveView};
 
 use crate::{
     Error, ThisError,
@@ -22,9 +22,8 @@ use crate::{
     },
     config::{Config, schema::SubnetConfig},
     log::Topic,
-    model::memory::reserve::CanisterReserve,
     ops::{
-        OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY,
+        OPS_RESERVE_CHECK_INTERVAL, OPS_RESERVE_INIT_DELAY, OpsError,
         config::ConfigOps,
         ic::{
             get_cycles,
@@ -33,8 +32,7 @@ use crate::{
             update_settings,
         },
         prelude::*,
-        storage::topology::SubnetCanisterRegistryOps,
-        subsystem::SubsystemOpsError,
+        storage::{reserve::CanisterReserveStorageOps, topology::SubnetCanisterRegistryOps},
     },
     types::{Cycles, TC},
 };
@@ -60,7 +58,7 @@ pub enum ReserveOpsError {
 
 impl From<ReserveOpsError> for Error {
     fn from(err: ReserveOpsError) -> Self {
-        SubsystemOpsError::from(err).into()
+        OpsError::from(err).into()
     }
 }
 
@@ -69,22 +67,22 @@ impl From<ReserveOpsError> for Error {
 //
 
 ///
-/// CanisterReserveAdminCommand
+/// ReserveAdminCommand
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum CanisterReserveAdminCommand {
+pub enum ReserveAdminCommand {
     CreateEmpty,
     Recycle { pid: Principal },
     Import { pid: Principal },
 }
 
 ///
-/// CanisterReserveAdminResponse
+/// ReserveAdminResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum CanisterReserveAdminResponse {
+pub enum ReserveAdminResponse {
     Created { pid: Principal },
     Recycled,
     Imported,
@@ -134,12 +132,12 @@ async fn reset_into_reserve(pid: Principal) -> Result<Cycles, Error> {
 }
 
 ///
-/// CanisterReserveOps
+/// ReserveOps
 ///
 
-pub struct CanisterReserveOps;
+pub struct ReserveOps;
 
-impl CanisterReserveOps {
+impl ReserveOps {
     /// Starts periodic reserve maintenance. Safe to call multiple times.
     pub fn start() {
         TIMER.with_borrow_mut(|slot| {
@@ -194,7 +192,7 @@ impl CanisterReserveOps {
         };
 
         let min_size: u64 = subnet_cfg.reserve.minimum_size.into();
-        let reserve_size = CanisterReserve::len();
+        let reserve_size = CanisterReserveStorageOps::len();
 
         if reserve_size < min_size {
             let missing = (min_size - reserve_size).min(10);
@@ -233,36 +231,34 @@ impl CanisterReserveOps {
     /// Pops the first entry in the reserve.
     #[must_use]
     pub fn pop_first() -> Option<(Principal, CanisterReserveEntry)> {
-        CanisterReserve::pop_first()
+        CanisterReserveStorageOps::pop_first()
     }
 
     /// Returns true if the reserve pool contains the given canister.
     #[must_use]
     pub fn contains(pid: &Principal) -> bool {
-        CanisterReserve::contains(pid)
+        CanisterReserveStorageOps::contains(pid)
     }
 
     /// Full export of reserve contents.
     #[must_use]
     pub fn export() -> CanisterReserveView {
-        CanisterReserve::export()
+        CanisterReserveStorageOps::export()
     }
 
-    pub async fn admin(
-        cmd: CanisterReserveAdminCommand,
-    ) -> Result<CanisterReserveAdminResponse, Error> {
+    pub async fn admin(cmd: ReserveAdminCommand) -> Result<ReserveAdminResponse, Error> {
         match cmd {
-            CanisterReserveAdminCommand::CreateEmpty => {
+            ReserveAdminCommand::CreateEmpty => {
                 let pid = reserve_create_canister().await?;
-                Ok(CanisterReserveAdminResponse::Created { pid })
+                Ok(ReserveAdminResponse::Created { pid })
             }
-            CanisterReserveAdminCommand::Recycle { pid } => {
+            ReserveAdminCommand::Recycle { pid } => {
                 reserve_recycle_canister(pid).await?;
-                Ok(CanisterReserveAdminResponse::Recycled)
+                Ok(ReserveAdminResponse::Recycled)
             }
-            CanisterReserveAdminCommand::Import { pid } => {
+            ReserveAdminCommand::Import { pid } => {
                 reserve_import_canister(pid).await?;
-                Ok(CanisterReserveAdminResponse::Imported)
+                Ok(ReserveAdminResponse::Imported)
             }
         }
     }
@@ -286,7 +282,7 @@ pub async fn reserve_create_canister() -> Result<Principal, Error> {
     let cycles = Cycles::new(RESERVE_CANISTER_CYCLES);
     let pid = create_canister(reserve_controllers(), cycles.clone()).await?;
 
-    CanisterReserve::register(pid, cycles, None, None, None);
+    CanisterReserveStorageOps::register(pid, cycles, None, None, None);
 
     Ok(pid)
 }
@@ -302,7 +298,7 @@ pub async fn reserve_import_canister(pid: Principal) -> Result<(), Error> {
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
     let cycles = reset_into_reserve(pid).await?;
-    CanisterReserve::register(pid, cycles, None, None, None);
+    CanisterReserveStorageOps::register(pid, cycles, None, None, None);
 
     Ok(())
 }
@@ -320,7 +316,7 @@ pub async fn reserve_recycle_canister(pid: Principal) -> Result<(), Error> {
     let _ = SubnetCanisterRegistryOps::remove(&pid);
 
     let cycles = reset_into_reserve(pid).await?;
-    CanisterReserve::register(pid, cycles, role, None, hash);
+    CanisterReserveStorageOps::register(pid, cycles, role, None, hash);
 
     Ok(())
 }
@@ -338,7 +334,8 @@ pub async fn reserve_recycle_canister(pid: Principal) -> Result<(), Error> {
 pub async fn reserve_export_canister(pid: Principal) -> Result<(CanisterRole, Vec<u8>), Error> {
     OpsError::require_root()?;
 
-    let entry = CanisterReserve::take(&pid).ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
+    let entry = CanisterReserveStorageOps::take(&pid)
+        .ok_or(ReserveOpsError::ReserveEntryMissing { pid })?;
 
     let role = entry.role.ok_or(ReserveOpsError::MissingType { pid })?;
     let hash = entry
@@ -374,18 +371,18 @@ mod tests {
 
     #[test]
     fn start_skips_when_minimum_size_zero() {
-        CanisterReserveOps::stop();
+        ReserveOps::stop();
         Config::reset_for_tests();
         let cfg = ConfigModel::test_default();
         Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
         EnvOps::set_subnet_role(SubnetRole::PRIME);
 
-        assert!(CanisterReserveOps::enabled_subnet_config().is_none());
+        assert!(ReserveOps::enabled_subnet_config().is_none());
     }
 
     #[test]
     fn start_runs_when_minimum_size_nonzero() {
-        CanisterReserveOps::stop();
+        ReserveOps::stop();
         let mut cfg = ConfigModel::test_default();
         let subnet = cfg.subnets.entry(SubnetRole::PRIME).or_default();
         subnet.reserve.minimum_size = 1;
@@ -394,6 +391,6 @@ mod tests {
         Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
         EnvOps::set_subnet_role(SubnetRole::PRIME);
 
-        assert!(CanisterReserveOps::enabled_subnet_config().is_some());
+        assert!(ReserveOps::enabled_subnet_config().is_some());
     }
 }

@@ -19,8 +19,7 @@ use crate::{
     log,
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::ic::call::Call,
-    ops::storage::CanisterInitPayload,
+    ops::{ic::call::Call, storage::CanisterInitPayload},
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     types::Cycles,
 };

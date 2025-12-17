@@ -5,16 +5,16 @@
 //! decisions, create new workers when necessary, and surface registry
 //! snapshots for diagnostics.
 
-pub use crate::model::memory::scaling::ScalingRegistryView;
+pub use crate::ops::storage::scaling::ScalingRegistryView;
 
 use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
     config::schema::ScalePool,
-    model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::{
         config::ConfigOps,
         rpc::{CreateCanisterParent, create_canister_request},
+        storage::scaling::{ScalingWorkerRegistryStorageOps, WorkerEntry},
     },
 };
 use candid::Principal;
@@ -68,7 +68,7 @@ impl ScalingRegistryOps {
     pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
-        let worker_count = ScalingRegistry::find_by_pool(pool).len() as u32;
+        let worker_count = ScalingWorkerRegistryStorageOps::find_by_pool(pool).len() as u32;
 
         if policy.max_workers > 0 && worker_count >= policy.max_workers {
             return Ok(ScalingPlan {
@@ -115,7 +115,7 @@ impl ScalingRegistryOps {
     /// Export a snapshot of the current registry state.
     #[must_use]
     pub fn export() -> ScalingRegistryView {
-        ScalingRegistry::export()
+        ScalingWorkerRegistryStorageOps::export()
     }
 
     /// Create a new worker canister in the given pool and register it.
@@ -143,7 +143,7 @@ impl ScalingRegistryOps {
             // load_bps: 0 by default (no load yet)
         };
 
-        ScalingRegistry::insert(pid, entry);
+        ScalingWorkerRegistryStorageOps::insert(pid, entry);
 
         Ok(pid)
     }

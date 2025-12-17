@@ -17,11 +17,14 @@
 use super::hrw::HrwSelector;
 use super::metrics::{PoolMetrics, pool_metrics};
 use super::{ShardingOpsError, ShardingRegistryDto};
-use crate::cdk::types::Principal;
 use crate::{
     Error,
+    cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
-    ops::{config::ConfigOps, storage::sharding::ShardingRegistryOps},
+    ops::{
+        config::ConfigOps,
+        storage::sharding::{ShardEntry, ShardingRegistryOps},
+    },
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -229,10 +232,10 @@ struct SlotBackfillPlan {
 
 fn plan_slot_backfill(
     pool: &str,
-    view: &[(Principal, crate::model::memory::sharding::ShardEntry)],
+    view: &[(Principal, ShardEntry)],
     max_slots: u32,
 ) -> SlotBackfillPlan {
-    let mut entries: Vec<(Principal, crate::model::memory::sharding::ShardEntry)> = view
+    let mut entries: Vec<(Principal, ShardEntry)> = view
         .iter()
         .filter(|(_, entry)| entry.pool == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))

@@ -7,16 +7,15 @@ use crate::{
     cdk::{api::canister_self, println},
     ids::{CanisterRole, SubnetRole},
     log::Topic,
-    model::memory::topology::SubnetIdentity,
     ops::{
+        service::TimerService,
         storage::{
             CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::EnvOps,
             memory::MemoryRegistryOps,
-            topology::SubnetCanisterRegistryOps,
+            topology::{SubnetCanisterRegistryOps, SubnetIdentity},
         },
-        subsystem::service::TimerService,
     },
 };
 use canic_memory::runtime::init_eager_tls;

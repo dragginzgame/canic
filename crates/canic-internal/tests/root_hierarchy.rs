@@ -78,10 +78,7 @@ struct Setup {
 fn setup_root() -> Option<Setup> {
     let root_wasm = load_root_wasm()?;
 
-    let pic = PicBuilder::new()
-        .with_nns_subnet()
-        .with_application_subnet()
-        .build();
+    let pic = PicBuilder::new().with_application_subnet().build();
 
     let root_id = pic
         .create_and_install_canister(CanisterRole::ROOT, root_wasm)

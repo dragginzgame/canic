@@ -2,9 +2,9 @@ use crate::{
     Error,
     ops::{
         OpsError,
+        reserve::ReserveOps,
         runtime::{cycles::CycleTrackerOps, log::LogOps},
         storage::env::EnvOps,
-        subsystem::reserve::CanisterReserveOps,
     },
 };
 
@@ -35,7 +35,7 @@ impl TimerService {
         Self::start_all()?;
 
         // root-only services
-        CanisterReserveOps::start();
+        ReserveOps::start();
 
         Ok(())
     }

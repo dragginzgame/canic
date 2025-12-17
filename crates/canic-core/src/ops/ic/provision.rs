@@ -19,13 +19,13 @@ use crate::{
         ic::IcOpsError,
         orchestration::cascade::state::StateBundle,
         prelude::*,
+        reserve::ReserveOps,
         storage::{
             CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             env::{EnvData, EnvOps},
             topology::SubnetCanisterRegistryOps,
         },
-        subsystem::reserve::CanisterReserveOps,
         wasm::WasmOps,
     },
     types::Cycles,
@@ -210,7 +210,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
     let target = cfg.initial_cycles;
 
     // Reuse from reserve
-    if let Some((pid, _)) = CanisterReserveOps::pop_first() {
+    if let Some((pid, _)) = ReserveOps::pop_first() {
         let mut current = super::get_cycles(pid).await?;
 
         if current < target {
