@@ -1,8 +1,8 @@
-#![allow(clippy::disallowed_methods)]
+pub use crate::cdk::mgmt::{HttpHeader, HttpMethod};
 
 use crate::{
     Error,
-    cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, http_request},
+    cdk::mgmt::{HttpRequestArgs, http_request},
     model::metrics::{
         http::HttpMetrics,
         system::{SystemMetricKind, SystemMetrics},
@@ -11,58 +11,57 @@ use crate::{
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
 
-const MAX_RESPONSE_BYTES: u64 = 200_000;
-
 ///
-/// http_get
-/// Generic helper for HTTP GET with JSON response.
+/// Http
 ///
-pub async fn http_get<T: DeserializeOwned>(
-    url: &str,
-    headers: &[(String, String)],
-) -> Result<T, Error> {
-    http_get_with_label(url, headers, None).await
-}
 
-/// http_get_with_label
-/// HTTP GET with optional stable metric label.
-pub async fn http_get_with_label<T: DeserializeOwned>(
-    url: &str,
-    headers: &[(String, String)],
-    label: Option<&str>,
-) -> Result<T, Error> {
-    // record metrics up front so attempts are counted
-    SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-    HttpMetrics::increment_with_label("GET", url, label);
+pub struct Http;
 
-    let headers: Vec<HttpHeader> = headers
-        .iter()
-        .map(|(name, value)| HttpHeader {
-            name: name.clone(),
-            value: value.clone(),
-        })
-        .collect();
+impl Http {
+    pub const MAX_RESPONSE_BYTES: u64 = 200_000;
 
-    let args = HttpRequestArgs {
-        url: url.to_string(),
-        method: HttpMethod::GET,
-        headers,
-        max_response_bytes: Some(MAX_RESPONSE_BYTES),
-        ..Default::default()
-    };
-
-    let res = http_request(&args)
-        .await
-        .map_err(|e| Error::HttpRequest(e.to_string()))?;
-
-    // status
-    let status: u32 = res.status.0.to_u32().unwrap_or(0);
-    if status != 200 {
-        return Err(Error::HttpErrorCode(status));
+    fn record_metrics(verb: &'static str, url: &str, label: Option<&str>) {
+        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        HttpMetrics::increment_with_label(verb, url, label);
     }
 
-    // deserialize json
-    let res: T = serde_json::from_slice::<T>(&res.body)?;
+    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
+        Self::get_with_label(url, headers, None).await
+    }
 
-    Ok(res)
+    pub async fn get_with_label<T: DeserializeOwned>(
+        url: &str,
+        headers: &[(&str, &str)],
+        label: Option<&str>,
+    ) -> Result<T, Error> {
+        // metrics
+        Self::record_metrics("GET", url, label);
+
+        let headers: Vec<HttpHeader> = headers
+            .iter()
+            .map(|(name, value)| HttpHeader {
+                name: name.to_string(),
+                value: value.to_string(),
+            })
+            .collect();
+
+        let args = HttpRequestArgs {
+            url: url.to_string(),
+            method: HttpMethod::GET,
+            headers,
+            max_response_bytes: Some(Self::MAX_RESPONSE_BYTES),
+            ..Default::default()
+        };
+
+        let res = http_request(&args)
+            .await
+            .map_err(|e| Error::HttpRequest(e.to_string()))?;
+
+        let status: u32 = res.status.0.to_u32().unwrap_or(0);
+        if status != 200 {
+            return Err(Error::HttpErrorCode(status));
+        }
+
+        serde_json::from_slice(&res.body).map_err(Into::into)
+    }
 }
