@@ -34,21 +34,22 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
 - `crates/` – workspace crates.
 - `crates/canic/` – thin façade re-exporting `canic-core`, `canic-memory`, `canic-utils`, and `canic-cdk` for consumers.
 - `crates/canic-core/` – orchestration crate used inside canisters.
-  - `src/auth.rs` & `src/guard.rs` – reusable authorization helpers.
-  - `src/cdk/` – IC CDK shims and patched utilities used by the macros.
+  - `src/access/` – reusable authorization, guard, and policy helpers.
   - `src/config/` – configuration loaders, validators, and schema helpers.
+  - `src/dispatch.rs` – endpoint routing helpers used by the macros.
+  - `src/dto/` – candid-friendly DTOs for paging and exports.
   - `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
+  - `src/ids/` – strongly-typed role identifiers (`CanisterRole`, `SubnetRole`, etc.).
   - `src/log.rs` – logging macros.
   - `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
   - `src/model/` – stable-memory registries plus volatile state caches that back the ops layer.
   - `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
-  - `src/runtime.rs` – runtime glue shared by macros.
   - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
-  - `types` – re-exported wrappers for accounts, cycles, bounded strings, ULIDs, WASM helpers, etc. under `canic::core::types`.
   - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
 - `crates/canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
-- `crates/canic-utils/` – deterministic helpers (MiniCBOR serialization, perf counters, hashing, time/format/rand, WASM hashing, bounded types) used by macros and canisters.
-- `crates/canic-macros/` – shared macros (`perf!`, `perf_start!`, `impl_storable_*`) wired to `canic-utils` for deterministic codecs and IC shims.
+- `crates/canic-types/` – candid-friendly domain types (cycles, decimals, bounded strings, WASM helpers).
+- `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
+- `crates/canic-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 - `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable-structures glue).
 - `crates/canisters/` – reference canisters that exercise the library end to end:
   - `root/` orchestrator tying together shards, scaling, and reserve flows.
