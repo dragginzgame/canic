@@ -1,14 +1,26 @@
+//! Test utilities and fixtures for exercising Canic canisters.
+//!
+//! This crate is intended for host-side test environments (for example via
+//! PocketIC) and provides small helpers for generating stable dummy principals
+//! and accounts.
+
 pub mod pic;
 
 use canic::cdk::types::{Account, Principal};
 
 ///
-/// Fake
+/// Deterministic dummy-value generator for tests.
+///
+/// Produces stable principals/accounts derived from a numeric seed, which makes
+/// tests reproducible without hardcoding raw byte arrays.
 ///
 
 pub struct Fake;
 
 impl Fake {
+    ///
+    /// Deterministically derive an [`Account`] from `seed`.
+    ///
     #[must_use]
     pub fn account(seed: u32) -> Account {
         let mut sub = [0u8; 32];
@@ -21,6 +33,9 @@ impl Fake {
         }
     }
 
+    ///
+    /// Deterministically derive a [`Principal`] from `seed`.
+    ///
     #[must_use]
     pub fn principal(seed: u32) -> Principal {
         let mut buf = [0u8; 29];

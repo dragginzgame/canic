@@ -8,7 +8,7 @@ At a high level the file describes:
 - Subnet-specific behaviour under `subnets.<name>`.
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 
-All fields are validated when `canic_build!` or `canic_build_root!` run, so configuration drift fails fast at compile time.
+All fields are validated when `canic::build!` or `canic::build_root!` run, so configuration drift fails fast at compile time.
 
 ---
 
@@ -46,7 +46,7 @@ Feature toggles tied to public standards.
 
 Optional allow-list for privileged operations.
 
-- `principals: [Principal]` – principals authorised for whitelist checks.
+- `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
 
 ---
 
@@ -145,4 +145,4 @@ policy.max_shards = 8
 initial_cycles = "3T"
 ```
 
-This example defines two subnets (`prime` and `general`), enables the reserve pool, whitelists ICRC-21, and configures both scaling and sharding strategies for hub canisters.
+This example defines two subnets (`prime` and `general`), enables the reserve pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters.
