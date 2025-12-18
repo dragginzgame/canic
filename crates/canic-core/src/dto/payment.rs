@@ -1,3 +1,4 @@
+use crate::types::Decimal;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
@@ -13,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct PriceQuote {
-    pub usd_amount: crate::types::Decimal,
+    pub usd_amount: Decimal,
     pub icp_e8s: u64,
-    pub usd_per_icp: crate::types::Decimal,
+    pub usd_per_icp: Decimal,
     pub timestamp_seconds: u64,
 }
