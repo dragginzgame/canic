@@ -104,7 +104,7 @@ impl<const N: u32> Storable for BoundedString<N> {
     };
 
     fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.0.as_bytes().to_vec())
+        Cow::Borrowed(self.0.as_bytes())
     }
 
     fn into_bytes(self) -> Vec<u8> {
@@ -119,7 +119,9 @@ impl<const N: u32> Storable for BoundedString<N> {
             "Stored string exceeds BoundedString<{N}> bound"
         );
 
-        let s = String::from_utf8(bytes.to_vec()).expect("Stored BoundedString is not valid UTF-8");
+        let s = std::str::from_utf8(bytes)
+            .expect("Stored BoundedString is not valid UTF-8")
+            .to_string();
 
         Self(s)
     }
