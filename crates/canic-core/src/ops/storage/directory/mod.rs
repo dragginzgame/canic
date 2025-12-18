@@ -8,7 +8,10 @@ pub use subnet::*;
 
 pub use crate::model::memory::directory::{DirectoryView, PrincipalList};
 
-use crate::{dto::Page, ids::CanisterRole, types::PageRequest};
+use crate::{
+    dto::page::{Page, PageRequest},
+    ids::CanisterRole,
+};
 
 ///
 /// Pagination

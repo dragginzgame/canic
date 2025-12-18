@@ -44,12 +44,11 @@ pub struct ShardKey {
 impl ShardKey {
     pub const STORABLE_MAX_SIZE: u32 = 160;
 
-    #[must_use]
-    pub(crate) fn new(pool: &str, tenant: &str) -> Self {
-        Self {
-            pool: pool.try_into().unwrap(),
-            tenant: tenant.try_into().unwrap(),
-        }
+    pub(crate) fn try_new(pool: &str, tenant: &str) -> Result<Self, String> {
+        Ok(Self {
+            pool: pool.try_into()?,
+            tenant: tenant.try_into()?,
+        })
     }
 }
 

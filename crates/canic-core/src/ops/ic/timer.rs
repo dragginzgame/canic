@@ -1,5 +1,3 @@
-#![allow(clippy::disallowed_methods)]
-
 pub use crate::cdk::timers::TimerId;
 
 use crate::{

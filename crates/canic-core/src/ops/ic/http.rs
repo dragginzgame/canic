@@ -69,9 +69,7 @@ impl Http {
         serde_json::from_slice(&res.body).map_err(Into::into)
     }
 
-    pub async fn get_raw<T: DeserializeOwned>(
-        args: HttpRequestArgs,
-    ) -> Result<HttpRequestResult, Error> {
+    pub async fn get_raw(args: HttpRequestArgs) -> Result<HttpRequestResult, Error> {
         Self::get_raw_with_label(args, None).await
     }
 

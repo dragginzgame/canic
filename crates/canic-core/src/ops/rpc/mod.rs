@@ -1,3 +1,4 @@
+pub(crate) mod methods;
 mod request;
 mod response;
 
@@ -46,7 +47,7 @@ impl From<RpcOpsError> for Error {
 async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
     let root_pid = EnvOps::try_get_root_pid().map_err(|_| RpcOpsError::RootNotFound)?;
 
-    let call_response = Call::unbounded_wait(root_pid, "canic_response")
+    let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())
         .await?;
 

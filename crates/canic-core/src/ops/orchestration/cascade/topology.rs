@@ -212,7 +212,12 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
 }
 
 async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Error> {
-    call_and_decode::<Result<(), Error>>(*pid, "canic_sync_topology", bundle).await?
+    call_and_decode::<Result<(), Error>>(
+        *pid,
+        crate::ops::rpc::methods::CANIC_SYNC_TOPOLOGY,
+        bundle,
+    )
+    .await?
 }
 
 //

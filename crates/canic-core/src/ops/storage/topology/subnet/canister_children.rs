@@ -1,10 +1,9 @@
 use crate::{
     cdk::{api::canister_self, types::Principal},
-    dto::Page,
+    dto::page::{Page, PageRequest},
     ids::CanisterRole,
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
     ops::storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
-    types::PageRequest,
 };
 
 ///

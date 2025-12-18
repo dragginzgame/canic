@@ -1,8 +1,7 @@
 pub use crate::model::metrics::{access::*, endpoint::*, http::*, icc::*, system::*, timer::*};
 use crate::{
-    dto::Page,
+    dto::page::{Page, PageRequest},
     perf::{PerfKey, entries as perf_entries},
-    types::PageRequest,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -251,7 +250,7 @@ fn perf_endpoint_snapshot() -> HashMap<String, (u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{perf, types::PageRequest};
+    use crate::perf;
 
     #[test]
     fn endpoint_health_joins_tables() {

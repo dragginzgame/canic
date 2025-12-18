@@ -10,6 +10,7 @@ use crate::{
         utils::time,
     },
     config::{Config, schema::LogConfig},
+    dto::page::PageRequest,
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
@@ -17,7 +18,6 @@ use crate::{
         MemoryError,
         id::log::{LOG_DATA_ID, LOG_INDEX_ID},
     },
-    types::PageRequest,
     utils::case::{Case, Casing},
 };
 

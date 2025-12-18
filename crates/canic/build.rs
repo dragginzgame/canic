@@ -1,6 +1,8 @@
 fn main() {
     // Path to the current crate (crates/canic)
-    let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = std::path::PathBuf::from(
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"),
+    );
 
     // Expected location of the repo-level Canic configuration
     //
@@ -27,7 +29,8 @@ fn main() {
         // Fallback mode: generate a minimal config so that
         // macros using `include_str!(env!(\"CANIC_CONFIG_PATH\"))`
         // can still compile in examples and tests.
-        let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let out_dir =
+            std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
         let fallback = out_dir.join("canic.default.toml");
 
         std::fs::write(

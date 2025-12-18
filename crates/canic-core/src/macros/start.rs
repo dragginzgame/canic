@@ -173,6 +173,16 @@ macro_rules! start_root {
 macro_rules! __canic_load_config {
     () => {{
         let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
-        $crate::config::Config::init_from_toml(config_str).unwrap();
+        if let Err(err) = $crate::config::Config::init_from_toml(config_str) {
+            $crate::cdk::println!(
+                "[canic] FATAL: config init failed (CANIC_CONFIG_PATH={}): {err}",
+                env!("CANIC_CONFIG_PATH")
+            );
+            let msg = format!(
+                "canic init failed: config init failed (CANIC_CONFIG_PATH={}): {err}",
+                env!("CANIC_CONFIG_PATH")
+            );
+            $crate::cdk::api::trap(&msg);
+        }
     }};
 }

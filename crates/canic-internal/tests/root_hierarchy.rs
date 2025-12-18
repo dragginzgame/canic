@@ -2,11 +2,11 @@ use canic::{
     Error,
     cdk::types::Principal,
     core::{
-        dto::Page,
+        dto::page::{Page, PageRequest},
         ids::{CanisterRole, SubnetRole},
         ops::storage::{CanisterEntry, CanisterSummary, directory::PrincipalList, env::EnvData},
     },
-    types::{PageRequest, TC},
+    types::TC,
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};

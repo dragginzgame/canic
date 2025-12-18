@@ -1,0 +1,29 @@
+//! Cycles minting canister (CMC) helpers.
+
+use crate::{
+    Error,
+    env::nns::CYCLES_MINTING_CANISTER,
+    ops::ic::call::Call,
+    spec::ic::cycles::{
+        IcpXdrConversionRate, IcpXdrConversionRateCertifiedResponse, IcpXdrConversionRateResponse,
+    },
+};
+
+///
+/// get_icp_xdr_conversion_rate
+/// Fetch the current ICP/XDR conversion rate from the CMC.
+///
+
+pub async fn get_icp_xdr_conversion_rate() -> Result<IcpXdrConversionRate, Error> {
+    let response =
+        Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate").await?;
+
+    // The CMC has historically returned both a plain response and a certified
+    // response envelope; accept either.
+    if let Ok(certified) = candid::decode_one::<IcpXdrConversionRateCertifiedResponse>(&response) {
+        return Ok(certified.data);
+    }
+
+    let plain = candid::decode_one::<IcpXdrConversionRateResponse>(&response)?;
+    Ok(plain.data)
+}

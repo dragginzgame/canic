@@ -71,8 +71,8 @@ macro_rules! canic_endpoints {
             crate_name: Option<String>,
             topic: Option<String>,
             min_level: Option<::canic::core::log::Level>,
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::log::LogEntryDto> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::log::LogEntryDto> {
             ::canic::core::ops::runtime::log::LogOps::page(crate_name, topic, min_level, page)
         }
 
@@ -87,48 +87,50 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_metrics_icc(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::IccMetricEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::IccMetricEntry> {
             ::canic::core::ops::runtime::metrics::MetricsOps::icc_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_http(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::HttpMetricEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::HttpMetricEntry> {
             ::canic::core::ops::runtime::metrics::MetricsOps::http_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_timer(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::TimerMetricEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::TimerMetricEntry>
+        {
             ::canic::core::ops::runtime::metrics::MetricsOps::timer_page(page)
         }
 
         #[canic_query]
         fn canic_metrics_access(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::AccessMetricEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::AccessMetricEntry>
+        {
             ::canic::core::ops::runtime::metrics::MetricsOps::access_page(page)
         }
 
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::perf::PerfEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::perf::PerfEntry> {
             ::canic::core::ops::perf::PerfOps::snapshot(page)
         }
 
         // derived_view
         #[canic_query]
         fn canic_metrics_endpoint_health(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::runtime::metrics::EndpointHealthEntry> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::EndpointHealthEntry> {
             ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
                 page,
-                Some("canic_metrics_endpoint_health"),
+                Some(stringify!(canic_metrics_endpoint_health)),
             )
         }
 
@@ -152,8 +154,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_app_directory(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<(
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<(
             ::canic::core::ids::CanisterRole,
             ::canic::core::ops::storage::directory::PrincipalList,
         )> {
@@ -162,9 +164,9 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_subnet_directory(
-            page: ::canic::core::types::PageRequest,
+            page: ::canic::core::dto::page::PageRequest,
         ) -> Result<
-            ::canic::core::dto::Page<(
+            ::canic::core::dto::page::Page<(
                 ::canic::core::ids::CanisterRole,
                 ::canic::core::ops::storage::directory::PrincipalList,
             )>,
@@ -179,8 +181,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_subnet_canister_children(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<::canic::core::ops::storage::CanisterSummary> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::storage::CanisterSummary> {
             ::canic::core::ops::storage::topology::subnet::SubnetCanisterChildrenOps::page(page)
         }
 
@@ -190,8 +192,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_cycle_tracker(
-            page: ::canic::core::types::PageRequest,
-        ) -> ::canic::core::dto::Page<(u64, ::canic::core::types::Cycles)> {
+            page: ::canic::core::dto::page::PageRequest,
+        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::types::Cycles)> {
             $crate::ops::runtime::cycles::CycleTrackerOps::page(page)
         }
 
@@ -246,10 +248,16 @@ macro_rules! canic_endpoints {
         #[canic_update]
         async fn icts_canister_status()
         -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::Error> {
-            use $crate::cdk::api::canister_self;
+            use $crate::cdk::api::{canister_self, msg_caller};
             use $crate::ops::ic::canister_status;
 
-            if &msg_caller().to_string() != "ylse7-raaaa-aaaal-qsrsa-cai" {
+            static ICTS_CALLER: ::std::sync::LazyLock<::candid::Principal> =
+                ::std::sync::LazyLock::new(|| {
+                    ::candid::Principal::from_text("ylse7-raaaa-aaaal-qsrsa-cai")
+                        .expect("ICTS caller principal must be valid")
+                });
+
+            if msg_caller() != *ICTS_CALLER {
                 return Err(::canic::Error::custom("Unauthorized"));
             }
 

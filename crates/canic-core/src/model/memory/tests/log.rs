@@ -1,9 +1,9 @@
 use crate::{
     cdk::utils::time,
     config::{Config, schema::ConfigModel},
+    dto::page::PageRequest,
     log::Level,
     model::memory::log::{LogEntry, StableLog, apply_retention},
-    types::PageRequest,
 };
 
 ///

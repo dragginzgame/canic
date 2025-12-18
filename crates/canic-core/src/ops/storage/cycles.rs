@@ -1,6 +1,6 @@
 pub use crate::model::memory::cycles::CycleTrackerView;
 
-use crate::{model::memory::cycles::CycleTracker, types::PageRequest};
+use crate::{dto::page::PageRequest, model::memory::cycles::CycleTracker};
 
 ///
 /// CycleTrackerStorageOps

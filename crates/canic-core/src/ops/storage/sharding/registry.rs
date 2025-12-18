@@ -22,6 +22,9 @@ pub enum ShardingRegistryOpsError {
     #[error("shard not found: {0}")]
     ShardNotFound(Principal),
 
+    #[error("invalid sharding key: {0}")]
+    InvalidKey(String),
+
     #[error("shard {pid} belongs to pool '{actual}', not '{expected}'")]
     PoolMismatch {
         pid: Principal,
@@ -124,7 +127,8 @@ impl ShardingRegistryOps {
                 .into());
             }
 
-            let key = ShardKey::new(pool, tenant);
+            let key =
+                ShardKey::try_new(pool, tenant).map_err(ShardingRegistryOpsError::InvalidKey)?;
 
             // If tenant is already assigned, decrement the old shard count.
             if let Some(current) = core.get_assignment(&key) {
@@ -152,7 +156,8 @@ impl ShardingRegistryOps {
     /// Returns the shard principal that previously held the assignment.
     pub fn unassign(pool: &str, tenant: &str) -> Result<Option<Principal>, Error> {
         ShardingRegistry::with_mut(|core| {
-            let key = ShardKey::new(pool, tenant);
+            let key =
+                ShardKey::try_new(pool, tenant).map_err(ShardingRegistryOpsError::InvalidKey)?;
             let Some(shard) = core.remove_assignment(&key) else {
                 return Ok(None);
             };

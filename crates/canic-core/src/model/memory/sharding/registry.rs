@@ -64,7 +64,8 @@ impl ShardingRegistry {
     /// Returns the shard assigned to the given tenant (if any).
     #[must_use]
     pub(crate) fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
-        Self::with(|s| s.get_assignment(&ShardKey::new(pool, tenant)))
+        let key = ShardKey::try_new(pool, tenant).ok()?;
+        Self::with(|s| s.get_assignment(&key))
     }
 
     /// Lists all tenants currently assigned to the specified shard.

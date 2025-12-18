@@ -3,8 +3,6 @@
 //! These wrappers attach ops-level concerns such as metrics recording around
 //! IC management canister calls and common ICC call patterns.
 
-#![allow(clippy::disallowed_methods)]
-
 use crate::{
     Error,
     cdk::{

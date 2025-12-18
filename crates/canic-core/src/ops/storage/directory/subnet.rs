@@ -1,6 +1,6 @@
 use crate::{
     Error, ThisError,
-    dto::Page,
+    dto::page::{Page, PageRequest},
     ids::CanisterRole,
     model::memory::directory::{DirectoryView, PrincipalList, SubnetDirectory},
     ops::{
@@ -9,7 +9,6 @@ use crate::{
             StorageOpsError, directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps,
         },
     },
-    types::PageRequest,
 };
 use std::collections::BTreeMap;
 
