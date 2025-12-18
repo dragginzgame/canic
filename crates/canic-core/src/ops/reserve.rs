@@ -105,7 +105,9 @@ const RESERVE_CANISTER_CYCLES: u128 = 5 * TC;
 
 /// Controller set for all reserve canisters (root-only).
 fn reserve_controllers() -> Vec<Principal> {
-    let mut controllers = Config::get().controllers.clone();
+    let mut controllers = Config::try_get()
+        .map(|cfg| cfg.controllers.clone())
+        .unwrap_or_default();
     let root = canister_self();
 
     if !controllers.contains(&root) {

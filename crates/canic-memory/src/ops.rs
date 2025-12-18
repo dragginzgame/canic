@@ -108,6 +108,9 @@ mod tests {
         defer_reserve_range("crate_b", 3, 4);
 
         let err = MemoryRegistryOps::init_memory(None).unwrap_err();
-        matches!(err, MemoryRegistryError::Overlap(_, _, _, _, _, _));
+        assert!(matches!(
+            err,
+            MemoryRegistryError::Overlap(_, _, _, _, _, _)
+        ));
     }
 }

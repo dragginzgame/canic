@@ -12,10 +12,10 @@ pub struct Icrc10Registry();
 
 impl Icrc10Registry {
     fn standards() -> Vec<Icrc10Standard> {
-        let config = Config::get();
+        let config = Config::try_get();
         let mut supported = vec![Icrc10Standard::Icrc10];
 
-        if let Some(standards) = &config.standards {
+        if let Some(standards) = config.as_ref().and_then(|cfg| cfg.standards.as_ref()) {
             if standards.icrc21 {
                 supported.push(Icrc10Standard::Icrc21);
             }
