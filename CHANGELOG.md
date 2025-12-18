@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [0.6.7] - 2025-12-18
 ### Fixed
 - `#[canic_query]`/`#[canic_update]` no longer panic on unsupported parameter patterns; now emit proper compile errors.
 - Root/non-root runtime startup now traps with a clear message if stable memory registry init fails.
