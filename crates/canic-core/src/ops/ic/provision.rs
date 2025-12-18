@@ -85,10 +85,13 @@ pub(crate) async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
 ) -> Result<StateBundle, Error> {
     let mut bundle = StateBundle::default();
-    let cfg = Config::get();
+    let cfg = Config::try_get();
 
     // did a directory change?
-    let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
+    let include_app = updated_role.is_none_or(|role| {
+        cfg.as_ref()
+            .is_none_or(|cfg| cfg.app_directory.contains(role))
+    });
     let include_subnet = updated_role.is_none_or(|role| {
         ConfigOps::current_subnet()
             .map(|c| c.subnet_directory.contains(role))
@@ -251,8 +254,11 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
 
 /// Create a fresh canister on the IC with the configured controllers.
 async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<Principal, Error> {
-    let mut controllers = Config::get().controllers.clone();
-    controllers.push(canister_self()); // root always controls
+    let root = canister_self();
+    let mut controllers = Config::try_get()
+        .map(|cfg| cfg.controllers.clone())
+        .unwrap_or_default();
+    controllers.push(root); // root always controls
 
     let pid = super::create_canister(controllers, cycles.clone()).await?;
 

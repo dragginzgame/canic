@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.8] - 2025-12-18
+- removed Mutex from the rand crate, so no chance of an expect() panic
+
 ## [0.6.7] - 2025-12-18
 ### Fixed
 - `#[canic_query]`/`#[canic_update]` no longer panic on unsupported parameter patterns; now emit proper compile errors.

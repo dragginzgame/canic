@@ -354,7 +354,10 @@ mod tests {
 
         // Overlap with existing should error
         let err = MemoryRegistry::reserve_range("crate_b", 15, 25).unwrap_err();
-        matches!(err, MemoryRegistryError::Overlap(_, _, _, _, _, _));
+        assert!(matches!(
+            err,
+            MemoryRegistryError::Overlap(_, _, _, _, _, _)
+        ));
 
         // Disjoint should succeed
         MemoryRegistry::reserve_range("crate_b", 30, 40).unwrap();
@@ -367,7 +370,7 @@ mod tests {
     fn reserve_range_rejects_invalid_order() {
         reset_for_tests();
         let err = MemoryRegistry::reserve_range("crate_a", 5, 4).unwrap_err();
-        matches!(err, MemoryRegistryError::InvalidRange(_, _, _));
+        assert!(matches!(err, MemoryRegistryError::InvalidRange(_, _, _)));
         assert!(MemoryRegistry::export_ranges().is_empty());
     }
 
@@ -378,7 +381,7 @@ mod tests {
 
         // Out of range
         let err = MemoryRegistry::register(5, "crate_a", "Foo").unwrap_err();
-        matches!(err, MemoryRegistryError::OutOfRange(_, _));
+        assert!(matches!(err, MemoryRegistryError::OutOfRange(_, _)));
 
         // Happy path
         MemoryRegistry::register(2, "crate_a", "Foo").unwrap();
@@ -388,7 +391,10 @@ mod tests {
 
         // Different label should error
         let err = MemoryRegistry::register(2, "crate_a", "Bar").unwrap_err();
-        matches!(err, MemoryRegistryError::AlreadyRegistered(_, _, _));
+        assert!(matches!(
+            err,
+            MemoryRegistryError::AlreadyRegistered(_, _, _)
+        ));
 
         let view = MemoryRegistry::export();
         assert_eq!(view.len(), 1);

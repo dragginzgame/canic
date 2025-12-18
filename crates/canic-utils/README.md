@@ -23,7 +23,7 @@ let sample = rand::next_u64();                   // non-crypto RNG for tests
 
 Determinism notes
 - Hashing: xxHash3 is **not** cryptographic. Use it for sharding, cache keys, and fingerprints—not for signatures or certified data.
-- RNG: seeded from `now_nanos()` once per process (shared `LazyLock<Mutex<StdRand>>`). Good for tests and sampling; not for secrets.
+- RNG: seeded from `now_nanos()` once per process.  Good for tests and sampling; not for secrets.
 - Time: `now_*` wraps `api::time()` on WASM; `SystemTime` on native. Casts are clamped to u64 with truncation allowed where noted.
 
 Error handling

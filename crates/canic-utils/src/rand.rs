@@ -1,20 +1,18 @@
 //!
-//! Randomness helpers built atop `tinyrand`, seeded with wall-clock time.
-//! Provides a shared RNG for tests and lightweight sampling (non-cryptographic).
+//! Thread-local, non-cryptographic RNG seeded from wall-clock time.
 //!
-
+//! The IC executes canister code single-threaded, so `RefCell` provides
+//! sufficient interior mutability without locking or poisoning semantics.
+//!
 use canic_cdk::utils::time::now_nanos;
-use std::sync::{LazyLock, Mutex};
+use std::cell::RefCell;
 use tinyrand::{Rand, Seeded, StdRand};
 
-///
-/// Global RNG protected by a mutex, seeded from `now_nanos()`.
-///
+thread_local! {
+    static STD_RAND: RefCell<StdRand> = RefCell::new(StdRand::seed(now_nanos()));
+}
 
-pub static STD_RAND: LazyLock<Mutex<StdRand>> =
-    LazyLock::new(|| Mutex::new(StdRand::seed(now_nanos())));
-
-/// Produce an 8-bit random value (samples from `next_u16`).
+/// Produce an 8-bit random value (derived from `next_u16`).
 #[must_use]
 pub fn next_u8() -> u8 {
     (next_u16() & 0xFF) as u8
@@ -23,25 +21,25 @@ pub fn next_u8() -> u8 {
 /// Produce a 16-bit random value from the shared RNG.
 #[must_use]
 pub fn next_u16() -> u16 {
-    STD_RAND.lock().expect("mutex").next_u16()
+    STD_RAND.with(|rng| rng.borrow_mut().next_u16())
 }
 
 /// Produce a 32-bit random value from the shared RNG.
 #[must_use]
 pub fn next_u32() -> u32 {
-    STD_RAND.lock().expect("mutex").next_u32()
+    STD_RAND.with(|rng| rng.borrow_mut().next_u32())
 }
 
 /// Produce a 64-bit random value from the shared RNG.
 #[must_use]
 pub fn next_u64() -> u64 {
-    STD_RAND.lock().expect("mutex").next_u64()
+    STD_RAND.with(|rng| rng.borrow_mut().next_u64())
 }
 
 /// Produce a 128-bit random value from the shared RNG.
 #[must_use]
 pub fn next_u128() -> u128 {
-    STD_RAND.lock().expect("mutex").next_u128()
+    STD_RAND.with(|rng| rng.borrow_mut().next_u128())
 }
 
 //
@@ -92,6 +90,8 @@ mod tests {
         }
     }
 
+    // Sanity check only: ensures bits vary across samples.
+    // This is not a statistical entropy test.
     #[test]
     fn test_bit_entropy() {
         let mut bits = 0u64;

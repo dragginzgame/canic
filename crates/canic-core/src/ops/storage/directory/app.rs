@@ -68,14 +68,17 @@ impl AppDirectoryOps {
     /// Build AppDirectory from the registry.
     #[must_use]
     pub fn root_build_view() -> DirectoryView {
-        let cfg = Config::get();
+        let cfg = Config::try_get();
         let entries = SubnetCanisterRegistry::export();
         let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();
 
         for entry in entries {
             let role = entry.role.clone();
 
-            if cfg.app_directory.contains(&role) {
+            if cfg
+                .as_ref()
+                .is_none_or(|cfg| cfg.app_directory.contains(&role))
+            {
                 map.entry(role).or_default().0.push(entry.pid);
             }
         }
