@@ -2,11 +2,11 @@
 //! Centralizes domain types so downstreams have a single import surface.
 
 mod cycles;
-mod page;
+mod decimal;
 mod string;
 mod wasm;
 
 pub use cycles::*;
-pub use page::*;
+pub use decimal::*;
 pub use string::*;
 pub use wasm::*;

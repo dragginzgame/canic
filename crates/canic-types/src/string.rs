@@ -34,6 +34,17 @@ pub struct BoundedString<const N: u32>(pub String);
 
 #[allow(clippy::cast_possible_truncation)]
 impl<const N: u32> BoundedString<N> {
+    pub fn try_new(s: impl Into<String>) -> Result<Self, String> {
+        let s: String = s.into();
+
+        #[allow(clippy::cast_possible_truncation)]
+        if s.len() as u32 <= N {
+            Ok(Self(s))
+        } else {
+            Err(format!("String too long for BoundedString<{N}>"))
+        }
+    }
+
     #[must_use]
     pub fn new(s: impl Into<String>) -> Self {
         let s: String = s.into();
@@ -73,11 +84,7 @@ impl<const N: u32> TryFrom<String> for BoundedString<N> {
 
     #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.len() as u32 <= N {
-            Ok(Self(value))
-        } else {
-            Err(format!("String too long for BoundedString<{N}>"))
-        }
+        Self::try_new(value)
     }
 }
 
@@ -86,11 +93,7 @@ impl<const N: u32> TryFrom<&str> for BoundedString<N> {
 
     #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value.len() as u32 <= N {
-            Ok(Self(value.to_string()))
-        } else {
-            Err(format!("String too long for BoundedString<{N}>"))
-        }
+        Self::try_new(value)
     }
 }
 
@@ -153,5 +156,11 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert!(a < c); // "abc" < "def"
+    }
+
+    #[test]
+    fn try_new_is_fallible() {
+        let err = BoundedString16::try_new("a".repeat(17)).unwrap_err();
+        assert!(err.contains("BoundedString<16>"));
     }
 }

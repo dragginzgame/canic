@@ -4,7 +4,10 @@ pub mod metrics;
 
 use crate::{
     VERSION,
-    cdk::{api::canister_self, println},
+    cdk::{
+        api::{canister_self, trap},
+        println,
+    },
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
@@ -19,6 +22,14 @@ use crate::{
     },
 };
 use canic_memory::runtime::init_eager_tls;
+
+fn init_memory_or_trap(phase: &str) {
+    if let Err(err) = MemoryRegistryOps::init_memory() {
+        println!("[canic] FATAL: memory init failed during {phase}: {err}");
+        let msg = format!("canic init failed during {phase}: memory init failed: {err}");
+        trap(&msg);
+    }
+}
 
 /// root_init
 /// Bootstraps the root canister runtime and environment.
@@ -38,7 +49,7 @@ pub fn root_init(identity: SubnetIdentity) {
 
     // init
     init_eager_tls();
-    MemoryRegistryOps::init_memory().unwrap();
+    init_memory_or_trap("root_init");
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
@@ -76,7 +87,7 @@ pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
     crate::log!(Topic::Init, Info, "🏁 post_upgrade: root");
     init_eager_tls();
-    MemoryRegistryOps::init_memory().unwrap();
+    init_memory_or_trap("root_post_upgrade");
 
     // --- Phase 2: Env registration ---
 
@@ -91,7 +102,7 @@ pub fn nonroot_init(canister_type: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_type);
     init_eager_tls();
-    MemoryRegistryOps::init_memory().unwrap();
+    init_memory_or_trap("nonroot_init");
 
     // --- Phase 2: Payload registration ---
     EnvOps::import(payload.env);
@@ -109,7 +120,7 @@ pub fn nonroot_post_upgrade(canister_type: CanisterRole) {
     // --- Phase 1: Init base systems ---
     crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_type);
     init_eager_tls();
-    MemoryRegistryOps::init_memory().unwrap();
+    init_memory_or_trap("nonroot_post_upgrade");
 
     // --- Phase 2: Env registration ---
 

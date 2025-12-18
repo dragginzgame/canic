@@ -127,7 +127,6 @@ impl LifecycleResult {
 pub struct CanisterLifecycleOrchestrator;
 
 impl CanisterLifecycleOrchestrator {
-    #[allow(clippy::too_many_lines)]
     pub async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
         let root_pid = canister_self();
 
@@ -139,92 +138,22 @@ impl CanisterLifecycleOrchestrator {
                 role,
                 parent,
                 extra_arg,
-            } => {
-                assert_parent_exists(parent)?;
-
-                let pid = create_and_install_canister(&role, parent, extra_arg).await?;
-
-                assert_immediate_parent(pid, parent)?;
-                assert_not_in_reserve(pid)?;
-
-                cascade_all(Some(&role), Some(pid)).await?;
-
-                Ok(LifecycleResult::created(pid))
-            }
+            } => Self::apply_create(role, parent, extra_arg).await,
 
             // -----------------------------------------------------------------
             // DELETE (leaf-only)
             // -----------------------------------------------------------------
-            LifecycleEvent::Delete { pid } => {
-                assert_no_children(pid)?;
-
-                // Snapshot BEFORE destructive delete.
-                let snap = snapshot_topology_required(pid)?;
-
-                delete_canister(pid).await?;
-
-                let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
-                cascade_all(Some(&snap.role), topology_target).await?;
-
-                Ok(LifecycleResult {
-                    new_canister_pid: None,
-                    cascaded_topology: topology_target.is_some(),
-                    cascaded_directories: true,
-                })
-            }
+            LifecycleEvent::Delete { pid } => Self::apply_delete(pid, root_pid).await,
 
             // -----------------------------------------------------------------
             // UPGRADE
             // -----------------------------------------------------------------
-            LifecycleEvent::Upgrade { pid } => {
-                let entry = SubnetCanisterRegistryOps::try_get(pid)?;
-                let wasm = WasmOps::try_get(&entry.role)?;
-
-                if let Some(parent_pid) = entry.parent_pid {
-                    assert_parent_exists(parent_pid)?;
-                    assert_immediate_parent(pid, parent_pid)?;
-                }
-                assert_not_in_reserve(pid)?;
-
-                upgrade_canister(entry.pid, wasm.bytes()).await?;
-                SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
-                assert_module_hash(entry.pid, wasm.module_hash())?;
-
-                Ok(LifecycleResult::default())
-            }
+            LifecycleEvent::Upgrade { pid } => Self::apply_upgrade(pid).await,
 
             // -----------------------------------------------------------------
             // REINSTALL
             // -----------------------------------------------------------------
-            LifecycleEvent::Reinstall { pid } => {
-                let entry = SubnetCanisterRegistryOps::try_get(pid)?;
-                if entry.role == CanisterRole::ROOT {
-                    return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
-                }
-
-                let wasm = WasmOps::try_get(&entry.role)?;
-
-                let parent_pid = entry
-                    .parent_pid
-                    .ok_or(OrchestratorOpsError::MissingParentPid(pid))?;
-                assert_parent_exists(parent_pid)?;
-                assert_immediate_parent(pid, parent_pid)?;
-                assert_not_in_reserve(pid)?;
-
-                let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
-                install_canic_code(
-                    CanisterInstallMode::Reinstall,
-                    entry.pid,
-                    wasm.bytes(),
-                    payload,
-                    None,
-                )
-                .await?;
-                SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
-                assert_module_hash(entry.pid, wasm.module_hash())?;
-
-                Ok(LifecycleResult::default())
-            }
+            LifecycleEvent::Reinstall { pid } => Self::apply_reinstall(pid).await,
 
             // -----------------------------------------------------------------
             // ADOPT FROM RESERVE
@@ -233,87 +162,182 @@ impl CanisterLifecycleOrchestrator {
                 pid,
                 parent,
                 extra_arg,
-            } => {
-                // Must currently be in reserve
-                assert_in_reserve(pid)?;
-                assert_parent_exists(parent)?;
-
-                // Export metadata from reserve (handoff)
-                let (role, stored_hash) = reserve_export_canister(pid).await?;
-
-                // No longer in reserve
-                assert_not_in_reserve(pid)?;
-
-                if role == CanisterRole::ROOT {
-                    try_return_to_reserve(pid, "adopt_reserve role=ROOT").await;
-                    return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
-                }
-
-                let wasm = WasmOps::try_get(&role)?;
-
-                // Validate module hash matches what reserve expected (defensive)
-                if wasm.module_hash() != stored_hash {
-                    try_return_to_reserve(pid, "adopt_reserve module hash mismatch").await;
-                    return Err(OrchestratorOpsError::ModuleHashMismatch(pid).into());
-                }
-
-                // Attach before install so init hooks can observe the registry; roll back on failure.
-                SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash);
-
-                let payload = match build_nonroot_init_payload(&role, parent) {
-                    Ok(p) => p,
-                    Err(err) => {
-                        let _ = SubnetCanisterRegistryOps::remove(&pid);
-                        try_return_to_reserve(pid, "adopt_reserve payload build failed").await;
-                        return Err(err);
-                    }
-                };
-
-                if let Err(err) = install_canic_code(
-                    CanisterInstallMode::Install,
-                    pid,
-                    wasm.bytes(),
-                    payload,
-                    extra_arg,
-                )
-                .await
-                {
-                    let _ = SubnetCanisterRegistryOps::remove(&pid);
-                    try_return_to_reserve(pid, "adopt_reserve install failed").await;
-                    return Err(err);
-                }
-
-                // Postconditions
-                assert_immediate_parent(pid, parent)?;
-
-                // Targeted cascade on the newly adopted canister
-                cascade_all(Some(&role), Some(pid)).await?;
-
-                Ok(LifecycleResult {
-                    new_canister_pid: None,
-                    cascaded_topology: true,
-                    cascaded_directories: true,
-                })
-            }
+            } => Self::apply_adopt_reserve(pid, parent, extra_arg).await,
             // -----------------------------------------------------------------
             // RECYCLE INTO RESERVE
             // -----------------------------------------------------------------
             LifecycleEvent::RecycleToReserve { pid } => {
-                // Snapshot BEFORE destruction. If it wasn't in registry, that's a bug.
-                let snap = snapshot_topology_required(pid)?;
-
-                reserve_recycle_canister(pid).await?;
-
-                let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
-                cascade_all(Some(&snap.role), topology_target).await?;
-
-                Ok(LifecycleResult {
-                    new_canister_pid: None,
-                    cascaded_topology: topology_target.is_some(),
-                    cascaded_directories: true,
-                })
+                Self::apply_recycle_to_reserve(pid, root_pid).await
             }
         }
+    }
+
+    async fn apply_create(
+        role: CanisterRole,
+        parent: Principal,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<LifecycleResult, Error> {
+        assert_parent_exists(parent)?;
+
+        let pid = create_and_install_canister(&role, parent, extra_arg).await?;
+
+        assert_immediate_parent(pid, parent)?;
+        assert_not_in_reserve(pid)?;
+
+        cascade_all(Some(&role), Some(pid)).await?;
+
+        Ok(LifecycleResult::created(pid))
+    }
+
+    async fn apply_delete(pid: Principal, root_pid: Principal) -> Result<LifecycleResult, Error> {
+        assert_no_children(pid)?;
+
+        // Snapshot BEFORE destructive delete.
+        let snap = snapshot_topology_required(pid)?;
+
+        delete_canister(pid).await?;
+
+        let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
+        cascade_all(Some(&snap.role), topology_target).await?;
+
+        Ok(LifecycleResult {
+            new_canister_pid: None,
+            cascaded_topology: topology_target.is_some(),
+            cascaded_directories: true,
+        })
+    }
+
+    async fn apply_upgrade(pid: Principal) -> Result<LifecycleResult, Error> {
+        let entry = SubnetCanisterRegistryOps::try_get(pid)?;
+        let wasm = WasmOps::try_get(&entry.role)?;
+
+        if let Some(parent_pid) = entry.parent_pid {
+            assert_parent_exists(parent_pid)?;
+            assert_immediate_parent(pid, parent_pid)?;
+        }
+        assert_not_in_reserve(pid)?;
+
+        upgrade_canister(entry.pid, wasm.bytes()).await?;
+        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
+        assert_module_hash(entry.pid, wasm.module_hash())?;
+
+        Ok(LifecycleResult::default())
+    }
+
+    async fn apply_reinstall(pid: Principal) -> Result<LifecycleResult, Error> {
+        let entry = SubnetCanisterRegistryOps::try_get(pid)?;
+        if entry.role == CanisterRole::ROOT {
+            return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+        }
+
+        let wasm = WasmOps::try_get(&entry.role)?;
+
+        let parent_pid = entry
+            .parent_pid
+            .ok_or(OrchestratorOpsError::MissingParentPid(pid))?;
+        assert_parent_exists(parent_pid)?;
+        assert_immediate_parent(pid, parent_pid)?;
+        assert_not_in_reserve(pid)?;
+
+        let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
+        install_canic_code(
+            CanisterInstallMode::Reinstall,
+            entry.pid,
+            wasm.bytes(),
+            payload,
+            None,
+        )
+        .await?;
+        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
+        assert_module_hash(entry.pid, wasm.module_hash())?;
+
+        Ok(LifecycleResult::default())
+    }
+
+    async fn apply_adopt_reserve(
+        pid: Principal,
+        parent: Principal,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<LifecycleResult, Error> {
+        // Must currently be in reserve
+        assert_in_reserve(pid)?;
+        assert_parent_exists(parent)?;
+
+        // Export metadata from reserve (handoff)
+        let (role, stored_hash) = reserve_export_canister(pid).await?;
+
+        // No longer in reserve
+        assert_not_in_reserve(pid)?;
+
+        if role == CanisterRole::ROOT {
+            try_return_to_reserve(pid, "adopt_reserve role=ROOT").await;
+            return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+        }
+
+        let wasm = WasmOps::try_get(&role)?;
+
+        // Validate module hash matches what reserve expected (defensive)
+        if wasm.module_hash() != stored_hash {
+            try_return_to_reserve(pid, "adopt_reserve module hash mismatch").await;
+            return Err(OrchestratorOpsError::ModuleHashMismatch(pid).into());
+        }
+
+        // Attach before install so init hooks can observe the registry; roll back on failure.
+        SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash);
+
+        let payload = match build_nonroot_init_payload(&role, parent) {
+            Ok(p) => p,
+            Err(err) => {
+                let _ = SubnetCanisterRegistryOps::remove(&pid);
+                try_return_to_reserve(pid, "adopt_reserve payload build failed").await;
+                return Err(err);
+            }
+        };
+
+        if let Err(err) = install_canic_code(
+            CanisterInstallMode::Install,
+            pid,
+            wasm.bytes(),
+            payload,
+            extra_arg,
+        )
+        .await
+        {
+            let _ = SubnetCanisterRegistryOps::remove(&pid);
+            try_return_to_reserve(pid, "adopt_reserve install failed").await;
+            return Err(err);
+        }
+
+        // Postconditions
+        assert_immediate_parent(pid, parent)?;
+
+        // Targeted cascade on the newly adopted canister
+        cascade_all(Some(&role), Some(pid)).await?;
+
+        Ok(LifecycleResult {
+            new_canister_pid: None,
+            cascaded_topology: true,
+            cascaded_directories: true,
+        })
+    }
+
+    async fn apply_recycle_to_reserve(
+        pid: Principal,
+        root_pid: Principal,
+    ) -> Result<LifecycleResult, Error> {
+        // Snapshot BEFORE destruction. If it wasn't in registry, that's a bug.
+        let snap = snapshot_topology_required(pid)?;
+
+        reserve_recycle_canister(pid).await?;
+
+        let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
+        cascade_all(Some(&snap.role), topology_target).await?;
+
+        Ok(LifecycleResult {
+            new_canister_pid: None,
+            cascaded_topology: topology_target.is_some(),
+            cascaded_directories: true,
+        })
     }
 }
 

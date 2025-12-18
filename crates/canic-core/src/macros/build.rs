@@ -44,7 +44,8 @@ app_directory = []
 
         let mut emitted_config_path = false;
 
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let manifest_dir =
+            std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
         let $cfg_path = std::path::PathBuf::from(manifest_dir).join($file);
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         if let Some(parent) = $cfg_path.parent() {
@@ -54,7 +55,9 @@ app_directory = []
         let $cfg_str = match std::fs::read_to_string(&$cfg_path) {
             Ok(s) => s,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+                let out_dir = std::path::PathBuf::from(
+                    std::env::var("OUT_DIR").expect("OUT_DIR must be set"),
+                );
                 let fallback = out_dir.join("canic.default.toml");
                 std::fs::write(&fallback, DEFAULT_CANIC_TOML).expect("write default canic config");
                 println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", fallback.display());

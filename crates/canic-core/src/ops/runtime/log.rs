@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    dto::Page,
+    dto::page::{Page, PageRequest},
     log,
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
@@ -8,7 +8,6 @@ use crate::{
         OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
         ic::timer::{TimerId, TimerOps},
     },
-    types::PageRequest,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

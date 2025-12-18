@@ -23,6 +23,7 @@ pub use registry::{
 };
 pub use runtime::init_eager_tls;
 
+#[doc(hidden)]
 pub mod __reexports {
     pub use ctor;
 }

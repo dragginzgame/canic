@@ -1,8 +1,9 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    dto::page::PageRequest,
     eager_static,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
-    types::{Cycles, PageRequest},
+    types::Cycles,
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;

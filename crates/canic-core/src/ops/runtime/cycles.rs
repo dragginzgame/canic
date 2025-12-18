@@ -2,7 +2,7 @@ pub use crate::ops::storage::cycles::CycleTrackerView;
 
 use crate::{
     cdk::{futures::spawn, utils::time::now_secs},
-    dto::Page,
+    dto::page::{Page, PageRequest},
     log,
     log::Topic,
     ops::{
@@ -14,7 +14,7 @@ use crate::{
         },
         storage::{cycles::CycleTrackerStorageOps, env::EnvOps},
     },
-    types::{Cycles, PageRequest},
+    types::Cycles,
 };
 use std::{cell::RefCell, time::Duration};
 

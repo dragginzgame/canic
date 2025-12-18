@@ -5,11 +5,15 @@
 //! navigable.
 
 pub mod call;
+pub mod cmc;
 pub mod http;
+pub mod ledger;
 pub mod mgmt;
+pub mod payment;
 pub mod provision;
 pub mod signature;
 pub mod timer;
+pub mod xrc;
 
 pub use mgmt::*;
 

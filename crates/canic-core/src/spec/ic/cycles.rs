@@ -22,6 +22,18 @@ pub struct IcpXdrConversionRateResponse {
 }
 
 ///
+/// IcpXdrConversionRateCertifiedResponse
+/// Certified wrapper returned by `get_icp_xdr_conversion_rate` (when available).
+///
+
+#[derive(CandidType, Debug, Deserialize)]
+pub struct IcpXdrConversionRateCertifiedResponse {
+    pub data: IcpXdrConversionRate,
+    pub hash_tree: ByteBuf,
+    pub certificate: ByteBuf,
+}
+
+///
 /// NotifyTopUpArgs
 /// Arguments expected by the cycles canister when notifying a top-up.
 ///

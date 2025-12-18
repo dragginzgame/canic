@@ -9,6 +9,11 @@ use std::{collections::HashMap, sync::OnceLock};
 
 static SNS_CANISTERS: OnceLock<HashMap<SnsType, SnsCanisters>> = OnceLock::new();
 
+fn parse_principal(sns: SnsType, role: &'static str, text: &'static str) -> Principal {
+    Principal::from_text(text)
+        .unwrap_or_else(|_| panic!("Invalid SNS {sns:?} {role} principal: {text}"))
+}
+
 ///
 /// SnsCanisters
 ///
@@ -100,33 +105,27 @@ macro_rules! define_sns_table {
             $map.insert(
                 SnsType::$name,
                 SnsCanisters {
-                    root: parse!($name, "root", $root),
-                    governance: parse!($name, "governance", $gov),
-                    index: parse!($name, "index", $idx),
-                    ledger: parse!($name, "ledger", $led),
+                    root: parse_principal(SnsType::$name, "root", $root),
+                    governance: parse_principal(SnsType::$name, "governance", $gov),
+                    index: parse_principal(SnsType::$name, "index", $idx),
+                    ledger: parse_principal(SnsType::$name, "ledger", $led),
                 },
             );
         )+
     };
 }
 
-#[allow(clippy::too_many_lines)]
 fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
     let mut map = HashMap::new();
 
-    macro_rules! parse {
-        ($sns:ident, $role:expr, $text:expr) => {
-            Principal::from_text($text).unwrap_or_else(|_| {
-                panic!(
-                    "Invalid SNS {} {} principal: {}",
-                    stringify!($sns),
-                    $role,
-                    $text
-                )
-            })
-        };
-    }
+    insert_sns_table_part_1(&mut map);
+    insert_sns_table_part_2(&mut map);
+    insert_sns_table_part_3(&mut map);
 
+    map
+}
+
+fn insert_sns_table_part_1(map: &mut HashMap<SnsType, SnsCanisters>) {
     define_sns_table! {
         map,
 
@@ -178,6 +177,12 @@ fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
             index:      "onixt-eiaaa-aaaaq-aad2q-cai",
             ledger:     "o7oak-iyaaa-aaaaq-aadzq-cai",
         },
+    }
+}
+
+fn insert_sns_table_part_2(map: &mut HashMap<SnsType, SnsCanisters>) {
+    define_sns_table! {
+        map,
 
         Mimic {
             root:       "4m6il-zqaaa-aaaaq-aaa2a-cai",
@@ -220,6 +225,12 @@ fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
             index:      "n535v-yiaaa-aaaaq-aadsq-cai",
             ledger:     "np5km-uyaaa-aaaaq-aadrq-cai",
         },
+    }
+}
+
+fn insert_sns_table_part_3(map: &mut HashMap<SnsType, SnsCanisters>) {
+    define_sns_table! {
+        map,
 
         Sneed {
             root:       "fp274-iaaaa-aaaaq-aacha-cai",
@@ -256,8 +267,6 @@ fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
             ledger:     "emww2-4yaaa-aaaaq-aacbq-cai",
         },
     }
-
-    map
 }
 
 ///

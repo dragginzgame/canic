@@ -1,6 +1,9 @@
 pub use crate::perf::PerfEntry;
 
-use crate::{dto::Page, perf, types::PageRequest};
+use crate::{
+    dto::page::{Page, PageRequest},
+    perf,
+};
 
 ///
 /// PerfOps

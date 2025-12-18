@@ -5,7 +5,26 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.5]
+## [Unreleased]
+### Fixed
+- `#[canic_query]`/`#[canic_update]` no longer panic on unsupported parameter patterns; now emit proper compile errors.
+- Root/non-root runtime startup now traps with a clear message if stable memory registry init fails.
+- Lifecycle config load now traps with a clear message (instead of panicking) when embedded config is invalid.
+- Sharding registry no longer panics on invalid `(pool, tenant)` inputs; returns a storage error instead.
+- ICRC-2 allowance expiry checks now compare against IC nanosecond time (fixes false “expired” errors).
+
+### Added
+- `BoundedString::try_new` for fallible bounded-string construction.
+- XRC candid bindings under `spec::ic::xrc` and IC-edge wrappers under `ops::ic::{cmc,xrc}`.
+- Rust-decimal-backed `Decimal` type under `canic-types` (candid encodes as `text`).
+- Canic-specific pricing DTOs under `canic-core::dto::payment`.
+
+### Changed
+- Refactored long modules to remove `clippy::too_many_lines` suppressions (SNS env table and lifecycle orchestrator).
+- Centralized internal cross-canister RPC method name strings.
+- Payment and pricing helpers moved out of `spec/` into `ops::ic/` (spec is now spec-only).
+
+## [0.6.6]
 - added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
 - refactored testkit::pic so it uses a static variable for all tests (we were running out of chunks)
 - canic-macros weren't passing through clippy lints
@@ -13,7 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - changed canic-macros so that custom error types can be used as long as they have From<canic::Error>
 - made the Call wrapper accept any kind of principal (icydb works)
 - set up http_get so it's a namespace struct Http, and also used in the prelude.
-- added get_raw to Http
+- added get_raw and get_raw_with_label to Http
 
 ## [0.6.0] - Aquafresh 3-in-1 Endpoint Protection
 

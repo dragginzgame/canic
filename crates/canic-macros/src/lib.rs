@@ -335,7 +335,10 @@ mod expand {
         let auth = auth(args.auth.as_ref(), &label);
         let policy = policy(&args.policies, &label);
 
-        let call_args = extract_args(&orig_sig).unwrap();
+        let call_args = match extract_args(&orig_sig) {
+            Ok(v) => v,
+            Err(e) => return e.to_compile_error().into(),
+        };
 
         let call = call(asyncness, dispatch, &label, impl_name, &call_args);
         let completion = completion(&label, returns_result, call);

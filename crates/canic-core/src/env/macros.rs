@@ -4,7 +4,15 @@ macro_rules! static_canisters {
     ($($name:ident = $id:expr;)*) => {
         $(
             pub static $name: ::std::sync::LazyLock<::candid::Principal> =
-                ::std::sync::LazyLock::new(|| ::candid::Principal::from_text($id).unwrap());
+                ::std::sync::LazyLock::new(|| {
+                    ::candid::Principal::from_text($id).unwrap_or_else(|err| {
+                        panic!(
+                            "Invalid canister id literal for {}: {} ({err})",
+                            stringify!($name),
+                            $id
+                        )
+                    })
+                });
         )*
 
         // auto-generate a test module too

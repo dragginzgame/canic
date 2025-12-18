@@ -217,5 +217,6 @@ async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error>
     let debug = bundle.debug();
     log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
 
-    call_and_decode::<Result<(), Error>>(*pid, "canic_sync_state", bundle).await?
+    call_and_decode::<Result<(), Error>>(*pid, crate::ops::rpc::methods::CANIC_SYNC_STATE, bundle)
+        .await?
 }

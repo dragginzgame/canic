@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     config::Config,
-    dto::Page,
+    dto::page::{Page, PageRequest},
     model::memory::{
         directory::{AppDirectory, PrincipalList},
         topology::SubnetCanisterRegistry,
@@ -14,7 +14,6 @@ use crate::{
             env::EnvOps,
         },
     },
-    types::PageRequest,
 };
 use std::collections::BTreeMap;
 
