@@ -103,9 +103,11 @@ In `lib.rs`:
 
 ```rust
 use canic::prelude::*;
-use canic::canister::EXAMPLE;
+use canic::core::ids::CanisterRole;
 
-canic::start!(EXAMPLE); // or canic::start_root!() for the orchestrator canister
+const APP: CanisterRole = CanisterRole::new("app");
+
+canic::start!(APP); // or canic::start_root!() for the orchestrator canister
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

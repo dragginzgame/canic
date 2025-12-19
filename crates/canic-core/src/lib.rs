@@ -1,4 +1,19 @@
-//! CANIC crate utilities for multi-canister apps on the Internet Computer.
+//! Core Canic library used inside canisters.
+//!
+//! Most users should depend on the `canic` facade crate, which re-exports this crate
+//! under `canic::core` and exposes the common entrypoint macros:
+//! - `canic::build!` / `canic::build_root!` (in `build.rs`) to validate/embed `canic.toml`
+//! - `canic::start!` / `canic::start_root!` (in `lib.rs`) to wire lifecycle hooks and export endpoints
+//!
+//! ## Layering
+//!
+//! Canic is organized to keep endpoint code thin and policies centralized:
+//! - `access/` contains guard/auth/policy helpers for boundary enforcement.
+//! - `model/` owns storage (stable memory) and in-process registries/caches.
+//! - `ops/` implements workflows (provisioning, scaling, sharding, reserve management).
+//! - `macros/` provides public macro entrypoints and endpoint bundles.
+//!
+//! The default flow is: endpoints → ops → model.
 pub mod access;
 
 // -----------------------------------------------------------------------------

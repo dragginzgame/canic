@@ -70,6 +70,7 @@ num-traits = "0.2"
 pocket-ic = "11.0"
 proc-macro2 = "1.0"
 quote = "1.0"
+rand_chacha = "0.3"
 remain = "0.2"
 rust_decimal = "1.36"
 serde = { version = "1.0", default-features = false }
@@ -78,7 +79,6 @@ serde_json = "1.0"
 sha2 = "0.10"
 syn = "2.0"
 thiserror = "2.0"
-tinyrand = "0.5"
 toml = "0.9"
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 

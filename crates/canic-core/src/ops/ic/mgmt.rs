@@ -21,7 +21,7 @@ use crate::{
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     types::Cycles,
 };
-use candid::{CandidType, Principal, encode_args, utils::ArgumentEncoder};
+use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -88,6 +88,22 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
     Ok(status.cycles.into())
+}
+
+//
+// ──────────────────────────────── RANDOMNESS ────────────────────────────────
+//
+
+/// Query the management canister for raw randomness and record metrics.
+pub async fn raw_rand() -> Result<[u8; 32], Error> {
+    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand").await?;
+    let bytes: Vec<u8> = decode_one(&response)?;
+    let len = bytes.len();
+    let seed: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| Error::CustomError(format!("raw_rand returned {len} bytes")))?;
+
+    Ok(seed)
 }
 
 //

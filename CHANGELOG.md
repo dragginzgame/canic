@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.6.8] - 2025-12-18
 - removed Mutex from the rand crate, so no chance of an expect() panic
+- rand utils now seed a ChaCha20 PRNG from IC `raw_rand` and reseed on a timer (metrics track the raw_rand call)
+- per-canister randomness reseed interval is configurable (default 3600s) and can be disabled
+- randomness can seed from time nanos as an alternative to IC `raw_rand` (config uses `source = "ic"` or `"time"`)
 
 ## [0.6.7] - 2025-12-18
 ### Fixed

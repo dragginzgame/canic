@@ -67,6 +67,10 @@ Each child table configures a logical canister type within the subnet.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (optional).
 - `topup.amount = "5T"` – cycles to request when topping up (optional).
+- `randomness.enabled = true` – enable PRNG seeding (set `false` to disable).
+- `randomness.reseed_interval_secs = 3600` – reseed interval in seconds (default `3600`).
+- `randomness.source = "ic"` – seeding source (`ic` or `time`, default `ic`).
+  - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless worker pools.
 - `sharding` – optional table that defines stateful shard pools.
 
@@ -103,6 +107,21 @@ Fields:
 - `canister_type` – canister type that implements the shard.
 - `policy.capacity` – per-shard capacity (default `1000`).
 - `policy.max_shards` – maximum shard count (default `4`).
+
+### Randomness (Per-Canister)
+
+```
+[subnets.<name>.canisters.<type>.randomness]
+enabled = true
+reseed_interval_secs = 3600
+source = "ic" # or "time"
+```
+
+Fields:
+
+- `enabled` – enable PRNG seeding (default `true`).
+- `reseed_interval_secs` – reseed interval in seconds (default `3600`).
+- `source` – `ic` for management canister `raw_rand`, `time` for `ic_cdk::api::time()`.
 
 ---
 

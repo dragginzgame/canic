@@ -4,7 +4,7 @@ Small, deterministic utilities that Canic (and your canisters) rely on without p
 
 What you get:
 - Fast xxHash3 helpers for non-crypto hashing.
-- Simple, thread-local RNG (`tinyrand`) seeded from wall-clock time.
+- ChaCha20 PRNG seeded from the management canister `raw_rand` (reseeding recommended).
 - String casing helpers (snake/constant/title/etc.).
 - Small formatting helpers for logs/UI (`ellipsize_middle`, instruction suffixes).
 
@@ -13,14 +13,17 @@ Quick hits
 use canic_utils::{format, hash, instructions, rand};
 
 let digest = hash::hash_u64(b"tenant-123");      // fast sharding key
-let sample = rand::next_u64();                   // non-crypto RNG for tests
+rand::seed_from([7; 32]);                        // tests only; use raw_rand in canisters
+let sample = rand::next_u64().expect("seeded RNG");
+let bytes = rand::random_bytes(16).expect("seeded RNG");
+let hex = rand::random_hex(16).expect("seeded RNG");
 let short = format::ellipsize_middle("abcdef0123456789", 10, 4, 4);
 let pretty = instructions::format_instructions(12_345_678);
 ```
 
 Determinism notes
 - Hashing: xxHash3 is **not** cryptographic. Use it for sharding, cache keys, and fingerprints—not for signatures or certified data.
-- RNG: seeded from wall-clock time once per thread. Good for tests/sampling; not for secrets.
+- RNG: ChaCha20 PRNG seeded from `raw_rand` and deterministic between reseeds. Use frequent reseeding for sensitive randomness, seed in init + post_upgrade (Canic runtime schedules this automatically), and call RNG helpers from update methods so state advances.
 
 Casing helper
 ```rust
@@ -40,7 +43,7 @@ canic-utils/
 │  ├─ format.rs      # tiny fmt helpers
 │  ├─ hash.rs        # xxHash3 helpers
 │  ├─ instructions.rs# low-level wasm instr helpers
-│  ├─ rand.rs        # tinyrand-based RNG
+│  ├─ rand.rs        # ChaCha20 PRNG seeded via raw_rand
 │  └─ lib.rs
 └─ Cargo.toml
 ```

@@ -2,6 +2,7 @@ use crate::{
     Error,
     ops::{
         OpsError,
+        random::RandomOps,
         reserve::ReserveOps,
         runtime::{cycles::CycleTrackerOps, log::LogOps},
         storage::env::EnvOps,
@@ -23,6 +24,7 @@ impl TimerService {
 
         CycleTrackerOps::start();
         LogOps::start_retention();
+        RandomOps::start();
 
         Ok(())
     }
