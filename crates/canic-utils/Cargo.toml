@@ -14,10 +14,11 @@ categories = { workspace = true }
 publish = true
 
 [dependencies]
-canic-cdk = { workspace = true }
+candid = { workspace = true }
 convert_case = { workspace = true }
 derive_more = { workspace = true }
-tinyrand = { workspace = true }
+hex = { workspace = true }
+rand_chacha = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [lints]

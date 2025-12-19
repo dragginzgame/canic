@@ -9,7 +9,7 @@
 //! - [`format`] – small formatting helpers for logs/UI.
 //! - [`hash`] – fast xxHash3 hashing (non-cryptographic).
 //! - [`instructions`] – formatting helpers for instruction counts.
-//! - [`rand`] – simple thread-local RNG (non-cryptographic).
+//! - [`rand`] – ChaCha20 PRNG seeded via the management canister `raw_rand`.
 
 pub mod case;
 pub mod format;

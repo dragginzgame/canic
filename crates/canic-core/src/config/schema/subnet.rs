@@ -70,6 +70,12 @@ impl Validate for SubnetConfig {
 
         // --- 3. Validate canister configurations ---
         for (parent_ty, cfg) in &self.canisters {
+            if cfg.randomness.enabled && cfg.randomness.reseed_interval_secs == 0 {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{parent_ty}' randomness reseed_interval_secs must be > 0",
+                )));
+            }
+
             // Sharding pools
             if let Some(sharding) = &cfg.sharding {
                 for (pool_name, pool) in &sharding.pools {
@@ -148,6 +154,9 @@ pub struct CanisterConfig {
     pub topup: Option<CanisterTopup>,
 
     #[serde(default)]
+    pub randomness: RandomnessConfig,
+
+    #[serde(default)]
     pub scaling: Option<ScalingConfig>,
 
     #[serde(default)]
@@ -174,6 +183,45 @@ impl Default for CanisterTopup {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(5 * TC),
         }
+    }
+}
+
+///
+/// RandomnessConfig
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct RandomnessConfig {
+    pub enabled: bool,
+    pub reseed_interval_secs: u64,
+    pub source: RandomnessSource,
+}
+
+impl Default for RandomnessConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reseed_interval_secs: 3600,
+            source: RandomnessSource::Ic,
+        }
+    }
+}
+
+///
+/// RandomnessSource
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RandomnessSource {
+    Ic,
+    Time,
+}
+
+impl Default for RandomnessSource {
+    fn default() -> Self {
+        Self::Ic
     }
 }
 
@@ -291,6 +339,24 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
+    fn randomness_defaults_to_ic() {
+        let cfg = RandomnessConfig::default();
+
+        assert!(cfg.enabled);
+        assert_eq!(cfg.reseed_interval_secs, 3600);
+        assert_eq!(cfg.source, RandomnessSource::Ic);
+    }
+
+    #[test]
+    fn randomness_source_parses_ic_and_time() {
+        let cfg: RandomnessConfig = toml::from_str("source = \"ic\"").unwrap();
+        assert_eq!(cfg.source, RandomnessSource::Ic);
+
+        let cfg: RandomnessConfig = toml::from_str("source = \"time\"").unwrap();
+        assert_eq!(cfg.source, RandomnessSource::Time);
+    }
+
+    #[test]
     fn auto_create_entries_must_exist_in_subnet() {
         let mut auto_create = BTreeSet::new();
         auto_create.insert(CanisterRole::from("missing_auto_canister"));
@@ -403,5 +469,30 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid scaling policy to fail");
+    }
+
+    #[test]
+    fn randomness_interval_requires_positive_value() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            randomness: RandomnessConfig {
+                enabled: true,
+                reseed_interval_secs: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected invalid randomness interval to fail");
     }
 }

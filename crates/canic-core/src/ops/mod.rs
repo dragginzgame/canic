@@ -15,6 +15,7 @@ pub mod icrc;
 pub mod orchestration;
 pub mod perf;
 pub mod placement;
+pub mod random;
 pub mod reserve;
 pub mod rpc;
 pub mod runtime;

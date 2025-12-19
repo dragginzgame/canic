@@ -1,33 +1,48 @@
-//! Thin facade over the Canic stack re-exporting the core crate and helpers.
+//! Canic facade crate.
+//!
+//! This crate is the recommended dependency for downstream canister projects. It
+//! re-exports the core Canic stack and provides the common macro entry points:
+//! - `build!` / `build_root!` for `build.rs` (validate/embed `canic.toml`)
+//! - `start!` / `start_root!` for `lib.rs` (wire lifecycle hooks and export endpoints)
+//!
+//! For lower-level access, use the `core`, `cdk`, `memory`, `types`, and `utils`
+//! re-exports.
 
-///
-/// RE-EXPORTS
-///
+// -----------------------------------------------------------------------------
+// Re-exports
+// -----------------------------------------------------------------------------
 pub use canic_core::{Error, build, build_root, log, log::Level, start, start_root};
 pub use canic_memory::{
     eager_init, eager_static, ic_memory, ic_memory_range, impl_storable_bounded,
     impl_storable_unbounded,
 };
 
-///
-/// SUB-CRATES
-///
+// -----------------------------------------------------------------------------
+// Sub-crates
+// -----------------------------------------------------------------------------
 pub use canic_cdk as cdk;
 pub use canic_core as core;
 pub use canic_macros as macros;
 pub use canic_types as types;
 pub use canic_utils as utils;
 
-///
-/// CONSTANTS
-///
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// -----------------------------------------------------------------------------
+// Prelude
+// -----------------------------------------------------------------------------
+
 ///
-/// Prelude
-/// should only be used in the Actor file
+/// Opinionated prelude for Canic canister crates.
+///
+/// Prefer importing from the prelude in your canister `lib.rs` to keep endpoint
+/// modules small and consistent. Library crates and shared modules should
+/// generally import from specific paths instead of pulling in the entire prelude.
 ///
 
 pub mod prelude {
