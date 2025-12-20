@@ -212,17 +212,12 @@ impl Default for RandomnessConfig {
 /// RandomnessSource
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RandomnessSource {
+    #[default]
     Ic,
     Time,
-}
-
-impl Default for RandomnessSource {
-    fn default() -> Self {
-        Self::Ic
-    }
 }
 
 ///
