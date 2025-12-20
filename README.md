@@ -45,8 +45,10 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
   - `src/model/` – stable-memory registries plus volatile state caches that back the ops layer.
   - `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
   - `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
-  - `examples/` – runnable demos for guards, shard lifecycle, and canister ops.
+  - `benches/` – criterion benchmarks for MiniCBOR serialization.
+- `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
 - `crates/canic-memory/` – standalone stable-memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
+- `crates/canic-testkit/` – host-side test utilities and fixtures for Canic canisters.
 - `crates/canic-types/` – candid-friendly domain types (cycles, decimals, bounded strings, WASM helpers).
 - `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
 - `crates/canic-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
@@ -58,10 +60,13 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
   - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
   - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
   - `blank/` – minimal canister template.
+  - `test/` – workspace-only test canister used by host-side fixtures.
 - `scripts/` – build, release, and environment helpers.
   - `app/` – dfx bootstrap scripts for the demo topology.
+  - `bench/` – local benchmarking helpers.
   - `ci/` – version bumping and security checks used by CI.
   - `env/` – local environment utilities (e.g., shared env updates).
+  - `env.sh` – shared environment bootstrap for scripts and tooling.
 - `.github/workflows/` – CI pipelines (fmt, clippy, tests, release).
 - `.githooks/` – optional git hooks; `pre-commit` formats and runs cargo sort before committing.
 
@@ -173,21 +178,18 @@ The `Account` textual encoding matches the ICRC reference (CRC32 → base32, no 
 - Lint: `make clippy`
 - Test: `make test`
 - Build release WASMs: `make build`
-- Run the example suite: `make examples` or `cargo build -p canic --examples`
+- Build example targets: `cargo build -p canic --examples`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 
 ## Examples
 
-Explore the runnable examples under `crates/canic-core/examples/`:
+Explore the runnable example under `crates/canic/examples/`:
 
-- `auth_rules.rs` – compose guard policies.
 - `minimal_root.rs` – bootstrap a bare-bones orchestrator.
-- `ops_create_canister.rs` – walk through the create-canister flow.
-- `shard_lifecycle.rs` – simulate register/assign/drain/rebalance operations.
 
 ```bash
-cargo run -p canic-core --example auth_rules
+cargo run -p canic --example minimal_root
 ```
 
 ## Project Status & Contributing
