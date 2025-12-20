@@ -54,7 +54,7 @@ pub mod prelude {
             export_candid, init,
         },
         core::{
-            access::auth::{is_controller, is_parent, is_root},
+            access::auth::{is_child, is_controller, is_parent, is_root},
             auth_require_all, auth_require_any,
             ids::CanisterRole,
             log,
