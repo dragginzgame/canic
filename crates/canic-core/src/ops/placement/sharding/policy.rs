@@ -14,7 +14,6 @@
 //!
 //! ===========================================================================
 
-use super::hrw::HrwSelector;
 use super::metrics::{PoolMetrics, pool_metrics};
 use super::{ShardingOpsError, ShardingRegistryDto};
 use crate::{
@@ -23,6 +22,7 @@ use crate::{
     config::schema::{ShardPool, ShardPoolPolicy},
     ops::{
         config::ConfigOps,
+        placement::sharding::hrw::HrwSelector,
         storage::sharding::{ShardEntry, ShardingRegistryOps},
     },
 };
@@ -131,7 +131,7 @@ impl ShardingPolicyOps {
         // Prefer an existing shard with spare capacity.
         let shards_with_capacity: Vec<_> = view
             .iter()
-            .filter(|(_, entry)| entry.pool == pool && entry.has_capacity())
+            .filter(|(_, entry)| entry.pool.as_ref() == pool && entry.has_capacity())
             .map(|(pid, _)| *pid)
             .collect();
 
@@ -237,7 +237,7 @@ fn plan_slot_backfill(
 ) -> SlotBackfillPlan {
     let mut entries: Vec<(Principal, ShardEntry)> = view
         .iter()
-        .filter(|(_, entry)| entry.pool == pool)
+        .filter(|(_, entry)| entry.pool.as_ref() == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))
         .collect();
 

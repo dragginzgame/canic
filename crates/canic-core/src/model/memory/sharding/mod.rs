@@ -66,7 +66,7 @@ pub struct ShardEntry {
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
-    pub pool: String,
+    pub pool: BoundedString32,
     pub canister_type: CanisterRole,
     pub created_at: u64,
 }
@@ -75,22 +75,23 @@ impl ShardEntry {
     pub const STORABLE_MAX_SIZE: u32 = 208;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
-    #[must_use]
-    pub(crate) fn new(
+    pub(crate) fn try_new(
         pool: &str,
         slot: u32,
         ty: CanisterRole,
         capacity: u32,
         created_at: u64,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, String> {
+        let pool = BoundedString32::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
+
+        Ok(Self {
             slot,
             canister_type: ty,
             capacity,
             count: 0,
-            pool: pool.to_string(),
+            pool,
             created_at,
-        }
+        })
     }
 
     /// Whether this shard has room for more tenants.

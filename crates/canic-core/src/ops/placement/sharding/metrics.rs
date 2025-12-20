@@ -22,7 +22,7 @@ pub fn pool_metrics(pool: &str) -> PoolMetrics {
     let mut used = 0;
 
     for (_, e) in &view {
-        if e.capacity > 0 && e.pool == pool {
+        if e.capacity > 0 && e.pool.as_ref() == pool {
             active += 1;
             cap += u64::from(e.capacity);
             used += u64::from(e.count);

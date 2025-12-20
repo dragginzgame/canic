@@ -53,7 +53,7 @@ impl ShardingRegistry {
     #[must_use]
     pub(crate) fn slot_for_shard(pool: &str, shard: Principal) -> Option<u32> {
         Self::with(|s| s.get_entry(&shard)).and_then(|entry| {
-            if entry.pool == pool && entry.has_assigned_slot() {
+            if entry.pool.as_ref() == pool && entry.has_assigned_slot() {
                 Some(entry.slot)
             } else {
                 None

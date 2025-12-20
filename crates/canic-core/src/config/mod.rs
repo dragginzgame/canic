@@ -87,7 +87,8 @@ impl Config {
 
     /// Return the current config as a TOML string.
     pub fn to_toml() -> Result<String, Error> {
-        let cfg = Self::get();
+        let cfg = Self::try_get()
+            .ok_or_else(|| Error::custom("config must be initialized before use"))?;
 
         toml::to_string_pretty(&*cfg)
             .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())

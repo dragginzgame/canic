@@ -58,7 +58,10 @@ impl ShardingRegistryOps {
         ShardingRegistry::with_mut(|core| {
             if slot != ShardEntry::UNASSIGNED_SLOT {
                 for (other_pid, other_entry) in core.all_entries() {
-                    if other_pid != pid && other_entry.pool == pool && other_entry.slot == slot {
+                    if other_pid != pid
+                        && other_entry.pool.as_ref() == pool
+                        && other_entry.slot == slot
+                    {
                         return Err(ShardingRegistryOpsError::SlotOccupied {
                             pool: pool.to_string(),
                             slot,
@@ -69,7 +72,9 @@ impl ShardingRegistryOps {
                 }
             }
 
-            let entry = ShardEntry::new(pool, slot, canister_type.clone(), capacity, now_secs());
+            let entry =
+                ShardEntry::try_new(pool, slot, canister_type.clone(), capacity, now_secs())
+                    .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
             Ok(())
@@ -118,11 +123,11 @@ impl ShardingRegistryOps {
                 .get_entry(&shard)
                 .ok_or(ShardingRegistryOpsError::ShardNotFound(shard))?;
 
-            if entry.pool != pool {
+            if entry.pool.as_ref() != pool {
                 return Err(ShardingRegistryOpsError::PoolMismatch {
                     pid: shard,
                     expected: pool.to_string(),
-                    actual: entry.pool,
+                    actual: entry.pool.to_string(),
                 }
                 .into());
             }
@@ -185,7 +190,7 @@ impl ShardingRegistryOps {
                         && other_entry.slot == slot
                     {
                         return Err(ShardingRegistryOpsError::SlotOccupied {
-                            pool: entry.pool,
+                            pool: entry.pool.to_string(),
                             slot,
                             pid: other_pid,
                         }
