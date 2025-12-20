@@ -25,7 +25,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.92.0"
 edition = "2024"
-version = "0.6.8"
+version = "0.6.9"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -42,15 +42,15 @@ base32 = "0.5"
 
 # canic crates
 candid = { version = "0.10", default-features = false }
-canic = { version = "0.6.8", path = "crates/canic" }
-canic-cdk = { version = "0.6.8", path = "crates/canic-cdk" }
-canic-core = { version = "0.6.8", path = "crates/canic-core" }
-canic-internal = { version = "0.6.8", path = "crates/canic-internal" }
-canic-macros = { version = "0.6.8", path = "crates/canic-macros" }
-canic-memory = { version = "0.6.8", path = "crates/canic-memory" }
-canic-testkit = { version = "0.6.8", path = "crates/canic-testkit" }
-canic-types = { version = "0.6.8", path = "crates/canic-types" }
-canic-utils = { version = "0.6.8", path = "crates/canic-utils" }
+canic = { version = "0.6.9", path = "crates/canic" }
+canic-cdk = { version = "0.6.9", path = "crates/canic-cdk" }
+canic-core = { version = "0.6.9", path = "crates/canic-core" }
+canic-internal = { version = "0.6.9", path = "crates/canic-internal" }
+canic-macros = { version = "0.6.9", path = "crates/canic-macros" }
+canic-memory = { version = "0.6.9", path = "crates/canic-memory" }
+canic-testkit = { version = "0.6.9", path = "crates/canic-testkit" }
+canic-types = { version = "0.6.9", path = "crates/canic-types" }
+canic-utils = { version = "0.6.9", path = "crates/canic-utils" }
 convert_case = "0.10"
 crc32fast = "1.5"
 criterion = "0.8"
