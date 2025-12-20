@@ -27,7 +27,7 @@ pub enum Topic {
     App,
     Auth,
     CanisterLifecycle,
-    CanisterReserve,
+    CanisterPool,
     CanisterState,
     Cycles,
     Init,

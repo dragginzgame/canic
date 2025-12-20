@@ -28,7 +28,7 @@ icrc21 = true # Enable ICRC-21 capability
 [subnets.prime]
 auto_create = ["app", "auth", "scale_hub", "shard_hub", "test"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub", "test"]
-reserve.minimum_size = 3
+pool.minimum_size = 3
 
 # --- App ---
 [subnets.prime.canisters.app]

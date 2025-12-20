@@ -75,20 +75,20 @@ macro_rules! canic_endpoints_root {
         }
 
         //
-        // CANISTER RESERVE
+        // CANISTER POOL
         //
 
         #[canic_query]
-        async fn canic_reserve_list()
-        -> Result<::canic::core::ops::reserve::CanisterReserveView, ::canic::Error> {
-            Ok($crate::ops::reserve::ReserveOps::export())
+        async fn canic_pool_list()
+        -> Result<::canic::core::ops::pool::CanisterPoolView, ::canic::Error> {
+            Ok($crate::ops::pool::PoolOps::export())
         }
 
         #[canic_update(auth_any(::canic::core::auth::is_controller))]
-        async fn canic_reserve_admin(
-            cmd: ::canic::core::ops::reserve::ReserveAdminCommand,
-        ) -> Result<::canic::core::ops::reserve::ReserveAdminResponse, ::canic::Error> {
-            ::canic::core::ops::reserve::ReserveOps::admin(cmd).await
+        async fn canic_pool_admin(
+            cmd: ::canic::core::ops::pool::PoolAdminCommand,
+        ) -> Result<::canic::core::ops::pool::PoolAdminResponse, ::canic::Error> {
+            ::canic::core::ops::pool::PoolOps::admin(cmd).await
         }
     };
 }

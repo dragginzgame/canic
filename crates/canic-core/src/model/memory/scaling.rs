@@ -4,6 +4,7 @@ use crate::{
     ids::CanisterRole,
     memory::impl_storable_bounded,
     model::memory::id::scaling::SCALING_REGISTRY_ID,
+    types::BoundedString64,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -27,13 +28,27 @@ eager_static! {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerEntry {
-    pub pool: String,                // which scale pool this belongs to
+    pub pool: BoundedString64,       // which scale pool this belongs to
     pub canister_type: CanisterRole, // canister type
     pub created_at_secs: u64,        // timestamp
 }
 
 impl WorkerEntry {
-    pub const STORABLE_MAX_SIZE: u32 = 128;
+    pub const STORABLE_MAX_SIZE: u32 = 160;
+
+    pub(crate) fn try_new(
+        pool: &str,
+        canister_type: CanisterRole,
+        created_at_secs: u64,
+    ) -> Result<Self, String> {
+        let pool = BoundedString64::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
+
+        Ok(Self {
+            pool,
+            canister_type,
+            created_at_secs,
+        })
+    }
 }
 
 impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);
@@ -65,7 +80,7 @@ impl ScalingRegistry {
     pub(crate) fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
         SCALING_REGISTRY.with_borrow(|map| {
             map.iter()
-                .filter(|e| e.value().pool == pool)
+                .filter(|e| e.value().pool.as_ref() == pool)
                 .map(|e| (*e.key(), e.value()))
                 .collect()
         })

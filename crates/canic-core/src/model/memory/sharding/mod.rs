@@ -11,7 +11,7 @@ use crate::{
     ids::CanisterRole,
     memory::impl_storable_bounded,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-    types::{BoundedString32, BoundedString128},
+    types::{BoundedString64, BoundedString128},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -37,12 +37,12 @@ eager_static! {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ShardKey {
-    pub pool: BoundedString32,
+    pub pool: BoundedString64,
     pub tenant: BoundedString128,
 }
 
 impl ShardKey {
-    pub const STORABLE_MAX_SIZE: u32 = 160;
+    pub const STORABLE_MAX_SIZE: u32 = 192;
 
     pub(crate) fn try_new(pool: &str, tenant: &str) -> Result<Self, String> {
         Ok(Self {
@@ -66,13 +66,13 @@ pub struct ShardEntry {
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
-    pub pool: BoundedString32,
+    pub pool: BoundedString64,
     pub canister_type: CanisterRole,
     pub created_at: u64,
 }
 
 impl ShardEntry {
-    pub const STORABLE_MAX_SIZE: u32 = 208;
+    pub const STORABLE_MAX_SIZE: u32 = 240;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
     pub(crate) fn try_new(
@@ -82,7 +82,7 @@ impl ShardEntry {
         capacity: u32,
         created_at: u64,
     ) -> Result<Self, String> {
-        let pool = BoundedString32::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
+        let pool = BoundedString64::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
 
         Ok(Self {
             slot,

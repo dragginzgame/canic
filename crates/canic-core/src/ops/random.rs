@@ -2,7 +2,6 @@
 
 use crate::{
     config::schema::{RandomnessConfig, RandomnessSource},
-    log,
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -50,10 +49,7 @@ impl RandomOps {
     async fn seed_once(source: RandomnessSource) {
         match source {
             RandomnessSource::Ic => match mgmt::raw_rand().await {
-                Ok(seed) => {
-                    log!(Topic::Init, Warn, "seed_from({seed:?})");
-                    rand_utils::seed_from(seed);
-                }
+                Ok(seed) => rand_utils::seed_from(seed),
                 Err(err) => {
                     crate::log!(Topic::Init, Warn, "raw_rand reseed failed: {err}");
                 }

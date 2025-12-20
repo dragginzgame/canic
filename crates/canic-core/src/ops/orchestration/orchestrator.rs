@@ -17,9 +17,7 @@ use crate::{
             OrchestrationOpsError,
             cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         },
-        reserve::{
-            ReserveOps, reserve_export_canister, reserve_import_canister, reserve_recycle_canister,
-        },
+        pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             topology::subnet::SubnetCanisterRegistryOps,
@@ -27,6 +25,10 @@ use crate::{
         wasm::WasmOps,
     },
 };
+
+///
+/// OrchestratorOpsError
+///
 
 #[derive(Debug, ThisError)]
 pub enum OrchestratorOpsError {
@@ -55,11 +57,11 @@ pub enum OrchestratorOpsError {
     #[error("subnet directory diverged from registry")]
     SubnetDirectoryDiverged,
 
-    #[error("canister {0} unexpectedly present in reserve")]
-    InReserve(Principal),
+    #[error("canister {0} unexpectedly present in pool")]
+    InPool(Principal),
 
-    #[error("expected canister {0} to be in reserve")]
-    NotInReserve(Principal),
+    #[error("expected canister {0} to be in pool")]
+    NotInPool(Principal),
 
     #[error("cannot perform init-based install for root canister {0}")]
     RootInitNotSupported(Principal),
@@ -93,15 +95,15 @@ pub enum LifecycleEvent {
         pid: Principal,
     },
 
-    /// Adopt a reserve canister into topology under `parent`.
-    /// Reserve export is a handoff; this event performs the attach + install.
-    AdoptReserve {
+    /// Adopt a pool canister into topology under `parent`.
+    /// Pool export is a handoff; this event performs the attach + install.
+    AdoptPool {
         pid: Principal,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     },
 
-    RecycleToReserve {
+    RecycleToPool {
         pid: Principal,
     },
 }
@@ -156,18 +158,18 @@ impl CanisterLifecycleOrchestrator {
             LifecycleEvent::Reinstall { pid } => Self::apply_reinstall(pid).await,
 
             // -----------------------------------------------------------------
-            // ADOPT FROM RESERVE
+            // ADOPT FROM POOL
             // -----------------------------------------------------------------
-            LifecycleEvent::AdoptReserve {
+            LifecycleEvent::AdoptPool {
                 pid,
                 parent,
                 extra_arg,
-            } => Self::apply_adopt_reserve(pid, parent, extra_arg).await,
+            } => Self::apply_adopt_pool(pid, parent, extra_arg).await,
             // -----------------------------------------------------------------
-            // RECYCLE INTO RESERVE
+            // RECYCLE INTO POOL
             // -----------------------------------------------------------------
-            LifecycleEvent::RecycleToReserve { pid } => {
-                Self::apply_recycle_to_reserve(pid, root_pid).await
+            LifecycleEvent::RecycleToPool { pid } => {
+                Self::apply_recycle_to_pool(pid, root_pid).await
             }
         }
     }
@@ -182,7 +184,7 @@ impl CanisterLifecycleOrchestrator {
         let pid = create_and_install_canister(&role, parent, extra_arg).await?;
 
         assert_immediate_parent(pid, parent)?;
-        assert_not_in_reserve(pid)?;
+        assert_not_in_pool(pid)?;
 
         cascade_all(Some(&role), Some(pid)).await?;
 
@@ -215,7 +217,7 @@ impl CanisterLifecycleOrchestrator {
             assert_parent_exists(parent_pid)?;
             assert_immediate_parent(pid, parent_pid)?;
         }
-        assert_not_in_reserve(pid)?;
+        assert_not_in_pool(pid)?;
 
         upgrade_canister(entry.pid, wasm.bytes()).await?;
         SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
@@ -237,7 +239,7 @@ impl CanisterLifecycleOrchestrator {
             .ok_or(OrchestratorOpsError::MissingParentPid(pid))?;
         assert_parent_exists(parent_pid)?;
         assert_immediate_parent(pid, parent_pid)?;
-        assert_not_in_reserve(pid)?;
+        assert_not_in_pool(pid)?;
 
         let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
         install_canic_code(
@@ -254,31 +256,31 @@ impl CanisterLifecycleOrchestrator {
         Ok(LifecycleResult::default())
     }
 
-    async fn apply_adopt_reserve(
+    async fn apply_adopt_pool(
         pid: Principal,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<LifecycleResult, Error> {
-        // Must currently be in reserve
-        assert_in_reserve(pid)?;
+        // Must currently be in pool
+        assert_in_pool(pid)?;
         assert_parent_exists(parent)?;
 
-        // Export metadata from reserve (handoff)
-        let (role, stored_hash) = reserve_export_canister(pid).await?;
+        // Export metadata from pool (handoff)
+        let (role, stored_hash) = pool_export_canister(pid).await?;
 
-        // No longer in reserve
-        assert_not_in_reserve(pid)?;
+        // No longer in pool
+        assert_not_in_pool(pid)?;
 
         if role == CanisterRole::ROOT {
-            try_return_to_reserve(pid, "adopt_reserve role=ROOT").await;
+            try_return_to_pool(pid, "adopt_pool role=ROOT").await;
             return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
         }
 
         let wasm = WasmOps::try_get(&role)?;
 
-        // Validate module hash matches what reserve expected (defensive)
+        // Validate module hash matches what pool expected (defensive)
         if wasm.module_hash() != stored_hash {
-            try_return_to_reserve(pid, "adopt_reserve module hash mismatch").await;
+            try_return_to_pool(pid, "adopt_pool module hash mismatch").await;
             return Err(OrchestratorOpsError::ModuleHashMismatch(pid).into());
         }
 
@@ -289,7 +291,7 @@ impl CanisterLifecycleOrchestrator {
             Ok(p) => p,
             Err(err) => {
                 let _ = SubnetCanisterRegistryOps::remove(&pid);
-                try_return_to_reserve(pid, "adopt_reserve payload build failed").await;
+                try_return_to_pool(pid, "adopt_pool payload build failed").await;
                 return Err(err);
             }
         };
@@ -304,7 +306,7 @@ impl CanisterLifecycleOrchestrator {
         .await
         {
             let _ = SubnetCanisterRegistryOps::remove(&pid);
-            try_return_to_reserve(pid, "adopt_reserve install failed").await;
+            try_return_to_pool(pid, "adopt_pool install failed").await;
             return Err(err);
         }
 
@@ -321,14 +323,14 @@ impl CanisterLifecycleOrchestrator {
         })
     }
 
-    async fn apply_recycle_to_reserve(
+    async fn apply_recycle_to_pool(
         pid: Principal,
         root_pid: Principal,
     ) -> Result<LifecycleResult, Error> {
         // Snapshot BEFORE destruction. If it wasn't in registry, that's a bug.
         let snap = snapshot_topology_required(pid)?;
 
-        reserve_recycle_canister(pid).await?;
+        pool_recycle_canister(pid).await?;
 
         let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
         cascade_all(Some(&snap.role), topology_target).await?;
@@ -428,19 +430,19 @@ fn assert_directories_match_registry() -> Result<(), OrchestratorOpsError> {
     Ok(())
 }
 
-fn assert_not_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
-    if ReserveOps::contains(&pid) {
-        Err(OrchestratorOpsError::InReserve(pid))
+fn assert_not_in_pool(pid: Principal) -> Result<(), OrchestratorOpsError> {
+    if PoolOps::contains(&pid) {
+        Err(OrchestratorOpsError::InPool(pid))
     } else {
         Ok(())
     }
 }
 
-fn assert_in_reserve(pid: Principal) -> Result<(), OrchestratorOpsError> {
-    if ReserveOps::contains(&pid) {
+fn assert_in_pool(pid: Principal) -> Result<(), OrchestratorOpsError> {
+    if PoolOps::contains(&pid) {
         Ok(())
     } else {
-        Err(OrchestratorOpsError::NotInReserve(pid))
+        Err(OrchestratorOpsError::NotInPool(pid))
     }
 }
 
@@ -461,12 +463,12 @@ fn assert_immediate_parent(
     }
 }
 
-async fn try_return_to_reserve(pid: Principal, context: &str) {
-    if let Err(err) = reserve_import_canister(pid).await {
+async fn try_return_to_pool(pid: Principal, context: &str) {
+    if let Err(err) = pool_import_canister(pid).await {
         log!(
             Topic::CanisterLifecycle,
             Warn,
-            "failed to return {pid} to reserve after {context}: {err}"
+            "failed to return {pid} to pool after {context}: {err}"
         );
     }
 }

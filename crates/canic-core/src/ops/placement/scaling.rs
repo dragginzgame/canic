@@ -32,6 +32,9 @@ pub enum ScalingOpsError {
     #[error("scaling pool '{0}' not found")]
     PoolNotFound(String),
 
+    #[error("invalid scaling key: {0}")]
+    InvalidKey(String),
+
     #[error("scaling plan rejected: {0}")]
     PlanRejected(String),
 }
@@ -136,12 +139,8 @@ impl ScalingRegistryOps {
             .new_canister_pid;
 
         // 4. Register in memory
-        let entry = WorkerEntry {
-            pool: pool.to_string(),
-            canister_type: ty,
-            created_at_secs: now_secs(),
-            // load_bps: 0 by default (no load yet)
-        };
+        let entry =
+            WorkerEntry::try_new(pool, ty, now_secs()).map_err(ScalingOpsError::InvalidKey)?;
 
         ScalingWorkerRegistryStorageOps::insert(pid, entry);
 
