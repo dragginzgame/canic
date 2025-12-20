@@ -23,6 +23,28 @@ pub enum ConfigSchemaError {
     ValidationError(String),
 }
 
+pub const NAME_MAX_BYTES: usize = 40;
+
+fn validate_canister_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
+    if role.as_ref().len() > NAME_MAX_BYTES {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), ConfigSchemaError> {
+    if role.as_ref().len() > NAME_MAX_BYTES {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
+        )));
+    }
+
+    Ok(())
+}
+
 impl From<ConfigSchemaError> for Error {
     fn from(err: ConfigSchemaError) -> Self {
         ConfigError::from(err).into()
@@ -99,6 +121,10 @@ impl ConfigModel {
 
 impl Validate for ConfigModel {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
+        for subnet_role in self.subnets.keys() {
+            validate_subnet_role_len(subnet_role, "subnet")?;
+        }
+
         //  Validate that prime subnet exists
         let prime = SubnetRole::PRIME;
         let prime_subnet = self
@@ -108,6 +134,7 @@ impl Validate for ConfigModel {
 
         //  Validate that every app_directory entry exists in prime.canisters
         for canister_ty in &self.app_directory {
+            validate_canister_role_len(canister_ty, "app directory canister")?;
             if !prime_subnet.canisters.contains_key(canister_ty) {
                 return Err(ConfigSchemaError::ValidationError(format!(
                     "app directory canister '{canister_ty}' is not in prime subnet",

@@ -2,7 +2,7 @@ pub mod cycles;
 pub mod directory;
 pub mod env;
 pub mod log;
-pub mod reserve;
+pub mod pool;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
@@ -74,7 +74,7 @@ pub mod id {
     // root
     // various structures handled solely by root
     pub mod root {
-        pub const CANISTER_RESERVE_ID: u8 = 20;
+        pub const CANISTER_POOL_ID: u8 = 20;
     }
 
     // cycles

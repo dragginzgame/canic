@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.9] - 2025-12-20
+- renamed reserve → pool (config key `pool`, legacy `reserve` still accepted)
+- pool entries now track status (`PendingReset`, `Ready`, `Failed`) to support background resets
+- added `ImportQueued` (batch, background reset) and `ImportImmediate` (synchronous reset) admin commands
+
 ## [0.6.8] - 2025-12-18
 - removed Mutex from the rand crate, so no chance of an expect() panic
 - rand utils now seed a ChaCha20 PRNG from IC `raw_rand` and reseed on a timer (metrics track the raw_rand call)

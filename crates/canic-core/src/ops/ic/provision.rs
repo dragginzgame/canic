@@ -18,8 +18,8 @@ use crate::{
         config::ConfigOps,
         ic::IcOpsError,
         orchestration::cascade::state::StateBundle,
+        pool::PoolOps,
         prelude::*,
-        reserve::ReserveOps,
         storage::{
             CanisterInitPayload,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -123,7 +123,7 @@ pub(crate) async fn rebuild_directories_from_registry(
 /// Create and install a new canister of the requested type beneath `parent`.
 ///
 /// PHASES:
-/// 1. Allocate a canister ID and cycles (preferring the reserve pool)
+/// 1. Allocate a canister ID and cycles (preferring the pool)
 /// 2. Install WASM + bootstrap initial state
 /// 3. Register canister in SubnetCanisterRegistry
 /// 4. Cascade topology + sync directories
@@ -200,20 +200,20 @@ pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
 
 //
 // ===========================================================================
-// PHASE 1 — ALLOCATION (Reserve → Create)
+// PHASE 1 — ALLOCATION (Pool → Create)
 // ===========================================================================
 //
 
 /// Allocate a canister ID and ensure it meets the initial cycle target.
 ///
-/// Reuses a canister from the reserve if available; otherwise creates a new one.
+/// Reuses a canister from the pool if available; otherwise creates a new one.
 pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
     // use ConfigOps for a clean, ops-layer config lookup
     let cfg = ConfigOps::current_subnet_canister(role)?;
     let target = cfg.initial_cycles;
 
-    // Reuse from reserve
-    if let Some((pid, _)) = ReserveOps::pop_first() {
+    // Reuse from pool
+    if let Some((pid, _)) = PoolOps::pop_ready() {
         let mut current = super::get_cycles(pid).await?;
 
         if current < target {
@@ -223,7 +223,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
                 current = Cycles::new(current.to_u128() + missing);
 
                 log!(
-                    Topic::CanisterReserve,
+                    Topic::CanisterPool,
                     Ok,
                     "⚡ allocate_canister: topped up {pid} by {} to meet target {}",
                     Cycles::from(missing),
@@ -233,7 +233,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
         }
 
         log!(
-            Topic::CanisterReserve,
+            Topic::CanisterPool,
             Ok,
             "⚡ allocate_canister: reusing {pid} from pool (current {current})"
         );
@@ -244,7 +244,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
     // Create new canister
     let pid = create_canister_with_configured_controllers(target).await?;
     log!(
-        Topic::CanisterReserve,
+        Topic::CanisterPool,
         Info,
         "⚡ allocate_canister: pool empty"
     );

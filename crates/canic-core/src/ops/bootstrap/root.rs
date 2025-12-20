@@ -47,13 +47,23 @@ pub async fn root_set_subnet_id() {
 /// - Emits a summary of the resulting topology
 ///
 /// Intended to run during root bootstrap or upgrade flows.
-/// Safe to re-run: create requests are idempotent at the command layer.
+/// Safe to re-run: skips roles that already exist in the subnet registry.
 pub async fn root_create_canisters() -> Result<(), Error> {
     // Load the effective configuration for the current subnet.
     let subnet_cfg = ConfigOps::current_subnet()?;
 
     // Creation pass: ensure all auto-create canister roles exist.
     for ty in &subnet_cfg.auto_create {
+        if let Some(existing) = SubnetCanisterRegistryOps::get_type(ty) {
+            log!(
+                Topic::Init,
+                Info,
+                "auto_create: {ty} already registered as {}, skipping",
+                existing.pid
+            );
+            continue;
+        }
+
         create_canister_request::<()>(ty, CreateCanisterParent::Root, None).await?;
     }
 

@@ -31,7 +31,7 @@ The default flow is: endpoints → ops → model.
 - `canic_core::env` – curated canister ID constants and helpers.
 - `canic_core::ids` – typed identifiers (`CanisterRole`, `SubnetRole`, etc.).
 - `canic_core::log` / `canic_core::perf` – logging + perf instrumentation helpers.
-- `canic_core::ops` – orchestration workflows (IC calls, sharding/scaling/reserve, WASM registry).
+- `canic_core::ops` – orchestration workflows (IC calls, sharding/scaling/pool, WASM registry).
 - `canic_core::spec` – representations of external IC standards/specs (ICRC, NNS/SNS, etc.).
 
 ## Quick Start (Typical Canister)

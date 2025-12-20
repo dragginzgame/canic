@@ -15,8 +15,8 @@ pub mod icrc;
 pub mod orchestration;
 pub mod perf;
 pub mod placement;
+pub mod pool;
 pub mod random;
-pub mod reserve;
 pub mod rpc;
 pub mod runtime;
 pub mod service;
@@ -38,11 +38,11 @@ pub const OPS_CYCLE_TRACK_INTERVAL: Duration = Duration::from_secs(60 * 10);
 /// Shared cadence for log retention (10 minutes).
 pub const OPS_LOG_RETENTION_INTERVAL: Duration = Duration::from_secs(60 * 10);
 
-/// Reserve timer initial delay (30 seconds) before first check.
-pub const OPS_RESERVE_INIT_DELAY: Duration = Duration::from_secs(30);
+/// Pool timer initial delay (30 seconds) before first check.
+pub const OPS_POOL_INIT_DELAY: Duration = Duration::from_secs(30);
 
-/// Reserve check cadence (30 minutes).
-pub const OPS_RESERVE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+/// Pool check cadence (30 minutes).
+pub const OPS_POOL_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 ///
 /// Prelude
@@ -95,7 +95,7 @@ pub enum OpsError {
     OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
 
     #[error(transparent)]
-    ReserveOpsError(#[from] reserve::ReserveOpsError),
+    PoolOpsError(#[from] pool::PoolOpsError),
 
     #[error(transparent)]
     RpcOpsError(#[from] rpc::RpcOpsError),

@@ -17,13 +17,13 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 - 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic::build!`, and `canic::build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
 - 🪶 **Core utilities** – `canic::core` exposes perf counters, bounded types, MiniCBOR serializers, and deterministic utilities without pulling in the full ops stack.
 - 🧠 **State layers** – opinionated separation for stable memory, volatile state, ops/business logic, and public endpoints.
-- 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and reserve policies validated straight from `canic.toml`.
+- 🗺️ **Topology-aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 - 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per-node direct children, validate roots/cycles, and fail fast to avoid quadratic fan-out.
 - 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
 - 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 - 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
 - 🪵 **Configurable logging** – ring/age retention with second-level timestamps and paged log/query helpers; provisioning calls log caller/parent context on create_canister_request failures to simplify bootstrap debugging.
-- ♻️ **Lifecycle helpers** – shard policies, reserve pools, scaling helpers, and sync cascades keep fleets healthy.
+- ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
 - 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.92.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
 For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`verify`) instead of feeding raw principals into `ic-signature-verification`; `verify` builds the proper DER canister-sig public key and domain-prefixed message to avoid slice panics on short (10-byte) canister IDs. Pass the signing domain and seed from the caller rather than hardcoding them.
@@ -54,11 +54,11 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
 - `crates/canic-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 - `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable-structures glue).
 - `crates/canisters/` – reference canisters that exercise the library end to end:
-  - `root/` orchestrator tying together shards, scaling, and reserve flows.
+  - `root/` orchestrator tying together shards, scaling, and pool flows.
   - `app/` – sample application canister used in integration flows.
   - `auth/` – auxiliary canister covering authorization patterns.
   - `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
-  - `scale/`, `scale_hub/` – reserve scaling agents demonstrating capacity workflows.
+  - `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   - `blank/` – minimal canister template.
   - `test/` – workspace-only test canister used by host-side fixtures.
 - `scripts/` – build, release, and environment helpers.
@@ -123,16 +123,16 @@ See `crates/canisters/root` and the hub/shard reference canisters under `crates/
 
 ### 4. Define your topology
 
-Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `reserve`, `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention in seconds. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
+Populate `canic.toml` with subnet definitions, directory membership, and per-canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top-up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `pool` (or legacy `reserve`), `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention in seconds. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
 
 ## Layered Architecture
 
 Canic enforces clear separation between storage, transient state, orchestration logic, and public endpoints:
 
-- `model::memory` – stable data backed by `ic-stable-structures` (e.g. shard registries, reserve pools).
+- `model::memory` – stable data backed by `ic-stable-structures` (e.g. shard registries, pool entries).
 - `model::memory::state` – stable canister state/settings persisted across upgrades (e.g. `AppState`, `SubnetState`).
 - `model::*` (non-memory) – volatile in-process registries/caches that reset on upgrade (e.g. WASM registry, metrics registries).
-- `ops/` – business logic tying state + memory together (sharding policies, scaling flows, reserve management).
+- `ops/` – business logic tying state + memory together (sharding policies, scaling flows, pool management).
 - `endpoints/` – macro-generated IC entrypoints that delegate to `ops/` and keep boundary code minimal.
 - Temporary exception (target revisit in ~2 weeks): when no ops façade exists yet, read-only queries may pull directly from stable storage (`model::memory`) or runtime registries (`model::*`); mutations should still flow through `ops/`.
 
@@ -147,10 +147,10 @@ canic_sharding_registry()
     -> Result<canic::core::ops::placement::sharding::ShardingRegistryDto, canic::Error>
 ```
 
-### Scaling & Reserve Pools ⚖️
+### Scaling & Pool Capacity ⚖️
 
 - `canic_scaling_registry()` provides controller insight into scaling pools via the shared endpoint bundle.
-- Root canisters manage spare capacity through `canic_reserve_list()` and the controller-only `canic_reserve_admin(cmd)` endpoint.
+- Root canisters manage spare capacity through `canic_pool_list()` and the controller-only `canic_pool_admin(cmd)` endpoint.
 
 ### Directory Views 📇
 

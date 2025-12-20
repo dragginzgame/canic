@@ -2,8 +2,8 @@ use crate::{
     Error,
     ops::{
         OpsError,
+        pool::PoolOps,
         random::RandomOps,
-        reserve::ReserveOps,
         runtime::{cycles::CycleTrackerOps, log::LogOps},
         storage::env::EnvOps,
     },
@@ -37,7 +37,7 @@ impl TimerService {
         Self::start_all()?;
 
         // root-only services
-        ReserveOps::start();
+        PoolOps::start();
 
         Ok(())
     }

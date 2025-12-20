@@ -4,7 +4,7 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Global cluster settings (`controllers`, `app_directory`, `reserve`, `standards`, `whitelist`).
+- Global cluster settings (`controllers`, `app_directory`, `pool`, `standards`, `whitelist`).
 - Subnet-specific behaviour under `subnets.<name>`.
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 
@@ -22,9 +22,9 @@ Optional list of controller principals appended to every provisioned canister.
 
 Global set of canister types that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters`.
 
-### `[reserve]`
+### `[pool]`
 
-Controls the warm canister reserve pool.
+Controls the warm canister pool.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0`).
 
@@ -131,7 +131,7 @@ Fields:
 controllers = ["aaaaa-aa"]
 app_directory = ["scale_hub", "shard_hub"]
 
-[reserve]
+[pool]
 minimum_size = 3
 
 [standards]
@@ -164,4 +164,4 @@ policy.max_shards = 8
 initial_cycles = "3T"
 ```
 
-This example defines two subnets (`prime` and `general`), enables the reserve pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters.
+This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters.
