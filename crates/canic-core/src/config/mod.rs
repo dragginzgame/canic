@@ -47,14 +47,22 @@ pub enum ConfigError {
 pub struct Config {}
 
 impl Config {
-    // use an Arc to avoid repeatedly cloning
     #[must_use]
     pub fn get() -> Arc<ConfigModel> {
         CONFIG.with(|cfg| {
-            cfg.borrow()
-                .as_ref()
-                .cloned()
-                .expect("⚠️ Config must be initialized before use")
+            if let Some(config) = cfg.borrow().as_ref() {
+                return config.clone();
+            }
+
+            #[cfg(test)]
+            {
+                return Self::init_for_tests();
+            }
+
+            #[cfg(not(test))]
+            {
+                panic!("⚠️ Config must be initialized before use");
+            }
         })
     }
 
@@ -97,6 +105,7 @@ impl Config {
 
     /// Test-only: ensure a minimal validated config is available.
     #[cfg(test)]
+    #[must_use]
     pub fn init_for_tests() -> Arc<ConfigModel> {
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();

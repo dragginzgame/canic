@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.11] - 2025-12-21
+- made DFX_NETWORK mandatory, and in the Makefile for tests.  It was getting hard to set up the right config
+and environment for local tests
+
 ## [0.6.10] - 2025-12-21
 - improved rust error handling for ICRC-21, the ? flow is now useable
 

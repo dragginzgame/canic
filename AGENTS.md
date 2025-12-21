@@ -26,6 +26,10 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 - **Build**: `make build` for release builds.
 - **Check**: `make check` for type-check only.
 
+### Build-time Network Requirement
+- **Always set `DFX_NETWORK`** to `local` or `ic` for any build/test (enforced by build script).
+- For `make`/scripts, `NETWORK=local|mainnet|staging` will map to `DFX_NETWORK=local|ic`.
+
 ✅ PRs must pass `make fmt-check`, `make clippy`, and `make test`.
 
 ### Versioning & Release

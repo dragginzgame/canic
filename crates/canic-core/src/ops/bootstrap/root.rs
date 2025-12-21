@@ -1,10 +1,10 @@
 use crate::{
     Error,
-    cdk::api::canister_self,
+    cdk::api::{canister_self, trap},
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::get_current_subnet_pid,
+        ic::{Network, build_network, get_current_subnet_pid},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
         storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
@@ -22,9 +22,26 @@ use crate::{
 pub async fn root_set_subnet_id() {
     // Preferred path: query the NNS registry for the subnet this canister
     // currently belongs to.
-    if let Ok(Some(subnet_pid)) = get_current_subnet_pid().await {
-        EnvOps::set_subnet_pid(subnet_pid);
-        return;
+    let subnet_result = get_current_subnet_pid().await;
+    match subnet_result {
+        Ok(Some(subnet_pid)) => {
+            EnvOps::set_subnet_pid(subnet_pid);
+            return;
+        }
+        Ok(None) => {
+            if build_network() == Some(Network::Ic) {
+                let msg = "get_current_subnet_pid returned None on ic; refusing to fall back";
+                log!(Topic::Topology, Error, "{msg}");
+                trap(msg);
+            }
+        }
+        Err(err) => {
+            if build_network() == Some(Network::Ic) {
+                let msg = format!("get_current_subnet_pid failed on ic: {err}");
+                log!(Topic::Topology, Error, "{msg}");
+                trap(&msg);
+            }
+        }
     }
 
     // Fallback path: environments without a registry (e.g. PocketIC).
@@ -34,7 +51,7 @@ pub async fn root_set_subnet_id() {
 
     log!(
         Topic::Topology,
-        Warn,
+        Info,
         "get_current_subnet_pid unavailable; using self as subnet: {fallback}"
     );
 }
