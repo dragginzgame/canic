@@ -1,4 +1,4 @@
-.PHONY: help version tags patch minor major release \
+.PHONY: help version tags patch minor major release package publish \
         test build check clippy fmt fmt-check clean install-dev \
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
@@ -58,6 +58,8 @@ help:
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
 	@echo "  release          CI-driven release (local target is no-op)"
+	@echo "  package          Build a publishable crate tarball"
+	@echo "  publish          Publish crates to registry"
 	@echo ""
 	@echo "Development:"
 	@echo "  test             Run all tests"
@@ -131,6 +133,12 @@ major: ensure-clean fmt
 
 release: ensure-clean
 	@echo "Release handled by CI on tag push"
+
+package: ensure-clean
+	$(CARGO_ENV) cargo package
+
+publish: ensure-clean
+	$(CARGO_ENV) cargo publish
 
 #
 # Tests
