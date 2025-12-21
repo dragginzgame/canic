@@ -58,12 +58,6 @@ impl Config {
         })
     }
 
-    /// Return the config if initialized, otherwise `None`.
-    #[must_use]
-    pub fn try_get() -> Option<Arc<ConfigModel>> {
-        CONFIG.with(|cfg| cfg.borrow().as_ref().cloned())
-    }
-
     /// Initialize the global configuration from a TOML string.
     /// return the config as it is read at build time
     pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigModel>, Error> {
@@ -87,8 +81,7 @@ impl Config {
 
     /// Return the current config as a TOML string.
     pub fn to_toml() -> Result<String, Error> {
-        let cfg = Self::try_get()
-            .ok_or_else(|| Error::custom("config must be initialized before use"))?;
+        let cfg = Self::get();
 
         toml::to_string_pretty(&*cfg)
             .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())
@@ -100,5 +93,23 @@ impl Config {
         CONFIG.with(|cfg| {
             *cfg.borrow_mut() = None;
         });
+    }
+
+    /// Test-only: ensure a minimal validated config is available.
+    #[cfg(test)]
+    pub fn init_for_tests() -> Arc<ConfigModel> {
+        CONFIG.with(|cfg| {
+            let mut borrow = cfg.borrow_mut();
+            if let Some(existing) = borrow.as_ref() {
+                return existing.clone();
+            }
+
+            let config = ConfigModel::test_default();
+            config.validate().expect("test config must validate");
+
+            let arc = Arc::new(config);
+            *borrow = Some(arc.clone());
+            arc
+        })
     }
 }

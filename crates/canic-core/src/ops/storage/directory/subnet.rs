@@ -68,9 +68,8 @@ impl SubnetDirectoryOps {
     /// Build SubnetDirectory for the current subnet from the registry.
     #[must_use]
     pub fn root_build_view() -> DirectoryView {
-        let Ok(subnet_cfg) = ConfigOps::current_subnet() else {
-            return Vec::new();
-        };
+        let subnet_cfg = ConfigOps::current_subnet()
+            .expect("SubnetDirectoryOps::root_build_view requires a configured subnet");
 
         let entries = SubnetCanisterRegistryOps::export();
         let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();

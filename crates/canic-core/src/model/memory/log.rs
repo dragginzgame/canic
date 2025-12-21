@@ -57,7 +57,7 @@ fn with_log_mut<R>(f: impl FnOnce(&mut StableLogStorage) -> R) -> R {
 }
 
 pub fn log_config() -> LogConfig {
-    Config::try_get().map(|c| c.log.clone()).unwrap_or_default()
+    Config::get().log.clone()
 }
 
 ///

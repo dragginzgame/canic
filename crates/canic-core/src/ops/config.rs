@@ -52,8 +52,7 @@ pub struct ConfigOps;
 impl ConfigOps {
     /// Fetch a subnet configuration by type.
     pub fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
-        let cfg = Config::try_get()
-            .ok_or_else(|| Error::custom("config must be initialized before use"))?;
+        let cfg = Config::get();
 
         let subnet_cfg = cfg
             .get_subnet(role)

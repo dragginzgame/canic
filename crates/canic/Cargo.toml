@@ -23,5 +23,8 @@ canic-types = { workspace = true }
 canic-utils = { workspace = true }
 ic-cdk = { workspace = true }
 
+[build-dependencies]
+canic-core = { workspace = true }
+
 [lints]
 workspace = true
