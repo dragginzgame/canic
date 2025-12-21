@@ -56,7 +56,7 @@ impl Config {
 
             #[cfg(test)]
             {
-                return Self::init_for_tests();
+                Self::init_for_tests()
             }
 
             #[cfg(not(test))]

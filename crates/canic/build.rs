@@ -31,7 +31,7 @@ fn main() {
         .unwrap_or(repo_cfg);
 
     // If the user explicitly set CANIC_CONFIG_PATH, missing config is a hard error.
-    if let Some(_) = env_cfg {
+    if env_cfg.is_some() {
         if !cfg_path.exists() {
             panic!("Missing Canic config at {}", cfg_path.display());
         }
