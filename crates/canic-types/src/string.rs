@@ -113,15 +113,14 @@ impl<const N: u32> Storable for BoundedString<N> {
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
         let bytes = bytes.as_ref();
+        let bytes = if bytes.len() > N as usize {
+            &bytes[..N as usize]
+        } else {
+            bytes
+        };
 
-        assert!(
-            bytes.len() <= N as usize,
-            "Stored string exceeds BoundedString<{N}> bound"
-        );
-
-        let s = std::str::from_utf8(bytes)
-            .expect("Stored BoundedString is not valid UTF-8")
-            .to_string();
+        // Best-effort decode to avoid trapping on corrupted or migrated data.
+        let s = String::from_utf8_lossy(bytes).into_owned();
 
         Self(s)
     }

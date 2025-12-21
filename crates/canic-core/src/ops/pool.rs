@@ -125,9 +125,7 @@ pub enum PoolAdminResponse {
 //
 
 fn pool_controllers() -> Vec<Principal> {
-    let mut controllers = Config::try_get()
-        .map(|cfg| cfg.controllers.clone())
-        .unwrap_or_default();
+    let mut controllers = Config::get().controllers.clone();
 
     let root = canister_self();
     if !controllers.contains(&root) {

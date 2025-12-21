@@ -1,60 +1,46 @@
 fn main() {
-    // Path to the current crate (crates/canic)
+    println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
+
     let manifest_dir = std::path::PathBuf::from(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"),
     );
 
-    // Expected location of the repo-level Canic configuration
-    //
-    // This is used for:
-    // - examples
-    // - tests
-    // - non-canister builds of the `canic` crate
     let repo_cfg = manifest_dir.join("../canisters/canic.toml");
 
-    // Re-run if the config file appears, disappears, or changes
-    println!("cargo:rerun-if-changed={}", repo_cfg.display());
-    if let Some(parent) = repo_cfg.parent() {
+    let cfg_path = match std::env::var("CANIC_CONFIG_PATH") {
+        Ok(val) => {
+            let path = std::path::PathBuf::from(val);
+            if path.is_relative() {
+                manifest_dir.join(path)
+            } else {
+                path
+            }
+        }
+        Err(_) => repo_cfg,
+    };
+
+    // Re-run if the config file changes
+    println!("cargo:rerun-if-changed={}", cfg_path.display());
+    if let Some(parent) = cfg_path.parent() {
         println!("cargo:rerun-if-changed={}", parent.display());
     }
 
-    // Resolve the config path:
-    // - Prefer the real repo config if it exists
-    // - Otherwise generate a minimal, valid fallback config
-    let config_path = if repo_cfg.exists() {
-        repo_cfg
-            .canonicalize()
-            .expect("canonicalize canic.toml in repo")
-    } else {
-        // Fallback mode: generate a minimal config so that
-        // macros using `include_str!(env!(\"CANIC_CONFIG_PATH\"))`
-        // can still compile in examples and tests.
-        let out_dir =
-            std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
-        let fallback = out_dir.join("canic.default.toml");
-
-        std::fs::write(
-            &fallback,
-            "controllers = []
-app_directory = []
-
-[subnets.prime]
-",
-        )
-        .expect("write default canic config");
-
-        fallback
-    };
-
-    // Export the config path as a compile-time environment variable.
-    //
-    // This is consumed by Canic lifecycle macros via:
-    // `include_str!(env!("CANIC_CONFIG_PATH"))`.
-    println!(
-        "cargo:rustc-env=CANIC_CONFIG_PATH={}",
-        config_path.display()
+    // Ensure config exists
+    assert!(
+        cfg_path.exists(),
+        "Missing Canic config at {}",
+        cfg_path.display()
     );
 
-    // Ensure rebuild if the selected config changes
-    println!("cargo:rerun-if-changed={}", config_path.display());
+    let config_str = std::fs::read_to_string(&cfg_path).expect("read canic config for validation");
+    canic_core::config::Config::init_from_toml(&config_str).expect("Invalid Canic config");
+
+    // Export canonicalized path for macros
+    println!(
+        "cargo:rustc-env=CANIC_CONFIG_PATH={}",
+        cfg_path
+            .canonicalize()
+            .expect("canonicalize canic config path")
+            .display()
+    );
 }

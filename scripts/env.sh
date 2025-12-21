@@ -11,8 +11,11 @@ NETWORK="${NETWORK:-local}"
 # Environment: default to "dev" if not set
 ENV="${ENV:-dev}"
 
+# Canic config path: default to the repo config.
+CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$ROOT/crates/canisters/canic.toml}"
+
 # Export so other commands see them
-export ROOT SCRIPTS NETWORK ENV
+export ROOT SCRIPTS NETWORK ENV CANIC_CONFIG_PATH
 
 echo "📁 ROOT=$ROOT ($NETWORK/$ENV)"
 

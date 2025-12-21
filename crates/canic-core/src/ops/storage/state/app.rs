@@ -90,8 +90,11 @@ impl AppStateOps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
 
     fn reset_state(mode: AppMode) {
+        Config::reset_for_tests();
+        Config::init_for_tests();
         AppStateOps::import(AppStateData { mode });
     }
 

@@ -299,11 +299,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         use crate::config::Config;
-        let Some(cfg) = Config::try_get() else {
-            // Missing config should not crash host-side tests/tools.
-            // In production this is loaded during init/post-upgrade.
-            return Ok(());
-        };
+        let cfg = Config::get();
 
         if !cfg.is_whitelisted(&caller) {
             Err(AuthError::NotWhitelisted(caller))?;
