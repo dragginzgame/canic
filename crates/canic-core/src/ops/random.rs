@@ -12,10 +12,6 @@ use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 
-// -----------------------------------------------------------------------------
-// RandomOps
-// -----------------------------------------------------------------------------
-
 ///
 /// RandomOps
 /// Schedules PRNG seeding from the configured source (IC `raw_rand` or time).
@@ -66,17 +62,7 @@ impl RandomOps {
     }
 
     fn randomness_config() -> RandomnessConfig {
-        match ConfigOps::current_canister() {
-            Ok(cfg) => cfg.randomness,
-            Err(err) => {
-                crate::log!(
-                    Topic::Init,
-                    Warn,
-                    "randomness config unavailable, using defaults: {err}"
-                );
-                RandomnessConfig::default()
-            }
-        }
+        ConfigOps::current_canister().randomness
     }
 
     fn seed_from_time() {

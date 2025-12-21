@@ -1,12 +1,8 @@
-use crate::{
-    Error,
-    ops::{
-        OpsError,
-        pool::PoolOps,
-        random::RandomOps,
-        runtime::{cycles::CycleTrackerOps, log::LogOps},
-        storage::env::EnvOps,
-    },
+use crate::ops::{
+    OpsError,
+    pool::PoolOps,
+    random::RandomOps,
+    runtime::{cycles::CycleTrackerOps, log::LogOps},
 };
 
 ///
@@ -18,27 +14,20 @@ pub struct TimerService;
 
 impl TimerService {
     /// Start timers that should run on all canisters.
-    pub fn start_all() -> Result<(), Error> {
-        // Ensure env is initialized (subnet type present) before starting timers.
-        EnvOps::try_get_subnet_role()?;
-
+    pub fn start_all() {
         CycleTrackerOps::start();
         LogOps::start_retention();
         RandomOps::start();
-
-        Ok(())
     }
 
     /// Start timers that should run only on root canisters.
-    pub fn start_all_root() -> Result<(), Error> {
-        OpsError::require_root()?;
+    pub fn start_all_root() {
+        OpsError::require_root().expect("TimerService::start_all_root called from non-root");
 
         // start shared timers too
-        Self::start_all()?;
+        Self::start_all();
 
         // root-only services
         PoolOps::start();
-
-        Ok(())
     }
 }

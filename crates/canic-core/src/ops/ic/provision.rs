@@ -36,21 +36,17 @@ use thiserror::Error as ThisError;
 pub(crate) fn build_nonroot_init_payload(
     role: &CanisterRole,
     parent_pid: Principal,
-) -> Result<CanisterInitPayload, Error> {
+) -> CanisterInitPayload {
     let env = EnvData {
-        prime_root_pid: Some(EnvOps::try_get_prime_root_pid()?),
-        subnet_role: Some(EnvOps::try_get_subnet_role()?),
-        subnet_pid: Some(EnvOps::try_get_subnet_pid()?),
-        root_pid: Some(EnvOps::try_get_root_pid()?),
+        prime_root_pid: Some(EnvOps::prime_root_pid()),
+        subnet_role: Some(EnvOps::subnet_role()),
+        subnet_pid: Some(EnvOps::subnet_pid()),
+        root_pid: Some(EnvOps::root_pid()),
         canister_role: Some(role.clone()),
         parent_pid: Some(parent_pid),
     };
 
-    Ok(CanisterInitPayload {
-        env,
-        app_directory: AppDirectoryOps::export(),
-        subnet_directory: SubnetDirectoryOps::export(),
-    })
+    CanisterInitPayload::new(env, AppDirectoryOps::export(), SubnetDirectoryOps::export())
 }
 
 ///
@@ -77,21 +73,21 @@ impl From<ProvisionOpsError> for Error {
 
 /// Rebuild AppDirectory and SubnetDirectory from the registry,
 /// import them directly, and return the resulting state bundle.
-/// When `updated_ty` is provided, only include the sections that list that type.
+///
+/// When `updated_role` is provided, only include the sections that
+/// list that role.
 pub(crate) async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
-) -> Result<StateBundle, Error> {
+) -> StateBundle {
     let mut bundle = StateBundle::default();
     let cfg = Config::get();
 
-    // did a directory change?
     let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
-    let include_subnet = if let Some(role) = updated_role {
-        let subnet_cfg = ConfigOps::current_subnet()?;
+
+    let include_subnet = updated_role.is_none_or(|role| {
+        let subnet_cfg = ConfigOps::current_subnet();
         subnet_cfg.subnet_directory.contains(role)
-    } else {
-        true
-    };
+    });
 
     if include_app {
         let app_view = AppDirectoryOps::root_build_view();
@@ -105,7 +101,7 @@ pub(crate) async fn rebuild_directories_from_registry(
         bundle.subnet_directory = Some(subnet_view);
     }
 
-    Ok(bundle)
+    bundle
 }
 
 //
@@ -203,7 +199,7 @@ pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
 /// Reuses a canister from the pool if available; otherwise creates a new one.
 pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
     // use ConfigOps for a clean, ops-layer config lookup
-    let cfg = ConfigOps::current_subnet_canister(role)?;
+    let cfg = ConfigOps::current_subnet_canister(role);
     let target = cfg.initial_cycles;
 
     // Reuse from pool
@@ -280,8 +276,7 @@ async fn install_canister(
     // Fetch and register WASM
     let wasm = WasmOps::try_get(role)?;
 
-    let payload = build_nonroot_init_payload(role, parent_pid)?;
-
+    let payload = build_nonroot_init_payload(role, parent_pid);
     let module_hash = wasm.module_hash();
 
     // Register before install so init hooks can observe the registry; roll back on failure.

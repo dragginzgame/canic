@@ -10,13 +10,15 @@ pub mod topology;
 
 pub use crate::model::memory::{CanisterEntry, CanisterSummary};
 
+#[cfg(test)]
+use crate::ops::storage::env::EnvOpsError;
 use crate::{
     Error, ThisError,
     ops::{
         OpsError,
         storage::{
             directory::{AppDirectoryOpsError, DirectoryView, SubnetDirectoryOpsError},
-            env::{EnvData, EnvOpsError},
+            env::EnvData,
             memory::MemoryRegistryOpsError,
             sharding::ShardingRegistryOpsError,
             state::AppStateOpsError,
@@ -40,6 +42,7 @@ pub enum StorageOpsError {
     AppStateOpsError(#[from] AppStateOpsError),
 
     #[error(transparent)]
+    #[cfg(test)]
     EnvOpsError(#[from] EnvOpsError),
 
     #[error(transparent)]
@@ -65,7 +68,7 @@ impl From<StorageOpsError> for Error {
 /// CanisterInitPayload
 ///
 
-#[derive(CandidType, Debug, Default, Deserialize)]
+#[derive(CandidType, Debug, Deserialize)]
 pub struct CanisterInitPayload {
     pub env: EnvData,
     pub app_directory: DirectoryView,
@@ -74,7 +77,15 @@ pub struct CanisterInitPayload {
 
 impl CanisterInitPayload {
     #[must_use]
-    pub fn empty() -> Self {
-        Self::default()
+    pub fn new(
+        env: EnvData,
+        app_directory: DirectoryView,
+        subnet_directory: DirectoryView,
+    ) -> Self {
+        Self {
+            env,
+            app_directory,
+            subnet_directory,
+        }
     }
 }

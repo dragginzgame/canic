@@ -30,9 +30,6 @@ pub trait Rpc {
 
 #[derive(Debug, ThisError)]
 pub enum RpcOpsError {
-    #[error("cannot find the root canister")]
-    RootNotFound,
-
     #[error(transparent)]
     RequestOpsError(#[from] request::RequestOpsError),
 }
@@ -45,7 +42,7 @@ impl From<RpcOpsError> for Error {
 
 // execute_rpc
 async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
-    let root_pid = EnvOps::try_get_root_pid().map_err(|_| RpcOpsError::RootNotFound)?;
+    let root_pid = EnvOps::root_pid();
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())

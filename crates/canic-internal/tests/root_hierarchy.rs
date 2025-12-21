@@ -189,15 +189,13 @@ fn directories_are_consistent_across_canisters() {
     let root_app_dir: Page<(CanisterRole, PrincipalList)> = pic
         .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
         .expect("root app directory");
-    let root_subnet_dir: Result<Page<(CanisterRole, PrincipalList)>, Error> = pic
+    let root_subnet_dir: Page<(CanisterRole, PrincipalList)> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
             (PageRequest::new(100, 0),),
         )
         .expect("root subnet directory");
-    let root_subnet_dir =
-        root_subnet_dir.unwrap_or_else(|err| panic!("root subnet directory result: {err}"));
 
     if print_counts {
         eprintln!(
@@ -215,15 +213,13 @@ fn directories_are_consistent_across_canisters() {
                 (PageRequest::new(100, 0),),
             )
             .expect("child app directory");
-        let subnet_dir: Result<Page<(CanisterRole, PrincipalList)>, Error> = pic
+        let subnet_dir: Page<(CanisterRole, PrincipalList)> = pic
             .query_call(
                 entry.pid,
                 "canic_subnet_directory",
                 (PageRequest::new(100, 0),),
             )
             .expect("child subnet directory");
-        let subnet_dir = subnet_dir
-            .unwrap_or_else(|err| panic!("child subnet directory result for {ty}: {err}"));
 
         if print_counts {
             eprintln!(

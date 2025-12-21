@@ -12,6 +12,21 @@ All fields are validated when `canic::build!` or `canic::build_root!` run, so co
 
 ---
 
+## Runtime Config + Env Lifecycle
+
+Canic treats config/env identity as startup invariants. Missing data is a fatal error.
+
+- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `DFX_NETWORK` is baked in.
+- Init/post-upgrade: `__canic_load_config!()` loads the embedded TOML; `ConfigOps::current_*` is infallible.
+- Root env: `root_init(identity)` sets base env fields, then `root_set_subnet_id()` resolves the real subnet on IC.
+  - On IC, registry lookup failure traps.
+  - On local/PocketIC, it falls back to `self` as the subnet principal.
+- Non-root env: children must receive a complete `EnvData` in `CanisterInitPayload` from root.
+  - On IC, missing env fields always trap.
+  - On local, missing env fields are filled from the embedded `CANISTER_ID_ROOT` (requires `dfx` builds).
+
+---
+
 ## Global Keys
 
 ### `controllers = ["aaaaa-aa", ...]`
