@@ -5,10 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.10] - 2025-12-21
+- improved rust error handling for ICRC-21, the ? flow is now useable
+
 ## [0.6.9] - 2025-12-20
-- renamed reserve → pool (config key `pool`, legacy `reserve` still accepted)
+- renamed reserve → pool (config key `pool`)
 - pool entries now track status (`PendingReset`, `Ready`, `Failed`) to support background resets
 - added `ImportQueued` (batch, background reset) and `ImportImmediate` (synchronous reset) admin commands
+- added pool unit tests covering queued imports, requeue scheduling, and metadata preservation
 
 ## [0.6.8] - 2025-12-18
 - removed Mutex from the rand crate, so no chance of an expect() panic

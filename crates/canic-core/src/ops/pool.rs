@@ -9,6 +9,7 @@
 //! - Root is the sole controller
 //! - Importing a canister is destructive (code + controllers wiped)
 //! - Registry metadata is informational only while in pool
+//! - Ready entries have no code installed (reset_into_pool uninstalls before Ready)
 
 pub use crate::ops::storage::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
 
@@ -36,14 +37,30 @@ use crate::{
     },
     types::{Cycles, TC},
 };
-
 use candid::CandidType;
 use serde::Deserialize;
 use std::{cell::RefCell, time::Duration};
 
 //
-// ERRORS
+// TIMER STATE
 //
+
+thread_local! {
+    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+    static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
+    static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
+    static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+}
+
+/// Default cycles allocated to freshly created pool canisters.
+const POOL_CANISTER_CYCLES: u128 = 5 * TC;
+
+/// Default batch size for resetting pending pool entries.
+const POOL_RESET_BATCH_SIZE: usize = 10;
+
+///
+/// PoolOpsError
+///
 
 #[derive(Debug, ThisError)]
 pub enum PoolOpsError {
@@ -66,9 +83,9 @@ impl From<PoolOpsError> for Error {
     }
 }
 
-//
-// ADMIN API
-//
+///
+/// PoolAdminCommand
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminCommand {
@@ -76,7 +93,12 @@ pub enum PoolAdminCommand {
     Recycle { pid: Principal },
     ImportImmediate { pid: Principal },
     ImportQueued { pids: Vec<Principal> },
+    RequeueFailed { pids: Option<Vec<Principal>> },
 }
+
+///
+/// PoolAdminResponse
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminResponse {
@@ -91,24 +113,12 @@ pub enum PoolAdminResponse {
         skipped: u64,
         total: u64,
     },
+    FailedRequeued {
+        requeued: u64,
+        skipped: u64,
+        total: u64,
+    },
 }
-
-//
-// TIMER STATE
-//
-
-thread_local! {
-    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-    static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
-
-/// Default cycles allocated to freshly created pool canisters.
-const POOL_CANISTER_CYCLES: u128 = 5 * TC;
-
-/// Default batch size for resetting pending pool entries.
-const POOL_RESET_BATCH_SIZE: usize = 10;
 
 //
 // INTERNAL HELPERS
@@ -142,9 +152,29 @@ async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     get_cycles(pid).await
 }
 
-//
-// POOL OPS
-//
+fn register_or_update_preserving_metadata(
+    pid: Principal,
+    cycles: Cycles,
+    status: CanisterPoolStatus,
+    role: Option<CanisterRole>,
+    parent: Option<Principal>,
+    module_hash: Option<Vec<u8>>,
+) {
+    if let Some(mut entry) = CanisterPoolStorageOps::get(pid) {
+        entry.cycles = cycles;
+        entry.status = status;
+        entry.role = role.or(entry.role);
+        entry.parent = parent.or(entry.parent);
+        entry.module_hash = module_hash.or(entry.module_hash);
+        let _ = CanisterPoolStorageOps::update(pid, entry);
+    } else {
+        CanisterPoolStorageOps::register(pid, cycles, status, role, parent, module_hash);
+    }
+}
+
+///
+/// PoolOps
+///
 
 pub struct PoolOps;
 
@@ -270,6 +300,14 @@ impl PoolOps {
                     requeued: r,
                     skipped: s,
                     total: t,
+                })
+            }
+            PoolAdminCommand::RequeueFailed { pids } => {
+                let (requeued, skipped, total) = pool_requeue_failed(pids)?;
+                Ok(PoolAdminResponse::FailedRequeued {
+                    requeued,
+                    skipped,
+                    total,
                 })
             }
         }
@@ -406,15 +444,58 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
+    register_or_update_preserving_metadata(
+        pid,
+        Cycles::default(),
+        CanisterPoolStatus::PendingReset,
+        None,
+        None,
+        None,
+    );
     let _ = SubnetCanisterRegistryOps::remove(&pid);
-    let cycles = reset_into_pool(pid).await?;
-
-    CanisterPoolStorageOps::register(pid, cycles, CanisterPoolStatus::Ready, None, None, None);
+    match reset_into_pool(pid).await {
+        Ok(cycles) => {
+            register_or_update_preserving_metadata(
+                pid,
+                cycles,
+                CanisterPoolStatus::Ready,
+                None,
+                None,
+                None,
+            );
+        }
+        Err(err) => {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import failed for {pid}: {err}"
+            );
+            register_or_update_preserving_metadata(
+                pid,
+                Cycles::default(),
+                CanisterPoolStatus::Failed {
+                    reason: err.to_string(),
+                },
+                None,
+                None,
+                None,
+            );
+        }
+    }
     Ok(())
 }
 
 fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<(u64, u64, u64, u64), Error> {
-    OpsError::require_root()?;
+    pool_import_queued_canisters_inner(pids, true)
+}
+
+fn pool_import_queued_canisters_inner(
+    pids: Vec<Principal>,
+    enforce_root: bool,
+) -> Result<(u64, u64, u64, u64), Error> {
+    if enforce_root {
+        OpsError::require_root()?;
+    }
 
     let mut added = 0;
     let mut requeued = 0;
@@ -426,22 +507,24 @@ fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<(u64, u64, u64, 
             continue;
         }
 
-        if let Some(mut entry) = CanisterPoolStorageOps::get(*pid) {
+        if let Some(entry) = CanisterPoolStorageOps::get(*pid) {
             if entry.status.is_failed() {
-                entry.status = CanisterPoolStatus::PendingReset;
-                entry.cycles = Cycles::default();
-                if CanisterPoolStorageOps::update(*pid, entry) {
-                    requeued += 1;
-                } else {
-                    skipped += 1;
-                }
+                register_or_update_preserving_metadata(
+                    *pid,
+                    Cycles::default(),
+                    CanisterPoolStatus::PendingReset,
+                    None,
+                    None,
+                    None,
+                );
+                requeued += 1;
             } else {
                 skipped += 1;
             }
             continue;
         }
 
-        CanisterPoolStorageOps::register(
+        register_or_update_preserving_metadata(
             *pid,
             Cycles::default(),
             CanisterPoolStatus::PendingReset,
@@ -452,9 +535,97 @@ fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<(u64, u64, u64, 
         added += 1;
     }
 
-    PoolOps::schedule_reset_worker();
+    maybe_schedule_reset_worker();
 
     Ok((added, requeued, skipped, pids.len() as u64))
+}
+
+#[cfg(not(test))]
+fn maybe_schedule_reset_worker() {
+    PoolOps::schedule_reset_worker();
+}
+
+#[cfg(test)]
+fn maybe_schedule_reset_worker() {
+    RESET_SCHEDULED.with_borrow_mut(|flag| *flag = true);
+}
+
+#[cfg(test)]
+thread_local! {
+    static RESET_SCHEDULED: RefCell<bool> = const { RefCell::new(false) };
+}
+
+#[cfg(test)]
+fn take_reset_scheduled() -> bool {
+    RESET_SCHEDULED.with_borrow_mut(|flag| {
+        let value = *flag;
+        *flag = false;
+        value
+    })
+}
+
+fn pool_requeue_failed(pids: Option<Vec<Principal>>) -> Result<(u64, u64, u64), Error> {
+    pool_requeue_failed_inner(pids, true)
+}
+
+fn pool_requeue_failed_inner(
+    pids: Option<Vec<Principal>>,
+    enforce_root: bool,
+) -> Result<(u64, u64, u64), Error> {
+    if enforce_root {
+        OpsError::require_root()?;
+    }
+
+    let mut requeued = 0;
+    let mut skipped = 0;
+    let total;
+
+    if let Some(pids) = pids {
+        total = pids.len() as u64;
+        for pid in pids {
+            if let Some(entry) = CanisterPoolStorageOps::get(pid) {
+                if entry.status.is_failed() {
+                    register_or_update_preserving_metadata(
+                        pid,
+                        Cycles::default(),
+                        CanisterPoolStatus::PendingReset,
+                        None,
+                        None,
+                        None,
+                    );
+                    requeued += 1;
+                } else {
+                    skipped += 1;
+                }
+            } else {
+                skipped += 1;
+            }
+        }
+    } else {
+        let entries = CanisterPoolStorageOps::export();
+        total = entries.len() as u64;
+        for (pid, entry) in entries {
+            if entry.status.is_failed() {
+                register_or_update_preserving_metadata(
+                    pid,
+                    Cycles::default(),
+                    CanisterPoolStatus::PendingReset,
+                    None,
+                    None,
+                    None,
+                );
+                requeued += 1;
+            } else {
+                skipped += 1;
+            }
+        }
+    }
+
+    if requeued > 0 {
+        maybe_schedule_reset_worker();
+    }
+
+    Ok((requeued, skipped, total))
 }
 
 pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
@@ -501,4 +672,204 @@ pub async fn recycle_via_orchestrator(pid: Principal) -> Result<(), Error> {
     CanisterLifecycleOrchestrator::apply(LifecycleEvent::RecycleToPool { pid })
         .await
         .map(|_| ())
+}
+
+//
+// TESTS
+//
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ids::CanisterRole,
+        model::memory::{CanisterEntry, pool::CanisterPool, topology::SubnetCanisterRegistry},
+    };
+    use candid::Principal;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn reset_state() {
+        CanisterPool::clear();
+        SubnetCanisterRegistry::clear_for_tests();
+        let _ = take_reset_scheduled();
+    }
+
+    #[test]
+    fn import_queued_registers_pending_entries() {
+        reset_state();
+
+        let p1 = p(1);
+        let p2 = p(2);
+
+        let (added, requeued, skipped, total) =
+            pool_import_queued_canisters_inner(vec![p1, p2], false).unwrap();
+        assert_eq!(added, 2);
+        assert_eq!(requeued, 0);
+        assert_eq!(skipped, 0);
+        assert_eq!(total, 2);
+
+        let e1 = CanisterPoolStorageOps::get(p1).unwrap();
+        let e2 = CanisterPoolStorageOps::get(p2).unwrap();
+        assert!(e1.status.is_pending_reset());
+        assert!(e2.status.is_pending_reset());
+        assert_eq!(e1.cycles, Cycles::default());
+        assert_eq!(e2.cycles, Cycles::default());
+    }
+
+    #[test]
+    fn import_queued_requeues_failed_entries() {
+        reset_state();
+
+        let p1 = p(3);
+        CanisterPoolStorageOps::register(
+            p1,
+            Cycles::new(10),
+            CanisterPoolStatus::Failed {
+                reason: "nope".to_string(),
+            },
+            None,
+            None,
+            None,
+        );
+
+        let (added, requeued, skipped, total) =
+            pool_import_queued_canisters_inner(vec![p1], false).unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(requeued, 1);
+        assert_eq!(skipped, 0);
+        assert_eq!(total, 1);
+        assert!(take_reset_scheduled());
+
+        let entry = CanisterPoolStorageOps::get(p1).unwrap();
+        assert!(entry.status.is_pending_reset());
+        assert_eq!(entry.cycles, Cycles::default());
+    }
+
+    #[test]
+    fn import_queued_skips_ready_entries() {
+        reset_state();
+
+        let p1 = p(4);
+        CanisterPoolStorageOps::register(
+            p1,
+            Cycles::new(42),
+            CanisterPoolStatus::Ready,
+            None,
+            None,
+            None,
+        );
+
+        let (added, requeued, skipped, total) =
+            pool_import_queued_canisters_inner(vec![p1], false).unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(requeued, 0);
+        assert_eq!(skipped, 1);
+        assert_eq!(total, 1);
+
+        let entry = CanisterPoolStorageOps::get(p1).unwrap();
+        assert!(entry.status.is_ready());
+        assert_eq!(entry.cycles, Cycles::new(42));
+    }
+
+    #[test]
+    fn import_queued_skips_registry_canisters() {
+        reset_state();
+
+        let pid = p(5);
+        SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
+            pid,
+            role: CanisterRole::new("alpha"),
+            parent_pid: None,
+            module_hash: None,
+            created_at: 0,
+        });
+
+        let (added, requeued, skipped, total) =
+            pool_import_queued_canisters_inner(vec![pid], false).unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(requeued, 0);
+        assert_eq!(skipped, 1);
+        assert_eq!(total, 1);
+        assert!(CanisterPoolStorageOps::get(pid).is_none());
+    }
+
+    #[test]
+    fn register_or_update_preserves_metadata() {
+        reset_state();
+
+        let pid = p(6);
+        let role = CanisterRole::new("alpha");
+        let parent = p(9);
+        let hash = vec![1, 2, 3];
+
+        CanisterPoolStorageOps::register(
+            pid,
+            Cycles::new(7),
+            CanisterPoolStatus::Failed {
+                reason: "oops".to_string(),
+            },
+            Some(role.clone()),
+            Some(parent),
+            Some(hash.clone()),
+        );
+
+        register_or_update_preserving_metadata(
+            pid,
+            Cycles::default(),
+            CanisterPoolStatus::PendingReset,
+            None,
+            None,
+            None,
+        );
+
+        let entry = CanisterPoolStorageOps::get(pid).unwrap();
+        assert!(entry.status.is_pending_reset());
+        assert_eq!(entry.cycles, Cycles::default());
+        assert_eq!(entry.role, Some(role));
+        assert_eq!(entry.parent, Some(parent));
+        assert_eq!(entry.module_hash, Some(hash));
+    }
+
+    #[test]
+    fn requeue_failed_scans_pool_and_schedules() {
+        reset_state();
+
+        let failed_pid = p(7);
+        let ready_pid = p(8);
+
+        CanisterPoolStorageOps::register(
+            failed_pid,
+            Cycles::new(11),
+            CanisterPoolStatus::Failed {
+                reason: "bad".to_string(),
+            },
+            None,
+            None,
+            None,
+        );
+        CanisterPoolStorageOps::register(
+            ready_pid,
+            Cycles::new(22),
+            CanisterPoolStatus::Ready,
+            None,
+            None,
+            None,
+        );
+
+        let (requeued, skipped, total) = pool_requeue_failed_inner(None, false).unwrap();
+        assert_eq!(requeued, 1);
+        assert_eq!(skipped, 1);
+        assert_eq!(total, 2);
+        assert!(take_reset_scheduled());
+
+        let failed_entry = CanisterPoolStorageOps::get(failed_pid).unwrap();
+        let ready_entry = CanisterPoolStorageOps::get(ready_pid).unwrap();
+        assert!(failed_entry.status.is_pending_reset());
+        assert_eq!(failed_entry.cycles, Cycles::default());
+        assert!(ready_entry.status.is_ready());
+        assert_eq!(ready_entry.cycles, Cycles::new(22));
+    }
 }
