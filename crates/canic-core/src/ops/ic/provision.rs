@@ -59,9 +59,6 @@ pub(crate) fn build_nonroot_init_payload(
 
 #[derive(Debug, ThisError)]
 pub enum ProvisionOpsError {
-    #[error(transparent)]
-    Other(#[from] Error),
-
     #[error("install failed for {pid}: {source}")]
     InstallFailed { pid: Principal, source: Error },
 }

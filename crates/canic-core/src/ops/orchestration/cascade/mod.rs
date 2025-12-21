@@ -21,9 +21,6 @@ pub enum CascadeOpsError {
     #[error("canister not found")]
     CanisterNotFound(Principal),
 
-    #[error("root canister not found")]
-    RootNotFound,
-
     #[error("invalid parent chain: empty")]
     InvalidParentChain,
 

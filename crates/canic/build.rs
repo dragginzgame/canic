@@ -32,9 +32,11 @@ fn main() {
 
     // If the user explicitly set CANIC_CONFIG_PATH, missing config is a hard error.
     if env_cfg.is_some() {
-        if !cfg_path.exists() {
-            panic!("Missing Canic config at {}", cfg_path.display());
-        }
+        assert!(
+            cfg_path.exists(),
+            "Missing Canic config at {}",
+            cfg_path.display()
+        );
     } else if !cfg_path.exists() {
         // Packaged builds won't include ../canisters. Skip build-time validation.
         // This keeps `cargo package` / `cargo publish` working.
