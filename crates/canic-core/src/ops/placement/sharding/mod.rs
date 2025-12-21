@@ -25,12 +25,6 @@ pub enum ShardingOpsError {
     #[error("shard creation blocked: {0}")]
     ShardCreationBlocked(String),
 
-    #[error("shard full: {0}")]
-    ShardFull(Principal),
-
-    #[error("shard not found: {0}")]
-    ShardNotFound(Principal),
-
     #[error("sharding disabled")]
     ShardingDisabled,
 

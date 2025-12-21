@@ -5,9 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.11] - 2025-12-21
-- made DFX_NETWORK mandatory, and in the Makefile for tests.  It was getting hard to set up the right config
-and environment for local tests
+## [0.6.12] - 2025-12-21
+- Enforced build‑time DFX_NETWORK (must be local or ic) across all Cargo builds; scripts/Makefile now map
+NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/invalid.
 
 ## [0.6.10] - 2025-12-21
 - improved rust error handling for ICRC-21, the ? flow is now useable
