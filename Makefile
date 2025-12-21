@@ -6,6 +6,34 @@
 # in case we need to use this
 CARGO_ENV :=
 
+# Network defaults and mapping for build-time DFX_NETWORK
+NETWORK ?= local
+DFX_NETWORK ?=
+
+ifeq ($(DFX_NETWORK),)
+  ifeq ($(NETWORK),local)
+    DFX_NETWORK := local
+  else ifeq ($(NETWORK),ic)
+    DFX_NETWORK := ic
+  else ifeq ($(NETWORK),mainnet)
+    DFX_NETWORK := ic
+  else ifeq ($(NETWORK),staging)
+    DFX_NETWORK := ic
+  endif
+endif
+
+ifeq ($(DFX_NETWORK),)
+  $(error DFX_NETWORK must be set to 'local' or 'ic')
+endif
+ifneq ($(DFX_NETWORK),local)
+  ifneq ($(DFX_NETWORK),ic)
+    $(error DFX_NETWORK must be set to 'local' or 'ic' (got $(DFX_NETWORK)))
+  endif
+endif
+
+export DFX_NETWORK
+CARGO_ENV := DFX_NETWORK=$(DFX_NETWORK) $(CARGO_ENV)
+
 # Check for clean git state
 ensure-clean:
 	@if ! git diff-index --quiet HEAD --; then \

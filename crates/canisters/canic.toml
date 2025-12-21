@@ -30,6 +30,9 @@ auto_create = ["app", "auth", "scale_hub", "shard_hub", "test"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub", "test"]
 pool.minimum_size = 3
 
+# --- Root ---
+[subnets.prime.canisters.root]
+
 # --- App ---
 [subnets.prime.canisters.app]
 

@@ -11,11 +11,18 @@ NETWORK="${NETWORK:-local}"
 # Environment: default to "dev" if not set
 ENV="${ENV:-dev}"
 
+# Build-time network hint for Rust (used by option_env!("DFX_NETWORK")).
+DFX_NETWORK="${DFX_NETWORK:-$NETWORK}"
+case "$DFX_NETWORK" in
+    local) ;;
+    ic|mainnet|staging) DFX_NETWORK="ic" ;;
+esac
+
 # Canic config path: default to the repo config.
 CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$ROOT/crates/canisters/canic.toml}"
 
 # Export so other commands see them
-export ROOT SCRIPTS NETWORK ENV CANIC_CONFIG_PATH
+export ROOT SCRIPTS NETWORK ENV DFX_NETWORK CANIC_CONFIG_PATH
 
 echo "📁 ROOT=$ROOT ($NETWORK/$ENV)"
 

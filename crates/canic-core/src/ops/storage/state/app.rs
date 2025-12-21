@@ -94,7 +94,7 @@ mod tests {
 
     fn reset_state(mode: AppMode) {
         Config::reset_for_tests();
-        Config::init_for_tests();
+        let _ = Config::init_for_tests();
         AppStateOps::import(AppStateData { mode });
     }
 
