@@ -218,18 +218,7 @@ impl PoolOps {
     pub fn check() -> u64 {
         Self::schedule_reset_worker();
 
-        let subnet_cfg = match ConfigOps::current_subnet() {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                log!(
-                    Topic::CanisterPool,
-                    Warn,
-                    "cannot read subnet config: {e:?}"
-                );
-                return 0;
-            }
-        };
-
+        let subnet_cfg = ConfigOps::current_subnet();
         let min_size: u64 = subnet_cfg.pool.minimum_size.into();
         let ready_size = Self::ready_len();
 

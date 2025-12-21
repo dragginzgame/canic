@@ -165,13 +165,10 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> Result<
-            ::canic::core::dto::page::Page<(
-                ::canic::core::ids::CanisterRole,
-                ::canic::core::ops::storage::directory::PrincipalList,
-            )>,
-            ::canic::Error,
-        > {
+        ) -> ::canic::core::dto::page::Page<(
+            ::canic::core::ids::CanisterRole,
+            ::canic::core::ops::storage::directory::PrincipalList,
+        )> {
             $crate::ops::storage::directory::SubnetDirectoryOps::page(page)
         }
 

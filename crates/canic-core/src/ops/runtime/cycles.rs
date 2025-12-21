@@ -92,11 +92,7 @@ impl CycleTrackerOps {
     fn check_auto_topup(cycles: u128) {
         use crate::ops::rpc::cycles_request;
 
-        // Read per-canister configuration.
-        // If no config or no topup policy is defined, nothing to do.
-        let Ok(canister_cfg) = ConfigOps::current_canister() else {
-            return;
-        };
+        let canister_cfg = ConfigOps::current_canister();
         let Some(topup) = canister_cfg.topup else {
             return;
         };

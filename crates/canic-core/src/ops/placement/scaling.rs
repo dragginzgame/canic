@@ -104,7 +104,7 @@ impl ScalingRegistryOps {
 
     /// Look up the config for a given pool on the *current canister*.
     fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-        let cfg = ConfigOps::current_canister()?;
+        let cfg = ConfigOps::current_canister();
         let scale_cfg = cfg.scaling.ok_or(ScalingOpsError::ScalingDisabled)?;
 
         let pool_cfg = scale_cfg

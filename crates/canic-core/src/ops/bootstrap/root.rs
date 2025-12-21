@@ -4,7 +4,7 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::{Network, build_network, get_current_subnet_pid},
+        ic::{Network, build_network, try_get_current_subnet_pid},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
         storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
@@ -22,7 +22,7 @@ use crate::{
 pub async fn root_set_subnet_id() {
     // Preferred path: query the NNS registry for the subnet this canister
     // currently belongs to.
-    let subnet_result = get_current_subnet_pid().await;
+    let subnet_result = try_get_current_subnet_pid().await;
     match subnet_result {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
@@ -30,14 +30,14 @@ pub async fn root_set_subnet_id() {
         }
         Ok(None) => {
             if build_network() == Some(Network::Ic) {
-                let msg = "get_current_subnet_pid returned None on ic; refusing to fall back";
+                let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
                 log!(Topic::Topology, Error, "{msg}");
                 trap(msg);
             }
         }
         Err(err) => {
             if build_network() == Some(Network::Ic) {
-                let msg = format!("get_current_subnet_pid failed on ic: {err}");
+                let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
                 log!(Topic::Topology, Error, "{msg}");
                 trap(&msg);
             }
@@ -52,7 +52,7 @@ pub async fn root_set_subnet_id() {
     log!(
         Topic::Topology,
         Info,
-        "get_current_subnet_pid unavailable; using self as subnet: {fallback}"
+        "try_get_current_subnet_pid unavailable; using self as subnet: {fallback}"
     );
 }
 
@@ -67,7 +67,7 @@ pub async fn root_set_subnet_id() {
 /// Safe to re-run: skips roles that already exist in the subnet registry.
 pub async fn root_create_canisters() -> Result<(), Error> {
     // Load the effective configuration for the current subnet.
-    let subnet_cfg = ConfigOps::current_subnet()?;
+    let subnet_cfg = ConfigOps::current_subnet();
 
     // Creation pass: ensure all auto-create canister roles exist.
     for ty in &subnet_cfg.auto_create {

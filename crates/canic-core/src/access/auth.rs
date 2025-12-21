@@ -174,7 +174,7 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = AppDirectoryOps::try_get(&role)?;
+        let pids = AppDirectoryOps::get(&role);
 
         if pids.contains(&caller) {
             Ok(())
@@ -189,7 +189,7 @@ pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleR
 #[must_use]
 pub fn is_subnet_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = SubnetDirectoryOps::try_get(&role)?;
+        let pids = SubnetDirectoryOps::get(&role);
 
         if pids.contains(&caller) {
             Ok(())
@@ -228,7 +228,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = EnvOps::try_get_root_pid()?;
+        let root_pid = EnvOps::root_pid();
 
         if caller == root_pid {
             Ok(())
@@ -243,7 +243,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = EnvOps::try_get_parent_pid()?;
+        let parent_pid = EnvOps::parent_pid();
 
         if parent_pid == caller {
             Ok(())

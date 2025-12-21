@@ -18,17 +18,14 @@ fn main() {
     // - If CANIC_CONFIG_PATH is set, it is authoritative (relative paths resolved from the crate).
     // - Otherwise, fall back to the repo default.
     let env_cfg = std::env::var("CANIC_CONFIG_PATH").ok();
-    let cfg_path = env_cfg
-        .as_ref()
-        .map(|val| {
-            let path = PathBuf::from(val);
-            if path.is_relative() {
-                manifest_dir.join(path)
-            } else {
-                path
-            }
-        })
-        .unwrap_or(repo_cfg);
+    let cfg_path = env_cfg.as_ref().map_or(repo_cfg, |val| {
+        let path = PathBuf::from(val);
+        if path.is_relative() {
+            manifest_dir.join(path)
+        } else {
+            path
+        }
+    });
 
     // If the user explicitly set CANIC_CONFIG_PATH, missing config is a hard error.
     if env_cfg.is_some() {

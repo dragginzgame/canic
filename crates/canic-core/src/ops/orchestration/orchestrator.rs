@@ -241,7 +241,7 @@ impl CanisterLifecycleOrchestrator {
         assert_immediate_parent(pid, parent_pid)?;
         assert_not_in_pool(pid)?;
 
-        let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
+        let payload = build_nonroot_init_payload(&entry.role, parent_pid);
         install_canic_code(
             CanisterInstallMode::Reinstall,
             entry.pid,
@@ -287,15 +287,7 @@ impl CanisterLifecycleOrchestrator {
         // Attach before install so init hooks can observe the registry; roll back on failure.
         SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash);
 
-        let payload = match build_nonroot_init_payload(&role, parent) {
-            Ok(p) => p,
-            Err(err) => {
-                let _ = SubnetCanisterRegistryOps::remove(&pid);
-                try_return_to_pool(pid, "adopt_pool payload build failed").await;
-                return Err(err);
-            }
-        };
-
+        let payload = build_nonroot_init_payload(&role, parent);
         if let Err(err) = install_canic_code(
             CanisterInstallMode::Install,
             pid,
@@ -375,7 +367,7 @@ async fn cascade_all(
     }
 
     if let Some(ty) = role {
-        let bundle = rebuild_directories_from_registry(Some(ty)).await?;
+        let bundle = rebuild_directories_from_registry(Some(ty)).await;
         root_cascade_state(bundle).await?;
         assert_directories_match_registry()?;
     }
@@ -414,17 +406,17 @@ fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), Orch
     }
 }
 
-fn assert_directories_match_registry() -> Result<(), OrchestratorOpsError> {
+fn assert_directories_match_registry() -> Result<(), Error> {
     let app_built = AppDirectoryOps::root_build_view();
     let app_exported = AppDirectoryOps::export();
     if app_built != app_exported {
-        return Err(OrchestratorOpsError::AppDirectoryDiverged);
+        return Err(OrchestratorOpsError::AppDirectoryDiverged.into());
     }
 
     let subnet_built = SubnetDirectoryOps::root_build_view();
     let subnet_exported = SubnetDirectoryOps::export();
     if subnet_built != subnet_exported {
-        return Err(OrchestratorOpsError::SubnetDirectoryDiverged);
+        return Err(OrchestratorOpsError::SubnetDirectoryDiverged.into());
     }
 
     Ok(())

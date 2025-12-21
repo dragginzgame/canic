@@ -156,6 +156,11 @@ We separate responsibilities into **four main layers**:
   - `model/*` → volatile runtime registries/caches
   - `ops/` → orchestration, policy, logging
   - `endpoints/` → IC boundary
+- Runtime invariants
+  - Config and env identity are initialized at startup; missing fields are fatal.
+  - `ConfigOps::current_*` and `EnvOps::*` (non-`try_*`) are infallible.
+  - Non-root installs must pass a complete `EnvData` payload.
+  - Local standalone installs rely on `CANISTER_ID_ROOT` embedded by `dfx` builds.
 - Predictable lifecycles
   - Shards: register → assign → rebalance → drain → decommission
   - Delegation: register → track → revoke → cleanup

@@ -1,9 +1,9 @@
+#[cfg(test)]
+use crate::{Error, ThisError, ops::storage::StorageOpsError};
 use crate::{
-    Error, ThisError,
-    cdk::types::Principal,
+    cdk::{api::canister_self, types::Principal},
     ids::{CanisterRole, SubnetRole},
     model::memory::Env,
-    ops::storage::StorageOpsError,
 };
 
 pub use crate::model::memory::env::EnvData;
@@ -12,9 +12,10 @@ pub use crate::model::memory::env::EnvData;
 /// EnvOpsError
 ///
 
+#[cfg(test)]
 #[derive(Debug, ThisError)]
 pub enum EnvOpsError {
-    #[error("failed to determine current canister type")]
+    #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
     #[error("failed to determine current parent principal")]
@@ -23,13 +24,14 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet principal")]
     SubnetPidUnavailable,
 
-    #[error("failed to determine current subnet type")]
+    #[error("failed to determine current subnet role")]
     SubnetRoleUnavailable,
 
     #[error("failed to determine current root principal")]
     RootPidUnavailable,
 }
 
+#[cfg(test)]
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
         StorageOpsError::from(err).into()
@@ -39,11 +41,47 @@ impl From<EnvOpsError> for Error {
 ///
 /// EnvOps
 ///
+/// NOTE:
+/// - `try_*` getters are test-only helpers for incomplete env setup.
+/// - Non-`try_*` getters assume the environment has been fully initialized
+///   during canister startup and will panic if called earlier.
+/// - After initialization, absence of environment fields is a programmer error.
+///
 
 pub struct EnvOps;
 
 impl EnvOps {
+    // ---------------------------------------------------------------------
+    // Initialization / import
+    // ---------------------------------------------------------------------
+
     pub fn import(env: EnvData) {
+        let mut missing = Vec::new();
+        if env.prime_root_pid.is_none() {
+            missing.push("prime_root_pid");
+        }
+        if env.subnet_role.is_none() {
+            missing.push("subnet_role");
+        }
+        if env.subnet_pid.is_none() {
+            missing.push("subnet_pid");
+        }
+        if env.root_pid.is_none() {
+            missing.push("root_pid");
+        }
+        if env.canister_role.is_none() {
+            missing.push("canister_role");
+        }
+        if env.parent_pid.is_none() {
+            missing.push("parent_pid");
+        }
+        if !missing.is_empty() {
+            panic!(
+                "EnvOps::import missing required fields: {}",
+                missing.join(", ")
+            );
+        }
+
         Env::import(env);
     }
 
@@ -67,56 +105,99 @@ impl EnvOps {
         Env::set_canister_role(role);
     }
 
+    // ---------------------------------------------------------------------
+    // Environment predicates
+    // ---------------------------------------------------------------------
+
     #[must_use]
     pub fn is_prime_root() -> bool {
-        Env::is_prime_root()
+        Self::prime_root_pid() == Self::root_pid()
     }
 
     #[must_use]
     pub fn is_prime_subnet() -> bool {
-        Env::is_prime_subnet()
+        Self::subnet_role().is_prime()
     }
 
     #[must_use]
     pub fn is_root() -> bool {
-        Env::is_root()
+        Self::root_pid() == canister_self()
     }
 
+    // ---------------------------------------------------------------------
+    // Bootstrap / fallible accessors
+    // ---------------------------------------------------------------------
+
+    #[cfg(test)]
     pub fn try_get_subnet_role() -> Result<SubnetRole, Error> {
-        let ty = Env::get_subnet_role().ok_or(EnvOpsError::SubnetRoleUnavailable)?;
-
-        Ok(ty)
+        Env::get_subnet_role().ok_or_else(|| EnvOpsError::SubnetRoleUnavailable.into())
     }
 
+    #[cfg(test)]
     pub fn try_get_canister_role() -> Result<CanisterRole, Error> {
-        let ty = Env::get_canister_role().ok_or(EnvOpsError::CanisterRoleUnavailable)?;
-
-        Ok(ty)
+        Env::get_canister_role().ok_or_else(|| EnvOpsError::CanisterRoleUnavailable.into())
     }
 
+    #[cfg(test)]
     pub fn try_get_subnet_pid() -> Result<Principal, Error> {
-        let pid = Env::get_subnet_pid().ok_or(EnvOpsError::SubnetPidUnavailable)?;
-
-        Ok(pid)
+        Env::get_subnet_pid().ok_or_else(|| EnvOpsError::SubnetPidUnavailable.into())
     }
 
+    #[cfg(test)]
     pub fn try_get_root_pid() -> Result<Principal, Error> {
-        let pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
-
-        Ok(pid)
+        Env::get_root_pid().ok_or_else(|| EnvOpsError::RootPidUnavailable.into())
     }
 
+    #[cfg(test)]
     pub fn try_get_prime_root_pid() -> Result<Principal, Error> {
-        let pid = Env::get_prime_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
-
-        Ok(pid)
+        Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::RootPidUnavailable.into())
     }
 
+    #[cfg(test)]
     pub fn try_get_parent_pid() -> Result<Principal, Error> {
-        let pid = Env::get_parent_pid().ok_or(EnvOpsError::ParentPidUnavailable)?;
-
-        Ok(pid)
+        Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
+
+    // ---------------------------------------------------------------------
+    // Steady-state / infallible accessors
+    // ---------------------------------------------------------------------
+
+    #[must_use]
+    pub fn subnet_role() -> SubnetRole {
+        Env::get_subnet_role()
+            .expect("EnvOps::subnet_role called before environment initialization")
+    }
+
+    #[must_use]
+    pub fn canister_role() -> CanisterRole {
+        Env::get_canister_role()
+            .expect("EnvOps::canister_role called before environment initialization")
+    }
+
+    #[must_use]
+    pub fn subnet_pid() -> Principal {
+        Env::get_subnet_pid().expect("EnvOps::subnet_pid called before environment initialization")
+    }
+
+    #[must_use]
+    pub fn root_pid() -> Principal {
+        Env::get_root_pid().expect("EnvOps::root_pid called before environment initialization")
+    }
+
+    #[must_use]
+    pub fn prime_root_pid() -> Principal {
+        Env::get_prime_root_pid()
+            .expect("EnvOps::prime_root_pid called before environment initialization")
+    }
+
+    #[must_use]
+    pub fn parent_pid() -> Principal {
+        Env::get_parent_pid().expect("EnvOps::parent_pid called before environment initialization")
+    }
+
+    // ---------------------------------------------------------------------
+    // Export
+    // ---------------------------------------------------------------------
 
     /// Export a snapshot of the current environment metadata.
     #[must_use]

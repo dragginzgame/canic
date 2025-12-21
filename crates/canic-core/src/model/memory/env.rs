@@ -1,8 +1,5 @@
 use crate::{
-    cdk::{
-        api::canister_self,
-        structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    },
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::{CanisterRole, SubnetRole},
     memory::impl_storable_bounded,
@@ -77,13 +74,6 @@ impl Env {
         });
     }
 
-    #[must_use]
-    pub(crate) fn is_prime_root() -> bool {
-        let prime_root_pid = Self::get_prime_root_pid();
-
-        prime_root_pid.is_some() && prime_root_pid == Self::get_root_pid()
-    }
-
     //
     // ---- Subnet Type ----
     //
@@ -99,11 +89,6 @@ impl Env {
             data.subnet_role = Some(role);
             cell.set(data);
         });
-    }
-
-    #[must_use]
-    pub(crate) fn is_prime_subnet() -> bool {
-        Self::get_subnet_role().is_some_and(|r| r.is_prime())
     }
 
     //
@@ -138,11 +123,6 @@ impl Env {
             data.root_pid = Some(pid);
             cell.set(data);
         });
-    }
-
-    #[must_use]
-    pub(crate) fn is_root() -> bool {
-        Self::get_root_pid() == Some(canister_self())
     }
 
     //

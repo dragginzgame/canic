@@ -5,10 +5,7 @@ use crate::{
         schema::{CanisterConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
-    ops::{
-        OpsError,
-        storage::env::{EnvOps, EnvOpsError},
-    },
+    ops::{OpsError, storage::env::EnvOps},
 };
 use thiserror::Error as ThisError;
 
@@ -23,9 +20,6 @@ pub enum ConfigOpsError {
 
     #[error("canister {0} not defined in subnet {1}")]
     CanisterNotFound(String, String),
-
-    #[error(transparent)]
-    EnvOpsError(#[from] EnvOpsError),
 }
 
 impl From<ConfigOpsError> for Error {
@@ -40,67 +34,79 @@ impl From<ConfigOpsError> for Error {
 /// Ops-layer façade for configuration access.
 ///
 /// Responsibilities:
-/// - Provide fallible lookups over the config *model* (`try_get_subnet`,
-///   `try_get_canister`).
-/// - Provide "current context" helpers (`cfg_current_subnet`,
-///   `cfg_current_canister`) that combine `EnvOps` (who am I?) with the
-///   static configuration model.
+/// - Provide fallible lookups over the configuration model (`try_get_*`)
+/// - Provide infallible access to the *current* subnet/canister context,
+///   assuming environment initialization has completed
 ///
 
 pub struct ConfigOps;
 
 impl ConfigOps {
-    /// Fetch a subnet configuration by type.
+    // ---------------------------------------------------------------------
+    // Explicit / fallible lookups
+    // ---------------------------------------------------------------------
+
+    /// Fetch a subnet configuration by role.
     pub fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
         let cfg = Config::get();
 
-        let subnet_cfg = cfg
-            .get_subnet(role)
-            .ok_or_else(|| ConfigOpsError::SubnetNotFound(role.to_string()))?;
-
-        Ok(subnet_cfg)
+        cfg.get_subnet(role)
+            .ok_or_else(|| ConfigOpsError::SubnetNotFound(role.to_string()).into())
     }
 
-    /// Get a canister configuration inside a specific subnet.
+    /// Fetch a canister configuration within a specific subnet.
     pub fn try_get_canister(
         subnet_role: &SubnetRole,
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, Error> {
         let subnet_cfg = Self::try_get_subnet(subnet_role)?;
 
-        let canister_cfg = subnet_cfg.get_canister(canister_role).ok_or_else(|| {
+        subnet_cfg.get_canister(canister_role).ok_or_else(|| {
             ConfigOpsError::CanisterNotFound(canister_role.to_string(), subnet_role.to_string())
-        })?;
-
-        Ok(canister_cfg)
+                .into()
+        })
     }
+
+    // ---------------------------------------------------------------------
+    // Current-context / infallible helpers
+    // ---------------------------------------------------------------------
 
     /// Fetch the configuration record for the *current* subnet.
-    pub fn current_subnet() -> Result<SubnetConfig, Error> {
-        let subnet_role = EnvOps::try_get_subnet_role()?;
+    ///
+    /// # Panics
+    /// - If the environment has not been initialized
+    /// - If the subnet is missing from the configuration
+    #[must_use]
+    pub fn current_subnet() -> SubnetConfig {
+        let subnet_role = EnvOps::subnet_role();
 
-        // delegate lookup to ConfigOps
-        let subnet_cfg = Self::try_get_subnet(&subnet_role)?;
-
-        Ok(subnet_cfg)
+        Self::try_get_subnet(&subnet_role).expect("current subnet must exist in configuration")
     }
 
-    pub fn current_canister() -> Result<CanisterConfig, Error> {
-        let subnet_role = EnvOps::try_get_subnet_role()?;
-        let canister_role = EnvOps::try_get_canister_role()?;
+    /// Fetch the configuration record for the *current* canister.
+    ///
+    /// # Panics
+    /// - If the environment has not been initialized
+    /// - If the canister is missing from the configuration
+    #[must_use]
+    pub fn current_canister() -> CanisterConfig {
+        let subnet_role = EnvOps::subnet_role();
+        let canister_role = EnvOps::canister_role();
 
-        // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = Self::try_get_canister(&subnet_role, &canister_role)?;
-
-        Ok(canister_cfg)
+        Self::try_get_canister(&subnet_role, &canister_role)
+            .expect("current canister must exist in configuration")
     }
 
-    pub fn current_subnet_canister(canister_role: &CanisterRole) -> Result<CanisterConfig, Error> {
-        let subnet_role = EnvOps::try_get_subnet_role()?;
+    /// Fetch the configuration for a specific canister in the *current* subnet.
+    ///
+    /// # Panics
+    /// - If the environment has not been initialized
+    /// - If the canister is missing from the configuration
+    #[must_use]
+    pub fn current_subnet_canister(canister_role: &CanisterRole) -> CanisterConfig {
+        let subnet_role = EnvOps::subnet_role();
 
-        // delegate lookup to ConfigOps or use subnet_cfg (either is fine)
-        let canister_cfg = Self::try_get_canister(&subnet_role, canister_role)?;
-
-        Ok(canister_cfg)
+        Self::try_get_canister(&subnet_role, canister_role)
+            .expect("canister must exist in current subnet configuration")
     }
 }

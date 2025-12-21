@@ -94,4 +94,10 @@ impl AppDirectoryOps {
 
         Ok(entry)
     }
+
+    /// Fetch principals for a canister type, panicking if the role is missing.
+    #[must_use]
+    pub fn get(role: &CanisterRole) -> PrincipalList {
+        Self::try_get(role).expect("app directory missing configured role")
+    }
 }

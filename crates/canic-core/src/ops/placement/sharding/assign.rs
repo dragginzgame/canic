@@ -202,7 +202,7 @@ impl ShardingOps {
 
     /// Internal: fetch shard pool config for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
-        let cfg = ConfigOps::current_canister()?;
+        let cfg = ConfigOps::current_canister();
         let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
             .pools

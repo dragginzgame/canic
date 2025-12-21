@@ -5,6 +5,23 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.13] - 2025-12-21
+  - Enforced env/config invariants: ConfigOps::current_*/EnvOps::* now used infallibly; removed obsolete error handling
+    and warning fallbacks in auth, RPC, timers, and runtime startup.
+  - Directory ops hardened: added infallible get accessors, made canic_subnet_directory infallible, and aligned tests/
+    endpoints accordingly.
+  - Env semantics tightened: import now validates required fields; root/non‑root predicates now use infallible getters;
+    removed unused env helpers; try_* env accessors are test‑only.
+  - Bootstrapping + local fallback clarified: get_current_subnet_pid renamed to try_get_current_subnet_pid; local
+    non‑root env fallback uses deterministic principals; IC still traps on missing env.
+  - Init payload safety: removed CanisterInitPayload::empty and Default, added CanisterInitPayload::new.
+  - Testkit upgrades: non‑root installs now pass deterministic EnvData; optional helper added to install with custom
+    directories; directories are empty by default by intent.
+  - Docs updated: AGENTS.md + CONFIG.md now explain runtime invariants and local/IC behavior.
+  - PocketIC wrapper now has explicit, high‑signal documentation (singleton rationale, assumptions, directory opt‑in,
+    fatal install failures).
+
+
 ## [0.6.12] - 2025-12-21
 - Enforced build‑time DFX_NETWORK (must be local or ic) across all Cargo builds; scripts/Makefile now map
 NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/invalid.
