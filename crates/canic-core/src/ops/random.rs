@@ -10,7 +10,12 @@ use crate::{
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};
-use std::time::Duration;
+use std::{cell::RefCell, time::Duration};
+
+thread_local! {
+    static SEED_TIMER: RefCell<Option<crate::ops::ic::timer::TimerId>> =
+        const { RefCell::new(None) };
+}
 
 ///
 /// RandomOps
@@ -39,7 +44,20 @@ impl RandomOps {
         }
 
         let interval = Duration::from_secs(interval_secs);
-        Self::schedule_seeding(Duration::ZERO, interval, cfg.source);
+        let source = cfg.source;
+        let _ = TimerOps::set_guarded_interval(
+            &SEED_TIMER,
+            Duration::ZERO,
+            "random:seed:init",
+            move || async move {
+                Self::seed_once(source).await;
+            },
+            interval,
+            "random:seed:interval",
+            move || async move {
+                Self::seed_once(source).await;
+            },
+        );
     }
 
     async fn seed_once(source: RandomnessSource) {
@@ -52,13 +70,6 @@ impl RandomOps {
             },
             RandomnessSource::Time => Self::seed_from_time(),
         }
-    }
-
-    fn schedule_seeding(delay: Duration, interval: Duration, source: RandomnessSource) {
-        let _ = TimerOps::set(delay, "random:seed", async move {
-            Self::seed_once(source).await;
-            Self::schedule_seeding(interval, interval, source);
-        });
     }
 
     fn randomness_config() -> RandomnessConfig {

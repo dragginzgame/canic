@@ -56,36 +56,24 @@ pub struct LogOps;
 impl LogOps {
     /// Start periodic log retention sweeps. Safe to call multiple times.
     pub fn start_retention() {
-        RETENTION_TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let init = TimerOps::set(OPS_INIT_DELAY, "log_retention:init", async {
+        let _ = TimerOps::set_guarded_interval(
+            &RETENTION_TIMER,
+            OPS_INIT_DELAY,
+            "log_retention:init",
+            || async {
                 let _ = Self::retain();
-
-                let interval = TimerOps::set_interval(
-                    RETENTION_INTERVAL,
-                    "log_retention:interval",
-                    || async {
-                        let _ = Self::retain();
-                    },
-                );
-
-                RETENTION_TIMER.with_borrow_mut(|slot| *slot = Some(interval));
-            });
-
-            *slot = Some(init);
-        });
+            },
+            RETENTION_INTERVAL,
+            "log_retention:interval",
+            || async {
+                let _ = Self::retain();
+            },
+        );
     }
 
     /// Stop periodic retention sweeps.
     pub fn stop_retention() {
-        RETENTION_TIMER.with_borrow_mut(|slot| {
-            if let Some(id) = slot.take() {
-                TimerOps::clear(id);
-            }
-        });
+        let _ = TimerOps::clear_guarded(&RETENTION_TIMER);
     }
 
     /// Run a retention sweep immediately.

@@ -57,17 +57,9 @@ mod reset_scheduler {
     }
 
     pub fn schedule() {
-        RESET_TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let id = TimerOps::set(Duration::ZERO, "pool:pending", async {
-                RESET_TIMER.with_borrow_mut(|slot| *slot = None);
-                let _ = run_worker(super::POOL_RESET_BATCH_SIZE).await;
-            });
-
-            *slot = Some(id);
+        let _ = TimerOps::set_guarded(&RESET_TIMER, Duration::ZERO, "pool:pending", async {
+            RESET_TIMER.with_borrow_mut(|slot| *slot = None);
+            let _ = run_worker(super::POOL_RESET_BATCH_SIZE).await;
         });
     }
 
@@ -211,6 +203,9 @@ const POOL_RESET_BATCH_SIZE: usize = 10;
 pub enum PoolOpsError {
     #[error("pool entry missing for {pid}")]
     PoolEntryMissing { pid: Principal },
+
+    #[error("pool import blocked for {pid}: canister is still registered in subnet registry")]
+    ImportBlockedRegistered { pid: Principal },
 
     #[error("missing module hash for pool entry {pid}")]
     MissingModuleHash { pid: Principal },
@@ -398,32 +393,23 @@ impl PoolOps {
     // ---------------------------------------------------------------------
 
     pub fn start() {
-        TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let id = TimerOps::set(OPS_POOL_INIT_DELAY, "pool:init", async {
+        let _ = TimerOps::set_guarded_interval(
+            &TIMER,
+            OPS_POOL_INIT_DELAY,
+            "pool:init",
+            || async {
                 let _ = Self::check();
-
-                let interval =
-                    TimerOps::set_interval(OPS_POOL_CHECK_INTERVAL, "pool:interval", || async {
-                        let _ = Self::check();
-                    });
-
-                TIMER.with_borrow_mut(|slot| *slot = Some(interval));
-            });
-
-            *slot = Some(id);
-        });
+            },
+            OPS_POOL_CHECK_INTERVAL,
+            "pool:interval",
+            || async {
+                let _ = Self::check();
+            },
+        );
     }
 
     pub fn stop() {
-        TIMER.with_borrow_mut(|slot| {
-            if let Some(id) = slot.take() {
-                TimerOps::clear(id);
-            }
-        });
+        let _ = TimerOps::clear_guarded(&TIMER);
     }
 
     // ---------------------------------------------------------------------
@@ -548,6 +534,10 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
+
+    if SubnetCanisterRegistryOps::get(pid).is_some() {
+        return Err(PoolOpsError::ImportBlockedRegistered { pid }.into());
+    }
 
     if !can_enter_pool(pid).await {
         let _ = CanisterPoolStorageOps::take(&pid);
