@@ -5,7 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.15] - 2025-12-22
+## [0.6.16] - 2025-12-22
+### Added
+- Subnet pool bootstrapping now supports `pool.import` to seed the warm pool before root auto-create.
+
 ### Fixed
 - Local pool imports now skip non-routable canister IDs instead of persisting failed entries.
 - Pool import immediate now surfaces reset failures to callers.

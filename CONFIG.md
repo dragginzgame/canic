@@ -4,8 +4,8 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Global cluster settings (`controllers`, `app_directory`, `pool`, `standards`, `whitelist`).
-- Subnet-specific behaviour under `subnets.<name>`.
+- Global cluster settings (`controllers`, `app_directory`, `standards`, `whitelist`).
+- Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 
 All fields are validated when `canic::build!` or `canic::build_root!` run, so configuration drift fails fast at compile time.
@@ -37,11 +37,13 @@ Optional list of controller principals appended to every provisioned canister.
 
 Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters`.
 
-### `[pool]`
+### `[subnets.<name>.pool]`
 
-Controls the warm canister pool.
+Controls the warm canister pool for a subnet.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0`).
+- `import = ["aaaaa-aa", ...]` – canister IDs to import into the pool during root bootstrap.
+  Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
 
 ### `[log]`
 
@@ -146,15 +148,14 @@ Fields:
 controllers = ["aaaaa-aa"]
 app_directory = ["scale_hub", "shard_hub"]
 
-[pool]
-minimum_size = 3
-
 [standards]
 icrc21 = true
 
 [subnets.prime]
 auto_create = ["app", "auth", "scale_hub", "shard_hub"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
+pool.minimum_size = 3
+pool.import = ["aaaaa-aa"]
 
 [subnets.prime.canisters.scale_hub]
 topup.threshold = "10T"

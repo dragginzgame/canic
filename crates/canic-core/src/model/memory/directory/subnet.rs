@@ -25,12 +25,6 @@ eager_static! {
 pub struct SubnetDirectory;
 
 impl SubnetDirectory {
-    #[must_use]
-    #[expect(dead_code)]
-    pub(crate) fn get(role: &CanisterRole) -> Option<PrincipalList> {
-        SUBNET_DIRECTORY.with_borrow(|map| map.get(role))
-    }
-
     // cannot return an iterator because of stable memory
     #[must_use]
     pub(crate) fn view() -> DirectoryView {

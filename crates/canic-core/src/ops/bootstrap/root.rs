@@ -5,6 +5,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{Network, build_network, try_get_current_subnet_pid},
+        pool::pool_import_canister,
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
         storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
@@ -54,6 +55,35 @@ pub async fn root_set_subnet_id() {
         Info,
         "try_get_current_subnet_pid unavailable; using self as subnet: {fallback}"
     );
+}
+
+/// Import any statically configured pool canisters for this subnet.
+///
+/// Import errors are logged and skipped so bootstrap can continue.
+pub async fn root_import_pool_from_config() {
+    let subnet_cfg = ConfigOps::current_subnet();
+    let import_list = subnet_cfg.pool.import;
+
+    if import_list.is_empty() {
+        return;
+    }
+
+    log!(
+        Topic::CanisterPool,
+        Info,
+        "pool import: {} configured canisters",
+        import_list.len()
+    );
+
+    for pid in import_list {
+        if let Err(err) = pool_import_canister(pid).await {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import failed for {pid}: {err}"
+            );
+        }
+    }
 }
 
 /// Ensures all statically configured canisters for this subnet exist.

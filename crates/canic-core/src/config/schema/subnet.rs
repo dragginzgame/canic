@@ -3,6 +3,7 @@ use crate::{
     ids::CanisterRole,
     types::{Cycles, TC},
 };
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -174,6 +175,8 @@ impl Validate for SubnetConfig {
 #[serde(deny_unknown_fields)]
 pub struct CanisterPool {
     pub minimum_size: u8,
+    #[serde(default)]
+    pub import: Vec<Principal>,
 }
 
 ///

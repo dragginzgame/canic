@@ -114,6 +114,7 @@ macro_rules! start_root {
                 "startup:root",
                 async move {
                     ::canic::core::ops::bootstrap::root::root_set_subnet_id().await;
+                    ::canic::core::ops::bootstrap::root::root_import_pool_from_config().await;
 
                     // attempt to create canisters
                     if let Err(err) =
