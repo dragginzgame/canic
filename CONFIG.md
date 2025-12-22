@@ -33,9 +33,9 @@ Canic treats config/env identity as startup invariants. Missing data is a fatal 
 
 Optional list of controller principals appended to every provisioned canister.
 
-### `app_directory = ["type_a", "type_b", ...]`
+### `app_directory = ["role_a", "role_b", ...]`
 
-Global set of canister types that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters`.
+Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters`.
 
 ### `[pool]`
 
@@ -71,13 +71,13 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 
 ### `[subnets.<name>]`
 
-- `auto_create = ["type_a", ...]` – canister types that root should ensure exist during bootstrap.
-- `subnet_directory = ["type_a", ...]` – canister types exposed through `canic_subnet_directory()`.
-- `canisters.*` – nested tables describing per-type policies (see below).
+- `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap.
+- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`.
+- `canisters.*` – nested tables describing per-role policies (see below).
 
-### `[subnets.<name>.canisters.<type>]`
+### `[subnets.<name>.canisters.<role>]`
 
-Each child table configures a logical canister type within the subnet.
+Each child table configures a logical canister role within the subnet.
 
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (optional).
@@ -94,15 +94,15 @@ Each child table configures a logical canister type within the subnet.
 Scaling pools model interchangeable workers with simple bounds on how many to keep alive.
 
 ```
-[subnets.<name>.canisters.<type>.scaling.pools.<pool>]
-canister_type = "worker_type"
+[subnets.<name>.canisters.<role>.scaling.pools.<pool>]
+canister_role = "worker_role"
 policy.min_workers = 2
 policy.max_workers = 16
 ```
 
 Fields:
 
-- `canister_type` – canister type that represents workers in this pool.
+- `canister_role` – canister role that represents workers in this pool.
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`).
 
@@ -111,22 +111,22 @@ Fields:
 Sharding pools manage stateful shards that own tenant partitions.
 
 ```
-[subnets.<name>.canisters.<type>.sharding.pools.<pool>]
-canister_type = "shard_type"
+[subnets.<name>.canisters.<role>.sharding.pools.<pool>]
+canister_role = "shard_role"
 policy.capacity = 1000
 policy.max_shards = 64
 ```
 
 Fields:
 
-- `canister_type` – canister type that implements the shard.
+- `canister_role` – canister role that implements the shard.
 - `policy.capacity` – per-shard capacity (default `1000`).
 - `policy.max_shards` – maximum shard count (default `4`).
 
 ### Randomness (Per-Canister)
 
 ```
-[subnets.<name>.canisters.<type>.randomness]
+[subnets.<name>.canisters.<role>.randomness]
 enabled = true
 reseed_interval_secs = 3600
 source = "ic" # or "time"
@@ -161,7 +161,7 @@ topup.threshold = "10T"
 topup.amount = "5T"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_type = "scale"
+canister_role = "scale"
 policy.min_workers = 2
 
 [subnets.prime.canisters.shard_hub]
@@ -169,7 +169,7 @@ topup.threshold = "10T"
 topup.amount = "5T"
 
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
-canister_type = "shard"
+canister_role = "shard"
 policy.capacity = 100
 policy.max_shards = 8
 

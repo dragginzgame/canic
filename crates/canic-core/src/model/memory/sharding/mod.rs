@@ -67,7 +67,7 @@ pub struct ShardEntry {
     pub capacity: u32,
     pub count: u32,
     pub pool: BoundedString64,
-    pub canister_type: CanisterRole,
+    pub canister_role: CanisterRole,
     pub created_at: u64,
 }
 
@@ -78,7 +78,7 @@ impl ShardEntry {
     pub(crate) fn try_new(
         pool: &str,
         slot: u32,
-        ty: CanisterRole,
+        role: CanisterRole,
         capacity: u32,
         created_at: u64,
     ) -> Result<Self, String> {
@@ -86,7 +86,7 @@ impl ShardEntry {
 
         Ok(Self {
             slot,
-            canister_type: ty,
+            canister_role: role,
             capacity,
             count: 0,
             pool,

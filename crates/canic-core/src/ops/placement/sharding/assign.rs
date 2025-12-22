@@ -34,7 +34,7 @@ impl ShardAllocator {
     pub async fn allocate(
         pool: &str,
         slot: u32,
-        canister_type: &CanisterRole,
+        canister_role: &CanisterRole,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
@@ -42,14 +42,14 @@ impl ShardAllocator {
         ShardingPolicyOps::check_create_allowed(&metrics, policy)?;
 
         let response = create_canister_request::<Vec<u8>>(
-            canister_type,
+            canister_role,
             CreateCanisterParent::ThisCanister,
             extra_arg,
         )
         .await?;
         let pid = response.new_canister_pid;
 
-        ShardingRegistryOps::create(pid, pool, slot, canister_type, policy.capacity)?;
+        ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity)?;
         log!(
             Topic::Sharding,
             Ok,
@@ -72,7 +72,7 @@ impl ShardingOps {
     pub async fn assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<Principal, Error> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
         Self::assign_with_policy(
-            &pool_cfg.canister_type,
+            &pool_cfg.canister_role,
             pool,
             &tenant.to_string(),
             pool_cfg.policy,
@@ -83,7 +83,7 @@ impl ShardingOps {
 
     /// Assign a tenant according to pool policy and HRW selection.
     pub async fn assign_with_policy(
-        canister_type: &CanisterRole,
+        canister_role: &CanisterRole,
         pool: &str,
         tenant: &str,
         policy: ShardPoolPolicy,
@@ -127,7 +127,7 @@ impl ShardingOps {
                     )
                 })?;
                 let pid =
-                    ShardAllocator::allocate(pool, slot, canister_type, &policy, extra_arg).await?;
+                    ShardAllocator::allocate(pool, slot, canister_role, &policy, extra_arg).await?;
                 ShardingRegistryOps::assign(pool, tenant, pid)?;
                 log!(
                     Topic::Sharding,
@@ -178,7 +178,7 @@ impl ShardingOps {
                     let new_pid = ShardAllocator::allocate(
                         pool,
                         slot,
-                        &pool_cfg.canister_type,
+                        &pool_cfg.canister_role,
                         &pool_cfg.policy,
                         None,
                     )

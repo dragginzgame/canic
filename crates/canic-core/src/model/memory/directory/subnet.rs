@@ -44,8 +44,8 @@ impl SubnetDirectory {
     pub(crate) fn import(view: DirectoryView) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (ty, pids) in view {
-                map.insert(ty, pids);
+            for (role, pids) in view {
+                map.insert(role, pids);
             }
         });
     }

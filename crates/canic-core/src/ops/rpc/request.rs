@@ -18,7 +18,7 @@ use candid::encode_one;
 
 #[derive(Debug, ThisError)]
 pub enum RequestOpsError {
-    #[error("canister type {0} not found")]
+    #[error("canister role {0} not found")]
     CanisterRoleNotFound(CanisterRole),
 
     #[error("child canister {0} not found")]

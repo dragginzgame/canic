@@ -131,16 +131,16 @@ impl ScalingRegistryOps {
 
         // 2. Look up pool config
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
-        let ty = pool_cfg.canister_type.clone();
+        let role = pool_cfg.canister_role.clone();
 
         // 3. Create the canister
-        let pid = create_canister_request::<()>(&ty, CreateCanisterParent::ThisCanister, None)
+        let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
             .await?
             .new_canister_pid;
 
         // 4. Register in memory
         let entry =
-            WorkerEntry::try_new(pool, ty, now_secs()).map_err(ScalingOpsError::InvalidKey)?;
+            WorkerEntry::try_new(pool, role, now_secs()).map_err(ScalingOpsError::InvalidKey)?;
 
         ScalingWorkerRegistryStorageOps::insert(pid, entry);
 

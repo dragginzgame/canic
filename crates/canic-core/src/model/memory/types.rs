@@ -69,7 +69,7 @@ pub mod test {
 
         let entry = CanisterEntry {
             pid,
-            role: CanisterRole::new("really_long_canister_type"),
+            role: CanisterRole::new("really_long_canister_role"),
             parent_pid: Some(pid),
             module_hash: Some(vec![0u8; 32]),
             created_at: u64::MAX,
@@ -92,7 +92,7 @@ pub mod test {
 
         let entry = CanisterSummary {
             pid,
-            role: CanisterRole::new("really_long_canister_type"),
+            role: CanisterRole::new("really_long_canister_role"),
             parent_pid: Some(pid),
         };
         let bytes = Encode!(&entry).unwrap();

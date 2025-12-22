@@ -51,41 +51,41 @@ impl SubnetConfig {
         self.subnet_directory.iter().cloned().collect()
     }
 
-    /// Get a canister configuration by type.
+    /// Get a canister configuration by role.
     #[must_use]
-    pub fn get_canister(&self, ty: &CanisterRole) -> Option<CanisterConfig> {
-        self.canisters.get(ty).cloned()
+    pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {
+        self.canisters.get(role).cloned()
     }
 }
 
 impl Validate for SubnetConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         // --- 1. Validate directory entries ---
-        for canister_ty in &self.subnet_directory {
-            validate_role_len(canister_ty, "subnet directory canister")?;
-            if !self.canisters.contains_key(canister_ty) {
+        for canister_role in &self.subnet_directory {
+            validate_role_len(canister_role, "subnet directory canister")?;
+            if !self.canisters.contains_key(canister_role) {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{canister_ty}' is not defined in subnet",
+                    "subnet directory canister '{canister_role}' is not defined in subnet",
                 )));
             }
         }
 
         // --- 2. Validate auto-create entries ---
-        for canister_ty in &self.auto_create {
-            validate_role_len(canister_ty, "auto-create canister")?;
-            if !self.canisters.contains_key(canister_ty) {
+        for canister_role in &self.auto_create {
+            validate_role_len(canister_role, "auto-create canister")?;
+            if !self.canisters.contains_key(canister_role) {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "auto-create canister '{canister_ty}' is not defined in subnet",
+                    "auto-create canister '{canister_role}' is not defined in subnet",
                 )));
             }
         }
 
         // --- 3. Validate canister configurations ---
-        for (parent_ty, cfg) in &self.canisters {
-            validate_role_len(parent_ty, "canister")?;
+        for (parent_role, cfg) in &self.canisters {
+            validate_role_len(parent_role, "canister")?;
             if cfg.randomness.enabled && cfg.randomness.reseed_interval_secs == 0 {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{parent_ty}' randomness reseed_interval_secs must be > 0",
+                    "canister '{parent_role}' randomness reseed_interval_secs must be > 0",
                 )));
             }
 
@@ -94,33 +94,33 @@ impl Validate for SubnetConfig {
                 for (pool_name, pool) in &sharding.pools {
                     if pool_name.len() > NAME_MAX_BYTES {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' sharding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                            "canister '{parent_role}' sharding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
                         )));
                     }
 
-                    if pool.canister_type.as_ref().len() > NAME_MAX_BYTES {
+                    if pool.canister_role.as_ref().len() > NAME_MAX_BYTES {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' sharding pool '{pool_name}' canister type '{ty}' exceeds {NAME_MAX_BYTES} bytes",
-                            ty = pool.canister_type
+                            "canister '{parent_role}' sharding pool '{pool_name}' canister role '{role}' exceeds {NAME_MAX_BYTES} bytes",
+                            role = pool.canister_role
                         )));
                     }
 
-                    if !self.canisters.contains_key(&pool.canister_type) {
+                    if !self.canisters.contains_key(&pool.canister_role) {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' sharding pool '{pool_name}' references unknown canister type '{ty}'",
-                            ty = pool.canister_type
+                            "canister '{parent_role}' sharding pool '{pool_name}' references unknown canister role '{role}'",
+                            role = pool.canister_role
                         )));
                     }
 
                     if pool.policy.capacity == 0 {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' sharding pool '{pool_name}' has zero capacity; must be > 0",
+                            "canister '{parent_role}' sharding pool '{pool_name}' has zero capacity; must be > 0",
                         )));
                     }
 
                     if pool.policy.max_shards == 0 {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' sharding pool '{pool_name}' has max_shards of 0; must be > 0",
+                            "canister '{parent_role}' sharding pool '{pool_name}' has max_shards of 0; must be > 0",
                         )));
                     }
                 }
@@ -131,21 +131,21 @@ impl Validate for SubnetConfig {
                 for (pool_name, pool) in &scaling.pools {
                     if pool_name.len() > NAME_MAX_BYTES {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' scaling pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                            "canister '{parent_role}' scaling pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
                         )));
                     }
 
-                    if pool.canister_type.as_ref().len() > NAME_MAX_BYTES {
+                    if pool.canister_role.as_ref().len() > NAME_MAX_BYTES {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' scaling pool '{pool_name}' canister type '{ty}' exceeds {NAME_MAX_BYTES} bytes",
-                            ty = pool.canister_type
+                            "canister '{parent_role}' scaling pool '{pool_name}' canister role '{role}' exceeds {NAME_MAX_BYTES} bytes",
+                            role = pool.canister_role
                         )));
                     }
 
-                    if !self.canisters.contains_key(&pool.canister_type) {
+                    if !self.canisters.contains_key(&pool.canister_role) {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' scaling pool '{pool_name}' references unknown canister type '{ty}'",
-                            ty = pool.canister_type
+                            "canister '{parent_role}' scaling pool '{pool_name}' references unknown canister role '{role}'",
+                            role = pool.canister_role
                         )));
                     }
 
@@ -153,7 +153,7 @@ impl Validate for SubnetConfig {
                         && pool.policy.max_workers < pool.policy.min_workers
                     {
                         return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_ty}' scaling pool '{pool_name}' has max_workers < min_workers (min {}, max {})",
+                            "canister '{parent_role}' scaling pool '{pool_name}' has max_workers < min_workers (min {}, max {})",
                             pool.policy.min_workers, pool.policy.max_workers
                         )));
                     }
@@ -284,7 +284,7 @@ pub struct ScalingConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ScalePool {
-    pub canister_type: CanisterRole,
+    pub canister_role: CanisterRole,
 
     #[serde(default)]
     pub policy: ScalePoolPolicy,
@@ -337,7 +337,7 @@ pub struct ShardingConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShardPool {
-    pub canister_type: CanisterRole,
+    pub canister_role: CanisterRole,
 
     #[serde(default)]
     pub policy: ShardPoolPolicy,
@@ -402,7 +402,7 @@ mod tests {
 
         subnet
             .validate()
-            .expect_err("expected missing auto-create type to fail");
+            .expect_err("expected missing auto-create role to fail");
     }
 
     #[test]
@@ -414,7 +414,7 @@ mod tests {
         sharding.pools.insert(
             "primary".into(),
             ShardPool {
-                canister_type: CanisterRole::from("missing_shard_worker"),
+                canister_role: CanisterRole::from("missing_shard_worker"),
                 policy: ShardPoolPolicy::default(),
             },
         );
@@ -433,7 +433,7 @@ mod tests {
 
         subnet
             .validate()
-            .expect_err("expected missing worker type to fail");
+            .expect_err("expected missing worker role to fail");
     }
 
     #[test]
@@ -445,7 +445,7 @@ mod tests {
         sharding.pools.insert(
             "primary".into(),
             ShardPool {
-                canister_type: managing_role.clone(),
+                canister_role: managing_role.clone(),
                 policy: ShardPoolPolicy {
                     capacity: 0,
                     max_shards: 0,
@@ -496,7 +496,7 @@ mod tests {
         sharding.pools.insert(
             "a".repeat(NAME_MAX_BYTES + 1),
             ShardPool {
-                canister_type: managing_role.clone(),
+                canister_role: managing_role.clone(),
                 policy: ShardPoolPolicy::default(),
             },
         );
@@ -526,7 +526,7 @@ mod tests {
         pools.insert(
             "worker".into(),
             ScalePool {
-                canister_type: CanisterRole::from("worker"),
+                canister_role: CanisterRole::from("worker"),
                 policy: ScalePoolPolicy {
                     min_workers: 5,
                     max_workers: 3,
@@ -560,7 +560,7 @@ mod tests {
         pools.insert(
             "a".repeat(NAME_MAX_BYTES + 1),
             ScalePool {
-                canister_type: CanisterRole::from("worker"),
+                canister_role: CanisterRole::from("worker"),
                 policy: ScalePoolPolicy::default(),
             },
         );

@@ -87,9 +87,9 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
                 .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
 
-            CreateCanisterParent::Directory(ty) => {
-                SubnetCanisterRegistryOps::try_get_type(ty)
-                    .map_err(|_| RequestOpsError::CanisterRoleNotFound(ty.clone()))?
+            CreateCanisterParent::Directory(role) => {
+                SubnetCanisterRegistryOps::try_get_type(role)
+                    .map_err(|_| RequestOpsError::CanisterRoleNotFound(role.clone()))?
                     .pid
             }
         };
