@@ -5,6 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.13] - 2025-12-22
+### Fixed
+- Local pool imports now skip non-routable canister IDs instead of persisting failed entries.
+
 ## [0.6.13] - 2025-12-21
   - Enforced env/config invariants: ConfigOps::current_*/EnvOps::* now used infallibly; removed obsolete error handling
     and warning fallbacks in auth, RPC, timers, and runtime startup.

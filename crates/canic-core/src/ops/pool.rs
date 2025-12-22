@@ -10,6 +10,10 @@
 //! - Importing a canister is destructive (code + controllers wiped)
 //! - Registry metadata is informational only while in pool
 //! - Ready entries have no code installed (reset_into_pool uninstalls before Ready)
+//
+// LOCAL INVARIANT:
+// On local replicas, only canisters that are routable in the current replica
+// may enter or remain in the pool. Mainnet canister IDs are never importable.
 
 pub use crate::ops::storage::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
 
@@ -27,7 +31,7 @@ use crate::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY, OpsError,
         config::ConfigOps,
         ic::{
-            get_cycles,
+            Network, build_network, canister_status, get_cycles,
             mgmt::{create_canister, uninstall_code},
             timer::{TimerId, TimerOps},
             update_settings,
@@ -40,6 +44,11 @@ use crate::{
 use candid::CandidType;
 use serde::Deserialize;
 use std::{cell::RefCell, time::Duration};
+
+#[cfg(test)]
+thread_local! {
+    static TEST_IMPORTABLE_OVERRIDE: RefCell<Option<bool>> = const { RefCell::new(None) };
+}
 
 //
 // TIMER STATE
@@ -133,6 +142,39 @@ fn pool_controllers() -> Vec<Principal> {
     }
 
     controllers
+}
+
+fn is_local_build() -> bool {
+    build_network() == Some(Network::Local)
+}
+
+///
+/// Returns true iff the canister is routable in the current local replica.
+///
+/// Local-only precondition check.
+/// Must be cheap, non-destructive, and side-effect free.
+///
+async fn is_importable_on_local(pid: Principal) -> bool {
+    #[cfg(test)]
+    if let Some(override_value) = TEST_IMPORTABLE_OVERRIDE.with(|slot| *slot.borrow()) {
+        return override_value;
+    }
+
+    if !is_local_build() {
+        return true;
+    }
+
+    match canister_status(pid).await {
+        Ok(_) => true,
+        Err(err) => {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import skipped for {pid} (local non-importable): {err}"
+            );
+            false
+        }
+    }
 }
 
 async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
@@ -281,7 +323,11 @@ impl PoolOps {
                 Ok(PoolAdminResponse::Imported)
             }
             PoolAdminCommand::ImportQueued { pids } => {
-                let (a, r, s, t) = pool_import_queued_canisters(pids)?;
+                let (a, r, s, t) = if is_local_build() {
+                    pool_import_queued_canisters_local(pids).await?
+                } else {
+                    pool_import_queued_canisters(pids)?
+                };
                 Ok(PoolAdminResponse::QueuedImported {
                     added: a,
                     requeued: r,
@@ -384,6 +430,11 @@ impl PoolOps {
         pending.sort_by_key(|(_, e)| e.created_at);
 
         for (pid, mut entry) in pending.into_iter().take(limit) {
+            if is_local_build() && !is_importable_on_local(pid).await {
+                let _ = CanisterPoolStorageOps::take(&pid);
+                continue;
+            }
+
             match reset_into_pool(pid).await {
                 Ok(cycles) => {
                     entry.cycles = cycles;
@@ -431,6 +482,12 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
+    if is_local_build() && !is_importable_on_local(pid).await {
+        // Local-only cleanup: remove non-importable IDs so they never persist as failures.
+        let _ = CanisterPoolStorageOps::take(&pid);
+        return Ok(());
+    }
+
     register_or_update_preserving_metadata(
         pid,
         Cycles::default(),
@@ -470,6 +527,65 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
         }
     }
     Ok(())
+}
+
+async fn pool_import_queued_canisters_local(
+    pids: Vec<Principal>,
+) -> Result<(u64, u64, u64, u64), Error> {
+    let total = pids.len() as u64;
+    let mut added = 0;
+    let mut requeued = 0;
+    let mut skipped = 0;
+
+    for pid in pids {
+        if SubnetCanisterRegistryOps::get(pid).is_some() {
+            skipped += 1;
+            continue;
+        }
+
+        if let Some(entry) = CanisterPoolStorageOps::get(pid) {
+            if entry.status.is_failed() {
+                if !is_importable_on_local(pid).await {
+                    let _ = CanisterPoolStorageOps::take(&pid);
+                    skipped += 1;
+                } else {
+                    register_or_update_preserving_metadata(
+                        pid,
+                        Cycles::default(),
+                        CanisterPoolStatus::PendingReset,
+                        None,
+                        None,
+                        None,
+                    );
+                    requeued += 1;
+                }
+            } else {
+                skipped += 1;
+            }
+            continue;
+        }
+
+        if !is_importable_on_local(pid).await {
+            skipped += 1;
+            continue;
+        }
+
+        register_or_update_preserving_metadata(
+            pid,
+            Cycles::default(),
+            CanisterPoolStatus::PendingReset,
+            None,
+            None,
+            None,
+        );
+        added += 1;
+    }
+
+    if added > 0 || requeued > 0 {
+        maybe_schedule_reset_worker();
+    }
+
+    Ok((added, requeued, skipped, total))
 }
 
 fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<(u64, u64, u64, u64), Error> {
@@ -549,6 +665,11 @@ fn take_reset_scheduled() -> bool {
         *flag = false;
         value
     })
+}
+
+#[cfg(test)]
+fn set_test_importable_override(value: Option<bool>) {
+    TEST_IMPORTABLE_OVERRIDE.with_borrow_mut(|slot| *slot = value);
 }
 
 fn pool_requeue_failed(pids: Option<Vec<Principal>>) -> Result<(u64, u64, u64), Error> {
@@ -781,6 +902,24 @@ mod tests {
         assert_eq!(skipped, 1);
         assert_eq!(total, 1);
         assert!(CanisterPoolStorageOps::get(pid).is_none());
+    }
+
+    #[test]
+    fn import_queued_local_skips_non_importable() {
+        reset_state();
+        set_test_importable_override(Some(false));
+
+        let pid = p(9);
+        let (added, requeued, skipped, total) =
+            futures::executor::block_on(pool_import_queued_canisters_local(vec![pid])).unwrap();
+
+        assert_eq!(added, 0);
+        assert_eq!(requeued, 0);
+        assert_eq!(skipped, 1);
+        assert_eq!(total, 1);
+        assert!(CanisterPoolStorageOps::get(pid).is_none());
+
+        set_test_importable_override(None);
     }
 
     #[test]
