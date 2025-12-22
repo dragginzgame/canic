@@ -44,34 +44,25 @@ impl CycleTrackerOps {
     /// Start recurring tracking every X seconds
     /// Safe to call multiple times: only one loop will run.
     pub fn start() {
-        TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let init = TimerOps::set(OPS_INIT_DELAY, "cycles:init", async {
+        let _ = TimerOps::set_guarded_interval(
+            &TIMER,
+            OPS_INIT_DELAY,
+            "cycles:init",
+            || async {
                 Self::track();
-
-                let interval =
-                    TimerOps::set_interval(TRACKER_INTERVAL, "cycles:interval", || async {
-                        Self::track();
-                        let _ = Self::purge();
-                    });
-
-                TIMER.with_borrow_mut(|slot| *slot = Some(interval));
-            });
-
-            *slot = Some(init);
-        });
+            },
+            TRACKER_INTERVAL,
+            "cycles:interval",
+            || async {
+                Self::track();
+                let _ = Self::purge();
+            },
+        );
     }
 
     /// Stop recurring tracking.
     pub fn stop() {
-        TIMER.with_borrow_mut(|slot| {
-            if let Some(id) = slot.take() {
-                TimerOps::clear(id);
-            }
-        });
+        let _ = TimerOps::clear_guarded(&TIMER);
     }
 
     pub fn track() {

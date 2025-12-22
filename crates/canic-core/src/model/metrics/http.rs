@@ -1,3 +1,4 @@
+pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult};
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
@@ -13,7 +14,7 @@ thread_local! {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct HttpMetricKey {
-    pub method: String,
+    pub method: HttpMethod,
     pub url: String,
 }
 
@@ -24,7 +25,7 @@ pub struct HttpMetricKey {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct HttpMetricEntry {
-    pub method: String,
+    pub method: HttpMethod,
     pub url: String,
     pub count: u64,
 }
@@ -44,18 +45,15 @@ pub type HttpMetricsSnapshot = Vec<HttpMetricEntry>;
 pub struct HttpMetrics;
 
 impl HttpMetrics {
-    pub fn increment(method: &str, url: &str) {
+    pub fn increment(method: HttpMethod, url: &str) {
         Self::increment_with_label(method, url, None);
     }
 
-    pub fn increment_with_label(method: &str, url: &str, label: Option<&str>) {
+    pub fn increment_with_label(method: HttpMethod, url: &str, label: Option<&str>) {
         let label = Self::label_for(url, label);
 
         HTTP_METRICS.with_borrow_mut(|counts| {
-            let key = HttpMetricKey {
-                method: method.to_string(),
-                url: label,
-            };
+            let key = HttpMetricKey { method, url: label };
             let entry = counts.entry(key).or_insert(0);
             *entry = entry.saturating_add(1);
         });
@@ -67,7 +65,7 @@ impl HttpMetrics {
             counts
                 .iter()
                 .map(|(key, count)| HttpMetricEntry {
-                    method: key.method.clone(),
+                    method: key.method,
                     url: key.url.clone(),
                     count: *count,
                 })
@@ -116,27 +114,27 @@ mod tests {
     fn http_metrics_track_method_and_url_normalized() {
         HttpMetrics::reset();
 
-        HttpMetrics::increment("GET", "https://example.com/a?query=1#frag");
-        HttpMetrics::increment("GET", "https://example.com/a?query=2");
-        HttpMetrics::increment("POST", "https://example.com/a?query=3");
-        HttpMetrics::increment("GET", "https://example.com/b#x");
+        HttpMetrics::increment(HttpMethod::GET, "https://example.com/a?query=1#frag");
+        HttpMetrics::increment(HttpMethod::GET, "https://example.com/a?query=2");
+        HttpMetrics::increment(HttpMethod::POST, "https://example.com/a?query=3");
+        HttpMetrics::increment(HttpMethod::GET, "https://example.com/b#x");
 
         let snapshot = HttpMetrics::snapshot();
-        let mut map: HashMap<(String, String), u64> = snapshot
+        let mut map: HashMap<(HttpMethod, String), u64> = snapshot
             .into_iter()
             .map(|entry| ((entry.method, entry.url), entry.count))
             .collect();
 
         assert_eq!(
-            map.remove(&("GET".to_string(), "https://example.com/a".to_string())),
+            map.remove(&(HttpMethod::GET, "https://example.com/a".to_string())),
             Some(2)
         );
         assert_eq!(
-            map.remove(&("POST".to_string(), "https://example.com/a".to_string())),
+            map.remove(&(HttpMethod::POST, "https://example.com/a".to_string())),
             Some(1)
         );
         assert_eq!(
-            map.remove(&("GET".to_string(), "https://example.com/b".to_string())),
+            map.remove(&(HttpMethod::GET, "https://example.com/b".to_string())),
             Some(1)
         );
         assert!(map.is_empty());
@@ -147,24 +145,24 @@ mod tests {
         HttpMetrics::reset();
 
         HttpMetrics::increment_with_label(
-            "GET",
+            HttpMethod::GET,
             "https://example.com/search?q=abc",
             Some("search"),
         );
         HttpMetrics::increment_with_label(
-            "GET",
+            HttpMethod::GET,
             "https://example.com/search?q=def",
             Some("search"),
         );
 
         let snapshot = HttpMetrics::snapshot();
-        let mut map: HashMap<(String, String), u64> = snapshot
+        let mut map: HashMap<(HttpMethod, String), u64> = snapshot
             .into_iter()
             .map(|entry| ((entry.method, entry.url), entry.count))
             .collect();
 
         assert_eq!(
-            map.remove(&("GET".to_string(), "search".to_string())),
+            map.remove(&(HttpMethod::GET, "search".to_string())),
             Some(2)
         );
         assert!(map.is_empty());

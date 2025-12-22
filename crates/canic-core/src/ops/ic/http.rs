@@ -20,9 +20,9 @@ pub struct Http;
 impl Http {
     pub const MAX_RESPONSE_BYTES: u64 = 200_000;
 
-    fn record_metrics(verb: &'static str, url: &str, label: Option<&str>) {
+    fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        HttpMetrics::increment_with_label(verb, url, label);
+        HttpMetrics::increment_with_label(method, url, label);
     }
 
     pub async fn get<T: DeserializeOwned>(
@@ -38,7 +38,7 @@ impl Http {
         label: Option<&str>,
     ) -> Result<T, Error> {
         // metrics
-        Self::record_metrics("GET", url, label);
+        Self::record_metrics(HttpMethod::GET, url, label);
 
         let headers: Vec<HttpHeader> = headers
             .as_ref()
@@ -78,7 +78,7 @@ impl Http {
         label: Option<&str>,
     ) -> Result<HttpRequestResult, Error> {
         // metrics
-        Self::record_metrics("GET", &args.url, label);
+        Self::record_metrics(args.method, &args.url, label);
 
         http_request(&args)
             .await

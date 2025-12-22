@@ -32,7 +32,7 @@ pub struct TimerMetricKey {
 
 ///
 /// TimerMetricEntry
-/// Snapshot entry pairing a timer mode/delay with its count.
+/// Snapshot entry pairing a timer mode/delay with its execution count.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
@@ -52,7 +52,7 @@ pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
 ///
 /// TimerMetrics
 ///
-/// Volatile counters for timers keyed by `(mode, delay_ms, label)`.
+/// Volatile counters for timer executions keyed by `(mode, delay_ms, label)`.
 ///
 /// ## What this measures
 ///
@@ -62,12 +62,13 @@ pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
 ///    - Use [`ensure`] at scheduling time to guarantee the timer appears in snapshots,
 ///      even if it has not fired yet (e.g., newly-created interval timers).
 ///
-/// 2) **How many scheduling events have occurred for a given timer key?**
-///    - Use [`increment`] when you explicitly want to count scheduling operations.
+/// 2) **How many times has a given timer fired?**
+///    - Use [`increment`] when a timer fires (one-shot completion or interval tick).
 ///
-/// Note that this type does **not** count executions/ticks of interval timers.
-/// Execution counts should be tracked separately (e.g., via perf records or a
-/// dedicated “timer runs” metric), because scheduling and execution are different signals.
+/// Note that this type **does** count executions/ticks of interval timers.
+/// Scheduling counts are tracked separately (e.g., via `SystemMetricKind::TimerScheduled`),
+/// and instruction costs are tracked via perf counters, because scheduling and
+/// execution are different signals.
 ///
 /// ## Cardinality and labels
 ///
@@ -108,10 +109,10 @@ impl TimerMetrics {
         });
     }
 
-    /// Increment the scheduling counter for a timer key.
+    /// Increment the execution counter for a timer key.
     ///
     /// Use this when you want to count how many times a given timer (identified by
-    /// `(mode, delay_ms, label)`) has been scheduled.
+    /// `(mode, delay_ms, label)`) has fired.
     ///
     /// This uses saturating arithmetic to avoid overflow.
     pub fn increment(mode: TimerMode, delay: Duration, label: &str) {
@@ -129,7 +130,7 @@ impl TimerMetrics {
         });
     }
 
-    /// Snapshot all timer scheduling metrics.
+    /// Snapshot all timer execution metrics.
     ///
     /// Returns the current contents of the metrics table as a vector of entries.
     /// Callers may sort or page the results as needed at the API layer.
