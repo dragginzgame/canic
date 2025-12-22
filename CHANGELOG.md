@@ -233,7 +233,7 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 - added a test/ module that's gated by cfg(test) for pocket-ic helpers
 
 ## [0.2.21] - 2025-10-24
-- fixed config validation, now its finding nested invalid canister types
+- fixed config validation, now its finding nested invalid canister roles
 
 ## [0.2.17] - 2025-10-20
 - removed icrc-ledger-types and implemented it manually

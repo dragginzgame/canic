@@ -33,7 +33,7 @@ fn init_memory_or_trap(phase: &str) {
     }
 }
 
-fn ensure_nonroot_env(canister_type: CanisterRole, mut env: EnvData) -> EnvData {
+fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvData) -> EnvData {
     let mut missing = Vec::new();
     if env.prime_root_pid.is_none() {
         missing.push("prime_root_pid");
@@ -58,12 +58,11 @@ fn ensure_nonroot_env(canister_type: CanisterRole, mut env: EnvData) -> EnvData 
         return env;
     }
 
-    if build_network() == Some(Network::Ic) {
-        panic!(
-            "nonroot init missing env fields on ic: {}",
-            missing.join(", ")
-        );
-    }
+    assert!(
+        build_network() != Some(Network::Ic),
+        "nonroot init missing env fields on ic: {}",
+        missing.join(", ")
+    );
 
     let root_pid = Principal::from_slice(&[0xBB; 29]);
     let subnet_pid = Principal::from_slice(&[0xAA; 29]);
@@ -72,7 +71,7 @@ fn ensure_nonroot_env(canister_type: CanisterRole, mut env: EnvData) -> EnvData 
     env.subnet_role.get_or_insert(SubnetRole::PRIME);
     env.subnet_pid.get_or_insert(subnet_pid);
     env.root_pid.get_or_insert(root_pid);
-    env.canister_role.get_or_insert(canister_type);
+    env.canister_role.get_or_insert(canister_role);
     env.parent_pid.get_or_insert(root_pid);
 
     env
@@ -141,14 +140,14 @@ pub fn root_post_upgrade() {
 }
 
 /// nonroot_init
-pub fn nonroot_init(canister_type: CanisterRole, payload: CanisterInitPayload) {
+pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
-    crate::log!(Topic::Init, Info, "🏁 init: {}", canister_type);
+    crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
     init_eager_tls();
     init_memory_or_trap("nonroot_init");
 
     // --- Phase 2: Payload registration ---
-    let env = ensure_nonroot_env(canister_type.clone(), payload.env);
+    let env = ensure_nonroot_env(canister_role, payload.env);
     EnvOps::import(env);
     AppDirectoryOps::import(payload.app_directory);
     SubnetDirectoryOps::import(payload.subnet_directory);
@@ -158,9 +157,9 @@ pub fn nonroot_init(canister_type: CanisterRole, payload: CanisterInitPayload) {
 }
 
 /// nonroot_post_upgrade
-pub fn nonroot_post_upgrade(canister_type: CanisterRole) {
+pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
-    crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_type);
+    crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_role);
     init_eager_tls();
     init_memory_or_trap("nonroot_post_upgrade");
 

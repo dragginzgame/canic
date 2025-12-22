@@ -70,18 +70,18 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     let subnet_cfg = ConfigOps::current_subnet();
 
     // Creation pass: ensure all auto-create canister roles exist.
-    for ty in &subnet_cfg.auto_create {
-        if let Some(existing) = SubnetCanisterRegistryOps::get_type(ty) {
+    for role in &subnet_cfg.auto_create {
+        if let Some(existing) = SubnetCanisterRegistryOps::get_type(role) {
             log!(
                 Topic::Init,
                 Info,
-                "auto_create: {ty} already registered as {}, skipping",
+                "auto_create: {role} already registered as {}, skipping",
                 existing.pid
             );
             continue;
         }
 
-        create_canister_request::<()>(ty, CreateCanisterParent::Root, None).await?;
+        create_canister_request::<()>(role, CreateCanisterParent::Root, None).await?;
     }
 
     // Reporting pass: emit the current topology for observability/debugging.

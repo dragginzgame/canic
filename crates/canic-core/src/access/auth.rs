@@ -38,10 +38,10 @@ pub enum AuthError {
     #[error("one or more rules must be defined")]
     NoRulesDefined,
 
-    #[error("caller '{0}' does not match the app directory's canister type '{1}'")]
+    #[error("caller '{0}' does not match the app directory's canister role '{1}'")]
     NotAppDirectoryType(Principal, CanisterRole),
 
-    #[error("caller '{0}' does not match the subnet directory's canister type '{1}'")]
+    #[error("caller '{0}' does not match the subnet directory's canister role '{1}'")]
     NotSubnetDirectoryType(Principal, CanisterRole),
 
     #[error("caller '{0}' is not a child of this canister")]
@@ -169,7 +169,7 @@ macro_rules! auth_require_any {
 // Rule functions
 // -----------------------------------------------------------------------------
 
-/// Ensure the caller matches the subnet directory entry recorded for `ty`.
+/// Ensure the caller matches the subnet directory entry recorded for `role`.
 /// Use for admin endpoints that expect specific app directory canisters.
 #[must_use]
 pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
@@ -184,7 +184,7 @@ pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleR
     })
 }
 
-/// Ensure the caller matches the subnet directory entry recorded for `ty`.
+/// Ensure the caller matches the subnet directory entry recorded for `role`.
 /// Use for admin endpoints that expect specific subnet directory canisters.
 #[must_use]
 pub fn is_subnet_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {

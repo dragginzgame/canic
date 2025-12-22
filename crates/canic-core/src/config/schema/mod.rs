@@ -88,10 +88,10 @@ pub struct ConfigModel {
 }
 
 impl ConfigModel {
-    /// Get a subnet configuration by type.
+    /// Get a subnet configuration by role.
     #[must_use]
-    pub fn get_subnet(&self, ty: &SubnetRole) -> Option<SubnetConfig> {
-        self.subnets.get(ty).cloned()
+    pub fn get_subnet(&self, role: &SubnetRole) -> Option<SubnetConfig> {
+        self.subnets.get(role).cloned()
     }
 
     /// Test-only: baseline config with a prime subnet so validation succeeds.
@@ -133,11 +133,11 @@ impl Validate for ConfigModel {
             .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
 
         //  Validate that every app_directory entry exists in prime.canisters
-        for canister_ty in &self.app_directory {
-            validate_canister_role_len(canister_ty, "app directory canister")?;
-            if !prime_subnet.canisters.contains_key(canister_ty) {
+        for canister_role in &self.app_directory {
+            validate_canister_role_len(canister_role, "app directory canister")?;
+            if !prime_subnet.canisters.contains_key(canister_role) {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_ty}' is not in prime subnet",
+                    "app directory canister '{canister_role}' is not in prime subnet",
                 )));
             }
         }

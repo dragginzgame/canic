@@ -116,7 +116,7 @@ fn root_builds_hierarchy_and_exposes_env() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_type = &setup.registry;
+    let by_role = &setup.registry;
 
     let expected = [
         (CanisterRole::ROOT, None),
@@ -126,12 +126,12 @@ fn root_builds_hierarchy_and_exposes_env() {
         (canister::SHARD_HUB, Some(root_id)),
     ];
 
-    for (ty, parent) in expected {
-        let entry = by_type
-            .get(&ty)
-            .unwrap_or_else(|| panic!("missing {ty} entry in registry"));
+    for (role, parent) in expected {
+        let entry = by_role
+            .get(&role)
+            .unwrap_or_else(|| panic!("missing {role} entry in registry"));
 
-        assert_eq!(entry.parent_pid, parent, "unexpected parent for {ty}");
+        assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");
     }
 
     let children = [
@@ -141,10 +141,10 @@ fn root_builds_hierarchy_and_exposes_env() {
         canister::SHARD_HUB,
     ];
 
-    for child_ty in children {
-        let entry = by_type
-            .get(&child_ty)
-            .unwrap_or_else(|| panic!("missing {child_ty} entry in registry"));
+    for child_role in children {
+        let entry = by_role
+            .get(&child_role)
+            .unwrap_or_else(|| panic!("missing {child_role} entry in registry"));
 
         let env: EnvData = pic
             .query_call(entry.pid, "canic_env", ())
@@ -152,25 +152,25 @@ fn root_builds_hierarchy_and_exposes_env() {
 
         assert_eq!(
             env.canister_role,
-            Some(child_ty.clone()),
-            "env canister type for {child_ty}",
+            Some(child_role.clone()),
+            "env canister role for {child_role}",
         );
-        assert_eq!(env.parent_pid, Some(root_id), "env parent for {child_ty}",);
-        assert_eq!(env.root_pid, Some(root_id), "env root for {child_ty}",);
+        assert_eq!(env.parent_pid, Some(root_id), "env parent for {child_role}",);
+        assert_eq!(env.root_pid, Some(root_id), "env root for {child_role}",);
         assert_eq!(
             env.prime_root_pid,
             Some(root_id),
-            "env prime root for {child_ty}",
+            "env prime root for {child_role}",
         );
         assert_eq!(
             env.subnet_role,
             Some(SubnetRole::PRIME),
-            "env subnet type for {child_ty}",
+            "env subnet role for {child_role}",
         );
 
         assert!(
             env.subnet_pid.is_some(),
-            "env subnet pid should be set for {child_ty}"
+            "env subnet pid should be set for {child_role}"
         );
     }
 }
@@ -181,7 +181,7 @@ fn directories_are_consistent_across_canisters() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_type = &setup.registry;
+    let by_role = &setup.registry;
 
     //    let print_counts = env::var("PRINT_DIR_COUNTS").is_ok();
     let print_counts = true;
@@ -205,7 +205,7 @@ fn directories_are_consistent_across_canisters() {
         );
     }
 
-    for (ty, entry) in by_type.iter().filter(|(ty, _)| !ty.is_root()) {
+    for (role, entry) in by_role.iter().filter(|(role, _)| !role.is_root()) {
         let app_dir: Page<(CanisterRole, PrincipalList)> = pic
             .query_call(
                 entry.pid,
@@ -223,7 +223,7 @@ fn directories_are_consistent_across_canisters() {
 
         if print_counts {
             eprintln!(
-                "{ty} app directory entries: {}, subnet directory entries: {}",
+                "{role} app directory entries: {}, subnet directory entries: {}",
                 app_dir.entries.len(),
                 subnet_dir.entries.len(),
             );
@@ -231,11 +231,11 @@ fn directories_are_consistent_across_canisters() {
 
         assert_eq!(
             app_dir.entries, root_app_dir.entries,
-            "app directory mismatch for {ty}"
+            "app directory mismatch for {role}"
         );
         assert_eq!(
             subnet_dir.entries, root_subnet_dir.entries,
-            "subnet directory mismatch for {ty}"
+            "subnet directory mismatch for {role}"
         );
     }
 }
@@ -246,9 +246,9 @@ fn subnet_children_matches_registry_on_root() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_type = &setup.registry;
+    let by_role = &setup.registry;
 
-    let mut expected_children: Vec<CanisterSummary> = by_type
+    let mut expected_children: Vec<CanisterSummary> = by_role
         .values()
         .filter(|entry| entry.parent_pid == Some(root_id))
         .map(|entry| CanisterSummary {
@@ -291,9 +291,9 @@ fn worker_topology_cascades_through_parent() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_type = &setup.registry;
+    let by_role = &setup.registry;
 
-    let scale_hub = by_type
+    let scale_hub = by_role
         .get(&canister::SCALE_HUB)
         .expect("scale_hub present in registry");
 

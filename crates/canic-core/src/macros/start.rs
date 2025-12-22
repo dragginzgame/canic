@@ -35,13 +35,13 @@
 
 #[macro_export]
 macro_rules! start {
-    ($canister_type:expr) => {
+    ($canister_role:expr) => {
         #[::canic::cdk::init]
         fn init(payload: ::canic::core::ops::storage::CanisterInitPayload, args: Option<Vec<u8>>) {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::core::ops::runtime::nonroot_init($canister_type, payload);
+            ::canic::core::ops::runtime::nonroot_init($canister_role, payload);
 
             // timers — async body, no spawn()
             let install_args = args;
@@ -60,7 +60,7 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // ops
-            ::canic::core::ops::runtime::nonroot_post_upgrade($canister_type);
+            ::canic::core::ops::runtime::nonroot_post_upgrade($canister_role);
 
             // timers — async body, no spawn()
             let _ = ::canic::core::ops::ic::timer::TimerOps::set(

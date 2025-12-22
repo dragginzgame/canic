@@ -359,15 +359,15 @@ fn snapshot_topology_required(pid: Principal) -> Result<TopologySnapshot, Orches
 //
 
 async fn cascade_all(
-    role: Option<&CanisterRole>,
+    role_opt: Option<&CanisterRole>,
     topology_target: Option<Principal>,
 ) -> Result<(), Error> {
     if let Some(target) = topology_target {
         root_cascade_topology_for_pid(target).await?;
     }
 
-    if let Some(ty) = role {
-        let bundle = rebuild_directories_from_registry(Some(ty)).await;
+    if let Some(role) = role_opt {
+        let bundle = rebuild_directories_from_registry(Some(role)).await;
         root_cascade_state(bundle).await?;
         assert_directories_match_registry()?;
     }

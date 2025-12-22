@@ -345,7 +345,7 @@ mod tests {
             initial_cycles = "5T"
 
             [subnets.prime.canisters.manager.sharding.pools.primary]
-            canister_type = "shard"
+            canister_role = "shard"
             [subnets.prime.canisters.manager.sharding.pools.primary.policy]
             capacity = 1
             max_shards = 2
@@ -365,9 +365,9 @@ mod tests {
         init_config();
         ShardingRegistryOps::clear_for_test();
 
-        let shard_ty = CanisterRole::from("shard");
+        let shard_role = CanisterRole::from("shard");
         let shard = p(1);
-        ShardingRegistryOps::create(shard, "primary", 0, &shard_ty, 1).unwrap();
+        ShardingRegistryOps::create(shard, "primary", 0, &shard_role, 1).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-a", shard).unwrap();
 
         let plan = ShardingPolicyOps::plan_assign_to_pool("primary", "tenant-x").unwrap();
@@ -382,11 +382,11 @@ mod tests {
         init_config();
         ShardingRegistryOps::clear_for_test();
 
-        let shard_ty = CanisterRole::from("shard");
+        let shard_role = CanisterRole::from("shard");
         let shard_a = p(1);
         let shard_b = p(2);
-        ShardingRegistryOps::create(shard_a, "primary", 0, &shard_ty, 1).unwrap();
-        ShardingRegistryOps::create(shard_b, "primary", 1, &shard_ty, 1).unwrap();
+        ShardingRegistryOps::create(shard_a, "primary", 0, &shard_role, 1).unwrap();
+        ShardingRegistryOps::create(shard_b, "primary", 1, &shard_role, 1).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-a", shard_a).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-b", shard_b).unwrap();
 

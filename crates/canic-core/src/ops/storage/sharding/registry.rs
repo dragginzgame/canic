@@ -52,7 +52,7 @@ impl ShardingRegistryOps {
         pid: Principal,
         pool: &str,
         slot: u32,
-        canister_type: &CanisterRole,
+        canister_role: &CanisterRole,
         capacity: u32,
     ) -> Result<(), Error> {
         ShardingRegistry::with_mut(|core| {
@@ -73,7 +73,7 @@ impl ShardingRegistryOps {
             }
 
             let entry =
-                ShardEntry::try_new(pool, slot, canister_type.clone(), capacity, now_secs())
+                ShardEntry::try_new(pool, slot, canister_role.clone(), capacity, now_secs())
                     .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
@@ -223,10 +223,10 @@ mod tests {
     #[test]
     fn assign_and_unassign_updates_count() {
         ShardingRegistryOps::clear_for_test();
-        let ty = CanisterRole::new("alpha");
+        let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &ty, 2).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2).unwrap();
         ShardingRegistryOps::assign("poolA", "tenant1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);

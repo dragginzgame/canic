@@ -43,9 +43,9 @@ impl WasmRegistry {
         Self::get(role).ok_or_else(|| WasmRegistryError::WasmNotFound(role.clone()).into())
     }
 
-    pub(crate) fn insert(canister_type: &CanisterRole, wasm: WasmModule) {
+    pub(crate) fn insert(canister_role: &CanisterRole, wasm: WasmModule) {
         WASM_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(canister_type.clone(), wasm);
+            reg.insert(canister_role.clone(), wasm);
         });
     }
 }

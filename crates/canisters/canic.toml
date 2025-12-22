@@ -49,7 +49,7 @@ topup.amount = "5T"
 
 # --- Scale Hub Pools ---
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_type = "scale"
+canister_role = "scale"
 policy.min_workers = 2
 
 # --- Scale ---
@@ -62,7 +62,7 @@ topup.amount = "5T"
 
 # --- Shard Hub Pools ---
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
-canister_type = "shard"
+canister_role = "shard"
 policy.capacity = 100
 policy.max_shards = 4
 

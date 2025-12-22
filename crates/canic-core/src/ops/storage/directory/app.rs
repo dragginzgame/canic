@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, ThisError)]
 pub enum AppDirectoryOpsError {
-    #[error("canister type {0} not found in app directory")]
+    #[error("canister role {0} not found in app directory")]
     NotFound(CanisterRole),
 }
 
@@ -83,7 +83,7 @@ impl AppDirectoryOps {
         map.into_iter().collect()
     }
 
-    /// Fetch principals for a canister type from the current AppDirectory.
+    /// Fetch principals for a canister role from the current AppDirectory.
     pub fn try_get(role: &CanisterRole) -> Result<PrincipalList, Error> {
         let target = role.clone();
         let view = Self::resolve_view();
@@ -95,7 +95,7 @@ impl AppDirectoryOps {
         Ok(entry)
     }
 
-    /// Fetch principals for a canister type, panicking if the role is missing.
+    /// Fetch principals for a canister role, panicking if the role is missing.
     #[must_use]
     pub fn get(role: &CanisterRole) -> PrincipalList {
         Self::try_get(role).expect("app directory missing configured role")

@@ -10,7 +10,7 @@ use crate::{
 pub struct WasmOps;
 
 impl WasmOps {
-    /// Fetch a WASM module for the given canister type if registered.
+    /// Fetch a WASM module for the given canister role if registered.
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<WasmModule> {
         WasmRegistry::get(role)

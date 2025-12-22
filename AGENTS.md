@@ -37,6 +37,9 @@ It expands on `README.md` with **workflow rules**, **layering conventions**, and
 - Use `make patch|minor|major` → `make release`.
 - Tags are immutable. Never alter historical tags.
 
+### API Stability
+- We have not made API guarantees yet; breaking changes are acceptable for any change.
+
 ---
 
 ## 📦 Project Structure
