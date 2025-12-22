@@ -77,7 +77,7 @@ pub struct CanisterInitPayload {
 
 impl CanisterInitPayload {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         env: EnvData,
         app_directory: DirectoryView,
         subnet_directory: DirectoryView,

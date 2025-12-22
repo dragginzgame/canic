@@ -367,7 +367,10 @@ async fn cascade_all(
     }
 
     if let Some(role) = role_opt {
-        let bundle = rebuild_directories_from_registry(Some(role)).await;
+        // Ensure newly created/adopted canisters inherit the current app state.
+        let bundle = rebuild_directories_from_registry(Some(role))
+            .await
+            .with_app_state();
         root_cascade_state(bundle).await?;
         assert_directories_match_registry()?;
     }
