@@ -18,7 +18,7 @@ use crate::{
         config::ConfigOps,
         ic::IcOpsError,
         orchestration::cascade::state::StateBundle,
-        pool::PoolOps,
+        pool::{PoolOps, pool_import_canister},
         prelude::*,
         storage::{
             CanisterInitPayload,
@@ -126,10 +126,25 @@ pub async fn create_and_install_canister(
     WasmOps::try_get(role)?;
 
     // Phase 1: allocation
-    let pid = allocate_canister(role).await?;
+    let (pid, source) = allocate_canister_with_source(role).await?;
 
     // Phase 2: installation
     if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
+        if source == AllocationSource::Pool {
+            if let Err(recycle_err) = pool_import_canister(pid).await {
+                log!(
+                    Topic::CanisterPool,
+                    Warn,
+                    "failed to recycle pool canister after install failure: {pid} ({recycle_err})"
+                );
+            }
+        } else if let Err(delete_err) = delete_canister(pid).await {
+            log!(
+                Topic::CanisterLifecycle,
+                Warn,
+                "failed to delete canister after install failure: {pid} ({delete_err})"
+            );
+        }
         return Err(ProvisionOpsError::InstallFailed { pid, source: err }.into());
     }
 
@@ -198,6 +213,19 @@ pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
 ///
 /// Reuses a canister from the pool if available; otherwise creates a new one.
 pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
+    let (pid, _) = allocate_canister_with_source(role).await?;
+    Ok(pid)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AllocationSource {
+    Pool,
+    New,
+}
+
+async fn allocate_canister_with_source(
+    role: &CanisterRole,
+) -> Result<(Principal, AllocationSource), Error> {
     // use ConfigOps for a clean, ops-layer config lookup
     let cfg = ConfigOps::current_subnet_canister(role);
     let target = cfg.initial_cycles;
@@ -228,7 +256,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
             "⚡ allocate_canister: reusing {pid} from pool (current {current})"
         );
 
-        return Ok(pid);
+        return Ok((pid, AllocationSource::Pool));
     }
 
     // Create new canister
@@ -239,7 +267,7 @@ pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> 
         "⚡ allocate_canister: pool empty"
     );
 
-    Ok(pid)
+    Ok((pid, AllocationSource::New))
 }
 
 /// Create a fresh canister on the IC with the configured controllers.

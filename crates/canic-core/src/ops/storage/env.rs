@@ -75,12 +75,12 @@ impl EnvOps {
         if env.parent_pid.is_none() {
             missing.push("parent_pid");
         }
-        if !missing.is_empty() {
-            panic!(
-                "EnvOps::import missing required fields: {}",
-                missing.join(", ")
-            );
-        }
+
+        assert!(
+            missing.is_empty(),
+            "EnvOps::import missing required fields: {}",
+            missing.join(", ")
+        );
 
         Env::import(env);
     }

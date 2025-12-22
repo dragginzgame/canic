@@ -5,9 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.6.13] - 2025-12-22
+## [0.6.15] - 2025-12-22
 ### Fixed
 - Local pool imports now skip non-routable canister IDs instead of persisting failed entries.
+- Pool import immediate now surfaces reset failures to callers.
+- Failed installs of pooled canisters now attempt a recycle back into the pool.
+- Failed installs of newly created canisters now delete the canister to avoid orphaning.
+- Pool import/recycle now remove topology registry entries only after a successful reset.
+- App state now cascades during directory syncs so newly created canisters match root mode.
 
 ## [0.6.13] - 2025-12-21
   - Enforced env/config invariants: ConfigOps::current_*/EnvOps::* now used infallibly; removed obsolete error handling

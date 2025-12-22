@@ -45,6 +45,145 @@ use candid::CandidType;
 use serde::Deserialize;
 use std::{cell::RefCell, time::Duration};
 
+/// Internal reset worker and scheduling logic.
+/// Isolated to keep pool lifecycle logic linear and readable.
+mod reset_scheduler {
+    use super::*;
+
+    thread_local! {
+        static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
+        static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
+        static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+    }
+
+    pub fn schedule() {
+        RESET_TIMER.with_borrow_mut(|slot| {
+            if slot.is_some() {
+                return;
+            }
+
+            let id = TimerOps::set(Duration::ZERO, "pool:pending", async {
+                RESET_TIMER.with_borrow_mut(|slot| *slot = None);
+                let _ = run_worker(super::POOL_RESET_BATCH_SIZE).await;
+            });
+
+            *slot = Some(id);
+        });
+    }
+
+    fn maybe_reschedule() {
+        let reschedule = RESET_RESCHEDULE.with_borrow_mut(|f| {
+            let v = *f;
+            *f = false;
+            v
+        });
+
+        if reschedule || has_pending_reset() {
+            schedule();
+        }
+    }
+
+    async fn run_worker(limit: usize) -> Result<(), Error> {
+        if limit == 0 {
+            return Ok(());
+        }
+
+        let should_run = RESET_IN_PROGRESS.with_borrow_mut(|flag| {
+            if *flag {
+                RESET_RESCHEDULE.with_borrow_mut(|r| *r = true);
+                false
+            } else {
+                *flag = true;
+                true
+            }
+        });
+
+        if !should_run {
+            return Ok(());
+        }
+
+        let result = run_batch(limit).await;
+
+        RESET_IN_PROGRESS.with_borrow_mut(|f| *f = false);
+        maybe_reschedule();
+
+        result
+    }
+
+    async fn run_batch(limit: usize) -> Result<(), Error> {
+        let mut pending: Vec<_> = CanisterPoolStorageOps::export()
+            .into_iter()
+            .filter(|(_, e)| e.status.is_pending_reset())
+            .collect();
+
+        if pending.is_empty() {
+            return Ok(());
+        }
+
+        pending.sort_by_key(|(_, e)| e.created_at);
+
+        for (pid, mut entry) in pending.into_iter().take(limit) {
+            if !super::can_enter_pool(pid).await {
+                let _ = CanisterPoolStorageOps::take(&pid);
+                continue;
+            }
+
+            match super::reset_into_pool(pid).await {
+                Ok(cycles) => {
+                    entry.cycles = cycles;
+                    entry.status = CanisterPoolStatus::Ready;
+                }
+                Err(err) => {
+                    entry.status = CanisterPoolStatus::Failed {
+                        reason: err.to_string(),
+                    };
+                    log!(
+                        Topic::CanisterPool,
+                        Warn,
+                        "pool reset failed for {pid}: {err}"
+                    );
+                }
+            }
+
+            if !CanisterPoolStorageOps::update(pid, entry) {
+                log!(
+                    Topic::CanisterPool,
+                    Warn,
+                    "pool reset update missing for {pid}"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn has_pending_reset() -> bool {
+        CanisterPoolStorageOps::export()
+            .into_iter()
+            .any(|(_, e)| e.status.is_pending_reset())
+    }
+
+    // ---------- test hook ----------
+    #[cfg(test)]
+    thread_local! {
+        static RESET_SCHEDULED: RefCell<bool> = const { RefCell::new(false) };
+    }
+
+    #[cfg(test)]
+    pub fn mark_scheduled_for_test() {
+        RESET_SCHEDULED.with_borrow_mut(|f| *f = true);
+    }
+
+    #[cfg(test)]
+    pub fn take_scheduled_for_test() -> bool {
+        RESET_SCHEDULED.with_borrow_mut(|flag| {
+            let value = *flag;
+            *flag = false;
+            value
+        })
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     static TEST_IMPORTABLE_OVERRIDE: RefCell<Option<bool>> = const { RefCell::new(None) };
@@ -56,9 +195,6 @@ thread_local! {
 
 thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-    static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
 /// Default cycles allocated to freshly created pool canisters.
@@ -129,10 +265,6 @@ pub enum PoolAdminResponse {
     },
 }
 
-//
-// INTERNAL HELPERS
-//
-
 fn pool_controllers() -> Vec<Principal> {
     let mut controllers = Config::get().controllers.clone();
 
@@ -177,9 +309,15 @@ async fn is_importable_on_local(pid: Principal) -> bool {
     }
 }
 
-async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
-    uninstall_code(pid).await?;
+async fn can_enter_pool(pid: Principal) -> bool {
+    if !is_local_build() {
+        return true;
+    }
 
+    is_importable_on_local(pid).await
+}
+
+async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
@@ -188,6 +326,8 @@ async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
         },
     })
     .await?;
+
+    uninstall_code(pid).await?;
 
     get_cycles(pid).await
 }
@@ -212,6 +352,40 @@ fn register_or_update_preserving_metadata(
     }
 }
 
+fn mark_pending_reset(pid: Principal) {
+    register_or_update_preserving_metadata(
+        pid,
+        Cycles::default(),
+        CanisterPoolStatus::PendingReset,
+        None,
+        None,
+        None,
+    );
+}
+
+fn mark_ready(pid: Principal, cycles: Cycles) {
+    register_or_update_preserving_metadata(
+        pid,
+        cycles,
+        CanisterPoolStatus::Ready,
+        None,
+        None,
+        None,
+    );
+}
+
+fn mark_failed(pid: Principal, err: &Error) {
+    register_or_update_preserving_metadata(
+        pid,
+        Cycles::default(),
+        CanisterPoolStatus::Failed {
+            reason: err.to_string(),
+        },
+        None,
+        None,
+        None,
+    );
+}
 ///
 /// PoolOps
 ///
@@ -258,7 +432,7 @@ impl PoolOps {
 
     #[must_use]
     pub fn check() -> u64 {
-        Self::schedule_reset_worker();
+        reset_scheduler::schedule();
 
         let subnet_cfg = ConfigOps::current_subnet();
         let min_size: u64 = subnet_cfg.pool.minimum_size.into();
@@ -356,113 +530,6 @@ impl PoolOps {
             .filter(|(_, e)| e.status.is_ready())
             .count() as u64
     }
-
-    fn has_pending_reset() -> bool {
-        CanisterPoolStorageOps::export()
-            .into_iter()
-            .any(|(_, e)| e.status.is_pending_reset())
-    }
-
-    fn maybe_reschedule() {
-        let reschedule = RESET_RESCHEDULE.with_borrow_mut(|f| {
-            let v = *f;
-            *f = false;
-            v
-        });
-
-        if reschedule || Self::has_pending_reset() {
-            Self::schedule_reset_worker();
-        }
-    }
-
-    fn schedule_reset_worker() {
-        RESET_TIMER.with_borrow_mut(|slot| {
-            if slot.is_some() {
-                return;
-            }
-
-            let id = TimerOps::set(Duration::ZERO, "pool:pending", async {
-                RESET_TIMER.with_borrow_mut(|slot| *slot = None);
-                let _ = Self::run_reset_worker(POOL_RESET_BATCH_SIZE).await;
-            });
-
-            *slot = Some(id);
-        });
-    }
-
-    async fn run_reset_worker(limit: usize) -> Result<(), Error> {
-        if limit == 0 {
-            return Ok(());
-        }
-
-        let should_run = RESET_IN_PROGRESS.with_borrow_mut(|flag| {
-            if *flag {
-                RESET_RESCHEDULE.with_borrow_mut(|r| *r = true);
-                false
-            } else {
-                *flag = true;
-                true
-            }
-        });
-
-        if !should_run {
-            return Ok(());
-        }
-
-        let result = Self::run_reset_batch(limit).await;
-
-        RESET_IN_PROGRESS.with_borrow_mut(|f| *f = false);
-        Self::maybe_reschedule();
-
-        result
-    }
-
-    async fn run_reset_batch(limit: usize) -> Result<(), Error> {
-        let mut pending: Vec<_> = CanisterPoolStorageOps::export()
-            .into_iter()
-            .filter(|(_, e)| e.status.is_pending_reset())
-            .collect();
-
-        if pending.is_empty() {
-            return Ok(());
-        }
-
-        pending.sort_by_key(|(_, e)| e.created_at);
-
-        for (pid, mut entry) in pending.into_iter().take(limit) {
-            if is_local_build() && !is_importable_on_local(pid).await {
-                let _ = CanisterPoolStorageOps::take(&pid);
-                continue;
-            }
-
-            match reset_into_pool(pid).await {
-                Ok(cycles) => {
-                    entry.cycles = cycles;
-                    entry.status = CanisterPoolStatus::Ready;
-                }
-                Err(err) => {
-                    entry.status = CanisterPoolStatus::Failed {
-                        reason: err.to_string(),
-                    };
-                    log!(
-                        Topic::CanisterPool,
-                        Warn,
-                        "pool reset failed for {pid}: {err}"
-                    );
-                }
-            }
-
-            if !CanisterPoolStorageOps::update(pid, entry) {
-                log!(
-                    Topic::CanisterPool,
-                    Warn,
-                    "pool reset update missing for {pid}"
-                );
-            }
-        }
-
-        Ok(())
-    }
 }
 
 //
@@ -482,31 +549,17 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    if is_local_build() && !is_importable_on_local(pid).await {
-        // Local-only cleanup: remove non-importable IDs so they never persist as failures.
+    if !can_enter_pool(pid).await {
         let _ = CanisterPoolStorageOps::take(&pid);
         return Ok(());
     }
 
-    register_or_update_preserving_metadata(
-        pid,
-        Cycles::default(),
-        CanisterPoolStatus::PendingReset,
-        None,
-        None,
-        None,
-    );
-    let _ = SubnetCanisterRegistryOps::remove(&pid);
+    mark_pending_reset(pid);
+
     match reset_into_pool(pid).await {
         Ok(cycles) => {
-            register_or_update_preserving_metadata(
-                pid,
-                cycles,
-                CanisterPoolStatus::Ready,
-                None,
-                None,
-                None,
-            );
+            let _ = SubnetCanisterRegistryOps::remove(&pid);
+            mark_ready(pid, cycles);
         }
         Err(err) => {
             log!(
@@ -514,18 +567,11 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
                 Warn,
                 "pool import failed for {pid}: {err}"
             );
-            register_or_update_preserving_metadata(
-                pid,
-                Cycles::default(),
-                CanisterPoolStatus::Failed {
-                    reason: err.to_string(),
-                },
-                None,
-                None,
-                None,
-            );
+            mark_failed(pid, &err);
+            return Err(err);
         }
     }
+
     Ok(())
 }
 
@@ -545,19 +591,12 @@ async fn pool_import_queued_canisters_local(
 
         if let Some(entry) = CanisterPoolStorageOps::get(pid) {
             if entry.status.is_failed() {
-                if !is_importable_on_local(pid).await {
+                if can_enter_pool(pid).await {
+                    mark_pending_reset(pid);
+                    requeued += 1;
+                } else {
                     let _ = CanisterPoolStorageOps::take(&pid);
                     skipped += 1;
-                } else {
-                    register_or_update_preserving_metadata(
-                        pid,
-                        Cycles::default(),
-                        CanisterPoolStatus::PendingReset,
-                        None,
-                        None,
-                        None,
-                    );
-                    requeued += 1;
                 }
             } else {
                 skipped += 1;
@@ -565,19 +604,12 @@ async fn pool_import_queued_canisters_local(
             continue;
         }
 
-        if !is_importable_on_local(pid).await {
+        if !can_enter_pool(pid).await {
             skipped += 1;
             continue;
         }
 
-        register_or_update_preserving_metadata(
-            pid,
-            Cycles::default(),
-            CanisterPoolStatus::PendingReset,
-            None,
-            None,
-            None,
-        );
+        mark_pending_reset(pid);
         added += 1;
     }
 
@@ -612,14 +644,7 @@ fn pool_import_queued_canisters_inner(
 
         if let Some(entry) = CanisterPoolStorageOps::get(*pid) {
             if entry.status.is_failed() {
-                register_or_update_preserving_metadata(
-                    *pid,
-                    Cycles::default(),
-                    CanisterPoolStatus::PendingReset,
-                    None,
-                    None,
-                    None,
-                );
+                mark_pending_reset(*pid);
                 requeued += 1;
             } else {
                 skipped += 1;
@@ -627,14 +652,7 @@ fn pool_import_queued_canisters_inner(
             continue;
         }
 
-        register_or_update_preserving_metadata(
-            *pid,
-            Cycles::default(),
-            CanisterPoolStatus::PendingReset,
-            None,
-            None,
-            None,
-        );
+        mark_pending_reset(*pid);
         added += 1;
     }
 
@@ -645,26 +663,17 @@ fn pool_import_queued_canisters_inner(
 
 #[cfg(not(test))]
 fn maybe_schedule_reset_worker() {
-    PoolOps::schedule_reset_worker();
+    reset_scheduler::schedule();
 }
 
 #[cfg(test)]
 fn maybe_schedule_reset_worker() {
-    RESET_SCHEDULED.with_borrow_mut(|flag| *flag = true);
-}
-
-#[cfg(test)]
-thread_local! {
-    static RESET_SCHEDULED: RefCell<bool> = const { RefCell::new(false) };
+    reset_scheduler::mark_scheduled_for_test();
 }
 
 #[cfg(test)]
 fn take_reset_scheduled() -> bool {
-    RESET_SCHEDULED.with_borrow_mut(|flag| {
-        let value = *flag;
-        *flag = false;
-        value
-    })
+    reset_scheduler::take_scheduled_for_test()
 }
 
 #[cfg(test)]
@@ -693,14 +702,7 @@ fn pool_requeue_failed_inner(
         for pid in pids {
             if let Some(entry) = CanisterPoolStorageOps::get(pid) {
                 if entry.status.is_failed() {
-                    register_or_update_preserving_metadata(
-                        pid,
-                        Cycles::default(),
-                        CanisterPoolStatus::PendingReset,
-                        None,
-                        None,
-                        None,
-                    );
+                    mark_pending_reset(pid);
                     requeued += 1;
                 } else {
                     skipped += 1;
@@ -714,14 +716,7 @@ fn pool_requeue_failed_inner(
         total = entries.len() as u64;
         for (pid, entry) in entries {
             if entry.status.is_failed() {
-                register_or_update_preserving_metadata(
-                    pid,
-                    Cycles::default(),
-                    CanisterPoolStatus::PendingReset,
-                    None,
-                    None,
-                    None,
-                );
+                mark_pending_reset(pid);
                 requeued += 1;
             } else {
                 skipped += 1;
@@ -745,9 +740,8 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
     let role = Some(entry.role.clone());
     let hash = entry.module_hash.clone();
 
-    let _ = SubnetCanisterRegistryOps::remove(&pid);
-
     let cycles = reset_into_pool(pid).await?;
+    let _ = SubnetCanisterRegistryOps::remove(&pid);
     CanisterPoolStorageOps::register(pid, cycles, CanisterPoolStatus::Ready, role, None, hash);
 
     Ok(())
@@ -942,14 +936,7 @@ mod tests {
             Some(hash.clone()),
         );
 
-        register_or_update_preserving_metadata(
-            pid,
-            Cycles::default(),
-            CanisterPoolStatus::PendingReset,
-            None,
-            None,
-            None,
-        );
+        mark_pending_reset(pid);
 
         let entry = CanisterPoolStorageOps::get(pid).unwrap();
         assert!(entry.status.is_pending_reset());
