@@ -167,16 +167,28 @@ impl Validate for SubnetConfig {
 }
 
 ///
+/// PoolImport
+/// Per-environment import lists for canister pools.
+///
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolImport {
+    #[serde(default)]
+    pub local: Vec<Principal>,
+    #[serde(default)]
+    pub ic: Vec<Principal>,
+}
+
+///
 /// CanisterPool
 /// defaults to a minimum size of 0
 ///
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterPool {
     pub minimum_size: u8,
     #[serde(default)]
-    pub import: Vec<Principal>,
+    pub import: PoolImport,
 }
 
 ///

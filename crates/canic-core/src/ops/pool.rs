@@ -13,7 +13,7 @@
 //
 // LOCAL INVARIANT:
 // On local replicas, only canisters that are routable in the current replica
-// may enter or remain in the pool. Mainnet canister IDs are never importable.
+// may enter or remain in the pool. IC/mainnet IDs are skipped on local.
 
 pub use crate::ops::storage::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
 
