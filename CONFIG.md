@@ -42,7 +42,8 @@ Global set of canister roles that should appear in the prime root directory expo
 Controls the warm canister pool for a subnet.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0`).
-- `import = ["aaaaa-aa", ...]` – canister IDs to import into the pool during root bootstrap.
+- `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=local`.
+- `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
 
 ### `[log]`
@@ -155,7 +156,8 @@ icrc21 = true
 auto_create = ["app", "auth", "scale_hub", "shard_hub"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
 pool.minimum_size = 3
-pool.import = ["aaaaa-aa"]
+pool.import.local = ["aaaaa-aa"]
+pool.import.ic = ["aaaaa-aa"]
 
 [subnets.prime.canisters.scale_hub]
 topup.threshold = "10T"

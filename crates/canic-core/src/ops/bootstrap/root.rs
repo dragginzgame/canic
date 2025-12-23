@@ -5,7 +5,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{Network, build_network, try_get_current_subnet_pid},
-        pool::pool_import_canister,
+        pool::{PoolOps, pool_import_canister},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
         storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
@@ -59,31 +59,52 @@ pub async fn root_set_subnet_id() {
 
 /// Import any statically configured pool canisters for this subnet.
 ///
-/// Import errors are logged and skipped so bootstrap can continue.
+/// Import failures are summarized so bootstrap can continue.
 pub async fn root_import_pool_from_config() {
     let subnet_cfg = ConfigOps::current_subnet();
-    let import_list = subnet_cfg.pool.import;
+    let import_list = match build_network() {
+        Some(Network::Local) => subnet_cfg.pool.import.local,
+        Some(Network::Ic) => subnet_cfg.pool.import.ic,
+        None => {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import skipped: build network not set"
+            );
+            return;
+        }
+    };
 
     if import_list.is_empty() {
         return;
     }
 
+    let mut attempted = 0_u64;
+    let mut imported = 0_u64;
+    let mut skipped = 0_u64;
+    let mut failed = 0_u64;
+
+    for pid in import_list {
+        attempted += 1;
+        match pool_import_canister(pid).await {
+            Ok(()) => {
+                if PoolOps::contains(&pid) {
+                    imported += 1;
+                } else {
+                    skipped += 1;
+                }
+            }
+            Err(_) => {
+                failed += 1;
+            }
+        }
+    }
+
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import: {} configured canisters",
-        import_list.len()
+        "pool import summary: configured={attempted}, imported={imported}, skipped={skipped}, failed={failed}"
     );
-
-    for pid in import_list {
-        if let Err(err) = pool_import_canister(pid).await {
-            log!(
-                Topic::CanisterPool,
-                Warn,
-                "pool import failed for {pid}: {err}"
-            );
-        }
-    }
 }
 
 /// Ensures all statically configured canisters for this subnet exist.

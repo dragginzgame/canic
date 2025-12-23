@@ -28,6 +28,11 @@ icrc21 = true # Enable ICRC-21 capability
 [subnets.prime]
 auto_create = ["app", "auth", "scale_hub", "shard_hub", "test"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub", "test"]
+pool.import.local = [
+    "kbsbp-3p777-77777-aaafa-cai",
+    "kgth3-wx777-77777-aaafq-cai",
+    "ktuww-x7777-77777-aaaga-cai",
+]
 pool.minimum_size = 3
 
 # --- Root ---
