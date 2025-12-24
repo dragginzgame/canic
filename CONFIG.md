@@ -51,6 +51,7 @@ Controls the warm canister pool for a subnet.
 Configure log retention for every canister.
 
 - `max_entries: u64` – ring buffer cap on stored log entries (default `10000`).
+- `max_entry_bytes: u32` – maximum message size in bytes per entry; oversized entries are truncated with a `...[truncated]` suffix (default `16384`).
 - `max_age_secs: u64` – optional maximum age; entries older than this (in seconds) are purged (default `null` = no age limit).
 
 ### `[standards]`

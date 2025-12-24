@@ -6,8 +6,6 @@ pub mod pool;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
-#[cfg(test)]
-pub mod tests;
 pub mod topology;
 pub mod types;
 

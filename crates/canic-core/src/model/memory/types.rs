@@ -100,7 +100,7 @@ pub mod test {
         assert!(
             bytes.len() <= CanisterSummary::STORABLE_MAX_SIZE as usize,
             "Size {} exceeded bound: {} bytes",
-            CanisterEntry::STORABLE_MAX_SIZE,
+            CanisterSummary::STORABLE_MAX_SIZE,
             bytes.len()
         );
     }

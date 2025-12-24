@@ -62,7 +62,7 @@ impl Http {
             .map_err(|e| Error::HttpRequest(e.to_string()))?;
 
         let status: u32 = res.status.0.to_u32().unwrap_or(0);
-        if status != 200 {
+        if !(200..300).contains(&status) {
             return Err(Error::HttpErrorCode(status));
         }
 

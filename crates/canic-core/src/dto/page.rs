@@ -14,7 +14,7 @@ pub struct Page<T> {
 
 ///
 /// PageRequest
-/// Common pagination envelope to avoid passing raw integers around.
+/// Pagination envelope to avoid passing raw integers around
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,5 +45,11 @@ impl PageRequest {
     #[must_use]
     pub fn clamped(self) -> Self {
         Self::bounded(self.limit, self.offset)
+    }
+}
+
+impl Default for PageRequest {
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }

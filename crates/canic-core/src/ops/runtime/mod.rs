@@ -148,7 +148,11 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
 
     // --- Phase 2: Payload registration ---
     let env = ensure_nonroot_env(canister_role, payload.env);
-    EnvOps::import(env);
+    if let Err(err) = EnvOps::import(env) {
+        println!("[canic] FATAL: env import failed during nonroot_init: {err}");
+        let msg = format!("canic init failed during nonroot_init: env import failed: {err}");
+        trap(&msg);
+    }
     AppDirectoryOps::import(payload.app_directory);
     SubnetDirectoryOps::import(payload.subnet_directory);
 

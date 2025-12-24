@@ -10,7 +10,6 @@ pub mod topology;
 
 pub use crate::model::memory::{CanisterEntry, CanisterSummary};
 
-#[cfg(test)]
 use crate::ops::storage::env::EnvOpsError;
 use crate::{
     Error, ThisError,
@@ -42,7 +41,6 @@ pub enum StorageOpsError {
     AppStateOpsError(#[from] AppStateOpsError),
 
     #[error(transparent)]
-    #[cfg(test)]
     EnvOpsError(#[from] EnvOpsError),
 
     #[error(transparent)]
