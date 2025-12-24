@@ -46,6 +46,28 @@ pub struct ShardingPlan {
 }
 
 ///
+/// CreateBlockedReason
+/// Structured reason for creation denial.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CreateBlockedReason {
+    PoolAtCapacity,
+    NoFreeSlots,
+    PolicyViolation(String),
+}
+
+impl std::fmt::Display for CreateBlockedReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PoolAtCapacity => write!(f, "shard cap reached"),
+            Self::NoFreeSlots => write!(f, "sharding pool has no free slots"),
+            Self::PolicyViolation(msg) => write!(f, "{msg}"),
+        }
+    }
+}
+
+///
 /// ShardingPlanState
 /// Outcome variants of a dry-run shard plan.
 ///
@@ -62,7 +84,7 @@ pub enum ShardingPlanState {
     CreateAllowed,
 
     /// Policy forbids creation of a new shard (e.g., capacity reached).
-    CreateBlocked { reason: String },
+    CreateBlocked { reason: CreateBlockedReason },
 }
 
 ///
@@ -76,16 +98,10 @@ impl ShardingPolicyOps {
     // Validation
     // -----------------------------------------------------------------------
 
-    /// Validate whether a pool may create a new shard under its policy.
-    pub(crate) fn check_create_allowed(
-        metrics: &PoolMetrics,
-        policy: &ShardPoolPolicy,
-    ) -> Result<(), Error> {
-        if metrics.active_count >= policy.max_shards {
-            Err(ShardingOpsError::ShardCapReached.into())
-        } else {
-            Ok(())
-        }
+    /// Return whether a pool may create a new shard under its policy.
+    #[must_use]
+    pub(crate) const fn can_create(metrics: &PoolMetrics, policy: &ShardPoolPolicy) -> bool {
+        metrics.active_count < policy.max_shards
     }
 
     // -----------------------------------------------------------------------
@@ -111,15 +127,34 @@ impl ShardingPolicyOps {
 
     /// Perform a dry-run plan for assigning a tenant to a shard.
     /// Never creates or mutates registry state.
-    pub fn plan_assign_to_pool<S: ToString>(pool: &str, tenant: S) -> Result<ShardingPlan, Error> {
-        let tenant = tenant.to_string();
+    pub fn plan_assign_to_pool(pool: &str, tenant: impl AsRef<str>) -> Result<ShardingPlan, Error> {
+        Self::plan_internal(pool, tenant.as_ref(), None)
+    }
+
+    /// Plan a reassignment for a tenant currently on `donor_pid`, excluding that shard.
+    /// Never creates or mutates registry state.
+    pub fn plan_reassign_from_shard(
+        pool: &str,
+        tenant: impl AsRef<str>,
+        donor_pid: Principal,
+    ) -> Result<ShardingPlan, Error> {
+        let tenant = tenant.as_ref();
+        Self::plan_internal(pool, tenant, Some(donor_pid))
+    }
+
+    fn plan_internal(
+        pool: &str,
+        tenant: &str,
+        exclude_pid: Option<Principal>,
+    ) -> Result<ShardingPlan, Error> {
         let pool_cfg = Self::get_pool_config(pool)?;
         let metrics = pool_metrics(pool);
         let view = ShardingRegistryOps::export();
         let slot_plan = plan_slot_backfill(pool, &view, pool_cfg.policy.max_shards);
 
-        // Case 1: Tenant already assigned → nothing to do
-        if let Some(pid) = ShardingRegistryOps::tenant_shard(pool, &tenant) {
+        if let Some(pid) = ShardingRegistryOps::tenant_shard(pool, tenant)
+            && exclude_pid != Some(pid)
+        {
             let slot = slot_plan.slots.get(&pid).copied();
             return Ok(Self::make_plan(
                 ShardingPlanState::AlreadyAssigned { pid },
@@ -131,11 +166,13 @@ impl ShardingPolicyOps {
         // Prefer an existing shard with spare capacity.
         let shards_with_capacity: Vec<_> = view
             .iter()
-            .filter(|(_, entry)| entry.pool.as_ref() == pool && entry.has_capacity())
+            .filter(|(pid, entry)| {
+                entry.pool.as_ref() == pool && entry.has_capacity() && exclude_pid != Some(*pid)
+            })
             .map(|(pid, _)| *pid)
             .collect();
 
-        if let Some(target_pid) = HrwSelector::select(&tenant, &shards_with_capacity) {
+        if let Some(target_pid) = HrwSelector::select(tenant, &shards_with_capacity) {
             let slot = slot_plan.slots.get(&target_pid).copied();
             return Ok(Self::make_plan(
                 ShardingPlanState::UseExisting { pid: target_pid },
@@ -149,30 +186,32 @@ impl ShardingPolicyOps {
             .filter(|slot| !slot_plan.occupied.contains(slot))
             .collect();
 
-        let Some(target_slot) = HrwSelector::select_from_slots(pool, &tenant, &free_slots) else {
+        // Slot selection is independent of create eligibility; we still compute a target slot
+        // so callers can distinguish "no slots exist" from "policy forbids creating one".
+        let Some(target_slot) = HrwSelector::select_from_slots(pool, tenant, &free_slots) else {
             return Ok(Self::make_plan(
                 ShardingPlanState::CreateBlocked {
-                    reason: "sharding pool has no free slots".to_string(),
+                    reason: CreateBlockedReason::NoFreeSlots,
                 },
                 &metrics,
                 None,
             ));
         };
 
-        // Case 3: No shard with capacity → check policy for creation
-        match Self::check_create_allowed(&metrics, &pool_cfg.policy) {
-            Ok(()) => Ok(Self::make_plan(
+        if Self::can_create(&metrics, &pool_cfg.policy) {
+            Ok(Self::make_plan(
                 ShardingPlanState::CreateAllowed,
                 &metrics,
                 Some(target_slot),
-            )),
-            Err(e) => Ok(Self::make_plan(
+            ))
+        } else {
+            Ok(Self::make_plan(
                 ShardingPlanState::CreateBlocked {
-                    reason: e.to_string(),
+                    reason: CreateBlockedReason::PoolAtCapacity,
                 },
                 &metrics,
                 Some(target_slot),
-            )),
+            ))
         }
     }
 
@@ -188,13 +227,15 @@ impl ShardingPolicyOps {
 
     /// Lookup the shard assigned to a tenant, if any.
     #[must_use]
-    pub fn lookup_tenant<S: ToString>(pool: &str, tenant: S) -> Option<Principal> {
-        ShardingRegistryOps::tenant_shard(pool, &tenant.to_string())
+    pub fn lookup_tenant(pool: &str, tenant: impl AsRef<str>) -> Option<Principal> {
+        let tenant = tenant.as_ref();
+        ShardingRegistryOps::tenant_shard(pool, tenant)
     }
 
     /// Lookup the shard assigned to a tenant, returning an error if none exists.
-    pub fn try_lookup_tenant<S: ToString>(pool: &str, tenant: S) -> Result<Principal, Error> {
-        ShardingRegistryOps::tenant_shard(pool, &tenant.to_string())
+    pub fn try_lookup_tenant(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
+        let tenant = tenant.as_ref();
+        ShardingRegistryOps::tenant_shard(pool, tenant)
             .ok_or_else(|| ShardingOpsError::TenantNotFound(tenant.to_string()).into())
     }
 
@@ -271,6 +312,8 @@ fn plan_slot_backfill(
             continue;
         }
 
+        // NOTE: Backfill simulates slot assignment for existing shards only.
+        // Policy enforcement happens later; this function is purely positional.
         if idx >= available.len() {
             break;
         }
@@ -299,7 +342,7 @@ mod tests {
     use candid::Principal;
 
     #[test]
-    fn check_create_allowed_blocks_when_at_capacity() {
+    fn can_create_blocks_when_at_capacity() {
         let metrics = PoolMetrics {
             active_count: 10,
             total_capacity: 100,
@@ -310,7 +353,7 @@ mod tests {
             max_shards: 5,
             ..Default::default()
         };
-        assert!(ShardingPolicyOps::check_create_allowed(&metrics, &policy).is_err());
+        assert!(!ShardingPolicyOps::can_create(&metrics, &policy));
     }
 
     #[test]

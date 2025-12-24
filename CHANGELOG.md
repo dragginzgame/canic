@@ -5,6 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.18] - 2025-12-24
+### Added
+- Added `log.max_entry_bytes` to cap per-entry log message size and truncate oversized entries.
+- `PageRequest` now implements `Default` (same as `PageRequest::DEFAULT`).
+- Pool admin queued imports now return a summary with pool status counts and skip reasons.
+
+### Fixed
+- `EnvOps::import` now returns a typed error when required env fields are missing, and non-root init traps with a clear message.
+- `Http::get` now treats any 2xx status as success (instead of only 200).
+- Shard draining now reassigns tenants off donor shards by planning with donor exclusion.
+- Sharding plan `CreateBlocked` now carries structured reasons, and sharding lookup/planning APIs accept `AsRef<str>`.
+
 ## [0.6.17] - 2025-12-23
 ### Added
 - Subnet pool bootstrapping now supports `pool.import.local` and `pool.import.ic` to seed the warm pool before root auto-create.

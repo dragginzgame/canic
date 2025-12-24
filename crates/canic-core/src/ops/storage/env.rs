@@ -1,4 +1,3 @@
-#[cfg(test)]
 use crate::{Error, ThisError, ops::storage::StorageOpsError};
 use crate::{
     cdk::{api::canister_self, types::Principal},
@@ -12,9 +11,11 @@ pub use crate::model::memory::env::EnvData;
 /// EnvOpsError
 ///
 
-#[cfg(test)]
 #[derive(Debug, ThisError)]
 pub enum EnvOpsError {
+    #[error("env import missing required fields: {0}")]
+    MissingFields(String),
+
     #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
@@ -31,7 +32,6 @@ pub enum EnvOpsError {
     RootPidUnavailable,
 }
 
-#[cfg(test)]
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
         StorageOpsError::from(err).into()
@@ -55,7 +55,7 @@ impl EnvOps {
     // Initialization / import
     // ---------------------------------------------------------------------
 
-    pub fn import(env: EnvData) {
+    pub fn import(env: EnvData) -> Result<(), Error> {
         let mut missing = Vec::new();
         if env.prime_root_pid.is_none() {
             missing.push("prime_root_pid");
@@ -76,13 +76,12 @@ impl EnvOps {
             missing.push("parent_pid");
         }
 
-        assert!(
-            missing.is_empty(),
-            "EnvOps::import missing required fields: {}",
-            missing.join(", ")
-        );
+        if !missing.is_empty() {
+            return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
+        }
 
         Env::import(env);
+        Ok(())
     }
 
     pub fn set_prime_root_pid(pid: Principal) {

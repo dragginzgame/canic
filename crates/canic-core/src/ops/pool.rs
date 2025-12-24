@@ -237,6 +237,34 @@ pub enum PoolAdminCommand {
 }
 
 ///
+/// PoolStatusCounts
+/// Summary of pool entries by status.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct PoolStatusCounts {
+    pub ready: u64,
+    pub pending_reset: u64,
+    pub failed: u64,
+    pub total: u64,
+}
+
+///
+/// PoolImportSummary
+/// Diagnostics for queued imports.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolImportSummary {
+    pub status_counts: PoolStatusCounts,
+    pub skipped_in_registry: u64,
+    pub skipped_already_ready: u64,
+    pub skipped_already_pending_reset: u64,
+    pub skipped_already_failed: u64,
+    pub skipped_non_importable: u64,
+}
+
+///
 /// PoolAdminResponse
 ///
 
@@ -252,6 +280,7 @@ pub enum PoolAdminResponse {
         requeued: u64,
         skipped: u64,
         total: u64,
+        summary: PoolImportSummary,
     },
     FailedRequeued {
         requeued: u64,
@@ -282,24 +311,31 @@ fn is_local_build() -> bool {
 /// Must be cheap, non-destructive, and side-effect free.
 ///
 async fn is_importable_on_local(pid: Principal) -> bool {
+    check_importable_on_local(pid).await.is_ok()
+}
+
+async fn check_importable_on_local(pid: Principal) -> Result<(), String> {
     #[cfg(test)]
     if let Some(override_value) = TEST_IMPORTABLE_OVERRIDE.with(|slot| *slot.borrow()) {
-        return override_value;
+        if override_value {
+            return Ok(());
+        }
+        return Err("test override: non-importable".to_string());
     }
 
     if !is_local_build() {
-        return true;
+        return Ok(());
     }
 
     match canister_status(pid).await {
-        Ok(_) => true,
+        Ok(_) => Ok(()),
         Err(err) => {
             log!(
                 Topic::CanisterPool,
                 Warn,
                 "pool import skipped for {pid} (local non-importable): {err}"
             );
-            false
+            Err(err.to_string())
         }
     }
 }
@@ -310,6 +346,21 @@ async fn can_enter_pool(pid: Principal) -> bool {
     }
 
     is_importable_on_local(pid).await
+}
+
+fn pool_status_counts() -> PoolStatusCounts {
+    let mut counts = PoolStatusCounts::default();
+
+    for (_, entry) in CanisterPoolStorageOps::export() {
+        match entry.status {
+            CanisterPoolStatus::Ready => counts.ready += 1,
+            CanisterPoolStatus::PendingReset => counts.pending_reset += 1,
+            CanisterPoolStatus::Failed { .. } => counts.failed += 1,
+        }
+    }
+
+    counts.total = counts.ready + counts.pending_reset + counts.failed;
+    counts
 }
 
 async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
@@ -483,7 +534,7 @@ impl PoolOps {
                 Ok(PoolAdminResponse::Imported)
             }
             PoolAdminCommand::ImportQueued { pids } => {
-                let (a, r, s, t) = if is_local_build() {
+                let (a, r, s, t, summary) = if is_local_build() {
                     pool_import_queued_canisters_local(pids).await?
                 } else {
                     pool_import_queued_canisters(pids)?
@@ -493,6 +544,7 @@ impl PoolOps {
                     requeued: r,
                     skipped: s,
                     total: t,
+                    summary,
                 })
             }
             PoolAdminCommand::RequeueFailed { pids } => {
@@ -567,57 +619,76 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
 
 async fn pool_import_queued_canisters_local(
     pids: Vec<Principal>,
-) -> Result<(u64, u64, u64, u64), Error> {
+) -> Result<(u64, u64, u64, u64, PoolImportSummary), Error> {
     let total = pids.len() as u64;
     let mut added = 0;
     let mut requeued = 0;
     let mut skipped = 0;
+    let mut summary = PoolImportSummary {
+        status_counts: PoolStatusCounts::default(),
+        skipped_in_registry: 0,
+        skipped_already_ready: 0,
+        skipped_already_pending_reset: 0,
+        skipped_already_failed: 0,
+        skipped_non_importable: 0,
+    };
 
     for pid in pids {
         if SubnetCanisterRegistryOps::get(pid).is_some() {
             skipped += 1;
+            summary.skipped_in_registry += 1;
             continue;
         }
 
         if let Some(entry) = CanisterPoolStorageOps::get(pid) {
             if entry.status.is_failed() {
-                if can_enter_pool(pid).await {
+                if Ok(()) == check_importable_on_local(pid).await {
                     mark_pending_reset(pid);
                     requeued += 1;
                 } else {
                     let _ = CanisterPoolStorageOps::take(&pid);
                     skipped += 1;
+                    summary.skipped_non_importable += 1;
                 }
             } else {
                 skipped += 1;
+                match entry.status {
+                    CanisterPoolStatus::Ready => summary.skipped_already_ready += 1,
+                    CanisterPoolStatus::PendingReset => summary.skipped_already_pending_reset += 1,
+                    CanisterPoolStatus::Failed { .. } => summary.skipped_already_failed += 1,
+                }
             }
             continue;
         }
 
-        if !can_enter_pool(pid).await {
+        if Ok(()) == check_importable_on_local(pid).await {
+            mark_pending_reset(pid);
+            added += 1;
+        } else {
             skipped += 1;
-            continue;
+            summary.skipped_non_importable += 1;
         }
-
-        mark_pending_reset(pid);
-        added += 1;
     }
 
     if added > 0 || requeued > 0 {
         maybe_schedule_reset_worker();
     }
 
-    Ok((added, requeued, skipped, total))
+    summary.status_counts = pool_status_counts();
+
+    Ok((added, requeued, skipped, total, summary))
 }
 
-fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<(u64, u64, u64, u64), Error> {
+fn pool_import_queued_canisters(
+    pids: Vec<Principal>,
+) -> Result<(u64, u64, u64, u64, PoolImportSummary), Error> {
     pool_import_queued_canisters_inner(pids, true)
 }
 
 fn pool_import_queued_canisters_inner(
     pids: Vec<Principal>,
     enforce_root: bool,
-) -> Result<(u64, u64, u64, u64), Error> {
+) -> Result<(u64, u64, u64, u64, PoolImportSummary), Error> {
     if enforce_root {
         OpsError::require_root()?;
     }
@@ -625,10 +696,19 @@ fn pool_import_queued_canisters_inner(
     let mut added = 0;
     let mut requeued = 0;
     let mut skipped = 0;
+    let mut summary = PoolImportSummary {
+        status_counts: PoolStatusCounts::default(),
+        skipped_in_registry: 0,
+        skipped_already_ready: 0,
+        skipped_already_pending_reset: 0,
+        skipped_already_failed: 0,
+        skipped_non_importable: 0,
+    };
 
     for pid in &pids {
         if SubnetCanisterRegistryOps::get(*pid).is_some() {
             skipped += 1;
+            summary.skipped_in_registry += 1;
             continue;
         }
 
@@ -638,6 +718,11 @@ fn pool_import_queued_canisters_inner(
                 requeued += 1;
             } else {
                 skipped += 1;
+                match entry.status {
+                    CanisterPoolStatus::Ready => summary.skipped_already_ready += 1,
+                    CanisterPoolStatus::PendingReset => summary.skipped_already_pending_reset += 1,
+                    CanisterPoolStatus::Failed { .. } => summary.skipped_already_failed += 1,
+                }
             }
             continue;
         }
@@ -648,7 +733,9 @@ fn pool_import_queued_canisters_inner(
 
     maybe_schedule_reset_worker();
 
-    Ok((added, requeued, skipped, pids.len() as u64))
+    summary.status_counts = pool_status_counts();
+
+    Ok((added, requeued, skipped, pids.len() as u64, summary))
 }
 
 #[cfg(not(test))]
@@ -796,7 +883,7 @@ mod tests {
         let p1 = p(1);
         let p2 = p(2);
 
-        let (added, requeued, skipped, total) =
+        let (added, requeued, skipped, total, _) =
             pool_import_queued_canisters_inner(vec![p1, p2], false).unwrap();
         assert_eq!(added, 2);
         assert_eq!(requeued, 0);
@@ -827,7 +914,7 @@ mod tests {
             None,
         );
 
-        let (added, requeued, skipped, total) =
+        let (added, requeued, skipped, total, _) =
             pool_import_queued_canisters_inner(vec![p1], false).unwrap();
         assert_eq!(added, 0);
         assert_eq!(requeued, 1);
@@ -854,7 +941,7 @@ mod tests {
             None,
         );
 
-        let (added, requeued, skipped, total) =
+        let (added, requeued, skipped, total, _) =
             pool_import_queued_canisters_inner(vec![p1], false).unwrap();
         assert_eq!(added, 0);
         assert_eq!(requeued, 0);
@@ -879,7 +966,7 @@ mod tests {
             created_at: 0,
         });
 
-        let (added, requeued, skipped, total) =
+        let (added, requeued, skipped, total, _) =
             pool_import_queued_canisters_inner(vec![pid], false).unwrap();
         assert_eq!(added, 0);
         assert_eq!(requeued, 0);
@@ -894,7 +981,7 @@ mod tests {
         set_test_importable_override(Some(false));
 
         let pid = p(9);
-        let (added, requeued, skipped, total) =
+        let (added, requeued, skipped, total, _) =
             futures::executor::block_on(pool_import_queued_canisters_local(vec![pid])).unwrap();
 
         assert_eq!(added, 0);

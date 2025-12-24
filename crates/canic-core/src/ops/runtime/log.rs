@@ -81,7 +81,21 @@ impl LogOps {
     #[must_use]
     pub fn retain() -> bool {
         match apply_retention() {
-            Ok(()) => true,
+            Ok(summary) => {
+                let dropped = summary.dropped_total();
+                if dropped > 0 {
+                    let before = summary.before;
+                    let retained = summary.retained;
+                    let dropped_by_age = summary.dropped_by_age;
+                    let dropped_by_limit = summary.dropped_by_limit;
+                    log!(
+                        Topic::Memory,
+                        Info,
+                        "log retention: dropped={dropped} (age={dropped_by_age}, limit={dropped_by_limit}), before={before}, retained={retained}"
+                    );
+                }
+                true
+            }
             Err(err) => {
                 log!(Topic::Memory, Warn, "log retention failed: {err}");
                 false

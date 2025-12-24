@@ -10,7 +10,7 @@ What you get:
 
 Sample boot logs when everything is wired correctly:
 ```
-17:27:24.796 [...] [Init] 🔧 --------------------- 'canic v0.5.3 -----------------------
+17:27:24.796 [...] [Init] 🔧 --------------------- 'canic v0.6.x -----------------------
 17:27:24.796 [...] [Init] 🏁 init: root (Prime)
 17:27:24.796 [...] [Memory] 💾 memory.range: canic-core [5-30] (15/26 slots used)
 17:27:24.796 [...] [Wasm] 📄 registry.insert: app (1013.10 KB)
@@ -55,7 +55,7 @@ thread_local! {
 
 ### Flush pending registrations during startup
 
-Call the ops helper once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros:
+Call the ops helper once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
 
 ```rust
 use canic_memory::ops::MemoryRegistryOps;
@@ -106,6 +106,7 @@ fn init() {
 
 The registry surfaces `MemoryRegistryError` for:
 - duplicate ranges, overlapping ranges, invalid range (start > end)
+- crate keys or labels longer than 256 bytes
 - registration outside the crate's reserved ranges
 - conflicting registrations on an ID with a different label
 - missing range for the crate

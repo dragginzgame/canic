@@ -208,6 +208,7 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
     }
 
     chain.reverse();
+
     Ok(chain)
 }
 
