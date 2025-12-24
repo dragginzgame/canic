@@ -55,7 +55,6 @@ convert_case = "0.10"
 crc32fast = "1.5"
 criterion = "0.8"
 ctor = "0.6"
-defer = "0.2"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
 hex = "0.4"
 ic-canister-sig-creation = "1.3.1"

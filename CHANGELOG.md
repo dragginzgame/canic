@@ -5,11 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.19] - Perf Stack
+- Endpoint dispatch now records exclusive perf totals via a scoped stack; removed `perf_scope` from the prelude and dropped the `defer` dependency.  This means that endpoints can call each other and the correct performance metrics are logged.
+
+
 ## [0.6.18] - 2025-12-24
 ### Added
 - Added `log.max_entry_bytes` to cap per-entry log message size and truncate oversized entries.
 - `PageRequest` now implements `Default` (same as `PageRequest::DEFAULT`).
 - Pool admin queued imports now return a summary with pool status counts and skip reasons.
+
 
 ### Fixed
 - `EnvOps::import` now returns a typed error when required env fields are missing, and non-root init traps with a clear message.

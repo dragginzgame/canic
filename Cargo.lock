@@ -315,7 +315,6 @@ dependencies = [
  "canic-utils",
  "criterion",
  "ctor",
- "defer",
  "derive_more",
  "futures",
  "ic-canister-sig-creation",
@@ -755,12 +754,6 @@ name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
-
-[[package]]
-name = "defer"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
 
 [[package]]
 name = "deranged"
