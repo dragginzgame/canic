@@ -44,7 +44,6 @@ pub use ::canic_utils as utils;
 #[doc(hidden)]
 pub mod __reexports {
     pub use ::ctor;
-    pub use ::defer;
 }
 
 pub use thiserror::Error as ThisError;

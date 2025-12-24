@@ -20,7 +20,6 @@ canic-memory = { workspace = true }
 canic-types = { workspace = true }
 canic-utils = { workspace = true }
 ctor = { workspace = true }
-defer = { workspace = true }
 derive_more = { workspace = true }
 ic-canister-sig-creation = { workspace = true }
 ic-cdk = { workspace = true }
