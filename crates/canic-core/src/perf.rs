@@ -24,7 +24,7 @@ thread_local! {
 
     /// Stack of active endpoint scopes for exclusive instruction accounting.
     /// This is independent of `PERF_LAST`, which is only used by `perf!` checkpoints.
-    static PERF_STACK: RefCell<Vec<PerfFrame>> = RefCell::new(Vec::new());
+    static PERF_STACK: RefCell<Vec<PerfFrame>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Returns the **call-context instruction counter** for the current execution.
@@ -103,7 +103,6 @@ impl PerfSlot {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct PerfEntry {
-    pub label: String,
     pub key: PerfKey,
     pub count: u64,
     pub total_instructions: u64,
@@ -140,10 +139,10 @@ fn enter_endpoint_at(start: u64) {
         let mut stack = stack.borrow_mut();
 
         // If a previous call trapped, clear any stale frames.
-        if let Some(last) = stack.last() {
-            if start < last.start {
-                stack.clear();
-            }
+        if let Some(last) = stack.last()
+            && start < last.start
+        {
+            stack.clear();
         }
 
         stack.push(PerfFrame {
@@ -173,6 +172,7 @@ fn exit_endpoint_at(label: &str, end: u64) {
 }
 
 /// Snapshot all recorded perf counters, sorted by key.
+/// Entries are sorted by (kind, label).
 #[must_use]
 pub fn entries() -> Vec<PerfEntry> {
     PERF_TABLE.with(|table| {
@@ -181,9 +181,6 @@ pub fn entries() -> Vec<PerfEntry> {
         let mut out: Vec<PerfEntry> = table
             .iter()
             .map(|(key, slot)| PerfEntry {
-                label: match key {
-                    PerfKey::Endpoint(label) | PerfKey::Timer(label) => label.clone(),
-                },
                 key: key.clone(),
                 count: slot.count,
                 total_instructions: slot.total_instructions,
@@ -217,7 +214,7 @@ mod tests {
     fn entry_for(label: &str) -> PerfEntry {
         entries()
             .into_iter()
-            .find(|entry| matches!(entry.key, PerfKey::Endpoint(_)) && entry.label == label)
+            .find(|entry| matches!(&entry.key, PerfKey::Endpoint(l) if l == label))
             .expect("expected perf entry to exist")
     }
 
