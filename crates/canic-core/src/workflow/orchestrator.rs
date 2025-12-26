@@ -13,10 +13,6 @@ use crate::{
             },
             upgrade_canister,
         },
-        orchestration::{
-            OrchestrationOpsError,
-            cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
-        },
         pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -24,14 +20,18 @@ use crate::{
         },
         wasm::WasmOps,
     },
+    workflow::{
+        WorkflowError,
+        cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
+    },
 };
 
 ///
-/// OrchestratorOpsError
+/// OrchestratorError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum OrchestratorOpsError {
+pub enum OrchestratorError {
     #[error("parent {0} not found in registry")]
     ParentNotFound(Principal),
 
@@ -73,9 +73,9 @@ pub enum OrchestratorOpsError {
     IcOpsError(#[from] IcOpsError),
 }
 
-impl From<OrchestratorOpsError> for Error {
-    fn from(err: OrchestratorOpsError) -> Self {
-        OrchestrationOpsError::from(err).into()
+impl From<OrchestratorError> for Error {
+    fn from(err: OrchestratorError) -> Self {
+        WorkflowError::from(err).into()
     }
 }
 

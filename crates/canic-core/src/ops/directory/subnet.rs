@@ -3,8 +3,7 @@ use crate::{
     ids::CanisterRole,
     model::memory::directory::{DirectoryView, SubnetDirectory},
     ops::{
-        config::ConfigOps,
-        storage::{directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps},
+        config::ConfigOps, directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps,
     },
 };
 use candid::Principal;

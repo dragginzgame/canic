@@ -4,14 +4,14 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
+        directory::SubnetDirectoryOps,
+        env::EnvOps,
         ic::{Network, build_network, try_get_current_subnet_pid},
-        pool::{PoolOps, pool_import_canister},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::{
-            directory::SubnetDirectoryOps, env::EnvOps, topology::SubnetCanisterRegistryOps,
-        },
+        topology::SubnetCanisterRegistryOps,
     },
+    workflow::pool::{PoolOps, pool_import_canister},
 };
 
 /// Initializes the subnet identifier for the root canister.

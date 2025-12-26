@@ -1,5 +1,4 @@
-use crate::ops::{
-    OpsError,
+use crate::workflow::{
     pool::PoolOps,
     random::RandomOps,
     runtime::{cycles::CycleTrackerOps, log::LogOps},
