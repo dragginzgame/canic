@@ -14,6 +14,7 @@ pub mod ic;
 pub mod icrc;
 pub mod memory;
 pub mod perf;
+pub mod pool;
 pub mod rpc;
 pub mod storage;
 pub mod wasm;
