@@ -27,9 +27,6 @@ pub enum ShardingOpsError {
 
     #[error("sharding disabled")]
     ShardingDisabled,
-
-    #[error("tenant '{0}' not found")]
-    TenantNotFound(String),
 }
 
 impl From<ShardingOpsError> for Error {

@@ -210,7 +210,9 @@ impl CanisterLifecycleOrchestrator {
     }
 
     async fn apply_upgrade(pid: Principal) -> Result<LifecycleResult, Error> {
-        let entry = SubnetCanisterRegistryOps::try_get(pid)?;
+        let entry = SubnetCanisterRegistryOps::get(pid)
+            .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+
         let wasm = WasmOps::try_get(&entry.role)?;
 
         if let Some(parent_pid) = entry.parent_pid {
@@ -220,14 +222,16 @@ impl CanisterLifecycleOrchestrator {
         assert_not_in_pool(pid)?;
 
         upgrade_canister(entry.pid, wasm.bytes()).await?;
-        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
+        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash());
         assert_module_hash(entry.pid, wasm.module_hash())?;
 
         Ok(LifecycleResult::default())
     }
 
     async fn apply_reinstall(pid: Principal) -> Result<LifecycleResult, Error> {
-        let entry = SubnetCanisterRegistryOps::try_get(pid)?;
+        let entry = SubnetCanisterRegistryOps::get(pid)
+            .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+
         if entry.role == CanisterRole::ROOT {
             return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
         }
@@ -250,7 +254,7 @@ impl CanisterLifecycleOrchestrator {
             None,
         )
         .await?;
-        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash())?;
+        SubnetCanisterRegistryOps::update_module_hash(entry.pid, wasm.module_hash());
         assert_module_hash(entry.pid, wasm.module_hash())?;
 
         Ok(LifecycleResult::default())

@@ -232,13 +232,6 @@ impl ShardingPolicyOps {
         ShardingRegistryOps::tenant_shard(pool, tenant)
     }
 
-    /// Lookup the shard assigned to a tenant, returning an error if none exists.
-    pub fn try_lookup_tenant(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
-        let tenant = tenant.as_ref();
-        ShardingRegistryOps::tenant_shard(pool, tenant)
-            .ok_or_else(|| ShardingOpsError::TenantNotFound(tenant.to_string()).into())
-    }
-
     // -----------------------------------------------------------------------
     // Utilities
     // -----------------------------------------------------------------------
