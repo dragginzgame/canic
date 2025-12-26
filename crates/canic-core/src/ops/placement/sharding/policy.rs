@@ -385,6 +385,7 @@ mod tests {
 
         let toml = r#"
             [subnets.prime.canisters.manager]
+            cardinality = "single"
             initial_cycles = "5T"
 
             [subnets.prime.canisters.manager.sharding.pools.primary]
@@ -394,6 +395,7 @@ mod tests {
             max_shards = 2
 
             [subnets.prime.canisters.shard]
+            cardinality = "many"
             initial_cycles = "5T"
         "#;
 

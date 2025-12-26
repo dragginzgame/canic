@@ -35,7 +35,7 @@ Optional list of controller principals appended to every provisioned canister.
 
 ### `app_directory = ["role_a", "role_b", ...]`
 
-Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters`.
+Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `cardinality = "single"`.
 
 ### `[subnets.<name>.pool]`
 
@@ -76,13 +76,14 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 ### `[subnets.<name>]`
 
 - `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap.
-- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`.
+- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `cardinality = "single"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
 ### `[subnets.<name>.canisters.<role>]`
 
 Each child table configures a logical canister role within the subnet.
 
+- `cardinality = "single" | "many"` – required; controls whether multiple canisters may share this role in the registry.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (optional).
 - `topup.amount = "5T"` – cycles to request when topping up (optional).
@@ -160,7 +161,14 @@ pool.minimum_size = 3
 pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
 
+[subnets.prime.canisters.app]
+cardinality = "single"
+
+[subnets.prime.canisters.auth]
+cardinality = "single"
+
 [subnets.prime.canisters.scale_hub]
+cardinality = "single"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -168,7 +176,11 @@ topup.amount = "5T"
 canister_role = "scale"
 policy.min_workers = 2
 
+[subnets.prime.canisters.scale]
+cardinality = "many"
+
 [subnets.prime.canisters.shard_hub]
+cardinality = "single"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -177,9 +189,13 @@ canister_role = "shard"
 policy.capacity = 100
 policy.max_shards = 8
 
+[subnets.prime.canisters.shard]
+cardinality = "many"
+
 [subnets.general]
 
 [subnets.general.canisters.blank]
+cardinality = "many"
 initial_cycles = "3T"
 ```
 

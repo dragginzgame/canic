@@ -2,10 +2,7 @@ use crate::{
     Error, ThisError,
     config::Config,
     dto::page::{Page, PageRequest},
-    model::memory::{
-        directory::{AppDirectory, PrincipalList},
-        topology::SubnetCanisterRegistry,
-    },
+    model::memory::{directory::AppDirectory, topology::SubnetCanisterRegistry},
     ops::{
         prelude::*,
         storage::{
@@ -15,6 +12,7 @@ use crate::{
         },
     },
 };
+use candid::Principal;
 use std::collections::BTreeMap;
 
 ///
@@ -61,7 +59,7 @@ impl AppDirectoryOps {
     }
 
     #[must_use]
-    pub fn page(request: PageRequest) -> Page<(CanisterRole, PrincipalList)> {
+    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
         paginate(Self::resolve_view(), request)
     }
 
@@ -70,13 +68,13 @@ impl AppDirectoryOps {
     pub fn root_build_view() -> DirectoryView {
         let cfg = Config::get();
         let entries = SubnetCanisterRegistry::export();
-        let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();
+        let mut map: BTreeMap<CanisterRole, Principal> = BTreeMap::new();
 
         for entry in entries {
             let role = entry.role.clone();
 
             if cfg.app_directory.contains(&role) {
-                map.entry(role).or_default().0.push(entry.pid);
+                map.insert(role, entry.pid);
             }
         }
 
@@ -84,20 +82,14 @@ impl AppDirectoryOps {
     }
 
     /// Fetch principals for a canister role from the current AppDirectory.
-    pub fn try_get(role: &CanisterRole) -> Result<PrincipalList, Error> {
+    pub fn try_get(role: &CanisterRole) -> Result<Principal, Error> {
         let target = role.clone();
         let view = Self::resolve_view();
         let entry = view
             .into_iter()
-            .find_map(|(t, pids)| (t == target).then_some(pids))
+            .find_map(|(t, pid)| (t == target).then_some(pid))
             .ok_or_else(|| AppDirectoryOpsError::NotFound(role.clone()))?;
 
         Ok(entry)
-    }
-
-    /// Fetch principals for a canister role, panicking if the role is missing.
-    #[must_use]
-    pub fn get(role: &CanisterRole) -> PrincipalList {
-        Self::try_get(role).expect("app directory missing configured role")
     }
 }

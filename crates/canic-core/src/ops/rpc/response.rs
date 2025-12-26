@@ -16,6 +16,7 @@ use crate::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
+        storage::directory::SubnetDirectoryOps,
         storage::topology::subnet::SubnetCanisterRegistryOps,
     },
 };
@@ -87,11 +88,8 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
                 .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
 
-            CreateCanisterParent::Directory(role) => {
-                SubnetCanisterRegistryOps::try_get_type(role)
-                    .map_err(|_| RequestOpsError::CanisterRoleNotFound(role.clone()))?
-                    .pid
-            }
+            CreateCanisterParent::Directory(role) => SubnetDirectoryOps::try_get(role)
+                .map_err(|_| RequestOpsError::CanisterRoleNotFound(role.clone()))?,
         };
 
         let event = LifecycleEvent::Create {

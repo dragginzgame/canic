@@ -366,7 +366,13 @@ mod tests {
         let hub = p(2);
 
         SubnetCanisterRegistryOps::register_root(root);
-        SubnetCanisterRegistryOps::register(hub, &CanisterRole::new("hub"), hub, vec![]);
+        SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
+            pid: hub,
+            role: CanisterRole::new("hub"),
+            parent_pid: Some(hub),
+            module_hash: Some(vec![]),
+            created_at: now_secs(),
+        });
 
         let err = TopologyBundle::for_target(hub).unwrap_err();
         assert!(err.to_string().contains("cycle"));

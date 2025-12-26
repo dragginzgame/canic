@@ -135,9 +135,15 @@ impl Validate for ConfigModel {
         //  Validate that every app_directory entry exists in prime.canisters
         for canister_role in &self.app_directory {
             validate_canister_role_len(canister_role, "app directory canister")?;
-            if !prime_subnet.canisters.contains_key(canister_role) {
-                return Err(ConfigSchemaError::ValidationError(format!(
+            let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {
+                ConfigSchemaError::ValidationError(format!(
                     "app directory canister '{canister_role}' is not in prime subnet",
+                ))
+            })?;
+
+            if canister_cfg.cardinality != CanisterCardinality::Single {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "app directory canister '{canister_role}' must have cardinality = \"single\"",
                 )));
             }
         }

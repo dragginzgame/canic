@@ -309,7 +309,7 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone());
+    SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
 
     if let Err(err) = super::install_canic_code(
         CanisterInstallMode::Install,

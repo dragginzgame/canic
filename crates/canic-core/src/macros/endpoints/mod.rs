@@ -157,7 +157,7 @@ macro_rules! canic_endpoints {
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(
             ::canic::core::ids::CanisterRole,
-            ::canic::core::ops::storage::directory::PrincipalList,
+            ::canic::core::cdk::types::Principal,
         )> {
             $crate::ops::storage::directory::AppDirectoryOps::page(page)
         }
@@ -167,7 +167,7 @@ macro_rules! canic_endpoints {
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(
             ::canic::core::ids::CanisterRole,
-            ::canic::core::ops::storage::directory::PrincipalList,
+            ::canic::core::cdk::types::Principal,
         )> {
             $crate::ops::storage::directory::SubnetDirectoryOps::page(page)
         }

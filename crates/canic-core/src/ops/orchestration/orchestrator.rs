@@ -285,7 +285,10 @@ impl CanisterLifecycleOrchestrator {
         }
 
         // Attach before install so init hooks can observe the registry; roll back on failure.
-        SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash);
+        if let Err(err) = SubnetCanisterRegistryOps::register(pid, &role, parent, stored_hash) {
+            try_return_to_pool(pid, "adopt_pool register failed").await;
+            return Err(err);
+        }
 
         let payload = build_nonroot_init_payload(&role, parent);
         if let Err(err) = install_canic_code(

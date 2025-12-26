@@ -28,27 +28,27 @@ icrc21 = true # Enable ICRC-21 capability
 [subnets.prime]
 auto_create = ["app", "auth", "scale_hub", "shard_hub", "test"]
 subnet_directory = ["app", "auth", "scale_hub", "shard_hub", "test"]
-pool.import.local = [
-    "kbsbp-3p777-77777-aaafa-cai",
-    "kgth3-wx777-77777-aaafq-cai",
-    "ktuww-x7777-77777-aaaga-cai",
-]
 pool.minimum_size = 3
 
 # --- Root ---
 [subnets.prime.canisters.root]
+cardinality = "single"
 
 # --- App ---
 [subnets.prime.canisters.app]
+cardinality = "single"
 
 # --- Auth ---
 [subnets.prime.canisters.auth]
+cardinality = "single"
 
 # --- Blank ---
 [subnets.prime.canisters.blank]
+cardinality = "many"
 
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
+cardinality = "single"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -59,9 +59,11 @@ policy.min_workers = 2
 
 # --- Scale ---
 [subnets.prime.canisters.scale]
+cardinality = "many"
 
 # --- Shard Hub ---
 [subnets.prime.canisters.shard_hub]
+cardinality = "single"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -73,11 +75,13 @@ policy.max_shards = 4
 
 # --- Shard ---
 [subnets.prime.canisters.shard]
+cardinality = "many"
 topup.threshold = "10T"
 topup.amount = "5T"
 
 # --- Test ---
 [subnets.prime.canisters.test]
+cardinality = "single"
 
 # ================================================================
 #  GENERAL SUBNET
@@ -86,3 +90,4 @@ topup.amount = "5T"
 
 # --- Blank Canister ---
 [subnets.general.canisters.blank]
+cardinality = "many"

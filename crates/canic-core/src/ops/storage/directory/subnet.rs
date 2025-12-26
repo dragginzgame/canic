@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     dto::page::{Page, PageRequest},
     ids::CanisterRole,
-    model::memory::directory::{DirectoryView, PrincipalList, SubnetDirectory},
+    model::memory::directory::{DirectoryView, SubnetDirectory},
     ops::{
         config::ConfigOps,
         storage::{
@@ -10,6 +10,7 @@ use crate::{
         },
     },
 };
+use candid::Principal;
 use std::collections::BTreeMap;
 
 ///
@@ -53,23 +54,17 @@ impl SubnetDirectoryOps {
     }
 
     /// Get principals for a role, if present.
-    pub fn try_get(role: &CanisterRole) -> Result<PrincipalList, Error> {
+    pub fn try_get(role: &CanisterRole) -> Result<Principal, Error> {
         let view = Self::resolve_view();
 
         view.iter()
-            .find_map(|(t, pids)| (t == role).then_some(pids.clone()))
+            .find_map(|(t, pid)| (t == role).then_some(*pid))
             .ok_or_else(|| SubnetDirectoryOpsError::NotFound(role.clone()).into())
-    }
-
-    /// Get principals for a role, panicking if the role is missing.
-    #[must_use]
-    pub fn get(role: &CanisterRole) -> PrincipalList {
-        Self::try_get(role).expect("subnet directory missing configured role")
     }
 
     /// Page through the directory view.
     #[must_use]
-    pub fn page(request: PageRequest) -> Page<(CanisterRole, PrincipalList)> {
+    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
         paginate(Self::resolve_view(), request)
     }
 
@@ -96,13 +91,13 @@ impl SubnetDirectoryOps {
         let subnet_cfg = ConfigOps::current_subnet();
 
         let entries = SubnetCanisterRegistryOps::export();
-        let mut map: BTreeMap<CanisterRole, PrincipalList> = BTreeMap::new();
+        let mut map: BTreeMap<CanisterRole, Principal> = BTreeMap::new();
 
         for entry in entries {
             let role = entry.role.clone();
 
             if subnet_cfg.subnet_directory.contains(&role) {
-                map.entry(role).or_default().0.push(entry.pid);
+                map.insert(role, entry.pid);
             }
         }
 
