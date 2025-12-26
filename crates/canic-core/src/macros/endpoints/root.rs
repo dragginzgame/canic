@@ -9,13 +9,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_app(
             cmd: ::canic::core::ops::storage::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
-            ::canic::core::ops::storage::state::AppStateOps::command(cmd)?;
-
-            let bundle = ::canic::core::ops::orchestration::cascade::state::StateBundle::new()
-                .with_app_state();
-            ::canic::core::ops::orchestration::cascade::state::cascade_root_state(bundle).await?;
-
-            Ok(())
+            ::canic::core::ops::orchestration::AppStateOrchestrator::apply_command(cmd).await
         }
 
         // canic_canister_upgrade
@@ -55,7 +49,7 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query(auth_any(::canic::core::auth::is_controller))]
         async fn canic_config() -> Result<String, ::canic::Error> {
-            $crate::config::Config::to_toml()
+            $crate::ops::config::ConfigOps::export_toml()
         }
 
         //

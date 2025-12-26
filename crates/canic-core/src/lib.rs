@@ -32,6 +32,7 @@ pub(crate) mod model;
 pub mod ops;
 pub mod perf;
 pub mod spec;
+pub mod workflow;
 
 pub use ::canic_cdk as cdk;
 pub use ::canic_memory as memory;
@@ -86,6 +87,13 @@ pub enum Error {
 
     #[error("{0}")]
     SerializeError(String),
+
+    #[error("{0}")]
+    WorkflowError(String),
+
+    ///
+    /// Http Errors
+    ///
 
     #[error("http request failed: {0}")]
     HttpRequest(String),
@@ -154,8 +162,9 @@ from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
-from_to_string!(serde_json::Error, HttpDecode);
+from_to_string!(workflow::WorkflowError, WorkflowError);
 
+from_to_string!(serde_json::Error, HttpDecode);
 from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);
 from_to_string!(CandidDecodeFailed, CandidDecodeFailed);

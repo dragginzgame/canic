@@ -6,18 +6,18 @@
 pub mod state;
 pub mod topology;
 
-use crate::{Error, ThisError, log, log::Topic, ops::orchestration::OrchestrationOpsError};
+use crate::{Error, ThisError, log, log::Topic, workflow::WorkflowError};
 use candid::Principal;
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 
 ///
-/// CascadeOpsError
+/// CascadeError
 /// Errors raised during synchronization
 ///
 
 #[derive(Debug, ThisError)]
-pub enum CascadeOpsError {
+pub enum CascadeError {
     #[error("canister not found")]
     CanisterNotFound(Principal),
 
@@ -40,9 +40,9 @@ pub enum CascadeOpsError {
     NextHopNotFound(Principal),
 }
 
-impl From<CascadeOpsError> for Error {
-    fn from(err: CascadeOpsError) -> Self {
-        OrchestrationOpsError::from(err).into()
+impl From<WorkflowError> for Error {
+    fn from(err: WorkflowError) -> Self {
+        WorkflowError::from(err).into()
     }
 }
 

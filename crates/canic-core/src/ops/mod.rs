@@ -7,20 +7,20 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
-pub mod bootstrap;
 pub mod command;
 pub mod config;
+pub mod directory;
+pub mod env;
 pub mod ic;
 pub mod icrc;
-pub mod orchestration;
+pub mod memory;
 pub mod perf;
 pub mod placement;
-pub mod pool;
 pub mod random;
 pub mod rpc;
-pub mod runtime;
-pub mod service;
-pub mod storage;
+pub mod sharding;
+pub mod state;
+pub mod topology;
 pub mod wasm;
 
 use std::time::Duration;
@@ -68,7 +68,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::storage::env::EnvOps};
+use crate::{ThisError, ops::env::EnvOps};
 
 ///
 /// OpsError
@@ -92,16 +92,7 @@ pub enum OpsError {
     IcOpsError(#[from] ic::IcOpsError),
 
     #[error(transparent)]
-    OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
-
-    #[error(transparent)]
-    PoolOpsError(#[from] pool::PoolOpsError),
-
-    #[error(transparent)]
     RpcOpsError(#[from] rpc::RpcOpsError),
-
-    #[error(transparent)]
-    StorageOpsError(#[from] storage::StorageOpsError),
 }
 
 impl OpsError {

@@ -46,6 +46,11 @@ impl ConfigOps {
     // Explicit / fallible lookups
     // ---------------------------------------------------------------------
 
+    /// Export the full current configuration as TOML.
+    pub fn export_toml() -> Result<String, Error> {
+        Config::to_toml()
+    }
+
     /// Fetch a subnet configuration by role.
     pub fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
         let cfg = Config::get();

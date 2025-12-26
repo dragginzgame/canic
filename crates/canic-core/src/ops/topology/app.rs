@@ -2,10 +2,6 @@ pub use crate::model::memory::topology::AppSubnetRegistryView;
 
 use crate::model::memory::topology::AppSubnetRegistry;
 
-//
-// Stable-memory adapter
-//
-
 ///
 /// AppSubnetRegistryOps
 ///
