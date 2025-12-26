@@ -38,9 +38,6 @@ pub enum SignatureOpsError {
     #[error("cannot parse signature")]
     CannotParseSignature,
 
-    #[error("cannot parse tokens")]
-    CannotParseTokens,
-
     #[error("invalid signature")]
     InvalidSignature,
 }
