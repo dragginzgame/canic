@@ -4,6 +4,7 @@ use crate::{
     Error, ThisError, log,
     log::Topic,
     model::memory::state::{AppState, AppStateData},
+    ops::state::StateError,
 };
 use candid::CandidType;
 use derive_more::Display;
@@ -21,7 +22,7 @@ pub enum AppStateOpsError {
 
 impl From<AppStateOpsError> for Error {
     fn from(err: AppStateOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        StateError::from(err).into()
     }
 }
 

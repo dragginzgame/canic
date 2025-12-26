@@ -3,7 +3,7 @@ use crate::{
     dto::page::{Page, PageRequest},
     ids::CanisterRole,
     model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
-    ops::storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
+    ops::{env::EnvOps, topology::SubnetCanisterRegistryOps},
 };
 
 ///

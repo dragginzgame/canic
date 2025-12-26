@@ -1,4 +1,4 @@
-pub use crate::ops::storage::cycles::CycleTrackerView;
+pub use crate::ops::cycles::CycleTrackerView;
 
 use crate::{
     cdk::{futures::spawn, utils::time::now_secs},
@@ -6,15 +6,11 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
-        config::ConfigOps,
-        ic::{
-            canister_cycle_balance,
-            timer::{TimerId, TimerOps},
-        },
-        storage::{cycles::CycleTrackerStorageOps, env::EnvOps},
+        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY, config::ConfigOps,
+        cycles::CycleTrackerStorageOps, env::EnvOps, ic::canister_cycle_balance,
     },
     types::Cycles,
+    workflow::timer::{TimerId, TimerOps},
 };
 use std::{cell::RefCell, time::Duration};
 
