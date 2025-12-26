@@ -19,9 +19,6 @@ pub enum ShardingOpsError {
     #[error("shard pool not found: {0}")]
     PoolNotFound(String),
 
-    #[error("shard cap reached")]
-    ShardCapReached,
-
     #[error("shard creation blocked: {0}")]
     ShardCreationBlocked(String),
 
