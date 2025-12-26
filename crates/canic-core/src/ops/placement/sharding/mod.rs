@@ -3,11 +3,11 @@ mod hrw;
 mod metrics;
 pub mod policy;
 
-pub use crate::ops::storage::sharding::ShardingRegistryOps;
+pub use crate::ops::sharding::ShardingRegistryOps;
 pub use metrics::{PoolMetrics, pool_metrics};
 pub use {assign::*, policy::*};
 
-use crate::{Error, ThisError, cdk::types::Principal, ops::storage::sharding::ShardEntry};
+use crate::{Error, ThisError, cdk::types::Principal, ops::sharding::ShardEntry};
 
 ///
 /// ShardingOpsError

@@ -14,7 +14,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::scaling::{ScalingWorkerRegistryStorageOps, WorkerEntry},
+        scaling::{ScalingWorkerRegistryStorageOps, WorkerEntry},
     },
 };
 use candid::Principal;

@@ -23,7 +23,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         placement::sharding::hrw::HrwSelector,
-        storage::sharding::{ShardEntry, ShardingRegistryOps},
+        sharding::{ShardEntry, ShardingRegistryOps},
     },
 };
 use candid::CandidType;
@@ -330,7 +330,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::CanisterRole,
-        ops::storage::{env::EnvOps, sharding::ShardingRegistryOps},
+        ops::{env::EnvOps, sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 

@@ -57,13 +57,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_memory_registry() -> ::canic::core::ops::storage::memory::MemoryRegistryView {
-            $crate::ops::storage::memory::MemoryRegistryOps::export()
+        fn canic_memory_registry() -> ::canic::core::ops::memory::MemoryRegistryView {
+            $crate::ops::memory::MemoryRegistryOps::export()
         }
 
         #[canic_query]
-        fn canic_env() -> ::canic::core::ops::storage::env::EnvData {
-            $crate::ops::storage::env::EnvOps::export()
+        fn canic_env() -> ::canic::core::ops::env::EnvData {
+            $crate::ops::env::EnvOps::export()
         }
 
         #[canic_query]
@@ -139,13 +139,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_app_state() -> ::canic::core::ops::storage::state::AppStateData {
-            $crate::ops::storage::state::AppStateOps::export()
+        fn canic_app_state() -> ::canic::core::ops::state::AppStateData {
+            $crate::ops::state::AppStateOps::export()
         }
 
         #[canic_query]
-        fn canic_subnet_state() -> ::canic::core::ops::storage::state::SubnetStateData {
-            $crate::ops::storage::state::SubnetStateOps::export()
+        fn canic_subnet_state() -> ::canic::core::ops::state::SubnetStateData {
+            $crate::ops::state::SubnetStateOps::export()
         }
 
         //
@@ -159,7 +159,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::storage::directory::AppDirectoryOps::page(page)
+            $crate::ops::directory::AppDirectoryOps::page(page)
         }
 
         #[canic_query]
@@ -169,7 +169,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::storage::directory::SubnetDirectoryOps::page(page)
+            $crate::ops::directory::SubnetDirectoryOps::page(page)
         }
 
         //
@@ -179,8 +179,8 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::storage::CanisterSummary> {
-            ::canic::core::ops::storage::topology::subnet::SubnetCanisterChildrenOps::page(page)
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::CanisterSummary> {
+            ::canic::core::ops::topology::subnet::SubnetCanisterChildrenOps::page(page)
         }
 
         //

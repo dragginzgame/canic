@@ -3,7 +3,7 @@ use canic::{
     Error,
     core::{
         ids::{CanisterRole, SubnetRole},
-        ops::storage::{
+        ops::{
             CanisterInitPayload, directory::DirectoryView, env::EnvData, topology::SubnetIdentity,
         },
     },
