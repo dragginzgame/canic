@@ -1,6 +1,6 @@
 use crate::{
     ops::OpsError,
-    workflow::{pool::PoolWorkflow, random::RandomWorkflow, runtime::cycles::CycleTrackerWorkflow},
+    workflow::{random::RandomWorkflow, runtime::cycles::CycleTrackerWorkflow},
 };
 
 ///
