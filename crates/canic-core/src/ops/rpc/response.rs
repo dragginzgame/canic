@@ -88,8 +88,8 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             CreateCanisterParent::Parent => SubnetCanisterRegistryOps::try_get_parent(caller)
                 .map_err(|_| RequestOpsError::ParentNotFound(caller))?,
 
-            CreateCanisterParent::Directory(role) => SubnetDirectoryOps::try_get(role)
-                .map_err(|_| RequestOpsError::CanisterRoleNotFound(role.clone()))?,
+            CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
+                .ok_or_else(|| RequestOpsError::CanisterRoleNotFound(role.clone()))?,
         };
 
         let event = LifecycleEvent::Create {

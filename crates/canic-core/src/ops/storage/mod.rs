@@ -16,11 +16,8 @@ use crate::{
     ops::{
         OpsError,
         storage::{
-            directory::{AppDirectoryOpsError, DirectoryView, SubnetDirectoryOpsError},
-            env::EnvData,
-            memory::MemoryRegistryOpsError,
-            sharding::ShardingRegistryOpsError,
-            state::AppStateOpsError,
+            directory::DirectoryView, env::EnvData, memory::MemoryRegistryOpsError,
+            sharding::ShardingRegistryOpsError, state::AppStateOpsError,
             topology::TopologyOpsError,
         },
     },
@@ -35,9 +32,6 @@ use serde::Deserialize;
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
-    AppDirectoryOpsError(#[from] AppDirectoryOpsError),
-
-    #[error(transparent)]
     AppStateOpsError(#[from] AppStateOpsError),
 
     #[error(transparent)]
@@ -48,9 +42,6 @@ pub enum StorageOpsError {
 
     #[error(transparent)]
     ShardingRegistryOpsError(#[from] ShardingRegistryOpsError),
-
-    #[error(transparent)]
-    SubnetDirectoryOpsError(#[from] SubnetDirectoryOpsError),
 
     #[error(transparent)]
     TopologyOpsError(#[from] TopologyOpsError),

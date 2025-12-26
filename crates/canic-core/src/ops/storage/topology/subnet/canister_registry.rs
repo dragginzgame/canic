@@ -52,7 +52,7 @@ impl SubnetCanisterRegistryOps {
         }
 
         if role_requires_singleton(role)
-            && let Some(existing) = SubnetCanisterRegistry::get_type(role)
+            && let Some(existing) = SubnetCanisterRegistry::find_first_by_role(role)
         {
             return Err(SubnetCanisterRegistryOpsError::RoleAlreadyRegistered {
                 role: role.clone(),
@@ -74,11 +74,6 @@ impl SubnetCanisterRegistryOps {
     #[must_use]
     pub fn get_parent(pid: Principal) -> Option<Principal> {
         SubnetCanisterRegistry::get_parent(pid)
-    }
-
-    #[must_use]
-    pub fn get_type(role: &CanisterRole) -> Option<CanisterEntry> {
-        SubnetCanisterRegistry::get_type(role)
     }
 
     #[must_use]
@@ -106,13 +101,6 @@ impl SubnetCanisterRegistryOps {
 
     pub fn try_get_parent(pid: Principal) -> Result<Principal, SubnetCanisterRegistryOpsError> {
         SubnetCanisterRegistry::get_parent(pid).ok_or(SubnetCanisterRegistryOpsError::NotFound(pid))
-    }
-
-    pub fn try_get_type(
-        role: &CanisterRole,
-    ) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
-        SubnetCanisterRegistry::get_type(role)
-            .ok_or_else(|| SubnetCanisterRegistryOpsError::RoleNotFound(role.clone()))
     }
 
     pub(crate) fn update_module_hash(

@@ -72,7 +72,7 @@ impl SubnetCanisterRegistry {
 
     /// Finds the first canister with the given [`CanisterRole`].
     #[must_use]
-    pub(crate) fn get_type(role: &CanisterRole) -> Option<CanisterEntry> {
+    pub(crate) fn find_first_by_role(role: &CanisterRole) -> Option<CanisterEntry> {
         Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.role == role))
     }
 

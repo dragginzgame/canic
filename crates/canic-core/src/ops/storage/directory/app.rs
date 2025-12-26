@@ -1,12 +1,10 @@
 use crate::{
-    Error, ThisError,
     config::Config,
     dto::page::{Page, PageRequest},
     model::memory::{directory::AppDirectory, topology::SubnetCanisterRegistry},
     ops::{
         prelude::*,
         storage::{
-            StorageOpsError,
             directory::{DirectoryView, paginate},
             env::EnvOps,
         },
@@ -14,22 +12,6 @@ use crate::{
 };
 use candid::Principal;
 use std::collections::BTreeMap;
-
-///
-/// AppDirectoryOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum AppDirectoryOpsError {
-    #[error("canister role {0} not found in app directory")]
-    NotFound(CanisterRole),
-}
-
-impl From<AppDirectoryOpsError> for Error {
-    fn from(err: AppDirectoryOpsError) -> Self {
-        StorageOpsError::from(err).into()
-    }
-}
 
 ///
 /// AppDirectoryOps
@@ -45,6 +27,16 @@ impl AppDirectoryOps {
         } else {
             AppDirectory::view()
         }
+    }
+
+    /// Fetch principal for a canister role from the current AppDirectory.
+    #[must_use]
+    pub fn get(role: &CanisterRole) -> Option<Principal> {
+        let target = role.clone();
+        let view = Self::resolve_view();
+
+        view.into_iter()
+            .find_map(|(t, pid)| (t == target).then_some(pid))
     }
 
     /// Public stable API for exporting the view.
@@ -79,17 +71,5 @@ impl AppDirectoryOps {
         }
 
         map.into_iter().collect()
-    }
-
-    /// Fetch principals for a canister role from the current AppDirectory.
-    pub fn try_get(role: &CanisterRole) -> Result<Principal, Error> {
-        let target = role.clone();
-        let view = Self::resolve_view();
-        let entry = view
-            .into_iter()
-            .find_map(|(t, pid)| (t == target).then_some(pid))
-            .ok_or_else(|| AppDirectoryOpsError::NotFound(role.clone()))?;
-
-        Ok(entry)
     }
 }
