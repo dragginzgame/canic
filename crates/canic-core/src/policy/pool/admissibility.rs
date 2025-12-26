@@ -66,7 +66,7 @@ async fn check_importable_on_local(pid: Principal) -> Result<(), PoolPolicyError
 /// - On non-local networks: always admissible (subject to other policies).
 /// - On local: must be importable/routable.
 /// - Additionally: pool membership is blocked if the PID is still in the subnet registry.
-pub async fn can_enter_pool(pid: Principal) -> Result<(), PoolPolicyError> {
+pub async fn assert_can_import(pid: Principal) -> Result<(), PoolPolicyError> {
     if SubnetCanisterRegistryOps::get(pid).is_some() {
         return Err(PoolPolicyError::RegisteredInSubnet(pid));
     }
