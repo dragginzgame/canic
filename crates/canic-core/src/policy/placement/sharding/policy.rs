@@ -23,6 +23,7 @@ use crate::{
         storage::sharding::{ShardEntry, ShardingRegistryOps},
     },
     policy::placement::sharding::{
+        ShardingPolicyError,
         hrw::HrwSelector,
         metrics::{PoolMetrics, pool_metrics},
     },
@@ -112,11 +113,11 @@ impl ShardingPolicyOps {
     /// Retrieve the shard pool configuration from the current canister’s config.
     pub(crate) fn get_pool_config(pool: &str) -> Result<ShardPool, Error> {
         let cfg = ConfigOps::current_canister();
-        let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
+        let sharding_cfg = cfg.sharding.ok_or(ShardingPolicyError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
             .pools
             .get(pool)
-            .ok_or_else(|| ShardingOpsError::PoolNotFound(pool.to_string()))?
+            .ok_or_else(|| ShardingPolicyError::PoolNotFound(pool.to_string()))?
             .clone();
 
         Ok(pool_cfg)
@@ -331,7 +332,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::CanisterRole,
-        ops::{env::EnvOps, sharding::ShardingRegistryOps},
+        ops::{env::EnvOps, storage::sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 

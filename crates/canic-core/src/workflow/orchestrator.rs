@@ -5,9 +5,11 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
         ic::{IcOpsError, install_canic_code, upgrade_canister},
-        topology::subnet::SubnetCanisterRegistryOps,
+        storage::{
+            directory::{AppDirectoryStorageOps, SubnetDirectoryStorageOps},
+            topology::subnet::SubnetCanisterRegistryOps,
+        },
         wasm::WasmOps,
     },
     workflow::{
