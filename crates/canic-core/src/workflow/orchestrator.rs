@@ -5,7 +5,8 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        ic::{IcOpsError, upgrade_canister},
+        canister::install_code_with_extra_arg,
+        ic::{IcOpsError, mgmt::delete_canister, upgrade_canister},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             topology::subnet::SubnetCanisterRegistryOps,
@@ -16,8 +17,8 @@ use crate::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         ic::provision::{
-            build_nonroot_init_payload, create_and_install_canister, delete_canister,
-            install_canic_code, rebuild_directories_from_registry,
+            build_nonroot_init_payload, create_and_install_canister,
+            rebuild_directories_from_registry,
         },
         pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
     },
@@ -243,7 +244,7 @@ impl CanisterLifecycleOrchestrator {
         assert_not_in_pool(pid)?;
 
         let payload = build_nonroot_init_payload(&entry.role, parent_pid);
-        install_canic_code(
+        install_code_with_extra_arg(
             CanisterInstallMode::Reinstall,
             entry.pid,
             wasm.bytes(),

@@ -1,8 +1,10 @@
 use crate::{
-    ops::storage::{
-        directory::{AppDirectoryStorageOps, DirectoryView},
+    ops::{
         env::EnvOps,
-        topology::SubnetCanisterRegistryOps,
+        storage::{
+            directory::{AppDirectoryOps, DirectoryView},
+            topology::SubnetCanisterRegistryOps,
+        },
     },
     policy,
 };
@@ -32,7 +34,7 @@ impl AppDirectoryWorkflow {
         if EnvOps::is_root() {
             Self::rebuild_from_registry()
         } else {
-            AppDirectoryStorageOps::export()
+            AppDirectoryOps::export()
         }
     }
 }

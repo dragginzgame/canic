@@ -1,8 +1,10 @@
 use crate::{
-    ops::storage::{
-        directory::{DirectoryView, SubnetDirectoryStorageOps},
+    ops::{
         env::EnvOps,
-        topology::subnet::SubnetCanisterRegistryOps,
+        storage::{
+            directory::{DirectoryView, SubnetDirectoryOps},
+            topology::subnet::SubnetCanisterRegistryOps,
+        },
     },
     policy,
 };
@@ -19,7 +21,7 @@ impl SubnetDirectoryWorkflow {
         if EnvOps::is_root() {
             Self::build_from_registry()
         } else {
-            SubnetDirectoryStorageOps::export()
+            SubnetDirectoryOps::export()
         }
     }
 
