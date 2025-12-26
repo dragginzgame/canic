@@ -172,11 +172,11 @@ macro_rules! auth_require_any {
 /// Ensure the caller matches the subnet directory entry recorded for `role`.
 /// Use for admin endpoints that expect specific app directory canisters.
 #[must_use]
-pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
+pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = AppDirectoryOps::get(&role);
+        let pid = AppDirectoryOps::try_get(&role)?;
 
-        if pids.contains(&caller) {
+        if pid == caller {
             Ok(())
         } else {
             Err(AuthError::NotAppDirectoryType(caller, role.clone()))?
@@ -187,11 +187,11 @@ pub fn is_app_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleR
 /// Ensure the caller matches the subnet directory entry recorded for `role`.
 /// Use for admin endpoints that expect specific subnet directory canisters.
 #[must_use]
-pub fn is_subnet_directory_type(caller: Principal, role: CanisterRole) -> AuthRuleResult {
+pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pids = SubnetDirectoryOps::get(&role);
+        let pid = SubnetDirectoryOps::try_get(&role)?;
 
-        if pids.contains(&caller) {
+        if pid == caller {
             Ok(())
         } else {
             Err(AuthError::NotSubnetDirectoryType(caller, role.clone()))?

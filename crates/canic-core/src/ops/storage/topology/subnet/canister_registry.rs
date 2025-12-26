@@ -3,9 +3,10 @@ pub use crate::model::memory::topology::SubnetCanisterRegistryView;
 use crate::{
     Error, ThisError,
     cdk::types::Principal,
+    config::schema::CanisterCardinality,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, topology::SubnetCanisterRegistry},
-    ops::storage::topology::TopologyOpsError,
+    ops::{config::ConfigOps, storage::topology::TopologyOpsError},
 };
 
 ///
@@ -19,6 +20,12 @@ pub enum SubnetCanisterRegistryOpsError {
 
     #[error("canister role {0} not found in registry")]
     RoleNotFound(CanisterRole),
+
+    #[error("canister {0} already registered")]
+    AlreadyRegistered(Principal),
+
+    #[error("role {role} already registered to {pid}")]
+    RoleAlreadyRegistered { role: CanisterRole, pid: Principal },
 }
 
 impl From<SubnetCanisterRegistryOpsError> for Error {
@@ -39,8 +46,24 @@ impl SubnetCanisterRegistryOps {
         role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
-    ) {
+    ) -> Result<(), Error> {
+        if SubnetCanisterRegistry::get(pid).is_some() {
+            return Err(SubnetCanisterRegistryOpsError::AlreadyRegistered(pid).into());
+        }
+
+        if role_requires_singleton(role)
+            && let Some(existing) = SubnetCanisterRegistry::get_type(role)
+        {
+            return Err(SubnetCanisterRegistryOpsError::RoleAlreadyRegistered {
+                role: role.clone(),
+                pid: existing.pid,
+            }
+            .into());
+        }
+
         SubnetCanisterRegistry::register(pid, role, parent_pid, module_hash);
+
+        Ok(())
     }
 
     #[must_use]
@@ -107,4 +130,9 @@ impl SubnetCanisterRegistryOps {
     pub fn export() -> Vec<CanisterEntry> {
         SubnetCanisterRegistry::export()
     }
+}
+
+fn role_requires_singleton(role: &CanisterRole) -> bool {
+    let cfg = ConfigOps::current_subnet_canister(role);
+    cfg.cardinality == CanisterCardinality::Single
 }

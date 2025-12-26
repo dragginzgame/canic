@@ -6,12 +6,13 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-pub use crate::model::memory::directory::{DirectoryView, PrincipalList};
+pub use crate::model::memory::directory::DirectoryView;
 
 use crate::{
     dto::page::{Page, PageRequest},
     ids::CanisterRole,
 };
+use candid::Principal;
 
 ///
 /// Pagination
@@ -21,7 +22,7 @@ use crate::{
 pub(crate) fn paginate(
     view: DirectoryView,
     request: PageRequest,
-) -> Page<(CanisterRole, PrincipalList)> {
+) -> Page<(CanisterRole, Principal)> {
     let request = request.clamped();
     let total = view.len() as u64;
     let (start, end) = pagination_bounds(total, request);
@@ -49,20 +50,14 @@ fn pagination_bounds(total: u64, request: PageRequest) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::{DirectoryView, PageRequest, paginate};
-    use crate::{
-        cdk::types::Principal, ids::CanisterRole, model::memory::directory::PrincipalList,
-    };
+    use crate::{cdk::types::Principal, ids::CanisterRole};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
     fn sample_view() -> DirectoryView {
-        vec![
-            ("a".into(), PrincipalList(vec![p(1)])),
-            ("b".into(), PrincipalList(vec![p(2), p(3)])),
-            ("c".into(), PrincipalList(vec![p(4)])),
-        ]
+        vec![("a".into(), p(1)), ("b".into(), p(2)), ("c".into(), p(4))]
     }
 
     #[test]

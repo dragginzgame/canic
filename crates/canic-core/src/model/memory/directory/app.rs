@@ -2,11 +2,9 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{
-        directory::{DirectoryView, PrincipalList},
-        id::directory::APP_DIRECTORY_ID,
-    },
+    model::memory::{directory::DirectoryView, id::directory::APP_DIRECTORY_ID},
 };
+use candid::Principal;
 use std::cell::RefCell;
 
 //
@@ -14,7 +12,7 @@ use std::cell::RefCell;
 //
 
 eager_static! {
-    static APP_DIRECTORY: RefCell<BTreeMap<CanisterRole, PrincipalList, VirtualMemory<DefaultMemoryImpl>>> =
+    static APP_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(ic_memory!(AppDirectory, APP_DIRECTORY_ID)));
 }
 
@@ -38,8 +36,8 @@ impl AppDirectory {
     pub(crate) fn import(view: DirectoryView) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (role, pids) in view {
-                map.insert(role, pids);
+            for (role, pid) in view {
+                map.insert(role, pid);
             }
         });
     }

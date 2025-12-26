@@ -4,7 +4,7 @@ use canic::{
     core::{
         dto::page::{Page, PageRequest},
         ids::{CanisterRole, SubnetRole},
-        ops::storage::{CanisterEntry, CanisterSummary, directory::PrincipalList, env::EnvData},
+        ops::storage::{CanisterEntry, CanisterSummary, env::EnvData},
     },
     types::TC,
 };
@@ -186,10 +186,10 @@ fn directories_are_consistent_across_canisters() {
     //    let print_counts = env::var("PRINT_DIR_COUNTS").is_ok();
     let print_counts = true;
 
-    let root_app_dir: Page<(CanisterRole, PrincipalList)> = pic
+    let root_app_dir: Page<(CanisterRole, Principal)> = pic
         .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
         .expect("root app directory");
-    let root_subnet_dir: Page<(CanisterRole, PrincipalList)> = pic
+    let root_subnet_dir: Page<(CanisterRole, Principal)> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
@@ -206,14 +206,14 @@ fn directories_are_consistent_across_canisters() {
     }
 
     for (role, entry) in by_role.iter().filter(|(role, _)| !role.is_root()) {
-        let app_dir: Page<(CanisterRole, PrincipalList)> = pic
+        let app_dir: Page<(CanisterRole, Principal)> = pic
             .query_call(
                 entry.pid,
                 "canic_app_directory",
                 (PageRequest::new(100, 0),),
             )
             .expect("child app directory");
-        let subnet_dir: Page<(CanisterRole, PrincipalList)> = pic
+        let subnet_dir: Page<(CanisterRole, Principal)> = pic
             .query_call(
                 entry.pid,
                 "canic_subnet_directory",

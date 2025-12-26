@@ -5,6 +5,19 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.20] - 2025-12-26
+### Added
+- Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that
+  directory roles must be singleton (`cardinality = "single"`).
+
+### Changed
+- App/subnet directories now map roles to a single `Principal`.
+- Registry registration now rejects duplicate principals and singleton-role collisions.
+
+### Fixed
+- Subnet registry subtree traversal now guards against parent cycles.
+- Pool export validates readiness and metadata before removing entries.
+
 ## [0.6.19] - Perf Stack
 - Endpoint dispatch now records exclusive perf totals via a scoped stack; removed `perf_scope` from the prelude and dropped the `defer` dependency.  This means that endpoints can call each other and the correct performance metrics are logged.
 

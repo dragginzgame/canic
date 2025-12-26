@@ -64,9 +64,15 @@ impl Validate for SubnetConfig {
         // --- 1. Validate directory entries ---
         for canister_role in &self.subnet_directory {
             validate_role_len(canister_role, "subnet directory canister")?;
-            if !self.canisters.contains_key(canister_role) {
-                return Err(ConfigSchemaError::ValidationError(format!(
+            let canister_cfg = self.canisters.get(canister_role).ok_or_else(|| {
+                ConfigSchemaError::ValidationError(format!(
                     "subnet directory canister '{canister_role}' is not defined in subnet",
+                ))
+            })?;
+
+            if canister_cfg.cardinality != CanisterCardinality::Single {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "subnet directory canister '{canister_role}' must have cardinality = \"single\"",
                 )));
             }
         }
@@ -195,9 +201,12 @@ pub struct CanisterPool {
 /// CanisterConfig
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterConfig {
+    /// Required cardinality for this canister role.
+    pub cardinality: CanisterCardinality,
+
     #[serde(
         default = "defaults::initial_cycles",
         deserialize_with = "Cycles::from_config"
@@ -215,6 +224,18 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub sharding: Option<ShardingConfig>,
+}
+
+///
+/// CanisterCardinality
+/// Indicates whether a canister role may have one or many instances.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CanisterCardinality {
+    Single,
+    Many,
 }
 
 ///
@@ -387,6 +408,17 @@ mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
 
+    fn base_canister_config(cardinality: CanisterCardinality) -> CanisterConfig {
+        CanisterConfig {
+            cardinality,
+            initial_cycles: defaults::initial_cycles(),
+            topup: None,
+            randomness: RandomnessConfig::default(),
+            scaling: None,
+            sharding: None,
+        }
+    }
+
     #[test]
     fn randomness_defaults_to_ic() {
         let cfg = RandomnessConfig::default();
@@ -436,7 +468,7 @@ mod tests {
 
         let manager_cfg = CanisterConfig {
             sharding: Some(sharding),
-            ..Default::default()
+            ..base_canister_config(CanisterCardinality::Single)
         };
 
         canisters.insert(managing_role, manager_cfg);
@@ -472,7 +504,7 @@ mod tests {
             managing_role,
             CanisterConfig {
                 sharding: Some(sharding),
-                ..Default::default()
+                ..base_canister_config(CanisterCardinality::Single)
             },
         );
 
@@ -490,7 +522,10 @@ mod tests {
     fn canister_role_name_must_fit_bound() {
         let long_role = "a".repeat(NAME_MAX_BYTES + 1);
         let mut canisters = BTreeMap::new();
-        canisters.insert(CanisterRole::from(long_role), CanisterConfig::default());
+        canisters.insert(
+            CanisterRole::from(long_role),
+            base_canister_config(CanisterCardinality::Single),
+        );
 
         let subnet = SubnetConfig {
             canisters,
@@ -520,7 +555,7 @@ mod tests {
             managing_role,
             CanisterConfig {
                 sharding: Some(sharding),
-                ..Default::default()
+                ..base_canister_config(CanisterCardinality::Single)
             },
         );
 
@@ -549,11 +584,14 @@ mod tests {
             },
         );
 
-        canisters.insert(CanisterRole::from("worker"), CanisterConfig::default());
+        canisters.insert(
+            CanisterRole::from("worker"),
+            base_canister_config(CanisterCardinality::Single),
+        );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..Default::default()
+            ..base_canister_config(CanisterCardinality::Single)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -580,11 +618,14 @@ mod tests {
             },
         );
 
-        canisters.insert(CanisterRole::from("worker"), CanisterConfig::default());
+        canisters.insert(
+            CanisterRole::from("worker"),
+            base_canister_config(CanisterCardinality::Single),
+        );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..Default::default()
+            ..base_canister_config(CanisterCardinality::Single)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -609,7 +650,7 @@ mod tests {
                 reseed_interval_secs: 0,
                 ..Default::default()
             },
-            ..Default::default()
+            ..base_canister_config(CanisterCardinality::Single)
         };
 
         canisters.insert(CanisterRole::from("app"), cfg);

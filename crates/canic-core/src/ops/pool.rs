@@ -827,7 +827,7 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
 pub async fn pool_export_canister(pid: Principal) -> Result<(CanisterRole, Vec<u8>), Error> {
     OpsError::require_root()?;
 
-    let entry = CanisterPoolStorageOps::take(&pid).ok_or(PoolOpsError::PoolEntryMissing { pid })?;
+    let entry = CanisterPoolStorageOps::get(pid).ok_or(PoolOpsError::PoolEntryMissing { pid })?;
 
     if !entry.status.is_ready() {
         return Err(PoolOpsError::PoolEntryNotReady { pid }.into());
@@ -837,6 +837,8 @@ pub async fn pool_export_canister(pid: Principal) -> Result<(CanisterRole, Vec<u
     let hash = entry
         .module_hash
         .ok_or(PoolOpsError::MissingModuleHash { pid })?;
+
+    let _ = CanisterPoolStorageOps::take(&pid).ok_or(PoolOpsError::PoolEntryMissing { pid })?;
 
     Ok((role, hash))
 }
