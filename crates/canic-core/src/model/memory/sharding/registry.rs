@@ -5,7 +5,13 @@ use crate::{
 use candid::Principal;
 
 ///
-/// Sharding Registry
+/// ShardingRegistryView
+///
+
+pub type ShardingRegistryView = Vec<(Principal, ShardEntry)>;
+
+///
+/// ShardingRegistry
 ///
 /// Persistent memory interface for tracking shard entries and tenant → shard
 /// assignments. This layer is purely responsible for durable state and

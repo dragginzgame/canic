@@ -2,7 +2,7 @@ pub mod hrw;
 pub mod metrics;
 pub mod policy;
 
-use crate::{Error, ThisError};
+use crate::{Error, ThisError, policy::PolicyError};
 
 ///
 /// ShardingPolicyError
@@ -22,6 +22,6 @@ pub enum ShardingPolicyError {
 
 impl From<ShardingPolicyError> for Error {
     fn from(err: ShardingPolicyError) -> Self {
-        Self::OpsError(err.to_string())
+        PolicyError::ShardingPolicyError(err).into()
     }
 }

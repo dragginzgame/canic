@@ -17,7 +17,7 @@ use crate::{
     ops::{
         OpsError,
         prelude::*,
-        topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
     },
     workflow::cascade::CascadeError,
 };

@@ -6,12 +6,12 @@ use crate::{
 use candid::Principal;
 
 ///
-/// AppDirectoryStorageOps
+/// AppDirectoryOps
 ///
 
-pub struct AppDirectoryStorageOps;
+pub struct AppDirectoryOps;
 
-impl AppDirectoryStorageOps {
+impl AppDirectoryOps {
     pub fn get(role: &CanisterRole) -> Option<Principal> {
         AppDirectory::view()
             .into_iter()

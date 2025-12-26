@@ -14,7 +14,7 @@ pub mod timer;
 
 use crate::{
     ThisError,
-    ops::storage::{directory::DirectoryView, env::EnvData},
+    ops::{env::EnvData, storage::directory::DirectoryView},
 };
 use candid::CandidType;
 use serde::Deserialize;

@@ -20,7 +20,7 @@ use crate::{
     config::schema::{ShardPool, ShardPoolPolicy},
     ops::{
         config::ConfigOps,
-        storage::sharding::{ShardEntry, ShardingRegistryOps},
+        storage::sharding::{ShardEntry, ShardingRegistryOps, ShardingRegistryView},
     },
     policy::placement::sharding::{
         ShardingPolicyError,
@@ -223,7 +223,7 @@ impl ShardingPolicyOps {
 
     /// Export a read-only view of the sharding registry.
     #[must_use]
-    pub fn export() -> ShardingRegistryDto {
+    pub fn export() -> ShardingRegistryView {
         ShardingRegistryOps::export()
     }
 

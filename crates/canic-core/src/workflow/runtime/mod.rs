@@ -12,13 +12,15 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
         env::{EnvData, EnvOps},
         ic::{Network, build_network},
         memory::MemoryRegistryOps,
-        topology::{SubnetCanisterRegistryOps, SubnetIdentity},
+        storage::{
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            topology::{SubnetCanisterRegistryOps, SubnetIdentity},
+        },
     },
-    workflow::{CanisterInitPayload, timer::TimerService},
+    workflow::{CanisterInitPayload, timer::TimerWorkflow},
 };
 use canic_memory::runtime::init_eager_tls;
 
@@ -120,7 +122,7 @@ pub fn root_init(identity: SubnetIdentity) {
     SubnetCanisterRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
-    TimerService::start_all_root();
+    TimerWorkflow::start_all_root();
 }
 
 /// root_post_upgrade
@@ -133,7 +135,7 @@ pub fn root_post_upgrade() {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    TimerService::start_all_root();
+    TimerWorkflow::start_all_root();
 }
 
 /// nonroot_init
@@ -154,7 +156,7 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     SubnetDirectoryOps::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
-    TimerService::start_all();
+    TimerWorkflow::start_all();
 }
 
 /// nonroot_post_upgrade
@@ -167,5 +169,5 @@ pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    TimerService::start_all();
+    TimerWorkflow::start_all();
 }

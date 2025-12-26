@@ -86,6 +86,9 @@ pub enum Error {
     OpsError(String),
 
     #[error("{0}")]
+    PolicyError(String),
+
+    #[error("{0}")]
     SerializeError(String),
 
     #[error("{0}")]
@@ -162,6 +165,7 @@ from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
+from_to_string!(policy::PolicyError, PolicyError);
 from_to_string!(workflow::WorkflowError, WorkflowError);
 
 from_to_string!(serde_json::Error, HttpDecode);

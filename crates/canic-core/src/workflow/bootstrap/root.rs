@@ -4,12 +4,11 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
-        directory::SubnetDirectoryOps,
         env::EnvOps,
         ic::{Network, build_network, try_get_current_subnet_pid},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
-        topology::SubnetCanisterRegistryOps,
+        storage::{directory::SubnetDirectoryOps, topology::SubnetCanisterRegistryOps},
     },
     workflow::pool::{PoolOps, pool_import_canister},
 };

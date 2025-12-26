@@ -12,7 +12,7 @@ use crate::{
     cdk::utils::time::now_secs,
     ops::{
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::scaling::WorkerEntry,
+        storage::scaling::{ScalingRegistryOps, WorkerEntry},
     },
     policy::placement::scaling::{ScalingPlan, ScalingPolicy},
 };
@@ -77,7 +77,7 @@ impl ScalingWorkflow {
         let entry = WorkerEntry::try_new(pool, role, now_secs())
             .map_err(ScalingWorkflowError::InvalidKey)?;
 
-        ScalingWorkerRegistryStorageOps::insert(pid, entry);
+        ScalingRegistryOps::insert(pid, entry);
 
         Ok(pid)
     }

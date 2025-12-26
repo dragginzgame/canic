@@ -1,4 +1,4 @@
-pub use crate::model::memory::sharding::ShardEntry;
+pub use crate::model::memory::sharding::{ShardEntry, ShardingRegistryView};
 
 use crate::{
     Error, ThisError,
@@ -7,12 +7,6 @@ use crate::{
     model::memory::sharding::{ShardKey, ShardingRegistry},
     ops::storage::StorageOpsError,
 };
-
-///
-/// ShardingRegistryDto
-///
-
-pub type ShardingRegistryDto = Vec<(Principal, ShardEntry)>;
 
 ///
 /// ShardingRegistryOps
