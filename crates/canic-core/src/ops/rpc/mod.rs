@@ -1,14 +1,14 @@
 pub(crate) mod methods;
 mod request;
-mod response;
+mod types;
 
 pub use request::*;
-pub use response::*;
+pub use types::*;
 
 use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
-    ops::{OpsError, ic::call::Call, storage::env::EnvOps},
+    ops::{OpsError, env::EnvOps, ic::call::Call},
 };
 use serde::de::DeserializeOwned;
 

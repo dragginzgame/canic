@@ -1,6 +1,5 @@
 pub mod cycles;
 pub mod directory;
-pub mod env;
 pub mod pool;
 pub mod scaling;
 pub mod sharding;
@@ -16,9 +15,6 @@ use crate::{Error, ThisError, ops::OpsError};
 
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
-    #[error(transparent)]
-    EnvOpsError(#[from] env::EnvOpsError),
-
     #[error(transparent)]
     ShardingRegistryOpsError(#[from] sharding::ShardingRegistryOpsError),
 

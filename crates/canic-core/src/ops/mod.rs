@@ -8,6 +8,7 @@
 //! here.
 
 pub mod config;
+pub mod env;
 pub mod ic;
 pub mod icrc;
 pub mod memory;
@@ -61,7 +62,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::storage::env::EnvOps};
+use crate::{ThisError, ops::env::EnvOps};
 
 ///
 /// OpsError
@@ -80,6 +81,9 @@ pub enum OpsError {
 
     #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
+
+    #[error(transparent)]
+    EnvOpsError(#[from] env::EnvOpsError),
 
     #[error(transparent)]
     IcOpsError(#[from] ic::IcOpsError),

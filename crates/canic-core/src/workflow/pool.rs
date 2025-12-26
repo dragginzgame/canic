@@ -34,7 +34,7 @@ use crate::{
             update_settings,
         },
         prelude::*,
-        topology::SubnetCanisterRegistryOps,
+        storage::topology::SubnetCanisterRegistryOps,
     },
     types::{Cycles, TC},
     workflow::timer::{TimerId, TimerOps},
