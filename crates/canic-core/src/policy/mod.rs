@@ -1,30 +1,18 @@
 pub mod directory;
 pub mod placement;
+pub mod pool;
 
-use crate::{Error, ThisError, ops::OpsError};
+use crate::ThisError;
 
 ///
-/// StorageOpsError
-/// Error envelope shared across operations submodules
+/// PolicyError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum StorageOpsError {
+pub enum PolicyError {
     #[error(transparent)]
-    EnvOpsError(#[from] env::EnvOpsError),
+    PoolPolicyError(#[from] pool::PoolPolicyError),
 
     #[error(transparent)]
-    ShardingRegistryOpsError(#[from] sharding::ShardingRegistryOpsError),
-
-    #[error(transparent)]
-    StateOpsError(#[from] state::StateOpsError),
-
-    #[error(transparent)]
-    TopologyOpsError(#[from] topology::TopologyOpsError),
-}
-
-impl From<StorageOpsError> for Error {
-    fn from(err: StorageOpsError) -> Self {
-        OpsError::StorageOpsError(err).into()
-    }
+    ShardingPolicyError(#[from] placement::sharding::ShardingPolicyError),
 }

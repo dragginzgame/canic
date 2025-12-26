@@ -13,7 +13,7 @@ pub use crate::model::memory::scaling::ScalingRegistryView;
 use crate::{
     Error, ThisError,
     config::schema::ScalePool,
-    ops::{config::ConfigOps, storage::scaling::ScalingRegistryStorageOps},
+    ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
 };
 
 ///
@@ -62,7 +62,7 @@ impl ScalingPolicy {
     pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
-        let worker_count = ScalingRegistryStorageOps::find_by_pool(pool).len() as u32;
+        let worker_count = ScalingRegistryOps::find_by_pool(pool).len() as u32;
 
         if policy.max_workers > 0 && worker_count >= policy.max_workers {
             return Ok(ScalingPlan {
@@ -101,7 +101,7 @@ impl ScalingPolicy {
     /// Export a snapshot of the current registry state.
     #[must_use]
     pub fn export() -> ScalingRegistryView {
-        ScalingRegistryStorageOps::export()
+        ScalingRegistryOps::export()
     }
 
     /// Look up the config for a given pool on the *current canister*.

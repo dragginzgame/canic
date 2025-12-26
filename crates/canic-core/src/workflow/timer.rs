@@ -1,25 +1,21 @@
 use crate::{
     ops::OpsError,
-    workflow::{
-        pool::PoolOps,
-        random::RandomOps,
-        runtime::{cycles::CycleTrackerOps, log::LogOps},
-    },
+    workflow::{pool::PoolWorkflow, random::RandomWorkflow, runtime::cycles::CycleTrackerWorkflow},
 };
 
 ///
-/// TimerService
+/// TimerWorkflow
 /// Coordinates periodic background services (timers) for Canic canisters.
 ///
 
-pub struct TimerService;
+pub struct TimerWorkflow;
 
-impl TimerService {
+impl TimerWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
-        CycleTrackerOps::start();
-        LogOps::start_retention();
-        RandomOps::start();
+        CycleTrackerWorkflow::start();
+        LogWorkflow::start_retention();
+        RandomWorkflow::start();
     }
 
     /// Start timers that should run only on root canisters.
@@ -30,6 +26,6 @@ impl TimerService {
         Self::start_all();
 
         // root-only services
-        PoolOps::start();
+        PoolWorkflow::start();
     }
 }

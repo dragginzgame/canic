@@ -9,6 +9,7 @@ pub mod cmc;
 pub mod ledger;
 pub mod mgmt;
 pub mod signature;
+pub mod timer;
 
 pub use mgmt::*;
 

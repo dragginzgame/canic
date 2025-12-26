@@ -5,9 +5,9 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        ic::{IcOpsError, install_canic_code, upgrade_canister},
+        ic::{IcOpsError, upgrade_canister},
         storage::{
-            directory::{AppDirectoryStorageOps, SubnetDirectoryStorageOps},
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
             topology::subnet::SubnetCanisterRegistryOps,
         },
         wasm::WasmOps,
@@ -17,7 +17,7 @@ use crate::{
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         ic::provision::{
             build_nonroot_init_payload, create_and_install_canister, delete_canister,
-            rebuild_directories_from_registry,
+            install_canic_code, rebuild_directories_from_registry,
         },
         pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
     },

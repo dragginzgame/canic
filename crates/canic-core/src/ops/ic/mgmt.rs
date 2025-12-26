@@ -41,6 +41,7 @@ pub async fn create_canister(
         .canister_id;
 
     SystemMetrics::increment(SystemMetricKind::CreateCanister);
+
     Ok(pid)
 }
 
@@ -56,6 +57,7 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 
     let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
     SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+
     Ok(status)
 }
 
@@ -79,12 +81,14 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
         .map_err(Error::from)?;
 
     SystemMetrics::increment(SystemMetricKind::DepositCycles);
+
     Ok(())
 }
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
+
     Ok(status.cycles.into())
 }
 

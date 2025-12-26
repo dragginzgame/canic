@@ -6,7 +6,7 @@ use crate::{
     ops::ic::call::Call,
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
-use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
 //
 // ────────────────────────────── TOPOLOGY LOOKUPS ─────────────────────────────

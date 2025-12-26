@@ -16,16 +16,13 @@ use crate::{
     ops::{
         OpsError,
         config::ConfigOps,
-        ic::{
-            create_canister, delete_canister, deposit_cycles, get_cycles, install_canic_code,
-            uninstall_code,
-        },
+        env::{EnvData, EnvOps},
+        ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
         prelude::*,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            env::{EnvData, EnvOps},
+            topology::SubnetCanisterRegistryOps,
         },
-        topology::SubnetCanisterRegistryOps,
         wasm::WasmOps,
     },
     types::Cycles,
@@ -96,15 +93,13 @@ pub(crate) async fn rebuild_directories_from_registry(
     });
 
     if include_app {
-        let app_view = AppDirectoryOps::root_build_view();
-        AppDirectoryOps::import(app_view.clone());
-        bundle.app_directory = Some(app_view);
+        let view = RootAppDirectoryBuilder::build_from_registry();
+        bundle.app_directory = Some(view);
     }
 
     if include_subnet {
-        let subnet_view = SubnetDirectoryOps::root_build_view();
-        SubnetDirectoryOps::import(subnet_view.clone());
-        bundle.subnet_directory = Some(subnet_view);
+        let view = RootSubnetDirectoryBuilder::build_from_registry();
+        bundle.subnet_directory = Some(view);
     }
 
     bundle

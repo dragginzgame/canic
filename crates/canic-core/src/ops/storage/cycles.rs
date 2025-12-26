@@ -3,13 +3,13 @@ pub use crate::model::memory::cycles::CycleTrackerView;
 use crate::{dto::page::PageRequest, model::memory::cycles::CycleTracker};
 
 ///
-/// CycleTrackerStorageOps
+/// CycleTrackerOps
 /// Stable storage wrapper for the cycle tracker.
 ///
 
-pub struct CycleTrackerStorageOps;
+pub struct CycleTrackerOps;
 
-impl CycleTrackerStorageOps {
+impl CycleTrackerOps {
     #[must_use]
     pub fn len() -> u64 {
         CycleTracker::len()

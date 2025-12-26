@@ -7,6 +7,7 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
+pub mod canister;
 pub mod config;
 pub mod env;
 pub mod ic;

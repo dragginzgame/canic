@@ -1,12 +1,13 @@
 use crate::{
     Error,
     config::{
-        Config,
+        Config, ConfigModel,
         schema::{CanisterConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, env::EnvOps},
 };
+use std::sync::Arc;
 use thiserror::Error as ThisError;
 
 ///
@@ -75,6 +76,10 @@ impl ConfigOps {
     // ---------------------------------------------------------------------
     // Current-context / infallible helpers
     // ---------------------------------------------------------------------
+
+    pub fn get() -> Arc<ConfigModel> {
+        Config::get().clone()
+    }
 
     /// Fetch the configuration record for the *current* subnet.
     ///

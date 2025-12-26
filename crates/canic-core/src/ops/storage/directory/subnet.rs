@@ -7,12 +7,12 @@ use crate::{
 use candid::Principal;
 
 ///
-/// SubnetDirectoryStorageOps
+/// SubnetDirectoryOps
 ///
 
-pub struct SubnetDirectoryStorageOps;
+pub struct SubnetDirectoryOps;
 
-impl SubnetDirectoryStorageOps {
+impl SubnetDirectoryOps {
     pub fn get(role: &CanisterRole) -> Option<Principal> {
         SubnetDirectory::view()
             .iter()

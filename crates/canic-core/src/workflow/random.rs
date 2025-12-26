@@ -1,27 +1,31 @@
 //! Randomness seeding helpers.
 
 use crate::{
+    cdk::timers::TimerId,
     config::schema::{RandomnessConfig, RandomnessSource},
     log::Topic,
-    ops::{config::ConfigOps, ic::mgmt},
+    ops::{
+        config::ConfigOps,
+        ic::{mgmt::raw_rand, timer::TimerOps},
+    },
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};
 use std::{cell::RefCell, time::Duration};
 
 thread_local! {
-    static SEED_TIMER: RefCell<Option<crate::ops::ic::timer::TimerId>> =
+    static SEED_TIMER: RefCell<Option<TimerId>> =
         const { RefCell::new(None) };
 }
 
 ///
-/// RandomOps
+/// RandomWorkflow
 /// Schedules PRNG seeding from the configured source (IC `raw_rand` or time).
 ///
 
-pub struct RandomOps;
+pub struct RandomWorkflow;
 
-impl RandomOps {
+impl RandomWorkflow {
     /// Start the periodic seeding timers.
     pub fn start() {
         let cfg = Self::randomness_config();
@@ -59,7 +63,7 @@ impl RandomOps {
 
     async fn seed_once(source: RandomnessSource) {
         match source {
-            RandomnessSource::Ic => match mgmt::raw_rand().await {
+            RandomnessSource::Ic => match raw_rand().await {
                 Ok(seed) => rand_utils::seed_from(seed),
                 Err(err) => {
                     crate::log!(Topic::Init, Warn, "raw_rand reseed failed: {err}");

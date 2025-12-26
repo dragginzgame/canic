@@ -13,9 +13,11 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
         env::EnvOps,
-        topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        storage::{
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        },
     },
 };
 use candid::Principal;

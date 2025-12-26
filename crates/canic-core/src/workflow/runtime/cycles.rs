@@ -1,16 +1,18 @@
-pub use crate::ops::cycles::CycleTrackerView;
+pub use crate::ops::storage::cycles::CycleTrackerView;
 
 use crate::{
-    cdk::{futures::spawn, utils::time::now_secs},
+    cdk::{futures::spawn, timers::TimerId, utils::time::now_secs},
     dto::page::{Page, PageRequest},
     log,
     log::Topic,
     ops::{
-        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY, config::ConfigOps,
-        cycles::CycleTrackerStorageOps, env::EnvOps, ic::canister_cycle_balance,
+        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
+        config::ConfigOps,
+        env::EnvOps,
+        ic::{canister_cycle_balance, timer::TimerOps},
+        storage::cycles::CycleTrackerOps,
     },
     types::Cycles,
-    workflow::timer::{TimerId, TimerOps},
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -31,12 +33,12 @@ thread_local! {
 const TRACKER_INTERVAL: Duration = OPS_CYCLE_TRACK_INTERVAL;
 
 ///
-/// CycleTrackerOps
+/// CycleTrackerWorkflow
 ///
 
-pub struct CycleTrackerOps;
+pub struct CycleTrackerWorkflow;
 
-impl CycleTrackerOps {
+impl CycleTrackerWorkflow {
     /// Start recurring tracking every X seconds
     /// Safe to call multiple times: only one loop will run.
     pub fn start() {
@@ -69,7 +71,7 @@ impl CycleTrackerOps {
             Self::evaluate_policies(cycles);
         }
 
-        CycleTrackerStorageOps::record(ts, cycles);
+        CycleTrackerOps::record(ts, cycles);
     }
 
     fn evaluate_policies(cycles: u128) {
@@ -131,7 +133,7 @@ impl CycleTrackerOps {
     #[must_use]
     pub fn purge() -> bool {
         let now = now_secs();
-        let purged = CycleTrackerStorageOps::purge(now);
+        let purged = CycleTrackerOps::purge(now);
 
         if purged > 0 {
             log!(
@@ -146,8 +148,8 @@ impl CycleTrackerOps {
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-        let entries = CycleTrackerStorageOps::entries(request);
-        let total = CycleTrackerStorageOps::len();
+        let entries = CycleTrackerOps::entries(request);
+        let total = CycleTrackerOps::len();
 
         Page { entries, total }
     }

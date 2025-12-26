@@ -31,13 +31,13 @@ use crate::{
         ic::{
             Network, build_network, canister_status, get_cycles,
             mgmt::{create_canister, uninstall_code},
+            timer::{TimerId, TimerOps},
             update_settings,
         },
         prelude::*,
         storage::topology::SubnetCanisterRegistryOps,
     },
     types::{Cycles, TC},
-    workflow::timer::{TimerId, TimerOps},
 };
 use candid::CandidType;
 use serde::Deserialize;
@@ -135,7 +135,7 @@ mod reset_scheduler {
                 }
             }
 
-            if !CanisterPoolStorageOps::update(pid, entry) {
+            if !CanisterPoolOps::update(pid, entry) {
                 log!(
                     Topic::CanisterPool,
                     Warn,
@@ -194,11 +194,11 @@ const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 const POOL_RESET_BATCH_SIZE: usize = 10;
 
 ///
-/// PoolOpsError
+/// PoolWorkflowError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum PoolOpsError {
+pub enum PoolPolicyError {
     #[error("pool entry missing for {pid}")]
     PoolEntryMissing { pid: Principal },
 

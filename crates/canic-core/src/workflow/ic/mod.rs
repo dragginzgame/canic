@@ -1,9 +1,7 @@
 pub mod http;
-pub mod lifecycle;
+pub mod network;
 pub mod payment;
 pub mod provision;
-pub mod timer;
-pub mod topology;
 pub mod xrc;
 
 use crate::{Error, ThisError, workflow::WorkflowError};
