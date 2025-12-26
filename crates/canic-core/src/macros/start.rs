@@ -37,7 +37,7 @@
 macro_rules! start {
     ($canister_role:expr) => {
         #[::canic::cdk::init]
-        fn init(payload: ::canic::core::ops::storage::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::core::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
             ::canic::core::__canic_load_config!();
 
             // ops
@@ -99,7 +99,7 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::ops::storage::topology::SubnetIdentity) {
+        fn init(identity: ::canic::core::ops::topology::SubnetIdentity) {
             ::canic::core::__canic_load_config!();
 
             // ops

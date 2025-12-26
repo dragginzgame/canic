@@ -18,15 +18,19 @@ use crate::{
         config::ConfigOps,
         directory::{AppDirectoryOps, SubnetDirectoryOps},
         env::{EnvData, EnvOps},
-        ic::{create_canister, deposit_cycles, get_cycles, install_canic_code, uninstall_code},
+        ic::{
+            create_canister, delete_canister, deposit_cycles, get_cycles, install_canic_code,
+            uninstall_code,
+        },
         prelude::*,
         topology::SubnetCanisterRegistryOps,
         wasm::WasmOps,
     },
     types::Cycles,
     workflow::{
-        CanisterInitPayload, WorkflowError,
+        CanisterInitPayload,
         cascade::state::StateBundle,
+        ic::IcError,
         pool::{PoolOps, pool_import_canister},
     },
 };
@@ -61,7 +65,7 @@ pub enum ProvisionError {
 
 impl From<ProvisionError> for Error {
     fn from(err: ProvisionError) -> Self {
-        WorkflowError::from(err).into()
+        IcError::from(err).into()
     }
 }
 
@@ -138,14 +142,14 @@ pub async fn create_and_install_canister(
                     "failed to recycle pool canister after install failure: {pid} ({recycle_err})"
                 );
             }
-        } else if let Err(delete_err) = delete_canister(pid).await {
+        } else if let Err(delete_err) = uninstall_and_delete_canister(pid).await {
             log!(
                 Topic::CanisterLifecycle,
                 Warn,
                 "failed to delete canister after install failure: {pid} ({delete_err})"
             );
         }
-        return Err(ProvisionOpsError::InstallFailed { pid, source: err }.into());
+        return Err(ProvisionError::InstallFailed { pid, source: err }.into());
     }
 
     Ok(pid)
@@ -165,7 +169,7 @@ pub async fn create_and_install_canister(
 /// 2. Remove from SubnetCanisterRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
-pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
+pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
     // Phase 0: uninstall code

@@ -3,7 +3,7 @@ use crate::{
     cdk::{types::Principal, utils::time::now_secs},
     ids::CanisterRole,
     model::memory::sharding::{ShardEntry, ShardKey, ShardingRegistry},
-    ops::storage::StorageOpsError,
+    ops::OpsError,
 };
 
 ///
@@ -42,7 +42,7 @@ pub enum ShardingRegistryOpsError {
 
 impl From<ShardingRegistryOpsError> for Error {
     fn from(err: ShardingRegistryOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        OpsError::from(err).into()
     }
 }
 
