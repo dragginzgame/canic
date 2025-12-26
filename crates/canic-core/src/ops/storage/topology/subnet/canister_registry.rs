@@ -15,12 +15,6 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum SubnetCanisterRegistryOpsError {
-    #[error("canister {0} not found in registry")]
-    NotFound(Principal),
-
-    #[error("canister role {0} not found in registry")]
-    RoleNotFound(CanisterRole),
-
     #[error("canister {0} already registered")]
     AlreadyRegistered(Principal),
 
@@ -95,23 +89,8 @@ impl SubnetCanisterRegistryOps {
         SubnetCanisterRegistry::register_root(pid);
     }
 
-    pub fn try_get(pid: Principal) -> Result<CanisterEntry, SubnetCanisterRegistryOpsError> {
-        SubnetCanisterRegistry::get(pid).ok_or(SubnetCanisterRegistryOpsError::NotFound(pid))
-    }
-
-    pub fn try_get_parent(pid: Principal) -> Result<Principal, SubnetCanisterRegistryOpsError> {
-        SubnetCanisterRegistry::get_parent(pid).ok_or(SubnetCanisterRegistryOpsError::NotFound(pid))
-    }
-
-    pub(crate) fn update_module_hash(
-        pid: Principal,
-        module_hash: Vec<u8>,
-    ) -> Result<(), SubnetCanisterRegistryOpsError> {
-        if SubnetCanisterRegistry::update_module_hash(pid, module_hash) {
-            Ok(())
-        } else {
-            Err(SubnetCanisterRegistryOpsError::NotFound(pid))
-        }
+    pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
+        SubnetCanisterRegistry::update_module_hash(pid, module_hash)
     }
 
     #[must_use]
