@@ -6,7 +6,6 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        OpsError,
         ic::{
             get_cycles,
             mgmt::{create_canister, uninstall_code},
@@ -105,7 +104,7 @@ fn mark_failed(pid: Principal, err: &Error) {
 // -----------------------------------------------------------------------------
 
 pub async fn pool_create_canister() -> Result<Principal, Error> {
-    policy::authority::require_root()?;
+    policy::authority::require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
     let pid = create_canister(pool_controllers(), cycles.clone()).await?;
@@ -121,7 +120,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 // -----------------------------------------------------------------------------
 
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
-    policy::authority::require_root()?;
+    policy::authority::require_pool_admin()?;
 
     policy::admissibility::assert_can_import(pid)?;
 
@@ -153,7 +152,7 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
 pub fn pool_import_queued_canisters(
     pids: Vec<Principal>,
 ) -> Result<(u64, u64, u64, u64, PoolImportSummary), Error> {
-    policy::authority::require_root()?;
+    policy::authority::require_pool_admin()?;
 
     let mut summary = PoolImportSummary::default();
     let total = pids.len() as u64;
@@ -191,7 +190,7 @@ pub fn pool_import_queued_canisters(
 pub async fn pool_export_canister(
     pid: Principal,
 ) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
-    policy::authority::require_root()?;
+    policy::authority::require_pool_admin()?;
 
     let entry = CanisterPoolStorageOps::get(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
 
