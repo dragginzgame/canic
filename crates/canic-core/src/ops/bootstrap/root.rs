@@ -8,7 +8,9 @@ use crate::{
         pool::{PoolOps, pool_import_canister},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::{env::EnvOps, topology::SubnetCanisterRegistryOps},
+        storage::{
+            directory::SubnetDirectoryOps, env::EnvOps, topology::SubnetCanisterRegistryOps,
+        },
     },
 };
 
@@ -122,12 +124,11 @@ pub async fn root_create_canisters() -> Result<(), Error> {
 
     // Creation pass: ensure all auto-create canister roles exist.
     for role in &subnet_cfg.auto_create {
-        if let Some(existing) = SubnetCanisterRegistryOps::get_type(role) {
+        if let Some(pid) = SubnetDirectoryOps::get(role) {
             log!(
                 Topic::Init,
                 Info,
-                "auto_create: {role} already registered as {}, skipping",
-                existing.pid
+                "auto_create: {role} already registered as {pid}, skipping"
             );
             continue;
         }

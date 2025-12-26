@@ -1,33 +1,14 @@
 use crate::{
-    Error, ThisError,
     dto::page::{Page, PageRequest},
     ids::CanisterRole,
     model::memory::directory::{DirectoryView, SubnetDirectory},
     ops::{
         config::ConfigOps,
-        storage::{
-            StorageOpsError, directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps,
-        },
+        storage::{directory::paginate, env::EnvOps, topology::SubnetCanisterRegistryOps},
     },
 };
 use candid::Principal;
 use std::collections::BTreeMap;
-
-///
-/// SubnetDirectoryOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum SubnetDirectoryOpsError {
-    #[error("canister role {0} not found in subnet directory")]
-    NotFound(CanisterRole),
-}
-
-impl From<SubnetDirectoryOpsError> for Error {
-    fn from(err: SubnetDirectoryOpsError) -> Self {
-        StorageOpsError::from(err).into()
-    }
-}
 
 ///
 /// SubnetDirectoryOps
@@ -53,13 +34,12 @@ impl SubnetDirectoryOps {
         }
     }
 
-    /// Get principals for a role, if present.
-    pub fn try_get(role: &CanisterRole) -> Result<Principal, Error> {
+    /// Get principal for a role, if present.
+    #[must_use]
+    pub fn get(role: &CanisterRole) -> Option<Principal> {
         let view = Self::resolve_view();
 
-        view.iter()
-            .find_map(|(t, pid)| (t == role).then_some(*pid))
-            .ok_or_else(|| SubnetDirectoryOpsError::NotFound(role.clone()).into())
+        view.iter().find_map(|(t, pid)| (t == role).then_some(*pid))
     }
 
     /// Page through the directory view.
@@ -77,6 +57,7 @@ impl SubnetDirectoryOps {
         Self::resolve_view()
     }
 
+    /// import
     pub fn import(view: DirectoryView) {
         SubnetDirectory::import(view);
     }
