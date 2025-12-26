@@ -6,14 +6,9 @@
 
 pub mod call;
 pub mod cmc;
-pub mod http;
 pub mod ledger;
 pub mod mgmt;
-pub mod payment;
-pub mod provision;
 pub mod signature;
-pub mod timer;
-pub mod xrc;
 
 pub use mgmt::*;
 
@@ -25,9 +20,6 @@ use crate::{Error, ThisError, ops::OpsError};
 
 #[derive(Debug, ThisError)]
 pub enum IcOpsError {
-    #[error(transparent)]
-    ProvisionOpsError(#[from] provision::ProvisionOpsError),
-
     #[error(transparent)]
     SignatureOpsError(#[from] signature::SignatureOpsError),
 }
@@ -99,6 +91,10 @@ pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Opti
 pub fn build_network() -> Option<Network> {
     build_network_from_dfx_network(option_env!("DFX_NETWORK"))
 }
+
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

@@ -1,9 +1,5 @@
 use crate::model::memory::state::{SubnetState, SubnetStateData};
 
-//
-// Stable-memory adapter
-//
-
 ///
 /// SubnetStateOps
 ///

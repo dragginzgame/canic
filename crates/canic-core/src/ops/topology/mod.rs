@@ -6,7 +6,7 @@ pub use subnet::*;
 
 pub use crate::model::memory::topology::SubnetIdentity;
 
-use crate::{Error, ThisError, ops::storage::StorageOpsError};
+use crate::{Error, ThisError, ops::OpsError};
 
 ///
 /// TopologyOpsError
@@ -20,6 +20,6 @@ pub enum TopologyOpsError {
 
 impl From<TopologyOpsError> for Error {
     fn from(err: TopologyOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        OpsError::from(err).into()
     }
 }

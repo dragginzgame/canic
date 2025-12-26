@@ -13,15 +13,13 @@ use crate::{
     Error,
     ids::CanisterRole,
     log::Topic,
+    model::memory::CanisterSummary,
     ops::{
         OpsError,
-        orchestration::cascade::CascadeOpsError,
         prelude::*,
-        storage::{
-            CanisterSummary,
-            topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
-        },
+        topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
     },
+    workflow::cascade::CascadeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -185,22 +183,22 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
 
     loop {
         if !seen.insert(pid) {
-            return Err(CascadeOpsError::ParentChainCycle(pid).into());
+            return Err(CascadeError::ParentChainCycle(pid).into());
         }
 
         let Some(entry) = SubnetCanisterRegistryOps::get(pid) else {
-            return Err(CascadeOpsError::CanisterNotFound(pid).into());
+            return Err(CascadeError::CanisterNotFound(pid).into());
         };
 
         if seen.len() > registry_len {
-            return Err(CascadeOpsError::ParentChainTooLong(seen.len()).into());
+            return Err(CascadeError::ParentChainTooLong(seen.len()).into());
         }
 
         chain.push(entry.clone().into());
 
         let Some(parent) = entry.parent_pid else {
             if entry.role != CanisterRole::ROOT {
-                return Err(CascadeOpsError::ParentChainNotRootTerminated(pid).into());
+                return Err(CascadeError::ParentChainNotRootTerminated(pid).into());
             }
             break;
         };
@@ -232,11 +230,11 @@ fn next_child_on_path(
     parents: &[CanisterSummary],
 ) -> Result<Option<Principal>, Error> {
     let Some(first) = parents.first() else {
-        return Err(CascadeOpsError::InvalidParentChain.into());
+        return Err(CascadeError::InvalidParentChain.into());
     };
 
     if first.pid != self_pid {
-        return Err(CascadeOpsError::ParentChainMissingSelf(self_pid).into());
+        return Err(CascadeError::ParentChainMissingSelf(self_pid).into());
     }
 
     Ok(parents.get(1).map(|p| p.pid))
@@ -260,7 +258,7 @@ fn slice_bundle_for_child(
     }
 
     if sliced_parents.is_empty() {
-        return Err(CascadeOpsError::NextHopNotFound(next_pid).into());
+        return Err(CascadeError::NextHopNotFound(next_pid).into());
     }
 
     // Slice children_map so it includes only nodes in the sliced chain

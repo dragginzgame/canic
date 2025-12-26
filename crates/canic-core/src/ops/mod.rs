@@ -7,7 +7,6 @@
 //! the public surface remains thin while policy, logging, and validation live
 //! here.
 
-pub mod command;
 pub mod config;
 pub mod directory;
 pub mod env;
@@ -89,10 +88,19 @@ pub enum OpsError {
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
+    EnvOpsError(#[from] env::EnvOpsError),
+
+    #[error(transparent)]
     IcOpsError(#[from] ic::IcOpsError),
 
     #[error(transparent)]
+    MemoryRegistryOpsError(#[from] memory::MemoryRegistryOpsError),
+
+    #[error(transparent)]
     RpcOpsError(#[from] rpc::RpcOpsError),
+
+    #[error(transparent)]
+    TopologyOpsError(#[from] topology::TopologyOpsError),
 }
 
 impl OpsError {

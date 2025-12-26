@@ -1,6 +1,8 @@
 pub mod app;
 pub mod bootstrap;
 pub mod cascade;
+pub mod command;
+pub mod ic;
 pub mod orchestrator;
 pub mod pool;
 pub mod runtime;
@@ -21,6 +23,9 @@ use serde::Deserialize;
 pub enum WorkflowError {
     #[error(transparent)]
     CascadeError(#[from] cascade::CascadeError),
+
+    #[error(transparent)]
+    IcError(#[from] ic::IcError),
 
     #[error(transparent)]
     OrchestrationError(#[from] orchestrator::OrchestratorError),

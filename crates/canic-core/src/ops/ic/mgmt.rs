@@ -17,9 +17,10 @@ use crate::{
     log,
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::{ic::call::Call, storage::CanisterInitPayload},
+    ops::ic::call::Call,
     spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     types::Cycles,
+    workflow::CanisterInitPayload,
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
@@ -218,6 +219,12 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
 
     mgmt::uninstall_code(&args).await.map_err(Error::from)?;
     SystemMetrics::increment(SystemMetricKind::UninstallCode);
+
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "🗑️ uninstall_canister: {canister_pid}"
+    );
 
     Ok(())
 }

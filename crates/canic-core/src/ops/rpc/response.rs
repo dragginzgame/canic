@@ -9,6 +9,7 @@ use crate::{
     Error,
     log::Topic,
     ops::{
+        directory::SubnetDirectoryOps,
         ic::deposit_cycles,
         orchestration::orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         prelude::*,
@@ -16,8 +17,7 @@ use crate::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RequestOpsError,
             UpgradeCanisterRequest,
         },
-        storage::directory::SubnetDirectoryOps,
-        storage::topology::subnet::SubnetCanisterRegistryOps,
+        topology::subnet::SubnetCanisterRegistryOps,
     },
 };
 

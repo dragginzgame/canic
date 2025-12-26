@@ -1,6 +1,5 @@
 use crate::{
-    Error, ThisError, access::AccessError, model::memory::state::AppMode,
-    ops::storage::state::AppStateOps,
+    Error, ThisError, access::AccessError, model::memory::state::AppMode, ops::state::AppStateOps,
 };
 
 ///

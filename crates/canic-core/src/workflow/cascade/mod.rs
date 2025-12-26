@@ -40,8 +40,8 @@ pub enum CascadeError {
     NextHopNotFound(Principal),
 }
 
-impl From<WorkflowError> for Error {
-    fn from(err: WorkflowError) -> Self {
+impl From<CascadeError> for Error {
+    fn from(err: CascadeError) -> Self {
         WorkflowError::from(err).into()
     }
 }
