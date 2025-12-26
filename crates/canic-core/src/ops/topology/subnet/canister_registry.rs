@@ -6,7 +6,7 @@ use crate::{
     config::schema::CanisterCardinality,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, topology::SubnetCanisterRegistry},
-    ops::{config::ConfigOps, storage::topology::TopologyOpsError},
+    ops::{config::ConfigOps, topology::TopologyOpsError},
 };
 
 ///

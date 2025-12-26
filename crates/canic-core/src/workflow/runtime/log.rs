@@ -4,10 +4,8 @@ use crate::{
     log,
     log::{Level, Topic},
     model::memory::log::{LogEntry, StableLog, apply_retention},
-    ops::{
-        OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
-        ic::timer::{TimerId, TimerOps},
-    },
+    ops::{OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL},
+    workflow::ic::timer::{TimerId, TimerOps},
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};

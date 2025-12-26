@@ -12,16 +12,13 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
+        directory::{AppDirectoryOps, SubnetDirectoryOps},
+        env::{EnvData, EnvOps},
         ic::{Network, build_network},
         memory::MemoryRegistryOps,
-        storage::{
-            CanisterInitPayload,
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            env::{EnvData, EnvOps},
-        },
         topology::{SubnetCanisterRegistryOps, SubnetIdentity},
     },
-    workflow::timer::TimerService,
+    workflow::{CanisterInitPayload, timer::TimerService},
 };
 use canic_memory::runtime::init_eager_tls;
 

@@ -5,24 +5,19 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        ic::{
-            IcOpsError, install_canic_code,
-            provision::{
-                build_nonroot_init_payload, create_and_install_canister, delete_canister,
-                rebuild_directories_from_registry,
-            },
-            upgrade_canister,
-        },
-        pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
-        storage::{
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            topology::subnet::SubnetCanisterRegistryOps,
-        },
+        directory::{AppDirectoryOps, SubnetDirectoryOps},
+        ic::{IcOpsError, install_canic_code, upgrade_canister},
+        topology::subnet::SubnetCanisterRegistryOps,
         wasm::WasmOps,
     },
     workflow::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
+        ic::provision::{
+            build_nonroot_init_payload, create_and_install_canister, delete_canister,
+            rebuild_directories_from_registry,
+        },
+        pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
     },
 };
 
@@ -211,7 +206,7 @@ impl CanisterLifecycleOrchestrator {
 
     async fn apply_upgrade(pid: Principal) -> Result<LifecycleResult, Error> {
         let entry = SubnetCanisterRegistryOps::get(pid)
-            .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+            .ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
         let wasm = WasmOps::try_get(&entry.role)?;
 
@@ -230,17 +225,17 @@ impl CanisterLifecycleOrchestrator {
 
     async fn apply_reinstall(pid: Principal) -> Result<LifecycleResult, Error> {
         let entry = SubnetCanisterRegistryOps::get(pid)
-            .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+            .ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
         if entry.role == CanisterRole::ROOT {
-            return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+            return Err(OrchestratorError::RootInitNotSupported(pid).into());
         }
 
         let wasm = WasmOps::try_get(&entry.role)?;
 
         let parent_pid = entry
             .parent_pid
-            .ok_or(OrchestratorOpsError::MissingParentPid(pid))?;
+            .ok_or(OrchestratorError::MissingParentPid(pid))?;
         assert_parent_exists(parent_pid)?;
         assert_immediate_parent(pid, parent_pid)?;
         assert_not_in_pool(pid)?;
@@ -277,7 +272,7 @@ impl CanisterLifecycleOrchestrator {
 
         if role == CanisterRole::ROOT {
             try_return_to_pool(pid, "adopt_pool role=ROOT").await;
-            return Err(OrchestratorOpsError::RootInitNotSupported(pid).into());
+            return Err(OrchestratorError::RootInitNotSupported(pid).into());
         }
 
         let wasm = WasmOps::try_get(&role)?;
@@ -285,7 +280,7 @@ impl CanisterLifecycleOrchestrator {
         // Validate module hash matches what pool expected (defensive)
         if wasm.module_hash() != stored_hash {
             try_return_to_pool(pid, "adopt_pool module hash mismatch").await;
-            return Err(OrchestratorOpsError::ModuleHashMismatch(pid).into());
+            return Err(OrchestratorError::ModuleHashMismatch(pid).into());
         }
 
         // Attach before install so init hooks can observe the registry; roll back on failure.
@@ -351,9 +346,9 @@ struct TopologySnapshot {
     parent_pid: Option<Principal>,
 }
 
-fn snapshot_topology_required(pid: Principal) -> Result<TopologySnapshot, OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+fn snapshot_topology_required(pid: Principal) -> Result<TopologySnapshot, OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
     Ok(TopologySnapshot {
         role: entry.role,
@@ -389,16 +384,16 @@ async fn cascade_all(
 // Invariants
 //
 
-fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorOpsError> {
+fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorError> {
     SubnetCanisterRegistryOps::get(parent_pid)
-        .ok_or(OrchestratorOpsError::ParentNotFound(parent_pid))?;
+        .ok_or(OrchestratorError::ParentNotFound(parent_pid))?;
     Ok(())
 }
 
-fn assert_no_children(pid: Principal) -> Result<(), OrchestratorOpsError> {
+fn assert_no_children(pid: Principal) -> Result<(), OrchestratorError> {
     let subtree = SubnetCanisterRegistryOps::subtree(pid);
     if subtree.len() > 1 {
-        return Err(OrchestratorOpsError::SubtreeNotEmpty {
+        return Err(OrchestratorError::SubtreeNotEmpty {
             pid,
             size: subtree.len(),
         });
@@ -406,13 +401,13 @@ fn assert_no_children(pid: Principal) -> Result<(), OrchestratorOpsError> {
     Ok(())
 }
 
-fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
     if entry.module_hash == Some(expected_hash) {
         Ok(())
     } else {
-        Err(OrchestratorOpsError::ModuleHashMismatch(pid))
+        Err(OrchestratorError::ModuleHashMismatch(pid))
     }
 }
 
@@ -420,44 +415,44 @@ fn assert_directories_match_registry() -> Result<(), Error> {
     let app_built = AppDirectoryOps::root_build_view();
     let app_exported = AppDirectoryOps::export();
     if app_built != app_exported {
-        return Err(OrchestratorOpsError::AppDirectoryDiverged.into());
+        return Err(OrchestratorError::AppDirectoryDiverged.into());
     }
 
     let subnet_built = SubnetDirectoryOps::root_build_view();
     let subnet_exported = SubnetDirectoryOps::export();
     if subnet_built != subnet_exported {
-        return Err(OrchestratorOpsError::SubnetDirectoryDiverged.into());
+        return Err(OrchestratorError::SubnetDirectoryDiverged.into());
     }
 
     Ok(())
 }
 
-fn assert_not_in_pool(pid: Principal) -> Result<(), OrchestratorOpsError> {
+fn assert_not_in_pool(pid: Principal) -> Result<(), OrchestratorError> {
     if PoolOps::contains(&pid) {
-        Err(OrchestratorOpsError::InPool(pid))
+        Err(OrchestratorError::InPool(pid))
     } else {
         Ok(())
     }
 }
 
-fn assert_in_pool(pid: Principal) -> Result<(), OrchestratorOpsError> {
+fn assert_in_pool(pid: Principal) -> Result<(), OrchestratorError> {
     if PoolOps::contains(&pid) {
         Ok(())
     } else {
-        Err(OrchestratorOpsError::NotInPool(pid))
+        Err(OrchestratorError::NotInPool(pid))
     }
 }
 
 fn assert_immediate_parent(
     pid: Principal,
     expected_parent: Principal,
-) -> Result<(), OrchestratorOpsError> {
-    let entry = SubnetCanisterRegistryOps::get(pid)
-        .ok_or(OrchestratorOpsError::RegistryEntryMissing(pid))?;
+) -> Result<(), OrchestratorError> {
+    let entry =
+        SubnetCanisterRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
     match entry.parent_pid {
         Some(pp) if pp == expected_parent => Ok(()),
-        other => Err(OrchestratorOpsError::ImmediateParentMismatch {
+        other => Err(OrchestratorError::ImmediateParentMismatch {
             pid,
             expected: expected_parent,
             found: other,

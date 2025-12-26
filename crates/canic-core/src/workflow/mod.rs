@@ -5,6 +5,8 @@ pub mod command;
 pub mod ic;
 pub mod orchestrator;
 pub mod pool;
+pub mod random;
+pub mod rpc;
 pub mod runtime;
 pub mod timer;
 

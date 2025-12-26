@@ -31,13 +31,13 @@ use crate::{
         ic::{
             Network, build_network, canister_status, get_cycles,
             mgmt::{create_canister, uninstall_code},
-            timer::{TimerId, TimerOps},
             update_settings,
         },
         prelude::*,
         topology::SubnetCanisterRegistryOps,
     },
     types::{Cycles, TC},
+    workflow::timer::{TimerId, TimerOps},
 };
 use candid::CandidType;
 use serde::Deserialize;

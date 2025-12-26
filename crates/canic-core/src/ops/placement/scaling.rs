@@ -5,7 +5,7 @@
 //! decisions, create new workers when necessary, and surface registry
 //! snapshots for diagnostics.
 
-pub use crate::ops::storage::scaling::ScalingRegistryView;
+pub use crate::ops::scaling::ScalingRegistryView;
 
 use crate::{
     Error, ThisError,

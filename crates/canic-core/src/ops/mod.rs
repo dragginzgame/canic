@@ -8,6 +8,7 @@
 //! here.
 
 pub mod config;
+pub mod cycles;
 pub mod directory;
 pub mod env;
 pub mod ic;
@@ -15,7 +16,7 @@ pub mod icrc;
 pub mod memory;
 pub mod perf;
 pub mod placement;
-pub mod random;
+pub mod pool;
 pub mod rpc;
 pub mod sharding;
 pub mod state;
