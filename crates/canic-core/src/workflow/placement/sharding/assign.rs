@@ -18,7 +18,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         rpc::{CreateCanisterParent, create_canister_request},
-        sharding::ShardingRegistryOps,
+        storage::sharding::ShardingRegistryOps,
     },
 };
 
@@ -237,7 +237,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::{CanisterRole, SubnetRole},
-        ops::{env::EnvOps, sharding::ShardingRegistryOps},
+        ops::storage::{env::EnvOps, sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 

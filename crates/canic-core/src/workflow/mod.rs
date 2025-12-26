@@ -2,8 +2,10 @@ pub mod app;
 pub mod bootstrap;
 pub mod cascade;
 pub mod command;
+pub mod directory;
 pub mod ic;
 pub mod orchestrator;
+pub mod placement;
 pub mod pool;
 pub mod random;
 pub mod rpc;
@@ -12,7 +14,7 @@ pub mod timer;
 
 use crate::{
     ThisError,
-    ops::{directory::DirectoryView, env::EnvData},
+    ops::{directory::DirectoryView, storage::env::EnvData},
 };
 use candid::CandidType;
 use serde::Deserialize;

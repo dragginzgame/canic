@@ -14,13 +14,12 @@
 //! - `macros/` provides public macro entrypoints and endpoint bundles.
 //!
 //! The default flow is: endpoints → ops → model.
-pub mod access;
 
 // -----------------------------------------------------------------------------
 // Phase 0: path coherence re-exports (no behavior change)
 // -----------------------------------------------------------------------------
 
-pub use access::{auth, guard, policy};
+pub mod access;
 pub mod config;
 pub mod dispatch;
 pub mod dto;
@@ -31,6 +30,7 @@ pub mod macros;
 pub(crate) mod model;
 pub mod ops;
 pub mod perf;
+pub mod policy;
 pub mod spec;
 pub mod workflow;
 

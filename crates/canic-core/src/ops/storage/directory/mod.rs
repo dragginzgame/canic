@@ -1,5 +1,3 @@
-//! Stable-memory directory adapters.
-
 mod app;
 mod subnet;
 

@@ -14,16 +14,17 @@
 //!
 //! ===========================================================================
 
-use super::metrics::{PoolMetrics, pool_metrics};
-use super::{ShardingOpsError, ShardingRegistryDto};
 use crate::{
     Error,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     ops::{
         config::ConfigOps,
-        placement::sharding::hrw::HrwSelector,
-        sharding::{ShardEntry, ShardingRegistryOps},
+        storage::sharding::{ShardEntry, ShardingRegistryOps},
+    },
+    policy::placement::sharding::{
+        hrw::HrwSelector,
+        metrics::{PoolMetrics, pool_metrics},
     },
 };
 use candid::CandidType;
@@ -320,9 +321,9 @@ fn plan_slot_backfill(
     SlotBackfillPlan { slots, occupied }
 }
 
-/// ===========================================================================
-/// Tests
-/// ===========================================================================
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

@@ -1,10 +1,18 @@
+pub use crate::model::memory::sharding::ShardEntry;
+
 use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
     ids::CanisterRole,
-    model::memory::sharding::{ShardEntry, ShardKey, ShardingRegistry},
-    ops::OpsError,
+    model::memory::sharding::{ShardKey, ShardingRegistry},
+    ops::storage::StorageOpsError,
 };
+
+///
+/// ShardingRegistryDto
+///
+
+pub type ShardingRegistryDto = Vec<(Principal, ShardEntry)>;
 
 ///
 /// ShardingRegistryOps
@@ -42,7 +50,7 @@ pub enum ShardingRegistryOpsError {
 
 impl From<ShardingRegistryOpsError> for Error {
     fn from(err: ShardingRegistryOpsError) -> Self {
-        OpsError::from(err).into()
+        StorageOpsError::ShardingRegistryOpsError(err).into()
     }
 }
 

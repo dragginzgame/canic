@@ -8,7 +8,7 @@ pub use response::*;
 use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
-    ops::{OpsError, env::EnvOps, ic::call::Call},
+    ops::{OpsError, ic::call::Call, storage::env::EnvOps},
 };
 use serde::de::DeserializeOwned;
 

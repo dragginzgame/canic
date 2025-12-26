@@ -8,19 +8,12 @@
 //! here.
 
 pub mod config;
-pub mod cycles;
-pub mod directory;
-pub mod env;
 pub mod ic;
 pub mod icrc;
 pub mod memory;
 pub mod perf;
-pub mod placement;
-pub mod pool;
 pub mod rpc;
-pub mod sharding;
-pub mod state;
-pub mod topology;
+pub mod storage;
 pub mod wasm;
 
 use std::time::Duration;
@@ -68,7 +61,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::env::EnvOps};
+use crate::{ThisError, ops::storage::env::EnvOps};
 
 ///
 /// OpsError
@@ -89,9 +82,6 @@ pub enum OpsError {
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
-    EnvOpsError(#[from] env::EnvOpsError),
-
-    #[error(transparent)]
     IcOpsError(#[from] ic::IcOpsError),
 
     #[error(transparent)]
@@ -101,7 +91,7 @@ pub enum OpsError {
     RpcOpsError(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
-    TopologyOpsError(#[from] topology::TopologyOpsError),
+    StorageOpsError(#[from] storage::StorageOpsError),
 }
 
 impl OpsError {
