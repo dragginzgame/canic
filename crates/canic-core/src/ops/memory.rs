@@ -4,7 +4,7 @@ use crate::{
     CRATE_NAME, Error, ThisError, log,
     log::Topic,
     model::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
-    ops::storage::StorageOpsError,
+    ops::OpsError,
 };
 use canic_memory::{
     MemoryRegistryError,
@@ -23,7 +23,7 @@ pub enum MemoryRegistryOpsError {
 
 impl From<MemoryRegistryOpsError> for Error {
     fn from(err: MemoryRegistryOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        OpsError::from(err).into()
     }
 }
 

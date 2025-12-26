@@ -16,19 +16,19 @@ use crate::{
     ops::{
         OpsError,
         config::ConfigOps,
-        ic::IcOpsError,
-        orchestration::cascade::state::StateBundle,
-        pool::{PoolOps, pool_import_canister},
+        directory::{AppDirectoryOps, SubnetDirectoryOps},
+        env::{EnvData, EnvOps},
+        ic::{create_canister, deposit_cycles, get_cycles, install_canic_code, uninstall_code},
         prelude::*,
-        storage::{
-            CanisterInitPayload,
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            env::{EnvData, EnvOps},
-            topology::SubnetCanisterRegistryOps,
-        },
+        topology::SubnetCanisterRegistryOps,
         wasm::WasmOps,
     },
     types::Cycles,
+    workflow::{
+        CanisterInitPayload, WorkflowError,
+        cascade::state::StateBundle,
+        pool::{PoolOps, pool_import_canister},
+    },
 };
 use candid::Principal;
 use thiserror::Error as ThisError;
@@ -50,18 +50,18 @@ pub(crate) fn build_nonroot_init_payload(
 }
 
 ///
-/// ProvisionOpsError
+/// ProvisionError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum ProvisionOpsError {
+pub enum ProvisionError {
     #[error("install failed for {pid}: {source}")]
     InstallFailed { pid: Principal, source: Error },
 }
 
-impl From<ProvisionOpsError> for Error {
-    fn from(err: ProvisionOpsError) -> Self {
-        IcOpsError::from(err).into()
+impl From<ProvisionError> for Error {
+    fn from(err: ProvisionError) -> Self {
+        WorkflowError::from(err).into()
     }
 }
 
@@ -169,10 +169,10 @@ pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
     // Phase 0: uninstall code
-    super::uninstall_code(pid).await?;
+    uninstall_code(pid).await?;
 
     // Phase 1: delete the canister
-    super::delete_canister(pid).await?;
+    delete_canister(pid).await?;
 
     // Phase 2: remove registry record
     let removed_entry = SubnetCanisterRegistryOps::remove(&pid);
@@ -190,15 +190,6 @@ pub async fn delete_canister(pid: Principal) -> Result<(), Error> {
             "🗑️ delete_canister: {pid} not in registry"
         ),
     }
-
-    Ok(())
-}
-
-/// Uninstall code from a canister without deleting it.
-pub async fn uninstall_canister(pid: Principal) -> Result<(), Error> {
-    super::uninstall_code(pid).await?;
-
-    log!(Topic::CanisterLifecycle, Ok, "🗑️ uninstall_canister: {pid}");
 
     Ok(())
 }
@@ -232,12 +223,12 @@ async fn allocate_canister_with_source(
 
     // Reuse from pool
     if let Some((pid, _)) = PoolOps::pop_ready() {
-        let mut current = super::get_cycles(pid).await?;
+        let mut current = get_cycles(pid).await?;
 
         if current < target {
             let missing = target.to_u128().saturating_sub(current.to_u128());
             if missing > 0 {
-                super::deposit_cycles(pid, missing).await?;
+                deposit_cycles(pid, missing).await?;
                 current = Cycles::new(current.to_u128() + missing);
 
                 log!(
@@ -276,7 +267,7 @@ async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<P
     let mut controllers = Config::get().controllers.clone();
     controllers.push(root); // root always controls
 
-    let pid = super::create_canister(controllers, cycles.clone()).await?;
+    let pid = create_canister(controllers, cycles.clone()).await?;
 
     log!(
         Topic::CanisterLifecycle,
@@ -311,7 +302,7 @@ async fn install_canister(
     // otherwise if the init() tries to create a canister via root, it will panic
     SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
 
-    if let Err(err) = super::install_canic_code(
+    if let Err(err) = install_canic_code(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),

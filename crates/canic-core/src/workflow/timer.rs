@@ -21,7 +21,7 @@ impl TimerService {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        OpsError::require_root().expect("TimerService::start_all_root called from non-root");
+        WorkflowError::require_root().expect("TimerService::start_all_root called from non-root");
 
         // start shared timers too
         Self::start_all();

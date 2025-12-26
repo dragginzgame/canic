@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     access::AccessError,
-    ops::{ic::Network, ic::build_network, storage::env::EnvOps},
+    ops::{env::EnvOps, ic::Network, ic::build_network},
 };
 
 ///

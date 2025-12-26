@@ -4,7 +4,6 @@ use crate::{
     Error, ThisError, log,
     log::Topic,
     model::memory::state::{AppState, AppStateData},
-    ops::storage::StorageOpsError,
 };
 use candid::CandidType;
 use derive_more::Display;

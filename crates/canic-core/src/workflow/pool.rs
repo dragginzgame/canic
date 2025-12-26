@@ -15,8 +15,6 @@
 // On local replicas, only canisters that are routable in the current replica
 // may enter or remain in the pool. IC/mainnet IDs are skipped on local.
 
-pub use crate::ops::storage::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
-
 use crate::{
     Error, ThisError,
     cdk::{
@@ -37,7 +35,7 @@ use crate::{
             update_settings,
         },
         prelude::*,
-        storage::{pool::CanisterPoolStorageOps, topology::SubnetCanisterRegistryOps},
+        topology::SubnetCanisterRegistryOps,
     },
     types::{Cycles, TC},
 };

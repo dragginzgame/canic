@@ -2,7 +2,7 @@ use crate::{
     Error,
     ops::{
         OpsError,
-        storage::state::{AppCommand, AppStateOps},
+        state::{AppCommand, AppStateOps},
     },
     workflow::cascade::state::{StateBundle, cascade_root_state},
 };
