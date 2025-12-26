@@ -1,4 +1,4 @@
-use crate::{Error, ThisError, ops::OpsError};
+use crate::{Error, ThisError, ops::storage::StorageOpsError};
 use crate::{
     cdk::{api::canister_self, types::Principal},
     ids::{CanisterRole, SubnetRole},
@@ -34,7 +34,7 @@ pub enum EnvOpsError {
 
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
-        OpsError::from(err).into()
+        StorageOpsError::from(err).into()
     }
 }
 

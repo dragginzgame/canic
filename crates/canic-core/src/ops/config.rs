@@ -5,7 +5,7 @@ use crate::{
         schema::{CanisterConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
-    ops::{OpsError, env::EnvOps},
+    ops::{OpsError, storage::env::EnvOps},
 };
 use thiserror::Error as ThisError;
 

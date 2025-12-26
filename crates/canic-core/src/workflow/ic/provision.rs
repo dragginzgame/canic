@@ -16,13 +16,15 @@ use crate::{
     ops::{
         OpsError,
         config::ConfigOps,
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
-        env::{EnvData, EnvOps},
         ic::{
             create_canister, delete_canister, deposit_cycles, get_cycles, install_canic_code,
             uninstall_code,
         },
         prelude::*,
+        storage::{
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            env::{EnvData, EnvOps},
+        },
         topology::SubnetCanisterRegistryOps,
         wasm::WasmOps,
     },

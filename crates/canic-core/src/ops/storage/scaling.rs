@@ -3,13 +3,13 @@ pub use crate::model::memory::scaling::{ScalingRegistryView, WorkerEntry};
 use crate::{cdk::types::Principal, model::memory::scaling::ScalingRegistry};
 
 ///
-/// ScalingWorkerRegistryStorageOps
+/// ScalingRegistryOps
 /// Stable storage wrapper for the scaling worker registry.
 ///
 
-pub struct ScalingWorkerRegistryStorageOps;
+pub struct ScalingRegistryOps;
 
-impl ScalingWorkerRegistryStorageOps {
+impl ScalingRegistryOps {
     pub fn insert(pid: Principal, entry: WorkerEntry) {
         ScalingRegistry::insert(pid, entry);
     }
