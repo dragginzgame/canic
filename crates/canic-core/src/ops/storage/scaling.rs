@@ -1,6 +1,6 @@
-pub use crate::model::memory::scaling::{ScalingRegistryView, WorkerEntry};
-
-use crate::{cdk::types::Principal, model::memory::scaling::ScalingRegistry};
+use crate::{
+    cdk::types::Principal, dto::placement::WorkerEntryView, model::memory::scaling::ScalingRegistry,
+};
 
 ///
 /// ScalingRegistryOps
@@ -10,12 +10,12 @@ use crate::{cdk::types::Principal, model::memory::scaling::ScalingRegistry};
 pub struct ScalingRegistryOps;
 
 impl ScalingRegistryOps {
-    pub fn insert(pid: Principal, entry: WorkerEntry) {
+    pub fn insert(pid: Principal, entry: WorkerEntryView) {
         ScalingRegistry::insert(pid, entry);
     }
 
     #[must_use]
-    pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
+    pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntryView)> {
         ScalingRegistry::find_by_pool(pool)
     }
 

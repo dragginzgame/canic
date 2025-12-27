@@ -10,11 +10,8 @@
 use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
-    dto::rpc::CreateCanisterParent,
-    ops::{
-        rpc::create_canister_request,
-        storage::scaling::{ScalingRegistryOps, WorkerEntry},
-    },
+    dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
+    ops::{rpc::create_canister_request, storage::scaling::ScalingRegistryOps},
     policy::placement::scaling::{ScalingPlan, ScalingPolicy},
 };
 use candid::Principal;
@@ -75,7 +72,7 @@ impl ScalingWorkflow {
             .new_canister_pid;
 
         // 4. Register in memory
-        let entry = WorkerEntry::try_new(pool, role, now_secs())
+        let entry = WorkerEntryView::try_new(pool, role, now_secs())
             .map_err(ScalingWorkflowError::InvalidKey)?;
 
         ScalingRegistryOps::insert(pid, entry);
