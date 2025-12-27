@@ -1,8 +1,8 @@
 use crate::dto::{
+    canister::CanisterSummaryView,
     directory::DirectoryView,
     prelude::*,
     state::{AppStateView, SubnetStateView},
-    topology::CanisterSummaryView,
 };
 
 ///

@@ -126,7 +126,7 @@ impl From<CanisterSummary> for CanisterSummaryView {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use candid::Encode;
+    use crate::cdk::structures::Storable;
     use std::str::FromStr;
 
     #[test]
@@ -142,7 +142,7 @@ pub mod test {
             module_hash: Some(vec![0u8; 32]),
             created_at: u64::MAX,
         };
-        let bytes = Encode!(&entry).unwrap();
+        let bytes = entry.to_bytes();
 
         assert!(
             bytes.len() <= CanisterEntry::STORABLE_MAX_SIZE as usize,
@@ -163,7 +163,7 @@ pub mod test {
             role: CanisterRole::new("really_long_canister_role"),
             parent_pid: Some(pid),
         };
-        let bytes = Encode!(&entry).unwrap();
+        let bytes = entry.to_bytes();
 
         assert!(
             bytes.len() <= CanisterSummary::STORABLE_MAX_SIZE as usize,

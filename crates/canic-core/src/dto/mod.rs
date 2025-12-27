@@ -1,4 +1,5 @@
 pub mod bundle;
+pub mod canister;
 pub mod directory;
 pub mod metrics;
 pub mod page;

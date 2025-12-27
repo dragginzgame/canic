@@ -2,10 +2,10 @@ pub use crate::model::memory::state::AppMode;
 
 use crate::{
     Error, ThisError,
-    dto::app::AppCommand,
+    dto::state::AppCommand,
     log,
     log::Topic,
-    model::memory::state::{AppState, AppStateData},
+    model::memory::state::{AppState, AppStateData, AppStateView},
     ops::storage::state::StateOpsError,
 };
 
@@ -61,13 +61,17 @@ impl AppStateOps {
         Ok(())
     }
 
-    pub fn import(data: AppStateData) {
+    /// Import app state from a public view.
+    pub fn import(view: AppStateView) {
+        let data: AppStateData = view.into();
         AppState::import(data);
     }
 
+    /// Export app state as a public view.
     #[must_use]
-    pub fn export() -> AppStateData {
-        AppState::export()
+    pub fn export() -> AppStateView {
+        let data: AppStateData = AppState::export();
+        data.into()
     }
 }
 
@@ -83,7 +87,7 @@ mod tests {
     fn reset_state(mode: AppMode) {
         Config::reset_for_tests();
         let _ = Config::init_for_tests();
-        AppStateOps::import(AppStateData { mode });
+        AppStateOps::import(AppStateView { mode });
     }
 
     #[test]

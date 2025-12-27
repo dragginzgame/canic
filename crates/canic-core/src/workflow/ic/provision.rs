@@ -28,6 +28,7 @@ use crate::{
         wasm::WasmOps,
     },
     workflow::{
+        cascade::state::StateBundleBuilder,
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::IcError,
         pool::pool_import_canister,
@@ -76,34 +77,33 @@ impl From<ProvisionError> for Error {
 //
 
 /// Rebuild AppDirectory and SubnetDirectory from the registry,
-/// import them directly, and return the resulting state bundle.
+/// import them directly, and return a builder containing the sections to sync.
 ///
-/// When `updated_role` is provided, only include the sections that
-/// list that role.
+/// When `updated_role` is provided, only include the sections that list that role.
 pub(crate) async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
-) -> StateBundle {
-    let mut bundle = StateBundle::default();
+) -> StateBundleBuilder {
     let cfg = Config::get();
 
     let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
-
     let include_subnet = updated_role.is_none_or(|role| {
         let subnet_cfg = ConfigOps::current_subnet();
         subnet_cfg.subnet_directory.contains(role)
     });
 
+    let mut builder = StateBundleBuilder::new();
+
     if include_app {
         let view = RootAppDirectoryBuilder::build_from_registry();
-        bundle.app_directory = Some(view);
+        builder = builder.with_app_directory(view);
     }
 
     if include_subnet {
         let view = RootSubnetDirectoryBuilder::build_from_registry();
-        bundle.subnet_directory = Some(view);
+        builder = builder.with_subnet_directory(view);
     }
 
-    bundle
+    builder
 }
 
 //
