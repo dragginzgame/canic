@@ -4,7 +4,7 @@ use candid::{Decode, Principal, encode_one};
 use canic::{
     Error,
     core::{
-        dto::{registry::SubnetIdentity, rpc::CreateCanisterResponse, state::AppCommand},
+        dto::{rpc::CreateCanisterResponse, state::AppCommand, topology::SubnetIdentity},
         ids::CanisterRole,
         model::memory::CanisterEntry,
         ops::storage::state::{AppMode, AppStateData},

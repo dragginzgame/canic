@@ -1,6 +1,9 @@
 use crate::{
-    dto::page::{Page, PageRequest},
-    model::memory::directory::{AppDirectory, DirectoryView},
+    dto::{
+        directory::DirectoryView,
+        page::{Page, PageRequest},
+    },
+    model::memory::directory::AppDirectory,
     ops::{prelude::*, storage::directory::paginate},
 };
 use candid::Principal;

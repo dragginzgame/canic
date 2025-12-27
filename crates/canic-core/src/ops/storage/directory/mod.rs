@@ -4,10 +4,11 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-pub use crate::model::memory::directory::DirectoryView;
-
 use crate::{
-    dto::page::{Page, PageRequest},
+    dto::{
+        directory::DirectoryView,
+        page::{Page, PageRequest},
+    },
     ids::CanisterRole,
 };
 use candid::Principal;

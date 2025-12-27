@@ -16,14 +16,14 @@ All fields are validated when `canic::build!` or `canic::build_root!` run, so co
 
 Canic treats config/env identity as startup invariants. Missing data is a fatal error.
 
-- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `DFX_NETWORK` is baked in.
+- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `DFX_NETWORK` is baked in (`local` or `ic`).
 - Init/post-upgrade: `__canic_load_config!()` loads the embedded TOML; `ConfigOps::current_*` is infallible.
-- Root env: `root_init(identity)` sets base env fields, then `root_set_subnet_id()` resolves the real subnet on IC.
-  - On IC, registry lookup failure traps.
-  - On local/PocketIC, it falls back to `self` as the subnet principal.
+- Root env: `root_init(identity)` sets base env fields directly from `SubnetIdentity` (no registry lookup).
+  - `Prime` means root == subnet == prime root.
+  - `Standard` carries the `subnet_type` and `prime_root_pid` from the prime subnet.
+  - `Manual` is a test/support override that pins the subnet principal.
 - Non-root env: children must receive a complete `EnvData` in `CanisterInitPayload` from root.
-  - On IC, missing env fields always trap.
-  - On local, missing env fields are filled from the embedded `CANISTER_ID_ROOT` (requires `dfx` builds).
+  - Missing env fields always trap (no local fallback).
 
 ---
 
@@ -41,7 +41,7 @@ Global set of canister roles that should appear in the prime root directory expo
 
 Controls the warm canister pool for a subnet.
 
-- `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0`).
+- `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0` when the table is omitted; required when the table is present).
 - `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=local`.
 - `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
@@ -66,6 +66,7 @@ Feature toggles tied to public standards.
 Optional allow-list for privileged operations.
 
 - `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
+  - If omitted, whitelist checks allow all principals.
 
 ---
 
@@ -75,7 +76,7 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 
 ### `[subnets.<name>]`
 
-- `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap.
+- `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap (must exist in `canisters`).
 - `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `cardinality = "single"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
@@ -85,10 +86,11 @@ Each child table configures a logical canister role within the subnet.
 
 - `cardinality = "single" | "many"` – required; controls whether multiple canisters may share this role in the registry.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
-- `topup.threshold = "10T"` – minimum cycles before requesting a top-up (optional).
-- `topup.amount = "5T"` – cycles to request when topping up (optional).
+- `topup.threshold = "10T"` – minimum cycles before requesting a top-up (set both fields if enabling top-ups).
+- `topup.amount = "5T"` – cycles to request when topping up (set both fields if enabling top-ups).
+  Omit `topup` entirely to disable auto top-ups.
 - `randomness.enabled = true` – enable PRNG seeding (set `false` to disable).
-- `randomness.reseed_interval_secs = 3600` – reseed interval in seconds (default `3600`).
+- `randomness.reseed_interval_secs = 3600` – reseed interval in seconds (default `3600`, must be > 0 when enabled).
 - `randomness.source = "ic"` – seeding source (`ic` or `time`, default `ic`).
   - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless worker pools.
@@ -107,9 +109,9 @@ policy.max_workers = 16
 
 Fields:
 
-- `canister_role` – canister role that represents workers in this pool.
+- `canister_role` – canister role that represents workers in this pool (must exist in the same subnet).
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
-- `policy.max_workers` – hard cap on workers (default `32`).
+- `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
 
 #### Sharding Pools
 
@@ -124,9 +126,9 @@ policy.max_shards = 64
 
 Fields:
 
-- `canister_role` – canister role that implements the shard.
-- `policy.capacity` – per-shard capacity (default `1000`).
-- `policy.max_shards` – maximum shard count (default `4`).
+- `canister_role` – canister role that implements the shard (must exist in the same subnet).
+- `policy.capacity` – per-shard capacity (default `1000`, must be > 0).
+- `policy.max_shards` – maximum shard count (default `4`, must be > 0).
 
 ### Randomness (Per-Canister)
 
@@ -140,7 +142,7 @@ source = "ic" # or "time"
 Fields:
 
 - `enabled` – enable PRNG seeding (default `true`).
-- `reseed_interval_secs` – reseed interval in seconds (default `3600`).
+- `reseed_interval_secs` – reseed interval in seconds (default `3600`, must be > 0 when enabled).
 - `source` – `ic` for management canister `raw_rand`, `time` for `ic_cdk::api::time()`.
 
 ---
