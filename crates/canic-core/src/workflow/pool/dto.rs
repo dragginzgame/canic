@@ -36,11 +36,6 @@ pub enum PoolAdminCommand {
 
     /// Queue one or more canisters for pool import.
     ImportQueued { pids: Vec<Principal> },
-
-    /// Requeue failed pool entries for another reset attempt.
-    ///
-    /// If `None`, all failed entries are requeued.
-    RequeueFailed { pids: Option<Vec<Principal>> },
 }
 
 /// Summary of pool entries by status.
@@ -53,7 +48,7 @@ pub struct PoolStatusCounts {
 }
 
 /// Diagnostics for queued imports.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct PoolImportSummary {
     pub status_counts: PoolStatusCounts,
 

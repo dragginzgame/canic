@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    Error, ThisError,
     config::{
         Config, ConfigModel,
         schema::{CanisterConfig, SubnetConfig},
@@ -7,8 +7,8 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, env::EnvOps},
 };
+use candid::Principal;
 use std::sync::Arc;
-use thiserror::Error as ThisError;
 
 ///
 /// ConfigOpsError
@@ -79,6 +79,11 @@ impl ConfigOps {
 
     pub fn get() -> Arc<ConfigModel> {
         Config::get().clone()
+    }
+
+    #[must_use]
+    pub fn controllers() -> Vec<Principal> {
+        Config::get().controllers.clone()
     }
 
     /// Fetch the configuration record for the *current* subnet.

@@ -16,16 +16,14 @@
 use crate::{
     Error,
     log::Topic,
-    model::memory::pool::CanisterPoolStatus,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
         ic::timer::{TimerId, TimerOps},
         prelude::*,
-        storage::pool::CanisterPoolStorageOps,
+        storage::pool::PoolOps,
     },
-    workflow::pool::{
-        can_enter_pool, mark_failed, register_or_update_preserving_metadata, reset_into_pool,
-    },
+    policy::pool::{PoolPolicyError, admissibility::can_enter_pool},
+    workflow::pool::{mark_failed, reset_into_pool},
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -124,7 +122,7 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = CanisterPoolStorageOps::export()
+    let mut pending: Vec<_> = PoolOps::export()
         .into_iter()
         .filter(|(_, e)| e.status.is_pending_reset())
         .collect();
@@ -136,21 +134,30 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
     pending.sort_by_key(|(_, e)| e.created_at);
 
     for (pid, _) in pending.into_iter().take(limit) {
-        if !can_enter_pool(pid).await {
-            let _ = CanisterPoolStorageOps::take(&pid);
-            continue;
-        }
+        match can_enter_pool(pid).await {
+            Ok(()) => {
+                // admissible, proceed
+            }
 
+            Err(PoolPolicyError::RegisteredInSubnet(_)) => {
+                // Permanently forbidden → remove from pool
+                let _ = PoolOps::take(&pid);
+                continue;
+            }
+
+            Err(PoolPolicyError::NonImportableOnLocal { .. }) => {
+                // Temporarily not admissible → skip, leave pending
+                continue;
+            }
+
+            Err(_) => {
+                // Defensive: unknown policy failure
+                continue;
+            }
+        }
         match reset_into_pool(pid).await {
             Ok(cycles) => {
-                register_or_update_preserving_metadata(
-                    pid,
-                    cycles,
-                    CanisterPoolStatus::Ready,
-                    None,
-                    None,
-                    None,
-                );
+                crate::workflow::pool::mark_ready(pid, cycles);
             }
             Err(err) => {
                 log!(
@@ -167,7 +174,7 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 }
 
 fn has_pending_reset() -> bool {
-    CanisterPoolStorageOps::export()
+    PoolOps::export()
         .into_iter()
         .any(|(_, e)| e.status.is_pending_reset())
 }

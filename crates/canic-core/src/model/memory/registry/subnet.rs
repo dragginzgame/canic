@@ -5,9 +5,7 @@ use crate::{
     },
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{
-        CanisterEntry, CanisterSummary, id::topology::subnet::SUBNET_CANISTER_REGISTRY_ID,
-    },
+    model::memory::{CanisterEntry, CanisterSummary, id::registry::SUBNET_REGISTRY_ID},
 };
 use candid::Principal;
 use std::{
@@ -16,12 +14,12 @@ use std::{
 };
 
 //
-// SUBNET_CANISTER_REGISTRY
+// SUBNET_REGISTRY
 //
 
 eager_static! {
-    static SUBNET_CANISTER_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(SubnetCanisterRegistry, SUBNET_CANISTER_REGISTRY_ID)));
+    static SUBNET_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(ic_memory!(SubnetCanisterRegistry, SUBNET_REGISTRY_ID)));
 }
 
 ///
