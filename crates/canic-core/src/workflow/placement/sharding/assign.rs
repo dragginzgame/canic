@@ -14,8 +14,7 @@ use crate::{
     ops::{
         config::ConfigOps, rpc::create_canister_request, storage::sharding::ShardingRegistryOps,
     },
-    policy::placement::sharding::{ShardingPlanState, ShardingPolicy},
-    workflow::placement::pool_metrics,
+    policy::placement::sharding::ShardingPolicyError,
 };
 
 ///
@@ -35,8 +34,8 @@ impl ShardAllocator {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
         let metrics = pool_metrics(pool);
-        if !ShardingPolicyOps::can_create(&metrics, policy) {
-            return Err(ShardingOpsError::ShardCreationBlocked(format!(
+        if !ShardingPolicy::can_create(&metrics, policy) {
+            return Err(ShardingPolicyError::ShardCreationBlocked(format!(
                 "shard cap reached for pool {pool}"
             ))
             .into());
@@ -91,7 +90,7 @@ impl ShardingOps {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
         // Step 1: Determine plan via HRW-based policy
-        let plan = ShardingPolicyOps::plan_assign_to_pool(pool, tenant)?;
+        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
@@ -123,7 +122,7 @@ impl ShardingOps {
 
             ShardingPlanState::CreateAllowed => {
                 let slot = plan.target_slot.ok_or_else(|| {
-                    ShardingOpsError::ShardCreationBlocked(
+                    ShardingPolicyError::ShardCreationBlocked(
                         "missing target slot in allocation plan".into(),
                     )
                 })?;
@@ -140,7 +139,7 @@ impl ShardingOps {
             }
 
             ShardingPlanState::CreateBlocked { reason } => {
-                Err(ShardingOpsError::ShardCreationBlocked(reason.to_string()).into())
+                Err(ShardingPolicyError::ShardCreationBlocked(reason.to_string()).into())
             }
         }
     }
@@ -157,7 +156,7 @@ impl ShardingOps {
 
         for tenant in tenants.iter().take(limit as usize) {
             // Let the normal policy decide where this tenant should go.
-            let plan = ShardingPolicyOps::plan_reassign_from_shard(pool, tenant, donor_shard_pid)?;
+            let plan = ShardingPolicy::plan_reassign_from_shard(pool, tenant, donor_shard_pid)?;
             match plan.state {
                 ShardingPlanState::UseExisting { pid } if pid != donor_shard_pid => {
                     ShardingRegistryOps::assign(pool, tenant, pid)?;
@@ -233,7 +232,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::{CanisterRole, SubnetRole},
-        ops::storage::{env::EnvOps, sharding::ShardingRegistryOps},
+        ops::{env::EnvOps, storage::sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 

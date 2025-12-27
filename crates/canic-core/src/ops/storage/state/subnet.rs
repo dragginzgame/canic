@@ -1,4 +1,4 @@
-use crate::model::memory::state::{SubnetState, SubnetStateData};
+use crate::model::memory::state::{SubnetState, SubnetStateData, SubnetStateView};
 
 ///
 /// SubnetStateOps
@@ -7,12 +7,14 @@ use crate::model::memory::state::{SubnetState, SubnetStateData};
 pub struct SubnetStateOps;
 
 impl SubnetStateOps {
-    pub fn import(data: SubnetStateData) {
+    pub fn import(view: SubnetStateView) {
+        let data: SubnetStateData = view.into();
         SubnetState::import(data);
     }
 
     #[must_use]
-    pub fn export() -> SubnetStateData {
-        SubnetState::export()
+    pub fn export() -> SubnetStateView {
+        let data: SubnetStateData = SubnetState::export();
+        data.into()
     }
 }
