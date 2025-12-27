@@ -26,7 +26,11 @@ use crate::{
         wasm::WasmOps,
     },
     workflow::{
-        CanisterInitPayload, cascade::state::StateBundle, ic::IcError, pool::pool_import_canister,
+        CanisterInitPayload,
+        cascade::state::StateBundle,
+        directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+        ic::IcError,
+        pool::pool_import_canister,
         prelude::*,
     },
 };

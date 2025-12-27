@@ -7,7 +7,7 @@ use crate::{
     cdk::types::Principal,
     ops::{
         ic::{Network, build_network, canister_status},
-        storage::topology::SubnetRegistryOps,
+        storage::registry::SubnetRegistryOps,
     },
     policy::pool::PoolPolicyError,
 };

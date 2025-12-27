@@ -16,7 +16,7 @@ use crate::{
         },
         storage::{
             pool::{PoolOps, pool_controllers},
-            topology::SubnetRegistryOps,
+            registry::SubnetRegistryOps,
         },
     },
     policy::{self, pool::PoolPolicyError},

@@ -10,13 +10,14 @@ use crate::{
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             pool::PoolOps,
-            topology::subnet::SubnetRegistryOps,
+            registry::SubnetRegistryOps,
         },
         wasm::WasmOps,
     },
     workflow::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
+        directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::provision::{
             build_nonroot_init_payload, create_and_install_canister,
             rebuild_directories_from_registry,
@@ -413,14 +414,16 @@ fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), Orch
 }
 
 fn assert_directories_match_registry() -> Result<(), Error> {
-    let app_built = AppDirectoryOps::root_build_view();
+    let app_built = RootAppDirectoryBuilder::build_from_registry();
     let app_exported = AppDirectoryOps::export();
+
     if app_built != app_exported {
         return Err(OrchestratorError::AppDirectoryDiverged.into());
     }
 
-    let subnet_built = SubnetDirectoryOps::root_build_view();
+    let subnet_built = RootSubnetDirectoryBuilder::build_from_registry();
     let subnet_exported = SubnetDirectoryOps::export();
+
     if subnet_built != subnet_exported {
         return Err(OrchestratorError::SubnetDirectoryDiverged.into());
     }

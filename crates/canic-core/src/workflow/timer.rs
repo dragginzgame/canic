@@ -1,7 +1,4 @@
-use crate::{
-    ops::OpsError,
-    workflow::{random::RandomWorkflow, runtime::cycles::CycleTrackerWorkflow},
-};
+use crate::{ops::OpsError, workflow};
 
 ///
 /// TimerWorkflow
@@ -13,9 +10,9 @@ pub struct TimerWorkflow;
 impl TimerWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
-        CycleTrackerWorkflow::start();
-        LogWorkflow::start_retention();
-        RandomWorkflow::start();
+        workflow::runtime::scheduler::start();
+        workflow::log::scheduler::start_retention();
+        workflow::random::scheduler::start();
     }
 
     /// Start timers that should run only on root canisters.
@@ -26,6 +23,6 @@ impl TimerWorkflow {
         Self::start_all();
 
         // root-only services
-        PoolWorkflow::start();
+        workflow::pool::scheduler::start();
     }
 }
