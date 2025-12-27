@@ -1,6 +1,10 @@
-use crate::dto::prelude::*;
+use crate::dto::{canister::CanisterSummaryView, prelude::*};
 
-pub use crate::model::memory::{CanisterEntryView, CanisterSummaryView};
+///
+/// CanisterChildrenView
+///
+
+pub type CanisterChildrenView = Vec<CanisterSummaryView>;
 
 ///
 /// SubnetIdentity

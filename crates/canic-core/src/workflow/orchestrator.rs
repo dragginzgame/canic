@@ -378,7 +378,7 @@ async fn cascade_all(
             .await
             .with_app_state()
             .build();
-        root_cascade_state(bundle).await?;
+        root_cascade_state(&bundle).await?;
         assert_directories_match_registry()?;
     }
 

@@ -11,9 +11,9 @@
 use super::warn_if_large;
 use crate::{
     Error,
+    dto::{bundle::TopologyBundle, canister::CanisterSummaryView},
     ids::CanisterRole,
     log::Topic,
-    model::memory::CanisterSummary,
     ops::{
         OpsError,
         prelude::*,
@@ -24,16 +24,16 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 
 ///
-/// TopologyBundle
+/// TopologyBundleBuilder
+/// Workflow helper for assembling topology bundles
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
-pub struct TopologyBundle {
-    pub parents: Vec<CanisterSummary>,
-    pub children_map: HashMap<Principal, Vec<CanisterSummary>>,
+pub struct TopologyBundleBuilder {
+    parents: Vec<CanisterSummaryView>,
+    children_map: HashMap<Principal, Vec<CanisterSummaryView>>,
 }
 
-impl TopologyBundle {
+impl TopologyBundleBuilder {
     pub fn for_target(target_pid: Principal) -> Result<Self, Error> {
         let parents = parent_chain(target_pid)?;
 
@@ -61,7 +61,7 @@ impl TopologyBundle {
 pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    let bundle = match TopologyBundle::for_target(target_pid) {
+    let bundle = match TopologyBundleBuilder::for_target(target_pid) {
         Ok(bundle) => bundle,
         Err(err) => {
             log!(
@@ -176,7 +176,7 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 // ===========================================================================
 //
 
-fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
+fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummaryView>, Error> {
     let registry_len = SubnetRegistryOps::export().len();
     let mut chain = Vec::new();
     let mut seen: HashSet<Principal> = HashSet::new();
@@ -227,7 +227,7 @@ async fn send_bundle(pid: &Principal, bundle: &TopologyBundle) -> Result<(), Err
 
 fn next_child_on_path(
     self_pid: Principal,
-    parents: &[CanisterSummary],
+    parents: &[CanisterSummaryView],
 ) -> Result<Option<Principal>, Error> {
     let Some(first) = parents.first() else {
         return Err(CascadeError::InvalidParentChain.into());
@@ -295,8 +295,8 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn s(pid: Principal, parent_pid: Option<Principal>) -> CanisterSummary {
-        CanisterSummary {
+    fn s(pid: Principal, parent_pid: Option<Principal>) -> CanisterSummaryView {
+        CanisterSummaryView {
             pid,
             role: CanisterRole::new("test"),
             parent_pid,
