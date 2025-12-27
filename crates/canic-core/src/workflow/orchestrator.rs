@@ -9,6 +9,7 @@ use crate::{
         ic::{IcOpsError, mgmt::delete_canister, upgrade_canister},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
+            pool::PoolOps,
             topology::subnet::SubnetCanisterRegistryOps,
         },
         wasm::WasmOps,
@@ -20,7 +21,7 @@ use crate::{
             build_nonroot_init_payload, create_and_install_canister,
             rebuild_directories_from_registry,
         },
-        pool::{PoolOps, pool_export_canister, pool_import_canister, pool_recycle_canister},
+        pool::{pool_export_canister, pool_import_canister, pool_recycle_canister},
     },
 };
 
@@ -293,7 +294,7 @@ impl CanisterLifecycleOrchestrator {
         }
 
         let payload = build_nonroot_init_payload(&role, parent);
-        if let Err(err) = install_canic_code(
+        if let Err(err) = install_code_with_extra_arg(
             CanisterInstallMode::Install,
             pid,
             wasm.bytes(),

@@ -12,6 +12,25 @@ pub mod rpc;
 pub mod runtime;
 pub mod timer;
 
+///
+/// Prelude
+///
+
+pub mod prelude {
+    pub use crate::{
+        cdk::{
+            api::{canister_self, msg_caller},
+            candid::CandidType,
+            types::{Account, Int, Nat, Principal, Subaccount},
+        },
+        ids::CanisterRole,
+        log,
+        log::{Level, Topic},
+        types::Cycles,
+    };
+    pub use serde::{Deserialize, Serialize};
+}
+
 use crate::{
     ThisError,
     ops::{env::EnvData, storage::directory::DirectoryView},

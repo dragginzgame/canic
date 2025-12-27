@@ -8,12 +8,11 @@ use crate::{
         ic::{Network, build_network},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::{directory::SubnetDirectoryOps, topology::SubnetCanisterRegistryOps},
+        storage::{
+            directory::SubnetDirectoryOps, pool::PoolOps, topology::SubnetCanisterRegistryOps,
+        },
     },
-    workflow::{
-        ic::network::try_get_current_subnet_pid,
-        pool::{PoolOps, pool_import_canister},
-    },
+    workflow::{ic::network::try_get_current_subnet_pid, pool::pool_import_canister},
 };
 
 /// Initializes the subnet identifier for the root canister.

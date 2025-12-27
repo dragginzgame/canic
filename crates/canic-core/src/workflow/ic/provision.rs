@@ -12,25 +12,22 @@ use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
-    log::Topic,
     ops::{
         OpsError,
+        canister::install_code_with_extra_arg,
         config::ConfigOps,
         env::{EnvData, EnvOps},
         ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
-        prelude::*,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
+            pool::PoolOps,
             topology::SubnetCanisterRegistryOps,
         },
         wasm::WasmOps,
     },
-    types::Cycles,
     workflow::{
-        CanisterInitPayload,
-        cascade::state::StateBundle,
-        ic::IcError,
-        pool::{PoolOps, pool_import_canister},
+        CanisterInitPayload, cascade::state::StateBundle, ic::IcError, pool::pool_import_canister,
+        prelude::*,
     },
 };
 use candid::Principal;
@@ -303,7 +300,7 @@ async fn install_canister(
     // otherwise if the init() tries to create a canister via root, it will panic
     SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
 
-    if let Err(err) = install_canic_code(
+    if let Err(err) = install_code_with_extra_arg(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),

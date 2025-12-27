@@ -1,16 +1,20 @@
 pub use crate::model::memory::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
 
-use crate::types::Cycles;
-use crate::{cdk::types::Principal, ids::CanisterRole, model::memory::pool::CanisterPool};
+use crate::{
+    cdk::types::Principal,
+    ids::CanisterRole,
+    model::memory::pool::CanisterPool,
+    ops::{config::ConfigOps, prelude::*},
+};
 
 ///
-/// CanisterPoolStorageOps
+/// PoolOps
 /// Stable storage wrapper for the canister pool registry.
 ///
 
-pub struct CanisterPoolStorageOps;
+pub struct PoolOps;
 
-impl CanisterPoolStorageOps {
+impl PoolOps {
     pub fn register(
         pid: Principal,
         cycles: Cycles,
@@ -56,4 +60,32 @@ impl CanisterPoolStorageOps {
     pub fn len() -> u64 {
         CanisterPool::len()
     }
+}
+
+/// Return the controller set for pool canisters.
+///
+/// Mechanical helper used by workflow when creating or resetting
+/// pool canisters.
+///
+/// Guarantees:
+/// - Includes all configured controllers from `Config`
+/// - Always includes the root canister as a controller
+/// - Deduplicates the root if already present
+///
+/// This function:
+/// - Does NOT perform authorization checks
+/// - Does NOT mutate state
+/// - Does NOT make IC calls
+///
+/// Policy decisions about *who* should control pool canisters
+/// are assumed to be encoded in configuration.
+pub fn pool_controllers() -> Vec<Principal> {
+    let mut controllers = ConfigOps::controllers();
+
+    let root = canister_self();
+    if !controllers.contains(&root) {
+        controllers.push(root);
+    }
+
+    controllers
 }
