@@ -12,7 +12,7 @@ pub struct RootAppDirectoryBuilder;
 impl RootAppDirectoryBuilder {
     #[must_use]
     pub fn build_from_registry() -> DirectoryView {
-        let entries = SubnetRegistryOps::export();
+        let entries = SubnetRegistryOps::export_view();
         let mut map = BTreeMap::new();
 
         for entry in entries {
@@ -34,7 +34,7 @@ pub struct RootSubnetDirectoryBuilder;
 impl RootSubnetDirectoryBuilder {
     #[must_use]
     pub fn build_from_registry() -> DirectoryView {
-        let entries = SubnetRegistryOps::export();
+        let entries = SubnetRegistryOps::export_view();
         let mut map = BTreeMap::new();
 
         for entry in entries {

@@ -1,17 +1,20 @@
 use crate::{
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
+        placement::WorkerEntryView,
         topology::CanisterChildrenView,
     },
-    model::memory::{CanisterEntry, CanisterSummary, children::CanisterChildren},
+    model::memory::{
+        CanisterEntry, CanisterSummary, children::CanisterChildrenData, scaling::WorkerEntry,
+    },
 };
 
 ///
-/// CanisterChildren
+/// CanisterChildrenData
 ///
 
-impl From<&CanisterChildren> for CanisterChildrenView {
-    fn from(e: &CanisterChildren) -> Self {
+impl From<&CanisterChildrenData> for CanisterChildrenView {
+    fn from(e: &CanisterChildrenData) -> Self {
         Self {
             pid: e.pid,
             role: e.role.clone(),
@@ -48,6 +51,20 @@ impl From<&CanisterSummary> for CanisterSummaryView {
             pid: s.pid,
             role: s.role.clone(),
             parent_pid: s.parent_pid,
+        }
+    }
+}
+
+///
+/// WorkerEntry
+///
+
+impl From<&WorkerEntry> for WorkerEntryView {
+    fn from(w: &WorkerEntry) -> Self {
+        Self {
+            pool: w.pool.as_str().to_string(),
+            canister_role: w.canister_role,
+            created_at_secs: w.created_at_secs,
         }
     }
 }

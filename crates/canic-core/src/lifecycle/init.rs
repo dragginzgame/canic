@@ -5,9 +5,8 @@
 //! limited to environment seeding and state import.
 
 use crate::{
-    abi::CanisterInitPayload,
     cdk::futures::spawn,
-    dto::topology::SubnetIdentity,
+    dto::{abi::v1::CanisterInitPayload, topology::SubnetIdentity},
     ids::CanisterRole,
     ops::{
         env::EnvOps,

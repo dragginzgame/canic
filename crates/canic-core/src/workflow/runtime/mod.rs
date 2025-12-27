@@ -4,13 +4,12 @@ pub mod random;
 
 use crate::{
     VERSION,
-    abi::CanisterInitPayload,
     cdk::{
         api::{canister_self, trap},
         println,
         types::Principal,
     },
-    dto::topology::SubnetIdentity,
+    dto::{abi::v1::CanisterInitPayload, topology::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{

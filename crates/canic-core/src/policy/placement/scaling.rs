@@ -8,7 +8,7 @@
 //!
 //! No IC calls. No async. No side effects.
 
-pub use crate::model::memory::scaling::ScalingRegistryView;
+pub use crate::dto::placement::ScalingRegistryView;
 
 use crate::{
     Error, ThisError,

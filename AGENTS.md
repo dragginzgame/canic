@@ -1,5 +1,7 @@
-Below is a **clean, consolidated rewrite of `AGENTS.md`** that incorporates the architectural decisions you have made during this refactor cycle: DTO separation, model/view boundaries, lifecycle semantics, timer usage, policy enforcement, and module placement.
-This version is opinionated, explicit, and intended to *prevent regression*.
+Below is the **complete, consolidated, up-to-date `AGENTS.md`**, incorporating all architectural decisions made during this refactor cycle.
+This version resolves prior inconsistencies, formalizes naming and data taxonomy, and is safe to treat as **normative**.
+
+You can drop this in verbatim.
 
 ---
 
@@ -8,7 +10,8 @@ This version is opinionated, explicit, and intended to *prevent regression*.
 This document defines **how agents (contributors, CI, maintainers)** must interact with the codebase.
 It supplements `README.md` with **authoritative rules** on workflow, layering, lifecycle behavior, and data ownership.
 
-This file is normative: **code should conform to it**, not the other way around.
+This file is normative: **code must conform to it**.
+If code conflicts with this document, **the code is wrong**.
 
 ---
 
@@ -17,12 +20,13 @@ This file is normative: **code should conform to it**, not the other way around.
 1. [Workflow](#-workflow)
 2. [Project Structure](#-project-structure)
 3. [Layering & Data Ownership](#-layering--data-ownership)
-4. [Lifecycle Semantics](#-lifecycle-semantics)
-5. [Coding Style](#-coding-style)
-6. [Testing](#-testing)
-7. [Security & Auth](#-security--auth)
-8. [Design Principles](#-design-principles)
-9. [Agent Checklist](#-agent-checklist)
+4. [Canonical Data, Views, and DTOs](#-canonical-data-views-and-dtos)
+5. [Lifecycle Semantics](#-lifecycle-semantics)
+6. [Coding Style](#-coding-style)
+7. [Testing](#-testing)
+8. [Security & Auth](#-security--auth)
+9. [Design Principles](#-design-principles)
+10. [Agent Checklist](#-agent-checklist)
 
 ---
 
@@ -101,17 +105,28 @@ AGENTS.md, CONFIG.md        # Contributor docs
 
 ## 🧩 Layering & Data Ownership
 
-### High-level flow
+### Dependency Direction (strict)
+
+Dependencies must point **downward only**:
 
 ```
-endpoints  →  workflow  →  ops  →  model
-                       ↘
-                        dto (transfer only)
+endpoints
+   ↓
+workflow
+   ↓
+policy
+   ↓
+ops
+   ↓
+model
 ```
+
+`dto` is used as a **transfer format** by endpoints, workflow, and ops.
+`model` and `policy` must not depend on `dto`.
 
 ---
 
-### `dto/` — **Data Transfer Objects (pure)**
+## `dto/` — **Data Transfer Objects (pure)**
 
 DTOs represent **boundary payloads only**.
 
@@ -120,18 +135,19 @@ DTOs:
 * contain **only data**
 * contain **no logic**
 * do **not** call ops, workflow, or model
-* may reference **other DTOs or public view types**
+* may reference **other DTOs or view types**
 * are safe to serialize, clone, and expose
 
 Examples:
 
-* init payloads (`CanisterInitPayload`)
+* init payloads
 * RPC requests / responses
-* sync bundles (`StateBundle`, `TopologyBundle`)
+* sync bundles
 * dry-run plans
-* endpoint response views
+* endpoint response shapes
+* ABI types (`dto::abi::vX::*`)
 
-DTOs **must not**:
+DTOs must not:
 
 * define storage bounds
 * contain invariants
@@ -139,13 +155,14 @@ DTOs **must not**:
 
 ---
 
-### `model/` — **Authoritative domain state**
+## `model/` — **Authoritative domain state**
 
-#### `model/memory/`
+### `model/memory/`
 
 * Stable memory (persists across upgrades)
-* Authoritative system-of-record state
-* Defines storage bounds and invariants
+* System-of-record state
+* Storage layout and bounds
+* Local, structural invariants
 
 Examples:
 
@@ -154,29 +171,155 @@ Examples:
 * cycle tracker
 * logs
 
-#### `model/*` (non-memory)
+### `model/*` (non-memory)
 
-* Volatile runtime state (cleared on upgrade)
-* Metrics, caches, registries
+* Volatile runtime state
+* Caches, metrics, ephemeral registries
 
 Model types:
 
-* may define invariants
+* may define **local invariants**
 * may define storage traits
-* are **not** public by default
+* are **not public by default**
+
+Rule:
+
+> `model` defines what *is true* about stored state.
+> It does not decide what *should happen next*.
 
 ---
 
-### Model *Views* (important distinction)
+## `ops/` — **Application services**
 
-Some model-derived types are **read-only snapshots** intended to cross boundaries.
+Ops provide **deterministic access** to model state.
 
-Rules:
+Ops:
 
-* View types are **data-only**
-* No mutation
-* No storage traits
-* Safe to expose
+* expose command and query façades
+* read and mutate model state
+* enforce application preconditions (existence, ownership, mode)
+* adapt domain state into views and DTOs
+
+Includes:
+
+* `ops::storage` — thin façades over `model/memory`
+* `ops::adapter` — domain → view / DTO mapping
+
+Ops must not:
+
+* define business policy
+* perform IC management calls
+* use async
+* schedule timers
+* coordinate multi-step behavior
+
+Rule:
+
+> `ops` applies state changes safely and deterministically,
+> but does not decide whether those changes are desirable.
+
+---
+
+## `policy/` — **Decision making (pure)**
+
+Policy owns **system rules and decisions**.
+
+Policy:
+
+* evaluates eligibility, placement, scaling, sharding
+* enforces system-wide invariants
+* answers “can we?” / “should we?”
+
+Allowed:
+
+* reading config
+* reading state via ops
+* deterministic computation
+
+Forbidden:
+
+* state mutation
+* IC calls
+* async
+* timers
+* side effects
+
+Rule:
+
+> `policy` decides, but never acts.
+
+---
+
+## `workflow/` — **Coordination & orchestration**
+
+Workflow owns **multi-step behavior over time**.
+
+Workflow:
+
+* sequences ops calls
+* performs IC management calls
+* schedules timers and retries
+* executes cascades and rollbacks
+* validates decisions via policy
+
+Workflow must not:
+
+* access model directly
+* embed policy logic inline
+
+Rule:
+
+> `workflow` is where things happen.
+
+---
+
+## `endpoints/` / macros — **System boundary**
+
+Endpoints and macros:
+
+* define IC entrypoints
+* perform auth and guards
+* marshal DTOs
+* delegate immediately to workflow or ops
+
+Forbidden:
+
+* business logic
+* policy decisions
+* orchestration
+* direct model access
+
+Rule:
+
+> Endpoints and macros wire requests to the system;
+> they do not contain business behavior.
+
+---
+
+## 📤 Canonical Data, Views, and DTOs
+
+The codebase distinguishes **three outward-facing representations**.
+
+### `*Data` — Canonical snapshots
+
+* Represent canonical internal state
+* Used for import/export, workflows, cascades
+* Detached from storage implementation
+* Owned by model or ops
+
+Examples:
+
+* `CanisterChildrenData`
+* `TopologyData`
+* `AppStateData`
+
+---
+
+### `*View` — Read-only projections
+
+* Data-only snapshots
+* No invariants, no mutation
+* Safe to expose internally or externally
 * Used by ops, workflow, DTOs, endpoints
 
 Examples:
@@ -184,64 +327,32 @@ Examples:
 * `DirectoryView`
 * `RegistryView`
 * `CycleTrackerView`
-* metric snapshots
 
-DTOs **may depend on view types**, but never on authoritative model types.
-
-If a type is used in DTOs, it must be explicitly treated as a **view**.
+DTOs may depend on views, **never on authoritative model types**.
 
 ---
 
-### `ops/` — **Execution & policy**
+### DTOs — Boundary contracts
 
-Ops:
+* API / RPC / ABI shapes
+* Versionable and replaceable
+* Passive data only
 
-* enforce policy
-* orchestrate storage mutations
-* call IC management APIs
-* perform logging, cleanup, scheduling
+---
 
-Submodules:
+### Export / Import Naming
 
-* `ops::storage` — thin façades over model/memory
-* `ops::runtime` — execution control (timers, guards, schedulers)
-* `ops::ic` — direct IC system interactions
+The names `export()` and `import()` are reserved for **canonical snapshot operations**.
 
 Rules:
 
-* Endpoints must route **mutations** through ops
-* Ops may return model views or DTOs
-* Ops must not expose raw model internals
+* `export()` / `import()` operate on `*Data` types
+* Views and DTOs must not use `export()` naming
+* Projection functions should be named:
 
----
-
-### `workflow/` — **Coordination**
-
-Workflow:
-
-* sequences multi-step operations
-* coordinates ops calls
-* assembles DTOs
-* owns “how things happen”
-
-Workflow must not:
-
-* define storage schemas
-* expose IC endpoints directly
-
----
-
-### `endpoints/`
-
-* IC boundary only
-* Authentication & routing
-* Thin delegation into workflow
-* No business logic
-
-Admin endpoints:
-
-* grouped by domain (`*_admin`)
-* single update call per domain
+  * `get_*_view`
+  * `snapshot_*`
+  * `to_*_view`
 
 ---
 
@@ -274,8 +385,8 @@ Adapters are **synchronous glue**.
 Rules:
 
 * restore environment context
-* **spawn** async workflow bootstrap
-* never `await` workflow
+* spawn async workflow bootstrap
+* never `await`
 * identical semantics for init and post-upgrade
 
 There must be **no difference** in execution model between init and upgrade.
@@ -343,7 +454,7 @@ fn p(id: u8) -> Principal {
 
 * Auth is enforced at **endpoints**
 * Workflow and ops assume authenticated input
-* Never embed auth checks in model or DTOs
+* Never embed auth checks in model, policy, or DTOs
 * Subnet / parent checks must be explicit and documented
 
 ---
@@ -354,11 +465,12 @@ fn p(id: u8) -> Principal {
 
   * model = truth
   * ops = execution
+  * policy = decision
   * workflow = coordination
   * dto = transfer
 * No hidden side effects
 * No cross-layer shortcuts
-* Policy must be enforced on execution paths
+* Prefer splitting responsibilities over collapsing them
 * Dry-run endpoints must use policy, not ops directly
 
 ---
@@ -372,11 +484,12 @@ Before merging:
 * [ ] `make test`
 * [ ] Update `CHANGELOG.md` if user-facing
 * [ ] Admin endpoints grouped under `*_admin`
-* [ ] Endpoints → workflow → ops → model
+* [ ] Endpoints → workflow → policy → ops → model
 * [ ] DTOs are data-only
 * [ ] No model internals leaked publicly
 * [ ] Lifecycle adapters spawn, never await
 
 ---
 
-If code conflicts with this document, **the code is wrong**.
+**This document is authoritative.**
+If implementation and documentation disagree, update the implementation.
