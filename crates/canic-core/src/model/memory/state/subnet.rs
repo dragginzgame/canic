@@ -31,25 +31,6 @@ pub struct SubnetStateData {}
 impl_storable_bounded!(SubnetStateData, 32, true);
 
 ///
-/// SubnetStateView
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetStateView {}
-
-impl From<SubnetStateData> for SubnetStateView {
-    fn from(_: SubnetStateData) -> Self {
-        Self {}
-    }
-}
-
-impl From<SubnetStateView> for SubnetStateData {
-    fn from(_: SubnetStateView) -> Self {
-        Self {}
-    }
-}
-
-///
 /// SubnetState (public API)
 ///
 

@@ -1,6 +1,10 @@
 use crate::{
     cdk::{api::canister_self, types::Principal},
-    dto::page::{Page, PageRequest},
+    dto::{
+        canister::CanisterSummaryView,
+        page::{Page, PageRequest},
+        topology::CanisterChildrenView,
+    },
     ids::CanisterRole,
     model::memory::{CanisterSummary, children::CanisterChildren},
     ops::{env::EnvOps, storage::registry::SubnetRegistryOps},
@@ -15,7 +19,7 @@ pub struct CanisterChildrenOps;
 impl CanisterChildrenOps {
     /// Resolve the canonical view of direct children for the current canister.
     /// Root rebuilds from the registry; children rely on their imported snapshot.
-    fn resolve_children() -> Vec<CanisterSummary> {
+    fn resolve_children() -> CanisterChildrenView {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(canister_self())
         } else {
@@ -39,7 +43,7 @@ impl CanisterChildrenOps {
 
     /// Lookup a child by principal
     #[must_use]
-    pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummary> {
+    pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummaryView> {
         Self::resolve_children()
             .into_iter()
             .find(|child| child.pid == *pid)
@@ -47,18 +51,18 @@ impl CanisterChildrenOps {
 
     /// Lookup the first child of a given type
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterSummary> {
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterSummaryView> {
         Self::resolve_children()
             .into_iter()
             .find(|child| &child.role == role)
     }
 
     #[must_use]
-    pub(crate) fn export() -> Vec<CanisterSummary> {
+    pub(crate) fn export() -> CanisterChildrenView {
         Self::resolve_children()
     }
 
-    pub(crate) fn import(children: Vec<CanisterSummary>) {
+    pub(crate) fn import(children: CanisterChildrenView) {
         CanisterChildren::import(children);
     }
 }

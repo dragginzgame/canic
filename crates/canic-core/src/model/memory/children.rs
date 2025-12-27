@@ -1,5 +1,6 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    dto::topology::CanisterChildrenView,
     eager_static, ic_memory,
     model::memory::{CanisterSummary, id::children::CANISTER_CHILDREN_ID},
 };
@@ -28,12 +29,12 @@ pub struct CanisterChildren;
 impl CanisterChildren {
     /// Export state
     #[must_use]
-    pub(crate) fn export() -> Vec<CanisterSummary> {
+    pub(crate) fn export() -> CanisterChildrenView {
         CANISTER_CHILDREN.with_borrow(|map| map.iter().map(|e| e.value()).collect())
     }
 
     /// Import state (replace everything)
-    pub(crate) fn import(data: Vec<CanisterSummary>) {
+    pub(crate) fn import(data: CanisterChildrenView) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear();
             for entry in data {

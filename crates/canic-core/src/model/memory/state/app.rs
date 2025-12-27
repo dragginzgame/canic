@@ -49,28 +49,6 @@ pub struct AppStateData {
 impl_storable_bounded!(AppStateData, 32, true);
 
 ///
-/// AppStateView
-/// Read-only snapshot of application state for transfer and inspection.
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AppStateView {
-    pub mode: AppMode,
-}
-
-impl From<AppStateData> for AppStateView {
-    fn from(d: AppStateData) -> Self {
-        Self { mode: d.mode }
-    }
-}
-
-impl From<AppStateView> for AppStateData {
-    fn from(v: AppStateView) -> Self {
-        Self { mode: v.mode }
-    }
-}
-
-///
 /// AppState
 ///
 

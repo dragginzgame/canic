@@ -1,11 +1,9 @@
-pub use crate::model::memory::state::AppMode;
-
 use crate::{
     Error, ThisError,
-    dto::state::AppCommand,
+    dto::state::{AppCommand, AppStateView},
     log,
     log::Topic,
-    model::memory::state::{AppState, AppStateData, AppStateView},
+    model::memory::state::{AppMode, AppState, AppStateData},
     ops::storage::state::StateOpsError,
 };
 
@@ -72,6 +70,22 @@ impl AppStateOps {
     pub fn export() -> AppStateView {
         let data: AppStateData = AppState::export();
         data.into()
+    }
+}
+
+///
+/// Adapter
+///
+
+impl From<AppStateData> for AppStateView {
+    fn from(d: AppStateData) -> Self {
+        Self { mode: d.mode }
+    }
+}
+
+impl From<AppStateView> for AppStateData {
+    fn from(v: AppStateView) -> Self {
+        Self { mode: v.mode }
     }
 }
 

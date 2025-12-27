@@ -94,7 +94,7 @@ pub(crate) async fn rebuild_directories_from_registry(
     let mut builder = StateBundleBuilder::new();
 
     if include_app {
-        let view = RootAppDirectoryBuilder::build_from_registry();
+        let view = RootAppDirectoryBuilder::build_from_registry()?;
         builder = builder.with_app_directory(view);
     }
 

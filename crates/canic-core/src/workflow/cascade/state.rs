@@ -15,8 +15,11 @@
 use super::warn_if_large;
 use crate::{
     Error,
-    cdk::futures::spawn,
-    dto::bundle::StateBundle,
+    dto::{
+        bundle::StateBundle,
+        directory::DirectoryView,
+        state::{AppStateView, SubnetStateView},
+    },
     log::Topic,
     ops::{
         OpsError,
@@ -30,16 +33,16 @@ use crate::{
     },
 };
 
-//
-// State bundle assembly
-//
-
+///
+/// StateBundleBuilder
+///
 /// Builder for assembling `StateBundle` DTOs from authoritative state.
 ///
 /// This type lives in workflow (not dto) because it:
 /// - calls ops
 /// - selects which sections to include
 /// - owns no persistence
+///
 pub struct StateBundleBuilder {
     bundle: StateBundle,
 }
@@ -90,6 +93,30 @@ impl StateBundleBuilder {
     }
 
     #[must_use]
+    pub fn with_app_state_view(mut self, view: AppStateView) -> Self {
+        self.bundle.app_state = Some(view);
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_state_view(mut self, view: SubnetStateView) -> Self {
+        self.bundle.subnet_state = Some(view);
+        self
+    }
+
+    #[must_use]
+    pub fn with_app_directory_view(mut self, view: DirectoryView) -> Self {
+        self.bundle.app_directory = Some(view);
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_directory_view(mut self, view: DirectoryView) -> Self {
+        self.bundle.subnet_directory = Some(view);
+        self
+    }
+
+    #[must_use]
     pub fn build(self) -> StateBundle {
         self.bundle
     }
@@ -102,7 +129,7 @@ impl StateBundleBuilder {
 /// Cascade a state bundle from the root canister to its direct children.
 ///
 /// No-op if the bundle is empty.
-fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
+pub async fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
     if bundle.is_empty() {
@@ -119,36 +146,29 @@ fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     let child_count = children.len();
     warn_if_large("root state cascade", child_count);
 
-    spawn(async move {
-        let mut failures = 0;
+    let mut failures = 0;
 
-        for child in children {
-            if let Err(err) = send_bundle(&child.pid, bundle).await {
-                failures += 1;
-                log!(
-                    Topic::Sync,
-                    Warn,
-                    "💦 sync.state: failed to cascade to {}: {err}",
-                    child.pid
-                );
-            }
-        }
-
-        if failures > 0 {
+    for child in children {
+        if let Err(err) = send_bundle(&child.pid, bundle).await {
+            failures += 1;
             log!(
                 Topic::Sync,
                 Warn,
-                "💦 sync.state: {failures} child cascade(s) failed; continuing"
+                "💦 sync.state: failed to cascade to {}: {err}",
+                child.pid
             );
         }
-    });
+    }
+
+    if failures > 0 {
+        log!(
+            Topic::Sync,
+            Warn,
+            "💦 sync.state: {failures} child cascade(s) failed; continuing"
+        );
+    }
 
     Ok(())
-}
-
-/// Public wrapper for root cascades.
-pub fn cascade_root_state(bundle: StateBundle) -> Result<(), Error> {
-    root_cascade_state(&bundle)
 }
 
 /// Cascade a bundle from a non-root canister:
