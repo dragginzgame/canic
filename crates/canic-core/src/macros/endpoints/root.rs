@@ -7,7 +7,7 @@ macro_rules! canic_endpoints_root {
         // eventually this will cascade down from an orchestrator canister
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_app(
-            cmd: ::canic::core::ops::storage::state::AppCommand,
+            cmd: ::canic::core::dto::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
             ::canic::core::workflow::app::AppStateOrchestrator::apply_command(cmd).await
         }

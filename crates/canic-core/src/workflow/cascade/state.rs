@@ -1,111 +1,108 @@
+//!
 //! State synchronization routines shared by root and child canisters.
 //!
-//! Bundles snapshot portions of `AppState`, `SubnetState`, and the directory
-//! views, ships them across the topology, and replays them on recipients.
+//! This module:
+//! - assembles `StateBundle` DTOs from authoritative state via ops
+//! - cascades bundles across the subnet topology
+//! - applies received bundles locally on child canisters
+//!
+//! IMPORTANT:
+//! - `StateBundle` is a pure DTO (data only)
+//! - All assembly logic lives here (workflow)
+//! - All persistence happens via ops
+//!
 
 use super::warn_if_large;
 use crate::{
     Error,
+    cdk::futures::spawn,
+    dto::bundle::StateBundle,
     log::Topic,
     ops::{
         OpsError,
         prelude::*,
         storage::{
             children::CanisterChildrenOps,
-            directory::{AppDirectoryOps, DirectoryView, SubnetDirectoryOps},
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
             registry::SubnetRegistryOps,
-            state::{AppStateData, AppStateOps, SubnetStateData, SubnetStateOps},
+            state::{AppStateOps, SubnetStateOps},
         },
     },
 };
 
-///
-/// StateBundle
-/// Snapshot of mutable state and directory sections that can be propagated to peers
-///
+//
+// State bundle assembly
+//
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize)]
-pub struct StateBundle {
-    // states
-    pub app_state: Option<AppStateData>,
-    pub subnet_state: Option<SubnetStateData>,
-
-    // directories
-    pub app_directory: Option<DirectoryView>,
-    pub subnet_directory: Option<DirectoryView>,
+/// Builder for assembling `StateBundle` DTOs from authoritative state.
+///
+/// This type lives in workflow (not dto) because it:
+/// - calls ops
+/// - selects which sections to include
+/// - owns no persistence
+pub struct StateBundleBuilder {
+    bundle: StateBundle,
 }
 
-impl StateBundle {
+impl StateBundleBuilder {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            bundle: StateBundle::default(),
+        }
     }
 
-    /// Construct a bundle containing the root canister’s full state view.
+    /// Construct a bundle containing the full root state.
     #[must_use]
     pub fn root() -> Self {
         Self {
-            app_state: Some(AppStateOps::export()),
-            subnet_state: Some(SubnetStateOps::export()),
-            app_directory: Some(AppDirectoryOps::export()),
-            subnet_directory: Some(SubnetDirectoryOps::export()),
+            bundle: StateBundle {
+                app_state: Some(AppStateOps::export()),
+                subnet_state: Some(SubnetStateOps::export()),
+                app_directory: Some(AppDirectoryOps::export()),
+                subnet_directory: Some(SubnetDirectoryOps::export()),
+            },
         }
     }
 
     #[must_use]
     pub fn with_app_state(mut self) -> Self {
-        self.app_state = Some(AppStateOps::export());
+        self.bundle.app_state = Some(AppStateOps::export());
         self
     }
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.subnet_state = Some(SubnetStateOps::export());
+        self.bundle.subnet_state = Some(SubnetStateOps::export());
         self
     }
 
     #[must_use]
     pub fn with_app_directory(mut self) -> Self {
-        self.app_directory = Some(AppDirectoryOps::export());
+        self.bundle.app_directory = Some(AppDirectoryOps::export());
         self
     }
 
     #[must_use]
     pub fn with_subnet_directory(mut self) -> Self {
-        self.subnet_directory = Some(SubnetDirectoryOps::export());
+        self.bundle.subnet_directory = Some(SubnetDirectoryOps::export());
         self
     }
 
-    /// Compact debug string showing which sections are present.
-    /// Example: `[as ss .. sd]`
     #[must_use]
-    pub fn debug(&self) -> String {
-        const fn fmt(present: bool, code: &str) -> &str {
-            if present { code } else { ".." }
-        }
-
-        format!(
-            "[{} {} {} {}]",
-            fmt(self.app_state.is_some(), "as"),
-            fmt(self.subnet_state.is_some(), "ss"),
-            fmt(self.app_directory.is_some(), "ad"),
-            fmt(self.subnet_directory.is_some(), "sd"),
-        )
-    }
-
-    /// Whether the bundle carries any sections (true when every optional field is absent).
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.app_state.is_none()
-            && self.subnet_state.is_none()
-            && self.app_directory.is_none()
-            && self.subnet_directory.is_none()
+    pub fn build(self) -> StateBundle {
+        self.bundle
     }
 }
 
-/// Cascade from root: distribute the state bundle to direct children.
-/// No-op when the bundle is empty.
-pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error> {
+//
+// Cascade logic
+//
+
+/// Cascade a state bundle from the root canister to its direct children.
+///
+/// No-op if the bundle is empty.
+fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::require_root()?;
 
     if bundle.is_empty() {
@@ -114,7 +111,6 @@ pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error>
             Info,
             "💦 sync.state: root_cascade skipped (empty bundle)"
         );
-
         return Ok(());
     }
 
@@ -123,43 +119,55 @@ pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error>
     let child_count = children.len();
     warn_if_large("root state cascade", child_count);
 
-    let mut failures = 0;
-    for child in children {
-        if let Err(err) = send_bundle(&child.pid, &bundle).await {
-            failures += 1;
+    spawn(async move {
+        let mut failures = 0;
+
+        for child in children {
+            if let Err(err) = send_bundle(&child.pid, bundle).await {
+                failures += 1;
+                log!(
+                    Topic::Sync,
+                    Warn,
+                    "💦 sync.state: failed to cascade to {}: {err}",
+                    child.pid
+                );
+            }
+        }
+
+        if failures > 0 {
             log!(
                 Topic::Sync,
                 Warn,
-                "💦 sync.state: failed to cascade to {}: {}",
-                child.pid,
-                err
+                "💦 sync.state: {failures} child cascade(s) failed; continuing"
             );
         }
-    }
-
-    if failures > 0 {
-        log!(
-            Topic::Sync,
-            Warn,
-            "💦 sync.state: {failures} child cascade(s) failed; continuing"
-        );
-    }
+    });
 
     Ok(())
 }
 
-/// Public wrapper for root state cascades to keep the internal entrypoint crate-private.
-pub async fn cascade_root_state(bundle: StateBundle) -> Result<(), Error> {
-    root_cascade_state(bundle).await
+/// Public wrapper for root cascades.
+pub fn cascade_root_state(bundle: StateBundle) -> Result<(), Error> {
+    root_cascade_state(&bundle)
 }
 
-/// Cascade from a child: forward the bundle to direct children.
-/// No-op when the bundle is empty.
+/// Cascade a bundle from a non-root canister:
+/// - apply it locally
+/// - forward it to direct children
 pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
-    // update local state
-    save_state(bundle)?;
+    if bundle.is_empty() {
+        log!(
+            Topic::Sync,
+            Info,
+            "💦 sync.state: nonroot_cascade skipped (empty bundle)"
+        );
+        return Ok(());
+    }
+
+    // Apply locally first
+    apply_state(bundle)?;
 
     let children = CanisterChildrenOps::export();
     let child_count = children.len();
@@ -172,9 +180,8 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
             log!(
                 Topic::Sync,
                 Warn,
-                "💦 sync.state: failed to cascade to {}: {}",
-                child.pid,
-                err
+                "💦 sync.state: failed to cascade to {}: {err}",
+                child.pid
             );
         }
     }
@@ -190,15 +197,21 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Save state locally on a child canister.
-fn save_state(bundle: &StateBundle) -> Result<(), Error> {
+//
+// Local application
+//
+
+/// Apply a received state bundle locally.
+///
+/// Only valid on non-root canisters.
+fn apply_state(bundle: &StateBundle) -> Result<(), Error> {
     OpsError::deny_root()?;
 
     // states
-    if let Some(state) = bundle.app_state {
+    if let Some(state) = bundle.app_state.clone() {
         AppStateOps::import(state);
     }
-    if let Some(state) = bundle.subnet_state {
+    if let Some(state) = bundle.subnet_state.clone() {
         SubnetStateOps::import(state);
     }
 
@@ -213,7 +226,11 @@ fn save_state(bundle: &StateBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Low-level bundle sender.
+//
+// Transport
+//
+
+/// Send a state bundle to another canister.
 async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
     let debug = bundle.debug();
     log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");

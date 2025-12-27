@@ -13,6 +13,7 @@ use crate::{
     abi::CanisterInitPayload,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
+    dto::bundle::StateBundle,
     ops::{
         OpsError,
         canister::install_code_with_extra_arg,
@@ -27,7 +28,6 @@ use crate::{
         wasm::WasmOps,
     },
     workflow::{
-        cascade::state::StateBundle,
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::IcError,
         pool::pool_import_canister,

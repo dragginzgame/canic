@@ -13,8 +13,7 @@
 //! - call ops or workflow
 //! - embed policy or orchestration logic
 
-use candid::{CandidType, Principal};
-use serde::Deserialize;
+use crate::dto::prelude::*;
 
 ///
 /// PoolAdminCommand

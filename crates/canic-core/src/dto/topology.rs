@@ -1,6 +1,6 @@
-use crate::ids::SubnetRole;
-use candid::{CandidType, Principal};
-use serde::Deserialize;
+use crate::dto::prelude::*;
+
+pub use crate::model::memory::{CanisterEntryView, CanisterSummaryView};
 
 ///
 /// SubnetIdentity

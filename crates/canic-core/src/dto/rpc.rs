@@ -1,6 +1,4 @@
-use crate::ids::CanisterRole;
-use candid::{CandidType, Principal};
-use serde::Deserialize;
+use crate::dto::prelude::*;
 
 ///
 /// Request

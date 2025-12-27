@@ -1,10 +1,8 @@
 use crate::{
     Error,
-    ops::{
-        OpsError,
-        storage::state::{AppCommand, AppStateOps},
-    },
-    workflow::cascade::state::{StateBundle, cascade_root_state},
+    dto::{app::AppCommand, bundle::StateBundle},
+    ops::{OpsError, storage::state::AppStateOps},
+    workflow::cascade::state::cascade_root_state,
 };
 
 ///

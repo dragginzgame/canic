@@ -1,14 +1,13 @@
 pub use crate::model::memory::state::AppMode;
 
 use crate::{
-    Error, ThisError, log,
+    Error, ThisError,
+    dto::app::AppCommand,
+    log,
     log::Topic,
     model::memory::state::{AppState, AppStateData},
     ops::storage::state::StateOpsError,
 };
-use candid::CandidType;
-use derive_more::Display;
-use serde::Deserialize;
 
 ///
 /// AppStateOpsError
@@ -24,17 +23,6 @@ impl From<AppStateOpsError> for Error {
     fn from(err: AppStateOpsError) -> Self {
         StateOpsError::from(err).into()
     }
-}
-
-///
-/// AppCommand
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq)]
-pub enum AppCommand {
-    Start,
-    Readonly,
-    Stop,
 }
 
 ///

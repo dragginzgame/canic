@@ -1,5 +1,4 @@
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
+use crate::dto::prelude::*;
 
 ///
 /// Page

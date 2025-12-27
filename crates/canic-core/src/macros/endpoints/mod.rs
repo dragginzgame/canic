@@ -127,7 +127,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::EndpointHealthEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::EndpointHealthView> {
             ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
                 page,
                 Some(stringify!(canic_metrics_endpoint_health)),

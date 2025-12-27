@@ -49,6 +49,16 @@ pub struct AppStateData {
 impl_storable_bounded!(AppStateData, 32, true);
 
 ///
+/// AppStateView
+/// Read-only snapshot of application state for transfer and inspection.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AppStateView {
+    pub mode: AppMode,
+}
+
+///
 /// AppState
 ///
 
