@@ -16,7 +16,7 @@ use crate::{
         env::EnvOps,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+            topology::{SubnetCanisterChildrenOps, SubnetRegistryOps},
         },
     },
 };
@@ -282,7 +282,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetCanisterRegistryOps::get(caller) {
+        match SubnetRegistryOps::get(caller) {
             Some(_) => Ok(()),
             None => Err(AuthError::NotRegisteredToSubnet(caller))?,
         }

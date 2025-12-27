@@ -17,7 +17,7 @@ use crate::{
         memory::MemoryRegistryOps,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            topology::{SubnetCanisterRegistryOps, SubnetIdentity},
+            topology::{SubnetIdentity, SubnetRegistryOps},
         },
     },
     workflow::{CanisterInitPayload, timer::TimerWorkflow},
@@ -119,7 +119,7 @@ pub fn root_init(identity: SubnetIdentity) {
         }
     }
 
-    SubnetCanisterRegistryOps::register_root(self_pid);
+    SubnetRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
     TimerWorkflow::start_all_root();

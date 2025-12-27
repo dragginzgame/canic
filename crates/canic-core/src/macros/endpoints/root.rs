@@ -57,14 +57,13 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        fn canic_app_subnet_registry() -> ::canic::core::ops::topology::AppSubnetRegistryView {
-            $crate::ops::topology::AppSubnetRegistryOps::export()
+        fn canic_APP_REGISTRY() -> ::canic::core::ops::topology::AppRegistryView {
+            $crate::ops::topology::AppRegistryOps::export()
         }
 
         #[canic_query]
-        fn canic_subnet_canister_registry()
-        -> ::canic::core::ops::topology::subnet::SubnetCanisterRegistryView {
-            $crate::ops::topology::SubnetCanisterRegistryOps::export()
+        fn canic_SUBNET_REGISTRY() -> ::canic::core::ops::topology::subnet::SubnetRegistryView {
+            $crate::ops::topology::SubnetRegistryOps::export()
         }
 
         //

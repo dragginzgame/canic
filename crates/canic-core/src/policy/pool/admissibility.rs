@@ -7,7 +7,7 @@ use crate::{
     cdk::types::Principal,
     ops::{
         ic::{Network, build_network, canister_status},
-        storage::topology::SubnetCanisterRegistryOps,
+        storage::topology::SubnetRegistryOps,
     },
     policy::pool::PoolPolicyError,
 };
@@ -67,7 +67,7 @@ async fn check_importable_on_local(pid: Principal) -> Result<(), PoolPolicyError
 /// - On local: must be importable/routable.
 /// - Additionally: pool membership is blocked if the PID is still in the subnet registry.
 pub async fn can_enter_pool(pid: Principal) -> Result<(), PoolPolicyError> {
-    if SubnetCanisterRegistryOps::get(pid).is_some() {
+    if SubnetRegistryOps::get(pid).is_some() {
         return Err(PoolPolicyError::RegisteredInSubnet(pid));
     }
 

@@ -95,7 +95,7 @@ fn setup_root() -> &'static Setup {
         }
 
         let registry_vec: Vec<CanisterEntry> = pic
-            .query_call(root_id, "canic_subnet_canister_registry", ())
+            .query_call(root_id, "canic_SUBNET_REGISTRY", ())
             .expect("query registry");
 
         let registry = registry_vec
@@ -311,7 +311,7 @@ fn worker_topology_cascades_through_parent() {
 
     // Registry on root should show the worker as a child of scale_hub.
     let registry_after: Vec<CanisterEntry> = pic
-        .query_call(root_id, "canic_subnet_canister_registry", ())
+        .query_call(root_id, "canic_SUBNET_REGISTRY", ())
         .expect("registry after worker creation");
     let worker_entry = registry_after
         .iter()

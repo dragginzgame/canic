@@ -2,7 +2,7 @@
 async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
     let caller = msg_caller();
 
-    let registry_entry = SubnetCanisterRegistryOps::get(req.canister_pid)
+    let registry_entry = SubnetRegistryOps::get(req.canister_pid)
         .ok_or(RequestOpsError::ChildNotFound(req.canister_pid))?;
 
     if registry_entry.parent_pid != Some(caller) {

@@ -8,9 +8,7 @@ use crate::{
         ic::{Network, build_network},
         prelude::*,
         rpc::{CreateCanisterParent, create_canister_request},
-        storage::{
-            directory::SubnetDirectoryOps, pool::PoolOps, topology::SubnetCanisterRegistryOps,
-        },
+        storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },
     workflow::{ic::network::try_get_current_subnet_pid, pool::pool_import_canister},
 };
@@ -138,7 +136,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Reporting pass: emit the current topology for observability/debugging.
-    for canister in SubnetCanisterRegistryOps::export() {
+    for canister in SubnetRegistryOps::export() {
         log!(Topic::Init, Info, "🥫 {} ({})", canister.role, canister.pid);
     }
 

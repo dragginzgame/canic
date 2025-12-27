@@ -17,7 +17,7 @@ use crate::{
     ops::{
         OpsError,
         prelude::*,
-        storage::topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+        storage::{children::CanisterChildrenOps, registry::SubnetRegistryOps},
     },
     workflow::cascade::CascadeError,
 };
@@ -41,7 +41,7 @@ impl TopologyBundle {
 
         // Add children of every ancestor in the chain (root → ... → target)
         for parent in &parents {
-            let children = SubnetCanisterRegistryOps::children(parent.pid);
+            let children = SubnetRegistryOps::children(parent.pid);
             children_map.insert(parent.pid, children);
         }
 
@@ -150,7 +150,7 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
         .cloned()
         .unwrap_or_default();
     warn_if_large("nonroot fanout", children.len());
-    SubnetCanisterChildrenOps::import(children);
+    CanisterChildrenOps::import(children);
 
     if let Some(next_pid) = next {
         let next_bundle = match slice_bundle_for_child(next_pid, bundle) {
@@ -177,7 +177,7 @@ pub async fn nonroot_cascade_topology(bundle: &TopologyBundle) -> Result<(), Err
 //
 
 fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
-    let registry_len = SubnetCanisterRegistryOps::export().len();
+    let registry_len = SubnetRegistryOps::export().len();
     let mut chain = Vec::new();
     let mut seen: HashSet<Principal> = HashSet::new();
 
@@ -186,7 +186,7 @@ fn parent_chain(mut pid: Principal) -> Result<Vec<CanisterSummary>, Error> {
             return Err(CascadeError::ParentChainCycle(pid).into());
         }
 
-        let Some(entry) = SubnetCanisterRegistryOps::get(pid) else {
+        let Some(entry) = SubnetRegistryOps::get(pid) else {
             return Err(CascadeError::CanisterNotFound(pid).into());
         };
 
@@ -278,11 +278,9 @@ fn slice_bundle_for_child(
     })
 }
 
-//
-// ===========================================================================
-//  TESTS
-// ===========================================================================
-//
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {
@@ -290,7 +288,7 @@ mod tests {
     use crate::{
         cdk::utils::time::now_secs,
         ids::CanisterRole,
-        model::memory::{CanisterEntry, topology::SubnetCanisterRegistry},
+        model::memory::{CanisterEntry, registry::SubnetRegistry},
     };
 
     fn p(id: u8) -> Principal {
@@ -359,12 +357,12 @@ mod tests {
 
     #[test]
     fn parent_chain_rejects_cycle() {
-        SubnetCanisterRegistry::clear_for_tests();
+        SubnetRegistry::clear_for_tests();
         let root = p(1);
         let hub = p(2);
 
-        SubnetCanisterRegistryOps::register_root(root);
-        SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
+        SubnetRegistryOps::register_root(root);
+        SubnetRegistry::insert_for_tests(CanisterEntry {
             pid: hub,
             role: CanisterRole::new("hub"),
             parent_pid: Some(hub),
@@ -378,11 +376,11 @@ mod tests {
 
     #[test]
     fn parent_chain_requires_root_termination() {
-        SubnetCanisterRegistry::clear_for_tests();
+        SubnetRegistry::clear_for_tests();
         let orphan = p(9);
         let role = CanisterRole::new("orphan");
 
-        SubnetCanisterRegistry::insert_for_tests(CanisterEntry {
+        SubnetRegistry::insert_for_tests(CanisterEntry {
             pid: orphan,
             role,
             parent_pid: None,

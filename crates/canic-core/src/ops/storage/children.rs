@@ -2,24 +2,24 @@ use crate::{
     cdk::{api::canister_self, types::Principal},
     dto::page::{Page, PageRequest},
     ids::CanisterRole,
-    model::memory::{CanisterSummary, topology::SubnetCanisterChildren},
-    ops::{env::EnvOps, storage::topology::SubnetCanisterRegistryOps},
+    model::memory::{CanisterSummary, children::CanisterChildren},
+    ops::{env::EnvOps, storage::registry::SubnetRegistryOps},
 };
 
 ///
-/// SubnetCanisterChildrenOps
+/// CanisterChildrenOps
 ///
 
-pub struct SubnetCanisterChildrenOps;
+pub struct CanisterChildrenOps;
 
-impl SubnetCanisterChildrenOps {
+impl CanisterChildrenOps {
     /// Resolve the canonical view of direct children for the current canister.
     /// Root rebuilds from the registry; children rely on their imported snapshot.
     fn resolve_children() -> Vec<CanisterSummary> {
         if EnvOps::is_root() {
-            SubnetCanisterRegistryOps::children(canister_self())
+            SubnetRegistryOps::children(canister_self())
         } else {
-            SubnetCanisterChildren::export()
+            CanisterChildren::export()
         }
     }
 
@@ -59,6 +59,6 @@ impl SubnetCanisterChildrenOps {
     }
 
     pub(crate) fn import(children: Vec<CanisterSummary>) {
-        SubnetCanisterChildren::import(children);
+        CanisterChildren::import(children);
     }
 }
