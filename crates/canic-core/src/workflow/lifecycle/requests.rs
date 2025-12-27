@@ -1,13 +1,13 @@
 use crate::{
     Error,
+    dto::rpc::{
+        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
+        CyclesResponse, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
+    },
     ops::{
         OpsError,
         ic::deposit_cycles,
-        rpc::{
-            CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
-            CyclesResponse, RequestOpsError, Response, UpgradeCanisterRequest,
-            UpgradeCanisterResponse,
-        },
+        rpc::RequestOpsError,
         storage::{directory::SubnetDirectoryOps, registry::SubnetRegistryOps},
     },
     workflow::{

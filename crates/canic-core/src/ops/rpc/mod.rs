@@ -1,13 +1,12 @@
 pub(crate) mod methods;
 mod request;
-mod types;
 
 pub use request::*;
-pub use types::*;
 
 use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
+    dto::rpc::{Request, Response},
     ops::{OpsError, env::EnvOps, ic::call::Call},
 };
 use serde::de::DeserializeOwned;

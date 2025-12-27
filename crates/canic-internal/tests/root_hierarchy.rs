@@ -4,7 +4,10 @@ use canic::{
     core::{
         dto::page::{Page, PageRequest},
         ids::{CanisterRole, SubnetRole},
-        ops::{CanisterEntry, CanisterSummary, env::EnvData},
+        ops::{
+            env::EnvData,
+            storage::{CanisterEntry, CanisterSummary},
+        },
     },
     types::TC,
 };

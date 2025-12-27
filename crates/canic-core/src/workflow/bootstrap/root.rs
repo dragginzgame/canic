@@ -1,13 +1,14 @@
 use crate::{
     Error,
     cdk::api::{canister_self, trap},
+    dto::rpc::CreateCanisterParent,
     log::Topic,
     ops::{
         config::ConfigOps,
         env::EnvOps,
         ic::{Network, build_network},
         prelude::*,
-        rpc::{CreateCanisterParent, create_canister_request},
+        rpc::create_canister_request,
         storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },
     workflow::{ic::network::try_get_current_subnet_pid, pool::pool_import_canister},

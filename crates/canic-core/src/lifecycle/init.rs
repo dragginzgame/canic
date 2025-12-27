@@ -14,8 +14,7 @@ use crate::{
     workflow,
 };
 
-use crate::cdk::futures::spawn;
-use crate::ops::storage::registry::SubnetIdentity;
+use crate::{cdk::futures::spawn, dto::registry::SubnetIdentity};
 
 pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
     EnvOps::init(payload.env, role);

@@ -74,7 +74,7 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::ops::storage::registry::SubnetIdentity) {
+        fn init(identity: ::canic::core::dto::registry::SubnetIdentity) {
             // Load embedded configuration early.
             ::canic::core::__canic_load_config!();
 

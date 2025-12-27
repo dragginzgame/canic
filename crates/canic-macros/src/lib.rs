@@ -405,13 +405,13 @@ mod expand {
 
         match kind {
             EndpointKind::Query => quote! {
-                if let Err(err) = ::canic::core::guard::guard_app_query() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_query() {
                     #metric
                     return Err(err.into());
                 }
             },
             EndpointKind::Update => quote! {
-                if let Err(err) = ::canic::core::guard::guard_app_update() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_update() {
                     #metric
                     return Err(err.into());
                 }

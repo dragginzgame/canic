@@ -10,6 +10,7 @@ use crate::{
         println,
         types::Principal,
     },
+    dto::registry::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
@@ -18,7 +19,7 @@ use crate::{
         memory::MemoryRegistryOps,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            registry::{SubnetIdentity, SubnetRegistryOps},
+            registry::SubnetRegistryOps,
         },
     },
     workflow::runtime,
