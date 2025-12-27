@@ -1,7 +1,10 @@
 use crate::{
-    dto::page::{Page, PageRequest},
+    dto::{
+        directory::DirectoryView,
+        page::{Page, PageRequest},
+    },
     ids::CanisterRole,
-    model::memory::directory::{DirectoryView, SubnetDirectory},
+    model::memory::directory::SubnetDirectory,
     ops::storage::directory::paginate,
 };
 use candid::Principal;

@@ -3,7 +3,7 @@ use canic::{
     Error,
     core::{
         abi::CanisterInitPayload,
-        dto::registry::SubnetIdentity,
+        dto::topology::SubnetIdentity,
         ids::{CanisterRole, SubnetRole},
         ops::{env::EnvData, storage::directory::DirectoryView},
     },

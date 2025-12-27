@@ -1,9 +1,8 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    dto::page::PageRequest,
+    dto::{cycles::CycleTrackerView, page::PageRequest},
     eager_static,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
-    types::Cycles,
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;
@@ -21,13 +20,6 @@ eager_static! {
 
 /// constants
 const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
-
-///
-/// CycleTrackerView
-/// Snapshot view of cycle tracker entries
-///
-
-pub type CycleTrackerView = Vec<(u64, Cycles)>;
 
 ///
 /// CycleTracker

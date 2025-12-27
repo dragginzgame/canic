@@ -1,8 +1,9 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    dto::directory::DirectoryView,
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{directory::DirectoryView, id::directory::SUBNET_DIRECTORY_ID},
+    model::memory::id::directory::SUBNET_DIRECTORY_ID,
 };
 use candid::Principal;
 use std::cell::RefCell;
