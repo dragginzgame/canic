@@ -1,6 +1,7 @@
 pub mod cycles;
 pub mod log;
 pub mod metrics;
+pub mod random;
 
 use crate::{
     VERSION,
@@ -17,12 +18,41 @@ use crate::{
         memory::MemoryRegistryOps,
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            topology::{SubnetIdentity, SubnetRegistryOps},
+            registry::{SubnetIdentity, SubnetRegistryOps},
         },
     },
-    workflow::{CanisterInitPayload, timer::TimerWorkflow},
+    workflow::{CanisterInitPayload, runtime},
 };
 use canic_memory::runtime::init_eager_tls;
+
+use crate::{ops::OpsError, workflow};
+
+///
+/// Runtime
+/// Coordinates periodic background services (timers) for Canic canisters.
+///
+
+pub struct Runtime;
+
+impl Runtime {
+    /// Start timers that should run on all canisters.
+    pub fn start_all() {
+        runtime::cycles::scheduler::start();
+        runtime::log::retention::start();
+        runtime::random::scheduler::start();
+    }
+
+    /// Start timers that should run only on root canisters.
+    pub fn start_all_root() {
+        OpsError::require_root();
+
+        // start shared timers too
+        Self::start_all();
+
+        // root-only services
+        workflow::pool::scheduler::start();
+    }
+}
 
 fn init_memory_or_trap(phase: &str) {
     if let Err(err) = MemoryRegistryOps::init_memory() {
@@ -122,7 +152,7 @@ pub fn root_init(identity: SubnetIdentity) {
     SubnetRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
-    TimerWorkflow::start_all_root();
+    Runtime::start_all_root();
 }
 
 /// root_post_upgrade
@@ -135,7 +165,7 @@ pub fn root_post_upgrade() {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    TimerWorkflow::start_all_root();
+    Runtime::start_all_root();
 }
 
 /// nonroot_init
@@ -156,7 +186,7 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     SubnetDirectoryOps::import(payload.subnet_directory);
 
     // --- Phase 3: Service startup ---
-    TimerWorkflow::start_all();
+    Runtime::start_all();
 }
 
 /// nonroot_post_upgrade
@@ -169,5 +199,5 @@ pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
     // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
-    TimerWorkflow::start_all();
+    Runtime::start_all();
 }

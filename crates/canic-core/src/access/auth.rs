@@ -15,8 +15,9 @@ use crate::{
     ops::{
         env::EnvOps,
         storage::{
+            children::CanisterChildrenOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
-            topology::{SubnetCanisterChildrenOps, SubnetRegistryOps},
+            registry::SubnetRegistryOps,
         },
     },
 };
@@ -200,7 +201,7 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        SubnetCanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
+        CanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
