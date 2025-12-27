@@ -15,6 +15,7 @@
 //!
 //! Examples of view ops include registry exports and metrics views.
 
+pub mod adapter;
 pub mod canister;
 pub mod config;
 pub mod env;
