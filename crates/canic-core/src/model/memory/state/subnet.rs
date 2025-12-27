@@ -31,6 +31,13 @@ pub struct SubnetStateData {}
 impl_storable_bounded!(SubnetStateData, 32, true);
 
 ///
+/// SubnetStateView
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetStateView {}
+
+///
 /// SubnetState (public API)
 ///
 

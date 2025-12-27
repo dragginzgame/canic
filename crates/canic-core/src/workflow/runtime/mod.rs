@@ -10,7 +10,7 @@ use crate::{
         println,
         types::Principal,
     },
-    dto::registry::SubnetIdentity,
+    dto::topology::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{

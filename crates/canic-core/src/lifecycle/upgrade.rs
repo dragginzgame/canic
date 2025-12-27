@@ -13,27 +13,31 @@
 //! - Encode policy decisions
 //! - Call ops beyond minimal environment restoration
 
-use crate::{ids::CanisterRole, ops::env::EnvOps, workflow};
+use crate::{cdk::futures::spawn, ids::CanisterRole, ops::env::EnvOps, workflow};
 
 /// Post-upgrade entrypoint for non-root canisters.
 ///
 /// Environment state is expected to be persisted across upgrade;
 /// only role context needs to be restored before delegating.
-pub async fn nonroot_post_upgrade(role: CanisterRole) {
+pub fn nonroot_post_upgrade(role: CanisterRole) {
     // Restore role context (env data already persisted)
     EnvOps::restore_role(role);
 
     // Delegate to async bootstrap workflow
-    workflow::bootstrap::nonroot_post_upgrade().await;
+    spawn(async {
+        workflow::bootstrap::nonroot_post_upgrade().await;
+    });
 }
 
 /// Post-upgrade entrypoint for the root canister.
 ///
 /// Root identity and subnet context are restored from stable state.
-pub async fn root_post_upgrade() {
+pub fn root_post_upgrade() {
     // Restore root environment context
     EnvOps::restore_root();
 
     // Delegate to async bootstrap workflow
-    workflow::bootstrap::root_post_upgrade().await;
+    spawn(async {
+        workflow::bootstrap::root_post_upgrade().await;
+    });
 }

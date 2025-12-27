@@ -3,23 +3,19 @@
 //! Handles tenant assignment, shard creation, and draining.
 //! Depends on [`policy`] for validation and [`registry`] for state.
 
-use super::{
-    ShardingOpsError,
-    metrics::pool_metrics,
-    policy::{ShardingPlanState, ShardingPolicyOps},
-};
 use crate::{
     Error,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
+    dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
     log,
     log::Topic,
     ops::{
-        config::ConfigOps,
-        rpc::{CreateCanisterParent, create_canister_request},
-        storage::sharding::ShardingRegistryOps,
+        config::ConfigOps, rpc::create_canister_request, storage::sharding::ShardingRegistryOps,
     },
+    policy::placement::sharding::{ShardingPlanState, ShardingPolicy},
+    workflow::placement::pool_metrics,
 };
 
 ///

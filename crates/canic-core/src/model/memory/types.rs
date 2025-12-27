@@ -8,7 +8,7 @@ use std::fmt::Debug;
 /// Full registry entry (authoritative)
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterEntry {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -24,11 +24,47 @@ impl CanisterEntry {
 impl_storable_bounded!(CanisterEntry, CanisterEntry::STORABLE_MAX_SIZE, false);
 
 ///
-/// CanisterSummary
-/// Minimal view for children/subnet directories
+/// CanisterEntryView
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterEntryView {
+    pub pid: Principal,
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+    pub module_hash: Option<Vec<u8>>,
+    pub created_at: u64,
+}
+
+impl From<&CanisterEntry> for CanisterEntryView {
+    fn from(e: &CanisterEntry) -> Self {
+        Self {
+            pid: e.pid,
+            role: e.role.clone(),
+            parent_pid: e.parent_pid,
+            module_hash: e.module_hash.clone(),
+            created_at: e.created_at,
+        }
+    }
+}
+
+impl From<CanisterEntry> for CanisterEntryView {
+    fn from(e: CanisterEntry) -> Self {
+        Self {
+            pid: e.pid,
+            role: e.role,
+            parent_pid: e.parent_pid,
+            module_hash: e.module_hash,
+            created_at: e.created_at,
+        }
+    }
+}
+
+///
+/// CanisterSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterSummary {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -50,6 +86,38 @@ impl From<CanisterEntry> for CanisterSummary {
 }
 
 impl_storable_bounded!(CanisterSummary, CanisterSummary::STORABLE_MAX_SIZE, false);
+
+///
+/// CanisterSummaryView
+/// Minimal view for children/subnet directories
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterSummaryView {
+    pub pid: Principal,
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+}
+
+impl From<&CanisterSummary> for CanisterSummaryView {
+    fn from(s: &CanisterSummary) -> Self {
+        Self {
+            pid: s.pid,
+            role: s.role.clone(),
+            parent_pid: s.parent_pid,
+        }
+    }
+}
+
+impl From<CanisterSummary> for CanisterSummaryView {
+    fn from(s: CanisterSummary) -> Self {
+        Self {
+            pid: s.pid,
+            role: s.role,
+            parent_pid: s.parent_pid,
+        }
+    }
+}
 
 ///
 /// TESTS

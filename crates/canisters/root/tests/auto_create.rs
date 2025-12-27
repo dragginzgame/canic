@@ -4,12 +4,10 @@ use candid::{Decode, Principal, encode_one};
 use canic::{
     Error,
     core::{
-        dto::registry::SubnetIdentity,
+        dto::{registry::SubnetIdentity, rpc::CreateCanisterResponse, state::AppCommand},
         ids::CanisterRole,
-        ops::{
-            rpc::CreateCanisterResponse,
-            storage::state::{AppCommand, AppMode, AppStateData},
-        },
+        model::memory::CanisterEntry,
+        ops::storage::state::{AppMode, AppStateData},
     },
 };
 use canic_internal::canister;

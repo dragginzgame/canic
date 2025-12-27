@@ -1,10 +1,11 @@
 pub use crate::model::metrics::{access::*, endpoint::*, http::*, icc::*, system::*, timer::*};
 use crate::{
-    dto::page::{Page, PageRequest},
+    dto::{
+        metrics::EndpointHealthView,
+        page::{Page, PageRequest},
+    },
     perf::{PerfKey, entries as perf_entries},
 };
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 
 ///
@@ -13,23 +14,6 @@ use std::collections::{BTreeSet, HashMap};
 ///
 
 pub struct MetricsOps;
-
-///
-/// EndpointHealthEntry
-/// Derived endpoint-level health view joined at read time.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointHealthEntry {
-    pub endpoint: String,
-    pub attempted: u64,
-    pub denied: u64,
-    pub completed: u64,
-    pub ok: u64,
-    pub err: u64,
-    pub avg_instr: u64,
-    pub total_instr: u64,
-}
 
 impl MetricsOps {
     /// Export the current metrics snapshot.
@@ -112,7 +96,7 @@ impl MetricsOps {
 
     /// Derived endpoint health view (attempts + denials + results + perf).
     #[must_use]
-    pub fn endpoint_health_page(request: PageRequest) -> Page<EndpointHealthEntry> {
+    pub fn endpoint_health_page(request: PageRequest) -> Page<EndpointHealthView> {
         Self::endpoint_health_page_excluding(request, None)
     }
 
@@ -122,7 +106,7 @@ impl MetricsOps {
     pub fn endpoint_health_page_excluding(
         request: PageRequest,
         exclude_endpoint: Option<&str>,
-    ) -> Page<EndpointHealthEntry> {
+    ) -> Page<EndpointHealthView> {
         let attempt_snapshot = EndpointAttemptMetrics::snapshot();
         let result_snapshot = EndpointResultMetrics::snapshot();
         let access_snapshot = AccessMetrics::snapshot();
@@ -171,7 +155,7 @@ impl MetricsOps {
                     total_instr / perf_count
                 };
 
-                EndpointHealthEntry {
+                EndpointHealthView {
                     endpoint,
                     attempted,
                     denied,

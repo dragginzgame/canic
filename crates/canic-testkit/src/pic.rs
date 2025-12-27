@@ -3,11 +3,9 @@ use canic::{
     Error,
     core::{
         abi::CanisterInitPayload,
+        dto::registry::SubnetIdentity,
         ids::{CanisterRole, SubnetRole},
-        ops::{
-            env::EnvData,
-            storage::{directory::DirectoryView, registry::SubnetIdentity},
-        },
+        ops::{env::EnvData, storage::directory::DirectoryView},
     },
 };
 use derive_more::{Deref, DerefMut};

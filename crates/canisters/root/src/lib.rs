@@ -9,7 +9,8 @@ use canic::{
     Error,
     core::{
         access::policy::is_prime_subnet,
-        ops::rpc::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+        dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
+        ops::rpc::create_canister_request,
     },
     prelude::*,
 };
