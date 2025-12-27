@@ -1,6 +1,10 @@
 pub use crate::model::memory::cycles::CycleTrackerView;
 
-use crate::{dto::page::PageRequest, model::memory::cycles::CycleTracker};
+use crate::{
+    dto::page::{Page, PageRequest},
+    model::memory::cycles::CycleTracker,
+    types::Cycles,
+};
 
 ///
 /// CycleTrackerOps
@@ -28,4 +32,12 @@ impl CycleTrackerOps {
     pub fn entries(request: PageRequest) -> CycleTrackerView {
         CycleTracker::entries(request)
     }
+}
+
+#[must_use]
+pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
+    let entries = CycleTrackerOps::entries(request);
+    let total = CycleTrackerOps::len();
+
+    Page { entries, total }
 }

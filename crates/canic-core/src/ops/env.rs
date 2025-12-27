@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     cdk::{api::canister_self, types::Principal},
     ids::{CanisterRole, SubnetRole},
-    model::memory::Env,
+    model::memory::{Env, registry::SubnetIdentity},
     ops::OpsError,
 };
 
@@ -14,23 +14,23 @@ pub use crate::model::memory::env::EnvData;
 
 #[derive(Debug, ThisError)]
 pub enum EnvOpsError {
-    #[error("env import missing required fields: {0}")]
-    MissingFields(String),
-
     #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
+    #[error("env import missing required fields: {0}")]
+    MissingFields(String),
+
     #[error("failed to determine current parent principal")]
     ParentPidUnavailable,
+
+    #[error("failed to determine current root principal")]
+    RootPidUnavailable,
 
     #[error("failed to determine current subnet principal")]
     SubnetPidUnavailable,
 
     #[error("failed to determine current subnet role")]
     SubnetRoleUnavailable,
-
-    #[error("failed to determine current root principal")]
-    RootPidUnavailable,
 }
 
 impl From<EnvOpsError> for Error {
@@ -55,6 +55,56 @@ impl EnvOps {
     // ---------------------------------------------------------------------
     // Initialization / import
     // ---------------------------------------------------------------------
+
+    /// Initialize environment state for the root canister during init.
+    ///
+    /// This must only be called from the IC `init` hook.
+    pub fn init_root(identity: SubnetIdentity) {
+        let self_pid = canister_self();
+
+        let (subnet_pid, subnet_role, prime_root_pid) = match identity {
+            SubnetIdentity::Prime => {
+                // Prime subnet: root == prime root == subnet
+                (self_pid, SubnetRole::PRIME, self_pid)
+            }
+
+            SubnetIdentity::Standard(params) => {
+                // Standard subnet syncing from prime
+                (self_pid, params.subnet_type, params.prime_root_pid)
+            }
+
+            SubnetIdentity::Manual(pid) => {
+                // Test/support only: explicit subnet override
+                (pid, SubnetRole::MANUAL, pid)
+            }
+        };
+
+        let env = EnvData {
+            prime_root_pid: Some(prime_root_pid),
+            root_pid: Some(self_pid),
+            subnet_pid: Some(subnet_pid),
+            subnet_role: Some(subnet_role),
+            canister_role: Some(CanisterRole::ROOT),
+            parent_pid: None,
+        };
+
+        if let Err(err) = Self::import(env) {
+            panic!("EnvOps::init_root failed: {err}");
+        }
+    }
+
+    /// Initialize environment state for a non-root canister during init.
+    ///
+    /// This function must only be called from the IC `init` hook.
+    pub fn init(mut env: EnvData, role: CanisterRole) {
+        // Override contextual role (do not trust payload blindly)
+        env.canister_role = Some(role);
+
+        // Import validates required fields and persists
+        if let Err(err) = Self::import(env) {
+            panic!("EnvOps::init failed: {err}");
+        }
+    }
 
     pub fn import(env: EnvData) -> Result<(), Error> {
         let mut missing = Vec::new();
@@ -196,6 +246,37 @@ impl EnvOps {
     }
 
     // ---------------------------------------------------------------------
+    // Restore
+    // ---------------------------------------------------------------------
+
+    // NOTE:
+    // Restore functions are intended to be called ONLY from lifecycle adapters.
+    // Calling them during steady-state execution is a logic error.
+
+    /// Restore root environment context after upgrade.
+    ///
+    /// Root identity and subnet metadata must already be present.
+    pub fn restore_root() {
+        // Ensure environment was initialized before upgrade
+        assert_initialized();
+
+        // Root canister role is implicit
+        Env::set_canister_role(CanisterRole::ROOT);
+    }
+
+    /// Restore canister role context after upgrade.
+    ///
+    /// Environment data is expected to already exist in stable memory.
+    /// Failure indicates a programmer error or corrupted state.
+    pub fn restore_role(role: CanisterRole) {
+        // Ensure environment was initialized before upgrade
+        assert_initialized();
+
+        // Restore the role context explicitly
+        Env::set_canister_role(role);
+    }
+
+    // ---------------------------------------------------------------------
     // Export
     // ---------------------------------------------------------------------
 
@@ -204,4 +285,13 @@ impl EnvOps {
     pub fn export() -> EnvData {
         Env::export()
     }
+}
+
+fn assert_initialized() {
+    assert!(
+        Env::get_root_pid().is_some()
+            && Env::get_subnet_pid().is_some()
+            && Env::get_prime_root_pid().is_some(),
+        "EnvOps called before environment initialization"
+    );
 }

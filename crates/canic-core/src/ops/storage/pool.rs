@@ -79,6 +79,7 @@ impl PoolOps {
 ///
 /// Policy decisions about *who* should control pool canisters
 /// are assumed to be encoded in configuration.
+#[must_use]
 pub fn pool_controllers() -> Vec<Principal> {
     let mut controllers = ConfigOps::controllers();
 

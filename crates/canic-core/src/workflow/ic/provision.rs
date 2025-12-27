@@ -10,6 +10,7 @@
 
 use crate::{
     Error,
+    abi::CanisterInitPayload,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     ops::{
@@ -26,7 +27,6 @@ use crate::{
         wasm::WasmOps,
     },
     workflow::{
-        CanisterInitPayload,
         cascade::state::StateBundle,
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::IcError,

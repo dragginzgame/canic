@@ -13,6 +13,24 @@ use crate::{
     workflow::{ic::network::try_get_current_subnet_pid, pool::pool_import_canister},
 };
 
+/// Bootstrap workflow for the root canister during init.
+pub async fn root_init() {
+    // Example sequence — adjust as needed
+    root_set_subnet_id().await;
+    root_import_pool_from_config().await;
+
+    if let Err(e) = root_create_canisters().await {
+        // Root bootstrap failures are fatal
+        panic!("root bootstrap failed: {e}");
+    }
+}
+
+/// Bootstrap workflow for the root canister after upgrade.
+pub async fn root_post_upgrade() {
+    root_set_subnet_id().await;
+    root_import_pool_from_config().await;
+}
+
 /// Initializes the subnet identifier for the root canister.
 ///
 /// This attempts to resolve the subnet ID via the NNS registry and records it

@@ -10,7 +10,8 @@
 //! Canic is organized to keep endpoint code thin and policies centralized:
 //! - `access/` contains guard/auth/policy helpers for boundary enforcement.
 //! - `model/` owns storage (stable memory) and in-process registries/caches.
-//! - `ops/` implements workflows (provisioning, scaling, sharding, pool management).
+//! - `workflow/` implements orchestration and lifecycle workflows.
+//! - `ops/` provides mechanical, reusable side-effecting operations.
 //! - `macros/` provides public macro entrypoints and endpoint bundles.
 //!
 //! The default flow is: endpoints → ops → model.
@@ -19,12 +20,14 @@
 // Phase 0: path coherence re-exports (no behavior change)
 // -----------------------------------------------------------------------------
 
+pub mod abi;
 pub mod access;
 pub mod config;
 pub mod dispatch;
 pub mod dto;
 pub mod env;
 pub mod ids;
+pub mod lifecycle;
 pub mod log;
 pub mod macros;
 pub(crate) mod model;
@@ -64,7 +67,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
 /// Error
-///
 /// top level error should handle all sub-errors, but not expose the child candid types
 ///
 

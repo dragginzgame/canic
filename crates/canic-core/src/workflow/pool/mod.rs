@@ -254,6 +254,7 @@ pub async fn pool_export_canister(
 // Stats
 // -----------------------------------------------------------------------------
 
+#[must_use]
 pub fn pool_status_counts() -> PoolStatusCounts {
     let mut counts = PoolStatusCounts::default();
 

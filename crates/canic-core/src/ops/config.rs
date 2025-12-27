@@ -77,8 +77,9 @@ impl ConfigOps {
     // Current-context / infallible helpers
     // ---------------------------------------------------------------------
 
+    #[must_use]
     pub fn get() -> Arc<ConfigModel> {
-        Config::get().clone()
+        Config::get()
     }
 
     #[must_use]

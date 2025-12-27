@@ -1,10 +1,10 @@
 pub mod cycles;
 pub mod log;
-pub mod metrics;
 pub mod random;
 
 use crate::{
     VERSION,
+    abi::CanisterInitPayload,
     cdk::{
         api::{canister_self, trap},
         println,
@@ -21,7 +21,7 @@ use crate::{
             registry::{SubnetIdentity, SubnetRegistryOps},
         },
     },
-    workflow::{CanisterInitPayload, runtime},
+    workflow::runtime,
 };
 use canic_memory::runtime::init_eager_tls;
 
@@ -44,7 +44,7 @@ impl Runtime {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        OpsError::require_root();
+        OpsError::require_root().unwrap();
 
         // start shared timers too
         Self::start_all();

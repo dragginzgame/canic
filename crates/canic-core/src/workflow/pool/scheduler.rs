@@ -194,6 +194,7 @@ pub fn mark_scheduled_for_test() {
 }
 
 #[cfg(test)]
+#[must_use]
 pub fn take_scheduled_for_test() -> bool {
     RESET_SCHEDULED.with_borrow_mut(|flag| {
         let value = *flag;
