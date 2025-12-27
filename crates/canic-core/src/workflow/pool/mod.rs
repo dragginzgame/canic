@@ -1,10 +1,10 @@
 pub mod admin;
-pub mod dto;
 pub mod scheduler;
 
 use crate::{
     Error,
     cdk::mgmt::{CanisterSettings, UpdateSettingsArgs},
+    dto::pool::{PoolImportSummary, PoolStatusCounts},
     log,
     log::Topic,
     model::memory::pool::CanisterPoolStatus,
@@ -21,7 +21,6 @@ use crate::{
     },
     policy::{self, pool::PoolPolicyError},
     types::{Cycles, TC},
-    workflow::pool::dto::{PoolImportSummary, PoolStatusCounts},
 };
 use candid::Principal;
 

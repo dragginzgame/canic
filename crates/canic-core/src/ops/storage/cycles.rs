@@ -32,12 +32,12 @@ impl CycleTrackerOps {
     pub fn entries(request: PageRequest) -> CycleTrackerView {
         CycleTracker::entries(request)
     }
-}
 
-#[must_use]
-pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-    let entries = CycleTrackerOps::entries(request);
-    let total = CycleTrackerOps::len();
+    #[must_use]
+    pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
+        let entries = Self::entries(request);
+        let total = Self::len();
 
-    Page { entries, total }
+        Page { entries, total }
+    }
 }

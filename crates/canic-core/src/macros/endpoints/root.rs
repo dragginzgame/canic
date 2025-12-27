@@ -29,7 +29,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_response(
             request: ::canic::core::ops::rpc::Request,
         ) -> Result<::canic::core::ops::rpc::Response, ::canic::Error> {
-            let response = $crate::ops::rpc::response(request).await?;
+            let response = $crate::workflow::rpc::handler::response(request).await?;
 
             Ok(response)
         }
@@ -76,15 +76,15 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_pool_list()
-        -> Result<::canic::core::ops::pool::CanisterPoolView, ::canic::Error> {
-            Ok($crate::ops::pool::PoolOps::export())
+        -> Result<::canic::core::ops::storage::pool::CanisterPoolView, ::canic::Error> {
+            Ok($crate::ops::storage::pool::PoolOps::export())
         }
 
-        #[canic_update(auth_any(::canic::core::auth::is_controller))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_pool_admin(
-            cmd: ::canic::core::ops::pool::PoolAdminCommand,
-        ) -> Result<::canic::core::ops::pool::PoolAdminResponse, ::canic::Error> {
-            ::canic::core::ops::pool::PoolOps::admin(cmd).await
+            cmd: ::canic::core::dto::pool::PoolAdminCommand,
+        ) -> Result<::canic::core::dto::pool::PoolAdminResponse, ::canic::Error> {
+            ::canic::core::workflow::pool::admin::handle_admin(cmd).await
         }
     };
 }

@@ -21,7 +21,17 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
-            ::canic::core::lifecycle::init::nonroot_init($canister_role, payload, args);
+            ::canic::core::lifecycle::init::nonroot_init($canister_role, payload, args.clone());
+
+            // ---- userland lifecycle hooks (scheduled last) ----
+            ::canic::core::ops::ic::timer::TimerOps::set(
+                ::core::time::Duration::ZERO,
+                "canic:user:init",
+                async move {
+                    canic_setup().await;
+                    canic_install(args).await;
+                },
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -31,6 +41,16 @@ macro_rules! start {
 
             // Delegate to lifecycle adapter.
             ::canic::core::lifecycle::upgrade::nonroot_post_upgrade($canister_role);
+
+            // ---- userland lifecycle hooks (scheduled last) ----
+            ::canic::core::ops::ic::timer::TimerOps::set(
+                ::core::time::Duration::ZERO,
+                "canic:user:init",
+                async move {
+                    canic_setup().await;
+                    canic_upgrade().await;
+                },
+            );
         }
 
         ::canic::core::canic_endpoints!();
@@ -55,18 +75,40 @@ macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
         fn init(identity: ::canic::core::ops::storage::registry::SubnetIdentity) {
+            // Load embedded configuration early.
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
             ::canic::core::lifecycle::init::root_init(identity);
+
+            // ---- userland lifecycle hooks (scheduled last) ----
+            ::canic::core::ops::ic::timer::TimerOps::set(
+                ::core::time::Duration::ZERO,
+                "canic:user:init",
+                async move {
+                    canic_setup().await;
+                    canic_install().await;
+                },
+            );
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
+            // Reload embedded configuration on upgrade.
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
             ::canic::core::lifecycle::upgrade::root_post_upgrade();
+
+            // ---- userland lifecycle hooks (scheduled last) ----
+            ::canic::core::ops::ic::timer::TimerOps::set(
+                ::core::time::Duration::ZERO,
+                "canic:user:init",
+                async move {
+                    canic_setup().await;
+                    canic_upgrade().await;
+                },
+            );
         }
 
         ::canic::core::canic_endpoints!();
