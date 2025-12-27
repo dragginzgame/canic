@@ -12,21 +12,24 @@ use candid::Principal;
 pub struct AppDirectoryOps;
 
 impl AppDirectoryOps {
+    #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
         AppDirectory::view()
             .into_iter()
             .find_map(|(t, pid)| (t == *role).then_some(pid))
     }
 
+    #[must_use]
+    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
+        paginate(AppDirectory::view(), request)
+    }
+
+    #[must_use]
     pub fn export() -> DirectoryView {
         AppDirectory::view()
     }
 
     pub fn import(view: DirectoryView) {
         AppDirectory::import(view);
-    }
-
-    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate(AppDirectory::view(), request)
     }
 }

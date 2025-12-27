@@ -58,8 +58,9 @@ pub mod prelude {
             auth_require_all, auth_require_any,
             ids::CanisterRole,
             log,
-            ops::ic::{call::Call, http::Http},
+            ops::ic::call::Call,
             perf, timer, timer_interval,
+            workflow::ic::http::Http,
         },
         macros::{canic_query, canic_update},
     };

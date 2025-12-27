@@ -2,7 +2,6 @@ pub use crate::ops::storage::cycles::CycleTrackerView;
 
 use crate::{
     cdk::{futures::spawn, timers::TimerId, utils::time::now_secs},
-    dto::page::{Page, PageRequest},
     log,
     log::Topic,
     ops::{
@@ -123,12 +122,4 @@ pub fn purge() -> bool {
     }
 
     purged > 0
-}
-
-#[must_use]
-pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-    let entries = CycleTrackerOps::entries(request);
-    let total = CycleTrackerOps::len();
-
-    Page { entries, total }
 }

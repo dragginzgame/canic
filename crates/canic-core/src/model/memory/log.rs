@@ -10,7 +10,6 @@ use crate::{
         utils::time,
     },
     config::{Config, schema::LogConfig},
-    dto::page::PageRequest,
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
@@ -121,12 +120,12 @@ impl LogEntry {
 impl_storable_unbounded!(LogEntry);
 
 ///
-/// StableLog
+/// Log
 ///
 
-pub struct StableLog;
+pub struct Log;
 
-impl StableLog {
+impl Log {
     // -------- Append --------
 
     pub(crate) fn append<T, M>(
@@ -172,38 +171,17 @@ impl StableLog {
         topic.as_ref().map(|t| t.to_string().to_case(Case::Snake))
     }
 
+    /// Export a snapshot of all log entries (unsorted).
+    /// Intended for read facades (pagination/filtering lives above).
     #[must_use]
-    pub(crate) fn entries_page_filtered(
-        crate_name: Option<&str>,
-        topic: Option<&str>,
-        min_level: Option<Level>,
-        request: PageRequest,
-    ) -> (Vec<(usize, LogEntry)>, u64) {
-        let request = request.clamped();
-        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-        let topic_norm: Option<String> = Self::normalize_topic(topic);
-        let topic_norm = topic_norm.as_deref();
-        let offset = request.offset;
-
+    pub(crate) fn snapshot() -> Vec<LogEntry> {
+        let mut out = Vec::new();
         with_log(|log| {
-            let mut total = 0u64;
-            let mut entries: Vec<(usize, LogEntry)> = Vec::new();
-
-            for (idx, entry) in iter_filtered(log, crate_name, topic_norm, min_level) {
-                if total < offset {
-                    total = total.saturating_add(1);
-                    continue;
-                }
-
-                if entries.len() < limit {
-                    entries.push((idx, entry));
-                }
-
-                total = total.saturating_add(1);
+            for entry in log.iter() {
+                out.push(entry);
             }
-
-            (entries, total)
-        })
+        });
+        out
     }
 }
 
@@ -353,94 +331,4 @@ fn truncate_to_boundary(message: &str, max_bytes: usize) -> &str {
     }
 
     &message[..end]
-}
-
-fn iter_filtered<'a>(
-    log: &'a StableLogStorage,
-    crate_name: Option<&'a str>, // this is optional
-    topic: Option<&'a str>,      // optional
-    min_level: Option<Level>,    // optional
-) -> impl Iterator<Item = (usize, LogEntry)> + 'a {
-    log.iter().enumerate().filter(move |(_, e)| {
-        crate_name.is_none_or(|name| e.crate_name == name)
-            && topic.is_none_or(|t| e.topic.as_deref() == Some(t))
-            && min_level.is_none_or(|lvl| e.level >= lvl)
-    })
-}
-
-//
-// TESTS
-//
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::{Config, schema::ConfigModel};
-
-    #[test]
-    fn retention_trims_old_and_excess_entries() {
-        Config::reset_for_tests();
-        let mut cfg = ConfigModel::test_default();
-        cfg.log.max_entries = 2;
-        cfg.log.max_age_secs = Some(5);
-        Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
-
-        let now = time::now_secs();
-        // fresh entry
-        StableLog::append("test", Option::<&str>::None, Level::Info, "fresh1").unwrap();
-
-        // old entry (backdated)
-        let mut old = LogEntry::new("test", Level::Info, None, "old");
-        old.created_at = now.saturating_sub(10);
-        StableLog::append_entry(old).unwrap();
-
-        // another fresh entry
-        StableLog::append("test", Option::<&str>::None, Level::Info, "fresh2").unwrap();
-
-        let summary = apply_retention().unwrap();
-        assert_eq!(summary.dropped_by_age, 1);
-        assert_eq!(summary.dropped_by_limit, 0);
-
-        let (entries, total) =
-            StableLog::entries_page_filtered(None, None, None, PageRequest::new(10, 0));
-        assert_eq!(total, 2);
-        let msgs: Vec<_> = entries.into_iter().map(|(_, e)| e.message).collect();
-        assert!(msgs.contains(&"fresh1".to_string()));
-        assert!(msgs.contains(&"fresh2".to_string()));
-        assert!(!msgs.contains(&"old".to_string()));
-    }
-
-    #[test]
-    fn log_truncates_oversized_messages() {
-        Config::reset_for_tests();
-        let mut cfg = ConfigModel::test_default();
-        cfg.log.max_entries = 10;
-        cfg.log.max_entry_bytes = 20;
-        Config::init_from_toml(&toml::to_string(&cfg).unwrap()).unwrap();
-
-        let message = "abcdefghijklmnopqrstuvwxyz";
-        StableLog::append(
-            "log_truncate_test",
-            Option::<&str>::None,
-            Level::Info,
-            message,
-        )
-        .unwrap();
-
-        let (entries, total) = StableLog::entries_page_filtered(
-            Some("log_truncate_test"),
-            None,
-            None,
-            PageRequest::new(10, 0),
-        );
-        assert_eq!(total, 1);
-        let entry = entries.first().expect("expected a logged entry").1.clone();
-
-        let keep_len = cfg
-            .log
-            .max_entry_bytes
-            .saturating_sub(TRUNCATION_SUFFIX.len() as u32) as usize;
-        let expected = format!("{}{}", &message[..keep_len], TRUNCATION_SUFFIX);
-        assert_eq!(entry.message, expected);
-    }
 }

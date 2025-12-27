@@ -140,7 +140,6 @@ impl SubnetRegistryOps {
     /// - No cycles
     /// - Bounded by registry size
     /// - Terminates at a ROOT canister
-    #[must_use]
     pub fn parent_chain(target: Principal) -> Result<Vec<CanisterSummary>, Error> {
         let registry_len = SubnetRegistry::export().len();
 
@@ -166,18 +165,13 @@ impl SubnetRegistryOps {
 
             chain.push(summary);
 
-            match parent {
-                Some(parent_pid) => {
-                    pid = parent_pid;
+            if let Some(parent_pid) = parent {
+                pid = parent_pid;
+            } else {
+                if entry.role != CanisterRole::ROOT {
+                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
                 }
-                None => {
-                    if entry.role != CanisterRole::ROOT {
-                        return Err(
-                            SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into()
-                        );
-                    }
-                    break;
-                }
+                break;
             }
         }
 

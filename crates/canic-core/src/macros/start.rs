@@ -1,76 +1,36 @@
-//! # Canic Lifecycle Macros
-//!
-//! These macros define **compile-time lifecycle entry points** (`init` and `post_upgrade`)
-//! for Canic canisters. Lifecycle hooks must exist at the crate root with fixed names,
-//! so they cannot be registered dynamically — macros are therefore used to generate the
-//! boilerplate pre- and post-initialization logic automatically.
-//!
-//! Each macro sets up configuration, memory, timers, and TLS before calling user-defined
-//! async setup functions (`canic_setup`, `canic_install`, `canic_upgrade`), and then
-//! exposes the standard Canic endpoint suites.
-//!
-//! ## When to use which
-//!
-//! - [`macro@canic::start`] — for **non-root** canisters (standard services, workers, etc.).
-//! - [`macro@canic::start_root`] — for the **root orchestrator**, which performs
-//!   additional initialization for global registries and root-only extensions.
-
-/// Configure lifecycle hooks for **non-root Canic canisters**.
+/// Configure lifecycle hooks for **non-root** Canic canisters.
 ///
-/// This macro wires up the `init` and `post_upgrade` entry points required by the IC,
-/// performing pre-initialization steps (config, memory, TLS, environment) before invoking
-/// user async functions:
+/// This macro defines the IC-required `init` and `post_upgrade` entry points
+/// at the crate root and *immediately delegates* all real work to runtime
+/// bootstrap code.
 ///
-/// ```ignore
-/// async fn canic_setup() { /* shared setup */ }
-/// async fn canic_install(args: Option<Vec<u8>>) { /* called after init */ }
-/// async fn canic_upgrade() { /* called after post_upgrade */ }
-/// ```
+/// IMPORTANT:
+/// - This macro must remain **thin**
+/// - It must not schedule timers
+/// - It must not perform orchestration
+/// - It must not contain async logic
+/// - It must not encode policy
 ///
-/// These functions are spawned asynchronously after bootstrap completes.
-/// The macro also exposes the standard non-root Canic endpoint suites.
-///
-/// This macro must be used instead of a normal function because the IC runtime requires
-/// `init` and `post_upgrade` to be declared at the top level.
-
+/// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
 #[macro_export]
 macro_rules! start {
     ($canister_role:expr) => {
         #[::canic::cdk::init]
-        fn init(payload: ::canic::core::ops::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::core::abi::CanisterInitPayload, args: Option<Vec<u8>>) {
+            // Load embedded configuration early.
             ::canic::core::__canic_load_config!();
 
-            // ops
-            ::canic::core::ops::runtime::nonroot_init($canister_role, payload);
-
-            // timers — async body, no spawn()
-            let install_args = args;
-            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
-                ::std::time::Duration::ZERO,
-                "startup:init",
-                async move {
-                    canic_setup().await;
-                    canic_install(install_args).await;
-                },
-            );
+            // Delegate to lifecycle adapter (NOT workflow).
+            ::canic::core::lifecycle::init::nonroot_init($canister_role, payload, args);
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
+            // Reload embedded configuration on upgrade.
             ::canic::core::__canic_load_config!();
 
-            // ops
-            ::canic::core::ops::runtime::nonroot_post_upgrade($canister_role);
-
-            // timers — async body, no spawn()
-            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
-                ::std::time::Duration::ZERO,
-                "startup:upgrade",
-                async move {
-                    canic_setup().await;
-                    canic_upgrade().await;
-                },
-            );
+            // Delegate to lifecycle adapter.
+            ::canic::core::lifecycle::upgrade::nonroot_post_upgrade($canister_role);
         }
 
         ::canic::core::canic_endpoints!();
@@ -78,86 +38,41 @@ macro_rules! start {
     };
 }
 
+/// Configure lifecycle hooks for the **root orchestrator** canister.
 ///
-/// Configure lifecycle hooks for the **root Canic orchestrator canister**.
+/// This macro behaves like [`start!`], but delegates to root-specific
+/// bootstrap logic.
 ///
-/// This macro behaves like [`macro@canic::start`], but includes additional
-/// root-only initialization for:
+/// IMPORTANT:
+/// - The macro does NOT perform root orchestration
+/// - The macro does NOT import WASMs
+/// - The macro does NOT create canisters
+/// - The macro does NOT schedule timers
 ///
-/// - the global subnet registry
-/// - root-only memory extensions and cycle tracking
-/// - the root endpoint suite
-///
-/// It generates the `init` and `post_upgrade` hooks required by the IC, loads embedded
-/// configuration, imports the root `WASMS` bundle, and runs pre- and post-upgrade logic
-/// in [`ops::runtime_lifecycle`].
-///
-/// Use this for the root orchestrator canister only. Other canisters should use
-/// [`macro@canic::start`].
-
+/// All root-specific behavior lives in `workflow::bootstrap`.
 #[macro_export]
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::ops::topology::SubnetIdentity) {
+        fn init(identity: ::canic::core::ops::storage::registry::SubnetIdentity) {
             ::canic::core::__canic_load_config!();
 
-            // ops
-            ::canic::core::ops::runtime::root_init(identity);
-
-            // import wasms
-            ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
-
-            // timers
-            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
-                std::time::Duration::ZERO,
-                "startup:root",
-                async move {
-                    ::canic::core::ops::bootstrap::root::root_set_subnet_id().await;
-                    ::canic::core::ops::bootstrap::root::root_import_pool_from_config().await;
-
-                    // attempt to create canisters
-                    if let Err(err) =
-                        ::canic::core::ops::bootstrap::root::root_create_canisters().await
-                    {
-                        $crate::log!(
-                            $crate::log::Topic::Init,
-                            Error,
-                            "root_create_canisters failed: {err}"
-                        );
-                        return;
-                    }
-
-                    canic_setup().await;
-                    canic_install().await;
-                },
-            );
+            // Delegate to lifecycle adapter.
+            ::canic::core::lifecycle::init::root_init(identity);
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             ::canic::core::__canic_load_config!();
-            ::canic::core::ops::wasm::WasmOps::import_static(WASMS);
 
-            // ops
-            ::canic::core::ops::runtime::root_post_upgrade();
-
-            // timers
-            let _ = ::canic::core::ops::ic::timer::TimerOps::set(
-                ::std::time::Duration::ZERO,
-                "startup:root-upgrade",
-                async move {
-                    canic_setup().await;
-                    canic_upgrade().await;
-                },
-            );
+            // Delegate to lifecycle adapter.
+            ::canic::core::lifecycle::upgrade::root_post_upgrade();
         }
 
         ::canic::core::canic_endpoints!();
         ::canic::core::canic_endpoints_root!();
     };
 }
-
 //
 // Private helpers
 //

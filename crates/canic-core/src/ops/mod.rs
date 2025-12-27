@@ -1,11 +1,19 @@
-//! Business-logic helpers that sit between endpoint handlers and the state
-//! layer.
+//! Operations layer.
 //!
-//! The ops layer orchestrates multi-step workflows such as provisioning new
-//! canisters,  running scaling/sharding policies, and
-//! synchronizing topology snapshots. Endpoint macros call into these modules so
-//! the public surface remains thin while policy, logging, and validation live
-//! here.
+//! This module contains two kinds of operations:
+//!
+//! 1. **Control ops**
+//!    - Mutate state
+//!    - Perform orchestration
+//!    - Call IC management APIs
+//!    - Must be invoked via workflow
+//!
+//! 2. **View ops**
+//!    - Read-only facades over internal state
+//!    - Perform snapshotting, aggregation, pagination
+//!    - Safe to call directly from query endpoints
+//!
+//! Examples of view ops include registry exports and metrics views.
 
 pub mod canister;
 pub mod config;
@@ -15,6 +23,7 @@ pub mod icrc;
 pub mod memory;
 pub mod perf;
 pub mod rpc;
+pub mod runtime;
 pub mod storage;
 pub mod wasm;
 

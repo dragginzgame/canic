@@ -5,15 +5,15 @@ macro_rules! canic_endpoints_root {
         // canic_app
         // modify app-level state
         // eventually this will cascade down from an orchestrator canister
-        #[canic_update(auth_any(::canic::core::auth::is_controller))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_app(
-            cmd: ::canic::core::ops::state::AppCommand,
+            cmd: ::canic::core::ops::storage::state::AppCommand,
         ) -> Result<(), ::canic::Error> {
-            ::canic::core::ops::orchestration::AppStateOrchestrator::apply_command(cmd).await
+            ::canic::core::workflow::app::AppStateOrchestrator::apply_command(cmd).await
         }
 
         // canic_canister_upgrade
-        #[canic_update(auth_any(::canic::core::auth::is_controller))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::core::ops::rpc::UpgradeCanisterResponse, ::canic::Error> {
@@ -25,7 +25,7 @@ macro_rules! canic_endpoints_root {
         // canic_response
         // root's way to respond to a generic request from another canister
         // has to come from a direct child canister
-        #[canic_update(auth_any(::canic::core::auth::is_registered_to_subnet))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_registered_to_subnet))]
         async fn canic_response(
             request: ::canic::core::ops::rpc::Request,
         ) -> Result<::canic::core::ops::rpc::Response, ::canic::Error> {
@@ -36,7 +36,10 @@ macro_rules! canic_endpoints_root {
 
         // canic_canister_status
         // this can be called via root as root is the master controller
-        #[canic_update(auth_any(::canic::core::auth::is_root, ::canic::core::auth::is_controller))]
+        #[canic_update(auth_any(
+            ::canic::core::access::auth::is_root,
+            ::canic::core::access::auth::is_controller
+        ))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
@@ -47,7 +50,7 @@ macro_rules! canic_endpoints_root {
         // CONFIG
         //
 
-        #[canic_query(auth_any(::canic::core::auth::is_controller))]
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_config() -> Result<String, ::canic::Error> {
             $crate::ops::config::ConfigOps::export_toml()
         }
@@ -57,13 +60,14 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        fn canic_APP_REGISTRY() -> ::canic::core::ops::topology::AppRegistryView {
-            $crate::ops::topology::AppRegistryOps::export()
+        fn canic_APP_REGISTRY() -> ::canic::core::ops::storage::registry::AppRegistryView {
+            $crate::ops::storage::registry::AppRegistryOps::export()
         }
 
         #[canic_query]
-        fn canic_SUBNET_REGISTRY() -> ::canic::core::ops::topology::subnet::SubnetRegistryView {
-            $crate::ops::topology::SubnetRegistryOps::export()
+        fn canic_SUBNET_REGISTRY()
+        -> ::canic::core::ops::storage::registry::subnet::SubnetRegistryView {
+            $crate::ops::storage::registry::SubnetRegistryOps::export()
         }
 
         //
@@ -93,18 +97,18 @@ macro_rules! canic_endpoints_nonroot {
         // SYNC
         //
 
-        #[canic_update(auth_any(::canic::core::auth::is_parent))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_state(
-            bundle: ::canic::core::ops::orchestration::cascade::state::StateBundle,
+            bundle: ::canic::core::workflow::cascade::state::StateBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::ops::orchestration::cascade::state::nonroot_cascade_state(&bundle).await
+            $crate::workflow::cascade::state::nonroot_cascade_state(&bundle).await
         }
 
-        #[canic_update(auth_any(::canic::core::auth::is_parent))]
+        #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
-            bundle: ::canic::core::ops::orchestration::cascade::topology::TopologyBundle,
+            bundle: ::canic::core::workflow::cascade::topology::TopologyBundle,
         ) -> Result<(), ::canic::Error> {
-            $crate::ops::orchestration::cascade::topology::nonroot_cascade_topology(&bundle).await
+            $crate::workflow::cascade::topology::nonroot_cascade_topology(&bundle).await
         }
     };
 }

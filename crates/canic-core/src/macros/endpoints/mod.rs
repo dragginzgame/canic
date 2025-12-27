@@ -139,13 +139,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_app_state() -> ::canic::core::ops::state::AppStateData {
-            $crate::ops::state::AppStateOps::export()
+        fn canic_app_state() -> ::canic::core::ops::storage::state::AppStateData {
+            $crate::ops::storage::state::AppStateOps::export()
         }
 
         #[canic_query]
-        fn canic_subnet_state() -> ::canic::core::ops::state::SubnetStateData {
-            $crate::ops::state::SubnetStateOps::export()
+        fn canic_subnet_state() -> ::canic::core::ops::storage::state::SubnetStateData {
+            $crate::ops::storage::state::SubnetStateOps::export()
         }
 
         //
@@ -159,7 +159,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::directory::AppDirectoryOps::page(page)
+            $crate::ops::storage::directory::AppDirectoryOps::page(page)
         }
 
         #[canic_query]
@@ -169,7 +169,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::directory::SubnetDirectoryOps::page(page)
+            $crate::ops::storage::directory::SubnetDirectoryOps::page(page)
         }
 
         //
@@ -179,8 +179,8 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::CanisterSummary> {
-            ::canic::core::ops::topology::subnet::SubnetCanisterChildrenOps::page(page)
+        ) -> ::canic::core::dto::page::Page<::canic::core::ops::storage::CanisterSummary> {
+            ::canic::core::ops::storage::children::CanisterChildrenOps::page(page)
         }
 
         //
@@ -191,27 +191,27 @@ macro_rules! canic_endpoints {
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::types::Cycles)> {
-            $crate::ops::runtime::cycles::CycleTrackerOps::page(page)
+            $crate::ops::storage::cycles::CycleTrackerOps::page(page)
         }
 
         //
         // SCALING
         //
 
-        #[canic_query(auth_any(::canic::core::auth::is_controller))]
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::ops::placement::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::ops::placement::scaling::ScalingRegistryOps::export())
+        -> Result<::canic::core::ops::storage::scaling::ScalingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::scaling::ScalingRegistryOps::export())
         }
 
         //
         // SHARDING
         //
 
-        #[canic_query(auth_any(::canic::core::auth::is_controller))]
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::core::ops::placement::sharding::ShardingRegistryDto, ::canic::Error> {
-            Ok($crate::ops::placement::sharding::ShardingPolicyOps::export())
+        -> Result<::canic::core::ops::storage::sharding::ShardingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::sharding::ShardingRegistryOps::export())
         }
 
         //
