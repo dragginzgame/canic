@@ -1,6 +1,5 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    dto::topology::CanisterChildrenView,
     eager_static, ic_memory,
     model::memory::{CanisterSummary, id::children::CANISTER_CHILDREN_ID},
 };
@@ -20,25 +19,32 @@ eager_static! {
 }
 
 ///
+/// CanisterChildrenData
+///
+
+pub type CanisterChildrenData = Vec<(Principal, CanisterSummary)>;
+
+///
 /// CanisterChildren
-/// Public API for accessing children
 ///
 
 pub struct CanisterChildren;
 
 impl CanisterChildren {
-    /// Export state
     #[must_use]
-    pub(crate) fn export() -> CanisterChildrenView {
-        CANISTER_CHILDREN.with_borrow(|map| map.iter().map(|e| e.value()).collect())
+    pub fn export() -> CanisterChildrenData {
+        CANISTER_CHILDREN.with_borrow(|map| {
+            map.iter()
+                .map(|e| (e.key().clone(), e.value().clone()))
+                .collect()
+        })
     }
 
-    /// Import state (replace everything)
-    pub(crate) fn import(data: CanisterChildrenView) {
+    pub fn import(data: CanisterChildrenData) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear();
-            for entry in data {
-                map.insert(entry.pid, entry);
+            for (pid, entry) in data {
+                map.insert(pid, entry);
             }
         });
     }

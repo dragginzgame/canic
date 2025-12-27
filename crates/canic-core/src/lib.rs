@@ -20,7 +20,6 @@
 // Phase 0: path coherence re-exports (no behavior change)
 // -----------------------------------------------------------------------------
 
-pub mod abi;
 pub mod access;
 pub mod config;
 pub mod dispatch;

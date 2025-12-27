@@ -4,6 +4,7 @@ use crate::{
     Error, ThisError,
     cdk::types::Principal,
     config::schema::CanisterCardinality,
+    dto::topology::CanisterChildrenView,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
     ops::{config::ConfigOps, storage::registry::RegistryOpsError},
@@ -124,8 +125,8 @@ impl SubnetRegistryOps {
     }
 
     #[must_use]
-    pub fn export() -> Vec<CanisterEntry> {
-        SubnetRegistry::export()
+    pub fn export_view() -> CanisterChildrenView {
+        SubnetRegistry::export().into()
     }
 
     // ---------------------------------------------------------------------

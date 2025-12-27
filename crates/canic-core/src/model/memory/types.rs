@@ -1,5 +1,5 @@
 use crate::{ids::CanisterRole, memory::impl_storable_bounded};
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -22,43 +22,6 @@ impl CanisterEntry {
 }
 
 impl_storable_bounded!(CanisterEntry, CanisterEntry::STORABLE_MAX_SIZE, false);
-
-///
-/// CanisterEntryView
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterEntryView {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-    pub module_hash: Option<Vec<u8>>,
-    pub created_at: u64,
-}
-
-impl From<&CanisterEntry> for CanisterEntryView {
-    fn from(e: &CanisterEntry) -> Self {
-        Self {
-            pid: e.pid,
-            role: e.role.clone(),
-            parent_pid: e.parent_pid,
-            module_hash: e.module_hash.clone(),
-            created_at: e.created_at,
-        }
-    }
-}
-
-impl From<CanisterEntry> for CanisterEntryView {
-    fn from(e: CanisterEntry) -> Self {
-        Self {
-            pid: e.pid,
-            role: e.role,
-            parent_pid: e.parent_pid,
-            module_hash: e.module_hash,
-            created_at: e.created_at,
-        }
-    }
-}
 
 ///
 /// CanisterSummary
@@ -86,38 +49,6 @@ impl From<CanisterEntry> for CanisterSummary {
 }
 
 impl_storable_bounded!(CanisterSummary, CanisterSummary::STORABLE_MAX_SIZE, false);
-
-///
-/// CanisterSummaryView
-/// Minimal view for children/subnet directories
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanisterSummaryView {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-}
-
-impl From<&CanisterSummary> for CanisterSummaryView {
-    fn from(s: &CanisterSummary) -> Self {
-        Self {
-            pid: s.pid,
-            role: s.role.clone(),
-            parent_pid: s.parent_pid,
-        }
-    }
-}
-
-impl From<CanisterSummary> for CanisterSummaryView {
-    fn from(s: CanisterSummary) -> Self {
-        Self {
-            pid: s.pid,
-            role: s.role,
-            parent_pid: s.parent_pid,
-        }
-    }
-}
 
 ///
 /// TESTS

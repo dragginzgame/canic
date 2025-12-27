@@ -1,1 +1,8 @@
-pub use crate::model::memory::directory::DirectoryView;
+use crate::ids::CanisterRole;
+use candid::Principal;
+
+///
+/// DirectoryView
+///
+
+pub type DirectoryView = Vec<(CanisterRole, Principal)>;
