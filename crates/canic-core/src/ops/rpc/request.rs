@@ -1,12 +1,13 @@
 use crate::{
     Error, ThisError,
+    dto::rpc::{
+        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
+        CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
+    },
     ids::CanisterRole,
     ops::{
         prelude::*,
-        rpc::{
-            CreateCanisterResponse, CyclesResponse, Response, Rpc, RpcOpsError,
-            UpgradeCanisterResponse, execute_rpc,
-        },
+        rpc::{Rpc, RpcOpsError, execute_rpc},
     },
 };
 use candid::encode_one;
@@ -44,66 +45,6 @@ impl From<RequestOpsError> for Error {
 }
 
 ///
-/// Request
-/// Root-directed orchestration commands.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum Request {
-    CreateCanister(CreateCanisterRequest),
-    UpgradeCanister(UpgradeCanisterRequest),
-    Cycles(CyclesRequest),
-}
-
-///
-/// CreateCanisterRequest
-/// Payload for [`Request::CreateCanister`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CreateCanisterRequest {
-    pub canister_role: CanisterRole,
-    pub parent: CreateCanisterParent,
-    pub extra_arg: Option<Vec<u8>>,
-}
-
-///
-/// CreateCanisterParent
-/// Parent-location choices for a new canister
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum CreateCanisterParent {
-    Root,
-    /// Use the requesting canister as parent.
-    ThisCanister,
-    /// Use the requesting canister's parent (creates a sibling).
-    Parent,
-    Canister(Principal),
-    Directory(CanisterRole),
-}
-
-///
-/// UpgradeCanisterRequest
-/// Payload for [`Request::UpgradeCanister`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct UpgradeCanisterRequest {
-    pub canister_pid: Principal,
-}
-
-///
-/// CyclesRequest
-/// Payload for [`Request::Cycles`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CyclesRequest {
-    pub cycles: u128,
-}
-
-///
 /// CreateCanister
 ///
 
@@ -124,6 +65,10 @@ where
     })
     .await
 }
+
+///
+/// CreateCanisterRpc
+///
 
 pub struct CreateCanisterRpc {
     pub canister_role: CanisterRole,

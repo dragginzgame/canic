@@ -16,7 +16,7 @@ macro_rules! canic_endpoints_root {
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
-        ) -> Result<::canic::core::ops::rpc::UpgradeCanisterResponse, ::canic::Error> {
+        ) -> Result<::canic::core::dto::rpc::UpgradeCanisterResponse, ::canic::Error> {
             let res = $crate::ops::rpc::upgrade_canister_request(canister_pid).await?;
 
             Ok(res)
@@ -27,8 +27,8 @@ macro_rules! canic_endpoints_root {
         // has to come from a direct child canister
         #[canic_update(auth_any(::canic::core::access::auth::is_registered_to_subnet))]
         async fn canic_response(
-            request: ::canic::core::ops::rpc::Request,
-        ) -> Result<::canic::core::ops::rpc::Response, ::canic::Error> {
+            request: ::canic::core::dto::rpc::Request,
+        ) -> Result<::canic::core::dto::rpc::Response, ::canic::Error> {
             let response = $crate::workflow::rpc::handler::response(request).await?;
 
             Ok(response)

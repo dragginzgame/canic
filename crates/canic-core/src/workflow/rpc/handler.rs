@@ -1,9 +1,7 @@
 use crate::{
     Error,
-    ops::{
-        OpsError,
-        rpc::{Request, Response},
-    },
+    dto::rpc::{Request, Response},
+    ops::OpsError,
     workflow::lifecycle::{create_canister_response, cycles_response, upgrade_canister_response},
 };
 

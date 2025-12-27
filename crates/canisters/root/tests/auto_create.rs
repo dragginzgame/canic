@@ -1,15 +1,14 @@
 use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
-use canic::Error;
-use canic::core::{
-    ids::CanisterRole,
-    ops::{
-        rpc::CreateCanisterResponse,
-        storage::{
-            CanisterEntry,
-            state::{AppCommand, AppMode, AppStateData},
-            topology::SubnetIdentity,
+use canic::{
+    Error,
+    core::{
+        dto::registry::SubnetIdentity,
+        ids::CanisterRole,
+        ops::{
+            rpc::CreateCanisterResponse,
+            storage::state::{AppCommand, AppMode, AppStateData},
         },
     },
 };

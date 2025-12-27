@@ -2,9 +2,11 @@ use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::
 use canic::{
     Error,
     core::{
+        abi::CanisterInitPayload,
         ids::{CanisterRole, SubnetRole},
         ops::{
-            CanisterInitPayload, directory::DirectoryView, env::EnvData, topology::SubnetIdentity,
+            env::EnvData,
+            storage::{directory::DirectoryView, registry::SubnetIdentity},
         },
     },
 };

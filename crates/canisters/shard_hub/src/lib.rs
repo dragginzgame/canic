@@ -8,7 +8,7 @@
 use candid::Principal;
 use canic::{
     Error,
-    core::ops::placement::sharding::{ShardingOps, ShardingPlan, ShardingPolicyOps},
+    core::workflow::sharding::{ShardingOps, ShardingPlan, ShardingRegisrtrOps},
     prelude::*,
 };
 use canic_internal::canister::SHARD_HUB;
