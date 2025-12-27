@@ -3,7 +3,7 @@ use crate::{
         env::EnvOps,
         storage::{
             directory::{DirectoryView, SubnetDirectoryOps},
-            topology::subnet::SubnetCanisterRegistryOps,
+            topology::subnet::SubnetRegistryOps,
         },
     },
     policy,
@@ -26,7 +26,7 @@ impl SubnetDirectoryWorkflow {
     }
 
     pub fn build_from_registry() -> DirectoryView {
-        let entries = SubnetCanisterRegistryOps::export();
+        let entries = SubnetRegistryOps::export();
         let mut map = BTreeMap::new();
 
         for entry in entries {

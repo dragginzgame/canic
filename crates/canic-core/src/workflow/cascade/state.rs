@@ -11,9 +11,10 @@ use crate::{
         OpsError,
         prelude::*,
         storage::{
+            children::CanisterChildrenOps,
             directory::{AppDirectoryOps, DirectoryView, SubnetDirectoryOps},
+            registry::SubnetRegistryOps,
             state::{AppStateData, AppStateOps, SubnetStateData, SubnetStateOps},
-            topology::subnet::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
         },
     },
 };
@@ -118,7 +119,7 @@ pub(crate) async fn root_cascade_state(bundle: StateBundle) -> Result<(), Error>
     }
 
     let root_pid = canister_self();
-    let children = SubnetCanisterRegistryOps::children(root_pid);
+    let children = SubnetRegistryOps::children(root_pid);
     let child_count = children.len();
     warn_if_large("root state cascade", child_count);
 
@@ -160,7 +161,7 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     // update local state
     save_state(bundle)?;
 
-    let children = SubnetCanisterChildrenOps::export();
+    let children = CanisterChildrenOps::export();
     let child_count = children.len();
     warn_if_large("nonroot state cascade", child_count);
 

@@ -7,7 +7,7 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_unbounded,
-    model::memory::id::root::CANISTER_POOL_ID,
+    model::memory::id::pool::CANISTER_POOL_ID,
     types::Cycles,
 };
 use candid::CandidType;

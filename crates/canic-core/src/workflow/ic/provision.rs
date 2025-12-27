@@ -21,7 +21,7 @@ use crate::{
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             pool::PoolOps,
-            topology::SubnetCanisterRegistryOps,
+            registry::SubnetRegistryOps,
         },
         wasm::WasmOps,
     },
@@ -113,7 +113,7 @@ pub(crate) async fn rebuild_directories_from_registry(
 /// PHASES:
 /// 1. Allocate a canister ID and cycles (preferring the pool)
 /// 2. Install WASM + bootstrap initial state
-/// 3. Register canister in SubnetCanisterRegistry
+/// 3. Register canister in SubnetRegistry
 /// 4. Cascade topology + sync directories
 pub async fn create_and_install_canister(
     role: &CanisterRole,
@@ -160,7 +160,7 @@ pub async fn create_and_install_canister(
 /// PHASES:
 /// 0. Uninstall code
 /// 1. Delete via management canister
-/// 2. Remove from SubnetCanisterRegistry
+/// 2. Remove from SubnetRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
 pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
@@ -173,7 +173,7 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
     delete_canister(pid).await?;
 
     // Phase 2: remove registry record
-    let removed_entry = SubnetCanisterRegistryOps::remove(&pid);
+    let removed_entry = SubnetRegistryOps::remove(&pid);
     match &removed_entry {
         Some(c) => log!(
             Topic::CanisterLifecycle,
@@ -298,7 +298,7 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    SubnetCanisterRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
+    SubnetRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
 
     if let Err(err) = install_code_with_extra_arg(
         CanisterInstallMode::Install,
@@ -309,7 +309,7 @@ async fn install_canister(
     )
     .await
     {
-        let removed = SubnetCanisterRegistryOps::remove(&pid);
+        let removed = SubnetRegistryOps::remove(&pid);
         if removed.is_none() {
             log!(
                 Topic::CanisterLifecycle,

@@ -11,7 +11,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             CreateCanisterParent::Root => canister_self(),
             CreateCanisterParent::ThisCanister => caller,
 
-            CreateCanisterParent::Parent => SubnetCanisterRegistryOps::get_parent(caller)
+            CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(caller)
                 .ok_or(RequestOpsError::ParentNotFound(caller))?,
 
             CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)

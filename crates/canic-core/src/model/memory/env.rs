@@ -3,7 +3,7 @@ use crate::{
     eager_static, ic_memory,
     ids::{CanisterRole, SubnetRole},
     memory::impl_storable_bounded,
-    model::memory::id::ENV_ID,
+    model::memory::id::env::ENV_ID,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
