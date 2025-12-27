@@ -2,8 +2,8 @@
 
 use crate::{
     Error,
+    dto::pool::{PoolAdminCommand, PoolAdminResponse},
     workflow::pool::{
-        dto::{PoolAdminCommand, PoolAdminResponse},
         pool_create_canister, pool_import_canister, pool_import_queued_canisters,
         pool_recycle_canister,
     },
