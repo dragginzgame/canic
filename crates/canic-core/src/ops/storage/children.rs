@@ -6,7 +6,10 @@ use crate::{
     },
     ids::CanisterRole,
     model::memory::children::{CanisterChildren, CanisterChildrenData},
-    ops::{adapter::canister_summary_to_view, env::EnvOps, storage::registry::SubnetRegistryOps},
+    ops::{
+        adapter::canister::canister_summary_to_view, env::EnvOps,
+        storage::registry::SubnetRegistryOps,
+    },
 };
 
 ///
