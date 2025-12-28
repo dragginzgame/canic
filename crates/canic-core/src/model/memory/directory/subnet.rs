@@ -7,14 +7,16 @@ use crate::{
 use candid::Principal;
 use std::cell::RefCell;
 
-//
-// SUBNET_DIRECTORY
-//
-
 eager_static! {
     static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(ic_memory!(SubnetDirectory, SUBNET_DIRECTORY_ID)));
 }
+
+///
+/// SubnetDirectoryData
+///
+
+pub type SubnetDirectoryData = Vec<(CanisterRole, Principal)>;
 
 ///
 /// SubnetDirectory
@@ -25,7 +27,7 @@ pub struct SubnetDirectory;
 impl SubnetDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> Vec<(CanisterRole, Principal)> {
+    pub(crate) fn export() -> SubnetDirectoryData {
         SUBNET_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
@@ -33,7 +35,7 @@ impl SubnetDirectory {
         })
     }
 
-    pub(crate) fn import(data: Vec<(CanisterRole, Principal)>) {
+    pub(crate) fn import(data: SubnetDirectoryData) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (role, pid) in data {

@@ -17,8 +17,8 @@ use crate::{
 
 pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
     EnvOps::init(payload.env, role);
-    AppDirectoryOps::import(payload.app_directory);
-    SubnetDirectoryOps::import(payload.subnet_directory);
+    AppDirectoryOps::import(payload.app_directory.into());
+    SubnetDirectoryOps::import(payload.subnet_directory.into());
 
     // Spawn async bootstrap workflow
     spawn(async move {

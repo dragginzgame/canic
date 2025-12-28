@@ -30,7 +30,6 @@ impl From<WasmRegistryError> for Error {
 /// WasmRegistry
 ///
 
-#[derive(Debug, Default)]
 pub struct WasmRegistry {}
 
 impl WasmRegistry {

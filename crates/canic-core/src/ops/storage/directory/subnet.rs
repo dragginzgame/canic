@@ -1,11 +1,8 @@
 use crate::{
-    dto::{
-        directory::DirectoryView,
-        page::{Page, PageRequest},
-    },
+    dto::page::{Page, PageRequest},
     ids::CanisterRole,
-    model::memory::directory::SubnetDirectory,
-    ops::storage::directory::paginate,
+    model::memory::directory::{SubnetDirectory, SubnetDirectoryData},
+    ops::view::paginate_vec,
 };
 use candid::Principal;
 
@@ -25,15 +22,15 @@ impl SubnetDirectoryOps {
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate(SubnetDirectory::export(), request)
+        paginate_vec(SubnetDirectory::export(), request)
     }
 
     #[must_use]
-    pub fn export() -> DirectoryView {
+    pub fn export() -> SubnetDirectoryData {
         SubnetDirectory::export()
     }
 
-    pub fn import(view: DirectoryView) {
-        SubnetDirectory::import(view);
+    pub fn import(data: SubnetDirectoryData) {
+        SubnetDirectory::import(data);
     }
 }

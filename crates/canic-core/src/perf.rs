@@ -73,7 +73,6 @@ pub enum PerfKey {
 /// Tracks an active endpoint scope and accumulated child instructions.
 ///
 
-#[derive(Debug, Default)]
 struct PerfFrame {
     start: u64,
     child_instructions: u64,
