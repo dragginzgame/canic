@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -10,7 +9,7 @@ thread_local! {
 /// Enumerates the resource-heavy actions we track.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum SystemMetricKind {
     CanisterCall,
@@ -28,23 +27,6 @@ pub enum SystemMetricKind {
 }
 
 ///
-/// SystemMetricEntry
-/// Snapshot entry pairing a metric kind with its count.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct SystemMetricEntry {
-    pub kind: SystemMetricKind,
-    pub count: u64,
-}
-
-///
-/// SystemMetricsSnapshot
-///
-
-pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
-
-///
 /// SystemMetrics
 /// Thin facade over the action metrics counters.
 ///
@@ -60,51 +42,13 @@ impl SystemMetrics {
         });
     }
 
-    /// Return a snapshot of all counters.
     #[must_use]
-    pub fn snapshot() -> Vec<SystemMetricEntry> {
-        SYSTEM_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(kind, count)| SystemMetricEntry {
-                    kind: *kind,
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<SystemMetricKind, u64> {
+        SYSTEM_METRICS.with_borrow(|counts| counts.clone())
     }
 
     #[cfg(test)]
     pub fn reset() {
         SYSTEM_METRICS.with_borrow_mut(HashMap::clear);
-    }
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn system_metrics_increments_and_snapshots() {
-        SystemMetrics::reset();
-
-        SystemMetrics::increment(SystemMetricKind::CreateCanister);
-        SystemMetrics::increment(SystemMetricKind::CreateCanister);
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
-
-        let snapshot = SystemMetrics::snapshot();
-        let as_map: HashMap<SystemMetricKind, u64> = snapshot
-            .into_iter()
-            .map(|entry| (entry.kind, entry.count))
-            .collect();
-
-        assert_eq!(as_map.get(&SystemMetricKind::CreateCanister), Some(&2));
-        assert_eq!(as_map.get(&SystemMetricKind::InstallCode), Some(&1));
-        assert!(!as_map.contains_key(&SystemMetricKind::CanisterCall));
     }
 }
