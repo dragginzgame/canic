@@ -19,7 +19,6 @@ use crate::{
     },
     utils::case::{Case, Casing},
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};
 
@@ -96,7 +95,7 @@ impl From<LogError> for Error {
 /// LogEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntry {
     pub crate_name: String,
     pub created_at: u64,

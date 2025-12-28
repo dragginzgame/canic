@@ -1,4 +1,3 @@
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
@@ -10,9 +9,7 @@ thread_local! {
 /// TimerMode
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum TimerMode {
     Interval,
     Once,
@@ -23,7 +20,7 @@ pub enum TimerMode {
 /// Uniquely identifies a timer by mode + delay (ms) + label.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
     pub delay_ms: u64,
@@ -35,7 +32,7 @@ pub struct TimerMetricKey {
 /// Snapshot entry pairing a timer mode/delay with its execution count.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TimerMetricEntry {
     pub mode: TimerMode,
     pub delay_ms: u64,

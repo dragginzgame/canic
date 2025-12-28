@@ -1,4 +1,3 @@
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -44,7 +43,7 @@ struct EndpointResultCounts {
 /// EndpointAttemptMetricEntry
 /// Public metric entry for endpoint attempt/completion.
 ///
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointAttemptMetricEntry {
     pub endpoint: String,
     pub attempted: u64,
@@ -62,7 +61,7 @@ pub type EndpointAttemptMetricsSnapshot = Vec<EndpointAttemptMetricEntry>;
 /// Public metric entry for endpoint ok/err outcomes.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointResultMetricEntry {
     pub endpoint: String,
     pub ok: u64,

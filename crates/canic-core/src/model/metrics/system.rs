@@ -1,4 +1,3 @@
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -11,9 +10,7 @@ thread_local! {
 /// Enumerates the resource-heavy actions we track.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[remain::sorted]
 pub enum SystemMetricKind {
     CanisterCall,
@@ -35,7 +32,7 @@ pub enum SystemMetricKind {
 /// Snapshot entry pairing a metric kind with its count.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SystemMetricEntry {
     pub kind: SystemMetricKind,
     pub count: u64,

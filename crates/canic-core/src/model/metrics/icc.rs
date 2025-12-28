@@ -1,4 +1,4 @@
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -11,7 +11,7 @@ thread_local! {
 /// Uniquely identifies an inter-canister call by target + method.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct IccMetricKey {
     pub target: Principal,
     pub method: String,
@@ -22,7 +22,7 @@ pub struct IccMetricKey {
 /// Snapshot entry pairing a target/method with its count.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct IccMetricEntry {
     pub target: Principal,
     pub method: String,

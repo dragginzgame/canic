@@ -18,19 +18,19 @@ pub struct SubnetDirectoryOps;
 impl SubnetDirectoryOps {
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
-        SubnetDirectory::view()
+        SubnetDirectory::export()
             .iter()
             .find_map(|(t, pid)| (t == role).then_some(*pid))
     }
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate(SubnetDirectory::view(), request)
+        paginate(SubnetDirectory::export(), request)
     }
 
     #[must_use]
     pub fn export() -> DirectoryView {
-        SubnetDirectory::view()
+        SubnetDirectory::export()
     }
 
     pub fn import(view: DirectoryView) {
