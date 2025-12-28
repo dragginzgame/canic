@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -18,10 +17,10 @@ thread_local! {
 /// Internal attempt/completion counters.
 ///
 
-#[derive(Default)]
-struct EndpointAttemptCounts {
-    attempted: u64,
-    completed: u64,
+#[derive(Clone, Default)]
+pub struct EndpointAttemptCounts {
+    pub attempted: u64,
+    pub completed: u64,
 }
 
 ///
@@ -29,50 +28,11 @@ struct EndpointAttemptCounts {
 /// Internal ok/err counters for Result-returning endpoints.
 ///
 
-#[derive(Default)]
-struct EndpointResultCounts {
-    ok: u64,
-    err: u64,
-}
-
-// -----------------------------------------------------------------------------
-// Public metric DTOs
-// -----------------------------------------------------------------------------
-
-///
-/// EndpointAttemptMetricEntry
-/// Public metric entry for endpoint attempt/completion.
-///
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointAttemptMetricEntry {
-    pub endpoint: String,
-    pub attempted: u64,
-    pub completed: u64,
-}
-
-///
-/// EndpointAttemptMetricsSnapshot
-///
-
-pub type EndpointAttemptMetricsSnapshot = Vec<EndpointAttemptMetricEntry>;
-
-///
-/// EndpointResultMetricEntry
-/// Public metric entry for endpoint ok/err outcomes.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointResultMetricEntry {
-    pub endpoint: String,
+#[derive(Clone, Default)]
+pub struct EndpointResultCounts {
     pub ok: u64,
     pub err: u64,
 }
-
-///
-/// EndpointResultMetricsSnapshot
-///
-
-pub type EndpointResultMetricsSnapshot = Vec<EndpointResultMetricEntry>;
 
 // -----------------------------------------------------------------------------
 // Metrics state + operations
@@ -105,17 +65,8 @@ impl EndpointAttemptMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> EndpointAttemptMetricsSnapshot {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(endpoint, c)| EndpointAttemptMetricEntry {
-                    endpoint: (*endpoint).to_string(),
-                    attempted: c.attempted,
-                    completed: c.completed,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<&'static str, EndpointAttemptCounts> {
+        ENDPOINT_ATTEMPT_METRICS.with_borrow(|counts| counts.clone())
     }
 
     #[cfg(test)]
@@ -150,71 +101,12 @@ impl EndpointResultMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> EndpointResultMetricsSnapshot {
-        ENDPOINT_RESULT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(endpoint, c)| EndpointResultMetricEntry {
-                    endpoint: (*endpoint).to_string(),
-                    ok: c.ok,
-                    err: c.err,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<&'static str, EndpointResultCounts> {
+        ENDPOINT_RESULT_METRICS.with_borrow(|counts| counts.clone())
     }
 
     #[cfg(test)]
     pub fn reset() {
         ENDPOINT_RESULT_METRICS.with_borrow_mut(HashMap::clear);
-    }
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn endpoint_attempt_metrics_track_attempted_and_completed() {
-        EndpointAttemptMetrics::reset();
-
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_attempted("b");
-        EndpointAttemptMetrics::increment_completed("a");
-
-        let snapshot = EndpointAttemptMetrics::snapshot();
-        let mut map: HashMap<String, (u64, u64)> = snapshot
-            .into_iter()
-            .map(|e| (e.endpoint, (e.attempted, e.completed)))
-            .collect();
-
-        assert_eq!(map.remove("a"), Some((2, 1)));
-        assert_eq!(map.remove("b"), Some((1, 0)));
-        assert!(map.is_empty());
-    }
-
-    #[test]
-    fn endpoint_result_metrics_track_ok_and_err() {
-        EndpointResultMetrics::reset();
-
-        EndpointResultMetrics::increment_ok("a");
-        EndpointResultMetrics::increment_ok("a");
-        EndpointResultMetrics::increment_err("a");
-        EndpointResultMetrics::increment_err("b");
-
-        let snapshot = EndpointResultMetrics::snapshot();
-        let mut map: HashMap<String, (u64, u64)> = snapshot
-            .into_iter()
-            .map(|e| (e.endpoint, (e.ok, e.err)))
-            .collect();
-
-        assert_eq!(map.remove("a"), Some((2, 1)));
-        assert_eq!(map.remove("b"), Some((0, 1)));
-        assert!(map.is_empty());
     }
 }

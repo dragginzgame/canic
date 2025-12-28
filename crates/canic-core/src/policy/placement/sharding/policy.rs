@@ -20,7 +20,7 @@ use crate::{
     config::schema::{ShardPool, ShardPoolPolicy},
     ops::{
         config::ConfigOps,
-        storage::sharding::{ShardEntry, ShardingRegistryOps, ShardingRegistryView},
+        storage::sharding::{ShardEntry, ShardingRegistryOps},
     },
     policy::placement::sharding::{
         ShardingPolicyError,
@@ -89,12 +89,12 @@ pub enum ShardingPlanState {
 }
 
 ///
-/// ShardingPolicyOps
+/// ShardingPolicy
 ///
 
-pub struct ShardingPolicyOps;
+pub struct ShardingPolicy;
 
-impl ShardingPolicyOps {
+impl ShardingPolicy {
     // -----------------------------------------------------------------------
     // Validation
     // -----------------------------------------------------------------------
@@ -220,12 +220,6 @@ impl ShardingPolicyOps {
     // Registry Access Helpers
     // -----------------------------------------------------------------------
 
-    /// Export a read-only view of the sharding registry.
-    #[must_use]
-    pub fn export() -> ShardingRegistryView {
-        ShardingRegistryOps::export()
-    }
-
     /// Lookup the shard assigned to a tenant, if any.
     #[must_use]
     pub fn lookup_tenant(pool: &str, tenant: impl AsRef<str>) -> Option<Principal> {
@@ -347,7 +341,7 @@ mod tests {
             max_shards: 5,
             ..Default::default()
         };
-        assert!(!ShardingPolicyOps::can_create(&metrics, &policy));
+        assert!(!ShardingPolicy::can_create(&metrics, &policy));
     }
 
     #[test]
@@ -409,7 +403,7 @@ mod tests {
         ShardingRegistryOps::create(shard, "primary", 0, &shard_role, 1).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-a", shard).unwrap();
 
-        let plan = ShardingPolicyOps::plan_assign_to_pool("primary", "tenant-x").unwrap();
+        let plan = ShardingPolicy::plan_assign_to_pool("primary", "tenant-x").unwrap();
 
         assert!(matches!(plan.state, ShardingPlanState::CreateAllowed));
         Config::reset_for_tests();
@@ -429,7 +423,7 @@ mod tests {
         ShardingRegistryOps::assign("primary", "tenant-a", shard_a).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-b", shard_b).unwrap();
 
-        let plan = ShardingPolicyOps::plan_assign_to_pool("primary", "tenant-y").unwrap();
+        let plan = ShardingPolicy::plan_assign_to_pool("primary", "tenant-y").unwrap();
 
         assert!(matches!(
             plan.state,

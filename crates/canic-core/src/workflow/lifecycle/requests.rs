@@ -44,8 +44,8 @@ pub async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Res
             extra_arg: req.extra_arg.clone(),
         };
 
-        let result = CanisterLifecycleOrchestrator::apply(event).await?;
-        let new_canister_pid = result
+        let lifecycle_result = CanisterLifecycleOrchestrator::apply(event).await?;
+        let new_canister_pid = lifecycle_result
             .new_canister_pid
             .ok_or(RequestOpsError::MissingNewCanisterPid)?;
 
@@ -79,7 +79,7 @@ pub async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<R
     }
 
     let event = LifecycleEvent::Upgrade {
-        pid: registry_entry.pid,
+        pid: req.canister_pid,
     };
 
     CanisterLifecycleOrchestrator::apply(event).await?;
