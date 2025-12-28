@@ -13,7 +13,39 @@
 //! - call ops or workflow
 //! - embed policy or orchestration logic
 
-use crate::dto::prelude::*;
+use crate::{dto::prelude::*, types::Cycles};
+
+///
+/// CanisterPoolView
+/// Read-only pool snapshot for endpoints.
+///
+
+pub type CanisterPoolView = Vec<(Principal, CanisterPoolEntryView)>;
+
+///
+/// CanisterPoolStatusView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolStatusView {
+    PendingReset,
+    Ready,
+    Failed { reason: String },
+}
+
+///
+/// CanisterPoolEntryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolEntryView {
+    pub created_at: u64,
+    pub cycles: Cycles,
+    pub status: CanisterPoolStatusView,
+    pub role: Option<CanisterRole>,
+    pub parent: Option<Principal>,
+    pub module_hash: Option<Vec<u8>>,
+}
 
 ///
 /// PoolAdminCommand

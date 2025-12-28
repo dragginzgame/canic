@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
+use crate::dto::prelude::*;
 
 ///
 /// TimerMetricEntry
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct TimerMetricEntry {
     pub mode: String,
     pub delay_ms: u64,

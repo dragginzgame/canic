@@ -2,12 +2,13 @@ use canic::{
     Error,
     cdk::types::Principal,
     core::{
-        dto::page::{Page, PageRequest},
-        ids::{CanisterRole, SubnetRole},
-        ops::{
-            env::EnvData,
-            storage::{CanisterEntry, CanisterSummary},
+        dto::{
+            canister::{CanisterEntryView, CanisterSummaryView},
+            page::{Page, PageRequest},
+            registry::SubnetRegistryView,
         },
+        ids::{CanisterRole, SubnetRole},
+        ops::env::EnvData,
     },
     types::TC,
 };
@@ -76,7 +77,8 @@ static SETUP: OnceLock<Setup> = OnceLock::new();
 struct Setup {
     pic: &'static Pic,
     root_id: Principal,
-    registry: HashMap<CanisterRole, CanisterEntry>,
+    registry: Vec<(CanisterRole, CanisterEntryView)>,
+    subnet_directory: HashMap<CanisterRole, Principal>,
 }
 
 fn setup_root() -> &'static Setup {
@@ -97,29 +99,37 @@ fn setup_root() -> &'static Setup {
             pic.tick();
         }
 
-        let registry_vec: Vec<CanisterEntry> = pic
+        let SubnetRegistryView(registry) = pic
             .query_call(root_id, "canic_SUBNET_REGISTRY", ())
             .expect("query registry");
 
-        let registry = registry_vec
-            .into_iter()
-            .map(|entry| (entry.role.clone(), entry))
-            .collect::<HashMap<_, _>>();
+        let subnet_directory_page: Page<(CanisterRole, Principal)> = pic
+            .query_call(
+                root_id,
+                "canic_subnet_directory",
+                (PageRequest::new(100, 0),),
+            )
+            .expect("query subnet directory");
+
+        let subnet_directory = subnet_directory_page.entries.into_iter().collect();
 
         Setup {
             pic,
             root_id,
             registry,
+            subnet_directory,
         }
     })
 }
+
 #[test]
 fn root_builds_hierarchy_and_exposes_env() {
     // setup
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_role = &setup.registry;
+    let registry = &setup.registry;
+    let subnet_directory = &setup.subnet_directory;
 
     let expected = [
         (CanisterRole::ROOT, None),
@@ -130,8 +140,9 @@ fn root_builds_hierarchy_and_exposes_env() {
     ];
 
     for (role, parent) in expected {
-        let entry = by_role
-            .get(&role)
+        let entry = registry
+            .iter()
+            .find_map(|(entry_role, entry)| (entry_role == &role).then_some(entry))
             .unwrap_or_else(|| panic!("missing {role} entry in registry"));
 
         assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");
@@ -145,12 +156,13 @@ fn root_builds_hierarchy_and_exposes_env() {
     ];
 
     for child_role in children {
-        let entry = by_role
+        let entry_pid = subnet_directory
             .get(&child_role)
-            .unwrap_or_else(|| panic!("missing {child_role} entry in registry"));
+            .copied()
+            .unwrap_or_else(|| panic!("missing {child_role} entry in subnet directory"));
 
         let env: EnvData = pic
-            .query_call(entry.pid, "canic_env", ())
+            .query_call(entry_pid, "canic_env", ())
             .expect("query child env");
 
         assert_eq!(
@@ -184,9 +196,8 @@ fn directories_are_consistent_across_canisters() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_role = &setup.registry;
+    let subnet_directory = &setup.subnet_directory;
 
-    //    let print_counts = env::var("PRINT_DIR_COUNTS").is_ok();
     let print_counts = true;
 
     let root_app_dir: Page<(CanisterRole, Principal)> = pic
@@ -208,17 +219,17 @@ fn directories_are_consistent_across_canisters() {
         );
     }
 
-    for (role, entry) in by_role.iter().filter(|(role, _)| !role.is_root()) {
+    for (role, entry_pid) in subnet_directory.iter().filter(|(role, _)| !role.is_root()) {
         let app_dir: Page<(CanisterRole, Principal)> = pic
             .query_call(
-                entry.pid,
+                *entry_pid,
                 "canic_app_directory",
                 (PageRequest::new(100, 0),),
             )
             .expect("child app directory");
         let subnet_dir: Page<(CanisterRole, Principal)> = pic
             .query_call(
-                entry.pid,
+                *entry_pid,
                 "canic_subnet_directory",
                 (PageRequest::new(100, 0),),
             )
@@ -249,14 +260,13 @@ fn subnet_children_matches_registry_on_root() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_role = &setup.registry;
+    let registry = &setup.registry;
 
-    let mut expected_children: Vec<CanisterSummary> = by_role
-        .values()
-        .filter(|entry| entry.parent_pid == Some(root_id))
-        .map(|entry| CanisterSummary {
-            pid: entry.pid,
-            role: entry.role.clone(),
+    let mut expected_children: Vec<CanisterSummaryView> = registry
+        .iter()
+        .filter(|(_, entry)| entry.parent_pid == Some(root_id))
+        .map(|(role, entry)| CanisterSummaryView {
+            role: role.clone(),
             parent_pid: entry.parent_pid,
         })
         .collect();
@@ -266,7 +276,7 @@ fn subnet_children_matches_registry_on_root() {
         "registry should contain root children"
     );
 
-    let mut page: Page<CanisterSummary> = pic
+    let mut page: Page<CanisterSummaryView> = pic
         .query_call(
             root_id,
             "canic_subnet_canister_children",
@@ -294,16 +304,23 @@ fn worker_topology_cascades_through_parent() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let by_role = &setup.registry;
+    let registry = &setup.registry;
+    let subnet_directory = &setup.subnet_directory;
 
-    let scale_hub = by_role
+    let scale_hub_pid = subnet_directory
         .get(&canister::SCALE_HUB)
-        .expect("scale_hub present in registry");
+        .copied()
+        .expect("scale_hub present in subnet directory");
+
+    let worker_count_before = registry
+        .iter()
+        .filter(|(role, entry)| role == &canister::SCALE && entry.parent_pid == Some(scale_hub_pid))
+        .count();
 
     // Create a worker via the scale_hub canister.
     let worker_pid: Result<Result<Principal, Error>, Error> =
-        pic.update_call(scale_hub.pid, "create_worker", ());
-    let worker_pid = worker_pid
+        pic.update_call(scale_hub_pid, "create_worker", ());
+    let _worker_pid = worker_pid
         .expect("create worker via scale_hub (transport)")
         .expect("create worker via scale_hub (app)");
 
@@ -312,34 +329,37 @@ fn worker_topology_cascades_through_parent() {
         pic.tick();
     }
 
-    // Registry on root should show the worker as a child of scale_hub.
-    let registry_after: Vec<CanisterEntry> = pic
+    // Registry on root should show a new worker under scale_hub.
+    let SubnetRegistryView(registry_after) = pic
         .query_call(root_id, "canic_SUBNET_REGISTRY", ())
         .expect("registry after worker creation");
-    let worker_entry = registry_after
+    let worker_count_after = registry_after
         .iter()
-        .find(|entry| entry.pid == worker_pid)
-        .expect("worker present in registry after creation");
+        .filter(|(role, entry)| role == &canister::SCALE && entry.parent_pid == Some(scale_hub_pid))
+        .count();
+
     assert_eq!(
-        worker_entry.parent_pid,
-        Some(scale_hub.pid),
+        worker_count_after,
+        worker_count_before + 1,
         "worker should be registered under scale_hub"
     );
 
     // Scale_hub's view of its children should include the worker (auth is parent-only).
-    let mut children_page: Page<CanisterSummary> = pic
+    let children_page: Page<CanisterSummaryView> = pic
         .query_call(
-            scale_hub.pid,
+            scale_hub_pid,
             "canic_subnet_canister_children",
             (PageRequest::new(100, 0),),
         )
         .expect("scale_hub subnet children");
-    children_page
+    let worker_children = children_page
         .entries
-        .retain(|c| c.parent_pid == Some(scale_hub.pid));
+        .iter()
+        .filter(|entry| entry.role == canister::SCALE)
+        .count();
 
     assert!(
-        children_page.entries.iter().any(|c| c.pid == worker_pid),
+        worker_children >= worker_count_after,
         "scale_hub children should include the new worker"
     );
 }

@@ -2,9 +2,10 @@ pub use crate::model::memory::pool::{CanisterPoolData, CanisterPoolEntry, Canist
 
 use crate::{
     cdk::types::Principal,
+    dto::pool::CanisterPoolView,
     ids::CanisterRole,
     model::memory::pool::CanisterPool,
-    ops::{config::ConfigOps, prelude::*},
+    ops::{adapter::pool::canister_pool_to_view, config::ConfigOps, prelude::*},
 };
 
 ///
@@ -54,6 +55,13 @@ impl PoolOps {
     #[must_use]
     pub fn export() -> CanisterPoolData {
         CanisterPool::export()
+    }
+
+    #[must_use]
+    pub fn export_view() -> CanisterPoolView {
+        let data = CanisterPool::export();
+
+        canister_pool_to_view(data)
     }
 
     #[must_use]

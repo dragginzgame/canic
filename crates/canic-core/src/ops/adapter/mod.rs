@@ -1,6 +1,8 @@
 pub mod canister;
 pub mod directory;
+pub mod log;
 pub mod metrics;
 pub mod placement;
+pub mod pool;
 pub mod registry;
 pub mod state;

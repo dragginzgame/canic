@@ -1,11 +1,13 @@
 use crate::{
+    dto::log::LogEntryView,
     dto::page::{Page, PageRequest},
     log::Level,
-    model::memory::log::{self, Log},
+    model::memory::log::Log,
+    ops::adapter::log::log_entry_to_view,
     ops::view::paginate_vec,
 };
 
-pub type LogEntryDto = log::LogEntry;
+pub type LogEntryDto = LogEntryView;
 
 ///
 /// LogOps
@@ -44,6 +46,8 @@ impl LogOps {
         // Newest first
         entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        paginate_vec(entries, request)
+        let views: Vec<LogEntryDto> = entries.iter().map(log_entry_to_view).collect();
+
+        paginate_vec(views, request)
     }
 }

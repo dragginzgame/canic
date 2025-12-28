@@ -52,7 +52,7 @@ impl AccessMetrics {
 
     #[must_use]
     pub fn export_raw() -> HashMap<AccessMetricKey, u64> {
-        ACCESS_METRICS.with_borrow(|counts| counts.clone())
+        ACCESS_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     #[cfg(test)]

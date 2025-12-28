@@ -13,20 +13,19 @@ pub fn system_metrics_to_view(
 }
 
 fn kind_to_string(kind: SystemMetricKind) -> String {
-    use SystemMetricKind::*;
     match kind {
-        CanisterCall => "CanisterCall",
-        CanisterStatus => "CanisterStatus",
-        CreateCanister => "CreateCanister",
-        DeleteCanister => "DeleteCanister",
-        DepositCycles => "DepositCycles",
-        HttpOutcall => "HttpOutcall",
-        InstallCode => "InstallCode",
-        ReinstallCode => "ReinstallCode",
-        TimerScheduled => "TimerScheduled",
-        UninstallCode => "UninstallCode",
-        UpdateSettings => "UpdateSettings",
-        UpgradeCode => "UpgradeCode",
+        SystemMetricKind::CanisterCall => "CanisterCall",
+        SystemMetricKind::CanisterStatus => "CanisterStatus",
+        SystemMetricKind::CreateCanister => "CreateCanister",
+        SystemMetricKind::DeleteCanister => "DeleteCanister",
+        SystemMetricKind::DepositCycles => "DepositCycles",
+        SystemMetricKind::HttpOutcall => "HttpOutcall",
+        SystemMetricKind::InstallCode => "InstallCode",
+        SystemMetricKind::ReinstallCode => "ReinstallCode",
+        SystemMetricKind::TimerScheduled => "TimerScheduled",
+        SystemMetricKind::UninstallCode => "UninstallCode",
+        SystemMetricKind::UpdateSettings => "UpdateSettings",
+        SystemMetricKind::UpgradeCode => "UpgradeCode",
     }
     .to_string()
 }

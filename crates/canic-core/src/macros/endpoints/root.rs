@@ -60,14 +60,13 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        fn canic_APP_REGISTRY() -> ::canic::core::ops::storage::registry::AppRegistryView {
-            $crate::ops::storage::registry::AppRegistryOps::export()
+        fn canic_APP_REGISTRY() -> ::canic::core::dto::registry::AppRegistryView {
+            $crate::ops::storage::registry::AppRegistryOps::export_view()
         }
 
         #[canic_query]
-        fn canic_SUBNET_REGISTRY()
-        -> ::canic::core::ops::storage::registry::subnet::SubnetRegistryView {
-            $crate::ops::storage::registry::SubnetRegistryOps::export()
+        fn canic_SUBNET_REGISTRY() -> ::canic::core::dto::registry::SubnetRegistryView {
+            $crate::ops::storage::registry::SubnetRegistryOps::export_view()
         }
 
         //
@@ -76,8 +75,8 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_pool_list()
-        -> Result<::canic::core::ops::storage::pool::CanisterPoolView, ::canic::Error> {
-            Ok($crate::ops::storage::pool::PoolOps::export())
+        -> Result<::canic::core::dto::pool::CanisterPoolView, ::canic::Error> {
+            Ok($crate::ops::storage::pool::PoolOps::export_view())
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]

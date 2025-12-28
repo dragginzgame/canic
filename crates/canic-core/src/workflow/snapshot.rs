@@ -44,6 +44,8 @@ use std::collections::{HashMap, HashSet};
 /// Assembles `StateSnapshotView` DTOs from authoritative state.
 /// This is workflow code (not DTO, not ops).
 ///
+
+#[derive(Default)]
 pub struct StateSnapshotBuilder {
     snapshot: StateSnapshotView,
 }
@@ -95,13 +97,13 @@ impl StateSnapshotBuilder {
     }
 
     #[must_use]
-    pub fn with_app_state_view(mut self, view: AppStateView) -> Self {
+    pub const fn with_app_state_view(mut self, view: AppStateView) -> Self {
         self.snapshot.app_state = Some(view);
         self
     }
 
     #[must_use]
-    pub fn with_subnet_state_view(mut self, view: SubnetStateView) -> Self {
+    pub const fn with_subnet_state_view(mut self, view: SubnetStateView) -> Self {
         self.snapshot.subnet_state = Some(view);
         self
     }
@@ -188,26 +190,26 @@ pub(crate) fn state_snapshot_debug(snapshot: &StateSnapshotView) -> String {
 }
 
 #[must_use]
-pub(crate) fn app_state_view_from_data(data: AppStateData) -> AppStateView {
+pub(crate) const fn app_state_view_from_data(data: AppStateData) -> AppStateView {
     AppStateView {
         mode: app_mode_into_view(data.mode),
     }
 }
 
 #[must_use]
-pub(crate) fn subnet_state_view_from_data(_data: SubnetStateData) -> SubnetStateView {
+pub(crate) const fn subnet_state_view_from_data(_data: SubnetStateData) -> SubnetStateView {
     SubnetStateView {}
 }
 
 #[must_use]
-pub(crate) fn app_state_data_from_view(view: AppStateView) -> AppStateData {
+pub(crate) const fn app_state_data_from_view(view: AppStateView) -> AppStateData {
     AppStateData {
         mode: app_mode_from_view(view.mode),
     }
 }
 
 #[must_use]
-pub(crate) fn subnet_state_data_from_view(_view: SubnetStateView) -> SubnetStateData {
+pub(crate) const fn subnet_state_data_from_view(_view: SubnetStateView) -> SubnetStateData {
     SubnetStateData {}
 }
 
@@ -225,7 +227,7 @@ pub(crate) fn subnet_directory_data_from_view(
     subnet_directory_from_view(view)
 }
 
-fn app_mode_from_view(mode: AppModeView) -> AppMode {
+const fn app_mode_from_view(mode: AppModeView) -> AppMode {
     match mode {
         AppModeView::Enabled => AppMode::Enabled,
         AppModeView::Readonly => AppMode::Readonly,

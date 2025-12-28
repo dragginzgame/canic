@@ -4,10 +4,13 @@ use candid::{Decode, Principal, encode_one};
 use canic::{
     Error,
     core::{
-        dto::{rpc::CreateCanisterResponse, state::AppCommand, topology::SubnetIdentity},
+        dto::{
+            registry::SubnetRegistryView,
+            rpc::CreateCanisterResponse,
+            state::{AppCommand, AppModeView, AppStateView},
+            subnet::SubnetIdentity,
+        },
         ids::CanisterRole,
-        model::memory::CanisterEntry,
-        ops::storage::state::{AppMode, AppStateData},
     },
 };
 use canic_internal::canister;
@@ -72,13 +75,13 @@ fn root_auto_creates_expected_canisters() {
         .query_call(
             root_id,
             Principal::anonymous(),
-            "canic_subnet_registry",
+            "canic_SUBNET_REGISTRY",
             encode_one(()).unwrap(),
         )
         .expect("query registry");
 
-    let registry: Vec<CanisterEntry> =
-        Decode!(&res, Vec<CanisterEntry>).expect("decode registry entries");
+    let SubnetRegistryView(registry) =
+        Decode!(&res, SubnetRegistryView).expect("decode registry entries");
 
     let expected = [
         (CanisterRole::ROOT, None),
@@ -91,7 +94,7 @@ fn root_auto_creates_expected_canisters() {
     for (role, parent) in expected {
         let entry = registry
             .iter()
-            .find(|entry| entry.role == role)
+            .find_map(|(entry_role, entry)| (entry_role == &role).then_some(entry))
             .unwrap_or_else(|| panic!("missing {role} entry"));
 
         assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");
@@ -167,10 +170,10 @@ fn new_canister_inherits_app_state_after_enable() {
             encode_one(()).unwrap(),
         )
         .expect("query canic_app_state");
-    let app_state: AppStateData = Decode!(&res, AppStateData).expect("decode canic_app_state");
+    let app_state: AppStateView = Decode!(&res, AppStateView).expect("decode canic_app_state");
     assert_eq!(
         app_state.mode,
-        AppMode::Enabled,
+        AppModeView::Enabled,
         "new canister should inherit Enabled app state"
     );
 }

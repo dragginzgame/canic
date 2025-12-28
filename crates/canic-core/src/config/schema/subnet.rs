@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod defaults {
     use super::Cycles;
 
-    pub fn initial_cycles() -> Cycles {
+    pub const fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
     }
 }

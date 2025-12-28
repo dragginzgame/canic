@@ -1,10 +1,10 @@
 use crate::{
     Error, ThisError,
-    dto::state::AppCommand,
+    dto::state::{AppCommand, AppStateView},
     log,
     log::Topic,
     model::memory::state::{AppMode, AppState, AppStateData},
-    ops::storage::state::StateOpsError,
+    ops::{adapter::state::app_state_to_view, storage::state::StateOpsError},
 };
 
 ///
@@ -60,13 +60,21 @@ impl AppStateOps {
     }
 
     pub fn import(data: AppStateData) {
-        AppState::import(data)
+        AppState::import(data);
     }
 
     /// Export app state as a public view.
     #[must_use]
     pub fn export() -> AppStateData {
         AppState::export()
+    }
+
+    /// Export app state as a public view.
+    #[must_use]
+    pub fn export_view() -> AppStateView {
+        let data = AppState::export();
+
+        app_state_to_view(data)
     }
 }
 

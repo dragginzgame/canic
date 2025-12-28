@@ -1,6 +1,7 @@
 use crate::{
-    dto::registry::{AppRegistryView, AppSubnetView},
-    model::memory::registry::{AppRegistryData, AppSubnet},
+    dto::registry::{AppRegistryView, AppSubnetView, SubnetRegistryView},
+    model::memory::registry::{AppRegistryData, AppSubnet, SubnetRegistryData},
+    ops::adapter::canister::canister_entry_to_view,
 };
 
 #[must_use]
@@ -19,4 +20,18 @@ pub fn app_registry_to_view(data: AppRegistryData) -> AppRegistryView {
         .collect();
 
     AppRegistryView(subnets)
+}
+
+#[must_use]
+pub fn subnet_registry_to_view(data: SubnetRegistryData) -> SubnetRegistryView {
+    let entries = data
+        .into_iter()
+        .map(|(_, entry)| {
+            let role = entry.role.clone();
+            let view = canister_entry_to_view(&entry);
+            (role, view)
+        })
+        .collect();
+
+    SubnetRegistryView(entries)
 }

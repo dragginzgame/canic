@@ -8,7 +8,7 @@
 use candid::Principal;
 use canic::{
     core::{
-        Error, policy::placement::scaling::ScalingPolicy,
+        Error, cdk::utils::time::now_secs, policy::placement::scaling::ScalingPolicy,
         workflow::placement::scaling::ScalingWorkflow,
     },
     prelude::*,
@@ -45,7 +45,7 @@ async fn create_worker() -> Result<Principal, Error> {
 #[canic_query]
 async fn plan_create_worker() -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
-    let plan = ScalingPolicy::plan_create_worker(POOL_NAME)?;
+    let plan = ScalingPolicy::plan_create_worker(POOL_NAME, now_secs())?;
 
     Ok(plan.should_spawn)
 }

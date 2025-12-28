@@ -3,8 +3,10 @@ pub use crate::model::memory::sharding::{ShardEntry, ShardingRegistryData};
 use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
+    dto::placement::ShardingRegistryView,
     ids::CanisterRole,
     model::memory::sharding::{ShardKey, ShardingRegistry},
+    ops::adapter::placement::shard_entry_to_view,
     ops::storage::StorageOpsError,
 };
 
@@ -93,6 +95,16 @@ impl ShardingRegistryOps {
     #[must_use]
     pub fn export() -> Vec<(Principal, ShardEntry)> {
         ShardingRegistry::export()
+    }
+
+    /// Export all shard entries as a public view.
+    #[must_use]
+    pub fn export_view() -> ShardingRegistryView {
+        let data = ShardingRegistry::export();
+
+        data.into_iter()
+            .map(|(pid, entry)| (pid, shard_entry_to_view(&entry)))
+            .collect()
     }
 
     /// Returns the shard assigned to the given tenant (if any).

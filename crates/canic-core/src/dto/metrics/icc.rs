@@ -1,11 +1,10 @@
-use candid::Principal;
-use serde::{Deserialize, Serialize};
+use crate::dto::prelude::*;
 
 ///
 /// IccMetricEntry
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct IccMetricEntry {
     pub target: Principal,
     pub method: String,

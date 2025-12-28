@@ -1,11 +1,10 @@
-use crate::cdk::candid::CandidType;
-use serde::{Deserialize, Serialize};
+use crate::dto::prelude::*;
 
 ///
 /// EndpointAttemptMetricEntry
 /// Public metric entry for endpoint attempt/completion.
 ///
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointAttemptMetricEntry {
     pub endpoint: String,
     pub attempted: u64,
@@ -16,7 +15,7 @@ pub struct EndpointAttemptMetricEntry {
 /// EndpointResultMetricEntry
 /// Public metric entry for endpoint ok/err outcomes.
 ///
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointResultMetricEntry {
     pub endpoint: String,
     pub ok: u64,

@@ -2,9 +2,13 @@ use crate::{
     Error, ThisError,
     cdk::types::Principal,
     config::schema::CanisterCardinality,
+    dto::registry::SubnetRegistryView,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
-    ops::{config::ConfigOps, storage::registry::RegistryOpsError},
+    ops::{
+        adapter::registry::subnet_registry_to_view, config::ConfigOps,
+        storage::registry::RegistryOpsError,
+    },
 };
 use std::collections::HashSet;
 
@@ -127,6 +131,13 @@ impl SubnetRegistryOps {
         SubnetRegistry::export()
     }
 
+    #[must_use]
+    pub fn export_view() -> SubnetRegistryView {
+        let data = SubnetRegistry::export();
+
+        subnet_registry_to_view(data)
+    }
+
     // ---------------------------------------------------------------------
     // Traversal / invariants
     // ---------------------------------------------------------------------
@@ -164,16 +175,13 @@ impl SubnetRegistryOps {
 
             chain.push((pid, summary));
 
-            match parent {
-                Some(parent_pid) => pid = parent_pid,
-                None => {
-                    if entry.role != CanisterRole::ROOT {
-                        return Err(
-                            SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into()
-                        );
-                    }
-                    break;
+            if let Some(parent_pid) = parent {
+                pid = parent_pid;
+            } else {
+                if entry.role != CanisterRole::ROOT {
+                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
                 }
+                break;
             }
         }
 

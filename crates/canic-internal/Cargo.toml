@@ -13,8 +13,5 @@ publish = false
 [dependencies]
 canic = { workspace = true }
 
-[dev-dependencies]
-canic-testkit = { workspace = true }
-
 [lints]
 workspace = true

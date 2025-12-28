@@ -6,7 +6,14 @@
 #![allow(clippy::unused_async)]
 
 use candid::Principal;
-use canic::{Error, core::workflow::placement::sharding::ShardingWorkflow, prelude::*};
+use canic::{
+    Error,
+    core::{
+        policy::placement::sharding::policy::ShardingPolicy,
+        workflow::placement::sharding::assign::ShardingOps,
+    },
+    prelude::*,
+};
 use canic_internal::canister::SHARD_HUB;
 
 const POOL_NAME: &str = "shards";
@@ -28,17 +35,17 @@ async fn canic_upgrade() {}
 // don't need authentication as this is a local canic test
 #[canic_update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
-    let shard_pid = ShardingWorkflow::assign_to_pool(POOL_NAME, pid.to_string()).await?;
+    let shard_pid = ShardingOps::assign_to_pool(POOL_NAME, pid.to_string()).await?;
 
     Ok(shard_pid)
 }
 
 /// Dry-run the player registration decision using config-driven policy.
 #[canic_query]
-async fn plan_register_principal(pid: Principal) -> Result<ShardingPlan, Error> {
+async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
     let plan = ShardingPolicy::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
-    Ok(plan)
+    Ok(format!("{:?}", plan.state))
 }
 
 export_candid!();
