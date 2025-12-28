@@ -12,13 +12,13 @@ use crate::{
     Error,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
-    dto::abi::v1::CanisterInitPayload,
+    dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
         OpsError,
         adapter::directory::{app_directory_to_view, subnet_directory_to_view},
         canister::install_code_with_extra_arg,
         config::ConfigOps,
-        env::{EnvData, EnvOps},
+        env::EnvOps,
         ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -42,7 +42,7 @@ pub(crate) fn build_nonroot_init_payload(
     role: &CanisterRole,
     parent_pid: Principal,
 ) -> CanisterInitPayload {
-    let env = EnvData {
+    let env = EnvView {
         prime_root_pid: Some(EnvOps::prime_root_pid()),
         subnet_role: Some(EnvOps::subnet_role()),
         subnet_pid: Some(EnvOps::subnet_pid()),

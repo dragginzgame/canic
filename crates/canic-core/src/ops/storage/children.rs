@@ -3,11 +3,13 @@ use crate::{
     dto::{
         canister::CanisterSummaryView,
         page::{Page, PageRequest},
+        snapshot::TopologyNodeView,
     },
     ids::CanisterRole,
     model::memory::children::{CanisterChildren, CanisterChildrenData},
     ops::{
-        adapter::canister::canister_summary_to_view, env::EnvOps,
+        adapter::canister::{canister_summary_from_topology_node, canister_summary_to_view},
+        env::EnvOps,
         storage::registry::SubnetRegistryOps,
     },
 };
@@ -74,6 +76,18 @@ impl CanisterChildrenOps {
 
     /// Import identity-bearing children data (crate-private).
     pub(crate) fn import(data: CanisterChildrenData) {
+        CanisterChildren::import(data);
+    }
+
+    /// Import identity-bearing children data from a topology snapshot view.
+    pub(crate) fn import_view(children: Vec<TopologyNodeView>) {
+        let data = children
+            .into_iter()
+            .map(|node| {
+                let summary = canister_summary_from_topology_node(&node);
+                (node.pid, summary)
+            })
+            .collect();
         CanisterChildren::import(data);
     }
 }

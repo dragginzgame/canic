@@ -22,7 +22,7 @@ Canic treats config/env identity as startup invariants. Missing data is a fatal 
   - `Prime` means root == subnet == prime root.
   - `Standard` carries the `subnet_type` and `prime_root_pid` from the prime subnet.
   - `Manual` is a test/support override that pins the subnet principal.
-- Non-root env: children must receive a complete `EnvData` in `CanisterInitPayload` from root.
+- Non-root env: children must receive a complete `EnvView` in `CanisterInitPayload` from root.
   - Missing env fields always trap (no local fallback).
 
 ---

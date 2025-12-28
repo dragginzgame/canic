@@ -4,11 +4,11 @@ use canic::{
     core::{
         dto::{
             canister::{CanisterEntryView, CanisterSummaryView},
+            env::EnvView,
             page::{Page, PageRequest},
             registry::SubnetRegistryView,
         },
         ids::{CanisterRole, SubnetRole},
-        ops::env::EnvData,
     },
     types::TC,
 };
@@ -161,7 +161,7 @@ fn root_builds_hierarchy_and_exposes_env() {
             .copied()
             .unwrap_or_else(|| panic!("missing {child_role} entry in subnet directory"));
 
-        let env: EnvData = pic
+        let env: EnvView = pic
             .query_call(entry_pid, "canic_env", ())
             .expect("query child env");
 

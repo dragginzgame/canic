@@ -1,6 +1,6 @@
 use crate::{
     dto::directory::{AppDirectoryView, SubnetDirectoryView},
-    ops::env::EnvData,
+    dto::env::EnvView,
 };
 use candid::CandidType;
 use serde::Deserialize;
@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct CanisterInitPayload {
-    pub env: EnvData,
+    pub env: EnvView,
     pub app_directory: AppDirectoryView,
     pub subnet_directory: SubnetDirectoryView,
 }
@@ -19,7 +19,7 @@ pub struct CanisterInitPayload {
 impl CanisterInitPayload {
     #[must_use]
     pub const fn new(
-        env: EnvData,
+        env: EnvView,
         app_directory: AppDirectoryView,
         subnet_directory: SubnetDirectoryView,
     ) -> Self {

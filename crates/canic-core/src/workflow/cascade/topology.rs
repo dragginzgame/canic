@@ -13,7 +13,6 @@ use crate::{
     Error,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
     log::Topic,
-    model::memory::CanisterSummary,
     ops::{OpsError, prelude::*, storage::children::CanisterChildrenOps},
     workflow::{cascade::CascadeError, snapshot::TopologySnapshotBuilder},
 };
@@ -117,19 +116,7 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
         .cloned()
         .unwrap_or_default();
     warn_if_large("nonroot fanout", children.len());
-    let children_data = children
-        .into_iter()
-        .map(|node| {
-            (
-                node.pid,
-                CanisterSummary {
-                    role: node.role,
-                    parent_pid: node.parent_pid,
-                },
-            )
-        })
-        .collect();
-    CanisterChildrenOps::import(children_data);
+    CanisterChildrenOps::import_view(children);
 
     if let Some(next_pid) = next {
         let next_snapshot = match slice_snapshot_for_child(next_pid, snapshot) {

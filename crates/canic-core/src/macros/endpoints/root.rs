@@ -60,12 +60,12 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        fn canic_APP_REGISTRY() -> ::canic::core::dto::registry::AppRegistryView {
+        fn canic_app_registry() -> ::canic::core::dto::registry::AppRegistryView {
             $crate::ops::storage::registry::AppRegistryOps::export_view()
         }
 
         #[canic_query]
-        fn canic_SUBNET_REGISTRY() -> ::canic::core::dto::registry::SubnetRegistryView {
+        fn canic_subnet_registry() -> ::canic::core::dto::registry::SubnetRegistryView {
             $crate::ops::storage::registry::SubnetRegistryOps::export_view()
         }
 

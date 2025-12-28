@@ -62,7 +62,7 @@ macro_rules! canic_endpoints {
         }
 
         #[canic_query]
-        fn canic_env() -> ::canic::core::ops::env::EnvData {
+        fn canic_env() -> ::canic::core::dto::env::EnvView {
             $crate::ops::env::EnvOps::export()
         }
 

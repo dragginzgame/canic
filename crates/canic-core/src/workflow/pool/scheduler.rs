@@ -22,8 +22,8 @@ use crate::{
         prelude::*,
         storage::pool::PoolOps,
     },
-    policy::pool::{PoolPolicyError, admissibility::can_enter_pool},
-    workflow::pool::{mark_failed, reset_into_pool},
+    policy::pool::PoolPolicyError,
+    workflow::pool::{admissibility::can_enter_pool, mark_failed, reset_into_pool},
 };
 use std::{cell::RefCell, time::Duration};
 

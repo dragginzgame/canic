@@ -5,10 +5,10 @@ use canic::{
         dto::{
             abi::v1::CanisterInitPayload,
             directory::{AppDirectoryView, SubnetDirectoryView},
+            env::EnvView,
             subnet::SubnetIdentity,
         },
         ids::{CanisterRole, SubnetRole},
-        ops::env::EnvData,
     },
 };
 use derive_more::{Deref, DerefMut};
@@ -181,7 +181,7 @@ impl Pic {
 ///
 /// Init semantics:
 /// - Root canisters receive a `SubnetIdentity` (direct root bootstrap).
-/// - Non-root canisters receive `EnvData` + optional directory snapshots.
+/// - Non-root canisters receive `EnvView` + optional directory snapshots.
 ///
 /// Directory handling:
 /// - By default, directory views are empty for standalone installs.
@@ -197,7 +197,7 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
         // Provide a minimal, deterministic env payload for standalone installs.
         let root_pid = Principal::from_slice(&[0xBB; 29]);
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        let env = EnvData {
+        let env = EnvView {
             prime_root_pid: Some(root_pid),
             subnet_role: Some(SubnetRole::PRIME),
             subnet_pid: Some(subnet_pid),
@@ -230,7 +230,7 @@ fn install_args_with_directories(
     } else {
         let root_pid = Principal::from_slice(&[0xBB; 29]);
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        let env = EnvData {
+        let env = EnvView {
             prime_root_pid: Some(root_pid),
             subnet_role: Some(SubnetRole::PRIME),
             subnet_pid: Some(subnet_pid),
