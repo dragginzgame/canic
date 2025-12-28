@@ -2,7 +2,7 @@ use crate::{
     Error,
     dto::state::AppCommand,
     ops::{OpsError, storage::state::AppStateOps},
-    workflow::cascade::state::{StateBundleBuilder, root_cascade_state},
+    workflow::{cascade::state::root_cascade_state, snapshot::StateSnapshotBuilder},
 };
 
 ///
@@ -16,8 +16,8 @@ impl AppStateOrchestrator {
         OpsError::require_root()?;
         AppStateOps::command(cmd)?;
 
-        let bundle = StateBundleBuilder::new().with_app_state().build();
-        root_cascade_state(&bundle).await?;
+        let snapshot = StateSnapshotBuilder::new().with_app_state().build();
+        root_cascade_state(&snapshot).await?;
 
         Ok(())
     }

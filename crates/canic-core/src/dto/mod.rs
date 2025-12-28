@@ -1,5 +1,4 @@
 pub mod abi;
-pub mod bundle;
 pub mod canister;
 pub mod directory;
 pub mod metrics;
@@ -9,8 +8,8 @@ pub mod placement;
 pub mod pool;
 pub mod registry;
 pub mod rpc;
+pub mod snapshot;
 pub mod state;
-pub mod topology;
 
 ///
 /// PRELUDE

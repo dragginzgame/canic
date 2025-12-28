@@ -1,25 +1,20 @@
 //!
-//! State synchronization routines shared by root and child canisters.
+//! State snapshot synchronization routines shared by root and child canisters.
 //!
 //! This module:
-//! - assembles `StateBundle` DTOs from authoritative state via ops
-//! - cascades bundles across the subnet topology
-//! - applies received bundles locally on child canisters
+//! - cascades snapshots across the subnet topology
+//! - applies received snapshots locally on child canisters
 //!
 //! IMPORTANT:
-//! - `StateBundle` is a pure DTO (data only)
-//! - All assembly logic lives here (workflow)
+//! - `StateSnapshotView` is a pure DTO (data only)
+//! - All assembly logic lives in `workflow::snapshot`
 //! - All persistence happens via ops
 //!
 
 use super::warn_if_large;
 use crate::{
     Error,
-    dto::{
-        bundle::StateBundle,
-        directory::{AppDirectoryView, SubnetDirectoryView},
-        state::{AppStateView, SubnetStateView},
-    },
+    dto::snapshot::StateSnapshotView,
     log::Topic,
     ops::{
         OpsError,
@@ -31,112 +26,27 @@ use crate::{
             state::{AppStateOps, SubnetStateOps},
         },
     },
+    workflow::snapshot::{
+        app_directory_data_from_view, app_state_data_from_view, state_snapshot_debug,
+        state_snapshot_is_empty, subnet_directory_data_from_view, subnet_state_data_from_view,
+    },
 };
-
-///
-/// StateBundleBuilder
-///
-/// Builder for assembling `StateBundle` DTOs from authoritative state.
-///
-/// This type lives in workflow (not dto) because it:
-/// - calls ops
-/// - selects which sections to include
-/// - owns no persistence
-///
-pub struct StateBundleBuilder {
-    bundle: StateBundle,
-}
-
-impl StateBundleBuilder {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            bundle: StateBundle::default(),
-        }
-    }
-
-    /// Construct a bundle containing the full root state.
-    #[must_use]
-    pub fn root() -> Self {
-        Self {
-            bundle: StateBundle {
-                app_state: Some(AppStateOps::export()),
-                subnet_state: Some(SubnetStateOps::export()),
-                app_directory: Some(AppDirectoryOps::export()),
-                subnet_directory: Some(SubnetDirectoryOps::export()),
-            },
-        }
-    }
-
-    #[must_use]
-    pub fn with_app_state(mut self) -> Self {
-        self.bundle.app_state = Some(AppStateOps::export());
-        self
-    }
-
-    #[must_use]
-    pub fn with_subnet_state(mut self) -> Self {
-        self.bundle.subnet_state = Some(SubnetStateOps::export());
-        self
-    }
-
-    #[must_use]
-    pub fn with_app_directory(mut self) -> Self {
-        self.bundle.app_directory = Some(AppDirectoryOps::export());
-        self
-    }
-
-    #[must_use]
-    pub fn with_subnet_directory(mut self) -> Self {
-        self.bundle.subnet_directory = Some(SubnetDirectoryOps::export());
-        self
-    }
-
-    #[must_use]
-    pub fn with_app_state_view(mut self, view: AppStateView) -> Self {
-        self.bundle.app_state = Some(view);
-        self
-    }
-
-    #[must_use]
-    pub fn with_subnet_state_view(mut self, view: SubnetStateView) -> Self {
-        self.bundle.subnet_state = Some(view);
-        self
-    }
-
-    #[must_use]
-    pub fn with_app_directory_view(mut self, view: AppDirectoryView) -> Self {
-        self.bundle.app_directory = Some(view);
-        self
-    }
-
-    #[must_use]
-    pub fn with_subnet_directory_view(mut self, view: SubnetDirectoryView) -> Self {
-        self.bundle.subnet_directory = Some(view);
-        self
-    }
-
-    #[must_use]
-    pub fn build(self) -> StateBundle {
-        self.bundle
-    }
-}
 
 //
 // Cascade logic
 //
 
-/// Cascade a state bundle from the root canister to its direct children.
+/// Cascade a state snapshot from the root canister to its direct children.
 ///
-/// No-op if the bundle is empty.
-pub async fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
+/// No-op if the snapshot is empty.
+pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
     OpsError::require_root()?;
 
-    if bundle.is_empty() {
+    if state_snapshot_is_empty(snapshot) {
         log!(
             Topic::Sync,
             Info,
-            "💦 sync.state: root_cascade skipped (empty bundle)"
+            "💦 sync.state: root_cascade skipped (empty snapshot)"
         );
         return Ok(());
     }
@@ -148,8 +58,8 @@ pub async fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
 
     let mut failures = 0;
 
-    for (pid, child) in children {
-        if let Err(err) = send_bundle(&pid, bundle).await {
+    for (pid, _) in children {
+        if let Err(err) = send_snapshot(&pid, snapshot).await {
             failures += 1;
             log!(
                 Topic::Sync,
@@ -170,23 +80,23 @@ pub async fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     Ok(())
 }
 
-/// Cascade a bundle from a non-root canister:
+/// Cascade a snapshot from a non-root canister:
 /// - apply it locally
 /// - forward it to direct children
-pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
+pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
     OpsError::deny_root()?;
 
-    if bundle.is_empty() {
+    if state_snapshot_is_empty(snapshot) {
         log!(
             Topic::Sync,
             Info,
-            "💦 sync.state: nonroot_cascade skipped (empty bundle)"
+            "💦 sync.state: nonroot_cascade skipped (empty snapshot)"
         );
         return Ok(());
     }
 
     // Apply locally first
-    apply_state(bundle)?;
+    apply_state(snapshot)?;
 
     let children = CanisterChildrenOps::export();
     let child_count = children.len();
@@ -194,7 +104,7 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
 
     let mut failures = 0;
     for (pid, _) in children {
-        if let Err(err) = send_bundle(&pid, bundle).await {
+        if let Err(err) = send_snapshot(&pid, snapshot).await {
             failures += 1;
             log!(
                 Topic::Sync,
@@ -219,26 +129,26 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
 // Local application
 //
 
-/// Apply a received state bundle locally.
+/// Apply a received state snapshot locally.
 ///
 /// Only valid on non-root canisters.
-fn apply_state(bundle: &StateBundle) -> Result<(), Error> {
+fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
     OpsError::deny_root()?;
 
     // states
-    if let Some(state) = bundle.app_state.clone() {
-        AppStateOps::import(state);
+    if let Some(state) = snapshot.app_state {
+        AppStateOps::import(app_state_data_from_view(state));
     }
-    if let Some(state) = bundle.subnet_state.clone() {
-        SubnetStateOps::import(state);
+    if let Some(state) = snapshot.subnet_state {
+        SubnetStateOps::import(subnet_state_data_from_view(state));
     }
 
     // directories
-    if let Some(dir) = &bundle.app_directory {
-        AppDirectoryOps::import(dir.clone());
+    if let Some(dir) = snapshot.app_directory.clone() {
+        AppDirectoryOps::import(app_directory_data_from_view(dir));
     }
-    if let Some(dir) = &bundle.subnet_directory {
-        SubnetDirectoryOps::import(dir.clone());
+    if let Some(dir) = snapshot.subnet_directory.clone() {
+        SubnetDirectoryOps::import(subnet_directory_data_from_view(dir));
     }
 
     Ok(())
@@ -248,11 +158,11 @@ fn apply_state(bundle: &StateBundle) -> Result<(), Error> {
 // Transport
 //
 
-/// Send a state bundle to another canister.
-async fn send_bundle(pid: &Principal, bundle: &StateBundle) -> Result<(), Error> {
-    let debug = bundle.debug();
+/// Send a state snapshot to another canister.
+async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<(), Error> {
+    let debug = state_snapshot_debug(snapshot);
     log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
 
-    call_and_decode::<Result<(), Error>>(*pid, crate::ops::rpc::methods::CANIC_SYNC_STATE, bundle)
+    call_and_decode::<Result<(), Error>>(*pid, crate::ops::rpc::methods::CANIC_SYNC_STATE, snapshot)
         .await?
 }
