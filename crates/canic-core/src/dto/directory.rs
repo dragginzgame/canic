@@ -1,8 +1,10 @@
-use crate::ids::CanisterRole;
+use crate::{dto::prelude::*, ids::CanisterRole};
 use candid::Principal;
 
 ///
 /// DirectoryView
+/// Snapshot of a directory for sync / export
 ///
 
-pub type DirectoryView = Vec<(CanisterRole, Principal)>;
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DirectoryView(pub Vec<(CanisterRole, Principal)>);

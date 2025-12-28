@@ -4,7 +4,6 @@ use crate::{
     memory::impl_storable_bounded,
     model::memory::id::state::APP_STATE_ID,
 };
-use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -27,9 +26,7 @@ eager_static! {
 /// Eventually we'll have more granularity overall
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Default, Display, Eq, PartialEq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq, Serialize)]
 pub enum AppMode {
     Enabled,
     Readonly,

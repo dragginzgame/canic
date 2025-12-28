@@ -10,7 +10,6 @@ use crate::{
     model::memory::id::pool::CANISTER_POOL_ID,
     types::Cycles,
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -29,7 +28,7 @@ eager_static! {
 /// CanisterPoolStatus
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolStatus {
     PendingReset,
     #[default]
@@ -60,7 +59,7 @@ impl CanisterPoolStatus {
 /// CanisterPoolEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterPoolEntry {
     pub created_at: u64,
     pub cycles: Cycles,

@@ -4,7 +4,6 @@ use crate::{
     memory::impl_storable_bounded,
     model::memory::id::state::SUBNET_STATE_ID,
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -25,7 +24,7 @@ eager_static! {
 /// SubnetStateData
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SubnetStateData {}
 
 impl_storable_bounded!(SubnetStateData, 32, true);

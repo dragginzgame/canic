@@ -1,5 +1,4 @@
 pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult};
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -12,7 +11,7 @@ thread_local! {
 /// Uniquely identifies an HTTP outcall by method + URL.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct HttpMetricKey {
     pub method: HttpMethod,
     pub url: String,
@@ -23,7 +22,7 @@ pub struct HttpMetricKey {
 /// Snapshot entry pairing a method/url with its count.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HttpMetricEntry {
     pub method: HttpMethod,
     pub url: String,

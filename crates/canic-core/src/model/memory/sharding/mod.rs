@@ -13,7 +13,6 @@ use crate::{
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
     types::{BoundedString64, BoundedString128},
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -35,7 +34,7 @@ eager_static! {
 /// Composite key: (pool, tenant) → shard
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ShardKey {
     pub pool: BoundedString64,
     pub tenant: BoundedString128,
@@ -59,7 +58,7 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 /// (bare-bones; policy like has_capacity is higher-level)
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardEntry {
     /// Logical slot index within the pool (assigned deterministically).
     #[serde(default = "ShardEntry::slot_default")]

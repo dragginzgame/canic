@@ -1,10 +1,28 @@
 use crate::{
+    cdk::candid::Principal,
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
+        directory::DirectoryView,
         placement::WorkerEntryView,
+        state::AppModeView,
     },
-    model::memory::{CanisterEntry, CanisterSummary, scaling::WorkerEntry},
+    ids::CanisterRole,
+    model::memory::{CanisterEntry, CanisterSummary, scaling::WorkerEntry, state::AppMode},
 };
+
+///
+/// AppMode
+///
+
+impl From<AppMode> for AppModeView {
+    fn from(m: AppMode) -> Self {
+        match m {
+            AppMode::Enabled => Self::Enabled,
+            AppMode::Readonly => Self::Readonly,
+            AppMode::Disabled => Self::Disabled,
+        }
+    }
+}
 
 ///
 /// CanisterEntry
@@ -31,6 +49,16 @@ impl From<&CanisterSummary> for CanisterSummaryView {
             role: s.role.clone(),
             parent_pid: s.parent_pid,
         }
+    }
+}
+
+///
+/// DirectoryView
+///
+
+impl From<Vec<(CanisterRole, Principal)>> for DirectoryView {
+    fn from(v: Vec<(CanisterRole, Principal)>) -> Self {
+        DirectoryView(v)
     }
 }
 

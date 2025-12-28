@@ -32,6 +32,8 @@ eager_static! {
 /// every canister can answer questions about its environment without touching
 /// global state.
 ///
+/// CandidType - allowed here as it's a persistence mirror of init args
+///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EnvData {

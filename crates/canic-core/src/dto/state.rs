@@ -1,4 +1,4 @@
-use crate::{dto::prelude::*, model::memory::state::AppMode};
+use crate::dto::prelude::*;
 
 ///
 /// AppCommand
@@ -12,18 +12,29 @@ pub enum AppCommand {
 }
 
 ///
+/// AppModeView
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AppModeView {
+    Enabled,
+    Readonly,
+    Disabled,
+}
+
+///
 /// AppStateView
 /// Read-only snapshot of application state for transfer and inspection.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateView {
-    pub mode: AppMode,
+    pub mode: AppModeView,
 }
 
 ///
 /// SubnetStateView
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SubnetStateView {}

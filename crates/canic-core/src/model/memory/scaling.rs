@@ -6,7 +6,7 @@ use crate::{
     model::memory::id::scaling::SCALING_REGISTRY_ID,
     types::BoundedString64,
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -26,7 +26,7 @@ eager_static! {
 /// WorkerEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerEntry {
     pub pool: BoundedString64,       // which scale pool this belongs to
     pub canister_role: CanisterRole, // canister role
