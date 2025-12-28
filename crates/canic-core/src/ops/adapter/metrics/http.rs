@@ -28,7 +28,7 @@ pub fn http_metrics_to_view(
         .collect()
 }
 
-fn http_method_to_kind(method: HttpMethod) -> HttpMethodKind {
+const fn http_method_to_kind(method: HttpMethod) -> HttpMethodKind {
     match method {
         HttpMethod::GET => HttpMethodKind::Get,
         HttpMethod::POST => HttpMethodKind::Post,

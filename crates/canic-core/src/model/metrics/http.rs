@@ -20,14 +20,14 @@ pub struct HttpMetricKey {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum HttpMethodKind {
+pub enum HttpMethodKind {
     Get,
     Post,
     Head,
 }
 
 impl HttpMethodKind {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Get => "GET",
             Self::Post => "POST",
@@ -58,6 +58,6 @@ impl HttpMetrics {
 
     #[must_use]
     pub fn export_raw() -> HashMap<HttpMetricKey, u64> {
-        HTTP_METRICS.with_borrow(|counts| counts.clone())
+        HTTP_METRICS.with_borrow(std::clone::Clone::clone)
     }
 }

@@ -1,14 +1,15 @@
+pub use crate::dto::metrics::{
+    access::AccessMetricEntry, endpoint::EndpointHealthView, http::HttpMetricEntry,
+    icc::IccMetricEntry, system::SystemMetricEntry, timer::TimerMetricEntry,
+};
 use crate::{
-    dto::{
-        metrics::{
-            access::AccessMetricEntry, endpoint::EndpointHealthView, http::HttpMetricEntry,
-            icc::IccMetricEntry, system::SystemMetricEntry, timer::TimerMetricEntry,
-        },
-        page::{Page, PageRequest},
-    },
+    dto::page::{Page, PageRequest},
     model::metrics::{
-        access::AccessMetrics,
-        endpoint::{EndpointAttemptMetrics, EndpointResultMetrics},
+        access::{AccessMetricKind as ModelAccessMetricKind, AccessMetrics as ModelAccessMetrics},
+        endpoint::{
+            EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
+            EndpointResultMetrics as ModelEndpointResultMetrics,
+        },
         http::HttpMetrics,
         icc::IccMetrics,
         system::SystemMetrics,
@@ -23,6 +24,57 @@ use crate::{
         view::paginate_vec,
     },
 };
+
+pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AccessMetricKind {
+    Auth,
+    Guard,
+    Policy,
+}
+
+impl From<AccessMetricKind> for ModelAccessMetricKind {
+    fn from(kind: AccessMetricKind) -> Self {
+        match kind {
+            AccessMetricKind::Auth => Self::Auth,
+            AccessMetricKind::Guard => Self::Guard,
+            AccessMetricKind::Policy => Self::Policy,
+        }
+    }
+}
+
+pub struct AccessMetrics;
+
+impl AccessMetrics {
+    pub fn increment(endpoint: &str, kind: AccessMetricKind) {
+        ModelAccessMetrics::increment(endpoint, kind.into());
+    }
+}
+
+pub struct EndpointAttemptMetrics;
+
+impl EndpointAttemptMetrics {
+    pub fn increment_attempted(endpoint: &'static str) {
+        ModelEndpointAttemptMetrics::increment_attempted(endpoint);
+    }
+
+    pub fn increment_completed(endpoint: &'static str) {
+        ModelEndpointAttemptMetrics::increment_completed(endpoint);
+    }
+}
+
+pub struct EndpointResultMetrics;
+
+impl EndpointResultMetrics {
+    pub fn increment_ok(endpoint: &'static str) {
+        ModelEndpointResultMetrics::increment_ok(endpoint);
+    }
+
+    pub fn increment_err(endpoint: &'static str) {
+        ModelEndpointResultMetrics::increment_err(endpoint);
+    }
+}
 
 ///
 /// MetricsOps
@@ -40,6 +92,17 @@ impl MetricsOps {
         entries.sort_by(|a, b| a.kind.cmp(&b.kind));
 
         paginate_vec(entries, request)
+    }
+
+    /// System-level action counters without pagination.
+    #[must_use]
+    pub fn system_snapshot() -> SystemMetricsSnapshot {
+        let raw = SystemMetrics::export_raw();
+        let mut entries = system_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| a.kind.cmp(&b.kind));
+
+        entries
     }
 
     /// HTTP outcall counters.
@@ -88,7 +151,7 @@ impl MetricsOps {
     /// Access-denial counters.
     #[must_use]
     pub fn access_page(request: PageRequest) -> Page<AccessMetricEntry> {
-        let raw = AccessMetrics::export_raw();
+        let raw = ModelAccessMetrics::export_raw();
         let mut entries = access_metrics_to_view(raw);
 
         entries.sort_by(|a, b| {
@@ -106,9 +169,9 @@ impl MetricsOps {
         request: PageRequest,
         exclude_endpoint: Option<&str>,
     ) -> Page<EndpointHealthView> {
-        let attempts = EndpointAttemptMetrics::export_raw();
-        let results = EndpointResultMetrics::export_raw();
-        let access = AccessMetrics::export_raw();
+        let attempts = ModelEndpointAttemptMetrics::export_raw();
+        let results = ModelEndpointResultMetrics::export_raw();
+        let access = ModelAccessMetrics::export_raw();
 
         let mut entries = endpoint_health_to_view(attempts, results, access, exclude_endpoint);
 
@@ -116,8 +179,17 @@ impl MetricsOps {
 
         paginate_vec(entries, request)
     }
+
+    #[must_use]
+    pub fn endpoint_health_page_excluding(
+        request: PageRequest,
+        exclude_endpoint: Option<&str>,
+    ) -> Page<EndpointHealthView> {
+        Self::endpoint_health_page(request, exclude_endpoint)
+    }
 }
 
+#[must_use]
 pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
     if let Some(label) = label {
         return label.to_string();

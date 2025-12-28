@@ -1,6 +1,7 @@
 pub mod abi;
 pub mod canister;
 pub mod directory;
+pub mod log;
 pub mod metrics;
 pub mod page;
 pub mod payment;

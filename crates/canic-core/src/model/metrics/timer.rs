@@ -123,7 +123,7 @@ impl TimerMetrics {
     /// no sorting, aggregation, or presentation shaping.
     #[must_use]
     pub fn export_raw() -> HashMap<TimerMetricKey, u64> {
-        TIMER_METRICS.with_borrow(|counts| counts.clone())
+        TIMER_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     /// Test-only helper: clear all timer metrics.

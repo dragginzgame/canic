@@ -70,20 +70,6 @@ pub struct WorkerEntry {
 
 impl WorkerEntry {
     pub const STORABLE_MAX_SIZE: u32 = 160;
-
-    pub(crate) fn try_new(
-        pool: &str,
-        canister_role: CanisterRole,
-        created_at_secs: u64,
-    ) -> Result<Self, String> {
-        let pool = BoundedString64::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
-
-        Ok(Self {
-            pool,
-            canister_role,
-            created_at_secs,
-        })
-    }
 }
 
 impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);

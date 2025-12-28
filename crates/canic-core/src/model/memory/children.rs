@@ -33,11 +33,7 @@ pub struct CanisterChildren;
 impl CanisterChildren {
     #[must_use]
     pub fn export() -> CanisterChildrenData {
-        CANISTER_CHILDREN.with_borrow(|map| {
-            map.iter()
-                .map(|e| (e.key().clone(), e.value().clone()))
-                .collect()
-        })
+        CANISTER_CHILDREN.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
     }
 
     pub fn import(data: CanisterChildrenData) {

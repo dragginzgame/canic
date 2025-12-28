@@ -4,6 +4,8 @@ use crate::dto::page::{Page, PageRequest};
 /// Pagination
 ///
 
+#[must_use]
+#[allow(clippy::cast_possible_truncation)]
 pub fn paginate_vec<T>(items: Vec<T>, request: PageRequest) -> Page<T> {
     let request = request.clamped();
     let total = items.len() as u64;

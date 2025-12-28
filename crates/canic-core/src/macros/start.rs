@@ -16,7 +16,7 @@
 macro_rules! start {
     ($canister_role:expr) => {
         #[::canic::cdk::init]
-        fn init(payload: ::canic::core::abi::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::core::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             // Load embedded configuration early.
             ::canic::core::__canic_load_config!();
 
@@ -74,7 +74,7 @@ macro_rules! start {
 macro_rules! start_root {
     () => {
         #[::canic::cdk::init]
-        fn init(identity: ::canic::core::dto::registry::SubnetIdentity) {
+        fn init(identity: ::canic::core::dto::subnet::SubnetIdentity) {
             // Load embedded configuration early.
             ::canic::core::__canic_load_config!();
 

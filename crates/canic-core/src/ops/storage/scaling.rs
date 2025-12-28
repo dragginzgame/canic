@@ -1,6 +1,8 @@
 use crate::{
     cdk::types::Principal,
+    dto::placement::ScalingRegistryView,
     model::memory::scaling::{ScalingRegistry, ScalingRegistryData, WorkerEntry},
+    ops::adapter::placement::worker_entry_to_view,
 };
 
 ///
@@ -23,5 +25,14 @@ impl ScalingRegistryOps {
     #[must_use]
     pub fn export() -> ScalingRegistryData {
         ScalingRegistry::export()
+    }
+
+    #[must_use]
+    pub fn export_view() -> ScalingRegistryView {
+        let data = ScalingRegistry::export();
+
+        data.into_iter()
+            .map(|(pid, entry)| (pid, worker_entry_to_view(&entry)))
+            .collect()
     }
 }

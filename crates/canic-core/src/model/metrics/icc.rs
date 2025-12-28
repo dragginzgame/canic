@@ -51,7 +51,7 @@ impl IccMetrics {
     /// sorting or presentation shaping.
     #[must_use]
     pub fn export_raw() -> HashMap<IccMetricKey, u64> {
-        ICC_METRICS.with_borrow(|counts| counts.clone())
+        ICC_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     /// Test-only helper: clear all ICC metrics.

@@ -127,7 +127,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::EndpointHealthView> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::endpoint::EndpointHealthView> {
             ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
                 page,
                 Some(stringify!(canic_metrics_endpoint_health)),
@@ -139,13 +139,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_app_state() -> ::canic::core::ops::storage::state::AppStateData {
-            $crate::ops::storage::state::AppStateOps::export()
+        fn canic_app_state() -> ::canic::core::dto::state::AppStateView {
+            $crate::ops::storage::state::AppStateOps::export_view()
         }
 
         #[canic_query]
-        fn canic_subnet_state() -> ::canic::core::ops::storage::state::SubnetStateData {
-            $crate::ops::storage::state::SubnetStateOps::export()
+        fn canic_subnet_state() -> ::canic::core::dto::state::SubnetStateView {
+            $crate::ops::storage::state::SubnetStateOps::export_view()
         }
 
         //
@@ -179,7 +179,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::storage::CanisterSummary> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
             ::canic::core::ops::storage::children::CanisterChildrenOps::page(page)
         }
 
@@ -200,8 +200,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::ops::storage::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::ops::storage::scaling::ScalingRegistryOps::export())
+        -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::scaling::ScalingRegistryOps::export_view())
         }
 
         //
@@ -210,8 +210,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::core::ops::storage::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::ops::storage::sharding::ShardingRegistryOps::export())
+        -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::sharding::ShardingRegistryOps::export_view())
         }
 
         //
