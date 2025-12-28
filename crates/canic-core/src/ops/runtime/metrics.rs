@@ -14,70 +14,93 @@ use crate::{
         system::SystemMetrics,
         timer::TimerMetrics,
     },
-    ops::adapter::metrics::{
-        access::access_metrics_to_view, endpoint::endpoint_health_to_view,
-        http::http_metrics_to_view, icc::icc_metrics_to_view, system::system_metrics_to_view,
-        timer::timer_metrics_to_view,
+    ops::{
+        adapter::metrics::{
+            access::access_metrics_to_view, endpoint::endpoint_health_to_view,
+            http::http_metrics_to_view, icc::icc_metrics_to_view, system::system_metrics_to_view,
+            timer::timer_metrics_to_view,
+        },
+        view::paginate_vec,
     },
 };
 
+///
 /// MetricsOps
 /// Read-side façade over volatile metrics state.
+///
 pub struct MetricsOps;
 
 impl MetricsOps {
+    /// System-level action counters.
     #[must_use]
     pub fn system_page(request: PageRequest) -> Page<SystemMetricEntry> {
         let raw = SystemMetrics::export_raw();
-        let entries = system_metrics_to_view(raw);
-        paginate_sorted(entries, request, |a, b| a.kind.cmp(&b.kind))
+        let mut entries = system_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| a.kind.cmp(&b.kind));
+
+        paginate_vec(entries, request)
     }
 
+    /// HTTP outcall counters.
     #[must_use]
     pub fn http_page(request: PageRequest) -> Page<HttpMetricEntry> {
         let raw = HttpMetrics::export_raw();
-        let entries = http_metrics_to_view(raw);
-        paginate_sorted(entries, request, |a, b| {
-            a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label))
-        })
+        let mut entries = http_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
+
+        paginate_vec(entries, request)
     }
 
+    /// Inter-canister call counters.
     #[must_use]
     pub fn icc_page(request: PageRequest) -> Page<IccMetricEntry> {
         let raw = IccMetrics::export_raw();
-        let entries = icc_metrics_to_view(raw);
-        paginate_sorted(entries, request, |a, b| {
+        let mut entries = icc_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| {
             a.target
                 .as_slice()
                 .cmp(b.target.as_slice())
                 .then_with(|| a.method.cmp(&b.method))
-        })
+        });
+
+        paginate_vec(entries, request)
     }
 
+    /// Timer execution counters.
     #[must_use]
     pub fn timer_page(request: PageRequest) -> Page<TimerMetricEntry> {
         let raw = TimerMetrics::export_raw();
-        let entries = timer_metrics_to_view(raw);
-        paginate_sorted(entries, request, |a, b| {
+        let mut entries = timer_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| {
             a.mode
                 .cmp(&b.mode)
                 .then_with(|| a.delay_ms.cmp(&b.delay_ms))
                 .then_with(|| a.label.cmp(&b.label))
-        })
+        });
+
+        paginate_vec(entries, request)
     }
 
+    /// Access-denial counters.
     #[must_use]
     pub fn access_page(request: PageRequest) -> Page<AccessMetricEntry> {
         let raw = AccessMetrics::export_raw();
-        let entries = access_metrics_to_view(raw);
-        paginate_sorted(entries, request, |a, b| {
+        let mut entries = access_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| {
             a.endpoint
                 .cmp(&b.endpoint)
                 .then_with(|| a.kind.cmp(&b.kind))
-        })
+        });
+
+        paginate_vec(entries, request)
     }
 
-    /// Derived endpoint health view.
+    /// Derived endpoint health view (attempts + denials + results).
     #[must_use]
     pub fn endpoint_health_page(
         request: PageRequest,
@@ -85,10 +108,12 @@ impl MetricsOps {
     ) -> Page<EndpointHealthView> {
         let attempts = EndpointAttemptMetrics::export_raw();
         let results = EndpointResultMetrics::export_raw();
-        let denied = AccessMetrics::export_raw();
+        let access = AccessMetrics::export_raw();
 
-        let entries = endpoint_health_to_view(attempts, results, denied, exclude_endpoint);
+        let mut entries = endpoint_health_to_view(attempts, results, access, exclude_endpoint);
 
-        paginate(entries, request)
+        entries.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+
+        paginate_vec(entries, request)
     }
 }

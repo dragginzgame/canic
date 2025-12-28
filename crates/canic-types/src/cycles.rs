@@ -66,7 +66,7 @@ impl Cycles {
     }
 
     #[must_use]
-    pub fn to_u128(&self) -> u128 {
+    pub const fn to_u128(&self) -> u128 {
         self.0
     }
 

@@ -3,12 +3,19 @@ use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static ICC_METRICS: RefCell<HashMap<IccMetricKey, u64>> = RefCell::new(HashMap::new());
+    /// Thread-local storage for inter-canister call counters.
+    ///
+    /// Keyed by `(target, method)` and holding the number of calls observed.
+    static ICC_METRICS: RefCell<HashMap<IccMetricKey, u64>> =
+        RefCell::new(HashMap::new());
 }
 
 ///
 /// IccMetricKey
-/// Uniquely identifies an inter-canister call by target + method.
+///
+/// Uniquely identifies an inter-canister call by:
+/// - target canister principal
+/// - method name
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -16,24 +23,6 @@ pub struct IccMetricKey {
     pub target: Principal,
     pub method: String,
 }
-
-///
-/// IccMetricEntry
-/// Snapshot entry pairing a target/method with its count.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct IccMetricEntry {
-    pub target: Principal,
-    pub method: String,
-    pub count: u64,
-}
-
-///
-/// IccMetricsSnapshot
-///
-
-pub type IccMetricsSnapshot = Vec<IccMetricEntry>;
 
 ///
 /// IccMetrics
@@ -50,32 +39,27 @@ impl IccMetrics {
                 target,
                 method: method.to_string(),
             };
+
             let entry = counts.entry(key).or_insert(0);
             *entry = entry.saturating_add(1);
         });
     }
 
-    /// Snapshot all ICC counters.
+    /// Export the raw ICC metrics table.
+    ///
+    /// Returns the internal `(IccMetricKey, count)` map without
+    /// sorting or presentation shaping.
     #[must_use]
-    pub fn snapshot() -> IccMetricsSnapshot {
-        ICC_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, count)| IccMetricEntry {
-                    target: key.target,
-                    method: key.method.clone(),
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<IccMetricKey, u64> {
+        ICC_METRICS.with_borrow(|counts| counts.clone())
     }
 
+    /// Test-only helper: clear all ICC metrics.
     #[cfg(test)]
     pub fn reset() {
         ICC_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
-
 ///
 /// TESTS
 ///
@@ -96,15 +80,32 @@ mod tests {
         IccMetrics::increment(t1, "bar");
         IccMetrics::increment(t2, "foo");
 
-        let snapshot = IccMetrics::snapshot();
-        let mut map: HashMap<(Principal, String), u64> = snapshot
-            .into_iter()
-            .map(|entry| ((entry.target, entry.method), entry.count))
-            .collect();
+        let raw = IccMetrics::export_raw();
 
-        assert_eq!(map.remove(&(t1, "foo".to_string())), Some(2));
-        assert_eq!(map.remove(&(t1, "bar".to_string())), Some(1));
-        assert_eq!(map.remove(&(t2, "foo".to_string())), Some(1));
-        assert!(map.is_empty());
+        assert_eq!(
+            raw.get(&IccMetricKey {
+                target: t1,
+                method: "foo".to_string()
+            }),
+            Some(&2)
+        );
+
+        assert_eq!(
+            raw.get(&IccMetricKey {
+                target: t1,
+                method: "bar".to_string()
+            }),
+            Some(&1)
+        );
+
+        assert_eq!(
+            raw.get(&IccMetricKey {
+                target: t2,
+                method: "foo".to_string()
+            }),
+            Some(&1)
+        );
+
+        assert_eq!(raw.len(), 3);
     }
 }

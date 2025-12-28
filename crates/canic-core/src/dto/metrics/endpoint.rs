@@ -36,6 +36,4 @@ pub struct EndpointHealthView {
     pub completed: u64,
     pub ok: u64,
     pub err: u64,
-    pub avg_instr: u64,
-    pub total_instr: u64,
 }
