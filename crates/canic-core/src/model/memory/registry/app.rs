@@ -31,6 +31,12 @@ pub struct AppSubnet {
 impl_storable_bounded!(AppSubnet, 64, true);
 
 ///
+/// AppRegistryData
+///
+
+pub type AppRegistryData = Vec<(Principal, AppSubnet)>;
+
+///
 /// AppRegistry
 ///
 
@@ -38,7 +44,7 @@ pub struct AppRegistry;
 
 impl AppRegistry {
     #[must_use]
-    pub(crate) fn export() -> Vec<(Principal, AppSubnet)> {
+    pub(crate) fn export() -> AppRegistryData {
         APP_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
     }
 }

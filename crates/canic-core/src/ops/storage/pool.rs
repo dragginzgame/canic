@@ -1,4 +1,4 @@
-pub use crate::model::memory::pool::{CanisterPoolEntry, CanisterPoolStatus, CanisterPoolView};
+pub use crate::model::memory::pool::{CanisterPoolData, CanisterPoolEntry, CanisterPoolStatus};
 
 use crate::{
     cdk::types::Principal,
@@ -52,7 +52,7 @@ impl PoolOps {
     }
 
     #[must_use]
-    pub fn export() -> CanisterPoolView {
+    pub fn export() -> CanisterPoolData {
         CanisterPool::export()
     }
 

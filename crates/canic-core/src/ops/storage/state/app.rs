@@ -1,6 +1,6 @@
 use crate::{
     Error, ThisError,
-    dto::state::{AppCommand, AppStateView},
+    dto::state::AppCommand,
     log,
     log::Topic,
     model::memory::state::{AppMode, AppState, AppStateData},
@@ -59,33 +59,14 @@ impl AppStateOps {
         Ok(())
     }
 
-    /// Import app state from a public view.
-    pub fn import(view: AppStateView) {
-        let data: AppStateData = view.into();
-        AppState::import(data);
+    pub fn import(data: AppStateData) {
+        AppState::import(data)
     }
 
     /// Export app state as a public view.
     #[must_use]
-    pub fn export() -> AppStateView {
-        let data: AppStateData = AppState::export();
-        data.into()
-    }
-}
-
-///
-/// Adapter
-///
-
-impl From<AppStateData> for AppStateView {
-    fn from(d: AppStateData) -> Self {
-        Self { mode: d.mode }
-    }
-}
-
-impl From<AppStateView> for AppStateData {
-    fn from(v: AppStateView) -> Self {
-        Self { mode: v.mode }
+    pub fn export() -> AppStateData {
+        AppState::export()
     }
 }
 
@@ -101,7 +82,7 @@ mod tests {
     fn reset_state(mode: AppMode) {
         Config::reset_for_tests();
         let _ = Config::init_for_tests();
-        AppStateOps::import(AppStateView { mode });
+        AppStateOps::import(AppStateData { mode });
     }
 
     #[test]

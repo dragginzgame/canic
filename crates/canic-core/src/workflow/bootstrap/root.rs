@@ -155,8 +155,8 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     }
 
     // Reporting pass: emit the current topology for observability/debugging.
-    for canister in SubnetRegistryOps::export_view() {
-        log!(Topic::Init, Info, "🥫 {} ({})", canister.role, canister.pid);
+    for (pid, canister) in SubnetRegistryOps::export() {
+        log!(Topic::Init, Info, "🥫 {} ({})", canister.role, pid);
     }
 
     Ok(())

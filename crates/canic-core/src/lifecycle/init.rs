@@ -9,6 +9,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, topology::SubnetIdentity},
     ids::CanisterRole,
     ops::{
+        adapter,
         env::EnvOps,
         storage::directory::{AppDirectoryOps, SubnetDirectoryOps},
     },
@@ -17,8 +18,12 @@ use crate::{
 
 pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
     EnvOps::init(payload.env, role);
-    AppDirectoryOps::import(payload.app_directory.into());
-    SubnetDirectoryOps::import(payload.subnet_directory.into());
+
+    let app_dir = adapter::app_directory_from_dto(payload.app_directory);
+    let subnet_dir = adapter::subnet_directory_from_dto(payload.subnet_directory);
+
+    AppDirectoryOps::import(app_dir);
+    SubnetDirectoryOps::import(subnet_dir);
 
     // Spawn async bootstrap workflow
     spawn(async move {

@@ -229,6 +229,7 @@ Policy:
 * evaluates eligibility, placement, scaling, sharding
 * enforces system-wide invariants
 * answers “can we?” / “should we?”
+* policy decides, but never acts and never serializes.
 
 Allowed:
 
@@ -243,6 +244,7 @@ Forbidden:
 * async
 * timers
 * side effects
+* serialization (`CandidType`, `Serialize`, `Deserialize`)
 
 Rule:
 
@@ -298,6 +300,9 @@ Rule:
 
 ## 📤 Canonical Data, Views, and DTOs
 
+Type aliases do not constitute boundaries.
+Any type that crosses a layer boundary must be a named struct or enum.
+
 The codebase distinguishes **three outward-facing representations**.
 
 ### `*Data` — Canonical snapshots
@@ -319,7 +324,7 @@ Examples:
 
 * Data-only snapshots
 * No invariants, no mutation
-* Safe to expose internally or externally
+* May be exposed externally if explicitly wrapped in a DTO
 * Used by ops, workflow, DTOs, endpoints
 
 Examples:
@@ -330,6 +335,7 @@ Examples:
 
 DTOs may depend on views, **never on authoritative model types**.
 
+
 ---
 
 ### DTOs — Boundary contracts
@@ -337,6 +343,13 @@ DTOs may depend on views, **never on authoritative model types**.
 * API / RPC / ABI shapes
 * Versionable and replaceable
 * Passive data only
+
+### DTO Defaults
+
+DTOs must not implement `Default` unless the default value represents a valid,
+neutral, and intentional payload (e.g. empty bundles, metric snapshots).
+
+Command, request, and mutation DTOs must never implement `Default`.
 
 ---
 
@@ -388,6 +401,9 @@ Rules:
 * spawn async workflow bootstrap
 * never `await`
 * identical semantics for init and post-upgrade
+
+Lifecycle adapters must not import DTOs into model state directly.
+All DTO → Data projection must occur via ops adapters.
 
 There must be **no difference** in execution model between init and upgrade.
 
