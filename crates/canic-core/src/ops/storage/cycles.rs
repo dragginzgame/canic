@@ -1,5 +1,3 @@
-pub use crate::model::memory::cycles::CycleTrackerView;
-
 use crate::{
     dto::page::{Page, PageRequest},
     model::memory::cycles::CycleTracker,
@@ -19,7 +17,7 @@ impl CycleTrackerOps {
         CycleTracker::len()
     }
 
-    pub fn record(now: u64, cycles: u128) {
+    pub fn record(now: u64, cycles: Cycles) {
         CycleTracker::record(now, cycles);
     }
 
@@ -29,13 +27,18 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn entries(request: PageRequest) -> CycleTrackerView {
-        CycleTracker::entries(request)
+    pub fn list_entries(request: PageRequest) -> Vec<(u64, Cycles)> {
+        let request = request.clamped();
+
+        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
+        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
+
+        CycleTracker::entries(offset, limit)
     }
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-        let entries = Self::entries(request);
+        let entries = Self::list_entries(request);
         let total = Self::len();
 
         Page { entries, total }

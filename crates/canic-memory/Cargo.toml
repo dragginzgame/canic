@@ -18,8 +18,8 @@ candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-types = { workspace = true }
 ctor = { workspace = true }
-minicbor-serde = { workspace = true }
 serde = { workspace = true }
+serde_cbor = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

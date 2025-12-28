@@ -1,4 +1,4 @@
-use crate::ops::{env::EnvData, storage::directory::DirectoryView};
+use crate::{dto::directory::DirectoryView, ops::env::EnvData};
 use candid::CandidType;
 use serde::Deserialize;
 

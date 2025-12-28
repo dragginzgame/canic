@@ -84,7 +84,7 @@ pub mod test {
     }
 
     #[test]
-    fn canister_view_fits_within_max() {
+    fn canister_data_fits_within_max() {
         let pid =
             Principal::from_str("pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae")
                 .unwrap();

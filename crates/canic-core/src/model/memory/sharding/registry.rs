@@ -5,12 +5,6 @@ use crate::{
 use candid::Principal;
 
 ///
-/// ShardingRegistryView
-///
-
-pub type ShardingRegistryView = Vec<(Principal, ShardEntry)>;
-
-///
 /// ShardingRegistry
 ///
 /// Persistent memory interface for tracking shard entries and tenant → shard

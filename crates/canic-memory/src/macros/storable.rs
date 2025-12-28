@@ -1,7 +1,7 @@
-//! Derive `ic-stable-structures` storage traits using Mini CBOR serialization.
+//! Derive `ic-stable-structures` storage traits using CBOR serialization.
 //!
 //! The helper macros below wire types into the Canister Development Kit's
-//! `Storable` trait by delegating to Canic's MiniCBOR helpers. The bounded
+//! `Storable` trait by delegating to Canic's CBOR helpers. The bounded
 //! variant requires callers to specify a maximum serialized size and whether
 //! the size is fixed; the unbounded variant is suitable for archival data
 //! that can grow, at the cost of larger metadata cells.

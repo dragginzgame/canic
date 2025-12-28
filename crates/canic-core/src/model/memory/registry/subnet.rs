@@ -23,12 +23,6 @@ eager_static! {
 }
 
 ///
-/// SubnetRegistryView
-///
-
-pub type SubnetRegistryView = Vec<CanisterEntry>;
-
-///
 /// SubnetRegistry
 ///
 
