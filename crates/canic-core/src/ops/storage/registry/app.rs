@@ -1,7 +1,7 @@
 use crate::{
     dto::registry::AppRegistryView,
     model::memory::registry::{AppRegistry, AppRegistryData},
-    ops::adapter::app_registry_to_view,
+    ops::adapter::registry::app_registry_to_view,
 };
 
 ///
