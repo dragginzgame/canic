@@ -11,10 +11,12 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::{
-        config::ConfigOps, rpc::create_canister_request, storage::sharding::ShardingRegistryOps,
+    ops::{rpc::create_canister_request, storage::sharding::ShardingRegistryOps},
+    policy::placement::sharding::{
+        ShardingPolicyError,
+        metrics::pool_metrics,
+        policy::{ShardingPlanState, ShardingPolicy},
     },
-    policy::placement::sharding::ShardingPolicyError,
 };
 
 ///
@@ -178,7 +180,7 @@ impl ShardingOps {
 
                 ShardingPlanState::CreateAllowed => {
                     let slot = plan.target_slot.ok_or_else(|| {
-                        ShardingOpsError::ShardCreationBlocked(
+                        ShardingPolicyError::ShardCreationBlocked(
                             "missing slot when draining shard".into(),
                         )
                     })?;
@@ -210,15 +212,7 @@ impl ShardingOps {
 
     /// Internal: fetch shard pool config for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
-        let cfg = ConfigOps::current_canister();
-        let sharding_cfg = cfg.sharding.ok_or(ShardingOpsError::ShardingDisabled)?;
-        let pool_cfg = sharding_cfg
-            .pools
-            .get(pool)
-            .ok_or_else(|| ShardingOpsError::PoolNotFound(pool.to_string()))?
-            .clone();
-
-        Ok(pool_cfg)
+        ShardingPolicy::get_pool_config(pool)
     }
 }
 

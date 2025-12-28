@@ -38,7 +38,7 @@ pub enum PoolAdminCommand {
 }
 
 /// Summary of pool entries by status.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct PoolStatusCounts {
     pub ready: u64,
     pub pending_reset: u64,
@@ -47,7 +47,7 @@ pub struct PoolStatusCounts {
 }
 
 /// Diagnostics for queued imports.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct PoolImportSummary {
     pub status_counts: PoolStatusCounts,
 

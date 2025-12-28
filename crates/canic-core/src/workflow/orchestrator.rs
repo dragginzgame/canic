@@ -221,9 +221,9 @@ impl CanisterLifecycleOrchestrator {
         }
         assert_not_in_pool(pid)?;
 
-        upgrade_canister(entry.pid, wasm.bytes()).await?;
-        SubnetRegistryOps::update_module_hash(entry.pid, wasm.module_hash());
-        assert_module_hash(entry.pid, wasm.module_hash())?;
+        upgrade_canister(pid, wasm.bytes()).await?;
+        SubnetRegistryOps::update_module_hash(pid, wasm.module_hash());
+        assert_module_hash(pid, wasm.module_hash())?;
 
         Ok(LifecycleResult::default())
     }
@@ -248,14 +248,14 @@ impl CanisterLifecycleOrchestrator {
         let payload = build_nonroot_init_payload(&entry.role, parent_pid);
         install_code_with_extra_arg(
             CanisterInstallMode::Reinstall,
-            entry.pid,
+            pid,
             wasm.bytes(),
             payload,
             None,
         )
         .await?;
-        SubnetRegistryOps::update_module_hash(entry.pid, wasm.module_hash());
-        assert_module_hash(entry.pid, wasm.module_hash())?;
+        SubnetRegistryOps::update_module_hash(pid, wasm.module_hash());
+        assert_module_hash(pid, wasm.module_hash())?;
 
         Ok(LifecycleResult::default())
     }

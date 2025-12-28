@@ -14,11 +14,11 @@ pub fn subnet_directory_from_view(view: SubnetDirectoryView) -> SubnetDirectoryD
 }
 
 #[must_use]
-pub fn app_directory_to_view(data: AppDirectoryData) -> AppDirectoryView {
+pub const fn app_directory_to_view(data: AppDirectoryData) -> AppDirectoryView {
     AppDirectoryView(data)
 }
 
 #[must_use]
-pub fn subnet_directory_to_view(data: SubnetDirectoryData) -> SubnetDirectoryView {
+pub const fn subnet_directory_to_view(data: SubnetDirectoryData) -> SubnetDirectoryView {
     SubnetDirectoryView(data)
 }

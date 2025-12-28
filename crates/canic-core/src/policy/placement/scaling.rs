@@ -13,6 +13,7 @@ use crate::{
     config::schema::ScalePool,
     dto::placement::WorkerEntryView,
     ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
+    types::BoundedString64,
 };
 
 ///
@@ -74,14 +75,11 @@ impl ScalingPolicy {
 
         // Min bound check
         if worker_count < policy.min_workers {
-            let entry =
-                WorkerEntryView::try_new(pool, pool_cfg.canister_role.clone(), created_at_secs)
-                    .map_err(|e| {
-                        // This should now be impossible unless config is corrupt
-                        Error::InvariantViolation(format!(
-                            "invalid worker entry for pool '{pool}': {e}"
-                        ))
-                    })?;
+            let entry = WorkerEntryView {
+                pool: BoundedString64::new(pool),
+                canister_role: pool_cfg.canister_role,
+                created_at_secs,
+            };
 
             return Ok(ScalingPlan {
                 should_spawn: true,
@@ -105,5 +103,17 @@ impl ScalingPolicy {
 
     pub fn should_spawn_worker(pool: &str, now_secs: u64) -> Result<bool, Error> {
         Ok(Self::plan_create_worker(pool, now_secs)?.should_spawn)
+    }
+
+    fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
+        let Some(scaling) = ConfigOps::current_scaling_config() else {
+            return Err(ScalingPolicyError::ScalingDisabled.into());
+        };
+
+        let Some(pool_cfg) = scaling.pools.get(pool) else {
+            return Err(ScalingPolicyError::PoolNotFound(pool.to_string()).into());
+        };
+
+        Ok(pool_cfg.clone())
     }
 }

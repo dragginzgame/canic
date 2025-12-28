@@ -10,8 +10,11 @@
 use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
-    dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
-    ops::{rpc::create_canister_request, storage::scaling::ScalingRegistryOps},
+    dto::rpc::CreateCanisterParent,
+    ops::{
+        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
+        storage::scaling::ScalingRegistryOps,
+    },
     policy::placement::scaling::{ScalingPlan, ScalingPolicy},
 };
 use candid::Principal;
@@ -25,9 +28,6 @@ use candid::Principal;
 pub enum ScalingWorkflowError {
     #[error("scaling plan rejected: {0}")]
     PlanRejected(String),
-
-    #[error("invalid scaling key: {0}")]
-    InvalidKey(String),
 }
 
 impl From<ScalingWorkflowError> for Error {
@@ -48,24 +48,18 @@ impl ScalingWorkflow {
         let ScalingPlan {
             should_spawn,
             reason,
-        } = ScalingPolicy::plan_create_worker(pool)?;
+            worker_entry,
+        } = ScalingPolicy::plan_create_worker(pool, now_secs())?;
 
         if !should_spawn {
             return Err(ScalingWorkflowError::PlanRejected(reason))?;
         }
 
-        // 2. Look up pool config (policy already validated existence)
-        let pool_cfg = {
-            let cfg = crate::ops::config::ConfigOps::current_canister();
-            cfg.scaling
-                .expect("scaling enabled by policy")
-                .pools
-                .get(pool)
-                .expect("pool validated by policy")
-                .clone()
-        };
+        let entry_view = worker_entry.ok_or_else(|| {
+            ScalingWorkflowError::PlanRejected("worker entry missing for spawn plan".to_string())
+        })?;
 
-        let role = pool_cfg.canister_role.clone();
+        let role = entry_view.canister_role.clone();
 
         // 3. Create the canister
         let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
@@ -73,9 +67,7 @@ impl ScalingWorkflow {
             .new_canister_pid;
 
         // 4. Register in memory
-        let entry = WorkerEntryView::try_new(pool, role, now_secs())
-            .map_err(ScalingWorkflowError::InvalidKey)?;
-
+        let entry = worker_entry_from_view(entry_view);
         ScalingRegistryOps::insert(pid, entry);
 
         Ok(pid)

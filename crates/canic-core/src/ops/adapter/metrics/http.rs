@@ -9,9 +9,7 @@ use crate::{
 /// Performs method mapping and label normalization.
 pub fn record_http_request(method: HttpMethod, url: &str, label: Option<&str>) {
     let kind = http_method_to_kind(method);
-    let label = label
-        .map(str::to_string)
-        .unwrap_or_else(|| normalize_http_label(url, label));
+    let label = label.map_or_else(|| normalize_http_label(url, label), str::to_string);
 
     HttpMetrics::increment(kind, &label);
 }

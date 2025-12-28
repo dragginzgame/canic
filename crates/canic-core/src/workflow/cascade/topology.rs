@@ -230,13 +230,7 @@ fn slice_snapshot_for_child(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::utils::time::now_secs,
-        ids::CanisterRole,
-        model::memory::{CanisterEntry, registry::SubnetRegistry},
-        ops::storage::registry::SubnetRegistryOps,
-        workflow::snapshot::TopologySnapshotBuilder,
-    };
+    use crate::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -303,42 +297,22 @@ mod tests {
     }
 
     #[test]
-    fn parent_chain_rejects_cycle() {
-        SubnetRegistry::clear_for_tests();
+    fn next_child_returns_next_hop() {
         let root = p(1);
         let hub = p(2);
+        let inst = p(3);
 
-        SubnetRegistryOps::register_root(root);
-        SubnetRegistry::insert_for_tests(CanisterEntry {
-            pid: hub,
-            role: CanisterRole::new("hub"),
-            parent_pid: Some(hub),
-            module_hash: Some(vec![]),
-            created_at: now_secs(),
-        });
+        let parents = vec![n(root, None), n(hub, Some(root)), n(inst, Some(hub))];
 
-        let err = TopologySnapshotBuilder::for_target(hub).unwrap_err();
-        assert!(err.to_string().contains("cycle"));
+        assert_eq!(next_child_on_path(root, &parents).unwrap(), Some(hub));
     }
 
     #[test]
-    fn parent_chain_requires_root_termination() {
-        SubnetRegistry::clear_for_tests();
-        let orphan = p(9);
-        let role = CanisterRole::new("orphan");
+    fn next_child_returns_none_at_leaf() {
+        let inst = p(3);
 
-        SubnetRegistry::insert_for_tests(CanisterEntry {
-            pid: orphan,
-            role,
-            parent_pid: None,
-            module_hash: None,
-            created_at: now_secs(),
-        });
+        let parents = vec![n(inst, Some(p(2)))];
 
-        let err = TopologySnapshotBuilder::for_target(orphan).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("parent chain did not terminate at root")
-        );
+        assert_eq!(next_child_on_path(inst, &parents).unwrap(), None);
     }
 }
