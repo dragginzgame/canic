@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::futures::spawn,
-    dto::{abi::v1::CanisterInitPayload, topology::SubnetIdentity},
+    dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::CanisterRole,
     ops::{
         adapter,

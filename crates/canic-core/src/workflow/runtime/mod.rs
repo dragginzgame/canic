@@ -9,10 +9,11 @@ use crate::{
         println,
         types::Principal,
     },
-    dto::{abi::v1::CanisterInitPayload, topology::SubnetIdentity},
+    dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
+        adapter::directory::{app_directory_from_view, subnet_directory_from_view},
         env::{EnvData, EnvOps},
         ic::{Network, build_network},
         memory::MemoryRegistryOps,
@@ -182,8 +183,8 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
         let msg = format!("canic init failed during nonroot_init: env import failed: {err}");
         trap(&msg);
     }
-    AppDirectoryOps::import(payload.app_directory);
-    SubnetDirectoryOps::import(payload.subnet_directory);
+    AppDirectoryOps::import(app_directory_from_view(payload.app_directory));
+    SubnetDirectoryOps::import(subnet_directory_from_view(payload.subnet_directory));
 
     // --- Phase 3: Service startup ---
     Runtime::start_all();

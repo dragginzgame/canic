@@ -3,10 +3,8 @@ pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestR
 use crate::{
     Error,
     cdk::mgmt::http_request,
-    model::metrics::{
-        http::HttpMetrics,
-        system::{SystemMetricKind, SystemMetrics},
-    },
+    model::metrics::system::{SystemMetricKind, SystemMetrics},
+    ops::adapter::metrics::http::record_http_request,
 };
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
@@ -22,7 +20,7 @@ impl Http {
 
     fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        HttpMetrics::increment_with_label(method, url, label);
+        record_http_request(method, url, label);
     }
 
     pub async fn get<T: DeserializeOwned>(

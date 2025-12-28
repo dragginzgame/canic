@@ -99,12 +99,12 @@ pub(crate) async fn rebuild_directories_from_registry(
 
     if include_app {
         let view = RootAppDirectoryBuilder::build_from_registry();
-        builder = builder.with_app_directory(view);
+        builder = builder.with_app_directory_view(app_directory_to_view(view));
     }
 
     if include_subnet {
         let view = RootSubnetDirectoryBuilder::build_from_registry();
-        builder = builder.with_subnet_directory(view);
+        builder = builder.with_subnet_directory_view(subnet_directory_to_view(view));
     }
 
     builder

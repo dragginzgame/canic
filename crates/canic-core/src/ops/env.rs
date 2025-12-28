@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     cdk::{api::canister_self, types::Principal},
-    dto::topology::SubnetIdentity,
+    dto::subnet::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     model::memory::Env,
     ops::OpsError,

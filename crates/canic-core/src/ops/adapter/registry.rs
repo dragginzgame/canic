@@ -3,7 +3,8 @@ use crate::{
     model::memory::registry::{AppRegistryData, AppSubnet},
 };
 
-pub fn app_subnet_to_view(data: AppSubnet) -> AppSubnetView {
+#[must_use]
+pub const fn app_subnet_to_view(data: AppSubnet) -> AppSubnetView {
     AppSubnetView {
         subnet_pid: data.subnet_pid,
         root_pid: data.root_pid,

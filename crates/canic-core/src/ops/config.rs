@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     config::{
         Config, ConfigModel,
-        schema::{CanisterConfig, SubnetConfig},
+        schema::{CanisterConfig, ScalingConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, env::EnvOps},
@@ -111,6 +111,16 @@ impl ConfigOps {
 
         Self::try_get_canister(&subnet_role, &canister_role)
             .expect("current canister must exist in configuration")
+    }
+
+    /// Fetch the scaling configuration for the *current* canister.
+    ///
+    /// # Panics
+    /// - If the environment has not been initialized
+    /// - If the canister is missing from the configuration
+    #[must_use]
+    pub fn current_scaling_config() -> Option<ScalingConfig> {
+        Self::current_canister().scaling
     }
 
     /// Fetch the configuration for a specific canister in the *current* subnet.
