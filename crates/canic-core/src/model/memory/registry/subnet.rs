@@ -13,10 +13,6 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-//
-// SUBNET_REGISTRY
-//
-
 eager_static! {
     static SUBNET_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(ic_memory!(SubnetRegistry, SUBNET_REGISTRY_ID)));
@@ -36,14 +32,17 @@ impl SubnetRegistry {
     fn with_entries<F, R>(f: F) -> R
     where
         F: FnOnce(
-            ic_stable_structures::btreemap::Iter<
+            &mut ic_stable_structures::btreemap::Iter<
                 Principal,
                 CanisterEntry,
                 VirtualMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     {
-        SUBNET_REGISTRY.with_borrow(|map| f(map.iter()))
+        SUBNET_REGISTRY.with_borrow(|map| {
+            let mut iter = map.iter();
+            f(&mut iter)
+        })
     }
 
     //
@@ -64,8 +63,13 @@ impl SubnetRegistry {
 
     /// Finds the first canister with the given [`CanisterRole`].
     #[must_use]
-    pub(crate) fn find_first_by_role(role: &CanisterRole) -> Option<CanisterEntry> {
-        Self::with_entries(|iter| iter.map(|e| e.value()).find(|entry| &entry.role == role))
+    pub(crate) fn find_first_by_role(role: &CanisterRole) -> Option<(Principal, CanisterEntry)> {
+        Self::with_entries(|iter| {
+            iter.find_map(|e| {
+                let v = e.value();
+                (&v.role == role).then(|| (*e.key(), v))
+            })
+        })
     }
 
     //
@@ -80,33 +84,31 @@ impl SubnetRegistry {
         module_hash: Vec<u8>,
     ) {
         let entry = CanisterEntry {
-            pid,
             role: role.clone(),
             parent_pid: Some(parent_pid),
             module_hash: Some(module_hash),
             created_at: now_secs(),
         };
 
-        Self::insert(entry);
+        Self::insert(pid, entry);
     }
 
     /// Register the root canister itself (no parent, no module hash).
     pub(crate) fn register_root(pid: Principal) {
         let entry = CanisterEntry {
-            pid,
             role: CanisterRole::ROOT,
             parent_pid: None,
             module_hash: None,
             created_at: now_secs(),
         };
 
-        Self::insert(entry);
+        Self::insert(pid, entry);
     }
 
     /// Inserts a fully formed entry into the registry.
-    fn insert(entry: CanisterEntry) {
+    fn insert(pid: Principal, entry: CanisterEntry) {
         SUBNET_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(entry.pid, entry);
+            reg.insert(pid, entry);
         });
     }
 
@@ -138,11 +140,12 @@ impl SubnetRegistry {
     ///
     /// This only traverses **one level down**.
     #[must_use]
-    pub(crate) fn children(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn children(parent: Principal) -> Vec<(Principal, CanisterSummary)> {
         Self::with_entries(|iter| {
-            iter.filter_map(|entry| {
-                let value = entry.value();
-                (value.parent_pid == Some(pid)).then(|| CanisterSummary::from(value))
+            iter.filter_map(|e| {
+                let pid = *e.key();
+                let entry = e.value();
+                (entry.parent_pid == Some(parent)).then(|| (pid, CanisterSummary::from(entry)))
             })
             .collect()
         })
@@ -151,62 +154,67 @@ impl SubnetRegistry {
     /// Returns the entire subtree rooted at `pid`:
     /// the original canister (if found) plus all its descendants.
     #[must_use]
-    pub(crate) fn subtree(pid: Principal) -> Vec<CanisterSummary> {
-        let entries: Vec<CanisterEntry> = Self::export();
+    pub(crate) fn subtree(root_pid: Principal) -> Vec<(Principal, CanisterSummary)> {
+        let entries: Vec<(Principal, CanisterEntry)> = Self::export();
 
-        let mut children: HashMap<Principal, Vec<CanisterEntry>> = HashMap::new();
+        // Build parent -> children map
+        let mut children: HashMap<Principal, Vec<(Principal, CanisterEntry)>> = HashMap::new();
         let mut root: Option<CanisterEntry> = None;
 
-        for e in entries {
-            if e.pid == pid {
-                root = Some(e.clone());
+        for (pid, entry) in entries {
+            if pid == root_pid {
+                root = Some(entry.clone());
             }
 
-            if let Some(parent) = e.parent_pid {
-                children.entry(parent).or_default().push(e);
+            if let Some(parent) = entry.parent_pid {
+                children.entry(parent).or_default().push((pid, entry));
             }
         }
 
-        let Some(root) = root else { return vec![] };
+        let Some(root_entry) = root else {
+            return vec![];
+        };
 
-        let mut result = vec![root];
-        let mut stack = vec![pid];
+        let mut result: Vec<(Principal, CanisterSummary)> =
+            vec![(root_pid, CanisterSummary::from(root_entry))];
+
+        let mut stack = vec![root_pid];
         let mut visited: HashSet<Principal> = HashSet::new();
-        visited.insert(pid);
+        visited.insert(root_pid);
 
         while let Some(current) = stack.pop() {
             if let Some(kids) = children.get(&current) {
-                for child in kids {
-                    if visited.insert(child.pid) {
-                        stack.push(child.pid);
-                        result.push(child.clone());
+                for (child_pid, child_entry) in kids {
+                    if visited.insert(*child_pid) {
+                        stack.push(*child_pid);
+                        result.push((*child_pid, CanisterSummary::from(child_entry.clone())));
                     }
                 }
             }
         }
 
-        // Final output → summaries
-        result.into_iter().map(CanisterSummary::from).collect()
+        result
     }
 
-    /// Return true if `entry` is part of the subtree rooted at `root_pid`.
+    /// Return true if `entry_pid` is part of the subtree rooted at `root_pid`.
     #[must_use]
     #[cfg(test)]
     pub(crate) fn is_in_subtree(
         root_pid: Principal,
-        entry: &CanisterSummary,
-        all: &[CanisterSummary],
+        entry_pid: Principal,
+        all: &[(Principal, CanisterSummary)],
     ) -> bool {
-        if entry.pid == root_pid {
+        if entry_pid == root_pid {
             return true;
         }
 
+        // Build child -> parent map
         let parent_map: HashMap<Principal, Principal> = all
             .iter()
-            .filter_map(|e| e.parent_pid.map(|parent| (e.pid, parent)))
+            .filter_map(|(pid, summary)| summary.parent_pid.map(|parent| (*pid, parent)))
             .collect();
 
-        let mut current = entry.parent_pid;
+        let mut current = parent_map.get(&entry_pid).copied();
         while let Some(pid) = current {
             if pid == root_pid {
                 return true;
@@ -223,20 +231,8 @@ impl SubnetRegistry {
 
     /// Returns all canister entries as a vector.
     #[must_use]
-    pub(crate) fn export() -> Vec<CanisterEntry> {
-        Self::with_entries(|iter| iter.map(|e| e.value()).collect())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn clear_for_tests() {
-        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn insert_for_tests(entry: CanisterEntry) {
-        SUBNET_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(entry.pid, entry);
-        });
+    pub(crate) fn export() -> Vec<(Principal, CanisterEntry)> {
+        Self::with_entries(|iter| iter.map(|e| (*e.key(), e.value())).collect())
     }
 }
 
@@ -253,12 +249,13 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn sort_by_pid(entries: &mut [CanisterSummary]) {
-        entries.sort_by(|a, b| a.pid.as_slice().cmp(b.pid.as_slice()));
+    fn sort_by_pid(entries: &mut [(Principal, CanisterSummary)]) {
+        entries.sort_by(|(a, _), (b, _)| a.as_slice().cmp(b.as_slice()));
     }
 
     fn register_tree() {
-        SubnetRegistry::clear_for_tests();
+        // clear registry
+        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
 
         // root
         SubnetRegistry::register_root(p(1));
@@ -285,8 +282,8 @@ mod tests {
         let mut subtree = SubnetRegistry::subtree(p(2));
         sort_by_pid(&mut subtree);
 
-        let expected: Vec<Principal> = vec![p(2), p(4), p(5), p(6)];
-        let actual: Vec<Principal> = subtree.into_iter().map(|e| e.pid).collect();
+        let expected = vec![p(2), p(4), p(5), p(6)];
+        let actual: Vec<Principal> = subtree.into_iter().map(|(pid, _)| pid).collect();
 
         assert_eq!(expected, actual);
     }
@@ -296,41 +293,45 @@ mod tests {
         register_tree();
 
         let full_tree = SubnetRegistry::subtree(p(1));
-        let leaf = full_tree.iter().find(|e| e.pid == p(6)).unwrap();
-        let sibling = full_tree.iter().find(|e| e.pid == p(7)).unwrap();
 
-        assert!(SubnetRegistry::is_in_subtree(p(2), leaf, &full_tree));
-        assert!(!SubnetRegistry::is_in_subtree(p(2), sibling, &full_tree));
-        assert!(SubnetRegistry::is_in_subtree(p(1), sibling, &full_tree));
+        assert!(SubnetRegistry::is_in_subtree(p(2), p(6), &full_tree));
+        assert!(!SubnetRegistry::is_in_subtree(p(2), p(7), &full_tree));
+        assert!(SubnetRegistry::is_in_subtree(p(1), p(7), &full_tree));
     }
 
     #[test]
     fn subtree_skips_cycles() {
-        SubnetRegistry::clear_for_tests();
+        // clear registry
+        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
 
         let a = p(1);
         let b = p(2);
 
-        SubnetRegistry::insert_for_tests(CanisterEntry {
-            pid: a,
-            role: CanisterRole::new("alpha"),
-            parent_pid: Some(b),
-            module_hash: None,
-            created_at: now_secs(),
-        });
-        SubnetRegistry::insert_for_tests(CanisterEntry {
-            pid: b,
-            role: CanisterRole::new("beta"),
-            parent_pid: Some(a),
-            module_hash: None,
-            created_at: now_secs(),
-        });
+        SubnetRegistry::insert(
+            a,
+            CanisterEntry {
+                role: CanisterRole::new("alpha"),
+                parent_pid: Some(b),
+                module_hash: None,
+                created_at: now_secs(),
+            },
+        );
+
+        SubnetRegistry::insert(
+            b,
+            CanisterEntry {
+                role: CanisterRole::new("beta"),
+                parent_pid: Some(a),
+                module_hash: None,
+                created_at: now_secs(),
+            },
+        );
 
         let mut subtree = SubnetRegistry::subtree(a);
         sort_by_pid(&mut subtree);
 
-        let expected: Vec<Principal> = vec![a, b];
-        let actual: Vec<Principal> = subtree.into_iter().map(|e| e.pid).collect();
+        let expected = vec![a, b];
+        let actual: Vec<Principal> = subtree.into_iter().map(|(pid, _)| pid).collect();
 
         assert_eq!(expected, actual);
     }

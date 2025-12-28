@@ -6,7 +6,6 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterEntryView {
-    pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,
     pub module_hash: Option<Vec<u8>>,
@@ -20,7 +19,6 @@ pub struct CanisterEntryView {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterSummaryView {
-    pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,
 }

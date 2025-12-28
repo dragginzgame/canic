@@ -1,5 +1,3 @@
-pub use crate::ops::storage::cycles::CycleTrackerView;
-
 use crate::{
     cdk::{futures::spawn, timers::TimerId, utils::time::now_secs},
     log,
@@ -48,20 +46,20 @@ pub fn stop() {
 
 pub fn track() {
     let ts = now_secs();
-    let cycles = canister_cycle_balance().to_u128();
+    let cycles = canister_cycle_balance();
 
     if !EnvOps::is_root() {
-        evaluate_policies(cycles);
+        evaluate_policies(cycles.clone());
     }
 
     CycleTrackerOps::record(ts, cycles);
 }
 
-fn evaluate_policies(cycles: u128) {
+fn evaluate_policies(cycles: Cycles) {
     check_auto_topup(cycles);
 }
 
-fn check_auto_topup(cycles: u128) {
+fn check_auto_topup(cycles: Cycles) {
     use crate::ops::rpc::cycles_request;
 
     let canister_cfg = ConfigOps::current_canister();
@@ -69,7 +67,7 @@ fn check_auto_topup(cycles: u128) {
         return;
     };
 
-    if cycles >= topup.threshold.to_u128() {
+    if cycles >= topup.threshold {
         return;
     }
 
