@@ -5,11 +5,8 @@ use crate::{
         page::{Page, PageRequest},
     },
     ids::CanisterRole,
-    model::memory::{
-        CanisterSummary,
-        children::{CanisterChildren, CanisterChildrenData},
-    },
-    ops::{env::EnvOps, storage::registry::SubnetRegistryOps},
+    model::memory::children::{CanisterChildren, CanisterChildrenData},
+    ops::{adapter::canister_summary_to_view, env::EnvOps, storage::registry::SubnetRegistryOps},
 };
 
 ///
@@ -19,8 +16,8 @@ use crate::{
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {
-    /// Resolve the canonical view of direct children for the current canister.
-    /// Root rebuilds from the registry; children rely on their imported snapshot.
+    /// Resolve the authoritative internal children data.
+    /// Root rebuilds from the registry; others use imported snapshot.
     fn resolve_children() -> CanisterChildrenData {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(canister_self())
@@ -29,42 +26,51 @@ impl CanisterChildrenOps {
         }
     }
 
-    /// Return a paginated view of the canister's direct children.
+    /// Return a paginated public view of direct children.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn page(request: PageRequest) -> Page<CanisterSummaryView> {
         let request = request.clamped();
-        let all_children = Self::resolve_children();
-        let total = all_children.len() as u64;
+        let all = Self::resolve_children();
+
+        let total = all.len() as u64;
         let start = request.offset.min(total) as usize;
         let end = request.offset.saturating_add(request.limit).min(total) as usize;
-        let entries = all_children[start..end].to_vec();
+
+        let entries = all[start..end]
+            .iter()
+            .map(|(_, summary)| canister_summary_to_view(summary))
+            .collect();
 
         Page { entries, total }
     }
 
-    /// Lookup a child by principal
+    /// Lookup a child by principal (internal-only, identity based).
     #[must_use]
     pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummaryView> {
         Self::resolve_children()
             .into_iter()
-            .find(|child| child.pid == *pid)
+            .find(|(p, _)| p == pid)
+            .map(|(_, summary)| canister_summary_to_view(&summary))
     }
 
-    /// Lookup the first child of a given type
+    /// Lookup the first child of a given role.
     #[must_use]
     pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterSummaryView> {
         Self::resolve_children()
             .into_iter()
-            .find(|child| &child.role == role)
+            .find(|(_, summary)| &summary.role == role)
+            .map(|(_, summary)| canister_summary_to_view(&summary))
     }
 
+    /// Export identity-bearing children data (crate-private).
     #[must_use]
-    pub(crate) fn export() -> CanisterChildrenView {
+    pub(crate) fn export() -> CanisterChildrenData {
         Self::resolve_children()
     }
 
-    pub(crate) fn import(children: CanisterChildrenView) {
-        CanisterChildren::import(children);
+    /// Import identity-bearing children data (crate-private).
+    pub(crate) fn import(data: CanisterChildrenData) {
+        CanisterChildren::import(data);
     }
 }

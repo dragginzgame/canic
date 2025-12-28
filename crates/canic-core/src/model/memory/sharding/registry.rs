@@ -5,6 +5,12 @@ use crate::{
 use candid::Principal;
 
 ///
+/// ShardingRegistryData
+///
+
+pub type ShardingRegistryData = Vec<(Principal, ShardEntry)>;
+
+///
 /// ShardingRegistry
 ///
 /// Persistent memory interface for tracking shard entries and tenant → shard
@@ -82,7 +88,7 @@ impl ShardingRegistry {
 
     /// Exports all shard entries (for inspection or snapshot purposes).
     #[must_use]
-    pub(crate) fn export() -> Vec<(Principal, ShardEntry)> {
+    pub(crate) fn export() -> ShardingRegistryData {
         Self::with(ShardingCore::all_entries)
     }
 }
