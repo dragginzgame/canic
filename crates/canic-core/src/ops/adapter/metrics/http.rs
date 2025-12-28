@@ -2,15 +2,16 @@ use crate::{
     cdk::mgmt::HttpMethod,
     dto::metrics::http::HttpMetricEntry,
     model::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics},
+    ops::runtime::metrics::normalize_http_label,
 };
 
 /// Increment HTTP metric using mgmt API types.
 /// Performs method mapping and label normalization.
-pub fn increment_http_metric(method: HttpMethod, url: &str, label: Option<&str>) {
-    let kind = map_method(method);
+pub fn record_http_request(method: HttpMethod, url: &str, label: Option<&str>) {
+    let kind = http_method_to_kind(method);
     let label = label
         .map(str::to_string)
-        .unwrap_or_else(|| normalize_url(url));
+        .unwrap_or_else(|| normalize_http_label(url, label));
 
     HttpMetrics::increment(kind, &label);
 }
@@ -22,14 +23,14 @@ pub fn http_metrics_to_view(
 ) -> Vec<HttpMetricEntry> {
     raw.into_iter()
         .map(|(key, count)| HttpMetricEntry {
-            method: method_kind_to_string(key.method),
+            method: key.method.as_str().to_string(),
             label: key.label,
             count,
         })
         .collect()
 }
 
-fn map_method(method: HttpMethod) -> HttpMethodKind {
+fn http_method_to_kind(method: HttpMethod) -> HttpMethodKind {
     match method {
         HttpMethod::GET => HttpMethodKind::Get,
         HttpMethod::POST => HttpMethodKind::Post,

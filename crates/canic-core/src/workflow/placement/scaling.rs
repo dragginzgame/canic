@@ -20,6 +20,7 @@ use candid::Principal;
 /// ScalingWorkflowError
 /// Errors raised during scaling execution
 ///
+
 #[derive(Debug, ThisError)]
 pub enum ScalingWorkflowError {
     #[error("scaling plan rejected: {0}")]

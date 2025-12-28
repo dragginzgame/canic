@@ -8,11 +8,10 @@
 //!
 //! No IC calls. No async. No side effects.
 
-pub use crate::dto::placement::ScalingRegistryView;
-
 use crate::{
     Error, ThisError,
     config::schema::ScalePool,
+    dto::placement::WorkerEntryView,
     ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
 };
 
@@ -43,11 +42,9 @@ impl From<ScalingPolicyError> for Error {
 
 #[derive(Clone, Debug)]
 pub struct ScalingPlan {
-    /// Whether a new worker should be spawned.
     pub should_spawn: bool,
-
-    /// Explanation / debug string for the decision.
     pub reason: String,
+    pub worker_entry: Option<WorkerEntryView>,
 }
 
 ///
@@ -57,13 +54,13 @@ pub struct ScalingPlan {
 pub struct ScalingPolicy;
 
 impl ScalingPolicy {
-    /// Evaluate scaling policy for a pool without side effects.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn plan_create_worker(pool: &str) -> Result<ScalingPlan, Error> {
+    pub fn plan_create_worker(pool: &str, created_at_secs: u64) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
         let worker_count = ScalingRegistryOps::find_by_pool(pool).len() as u32;
 
+        // Max bound check
         if policy.max_workers > 0 && worker_count >= policy.max_workers {
             return Ok(ScalingPlan {
                 should_spawn: false,
@@ -71,16 +68,28 @@ impl ScalingPolicy {
                     "pool '{pool}' at max_workers ({}/{})",
                     worker_count, policy.max_workers
                 ),
+                worker_entry: None,
             });
         }
 
+        // Min bound check
         if worker_count < policy.min_workers {
+            let entry =
+                WorkerEntryView::try_new(pool, pool_cfg.canister_role.clone(), created_at_secs)
+                    .map_err(|e| {
+                        // This should now be impossible unless config is corrupt
+                        Error::InvariantViolation(format!(
+                            "invalid worker entry for pool '{pool}': {e}"
+                        ))
+                    })?;
+
             return Ok(ScalingPlan {
                 should_spawn: true,
                 reason: format!(
                     "pool '{pool}' below min_workers (current {worker_count}, min {})",
                     policy.min_workers
                 ),
+                worker_entry: Some(entry),
             });
         }
 
@@ -90,24 +99,11 @@ impl ScalingPolicy {
                 "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
                 policy.min_workers, policy.max_workers
             ),
+            worker_entry: None,
         })
     }
 
-    /// Convenience helper.
-    pub fn should_spawn_worker(pool: &str) -> Result<bool, Error> {
-        Ok(Self::plan_create_worker(pool)?.should_spawn)
-    }
-
-    /// Look up the config for a given pool on the *current canister*.
-    fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-        let cfg = ConfigOps::current_canister();
-        let scale_cfg = cfg.scaling.ok_or(ScalingPolicyError::ScalingDisabled)?;
-
-        let pool_cfg = scale_cfg
-            .pools
-            .get(pool)
-            .ok_or_else(|| ScalingPolicyError::PoolNotFound(pool.to_string()))?;
-
-        Ok(pool_cfg.clone())
+    pub fn should_spawn_worker(pool: &str, now_secs: u64) -> Result<bool, Error> {
+        Ok(Self::plan_create_worker(pool, now_secs)?.should_spawn)
     }
 }

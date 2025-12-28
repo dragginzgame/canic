@@ -1,4 +1,4 @@
-use crate::{cdk::mgmt::HttpMethod, dto::prelude::*};
+use crate::dto::prelude::*;
 
 ///
 /// HttpMetricEntry
@@ -7,7 +7,7 @@ use crate::{cdk::mgmt::HttpMethod, dto::prelude::*};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HttpMetricEntry {
-    pub method: HttpMethod,
+    pub method: String,
     pub label: String,
     pub count: u64,
 }

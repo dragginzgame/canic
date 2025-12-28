@@ -26,6 +26,16 @@ pub(crate) enum HttpMethodKind {
     Head,
 }
 
+impl HttpMethodKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Head => "HEAD",
+        }
+    }
+}
+
 ///
 /// HttpMetrics
 /// Volatile counters for HTTP outcalls keyed by method + URL.
