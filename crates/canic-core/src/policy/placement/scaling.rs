@@ -98,12 +98,6 @@ impl ScalingPolicy {
         Ok(Self::plan_create_worker(pool)?.should_spawn)
     }
 
-    /// Export a snapshot of the current registry state.
-    #[must_use]
-    pub fn export() -> ScalingRegistryView {
-        ScalingRegistryOps::export()
-    }
-
     /// Look up the config for a given pool on the *current canister*.
     fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
         let cfg = ConfigOps::current_canister();

@@ -4,7 +4,7 @@
 //! Given a tenant and a set of shard principals, it selects
 //! the shard with the highest weighted hash.
 //!
-//! Used by [`ShardAllocator`] or [`ShardingPolicyOps`] when assigning tenants.
+//! Used by [`ShardAllocator`] or [`ShardingPolicy`] when assigning tenants.
 
 use crate::utils::hash::hash_u64;
 use candid::Principal;

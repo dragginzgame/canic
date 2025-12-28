@@ -10,10 +10,9 @@
 
 use crate::{
     Error,
-    abi::CanisterInitPayload,
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
-    dto::bundle::StateBundle,
+    dto::abi::v1::CanisterInitPayload,
     ops::{
         OpsError,
         canister::install_code_with_extra_arg,

@@ -148,14 +148,13 @@ pub async fn root_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
 
     let mut failures = 0;
 
-    for child in children {
-        if let Err(err) = send_bundle(&child.pid, bundle).await {
+    for (pid, child) in children {
+        if let Err(err) = send_bundle(&pid, bundle).await {
             failures += 1;
             log!(
                 Topic::Sync,
                 Warn,
-                "💦 sync.state: failed to cascade to {}: {err}",
-                child.pid
+                "💦 sync.state: failed to cascade to {pid}: {err}",
             );
         }
     }
@@ -194,14 +193,13 @@ pub async fn nonroot_cascade_state(bundle: &StateBundle) -> Result<(), Error> {
     warn_if_large("nonroot state cascade", child_count);
 
     let mut failures = 0;
-    for child in children {
-        if let Err(err) = send_bundle(&child.pid, bundle).await {
+    for (pid, _) in children {
+        if let Err(err) = send_bundle(&pid, bundle).await {
             failures += 1;
             log!(
                 Topic::Sync,
                 Warn,
-                "💦 sync.state: failed to cascade to {}: {err}",
-                child.pid
+                "💦 sync.state: failed to cascade to {pid}: {err}",
             );
         }
     }

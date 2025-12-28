@@ -30,24 +30,6 @@ pub struct AccessMetricKey {
 }
 
 ///
-/// AccessMetricEntry
-/// Snapshot entry pairing an endpoint/stage with its count.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AccessMetricEntry {
-    pub endpoint: String,
-    pub kind: AccessMetricKind,
-    pub count: u64,
-}
-
-///
-/// AccessMetricsSnapshot
-///
-
-pub type AccessMetricsSnapshot = Vec<AccessMetricEntry>;
-
-///
 /// AccessMetrics
 /// Volatile counters for unsuccessful access attempts by endpoint + stage.
 ///
@@ -68,19 +50,9 @@ impl AccessMetrics {
         });
     }
 
-    /// Snapshot all access metrics.
     #[must_use]
-    pub fn snapshot() -> AccessMetricsSnapshot {
-        ACCESS_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, count)| AccessMetricEntry {
-                    endpoint: key.endpoint.clone(),
-                    kind: key.kind,
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<AccessMetricKey, u64> {
+        ACCESS_METRICS.with_borrow(|counts| counts.clone())
     }
 
     #[cfg(test)]
@@ -107,10 +79,10 @@ mod tests {
         AccessMetrics::increment("foo", AccessMetricKind::Auth);
         AccessMetrics::increment("bar", AccessMetricKind::Policy);
 
-        let snapshot = AccessMetrics::snapshot();
-        let mut map: HashMap<(String, AccessMetricKind), u64> = snapshot
+        let raw = AccessMetrics::export_raw();
+        let mut map: HashMap<(String, AccessMetricKind), u64> = raw
             .into_iter()
-            .map(|entry| ((entry.endpoint, entry.kind), entry.count))
+            .map(|(key, count)| ((key.endpoint, key.kind), count))
             .collect();
 
         assert_eq!(

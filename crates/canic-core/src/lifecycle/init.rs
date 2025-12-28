@@ -19,8 +19,8 @@ use crate::{
 pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
     EnvOps::init(payload.env, role);
 
-    let app_dir = adapter::app_directory_from_dto(payload.app_directory);
-    let subnet_dir = adapter::subnet_directory_from_dto(payload.subnet_directory);
+    let app_dir = adapter::directory::app_directory_from_dto(payload.app_directory);
+    let subnet_dir = adapter::directory::subnet_directory_from_dto(payload.subnet_directory);
 
     AppDirectoryOps::import(app_dir);
     SubnetDirectoryOps::import(subnet_dir);
