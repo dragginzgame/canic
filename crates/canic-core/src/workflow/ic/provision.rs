@@ -15,6 +15,7 @@ use crate::{
     dto::abi::v1::CanisterInitPayload,
     ops::{
         OpsError,
+        adapter::directory::{app_directory_to_view, subnet_directory_to_view},
         canister::install_code_with_extra_arg,
         config::ConfigOps,
         env::{EnvData, EnvOps},
@@ -27,11 +28,11 @@ use crate::{
         wasm::WasmOps,
     },
     workflow::{
-        cascade::state::StateBundleBuilder,
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::IcError,
         pool::pool_import_canister,
         prelude::*,
+        snapshot::StateSnapshotBuilder,
     },
 };
 use candid::Principal;
@@ -50,7 +51,11 @@ pub(crate) fn build_nonroot_init_payload(
         parent_pid: Some(parent_pid),
     };
 
-    CanisterInitPayload::new(env, AppDirectoryOps::export(), SubnetDirectoryOps::export())
+    CanisterInitPayload::new(
+        env,
+        app_directory_to_view(AppDirectoryOps::export()),
+        subnet_directory_to_view(SubnetDirectoryOps::export()),
+    )
 }
 
 ///
@@ -81,7 +86,7 @@ impl From<ProvisionError> for Error {
 /// When `updated_role` is provided, only include the sections that list that role.
 pub(crate) async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
-) -> StateBundleBuilder {
+) -> StateSnapshotBuilder {
     let cfg = Config::get();
 
     let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
@@ -90,7 +95,7 @@ pub(crate) async fn rebuild_directories_from_registry(
         subnet_cfg.subnet_directory.contains(role)
     });
 
-    let mut builder = StateBundleBuilder::new();
+    let mut builder = StateSnapshotBuilder::new();
 
     if include_app {
         let view = RootAppDirectoryBuilder::build_from_registry();

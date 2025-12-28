@@ -99,16 +99,16 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_state(
-            bundle: ::canic::core::workflow::cascade::state::StateBundle,
+            snapshot: ::canic::core::dto::snapshot::StateSnapshotView,
         ) -> Result<(), ::canic::Error> {
-            $crate::workflow::cascade::state::nonroot_cascade_state(&bundle).await
+            $crate::workflow::cascade::state::nonroot_cascade_state(&snapshot).await
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
-            bundle: ::canic::core::workflow::cascade::topology::TopologyBundle,
+            snapshot: ::canic::core::dto::snapshot::TopologySnapshotView,
         ) -> Result<(), ::canic::Error> {
-            $crate::workflow::cascade::topology::nonroot_cascade_topology(&bundle).await
+            $crate::workflow::cascade::topology::nonroot_cascade_topology(&snapshot).await
         }
     };
 }
