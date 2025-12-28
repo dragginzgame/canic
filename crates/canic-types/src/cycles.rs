@@ -5,11 +5,15 @@
 //! with derived math traits and serde helpers.
 //!
 
-use canic_cdk::{candid::CandidType, types::Nat};
+use canic_cdk::{
+    candid::{CandidType, Nat},
+    structures::{Storable, storable::Bound},
+};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
+    borrow::Cow,
     fmt::{self, Display},
     str::FromStr,
 };
@@ -48,22 +52,22 @@ pub const QC: u128 = 1_000_000_000_000_000;
     SubAssign,
     Sub,
 )]
-pub struct Cycles(Nat);
+pub struct Cycles(u128);
 
 impl Cycles {
     #[must_use]
-    pub fn new(amount: u128) -> Self {
-        Self(amount.into())
+    pub const fn new(n: u128) -> Self {
+        Self(n)
     }
 
     #[must_use]
     pub fn to_u64(&self) -> u64 {
-        self.0.0.to_u64().unwrap_or(u64::MAX)
+        self.0.to_u64().unwrap_or(u64::MAX)
     }
 
     #[must_use]
     pub fn to_u128(&self) -> u128 {
-        self.0.0.to_u128().unwrap_or(u128::MAX)
+        self.0
     }
 
     // from_config
@@ -94,19 +98,19 @@ impl Display for Cycles {
     }
 }
 
-impl From<u128> for Cycles {
-    fn from(v: u128) -> Self {
-        Self(Nat::from(v))
-    }
-}
-
 impl From<Nat> for Cycles {
     fn from(n: Nat) -> Self {
-        Self(n)
+        Self(n.0.to_u128().unwrap_or(0))
     }
 }
 
-impl From<Cycles> for Nat {
+impl From<u128> for Cycles {
+    fn from(v: u128) -> Self {
+        Self(v)
+    }
+}
+
+impl From<Cycles> for u128 {
     fn from(c: Cycles) -> Self {
         c.0
     }
@@ -148,5 +152,35 @@ impl FromStr for Cycles {
         }
 
         Ok(Self::new(n as u128))
+    }
+}
+
+impl Storable for Cycles {
+    // u128 is exactly 16 bytes, fixed-size
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 16,
+        is_fixed_size: true,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.0.to_be_bytes().to_vec())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.to_be_bytes().to_vec()
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let b = bytes.as_ref();
+
+        // Defensive decode: never panic on corrupted data
+        if b.len() != 16 {
+            return Self::default();
+        }
+
+        let mut arr = [0u8; 16];
+        arr.copy_from_slice(b);
+
+        Self(u128::from_be_bytes(arr))
     }
 }

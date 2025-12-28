@@ -1,6 +1,5 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    dto::directory::DirectoryView,
     eager_static, ic_memory,
     ids::CanisterRole,
     model::memory::id::directory::SUBNET_DIRECTORY_ID,
@@ -26,7 +25,7 @@ pub struct SubnetDirectory;
 impl SubnetDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn view() -> DirectoryView {
+    pub(crate) fn export() -> Vec<(CanisterRole, Principal)> {
         SUBNET_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
@@ -34,10 +33,10 @@ impl SubnetDirectory {
         })
     }
 
-    pub(crate) fn import(view: DirectoryView) {
+    pub(crate) fn import(data: Vec<(CanisterRole, Principal)>) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (role, pid) in view {
+            for (role, pid) in data {
                 map.insert(role, pid);
             }
         });

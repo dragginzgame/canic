@@ -26,12 +26,6 @@ eager_static! {
 }
 
 ///
-/// CanisterPoolView
-///
-
-pub type CanisterPoolView = Vec<(Principal, CanisterPoolEntry)>;
-
-///
 /// CanisterPoolStatus
 ///
 
@@ -163,7 +157,7 @@ impl CanisterPool {
 
     /// Export the pool as a vector of (Principal, Entry).
     #[must_use]
-    pub(crate) fn export() -> CanisterPoolView {
+    pub(crate) fn export() -> Vec<(Principal, CanisterPoolEntry)> {
         CANISTER_POOL.with_borrow(BTreeMap::to_vec)
     }
 
@@ -224,13 +218,13 @@ mod tests {
             None,
         );
 
-        let view = CanisterPool::export();
-        assert_eq!(view.len(), 2);
+        let data = CanisterPool::export();
+        assert_eq!(data.len(), 2);
 
-        let entry1 = view.iter().find(|(id, _)| *id == p1).unwrap();
+        let entry1 = data.iter().find(|(id, _)| *id == p1).unwrap();
         assert_eq!(entry1.1.cycles, 100u128.into());
 
-        let entry2 = view.iter().find(|(id, _)| *id == p2).unwrap();
+        let entry2 = data.iter().find(|(id, _)| *id == p2).unwrap();
         assert_eq!(entry2.1.cycles, 200u128.into());
     }
 
@@ -262,9 +256,9 @@ mod tests {
         assert_eq!(removed.cycles, 123u128.into());
 
         // only p2 should remain
-        let view = CanisterPool::export();
-        assert_eq!(view.len(), 1);
-        assert_eq!(view[0].0, p2);
+        let data = CanisterPool::export();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].0, p2);
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    dto::{cycles::CycleTrackerView, page::PageRequest},
     eager_static,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
+    types::Cycles,
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;
@@ -19,7 +19,7 @@ eager_static! {
 }
 
 /// constants
-const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
+const STORAGE_RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 
 ///
 /// CycleTracker
@@ -29,11 +29,11 @@ const RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 ///
 
 pub struct CycleTracker {
-    map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>,
+    map: BTreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
 }
 
 impl CycleTracker {
-    pub const fn new(map: BTreeMap<u64, u128, VirtualMemory<DefaultMemoryImpl>>) -> Self {
+    pub const fn new(map: BTreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>) -> Self {
         Self { map }
     }
 
@@ -44,7 +44,7 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow(|t| t.map.len())
     }
 
-    pub(crate) fn record(now: u64, cycles: u128) {
+    pub(crate) fn record(now: u64, cycles: Cycles) {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles));
     }
 
@@ -55,18 +55,13 @@ impl CycleTracker {
     }
 
     #[must_use]
-    pub(crate) fn entries(request: PageRequest) -> CycleTrackerView {
-        let request = request.clamped();
-
-        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
-        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-
+    pub(crate) fn entries(offset: usize, limit: usize) -> Vec<(u64, Cycles)> {
         CYCLE_TRACKER.with_borrow(|t| {
             t.map
                 .iter()
                 .skip(offset)
                 .take(limit)
-                .map(|entry| (*entry.key(), entry.value().into()))
+                .map(|entry| (*entry.key(), entry.value()))
                 .collect()
         })
     }
@@ -75,7 +70,7 @@ impl CycleTracker {
 
     /// Remove entries older than the retention window.
     fn purge_inner(&mut self, now: u64) -> usize {
-        let cutoff = now.saturating_sub(RETAIN_SECS);
+        let cutoff = now.saturating_sub(STORAGE_RETAIN_SECS);
         let mut purged = 0;
 
         while let Some((first_ts, _)) = self.map.first_key_value() {
@@ -90,7 +85,7 @@ impl CycleTracker {
         purged
     }
 
-    fn insert(&mut self, now: u64, cycles: u128) -> bool {
+    fn insert(&mut self, now: u64, cycles: Cycles) -> bool {
         self.map.insert(now, cycles);
 
         true
