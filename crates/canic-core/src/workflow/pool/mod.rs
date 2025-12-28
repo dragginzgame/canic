@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod admissibility;
 pub mod scheduler;
 
 use crate::{
@@ -118,7 +119,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     policy::pool::authority::require_pool_admin()?;
-    policy::pool::admissibility::can_enter_pool(pid).await?;
+    admissibility::can_enter_pool(pid).await?;
 
     mark_pending_reset(pid);
 
@@ -189,7 +190,7 @@ pub async fn pool_import_queued_canisters(
     let mut skipped = 0;
 
     for pid in pids {
-        match policy::pool::admissibility::can_enter_pool(pid).await {
+        match admissibility::can_enter_pool(pid).await {
             Ok(()) => {
                 if let Some(entry) = PoolOps::get(pid) {
                     if entry.status.is_failed() {

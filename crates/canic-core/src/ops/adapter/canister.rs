@@ -1,5 +1,8 @@
 use crate::{
-    dto::canister::{CanisterEntryView, CanisterSummaryView},
+    dto::{
+        canister::{CanisterEntryView, CanisterSummaryView},
+        snapshot::TopologyNodeView,
+    },
     model::memory::{CanisterEntry, CanisterSummary},
 };
 
@@ -18,5 +21,13 @@ pub fn canister_summary_to_view(s: &CanisterSummary) -> CanisterSummaryView {
     CanisterSummaryView {
         role: s.role.clone(),
         parent_pid: s.parent_pid,
+    }
+}
+
+#[must_use]
+pub fn canister_summary_from_topology_node(node: &TopologyNodeView) -> CanisterSummary {
+    CanisterSummary {
+        role: node.role.clone(),
+        parent_pid: node.parent_pid,
     }
 }

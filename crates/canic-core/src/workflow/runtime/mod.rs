@@ -9,12 +9,12 @@ use crate::{
         println,
         types::Principal,
     },
-    dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
+    dto::{abi::v1::CanisterInitPayload, env::EnvView, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
         adapter::directory::{app_directory_from_view, subnet_directory_from_view},
-        env::{EnvData, EnvOps},
+        env::EnvOps,
         ic::{Network, build_network},
         memory::MemoryRegistryOps,
         storage::{
@@ -63,7 +63,7 @@ fn init_memory_or_trap(phase: &str) {
     }
 }
 
-fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvData) -> EnvData {
+fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView {
     let mut missing = Vec::new();
     if env.prime_root_pid.is_none() {
         missing.push("prime_root_pid");

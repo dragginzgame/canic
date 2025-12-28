@@ -1,13 +1,17 @@
 use crate::{
     Error, ThisError,
     cdk::{api::canister_self, types::Principal},
+    dto::env::EnvView,
     dto::subnet::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     model::memory::Env,
-    ops::OpsError,
+    ops::{
+        OpsError,
+        adapter::env::{env_data_from_view, env_data_to_view},
+    },
 };
 
-pub use crate::model::memory::env::EnvData;
+use crate::model::memory::env::EnvData;
 
 ///
 /// EnvOpsError
@@ -89,7 +93,7 @@ impl EnvOps {
             parent_pid: None,
         };
 
-        if let Err(err) = Self::import(env) {
+        if let Err(err) = Self::import_data(env) {
             panic!("EnvOps::init_root failed: {err}");
         }
     }
@@ -97,17 +101,23 @@ impl EnvOps {
     /// Initialize environment state for a non-root canister during init.
     ///
     /// This function must only be called from the IC `init` hook.
-    pub fn init(mut env: EnvData, role: CanisterRole) {
+    pub fn init(env: EnvView, role: CanisterRole) {
+        let mut env = env_data_from_view(env);
         // Override contextual role (do not trust payload blindly)
         env.canister_role = Some(role);
 
         // Import validates required fields and persists
-        if let Err(err) = Self::import(env) {
+        if let Err(err) = Self::import_data(env) {
             panic!("EnvOps::init failed: {err}");
         }
     }
 
-    pub fn import(env: EnvData) -> Result<(), Error> {
+    pub fn import(env: EnvView) -> Result<(), Error> {
+        let env = env_data_from_view(env);
+        Self::import_data(env)
+    }
+
+    fn import_data(env: EnvData) -> Result<(), Error> {
         let mut missing = Vec::new();
         if env.prime_root_pid.is_none() {
             missing.push("prime_root_pid");
@@ -283,8 +293,8 @@ impl EnvOps {
 
     /// Export a snapshot of the current environment metadata.
     #[must_use]
-    pub fn export() -> EnvData {
-        Env::export()
+    pub fn export() -> EnvView {
+        env_data_to_view(Env::export())
     }
 }
 
