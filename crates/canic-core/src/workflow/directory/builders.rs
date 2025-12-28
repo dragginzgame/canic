@@ -12,12 +12,12 @@ pub struct RootAppDirectoryBuilder;
 impl RootAppDirectoryBuilder {
     #[must_use]
     pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
-        let entries = SubnetRegistryOps::export();
+        let entries = SubnetRegistryOps::export_roles();
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
-        for (pid, entry) in entries {
-            if policy::directory::is_app_directory_role(&entry.role) {
-                map.insert(entry.role.clone(), pid);
+        for (pid, role) in entries {
+            if policy::directory::is_app_directory_role(&role) {
+                map.insert(role.clone(), pid);
             }
         }
 
@@ -33,12 +33,12 @@ pub struct RootSubnetDirectoryBuilder;
 impl RootSubnetDirectoryBuilder {
     #[must_use]
     pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
-        let entries = SubnetRegistryOps::export();
+        let entries = SubnetRegistryOps::export_roles();
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
-        for (pid, entry) in entries {
-            if policy::directory::is_subnet_directory_role(&entry.role) {
-                map.insert(entry.role.clone(), pid);
+        for (pid, role) in entries {
+            if policy::directory::is_subnet_directory_role(&role) {
+                map.insert(role.clone(), pid);
             }
         }
 

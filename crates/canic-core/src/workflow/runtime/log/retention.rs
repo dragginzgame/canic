@@ -1,10 +1,10 @@
 use crate::{
     log,
     log::Topic,
-    model::memory::log::apply_retention,
     ops::{
         OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
         ic::timer::{TimerId, TimerOps},
+        runtime::log::apply_log_retention,
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -40,7 +40,7 @@ pub fn stop() {
 /// Run a retention sweep immediately.
 #[must_use]
 pub fn retain() -> bool {
-    match apply_retention() {
+    match apply_log_retention() {
         Ok(summary) => {
             let dropped = summary.dropped_total();
             if dropped > 0 {

@@ -99,16 +99,6 @@ impl ShardEntry {
         self.count < self.capacity
     }
 
-    /// Returns load in basis points (0–10_000), or `None` if capacity is 0.
-    #[must_use]
-    pub const fn load_bps(&self) -> Option<u64> {
-        if self.capacity == 0 {
-            None
-        } else {
-            Some((self.count as u64).saturating_mul(10_000) / self.capacity as u64)
-        }
-    }
-
     const fn slot_default() -> u32 {
         Self::UNASSIGNED_SLOT
     }

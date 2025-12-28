@@ -42,18 +42,8 @@ pub enum CanisterPoolStatus {
 
 impl CanisterPoolStatus {
     #[must_use]
-    pub const fn is_pending_reset(&self) -> bool {
-        matches!(self, Self::PendingReset)
-    }
-
-    #[must_use]
     pub const fn is_ready(&self) -> bool {
         matches!(self, Self::Ready)
-    }
-
-    #[must_use]
-    pub const fn is_failed(&self) -> bool {
-        matches!(self, Self::Failed { .. })
     }
 }
 

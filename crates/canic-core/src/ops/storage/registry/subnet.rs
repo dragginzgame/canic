@@ -2,11 +2,12 @@ use crate::{
     Error, ThisError,
     cdk::types::Principal,
     config::schema::CanisterCardinality,
-    dto::registry::SubnetRegistryView,
+    dto::{registry::SubnetRegistryView, snapshot::TopologyNodeView},
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
     ops::{
-        adapter::registry::subnet_registry_to_view, config::ConfigOps,
+        adapter::{canister::canister_summary_to_topology_node, registry::subnet_registry_to_view},
+        config::ConfigOps,
         storage::registry::RegistryOpsError,
     },
 };
@@ -104,7 +105,7 @@ impl SubnetRegistryOps {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub fn get(pid: Principal) -> Option<CanisterEntry> {
+    pub(crate) fn get(pid: Principal) -> Option<CanisterEntry> {
         SubnetRegistry::get(pid)
     }
 
@@ -119,16 +120,28 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
     }
 
+    /// Direct children (one level) as topology views.
+    #[must_use]
+    pub(crate) fn children_view(pid: Principal) -> Vec<TopologyNodeView> {
+        SubnetRegistry::children(pid)
+            .into_iter()
+            .map(|(pid, summary)| canister_summary_to_topology_node(pid, &summary))
+            .collect()
+    }
+
     /// Full subtree rooted at `pid`.
     #[must_use]
     pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
         SubnetRegistry::subtree(pid)
     }
 
-    /// Canonical registry export (identity + entry).
+    /// Canonical registry export (identity + role only).
     #[must_use]
-    pub fn export() -> Vec<(Principal, CanisterEntry)> {
+    pub(crate) fn export_roles() -> Vec<(Principal, CanisterRole)> {
         SubnetRegistry::export()
+            .into_iter()
+            .map(|(pid, entry)| (pid, entry.role))
+            .collect()
     }
 
     #[must_use]
@@ -150,7 +163,9 @@ impl SubnetRegistryOps {
     /// - no cycles
     /// - bounded by registry size
     /// - terminates at ROOT
-    pub fn parent_chain(target: Principal) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
+    pub(crate) fn parent_chain(
+        target: Principal,
+    ) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
         let registry_len = SubnetRegistry::export().len();
 
         let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
@@ -187,6 +202,15 @@ impl SubnetRegistryOps {
 
         chain.reverse();
         Ok(chain)
+    }
+
+    /// Parent chain as topology views (root → … → target).
+    pub(crate) fn parent_chain_view(target: Principal) -> Result<Vec<TopologyNodeView>, Error> {
+        let chain = Self::parent_chain(target)?;
+        Ok(chain
+            .into_iter()
+            .map(|(pid, summary)| canister_summary_to_topology_node(pid, &summary))
+            .collect())
     }
 }
 

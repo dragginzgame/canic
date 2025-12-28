@@ -196,13 +196,6 @@ pub struct RetentionSummary {
     pub dropped_by_limit: u64,
 }
 
-impl RetentionSummary {
-    #[must_use]
-    pub const fn dropped_total(&self) -> u64 {
-        self.dropped_by_age + self.dropped_by_limit
-    }
-}
-
 // apply_retention
 // currently using the local config
 pub fn apply_retention() -> Result<RetentionSummary, Error> {

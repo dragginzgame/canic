@@ -1,24 +1,31 @@
 pub use crate::dto::metrics::{
-    access::AccessMetricEntry, endpoint::EndpointHealthView, http::HttpMetricEntry,
-    icc::IccMetricEntry, system::SystemMetricEntry, timer::TimerMetricEntry,
+    access::{AccessMetricEntry, AccessMetricKind},
+    endpoint::EndpointHealthView,
+    http::HttpMetricEntry,
+    icc::IccMetricEntry,
+    system::SystemMetricEntry,
+    timer::TimerMetricEntry,
 };
 use crate::{
     dto::page::{Page, PageRequest},
     model::metrics::{
-        access::{AccessMetricKind as ModelAccessMetricKind, AccessMetrics as ModelAccessMetrics},
+        access::AccessMetrics as ModelAccessMetrics,
         endpoint::{
             EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
             EndpointResultMetrics as ModelEndpointResultMetrics,
         },
         http::HttpMetrics,
         icc::IccMetrics,
-        system::SystemMetrics,
+        system::{SystemMetricKind, SystemMetrics},
         timer::TimerMetrics,
     },
     ops::{
         adapter::metrics::{
-            access::access_metrics_to_view, endpoint::endpoint_health_to_view,
-            http::http_metrics_to_view, icc::icc_metrics_to_view, system::system_metrics_to_view,
+            access::{access_metric_kind_from_view, access_metrics_to_view},
+            endpoint::endpoint_health_to_view,
+            http::http_metrics_to_view,
+            icc::icc_metrics_to_view,
+            system::system_metrics_to_view,
             timer::timer_metrics_to_view,
         },
         view::paginate_vec,
@@ -27,28 +34,12 @@ use crate::{
 
 pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AccessMetricKind {
-    Auth,
-    Guard,
-    Policy,
-}
-
-impl From<AccessMetricKind> for ModelAccessMetricKind {
-    fn from(kind: AccessMetricKind) -> Self {
-        match kind {
-            AccessMetricKind::Auth => Self::Auth,
-            AccessMetricKind::Guard => Self::Guard,
-            AccessMetricKind::Policy => Self::Policy,
-        }
-    }
-}
-
 pub struct AccessMetrics;
 
 impl AccessMetrics {
     pub fn increment(endpoint: &str, kind: AccessMetricKind) {
-        ModelAccessMetrics::increment(endpoint, kind.into());
+        let model_kind = access_metric_kind_from_view(kind);
+        ModelAccessMetrics::increment(endpoint, model_kind);
     }
 }
 
@@ -187,6 +178,11 @@ impl MetricsOps {
     ) -> Page<EndpointHealthView> {
         Self::endpoint_health_page(request, exclude_endpoint)
     }
+}
+
+/// Record a single HTTP outcall for system metrics.
+pub fn record_http_outcall() {
+    SystemMetrics::increment(SystemMetricKind::HttpOutcall);
 }
 
 #[must_use]

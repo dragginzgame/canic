@@ -1,7 +1,14 @@
 use crate::{
-    dto::page::{Page, PageRequest},
+    dto::{
+        directory::AppDirectoryView,
+        page::{Page, PageRequest},
+    },
     model::memory::directory::{AppDirectory, AppDirectoryData},
-    ops::{prelude::*, view::paginate_vec},
+    ops::{
+        adapter::directory::{app_directory_from_view, app_directory_to_view},
+        prelude::*,
+        view::paginate_vec,
+    },
 };
 use candid::Principal;
 
@@ -25,11 +32,24 @@ impl AppDirectoryOps {
     }
 
     #[must_use]
-    pub fn export() -> AppDirectoryData {
+    pub(crate) fn export() -> AppDirectoryData {
         AppDirectory::export()
     }
 
-    pub fn import(data: AppDirectoryData) {
+    /// Export app directory as a public view.
+    #[must_use]
+    pub fn export_view() -> AppDirectoryView {
+        let data = AppDirectory::export();
+        app_directory_to_view(data)
+    }
+
+    pub(crate) fn import(data: AppDirectoryData) {
+        AppDirectory::import(data);
+    }
+
+    /// Import app directory from a public view.
+    pub fn import_view(view: AppDirectoryView) {
+        let data = app_directory_from_view(view);
         AppDirectory::import(data);
     }
 }

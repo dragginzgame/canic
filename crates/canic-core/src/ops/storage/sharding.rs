@@ -1,4 +1,4 @@
-pub use crate::model::memory::sharding::{ShardEntry, ShardingRegistryData};
+pub(crate) use crate::model::memory::sharding::ShardEntry;
 
 use crate::{
     Error, ThisError,
@@ -85,15 +85,16 @@ impl ShardingRegistryOps {
         })
     }
 
-    /// Fetch a shard entry by principal.
+    /// Fetch a shard entry by principal (tests only).
+    #[cfg(test)]
     #[must_use]
-    pub fn get(pid: Principal) -> Option<ShardEntry> {
+    pub(crate) fn get(pid: Principal) -> Option<ShardEntry> {
         ShardingRegistry::with(|core| core.get_entry(&pid))
     }
 
     /// Export all shard entries.
     #[must_use]
-    pub fn export() -> Vec<(Principal, ShardEntry)> {
+    pub(crate) fn export() -> Vec<(Principal, ShardEntry)> {
         ShardingRegistry::export()
     }
 

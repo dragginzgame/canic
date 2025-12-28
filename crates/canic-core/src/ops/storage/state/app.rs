@@ -3,9 +3,15 @@ use crate::{
     dto::state::{AppCommand, AppStateView},
     log,
     log::Topic,
-    model::memory::state::{AppMode, AppState, AppStateData},
-    ops::{adapter::state::app_state_to_view, storage::state::StateOpsError},
+    model::memory::state::{AppMode, AppState},
+    ops::{
+        adapter::state::{app_state_from_view, app_state_to_view},
+        storage::state::StateOpsError,
+    },
 };
+
+#[cfg(test)]
+use crate::model::memory::state::AppStateData;
 
 ///
 /// AppStateOpsError
@@ -31,12 +37,8 @@ pub struct AppStateOps;
 
 impl AppStateOps {
     #[must_use]
-    pub fn get_mode() -> AppMode {
+    pub(crate) fn get_mode() -> AppMode {
         AppState::get_mode()
-    }
-
-    pub fn set_mode(mode: AppMode) {
-        AppState::set_mode(mode);
     }
 
     pub fn command(cmd: AppCommand) -> Result<(), Error> {
@@ -59,16 +61,18 @@ impl AppStateOps {
         Ok(())
     }
 
-    pub fn import(data: AppStateData) {
+    #[cfg(test)]
+    pub(crate) fn import(data: AppStateData) {
+        AppState::import(data);
+    }
+
+    /// Import app state from a public view.
+    pub fn import_view(view: AppStateView) {
+        let data = app_state_from_view(view);
         AppState::import(data);
     }
 
     /// Export app state as a public view.
-    #[must_use]
-    pub fn export() -> AppStateData {
-        AppState::export()
-    }
-
     /// Export app state as a public view.
     #[must_use]
     pub fn export_view() -> AppStateView {

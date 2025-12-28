@@ -1,8 +1,14 @@
 use crate::{
-    dto::page::{Page, PageRequest},
+    dto::{
+        directory::SubnetDirectoryView,
+        page::{Page, PageRequest},
+    },
     ids::CanisterRole,
     model::memory::directory::{SubnetDirectory, SubnetDirectoryData},
-    ops::view::paginate_vec,
+    ops::{
+        adapter::directory::{subnet_directory_from_view, subnet_directory_to_view},
+        view::paginate_vec,
+    },
 };
 use candid::Principal;
 
@@ -26,11 +32,24 @@ impl SubnetDirectoryOps {
     }
 
     #[must_use]
-    pub fn export() -> SubnetDirectoryData {
+    pub(crate) fn export() -> SubnetDirectoryData {
         SubnetDirectory::export()
     }
 
-    pub fn import(data: SubnetDirectoryData) {
+    /// Export subnet directory as a public view.
+    #[must_use]
+    pub fn export_view() -> SubnetDirectoryView {
+        let data = SubnetDirectory::export();
+        subnet_directory_to_view(data)
+    }
+
+    pub(crate) fn import(data: SubnetDirectoryData) {
+        SubnetDirectory::import(data);
+    }
+
+    /// Import subnet directory from a public view.
+    pub fn import_view(view: SubnetDirectoryView) {
+        let data = subnet_directory_from_view(view);
         SubnetDirectory::import(data);
     }
 }

@@ -1,11 +1,32 @@
 use crate::{
+    Error,
     dto::log::LogEntryView,
     dto::page::{Page, PageRequest},
     log::Level,
-    model::memory::log::Log,
+    model::memory::log::{Log, RetentionSummary as ModelRetentionSummary, apply_retention},
     ops::adapter::log::log_entry_to_view,
     ops::view::paginate_vec,
 };
+
+///
+/// RetentionSummary
+/// Ops-level summary for retention sweeps.
+///
+
+#[derive(Clone, Debug, Default)]
+pub struct RetentionSummary {
+    pub before: u64,
+    pub retained: u64,
+    pub dropped_by_age: u64,
+    pub dropped_by_limit: u64,
+}
+
+impl RetentionSummary {
+    #[must_use]
+    pub const fn dropped_total(&self) -> u64 {
+        self.dropped_by_age + self.dropped_by_limit
+    }
+}
 
 pub type LogEntryDto = LogEntryView;
 
@@ -50,4 +71,15 @@ impl LogOps {
 
         paginate_vec(views, request)
     }
+}
+
+/// Apply log retention policy and return a summary.
+pub fn apply_log_retention() -> Result<RetentionSummary, Error> {
+    let summary: ModelRetentionSummary = apply_retention()?;
+    Ok(RetentionSummary {
+        before: summary.before,
+        retained: summary.retained,
+        dropped_by_age: summary.dropped_by_age,
+        dropped_by_limit: summary.dropped_by_limit,
+    })
 }
