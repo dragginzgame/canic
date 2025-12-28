@@ -1,15 +1,20 @@
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
 thread_local! {
-    static TIMER_METRICS: RefCell<HashMap<TimerMetricKey, u64>> = RefCell::new(HashMap::new());
+    /// Thread-local storage for timer execution counters.
+    ///
+    /// Keyed by `(mode, delay_ms, label)` and holding the number of times
+    /// the timer has fired.
+    static TIMER_METRICS: RefCell<HashMap<TimerMetricKey, u64>> =
+        RefCell::new(HashMap::new());
 }
 
 ///
 /// TimerMode
 ///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+/// Identifies whether a timer is a one-shot or an interval timer.
+///
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TimerMode {
     Interval,
     Once,
@@ -17,34 +22,18 @@ pub enum TimerMode {
 
 ///
 /// TimerMetricKey
-/// Uniquely identifies a timer by mode + delay (ms) + label.
 ///
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+/// Uniquely identifies a timer metric by:
+/// - scheduling mode
+/// - delay in milliseconds
+/// - a stable, low-cardinality label
+///
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
     pub delay_ms: u64,
     pub label: String,
 }
-
-///
-/// TimerMetricEntry
-/// Snapshot entry pairing a timer mode/delay with its execution count.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TimerMetricEntry {
-    pub mode: TimerMode,
-    pub delay_ms: u64,
-    pub label: String,
-    pub count: u64,
-}
-
-///
-/// TimerMetricsSnapshot
-///
-
-pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
 
 ///
 /// TimerMetrics
@@ -53,34 +42,35 @@ pub type TimerMetricsSnapshot = Vec<TimerMetricEntry>;
 ///
 /// ## What this measures
 ///
-/// `TimerMetrics` is intended to answer two related questions:
+/// `TimerMetrics` answers two related questions:
 ///
 /// 1) **Which timers have been scheduled?**
-///    - Use [`ensure`] at scheduling time to guarantee the timer appears in snapshots,
-///      even if it has not fired yet (e.g., newly-created interval timers).
+///    - Use [`ensure`] at scheduling time to guarantee the timer appears in
+///      raw exports, even if it has not fired yet (important for interval timers).
 ///
 /// 2) **How many times has a given timer fired?**
 ///    - Use [`increment`] when a timer fires (one-shot completion or interval tick).
 ///
-/// Note that this type **does** count executions/ticks of interval timers.
-/// Scheduling counts are tracked separately (e.g., via `SystemMetricKind::TimerScheduled`),
-/// and instruction costs are tracked via perf counters, because scheduling and
-/// execution are different signals.
+/// Interval timers are counted once per tick. Scheduling counts are tracked
+/// separately (e.g. via `SystemMetricKind::TimerScheduled`), and instruction
+/// costs are tracked via perf counters.
 ///
 /// ## Cardinality and labels
 ///
-/// Labels are used as metric keys. Keep labels stable and low-cardinality (avoid
-/// embedding principals, IDs, or other high-variance values).
+/// Labels are used as metric keys. They should be:
+/// - stable
+/// - low-cardinality
+/// - free of principals, IDs, or other high-variance data
 ///
-/// ## Thread safety / runtime model
+/// ## Runtime model
 ///
-/// This uses `thread_local!` storage. On the IC, this is the standard way to maintain
-/// mutable global state without `unsafe`.
+/// Uses `thread_local!` storage. On the IC, this is the standard pattern
+/// for maintaining mutable global state without `unsafe`.
 ///
-
 pub struct TimerMetrics;
 
 impl TimerMetrics {
+    /// Convert a `Duration` to milliseconds, saturating at `u64::MAX`.
     #[allow(clippy::cast_possible_truncation)]
     fn delay_ms(delay: Duration) -> u64 {
         delay.as_millis().min(u128::from(u64::MAX)) as u64
@@ -88,10 +78,10 @@ impl TimerMetrics {
 
     /// Ensure a timer key exists in the metrics table with an initial count of `0`.
     ///
-    /// This is used at **schedule time** to make timers visible in snapshots before they
-    /// have fired (particularly important for interval timers).
+    /// Intended to be called at **schedule time** so that timers are visible
+    /// in raw exports before their first execution.
     ///
-    /// Idempotent: calling `ensure` repeatedly for the same key does not change the count.
+    /// Idempotent: repeated calls with the same key do not change the count.
     pub fn ensure(mode: TimerMode, delay: Duration, label: &str) {
         let delay_ms = Self::delay_ms(delay);
 
@@ -108,10 +98,10 @@ impl TimerMetrics {
 
     /// Increment the execution counter for a timer key.
     ///
-    /// Use this when you want to count how many times a given timer (identified by
-    /// `(mode, delay_ms, label)`) has fired.
+    /// Call this when a timer fires (once for one-shot completion,
+    /// once per tick for interval timers).
     ///
-    /// This uses saturating arithmetic to avoid overflow.
+    /// Uses saturating arithmetic to avoid overflow.
     pub fn increment(mode: TimerMode, delay: Duration, label: &str) {
         let delay_ms = Self::delay_ms(delay);
 
@@ -127,23 +117,13 @@ impl TimerMetrics {
         });
     }
 
-    /// Snapshot all timer execution metrics.
+    /// Export the raw timer metrics table.
     ///
-    /// Returns the current contents of the metrics table as a vector of entries.
-    /// Callers may sort or page the results as needed at the API layer.
+    /// This returns the internal `(TimerMetricKey, count)` map and performs
+    /// no sorting, aggregation, or presentation shaping.
     #[must_use]
-    pub fn snapshot() -> TimerMetricsSnapshot {
-        TIMER_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, count)| TimerMetricEntry {
-                    mode: key.mode,
-                    delay_ms: key.delay_ms,
-                    label: key.label.clone(),
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<TimerMetricKey, u64> {
+        TIMER_METRICS.with_borrow(|counts| counts.clone())
     }
 
     /// Test-only helper: clear all timer metrics.
@@ -153,9 +133,9 @@ impl TimerMetrics {
     }
 }
 
-///
-/// TESTS
-///
+//
+// TESTS
+//
 
 #[cfg(test)]
 mod tests {
@@ -173,20 +153,59 @@ mod tests {
             "interval:b",
         );
 
-        let snapshot = TimerMetrics::snapshot();
-        let mut map: HashMap<(TimerMode, u64, String), u64> = snapshot
-            .into_iter()
-            .map(|entry| ((entry.mode, entry.delay_ms, entry.label), entry.count))
-            .collect();
+        let raw = TimerMetrics::export_raw();
 
-        assert_eq!(
-            map.remove(&(TimerMode::Once, 1_000, "once:a".to_string())),
-            Some(2)
-        );
-        assert_eq!(
-            map.remove(&(TimerMode::Interval, 500, "interval:b".to_string())),
-            Some(1)
-        );
-        assert!(map.is_empty());
+        let key_once = TimerMetricKey {
+            mode: TimerMode::Once,
+            delay_ms: 1_000,
+            label: "once:a".to_string(),
+        };
+
+        let key_interval = TimerMetricKey {
+            mode: TimerMode::Interval,
+            delay_ms: 500,
+            label: "interval:b".to_string(),
+        };
+
+        assert_eq!(raw.get(&key_once), Some(&2));
+        assert_eq!(raw.get(&key_interval), Some(&1));
+        assert_eq!(raw.len(), 2);
+    }
+
+    #[test]
+    fn ensure_creates_zero_count_entry() {
+        TimerMetrics::reset();
+
+        TimerMetrics::ensure(TimerMode::Interval, Duration::from_secs(2), "heartbeat");
+
+        let raw = TimerMetrics::export_raw();
+
+        let key = TimerMetricKey {
+            mode: TimerMode::Interval,
+            delay_ms: 2_000,
+            label: "heartbeat".to_string(),
+        };
+
+        assert_eq!(raw.get(&key), Some(&0));
+        assert_eq!(raw.len(), 1);
+    }
+
+    #[test]
+    fn ensure_is_idempotent() {
+        TimerMetrics::reset();
+
+        TimerMetrics::ensure(TimerMode::Once, Duration::from_secs(1), "once:x");
+        TimerMetrics::ensure(TimerMode::Once, Duration::from_secs(1), "once:x");
+
+        let raw = TimerMetrics::export_raw();
+
+        let key = TimerMetricKey {
+            mode: TimerMode::Once,
+            delay_ms: 1_000,
+            label: "once:x".to_string(),
+        };
+
+        assert_eq!(raw.get(&key), Some(&0));
+        assert_eq!(raw.len(), 1);
     }
 }

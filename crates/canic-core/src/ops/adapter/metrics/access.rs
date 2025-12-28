@@ -1,4 +1,4 @@
-use crate::{dto::metrics::AccessMetricEntry, model::metrics::access::AccessMetricKey};
+use crate::{dto::metrics::access::AccessMetricEntry, model::metrics::access::AccessMetricKey};
 
 #[must_use]
 pub fn access_metrics_to_view(

@@ -1,8 +1,8 @@
 use crate::{
     dto::{
         metrics::{
-            AccessMetricEntry, EndpointHealthView, http::HttpMetricEntry, icc::IccMetricEntry,
-            system::SystemMetricEntry, timer::TimerMetricEntry,
+            access::AccessMetricEntry, endpoint::EndpointHealthView, http::HttpMetricEntry,
+            icc::IccMetricEntry, system::SystemMetricEntry, timer::TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },

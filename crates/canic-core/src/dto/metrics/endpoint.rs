@@ -13,10 +13,15 @@ pub struct EndpointAttemptMetricEntry {
 }
 
 ///
-/// EndpointAttemptMetricsSnapshot
+/// EndpointResultMetricEntry
+/// Public metric entry for endpoint ok/err outcomes.
 ///
-
-pub type EndpointAttemptMetricsSnapshot = Vec<EndpointAttemptMetricEntry>;
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct EndpointResultMetricEntry {
+    pub endpoint: String,
+    pub ok: u64,
+    pub err: u64,
+}
 
 ///
 /// EndpointHealthView
