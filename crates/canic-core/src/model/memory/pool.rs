@@ -13,16 +13,18 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-//
-// CANISTER_POOL
-//
-
 eager_static! {
     static CANISTER_POOL: RefCell<BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(
             ic_memory!(CanisterPool, CANISTER_POOL_ID),
         ));
 }
+
+///
+/// CanisterPoolData
+///
+
+pub type CanisterPoolData = Vec<(Principal, CanisterPoolEntry)>;
 
 ///
 /// CanisterPoolStatus
@@ -156,7 +158,7 @@ impl CanisterPool {
 
     /// Export the pool as a vector of (Principal, Entry).
     #[must_use]
-    pub(crate) fn export() -> Vec<(Principal, CanisterPoolEntry)> {
+    pub(crate) fn export() -> CanisterPoolData {
         CANISTER_POOL.with_borrow(BTreeMap::to_vec)
     }
 

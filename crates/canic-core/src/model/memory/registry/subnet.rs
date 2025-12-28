@@ -19,6 +19,12 @@ eager_static! {
 }
 
 ///
+/// SubnetRegistryData
+///
+
+pub type SubnetRegistryData = Vec<(Principal, CanisterEntry)>;
+
+///
 /// SubnetRegistry
 ///
 
@@ -231,7 +237,7 @@ impl SubnetRegistry {
 
     /// Returns all canister entries as a vector.
     #[must_use]
-    pub(crate) fn export() -> Vec<(Principal, CanisterEntry)> {
+    pub(crate) fn export() -> SubnetRegistryData {
         Self::with_entries(|iter| iter.map(|e| (*e.key(), e.value())).collect())
     }
 }

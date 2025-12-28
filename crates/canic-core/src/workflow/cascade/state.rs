@@ -17,7 +17,7 @@ use crate::{
     Error,
     dto::{
         bundle::StateBundle,
-        directory::DirectoryView,
+        directory::{AppDirectoryView, SubnetDirectoryView},
         state::{AppStateView, SubnetStateView},
     },
     log::Topic,
@@ -105,13 +105,13 @@ impl StateBundleBuilder {
     }
 
     #[must_use]
-    pub fn with_app_directory_view(mut self, view: DirectoryView) -> Self {
+    pub fn with_app_directory_view(mut self, view: AppDirectoryView) -> Self {
         self.bundle.app_directory = Some(view);
         self
     }
 
     #[must_use]
-    pub fn with_subnet_directory_view(mut self, view: DirectoryView) -> Self {
+    pub fn with_subnet_directory_view(mut self, view: SubnetDirectoryView) -> Self {
         self.bundle.subnet_directory = Some(view);
         self
     }

@@ -7,6 +7,7 @@ pub mod page;
 pub mod payment;
 pub mod placement;
 pub mod pool;
+pub mod registry;
 pub mod rpc;
 pub mod state;
 pub mod topology;
