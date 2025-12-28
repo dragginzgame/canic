@@ -10,7 +10,6 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CanisterEntry {
-    pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,
     pub module_hash: Option<Vec<u8>>,
@@ -29,7 +28,6 @@ impl_storable_bounded!(CanisterEntry, CanisterEntry::STORABLE_MAX_SIZE, false);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterSummary {
-    pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,
 }
@@ -41,7 +39,15 @@ impl CanisterSummary {
 impl From<CanisterEntry> for CanisterSummary {
     fn from(e: CanisterEntry) -> Self {
         Self {
-            pid: e.pid,
+            role: e.role,
+            parent_pid: e.parent_pid,
+        }
+    }
+}
+
+impl From<&CanisterEntry> for CanisterSummary {
+    fn from(e: &CanisterEntry) -> Self {
+        Self {
             role: e.role.clone(),
             parent_pid: e.parent_pid,
         }
@@ -67,7 +73,6 @@ pub mod test {
                 .unwrap();
 
         let entry = CanisterEntry {
-            pid,
             role: CanisterRole::new("really_long_canister_role"),
             parent_pid: Some(pid),
             module_hash: Some(vec![0u8; 32]),
@@ -90,7 +95,6 @@ pub mod test {
                 .unwrap();
 
         let entry = CanisterSummary {
-            pid,
             role: CanisterRole::new("really_long_canister_role"),
             parent_pid: Some(pid),
         };

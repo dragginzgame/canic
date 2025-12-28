@@ -1,5 +1,5 @@
 use crate::{
-    model::memory::directory::DirectoryView, ops::storage::registry::SubnetRegistryOps, policy,
+    cdk::candid::Principal, ids::CanisterRole, ops::storage::registry::SubnetRegistryOps, policy,
 };
 use std::collections::BTreeMap;
 
@@ -11,7 +11,7 @@ pub struct RootAppDirectoryBuilder;
 
 impl RootAppDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> DirectoryView {
+    pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
         let entries = SubnetRegistryOps::export_view();
         let mut map = BTreeMap::new();
 
@@ -33,7 +33,7 @@ pub struct RootSubnetDirectoryBuilder;
 
 impl RootSubnetDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> DirectoryView {
+    pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
         let entries = SubnetRegistryOps::export_view();
         let mut map = BTreeMap::new();
 

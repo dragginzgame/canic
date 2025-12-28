@@ -3,10 +3,12 @@ use crate::{
     dto::{
         canister::CanisterSummaryView,
         page::{Page, PageRequest},
-        topology::CanisterChildrenView,
     },
     ids::CanisterRole,
-    model::memory::{CanisterSummary, children::CanisterChildren},
+    model::memory::{
+        CanisterSummary,
+        children::{CanisterChildren, CanisterChildrenData},
+    },
     ops::{env::EnvOps, storage::registry::SubnetRegistryOps},
 };
 
@@ -19,7 +21,7 @@ pub struct CanisterChildrenOps;
 impl CanisterChildrenOps {
     /// Resolve the canonical view of direct children for the current canister.
     /// Root rebuilds from the registry; children rely on their imported snapshot.
-    fn resolve_children() -> CanisterChildrenView {
+    fn resolve_children() -> CanisterChildrenData {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(canister_self())
         } else {
@@ -30,7 +32,7 @@ impl CanisterChildrenOps {
     /// Return a paginated view of the canister's direct children.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
-    pub fn page(request: PageRequest) -> Page<CanisterSummary> {
+    pub fn page(request: PageRequest) -> Page<CanisterSummaryView> {
         let request = request.clamped();
         let all_children = Self::resolve_children();
         let total = all_children.len() as u64;

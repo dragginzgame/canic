@@ -1,10 +1,7 @@
-pub use crate::model::memory::registry::SubnetRegistryView;
-
 use crate::{
     Error, ThisError,
     cdk::types::Principal,
     config::schema::CanisterCardinality,
-    dto::topology::CanisterChildrenView,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
     ops::{config::ConfigOps, storage::registry::RegistryOpsError},
@@ -13,8 +10,6 @@ use std::collections::HashSet;
 
 ///
 /// SubnetRegistryOpsError
-///
-/// All semantic and invariant violations related to the subnet registry.
 ///
 
 #[derive(Debug, ThisError)]
@@ -75,11 +70,11 @@ impl SubnetRegistryOps {
         }
 
         if role_requires_singleton(role)
-            && let Some(existing) = SubnetRegistry::find_first_by_role(role)
+            && let Some((existing_pid, _)) = SubnetRegistry::find_first_by_role(role)
         {
             return Err(SubnetRegistryOpsError::RoleAlreadyRegistered {
                 role: role.clone(),
-                pid: existing.pid,
+                pid: existing_pid,
             }
             .into());
         }
@@ -101,7 +96,7 @@ impl SubnetRegistryOps {
     }
 
     // ---------------------------------------------------------------------
-    // Queries
+    // Queries (canonical data)
     // ---------------------------------------------------------------------
 
     #[must_use]
@@ -114,37 +109,40 @@ impl SubnetRegistryOps {
         SubnetRegistry::get_parent(pid)
     }
 
+    /// Direct children (one level).
     #[must_use]
-    pub(crate) fn children(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
         SubnetRegistry::children(pid)
     }
 
+    /// Full subtree rooted at `pid`.
     #[must_use]
-    pub(crate) fn subtree(pid: Principal) -> Vec<CanisterSummary> {
+    pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
         SubnetRegistry::subtree(pid)
     }
 
+    /// Canonical registry export (identity + entry).
     #[must_use]
-    pub fn export_view() -> CanisterChildrenView {
-        SubnetRegistry::export().into()
+    pub fn export() -> Vec<(Principal, CanisterEntry)> {
+        SubnetRegistry::export()
     }
 
     // ---------------------------------------------------------------------
-    // Traversal
+    // Traversal / invariants
     // ---------------------------------------------------------------------
 
     /// Return the canonical parent chain for a canister.
     ///
-    /// The returned vector is ordered: root → ... → target.
+    /// Returned order: root → … → target
     ///
     /// Invariants enforced:
-    /// - No cycles
-    /// - Bounded by registry size
-    /// - Terminates at a ROOT canister
-    pub fn parent_chain(target: Principal) -> Result<Vec<CanisterSummary>, Error> {
+    /// - no cycles
+    /// - bounded by registry size
+    /// - terminates at ROOT
+    pub fn parent_chain(target: Principal) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
         let registry_len = SubnetRegistry::export().len();
 
-        let mut chain = Vec::new();
+        let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
         let mut seen: HashSet<Principal> = HashSet::new();
         let mut pid = target;
 
@@ -161,18 +159,21 @@ impl SubnetRegistryOps {
                 return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
             }
 
-            let summary: CanisterSummary = entry.clone().into();
+            let summary = CanisterSummary::from(&entry);
             let parent = entry.parent_pid;
 
-            chain.push(summary);
+            chain.push((pid, summary));
 
-            if let Some(parent_pid) = parent {
-                pid = parent_pid;
-            } else {
-                if entry.role != CanisterRole::ROOT {
-                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
+            match parent {
+                Some(parent_pid) => pid = parent_pid,
+                None => {
+                    if entry.role != CanisterRole::ROOT {
+                        return Err(
+                            SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into()
+                        );
+                    }
+                    break;
                 }
-                break;
             }
         }
 

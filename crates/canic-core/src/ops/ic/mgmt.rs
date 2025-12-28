@@ -89,7 +89,7 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
 
-    Ok(status.cycles)
+    Ok(status.cycles.into())
 }
 
 //
