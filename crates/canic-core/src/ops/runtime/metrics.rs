@@ -117,3 +117,22 @@ impl MetricsOps {
         paginate_vec(entries, request)
     }
 }
+
+pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
+    if let Some(label) = label {
+        return label.to_string();
+    }
+
+    let without_fragment = url.split('#').next().unwrap_or(url);
+    let without_query = without_fragment
+        .split('?')
+        .next()
+        .unwrap_or(without_fragment);
+
+    let trimmed = without_query.trim();
+    if trimmed.is_empty() {
+        url.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
