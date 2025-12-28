@@ -1,13 +1,16 @@
 use crate::{
-    cdk::candid::Principal,
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
-        directory::DirectoryView,
+        directory::{AppDirectoryView, SubnetDirectoryView},
         placement::WorkerEntryView,
         state::AppModeView,
     },
-    ids::CanisterRole,
-    model::memory::{CanisterEntry, CanisterSummary, scaling::WorkerEntry, state::AppMode},
+    model::memory::{
+        CanisterEntry, CanisterSummary,
+        directory::{AppDirectoryData, SubnetDirectoryData},
+        scaling::WorkerEntry,
+        state::AppMode,
+    },
 };
 
 ///
@@ -53,15 +56,24 @@ impl From<&CanisterSummary> for CanisterSummaryView {
 }
 
 ///
-/// DirectoryView
+/// AppDirectory
 ///
 
-impl From<Vec<(CanisterRole, Principal)>> for DirectoryView {
-    fn from(v: Vec<(CanisterRole, Principal)>) -> Self {
-        DirectoryView(v)
+impl From<AppDirectoryView> for AppDirectoryData {
+    fn from(view: AppDirectoryView) -> Self {
+        view.0
     }
 }
 
+///
+/// SubnetDirector
+///
+
+impl From<SubnetDirectoryView> for SubnetDirectoryData {
+    fn from(view: SubnetDirectoryView) -> Self {
+        view.0
+    }
+}
 ///
 /// WorkerEntry
 ///

@@ -58,7 +58,6 @@ impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);
 /// Registry of active scaling workers
 ///
 
-#[derive(Clone, Copy, Debug, Default)]
 pub struct ScalingRegistry;
 
 impl ScalingRegistry {

@@ -1,6 +1,6 @@
 use crate::dto::{
     canister::CanisterSummaryView,
-    directory::DirectoryView,
+    directory::{AppDirectoryView, SubnetDirectoryView},
     prelude::*,
     state::{AppStateView, SubnetStateView},
 };
@@ -17,8 +17,8 @@ pub struct StateBundle {
     pub subnet_state: Option<SubnetStateView>,
 
     // directories
-    pub app_directory: Option<DirectoryView>,
-    pub subnet_directory: Option<DirectoryView>,
+    pub app_directory: Option<AppDirectoryView>,
+    pub subnet_directory: Option<SubnetDirectoryView>,
 }
 
 impl StateBundle {

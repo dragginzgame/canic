@@ -26,6 +26,7 @@ pub mod perf;
 pub mod rpc;
 pub mod runtime;
 pub mod storage;
+pub mod view;
 pub mod wasm;
 
 use std::time::Duration;

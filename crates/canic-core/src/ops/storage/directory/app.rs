@@ -1,10 +1,7 @@
 use crate::{
-    dto::{
-        directory::DirectoryView,
-        page::{Page, PageRequest},
-    },
-    model::memory::directory::AppDirectory,
-    ops::{prelude::*, storage::directory::paginate},
+    dto::page::{Page, PageRequest},
+    model::memory::directory::{AppDirectory, AppDirectoryData},
+    ops::{prelude::*, view::paginate_vec},
 };
 use candid::Principal;
 
@@ -24,15 +21,15 @@ impl AppDirectoryOps {
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate(AppDirectory::export(), request)
+        paginate_vec(AppDirectory::export(), request)
     }
 
     #[must_use]
-    pub fn export() -> DirectoryView {
+    pub fn export() -> AppDirectoryData {
         AppDirectory::export()
     }
 
-    pub fn import(view: DirectoryView) {
-        AppDirectory::import(view);
+    pub fn import(data: AppDirectoryData) {
+        AppDirectory::import(data);
     }
 }

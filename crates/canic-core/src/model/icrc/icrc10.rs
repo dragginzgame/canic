@@ -7,8 +7,7 @@ use crate::{
 /// Icrc10Registry
 ///
 
-#[derive(Default)]
-pub struct Icrc10Registry();
+pub struct Icrc10Registry;
 
 impl Icrc10Registry {
     fn standards() -> Vec<Icrc10Standard> {

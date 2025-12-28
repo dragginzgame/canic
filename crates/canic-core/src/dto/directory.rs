@@ -2,9 +2,15 @@ use crate::{dto::prelude::*, ids::CanisterRole};
 use candid::Principal;
 
 ///
-/// DirectoryView
-/// Snapshot of a directory for sync / export
+/// AppDirectoryView
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DirectoryView(pub Vec<(CanisterRole, Principal)>);
+pub struct AppDirectoryView(pub Vec<(CanisterRole, Principal)>);
+
+///
+/// SubnetDirectoryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetDirectoryView(pub Vec<(CanisterRole, Principal)>);
