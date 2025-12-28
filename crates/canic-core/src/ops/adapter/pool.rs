@@ -15,7 +15,7 @@ fn canister_pool_status_to_view(status: &CanisterPoolStatus) -> CanisterPoolStat
 }
 
 #[must_use]
-fn canister_pool_entry_to_view(entry: &CanisterPoolEntry) -> CanisterPoolEntryView {
+pub fn canister_pool_entry_to_view(entry: &CanisterPoolEntry) -> CanisterPoolEntryView {
     CanisterPoolEntryView {
         created_at: entry.created_at,
         cycles: entry.cycles.clone(),

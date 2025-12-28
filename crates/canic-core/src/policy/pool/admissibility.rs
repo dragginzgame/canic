@@ -10,7 +10,7 @@ use crate::{cdk::types::Principal, policy::pool::PoolPolicyError};
 /// Callers must provide:
 /// - whether the PID is still registered in the subnet registry
 /// - the local importability check result (Ok/Err details)
-pub fn can_enter_pool(
+pub fn policy_can_enter_pool(
     pid: Principal,
     registered_in_subnet: bool,
     importable_on_local: Result<(), String>,
@@ -19,11 +19,11 @@ pub fn can_enter_pool(
         return Err(PoolPolicyError::RegisteredInSubnet(pid));
     }
 
-    is_importable_on_local(pid, importable_on_local)
+    policy_is_importable_on_local(pid, importable_on_local)
 }
 
 /// Convenience helper when you only want the local-routability decision (no registry check).
-pub fn is_importable_on_local(
+pub fn policy_is_importable_on_local(
     pid: Principal,
     importable_on_local: Result<(), String>,
 ) -> Result<(), PoolPolicyError> {

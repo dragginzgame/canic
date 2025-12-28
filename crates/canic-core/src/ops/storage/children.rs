@@ -68,15 +68,13 @@ impl CanisterChildrenOps {
             .map(|(_, summary)| canister_summary_to_view(&summary))
     }
 
-    /// Export identity-bearing children data (crate-private).
+    /// Export child principals only (crate-private).
     #[must_use]
-    pub(crate) fn export() -> CanisterChildrenData {
+    pub(crate) fn pids() -> Vec<Principal> {
         Self::resolve_children()
-    }
-
-    /// Import identity-bearing children data (crate-private).
-    pub(crate) fn import(data: CanisterChildrenData) {
-        CanisterChildren::import(data);
+            .into_iter()
+            .map(|(pid, _)| pid)
+            .collect()
     }
 
     /// Import identity-bearing children data from a topology snapshot view.

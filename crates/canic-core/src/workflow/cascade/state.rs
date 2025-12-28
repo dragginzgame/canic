@@ -26,10 +26,7 @@ use crate::{
             state::{AppStateOps, SubnetStateOps},
         },
     },
-    workflow::snapshot::{
-        app_directory_data_from_view, app_state_data_from_view, state_snapshot_debug,
-        state_snapshot_is_empty, subnet_directory_data_from_view, subnet_state_data_from_view,
-    },
+    workflow::snapshot::{state_snapshot_debug, state_snapshot_is_empty},
 };
 
 //
@@ -52,13 +49,14 @@ pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Erro
     }
 
     let root_pid = canister_self();
-    let children = SubnetRegistryOps::children(root_pid);
+    let children = SubnetRegistryOps::children_view(root_pid);
     let child_count = children.len();
     warn_if_large("root state cascade", child_count);
 
     let mut failures = 0;
 
-    for (pid, _) in children {
+    for child in children {
+        let pid = child.pid;
         if let Err(err) = send_snapshot(&pid, snapshot).await {
             failures += 1;
             log!(
@@ -98,12 +96,12 @@ pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), E
     // Apply locally first
     apply_state(snapshot)?;
 
-    let children = CanisterChildrenOps::export();
-    let child_count = children.len();
+    let child_pids = CanisterChildrenOps::pids();
+    let child_count = child_pids.len();
     warn_if_large("nonroot state cascade", child_count);
 
     let mut failures = 0;
-    for (pid, _) in children {
+    for pid in child_pids {
         if let Err(err) = send_snapshot(&pid, snapshot).await {
             failures += 1;
             log!(
@@ -137,18 +135,18 @@ fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
 
     // states
     if let Some(state) = snapshot.app_state {
-        AppStateOps::import(app_state_data_from_view(state));
+        AppStateOps::import_view(state);
     }
     if let Some(state) = snapshot.subnet_state {
-        SubnetStateOps::import(subnet_state_data_from_view(state));
+        SubnetStateOps::import_view(state);
     }
 
     // directories
     if let Some(dir) = snapshot.app_directory.clone() {
-        AppDirectoryOps::import(app_directory_data_from_view(dir));
+        AppDirectoryOps::import_view(dir);
     }
     if let Some(dir) = snapshot.subnet_directory.clone() {
-        SubnetDirectoryOps::import(subnet_directory_data_from_view(dir));
+        SubnetDirectoryOps::import_view(dir);
     }
 
     Ok(())

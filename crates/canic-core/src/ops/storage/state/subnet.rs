@@ -1,7 +1,7 @@
 use crate::{
     dto::state::SubnetStateView,
-    model::memory::state::{SubnetState, SubnetStateData},
-    ops::adapter::state::subnet_state_to_view,
+    model::memory::state::SubnetState,
+    ops::adapter::state::{subnet_state_from_view, subnet_state_to_view},
 };
 
 ///
@@ -11,13 +11,10 @@ use crate::{
 pub struct SubnetStateOps;
 
 impl SubnetStateOps {
-    pub fn import(data: SubnetStateData) {
+    /// Import subnet state from a public view.
+    pub fn import_view(view: SubnetStateView) {
+        let data = subnet_state_from_view(view);
         SubnetState::import(data);
-    }
-
-    #[must_use]
-    pub fn export() -> SubnetStateData {
-        SubnetState::export()
     }
 
     /// Export subnet state as a public view.

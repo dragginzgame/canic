@@ -3,8 +3,7 @@ pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestR
 use crate::{
     Error,
     cdk::mgmt::http_request,
-    model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::adapter::metrics::http::record_http_request,
+    ops::{adapter::metrics::http::record_http_request, runtime::metrics::record_http_outcall},
 };
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
@@ -19,7 +18,7 @@ impl Http {
     pub const MAX_RESPONSE_BYTES: u64 = 200_000;
 
     fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
-        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        record_http_outcall();
         record_http_request(method, url, label);
     }
 

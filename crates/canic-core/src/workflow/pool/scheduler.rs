@@ -15,6 +15,7 @@
 
 use crate::{
     Error,
+    dto::pool::CanisterPoolStatusView,
     log::Topic,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
@@ -23,7 +24,7 @@ use crate::{
         storage::pool::PoolOps,
     },
     policy::pool::PoolPolicyError,
-    workflow::pool::{admissibility::can_enter_pool, mark_failed, reset_into_pool},
+    workflow::pool::{admissibility::check_can_enter_pool, mark_failed, reset_into_pool},
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -122,9 +123,9 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = PoolOps::export()
+    let mut pending: Vec<_> = PoolOps::export_view()
         .into_iter()
-        .filter(|(_, e)| e.status.is_pending_reset())
+        .filter(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
         .collect();
 
     if pending.is_empty() {
@@ -134,7 +135,7 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
     pending.sort_by_key(|(_, e)| e.created_at);
 
     for (pid, _) in pending.into_iter().take(limit) {
-        match can_enter_pool(pid).await {
+        match check_can_enter_pool(pid).await {
             Ok(()) => {
                 // admissible, proceed
             }
@@ -174,9 +175,9 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 }
 
 fn has_pending_reset() -> bool {
-    PoolOps::export()
+    PoolOps::export_view()
         .into_iter()
-        .any(|(_, e)| e.status.is_pending_reset())
+        .any(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
 }
 
 //

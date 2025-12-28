@@ -23,3 +23,24 @@ pub const fn app_state_to_view(data: AppStateData) -> AppStateView {
 pub const fn subnet_state_to_view(_: SubnetStateData) -> SubnetStateView {
     SubnetStateView {}
 }
+
+#[must_use]
+pub const fn app_mode_from_view(mode: AppModeView) -> AppMode {
+    match mode {
+        AppModeView::Enabled => AppMode::Enabled,
+        AppModeView::Readonly => AppMode::Readonly,
+        AppModeView::Disabled => AppMode::Disabled,
+    }
+}
+
+#[must_use]
+pub const fn app_state_from_view(view: AppStateView) -> AppStateData {
+    AppStateData {
+        mode: app_mode_from_view(view.mode),
+    }
+}
+
+#[must_use]
+pub const fn subnet_state_from_view(_: SubnetStateView) -> SubnetStateData {
+    SubnetStateData {}
+}

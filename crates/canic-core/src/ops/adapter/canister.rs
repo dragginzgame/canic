@@ -1,4 +1,5 @@
 use crate::{
+    cdk::types::Principal,
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
         snapshot::TopologyNodeView,
@@ -21,6 +22,19 @@ pub fn canister_summary_to_view(s: &CanisterSummary) -> CanisterSummaryView {
     CanisterSummaryView {
         role: s.role.clone(),
         parent_pid: s.parent_pid,
+    }
+}
+
+#[must_use]
+#[must_use]
+pub fn canister_summary_to_topology_node(
+    pid: Principal,
+    summary: &CanisterSummary,
+) -> TopologyNodeView {
+    TopologyNodeView {
+        pid,
+        role: summary.role.clone(),
+        parent_pid: summary.parent_pid,
     }
 }
 

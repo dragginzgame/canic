@@ -7,8 +7,6 @@ pub mod scaling;
 pub mod sharding;
 pub mod state;
 
-pub use crate::model::memory::CanisterSummary;
-
 use crate::{Error, ThisError, ops::OpsError};
 
 ///

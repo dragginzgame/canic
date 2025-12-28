@@ -5,10 +5,9 @@ pub mod scheduler;
 use crate::{
     Error,
     cdk::mgmt::{CanisterSettings, UpdateSettingsArgs},
-    dto::pool::{PoolImportSummary, PoolStatusCounts},
+    dto::pool::{CanisterPoolStatusView, PoolImportSummary, PoolStatusCounts},
     log,
     log::Topic,
-    model::memory::pool::CanisterPoolStatus,
     ops::{
         ic::{
             get_cycles,
@@ -50,52 +49,16 @@ pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
 // Metadata helpers
 // -----------------------------------------------------------------------------
 
-fn register_or_update(
-    pid: Principal,
-    cycles: Cycles,
-    status: CanisterPoolStatus,
-    role: Option<crate::ids::CanisterRole>,
-    parent: Option<Principal>,
-    module_hash: Option<Vec<u8>>,
-) {
-    if let Some(mut entry) = PoolOps::get(pid) {
-        entry.cycles = cycles;
-        entry.status = status;
-        entry.role = role.or(entry.role);
-        entry.parent = parent.or(entry.parent);
-        entry.module_hash = module_hash.or(entry.module_hash);
-        let _ = PoolOps::update(pid, entry);
-    } else {
-        PoolOps::register(pid, cycles, status, role, parent, module_hash);
-    }
-}
-
 fn mark_pending_reset(pid: Principal) {
-    register_or_update(
-        pid,
-        Cycles::default(),
-        CanisterPoolStatus::PendingReset,
-        None,
-        None,
-        None,
-    );
+    PoolOps::mark_pending_reset(pid);
 }
 
 fn mark_ready(pid: Principal, cycles: Cycles) {
-    register_or_update(pid, cycles, CanisterPoolStatus::Ready, None, None, None);
+    PoolOps::mark_ready(pid, cycles);
 }
 
 fn mark_failed(pid: Principal, err: &Error) {
-    register_or_update(
-        pid,
-        Cycles::default(),
-        CanisterPoolStatus::Failed {
-            reason: err.to_string(),
-        },
-        None,
-        None,
-        None,
-    );
+    PoolOps::mark_failed(pid, err);
 }
 
 // -----------------------------------------------------------------------------
@@ -108,7 +71,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
     let pid = create_canister(pool_controllers(), cycles.clone()).await?;
 
-    PoolOps::register(pid, cycles, CanisterPoolStatus::Ready, None, None, None);
+    PoolOps::register_ready(pid, cycles, None, None, None);
 
     Ok(pid)
 }
@@ -119,7 +82,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     policy::pool::authority::require_pool_admin()?;
-    admissibility::can_enter_pool(pid).await?;
+    admissibility::check_can_enter_pool(pid).await?;
 
     mark_pending_reset(pid);
 
@@ -161,14 +124,7 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
     let _ = SubnetRegistryOps::remove(&pid);
 
     // Register back into pool, preserving metadata
-    PoolOps::register(
-        pid,
-        cycles,
-        CanisterPoolStatus::Ready,
-        role,
-        None,
-        module_hash,
-    );
+    PoolOps::register_ready(pid, cycles, role, None, module_hash);
 
     Ok(())
 }
@@ -190,10 +146,10 @@ pub async fn pool_import_queued_canisters(
     let mut skipped = 0;
 
     for pid in pids {
-        match admissibility::can_enter_pool(pid).await {
+        match admissibility::check_can_enter_pool(pid).await {
             Ok(()) => {
-                if let Some(entry) = PoolOps::get(pid) {
-                    if entry.status.is_failed() {
+                if let Some(entry) = PoolOps::get_view(pid) {
+                    if matches!(entry.status, CanisterPoolStatusView::Failed { .. }) {
                         mark_pending_reset(pid);
                         requeued += 1;
                     } else {
@@ -236,14 +192,10 @@ pub async fn pool_export_canister(
 ) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
     policy::pool::authority::require_pool_admin()?;
 
-    let entry = PoolOps::get(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
+    let entry = PoolOps::get_view(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
 
-    policy::pool::export::can_export(&entry)?;
-
-    let role = entry.role.ok_or(PoolPolicyError::MissingRole)?;
-    let hash = entry
-        .module_hash
-        .ok_or(PoolPolicyError::MissingModuleHash)?;
+    let is_ready = matches!(entry.status, CanisterPoolStatusView::Ready);
+    let (role, hash) = policy::pool::export::can_export(is_ready, entry.role, entry.module_hash)?;
 
     let _ = PoolOps::take(&pid);
 
@@ -258,11 +210,11 @@ pub async fn pool_export_canister(
 pub fn pool_status_counts() -> PoolStatusCounts {
     let mut counts = PoolStatusCounts::default();
 
-    for (_, entry) in PoolOps::export() {
+    for (_, entry) in PoolOps::export_view() {
         match entry.status {
-            CanisterPoolStatus::Ready => counts.ready += 1,
-            CanisterPoolStatus::PendingReset => counts.pending_reset += 1,
-            CanisterPoolStatus::Failed { .. } => counts.failed += 1,
+            CanisterPoolStatusView::Ready => counts.ready += 1,
+            CanisterPoolStatusView::PendingReset => counts.pending_reset += 1,
+            CanisterPoolStatusView::Failed { .. } => counts.failed += 1,
         }
     }
 
