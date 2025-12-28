@@ -2,6 +2,7 @@ use crate::{
     dto::page::{Page, PageRequest},
     log::Level,
     model::memory::log::{self, Log},
+    ops::view::paginate_vec,
 };
 
 pub type LogEntryDto = log::LogEntry;
@@ -16,6 +17,7 @@ pub type LogEntryDto = log::LogEntry;
 /// - no policy
 /// - safe to call directly from query endpoints
 ///
+
 pub struct LogOps;
 
 impl LogOps {
@@ -42,19 +44,6 @@ impl LogOps {
         // Newest first
         entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        paginate(entries, request)
+        paginate_vec(entries, request)
     }
-}
-
-// You can reuse your existing pagination helper; this mirrors your MetricsOps.
-#[allow(clippy::cast_possible_truncation)]
-fn paginate<T>(entries: Vec<T>, request: PageRequest) -> Page<T> {
-    let request = request.clamped();
-    let total = entries.len() as u64;
-
-    let start = request.offset.min(total) as usize;
-    let end = request.offset.saturating_add(request.limit).min(total) as usize;
-
-    let entries = entries.into_iter().skip(start).take(end - start).collect();
-    Page { entries, total }
 }
