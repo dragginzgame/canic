@@ -1,4 +1,4 @@
-pub use crate::model::memory::sharding::{ShardEntry, ShardingRegistryView};
+pub use crate::model::memory::sharding::{ShardEntry, ShardingRegistryData};
 
 use crate::{
     Error, ThisError,

@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[must_use]
-pub fn canister_entry_into_view(e: &CanisterEntry) -> CanisterEntryView {
+pub fn canister_entry_to_view(e: &CanisterEntry) -> CanisterEntryView {
     CanisterEntryView {
         role: e.role.clone(),
         parent_pid: e.parent_pid,
@@ -14,7 +14,7 @@ pub fn canister_entry_into_view(e: &CanisterEntry) -> CanisterEntryView {
 }
 
 #[must_use]
-pub fn canister_summary_into_view(s: &CanisterSummary) -> CanisterSummaryView {
+pub fn canister_summary_to_view(s: &CanisterSummary) -> CanisterSummaryView {
     CanisterSummaryView {
         role: s.role.clone(),
         parent_pid: s.parent_pid,
