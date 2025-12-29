@@ -37,7 +37,7 @@ impl LogOps {
             return Ok(0);
         }
 
-        let cfg = ConfigOps::log_config();
+        let cfg = ConfigOps::log_config()?;
         let now = now_secs();
 
         Log::append(&cfg, now, crate_name, topic, level, message)
@@ -74,7 +74,7 @@ impl LogOps {
 
 /// Apply log retention policy and return a summary.
 pub fn apply_log_retention() -> Result<RetentionSummary, Error> {
-    let cfg = ConfigOps::log_config();
+    let cfg = ConfigOps::log_config()?;
     let now = now_secs();
 
     apply_retention_with_cfg(&cfg, now)

@@ -1,5 +1,8 @@
 //! Operations layer.
 //!
+//! Ops functions are fallible and must not trap.
+//! All unrecoverable failures are handled at lifecycle boundaries.
+//!
 //! This module contains two kinds of operations:
 //!
 //! 1. **Control ops**
@@ -73,7 +76,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::env::EnvOps};
+use crate::{ThisError, cdk::api::canister_self, model::memory::Env, ops::env::EnvOpsError};
 
 ///
 /// OpsError
@@ -112,7 +115,9 @@ pub enum OpsError {
 impl OpsError {
     /// Ensure the caller is the root canister.
     pub fn require_root() -> Result<(), Self> {
-        if EnvOps::is_root() {
+        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+
+        if root_pid == canister_self() {
             Ok(())
         } else {
             Err(Self::NotRoot)
@@ -121,7 +126,9 @@ impl OpsError {
 
     /// Ensure the caller is not the root canister.
     pub fn deny_root() -> Result<(), Self> {
-        if EnvOps::is_root() {
+        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+
+        if root_pid == canister_self() {
             Err(Self::IsRoot)
         } else {
             Ok(())

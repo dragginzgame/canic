@@ -68,7 +68,7 @@ impl ScalingWorkflow {
 
         // 4. Register in memory
         let entry = worker_entry_from_view(entry_view);
-        ScalingRegistryOps::insert(pid, entry);
+        ScalingRegistryOps::upsert(pid, entry);
 
         Ok(pid)
     }

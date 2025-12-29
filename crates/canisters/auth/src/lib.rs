@@ -20,7 +20,7 @@ async fn canic_upgrade() {}
 #[canic_update]
 fn authenticate_caller() -> Vec<u8> {
     // step 1: prepare the signature
-    signature::prepare(b"domain", b"user-auth", b"hello");
+    signature::prepare(b"domain", b"user-auth", b"hello").unwrap();
 
     // returning root_hash is optional — just for debugging
     signature::root_hash()

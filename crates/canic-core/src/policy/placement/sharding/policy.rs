@@ -109,7 +109,7 @@ impl ShardingPolicy {
 
     /// Retrieve the shard pool configuration from the current canister’s config.
     pub(crate) fn get_pool_config(pool: &str) -> Result<ShardPool, Error> {
-        let cfg = ConfigOps::current_canister();
+        let cfg = ConfigOps::current_canister()?;
         let sharding_cfg = cfg.sharding.ok_or(ShardingPolicyError::ShardingDisabled)?;
         let pool_cfg = sharding_cfg
             .pools

@@ -41,21 +41,21 @@ use thiserror::Error as ThisError;
 pub(crate) fn build_nonroot_init_payload(
     role: &CanisterRole,
     parent_pid: Principal,
-) -> CanisterInitPayload {
+) -> Result<CanisterInitPayload, Error> {
     let env = EnvView {
-        prime_root_pid: Some(EnvOps::prime_root_pid()),
-        subnet_role: Some(EnvOps::subnet_role()),
-        subnet_pid: Some(EnvOps::subnet_pid()),
-        root_pid: Some(EnvOps::root_pid()),
+        prime_root_pid: Some(EnvOps::prime_root_pid()?),
+        subnet_role: Some(EnvOps::subnet_role()?),
+        subnet_pid: Some(EnvOps::subnet_pid()?),
+        root_pid: Some(EnvOps::root_pid()?),
         canister_role: Some(role.clone()),
         parent_pid: Some(parent_pid),
     };
 
-    CanisterInitPayload::new(
+    Ok(CanisterInitPayload::new(
         env,
         app_directory_to_view(AppDirectoryOps::export()),
         subnet_directory_to_view(SubnetDirectoryOps::export()),
-    )
+    ))
 }
 
 ///
@@ -86,14 +86,12 @@ impl From<ProvisionError> for Error {
 /// When `updated_role` is provided, only include the sections that list that role.
 pub(crate) async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
-) -> StateSnapshotBuilder {
-    let cfg = Config::get();
+) -> Result<StateSnapshotBuilder, Error> {
+    let cfg = Config::get()?;
+    let subnet_cfg = ConfigOps::current_subnet()?;
 
     let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
-    let include_subnet = updated_role.is_none_or(|role| {
-        let subnet_cfg = ConfigOps::current_subnet();
-        subnet_cfg.subnet_directory.contains(role)
-    });
+    let include_subnet = updated_role.is_none_or(|role| subnet_cfg.subnet_directory.contains(role));
 
     let mut builder = StateSnapshotBuilder::new();
 
@@ -109,7 +107,7 @@ pub(crate) async fn rebuild_directories_from_registry(
         builder = builder.with_subnet_directory_view(subnet_directory_to_view(data));
     }
 
-    builder
+    Ok(builder)
 }
 
 //
@@ -226,7 +224,7 @@ async fn allocate_canister_with_source(
     role: &CanisterRole,
 ) -> Result<(Principal, AllocationSource), Error> {
     // use ConfigOps for a clean, ops-layer config lookup
-    let cfg = ConfigOps::current_subnet_canister(role);
+    let cfg = ConfigOps::current_subnet_canister(role)?;
     let target = cfg.initial_cycles;
 
     // Reuse from pool
@@ -272,7 +270,7 @@ async fn allocate_canister_with_source(
 /// Create a fresh canister on the IC with the configured controllers.
 async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<Principal, Error> {
     let root = canister_self();
-    let mut controllers = Config::get().controllers.clone();
+    let mut controllers = Config::get()?.controllers.clone();
     controllers.push(root); // root always controls
 
     let pid = create_canister(controllers, cycles.clone()).await?;
@@ -303,7 +301,7 @@ async fn install_canister(
     // Fetch and register WASM
     let wasm = WasmOps::try_get(role)?;
 
-    let payload = build_nonroot_init_payload(role, parent_pid);
+    let payload = build_nonroot_init_payload(role, parent_pid)?;
     let module_hash = wasm.module_hash();
 
     // Register before install so init hooks can observe the registry; roll back on failure.

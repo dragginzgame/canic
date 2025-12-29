@@ -61,7 +61,13 @@ fn evaluate_policies(cycles: Cycles) {
 fn check_auto_topup(cycles: Cycles) {
     use crate::ops::rpc::cycles_request;
 
-    let canister_cfg = ConfigOps::current_canister();
+    let canister_cfg = match ConfigOps::current_canister() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            log!(Topic::Cycles, Warn, "auto topup skipped: {err}");
+            return;
+        }
+    };
     let Some(topup) = canister_cfg.topup else {
         return;
     };

@@ -2,7 +2,6 @@ use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
         types::{Cycles, Principal},
-        utils::time::now_secs,
     },
     eager_static, ic_memory,
     ids::CanisterRole,
@@ -52,6 +51,19 @@ impl CanisterPoolStatus {
 }
 
 ///
+/// CanisterPoolEntry
+/// Composite entry stored in stable memory.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolEntry {
+    pub header: CanisterPoolHeader,
+    pub state: CanisterPoolState,
+}
+
+impl_storable_unbounded!(CanisterPoolEntry);
+
+///
 /// CanisterPoolHeader
 /// Immutable, ordering-relevant metadata.
 /// Set once at registration and must never change.
@@ -67,31 +79,14 @@ pub struct CanisterPoolHeader {
 /// Mutable lifecycle state.
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CanisterPoolState {
     pub cycles: Cycles,
-    #[serde(default)]
     pub status: CanisterPoolStatus,
-    #[serde(default)]
     pub role: Option<CanisterRole>,
-    #[serde(default)]
     pub parent: Option<Principal>,
-    #[serde(default)]
     pub module_hash: Option<Vec<u8>>,
 }
-
-///
-/// CanisterPoolEntry
-/// Composite entry stored in stable memory.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolEntry {
-    pub header: CanisterPoolHeader,
-    pub state: CanisterPoolState,
-}
-
-impl_storable_unbounded!(CanisterPoolEntry);
 
 ///
 /// CanisterPool
@@ -109,11 +104,10 @@ impl CanisterPool {
         role: Option<CanisterRole>,
         parent: Option<Principal>,
         module_hash: Option<Vec<u8>>,
+        created_at: u64,
     ) {
         let entry = CanisterPoolEntry {
-            header: CanisterPoolHeader {
-                created_at: now_secs(),
-            },
+            header: CanisterPoolHeader { created_at },
             state: CanisterPoolState {
                 cycles,
                 status,
@@ -232,8 +226,27 @@ mod tests {
     use super::*;
     use candid::Principal;
 
+    // --- Helpers --------------------------------------------------------
+
     fn pid(n: u8) -> Principal {
         Principal::self_authenticating(vec![n])
+    }
+
+    fn insert_ready_with_created_at(pid: Principal, created_at: u64, cycles: u128) {
+        let entry = CanisterPoolEntry {
+            header: CanisterPoolHeader { created_at },
+            state: CanisterPoolState {
+                cycles: cycles.into(),
+                status: CanisterPoolStatus::Ready,
+                role: None,
+                parent: None,
+                module_hash: None,
+            },
+        };
+
+        CANISTER_POOL.with_borrow_mut(|map| {
+            map.insert(pid, entry);
+        });
     }
 
     #[test]
@@ -250,6 +263,7 @@ mod tests {
             None,
             None,
             None,
+            1,
         );
         CanisterPool::register(
             p2,
@@ -258,6 +272,7 @@ mod tests {
             None,
             None,
             None,
+            2,
         );
 
         let data = CanisterPool::export();
@@ -281,26 +296,8 @@ mod tests {
         let p1 = pid(1);
         let p2 = pid(2);
 
-        CanisterPool::register(
-            p1,
-            1u128.into(),
-            CanisterPoolStatus::Ready,
-            None,
-            None,
-            None,
-        );
-
-        // ensure ordering difference
-        std::thread::sleep(std::time::Duration::from_millis(1));
-
-        CanisterPool::register(
-            p2,
-            2u128.into(),
-            CanisterPoolStatus::Ready,
-            None,
-            None,
-            None,
-        );
+        insert_ready_with_created_at(p1, 1, 1);
+        insert_ready_with_created_at(p2, 2, 2);
 
         let (pid, entry) = CanisterPool::pop_ready().expect("expected ready entry");
         assert_eq!(pid, p1);
@@ -320,6 +317,7 @@ mod tests {
             None,
             None,
             None,
+            42,
         );
 
         let before = CanisterPool::get(p).unwrap().header.created_at;
@@ -360,6 +358,7 @@ mod tests {
             None,
             None,
             None,
+            1,
         );
         CanisterPool::register(
             p2,
@@ -368,6 +367,7 @@ mod tests {
             None,
             None,
             None,
+            2,
         );
 
         let removed = CanisterPool::take(&p1).unwrap();
@@ -389,6 +389,7 @@ mod tests {
             None,
             None,
             None,
+            1,
         );
         assert!(!CanisterPool::is_empty());
 

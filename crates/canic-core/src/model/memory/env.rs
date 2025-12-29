@@ -5,7 +5,7 @@ use crate::{
     memory::impl_storable_bounded,
     model::memory::id::env::ENV_ID,
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -32,10 +32,8 @@ eager_static! {
 /// every canister can answer questions about its environment without touching
 /// global state.
 ///
-/// CandidType - allowed here as it's a persistence mirror of init args
-///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EnvData {
     // app
     pub prime_root_pid: Option<Principal>,

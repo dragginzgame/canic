@@ -8,7 +8,7 @@ use crate::{
         mgmt::{CanisterSettings, UpdateSettingsArgs},
         types::{Cycles, TC},
     },
-    dto::pool::{CanisterPoolStatusView, PoolImportSummary, PoolStatusCounts},
+    dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     log,
     log::Topic,
     ops::{
@@ -37,7 +37,7 @@ pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
-            controllers: Some(pool_controllers()),
+            controllers: Some(pool_controllers()?),
             ..Default::default()
         },
     })
@@ -71,7 +71,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
     policy::pool::authority::require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
-    let pid = create_canister(pool_controllers(), cycles.clone()).await?;
+    let pid = create_canister(pool_controllers()?, cycles.clone()).await?;
 
     PoolOps::register_ready(pid, cycles, None, None, None);
 
@@ -135,12 +135,9 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
 // Bulk import
 // -----------------------------------------------------------------------------
 
-pub async fn pool_import_queued_canisters(
-    pids: Vec<Principal>,
-) -> Result<(u64, u64, u64, u64, PoolImportSummary), Error> {
+pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBatchResult, Error> {
     policy::pool::authority::require_pool_admin()?;
 
-    let mut summary = PoolImportSummary::default();
     let total = pids.len() as u64;
 
     let mut added = 0;
@@ -151,12 +148,15 @@ pub async fn pool_import_queued_canisters(
         match admissibility::check_can_enter_pool(pid).await {
             Ok(()) => {
                 if let Some(entry) = PoolOps::get_view(pid) {
-                    if matches!(entry.status, CanisterPoolStatusView::Failed { .. }) {
-                        mark_pending_reset(pid);
-                        requeued += 1;
-                    } else {
-                        skipped += 1;
-                        // already ready or pending
+                    match entry.status {
+                        CanisterPoolStatusView::Failed { .. } => {
+                            mark_pending_reset(pid);
+                            requeued += 1;
+                        }
+                        _ => {
+                            // already ready or pending reset
+                            skipped += 1;
+                        }
                     }
                 } else {
                     mark_pending_reset(pid);
@@ -164,25 +164,19 @@ pub async fn pool_import_queued_canisters(
                 }
             }
 
-            Err(PoolPolicyError::RegisteredInSubnet(_)) => {
-                skipped += 1;
-                summary.skipped_in_registry += 1;
-            }
-
-            Err(PoolPolicyError::NonImportableOnLocal { .. }) => {
-                skipped += 1;
-                summary.skipped_non_importable += 1;
-            }
-
+            // Any policy rejection is treated as a skip
             Err(_) => {
                 skipped += 1;
             }
         }
     }
 
-    summary.status_counts = pool_status_counts();
-
-    Ok((added, requeued, skipped, total, summary))
+    Ok(PoolBatchResult {
+        total,
+        added,
+        requeued,
+        skipped,
+    })
 }
 
 // -----------------------------------------------------------------------------
@@ -202,24 +196,4 @@ pub async fn pool_export_canister(
     let _ = PoolOps::take(&pid);
 
     Ok((role, hash))
-}
-
-// -----------------------------------------------------------------------------
-// Stats
-// -----------------------------------------------------------------------------
-
-#[must_use]
-pub fn pool_status_counts() -> PoolStatusCounts {
-    let mut counts = PoolStatusCounts::default();
-
-    for (_, entry) in PoolOps::export_view() {
-        match entry.status {
-            CanisterPoolStatusView::Ready => counts.ready += 1,
-            CanisterPoolStatusView::PendingReset => counts.pending_reset += 1,
-            CanisterPoolStatusView::Failed { .. } => counts.failed += 1,
-        }
-    }
-
-    counts.total = counts.ready + counts.pending_reset + counts.failed;
-    counts
 }

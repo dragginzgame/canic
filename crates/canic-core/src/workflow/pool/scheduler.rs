@@ -123,7 +123,7 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = PoolOps::export_view()
+    let mut pending: Vec<_> = PoolOps::export()
         .into_iter()
         .filter(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
         .collect();
@@ -175,7 +175,7 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 }
 
 fn has_pending_reset() -> bool {
-    PoolOps::export_view()
+    PoolOps::export()
         .into_iter()
         .any(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
 }

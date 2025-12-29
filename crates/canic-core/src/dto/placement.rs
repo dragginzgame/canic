@@ -4,13 +4,15 @@ use crate::{cdk::types::BoundedString64, dto::prelude::*};
 /// ScalingRegistryView
 ///
 
-pub type ScalingRegistryView = Vec<(Principal, WorkerEntryView)>;
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ScalingRegistryView(pub Vec<(Principal, WorkerEntryView)>);
 
 ///
 /// ShardingRegistryView
 ///
 
-pub type ShardingRegistryView = Vec<(Principal, ShardEntryView)>;
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ShardingRegistryView(pub Vec<(Principal, ShardEntryView)>);
 
 ///
 /// WorkerEntryView

@@ -14,6 +14,7 @@
 //! - Call ops beyond minimal environment restoration
 
 use crate::{
+    cdk::api::trap,
     ids::CanisterRole,
     ops::{env::EnvOps, ic::timer::TimerOps},
     workflow,
@@ -26,7 +27,10 @@ use core::time::Duration;
 /// only role context needs to be restored before delegating.
 pub fn nonroot_post_upgrade(role: CanisterRole) {
     // Restore role context (env data already persisted)
-    EnvOps::restore_role(role.clone());
+    if let Err(err) = EnvOps::restore_role(role.clone()) {
+        let msg = format!("env restore failed (nonroot upgrade): {err}");
+        trap(&msg);
+    }
     workflow::runtime::nonroot_post_upgrade(role);
 
     // Delegate to async bootstrap workflow
@@ -40,7 +44,10 @@ pub fn nonroot_post_upgrade(role: CanisterRole) {
 /// Root identity and subnet context are restored from stable state.
 pub fn root_post_upgrade() {
     // Restore root environment context
-    EnvOps::restore_root();
+    if let Err(err) = EnvOps::restore_root() {
+        let msg = format!("env restore failed (root upgrade): {err}");
+        trap(&msg);
+    }
     workflow::runtime::root_post_upgrade();
 
     // Delegate to async bootstrap workflow

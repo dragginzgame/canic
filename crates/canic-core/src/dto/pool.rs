@@ -20,7 +20,8 @@ use crate::{cdk::types::Cycles, dto::prelude::*};
 /// Read-only pool snapshot for endpoints.
 ///
 
-pub type CanisterPoolView = Vec<(Principal, CanisterPoolEntryView)>;
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolView(pub Vec<(Principal, CanisterPoolEntryView)>);
 
 ///
 /// CanisterPoolStatusView
@@ -69,27 +70,6 @@ pub enum PoolAdminCommand {
     ImportQueued { pids: Vec<Principal> },
 }
 
-/// Summary of pool entries by status.
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct PoolStatusCounts {
-    pub ready: u64,
-    pub pending_reset: u64,
-    pub failed: u64,
-    pub total: u64,
-}
-
-/// Diagnostics for queued imports.
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct PoolImportSummary {
-    pub status_counts: PoolStatusCounts,
-
-    pub skipped_in_registry: u64,
-    pub skipped_already_ready: u64,
-    pub skipped_already_pending_reset: u64,
-    pub skipped_already_failed: u64,
-    pub skipped_non_importable: u64,
-}
-
 ///
 /// PoolAdminResponse
 /// These describe *what happened*, not *how* it happened.
@@ -107,18 +87,20 @@ pub enum PoolAdminResponse {
     Imported,
 
     /// One or more canisters were queued for import.
-    QueuedImported {
-        added: u64,
-        requeued: u64,
-        skipped: u64,
-        total: u64,
-        summary: PoolImportSummary,
-    },
+    QueuedImported { result: PoolBatchResult },
 
     /// Failed pool entries were requeued.
-    FailedRequeued {
-        requeued: u64,
-        skipped: u64,
-        total: u64,
-    },
+    FailedRequeued { result: PoolBatchResult },
+}
+
+///
+/// PoolBatchResult
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolBatchResult {
+    pub total: u64,
+    pub added: u64,
+    pub requeued: u64,
+    pub skipped: u64,
 }

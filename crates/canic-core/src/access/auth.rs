@@ -225,7 +225,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = EnvOps::root_pid();
+        let root_pid = EnvOps::root_pid()?;
 
         if caller == root_pid {
             Ok(())
@@ -240,7 +240,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = EnvOps::parent_pid();
+        let parent_pid = EnvOps::parent_pid()?;
 
         if parent_pid == caller {
             Ok(())
@@ -297,7 +297,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         use crate::config::Config;
-        let cfg = Config::get();
+        let cfg = Config::get()?;
 
         if !cfg.is_whitelisted(&caller) {
             Err(AuthError::NotWhitelisted(caller))?;

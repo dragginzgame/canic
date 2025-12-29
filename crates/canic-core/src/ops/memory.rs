@@ -52,6 +52,11 @@ impl MemoryRegistryOps {
     }
 
     fn log_summary(summary: &MemoryRegistrySummary) {
+        if !crate::log::is_ready() {
+            // During early init, logging may not be ready; avoid accidental traps.
+            return;
+        }
+
         let entries = &summary.entries;
 
         for (crate_name, range) in &summary.ranges {

@@ -1,9 +1,12 @@
 use crate::{
     Error,
     cdk::types::Principal,
+    cdk::utils::time::now_secs,
     dto::pool::{CanisterPoolEntryView, CanisterPoolView},
     ids::CanisterRole,
-    model::memory::pool::{CanisterPool, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus},
+    model::memory::pool::{
+        CanisterPool, CanisterPoolData, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus,
+    },
     ops::{
         adapter::pool::{canister_pool_entry_to_view, canister_pool_to_view},
         config::ConfigOps,
@@ -20,6 +23,7 @@ use crate::{
 /// - mutate existing entry state (without reordering)
 /// - export and basic lookups
 ///
+
 pub struct PoolOps;
 
 impl PoolOps {
@@ -34,6 +38,7 @@ impl PoolOps {
         parent: Option<Principal>,
         module_hash: Option<Vec<u8>>,
     ) {
+        let created_at = now_secs();
         CanisterPool::register(
             pid,
             cycles,
@@ -41,6 +46,7 @@ impl PoolOps {
             role,
             parent,
             module_hash,
+            created_at,
         );
     }
 
@@ -75,6 +81,13 @@ impl PoolOps {
     #[must_use]
     pub fn get_view(pid: Principal) -> Option<CanisterPoolEntryView> {
         CanisterPool::get(pid).map(|entry| canister_pool_entry_to_view(&entry))
+    }
+
+    // ------- Export ------------------------
+
+    #[must_use]
+    pub fn export() -> CanisterPoolData {
+        CanisterPool::export()
     }
 
     #[must_use]
@@ -132,7 +145,8 @@ impl PoolOps {
 
         if !updated {
             // For new entries, we don’t know parent/module_hash here (same as before).
-            CanisterPool::register(pid, cycles, status, role, None, None);
+            let created_at = now_secs();
+            CanisterPool::register(pid, cycles, status, role, None, None, created_at);
         }
     }
 }
@@ -154,14 +168,13 @@ impl PoolOps {
 ///
 /// Policy decisions about *who* should control pool canisters
 /// are assumed to be encoded in configuration.
-#[must_use]
-pub fn pool_controllers() -> Vec<Principal> {
-    let mut controllers = ConfigOps::controllers();
+pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
+    let mut controllers = ConfigOps::controllers()?;
 
     let root = canister_self();
     if !controllers.contains(&root) {
         controllers.push(root);
     }
 
-    controllers
+    Ok(controllers)
 }

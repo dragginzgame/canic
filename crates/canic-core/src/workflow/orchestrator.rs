@@ -245,7 +245,7 @@ impl CanisterLifecycleOrchestrator {
         assert_immediate_parent(pid, parent_pid)?;
         assert_not_in_pool(pid)?;
 
-        let payload = build_nonroot_init_payload(&entry.role, parent_pid);
+        let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
         install_code_with_extra_arg(
             CanisterInstallMode::Reinstall,
             pid,
@@ -294,7 +294,7 @@ impl CanisterLifecycleOrchestrator {
             return Err(err);
         }
 
-        let payload = build_nonroot_init_payload(&role, parent);
+        let payload = build_nonroot_init_payload(&role, parent)?;
         if let Err(err) = install_code_with_extra_arg(
             CanisterInstallMode::Install,
             pid,
@@ -375,7 +375,7 @@ async fn cascade_all(
     if let Some(role) = role_opt {
         // Ensure newly created/adopted canisters inherit the current app state.
         let snapshot = rebuild_directories_from_registry(Some(role))
-            .await
+            .await?
             .with_app_state()
             .build();
         root_cascade_state(&snapshot).await?;
