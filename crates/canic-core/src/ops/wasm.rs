@@ -39,4 +39,12 @@ impl WasmOps {
             );
         }
     }
+
+    /// Import a static slice of (role, wasm bytes) without logging.
+    pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
+        for (role, bytes) in wasms {
+            let wasm = WasmModule::new(bytes);
+            WasmRegistry::insert(role, wasm);
+        }
+    }
 }

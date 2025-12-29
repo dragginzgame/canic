@@ -111,6 +111,9 @@ fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView 
 /// Bootstraps the root canister runtime and environment.
 pub fn root_init(identity: SubnetIdentity) {
     // --- Phase 1: Init base systems ---
+    init_eager_tls();
+    init_memory_or_trap("root_init");
+    crate::log::set_ready();
 
     // log - clear some space
     println!("");
@@ -122,10 +125,6 @@ pub fn root_init(identity: SubnetIdentity) {
         "🔧 --------------------- 'canic v{VERSION} -----------------------",
     );
     crate::log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
-
-    // init
-    init_eager_tls();
-    init_memory_or_trap("root_init");
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
@@ -159,9 +158,10 @@ pub fn root_init(identity: SubnetIdentity) {
 /// root_post_upgrade
 pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
-    crate::log!(Topic::Init, Info, "🏁 post_upgrade: root");
     init_eager_tls();
     init_memory_or_trap("root_post_upgrade");
+    crate::log::set_ready();
+    crate::log!(Topic::Init, Info, "🏁 post_upgrade: root");
 
     // --- Phase 2: Env registration ---
 
@@ -172,9 +172,10 @@ pub fn root_post_upgrade() {
 /// nonroot_init
 pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
-    crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
     init_eager_tls();
     init_memory_or_trap("nonroot_init");
+    crate::log::set_ready();
+    crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
 
     // --- Phase 2: Payload registration ---
     let env = ensure_nonroot_env(canister_role, payload.env);
@@ -193,9 +194,10 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
 /// nonroot_post_upgrade
 pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
-    crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_role);
     init_eager_tls();
     init_memory_or_trap("nonroot_post_upgrade");
+    crate::log::set_ready();
+    crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_role);
 
     // --- Phase 2: Env registration ---
 

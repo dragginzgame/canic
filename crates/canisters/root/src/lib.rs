@@ -25,7 +25,7 @@ canic::start_root!();
 
 canic::eager_init!({
     // Populate the in-memory WASM registry for provisioning before bootstrap.
-    WasmOps::import_static(WASMS);
+    WasmOps::import_static_quiet(WASMS);
 });
 
 async fn canic_setup() {}
