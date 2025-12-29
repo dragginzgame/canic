@@ -1,6 +1,7 @@
 //! Randomness seeding scheduler.
 
 use crate::{
+    Error,
     cdk::timers::TimerId,
     config::schema::{RandomnessConfig, RandomnessSource},
     log::Topic,
@@ -24,7 +25,13 @@ thread_local! {
 /// - Called during canister initialization / startup
 /// - Authority is enforced by the caller if required
 pub fn start() {
-    let cfg = randomness_config();
+    let cfg = match randomness_config() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            crate::log!(Topic::Init, Warn, "randomness config unavailable: {err}");
+            return;
+        }
+    };
     if !cfg.enabled {
         crate::log!(Topic::Init, Info, "randomness seeding disabled by config");
         return;
@@ -70,8 +77,8 @@ async fn seed_once(source: RandomnessSource) {
     }
 }
 
-fn randomness_config() -> RandomnessConfig {
-    ConfigOps::current_canister().randomness
+fn randomness_config() -> Result<RandomnessConfig, Error> {
+    Ok(ConfigOps::current_canister()?.randomness)
 }
 
 fn seed_from_time() {

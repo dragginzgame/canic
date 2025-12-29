@@ -31,6 +31,9 @@ pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,
 
+    #[error("config has not been initialized")]
+    NotInitialized,
+
     /// TOML could not be parsed into the expected structure.
     #[error("toml error: {0}")]
     CannotParseToml(String),
@@ -47,21 +50,20 @@ pub enum ConfigError {
 pub struct Config {}
 
 impl Config {
-    #[must_use]
-    pub fn get() -> Arc<ConfigModel> {
+    pub fn get() -> Result<Arc<ConfigModel>, Error> {
         CONFIG.with(|cfg| {
             if let Some(config) = cfg.borrow().as_ref() {
-                return config.clone();
+                return Ok(config.clone());
             }
 
             #[cfg(test)]
             {
-                Self::init_for_tests()
+                Ok(Self::init_for_tests())
             }
 
             #[cfg(not(test))]
             {
-                panic!("⚠️ Config must be initialized before use");
+                Err(ConfigError::NotInitialized.into())
             }
         })
     }
@@ -89,7 +91,7 @@ impl Config {
 
     /// Return the current config as a TOML string.
     pub fn to_toml() -> Result<String, Error> {
-        let cfg = Self::get();
+        let cfg = Self::get()?;
 
         toml::to_string_pretty(&*cfg)
             .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())

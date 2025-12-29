@@ -1,6 +1,7 @@
 use crate::{
     Error, ThisError,
     cdk::types::Principal,
+    cdk::utils::time::now_secs,
     config::schema::CanisterCardinality,
     dto::{
         registry::SubnetRegistryView,
@@ -80,7 +81,7 @@ impl SubnetRegistryOps {
             return Err(SubnetRegistryOpsError::AlreadyRegistered(pid).into());
         }
 
-        if role_requires_singleton(role)
+        if role_requires_singleton(role)?
             && let Some((existing_pid, _)) = SubnetRegistry::find_first_by_role(role)
         {
             return Err(SubnetRegistryOpsError::RoleAlreadyRegistered {
@@ -90,7 +91,8 @@ impl SubnetRegistryOps {
             .into());
         }
 
-        SubnetRegistry::register(pid, role, parent_pid, module_hash);
+        let created_at = now_secs();
+        SubnetRegistry::register(pid, role, parent_pid, module_hash, created_at);
         Ok(())
     }
 
@@ -99,7 +101,8 @@ impl SubnetRegistryOps {
     }
 
     pub(crate) fn register_root(pid: Principal) {
-        SubnetRegistry::register_root(pid);
+        let created_at = now_secs();
+        SubnetRegistry::register_root(pid, created_at);
     }
 
     pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
@@ -238,7 +241,7 @@ impl SubnetRegistryOps {
 // Helpers
 // -------------------------------------------------------------------------
 
-fn role_requires_singleton(role: &CanisterRole) -> bool {
-    let cfg = ConfigOps::current_subnet_canister(role);
-    cfg.cardinality == CanisterCardinality::Single
+fn role_requires_singleton(role: &CanisterRole) -> Result<bool, Error> {
+    let cfg = ConfigOps::current_subnet_canister(role)?;
+    Ok(cfg.cardinality == CanisterCardinality::Single)
 }

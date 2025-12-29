@@ -5,9 +5,8 @@ use crate::{
     cdk::{types::Principal, utils::time::now_secs},
     dto::placement::ShardingRegistryView,
     ids::CanisterRole,
-    model::memory::sharding::{ShardKey, ShardingRegistry},
-    ops::adapter::placement::shard_entry_to_view,
-    ops::storage::StorageOpsError,
+    model::memory::sharding::{ShardKey, ShardingRegistry, ShardingRegistryData},
+    ops::{adapter::placement::shard_entry_to_view, storage::StorageOpsError},
 };
 
 ///
@@ -94,12 +93,20 @@ impl ShardingRegistryOps {
 
     /// Export all shard entries as a public view.
     #[must_use]
+    pub fn export() -> ShardingRegistryData {
+        ShardingRegistry::export()
+    }
+
+    /// Export all shard entries as a public view.
+    #[must_use]
     pub fn export_view() -> ShardingRegistryView {
         let data = ShardingRegistry::export();
-
-        data.into_iter()
+        let view = data
+            .into_iter()
             .map(|(pid, entry)| (pid, shard_entry_to_view(&entry)))
-            .collect()
+            .collect();
+
+        ShardingRegistryView(view)
     }
 
     /// Returns the shard assigned to the given tenant (if any).
@@ -220,6 +227,10 @@ impl ShardingRegistryOps {
         ShardingRegistry::clear();
     }
 }
+
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

@@ -286,6 +286,7 @@ mod validate {
         let syn::Type::Path(ty) = &**ty else {
             return false;
         };
+
         ty.path
             .segments
             .last()

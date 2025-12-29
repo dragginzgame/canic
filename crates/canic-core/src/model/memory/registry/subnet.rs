@@ -12,10 +12,7 @@
 //!   callers are responsible for maintaining those invariants.
 
 use crate::{
-    cdk::{
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-        utils::time::now_secs,
-    },
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, id::registry::SUBNET_REGISTRY_ID},
@@ -101,24 +98,25 @@ impl SubnetRegistry {
         role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
+        created_at: u64,
     ) {
         let entry = CanisterEntry {
             role: role.clone(),
             parent_pid: Some(parent_pid),
             module_hash: Some(module_hash),
-            created_at: now_secs(),
+            created_at,
         };
 
         Self::insert(pid, entry);
     }
 
     /// Register the root canister itself (no parent, no module hash).
-    pub(crate) fn register_root(pid: Principal) {
+    pub(crate) fn register_root(pid: Principal, created_at: u64) {
         let entry = CanisterEntry {
             role: CanisterRole::ROOT,
             parent_pid: None,
             module_hash: None,
-            created_at: now_secs(),
+            created_at,
         };
 
         Self::insert(pid, entry);
@@ -262,7 +260,7 @@ impl SubnetRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::CanisterRole;
+    use crate::{cdk::utils::time::now_secs, ids::CanisterRole};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -277,21 +275,21 @@ mod tests {
         SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
 
         // root
-        SubnetRegistry::register_root(p(1));
+        SubnetRegistry::register_root(p(1), 1);
 
         // children of root
-        SubnetRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![]);
-        SubnetRegistry::register(p(3), &CanisterRole::new("beta"), p(1), vec![]);
+        SubnetRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![], 2);
+        SubnetRegistry::register(p(3), &CanisterRole::new("beta"), p(1), vec![], 3);
 
         // grandchildren under alpha
-        SubnetRegistry::register(p(4), &CanisterRole::new("alpha-a"), p(2), vec![]);
-        SubnetRegistry::register(p(5), &CanisterRole::new("alpha-b"), p(2), vec![]);
+        SubnetRegistry::register(p(4), &CanisterRole::new("alpha-a"), p(2), vec![], 4);
+        SubnetRegistry::register(p(5), &CanisterRole::new("alpha-b"), p(2), vec![], 5);
 
         // great-grandchild under alpha-b
-        SubnetRegistry::register(p(6), &CanisterRole::new("alpha-b-i"), p(5), vec![]);
+        SubnetRegistry::register(p(6), &CanisterRole::new("alpha-b-i"), p(5), vec![], 6);
 
         // child under beta
-        SubnetRegistry::register(p(7), &CanisterRole::new("beta-a"), p(3), vec![]);
+        SubnetRegistry::register(p(7), &CanisterRole::new("beta-a"), p(3), vec![], 7);
     }
 
     #[test]

@@ -13,7 +13,10 @@
 
 use crate::{
     Error, ThisError,
-    cdk::{api::certified_data_set, types::Principal},
+    cdk::{
+        api::{certified_data_set, in_replicated_execution},
+        types::Principal,
+    },
     ops::ic::IcOpsError,
 };
 use ic_canister_sig_creation::{
@@ -56,8 +59,11 @@ impl From<SignatureOpsError> for Error {
 ///
 /// - `seed` should uniquely identify the logical key context.
 /// - `message` is the data being signed.
+/// - must be called from an update context
 ///
-pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) {
+pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
+    ensure_update_context()?;
+
     let sig_inputs = CanisterSigInputs {
         domain,
         seed,
@@ -72,6 +78,8 @@ pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) {
     SIGNATURES.with_borrow(|sigs| {
         certified_data_set(hash_with_domain(LABEL_SIG, &sigs.root_hash()));
     });
+
+    Ok(())
 }
 
 ///
@@ -96,10 +104,10 @@ pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
 /// High-level convenience helper that combines [`prepare`] and [`get`]
 /// in one call. Suitable for simple use-cases where you don’t split update/query.
 ///
-#[must_use]
-pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
-    prepare(domain, seed, message);
-    get(domain, seed, message)
+pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    prepare(domain, seed, message)?;
+
+    Ok(get(domain, seed, message))
 }
 
 ///
@@ -153,6 +161,16 @@ fn domain_prefixed_message(domain: &[u8], message: &[u8]) -> Vec<u8> {
     buf.extend_from_slice(domain);
     buf.extend_from_slice(message);
     buf
+}
+
+fn ensure_update_context() -> Result<(), Error> {
+    if in_replicated_execution() {
+        return Ok(());
+    }
+
+    Err(Error::custom(
+        "signature preparation must be called from an update context",
+    ))
 }
 
 ///

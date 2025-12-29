@@ -17,15 +17,14 @@ use crate::{
 };
 
 /// Bootstrap workflow for the root canister during init.
-pub async fn root_init() {
+pub async fn root_init() -> Result<(), Error> {
     // Example sequence — adjust as needed
     root_set_subnet_id().await;
     root_import_pool_from_config().await;
 
-    if let Err(e) = root_create_canisters().await {
-        // Root bootstrap failures are fatal
-        panic!("root bootstrap failed: {e}");
-    }
+    root_create_canisters().await?;
+
+    Ok(())
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
@@ -51,6 +50,7 @@ pub async fn root_set_subnet_id() {
             EnvOps::set_subnet_pid(subnet_pid);
             return;
         }
+
         Ok(None) => {
             if build_network() == Some(Network::Ic) {
                 let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
@@ -58,6 +58,7 @@ pub async fn root_set_subnet_id() {
                 trap(msg);
             }
         }
+
         Err(err) => {
             if build_network() == Some(Network::Ic) {
                 let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
@@ -83,7 +84,17 @@ pub async fn root_set_subnet_id() {
 ///
 /// Import failures are summarized so bootstrap can continue.
 pub async fn root_import_pool_from_config() {
-    let subnet_cfg = ConfigOps::current_subnet();
+    let subnet_cfg = match ConfigOps::current_subnet() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import skipped: missing subnet config ({err})"
+            );
+            return;
+        }
+    };
     let import_list = match build_network() {
         Some(Network::Local) => subnet_cfg.pool.import.local,
         Some(Network::Ic) => subnet_cfg.pool.import.ic,
@@ -140,7 +151,7 @@ pub async fn root_import_pool_from_config() {
 /// Safe to re-run: skips roles that already exist in the subnet registry.
 pub async fn root_create_canisters() -> Result<(), Error> {
     // Load the effective configuration for the current subnet.
-    let subnet_cfg = ConfigOps::current_subnet();
+    let subnet_cfg = ConfigOps::current_subnet()?;
 
     // Creation pass: ensure all auto-create canister roles exist.
     for role in &subnet_cfg.auto_create {

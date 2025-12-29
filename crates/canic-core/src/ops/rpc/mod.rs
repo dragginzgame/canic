@@ -41,7 +41,7 @@ impl From<RpcOpsError> for Error {
 
 // execute_rpc
 async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
-    let root_pid = EnvOps::root_pid();
+    let root_pid = EnvOps::root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())

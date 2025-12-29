@@ -106,7 +106,7 @@ impl ScalingPolicy {
     }
 
     fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-        let Some(scaling) = ConfigOps::current_scaling_config() else {
+        let Some(scaling) = ConfigOps::current_scaling_config()? else {
             return Err(ScalingPolicyError::ScalingDisabled.into());
         };
 

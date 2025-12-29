@@ -13,8 +13,8 @@ use crate::{
 pub struct ScalingRegistryOps;
 
 impl ScalingRegistryOps {
-    pub(crate) fn insert(pid: Principal, entry: WorkerEntry) {
-        ScalingRegistry::insert(pid, entry);
+    pub(crate) fn upsert(pid: Principal, entry: WorkerEntry) {
+        ScalingRegistry::upsert(pid, entry);
     }
 
     #[must_use]
@@ -27,8 +27,11 @@ impl ScalingRegistryOps {
     pub fn export_view() -> ScalingRegistryView {
         let data = ScalingRegistry::export();
 
-        data.into_iter()
+        let view = data
+            .into_iter()
             .map(|(pid, entry)| (pid, worker_entry_to_view(&entry)))
-            .collect()
+            .collect();
+
+        ScalingRegistryView(view)
     }
 }

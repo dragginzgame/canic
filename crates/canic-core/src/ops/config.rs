@@ -54,7 +54,7 @@ impl ConfigOps {
 
     /// Fetch a subnet configuration by role.
     pub fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
-        let cfg = Config::get();
+        let cfg = Config::get()?;
 
         cfg.get_subnet(role)
             .ok_or_else(|| ConfigOpsError::SubnetNotFound(role.to_string()).into())
@@ -77,67 +77,42 @@ impl ConfigOps {
     // Current-context / infallible helpers
     // ---------------------------------------------------------------------
 
-    #[must_use]
-    pub fn get() -> Arc<ConfigModel> {
+    pub fn get() -> Result<Arc<ConfigModel>, Error> {
         Config::get()
     }
 
-    #[must_use]
-    pub fn controllers() -> Vec<Principal> {
-        Config::get().controllers.clone()
+    pub fn controllers() -> Result<Vec<Principal>, Error> {
+        Ok(Config::get()?.controllers.clone())
     }
 
-    #[must_use]
-    pub fn log_config() -> LogConfig {
-        Config::get().log.clone()
+    pub fn log_config() -> Result<LogConfig, Error> {
+        Ok(Config::get()?.log.clone())
     }
 
     /// Fetch the configuration record for the *current* subnet.
-    ///
-    /// # Panics
-    /// - If the environment has not been initialized
-    /// - If the subnet is missing from the configuration
-    #[must_use]
-    pub fn current_subnet() -> SubnetConfig {
-        let subnet_role = EnvOps::subnet_role();
+    pub fn current_subnet() -> Result<SubnetConfig, Error> {
+        let subnet_role = EnvOps::subnet_role()?;
 
-        Self::try_get_subnet(&subnet_role).expect("current subnet must exist in configuration")
+        Self::try_get_subnet(&subnet_role)
     }
 
     /// Fetch the configuration record for the *current* canister.
-    ///
-    /// # Panics
-    /// - If the environment has not been initialized
-    /// - If the canister is missing from the configuration
-    #[must_use]
-    pub fn current_canister() -> CanisterConfig {
-        let subnet_role = EnvOps::subnet_role();
-        let canister_role = EnvOps::canister_role();
+    pub fn current_canister() -> Result<CanisterConfig, Error> {
+        let subnet_role = EnvOps::subnet_role()?;
+        let canister_role = EnvOps::canister_role()?;
 
         Self::try_get_canister(&subnet_role, &canister_role)
-            .expect("current canister must exist in configuration")
     }
 
     /// Fetch the scaling configuration for the *current* canister.
-    ///
-    /// # Panics
-    /// - If the environment has not been initialized
-    /// - If the canister is missing from the configuration
-    #[must_use]
-    pub fn current_scaling_config() -> Option<ScalingConfig> {
-        Self::current_canister().scaling
+    pub fn current_scaling_config() -> Result<Option<ScalingConfig>, Error> {
+        Ok(Self::current_canister()?.scaling)
     }
 
     /// Fetch the configuration for a specific canister in the *current* subnet.
-    ///
-    /// # Panics
-    /// - If the environment has not been initialized
-    /// - If the canister is missing from the configuration
-    #[must_use]
-    pub fn current_subnet_canister(canister_role: &CanisterRole) -> CanisterConfig {
-        let subnet_role = EnvOps::subnet_role();
+    pub fn current_subnet_canister(canister_role: &CanisterRole) -> Result<CanisterConfig, Error> {
+        let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)
-            .expect("canister must exist in current subnet configuration")
     }
 }

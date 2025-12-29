@@ -55,16 +55,27 @@ impl Runtime {
     }
 }
 
+//
+// ─────────────────────────────────────────────────────────────
+// Fatal helpers (lifecycle boundary)
+// ─────────────────────────────────────────────────────────────
+//
+
+fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
+    let msg = format!("canic init failed during {phase}: {err}");
+    println!("[canic] FATAL: {msg}");
+    trap(&msg);
+}
+
 fn init_memory_or_trap(phase: &str) {
     if let Err(err) = MemoryRegistryOps::init_memory() {
-        println!("[canic] FATAL: memory init failed during {phase}: {err}");
-        let msg = format!("canic init failed during {phase}: memory init failed: {err}");
-        trap(&msg);
+        fatal(phase, format!("memory init failed: {err}"));
     }
 }
 
 fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView {
     let mut missing = Vec::new();
+
     if env.prime_root_pid.is_none() {
         missing.push("prime_root_pid");
     }
@@ -88,12 +99,14 @@ fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView 
         return env;
     }
 
-    assert!(
-        build_network() != Some(Network::Ic),
-        "nonroot init missing env fields on ic: {}",
-        missing.join(", ")
-    );
+    if build_network() == Some(Network::Ic) {
+        fatal(
+            "nonroot_init",
+            format!("missing env fields on ic: {}", missing.join(", ")),
+        );
+    }
 
+    // local / test fallback defaults
     let root_pid = Principal::from_slice(&[0xBB; 29]);
     let subnet_pid = Principal::from_slice(&[0xAA; 29]);
 
@@ -107,22 +120,25 @@ fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView 
     env
 }
 
+///
 /// root_init
 /// Bootstraps the root canister runtime and environment.
+///
+
 pub fn root_init(identity: SubnetIdentity) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
     init_memory_or_trap("root_init");
     crate::log::set_ready();
 
-    // log - clear some space
+    // log header
     println!("");
     println!("");
     println!("");
     crate::log!(
         Topic::Init,
         Info,
-        "🔧 --------------------- 'canic v{VERSION} -----------------------",
+        "🔧 --------------------- canic v{VERSION} -----------------------",
     );
     crate::log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
 
@@ -155,7 +171,10 @@ pub fn root_init(identity: SubnetIdentity) {
     Runtime::start_all_root();
 }
 
+///
 /// root_post_upgrade
+///
+
 pub fn root_post_upgrade() {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
@@ -163,13 +182,14 @@ pub fn root_post_upgrade() {
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade: root");
 
-    // --- Phase 2: Env registration ---
-
     // --- Phase 3: Service startup ---
     Runtime::start_all_root();
 }
 
+///
 /// nonroot_init
+///
+
 pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
@@ -180,10 +200,9 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 2: Payload registration ---
     let env = ensure_nonroot_env(canister_role, payload.env);
     if let Err(err) = EnvOps::import(env) {
-        println!("[canic] FATAL: env import failed during nonroot_init: {err}");
-        let msg = format!("canic init failed during nonroot_init: env import failed: {err}");
-        trap(&msg);
+        fatal("nonroot_init", format!("env import failed: {err}"));
     }
+
     AppDirectoryOps::import(app_directory_from_view(payload.app_directory));
     SubnetDirectoryOps::import(subnet_directory_from_view(payload.subnet_directory));
 
@@ -191,15 +210,16 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
     Runtime::start_all();
 }
 
+///
 /// nonroot_post_upgrade
+///
+
 pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
     init_memory_or_trap("nonroot_post_upgrade");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_role);
-
-    // --- Phase 2: Env registration ---
 
     // --- Phase 3: Service startup ---
     Runtime::start_all();

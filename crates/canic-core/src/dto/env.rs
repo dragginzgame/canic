@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// EnvView
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EnvView {
     // app
     pub prime_root_pid: Option<Principal>,

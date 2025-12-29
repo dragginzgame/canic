@@ -28,7 +28,10 @@ pub fn canister_pool_entry_to_view(entry: &CanisterPoolEntry) -> CanisterPoolEnt
 
 #[must_use]
 pub fn canister_pool_to_view(data: CanisterPoolData) -> CanisterPoolView {
-    data.into_iter()
+    let view = data
+        .into_iter()
         .map(|(pid, entry)| (pid, canister_pool_entry_to_view(&entry)))
-        .collect()
+        .collect();
+
+    CanisterPoolView(view)
 }

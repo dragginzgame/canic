@@ -26,6 +26,9 @@ pub fn root_init(identity: SubnetIdentity) {
 
     // Spawn async bootstrap workflow
     TimerOps::set(Duration::ZERO, "canic:bootstrap:root_init", async {
-        workflow::bootstrap::root_init().await;
+        if let Err(err) = workflow::bootstrap::root_init().await {
+            let msg = format!("root bootstrap failed: {err}");
+            crate::cdk::api::trap(&msg);
+        }
     });
 }
