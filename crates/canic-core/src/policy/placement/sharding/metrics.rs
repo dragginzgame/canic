@@ -16,7 +16,7 @@ pub struct PoolMetrics {
 /// Compute pool-level metrics from the registry.
 #[must_use]
 pub fn pool_metrics(pool: &str) -> PoolMetrics {
-    let view = ShardingRegistryOps::export();
+    let view = ShardingRegistryOps::export_view();
     let mut active = 0;
     let mut cap = 0;
     let mut used = 0;

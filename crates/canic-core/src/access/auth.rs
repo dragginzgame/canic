@@ -283,9 +283,10 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetRegistryOps::get(caller) {
-            Some(_) => Ok(()),
-            None => Err(AuthError::NotRegisteredToSubnet(caller))?,
+        if SubnetRegistryOps::is_registered(caller) {
+            Ok(())
+        } else {
+            Err(AuthError::NotRegisteredToSubnet(caller))?
         }
     })
 }

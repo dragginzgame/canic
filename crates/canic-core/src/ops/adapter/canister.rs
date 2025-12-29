@@ -26,7 +26,6 @@ pub fn canister_summary_to_view(s: &CanisterSummary) -> CanisterSummaryView {
 }
 
 #[must_use]
-#[must_use]
 pub fn canister_summary_to_topology_node(
     pid: Principal,
     summary: &CanisterSummary,

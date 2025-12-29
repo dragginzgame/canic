@@ -59,7 +59,7 @@ impl ScalingPolicy {
     pub fn plan_create_worker(pool: &str, created_at_secs: u64) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
-        let worker_count = ScalingRegistryOps::find_by_pool(pool).len() as u32;
+        let worker_count = ScalingRegistryOps::count_by_pool(pool);
 
         // Max bound check
         if policy.max_workers > 0 && worker_count >= policy.max_workers {

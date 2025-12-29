@@ -18,8 +18,9 @@ impl ScalingRegistryOps {
     }
 
     #[must_use]
-    pub(crate) fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
-        ScalingRegistry::find_by_pool(pool)
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn count_by_pool(pool: &str) -> u32 {
+        ScalingRegistry::find_by_pool(pool).len() as u32
     }
 
     #[must_use]

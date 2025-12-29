@@ -110,6 +110,11 @@ impl SubnetRegistryOps {
     }
 
     #[must_use]
+    pub(crate) fn is_registered(pid: Principal) -> bool {
+        SubnetRegistry::get(pid).is_some()
+    }
+
+    #[must_use]
     pub fn get_parent(pid: Principal) -> Option<Principal> {
         SubnetRegistry::get_parent(pid)
     }
