@@ -11,13 +11,13 @@ use crate::{
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
             UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
         },
+        types::Cycles,
         utils::wasm::get_wasm_hash,
     },
     log,
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
     ops::ic::call::Call,
-    types::Cycles,
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 

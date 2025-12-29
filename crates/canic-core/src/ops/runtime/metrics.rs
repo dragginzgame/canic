@@ -7,6 +7,7 @@ pub use crate::dto::metrics::{
     timer::TimerMetricEntry,
 };
 use crate::{
+    api::Call,
     dto::page::{Page, PageRequest},
     model::metrics::{
         access::AccessMetrics as ModelAccessMetrics,
@@ -37,33 +38,33 @@ pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 pub struct AccessMetrics;
 
 impl AccessMetrics {
-    pub fn increment(endpoint: &str, kind: AccessMetricKind) {
+    pub fn increment(call: Call, kind: AccessMetricKind) {
         let model_kind = access_metric_kind_from_view(kind);
-        ModelAccessMetrics::increment(endpoint, model_kind);
+        ModelAccessMetrics::increment(call.endpoint.name, model_kind);
     }
 }
 
 pub struct EndpointAttemptMetrics;
 
 impl EndpointAttemptMetrics {
-    pub fn increment_attempted(endpoint: &'static str) {
-        ModelEndpointAttemptMetrics::increment_attempted(endpoint);
+    pub fn increment_attempted(call: Call) {
+        ModelEndpointAttemptMetrics::increment_attempted(call.endpoint.name);
     }
 
-    pub fn increment_completed(endpoint: &'static str) {
-        ModelEndpointAttemptMetrics::increment_completed(endpoint);
+    pub fn increment_completed(call: Call) {
+        ModelEndpointAttemptMetrics::increment_completed(call.endpoint.name);
     }
 }
 
 pub struct EndpointResultMetrics;
 
 impl EndpointResultMetrics {
-    pub fn increment_ok(endpoint: &'static str) {
-        ModelEndpointResultMetrics::increment_ok(endpoint);
+    pub fn increment_ok(call: Call) {
+        ModelEndpointResultMetrics::increment_ok(call.endpoint.name);
     }
 
-    pub fn increment_err(endpoint: &'static str) {
-        ModelEndpointResultMetrics::increment_err(endpoint);
+    pub fn increment_err(call: Call) {
+        ModelEndpointResultMetrics::increment_err(call.endpoint.name);
     }
 }
 

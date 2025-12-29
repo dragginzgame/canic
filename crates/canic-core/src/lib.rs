@@ -21,10 +21,10 @@
 // -----------------------------------------------------------------------------
 
 pub mod access;
+pub mod api;
 pub mod config;
 pub mod dispatch;
 pub mod dto;
-pub mod env;
 pub mod ids;
 pub mod lifecycle;
 pub mod log;
@@ -33,13 +33,12 @@ pub(crate) mod model;
 pub mod ops;
 pub mod perf;
 pub mod policy;
-pub mod spec;
+pub mod types;
 pub mod workflow;
 
 pub use ::canic_cdk as cdk;
 pub use ::canic_memory as memory;
 pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
-pub use ::canic_types as types;
 pub use ::canic_utils as utils;
 
 /// Internal re-exports required for macro expansion.

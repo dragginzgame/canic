@@ -4,7 +4,10 @@ pub mod scheduler;
 
 use crate::{
     Error,
-    cdk::mgmt::{CanisterSettings, UpdateSettingsArgs},
+    cdk::{
+        mgmt::{CanisterSettings, UpdateSettingsArgs},
+        types::{Cycles, TC},
+    },
     dto::pool::{CanisterPoolStatusView, PoolImportSummary, PoolStatusCounts},
     log,
     log::Topic,
@@ -20,7 +23,6 @@ use crate::{
         },
     },
     policy::{self, pool::PoolPolicyError},
-    types::{Cycles, TC},
 };
 use candid::Principal;
 

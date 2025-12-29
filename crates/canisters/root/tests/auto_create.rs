@@ -75,7 +75,7 @@ fn root_auto_creates_expected_canisters() {
         .query_call(
             root_id,
             Principal::anonymous(),
-            "canic_SUBNET_REGISTRY",
+            "canic_subnet_registry",
             encode_one(()).unwrap(),
         )
         .expect("query registry");

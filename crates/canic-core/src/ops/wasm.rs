@@ -1,5 +1,5 @@
 use crate::{
-    Error, ids::CanisterRole, log, log::Topic, model::wasm::WasmRegistry, types::WasmModule,
+    Error, cdk::types::WasmModule, ids::CanisterRole, log, log::Topic, model::wasm::WasmRegistry,
 };
 
 ///

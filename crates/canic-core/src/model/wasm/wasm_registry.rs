@@ -1,4 +1,4 @@
-use crate::{Error, ids::CanisterRole, model::ModelError, types::WasmModule};
+use crate::{Error, cdk::types::WasmModule, ids::CanisterRole, model::ModelError};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 

@@ -28,7 +28,6 @@ macro_rules! sns_table {
         /// SnsType
         ///
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[remain::sorted]
         pub enum SnsType {
             $($name,)+
         }

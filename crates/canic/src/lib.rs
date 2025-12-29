@@ -23,7 +23,6 @@ pub use canic_memory::{
 pub use canic_cdk as cdk;
 pub use canic_core as core;
 pub use canic_macros as macros;
-pub use canic_types as types;
 pub use canic_utils as utils;
 
 // -----------------------------------------------------------------------------

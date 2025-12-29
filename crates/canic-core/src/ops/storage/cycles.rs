@@ -1,7 +1,7 @@
 use crate::{
+    cdk::types::Cycles,
     dto::page::{Page, PageRequest},
     model::memory::cycles::CycleTracker,
-    types::Cycles,
 };
 
 ///

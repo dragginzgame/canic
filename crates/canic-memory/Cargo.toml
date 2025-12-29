@@ -16,7 +16,6 @@ publish = true
 [dependencies]
 candid = { workspace = true }
 canic-cdk = { workspace = true }
-canic-types = { workspace = true }
 ctor = { workspace = true }
 serde = { workspace = true }
 serde_cbor = { workspace = true }

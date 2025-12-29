@@ -1,8 +1,10 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::{
+        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+        types::Cycles,
+    },
     eager_static,
     model::memory::id::cycles::CYCLE_TRACKER_ID,
-    types::Cycles,
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;

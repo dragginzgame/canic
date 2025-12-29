@@ -1,7 +1,7 @@
 use crate::{
+    cdk::types::{Cycles, TC},
     config::schema::{ConfigSchemaError, NAME_MAX_BYTES, Validate},
     ids::CanisterRole,
-    types::{Cycles, TC},
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};

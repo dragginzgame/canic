@@ -2,9 +2,11 @@
 
 use crate::{
     Error,
-    env::nns::EXCHANGE_RATE_CANISTER,
+    cdk::{
+        env::nns::EXCHANGE_RATE_CANISTER,
+        spec::ic::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
+    },
     ops::ic::call::Call,
-    spec::ic::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
 };
 
 /// Default cycles to attach to XRC calls.

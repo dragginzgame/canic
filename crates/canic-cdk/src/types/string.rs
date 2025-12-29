@@ -4,8 +4,8 @@
 //! tables where size caps matter.
 //!
 
+use crate::structures::{Storable, storable::Bound};
 use candid::CandidType;
-use canic_cdk::structures::{Storable, storable::Bound};
 use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, convert::TryFrom};

@@ -13,7 +13,7 @@
 //! - call ops or workflow
 //! - embed policy or orchestration logic
 
-use crate::{dto::prelude::*, types::Cycles};
+use crate::{cdk::types::Cycles, dto::prelude::*};
 
 ///
 /// CanisterPoolView

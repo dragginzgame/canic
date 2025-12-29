@@ -1,10 +1,12 @@
 use crate::{
     Error,
-    env::nns::NNS_REGISTRY_CANISTER,
+    cdk::{
+        env::nns::NNS_REGISTRY_CANISTER,
+        spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
+    },
     log,
     log::Topic,
     ops::ic::call::Call,
-    spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
 };
 use candid::Principal;
 

@@ -5,13 +5,12 @@ pub use registry::*;
 use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-        types::Principal,
+        types::{BoundedString64, BoundedString128, Principal},
     },
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-    types::{BoundedString64, BoundedString128},
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

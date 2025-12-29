@@ -28,8 +28,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
-            req: ::canic::core::spec::icrc::icrc21::ConsentMessageRequest,
-        ) -> ::canic::core::spec::icrc::icrc21::ConsentMessageResponse {
+            req: ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageRequest,
+        ) -> ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageResponse {
             $crate::ops::icrc::Icrc21Ops::consent_message(req)
         }
 
@@ -190,7 +190,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::types::Cycles)> {
+        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
             $crate::ops::storage::cycles::CycleTrackerOps::page(page)
         }
 
