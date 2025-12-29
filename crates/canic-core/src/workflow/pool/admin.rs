@@ -9,6 +9,7 @@ use crate::{
     },
 };
 
+///
 /// Entry point for pool admin commands.
 ///
 /// Responsibilities:
@@ -19,6 +20,7 @@ use crate::{
 /// - Authorization (handled in workflow / policy)
 /// - Scheduling
 /// - Pool mechanics
+///
 pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
     match cmd {
         PoolAdminCommand::CreateEmpty => {
@@ -37,16 +39,9 @@ pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Er
         }
 
         PoolAdminCommand::ImportQueued { pids } => {
-            let (added, requeued, skipped, total, summary) =
-                pool_import_queued_canisters(pids).await?;
+            let result = pool_import_queued_canisters(pids).await?;
 
-            Ok(PoolAdminResponse::QueuedImported {
-                added,
-                requeued,
-                skipped,
-                total,
-                summary,
-            })
+            Ok(PoolAdminResponse::QueuedImported { result })
         }
     }
 }

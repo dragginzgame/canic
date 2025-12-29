@@ -45,7 +45,7 @@ impl Runtime {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        OpsError::require_root().unwrap();
+        OpsError::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
 
         // start shared timers too
         Self::start_all();
@@ -121,14 +121,14 @@ fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvView) -> EnvView 
 }
 
 ///
-/// root_init
+/// init_root_canister
 /// Bootstraps the root canister runtime and environment.
 ///
 
-pub fn root_init(identity: SubnetIdentity) {
+pub fn init_root_canister(identity: SubnetIdentity) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("root_init");
+    init_memory_or_trap("init_root_canister");
     crate::log::set_ready();
 
     // log header
@@ -172,35 +172,37 @@ pub fn root_init(identity: SubnetIdentity) {
 }
 
 ///
-/// root_post_upgrade
+/// post_upgrade_root_canister
 ///
 
-pub fn root_post_upgrade() {
+pub fn post_upgrade_root_canister() {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("root_post_upgrade");
+    init_memory_or_trap("post_upgrade_root_canister");
     crate::log::set_ready();
-    crate::log!(Topic::Init, Info, "🏁 post_upgrade: root");
+    crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
+
+    // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
     Runtime::start_all_root();
 }
 
 ///
-/// nonroot_init
+/// init_nonroot_canister
 ///
 
-pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
+pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("nonroot_init");
+    init_memory_or_trap("init_nonroot_canister");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
 
     // --- Phase 2: Payload registration ---
     let env = ensure_nonroot_env(canister_role, payload.env);
     if let Err(err) = EnvOps::import(env) {
-        fatal("nonroot_init", format!("env import failed: {err}"));
+        fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 
     AppDirectoryOps::import(app_directory_from_view(payload.app_directory));
@@ -211,15 +213,22 @@ pub fn nonroot_init(canister_role: CanisterRole, payload: CanisterInitPayload) {
 }
 
 ///
-/// nonroot_post_upgrade
+/// post_upgrade_nonroot_canister
 ///
 
-pub fn nonroot_post_upgrade(canister_role: CanisterRole) {
+pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("nonroot_post_upgrade");
+    init_memory_or_trap("post_upgrade_nonroot_canister");
     crate::log::set_ready();
-    crate::log!(Topic::Init, Info, "🏁 post_upgrade: {}", canister_role);
+    crate::log!(
+        Topic::Init,
+        Info,
+        "🏁 post_upgrade_nonroot_canister: {}",
+        canister_role
+    );
+
+    // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
     Runtime::start_all();

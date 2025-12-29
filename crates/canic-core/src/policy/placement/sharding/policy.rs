@@ -18,8 +18,10 @@ use crate::{
     Error,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
-    dto::placement::ShardEntryView,
-    ops::{config::ConfigOps, storage::sharding::ShardingRegistryOps},
+    ops::{
+        config::ConfigOps,
+        storage::sharding::{ShardEntry, ShardingRegistryOps},
+    },
     policy::placement::sharding::{
         ShardingPolicyError,
         hrw::HrwSelector,
@@ -148,8 +150,8 @@ impl ShardingPolicy {
     ) -> Result<ShardingPlan, Error> {
         let pool_cfg = Self::get_pool_config(pool)?;
         let metrics = pool_metrics(pool);
-        let view = ShardingRegistryOps::export_view();
-        let slot_plan = plan_slot_backfill(pool, &view, pool_cfg.policy.max_shards);
+        let data = ShardingRegistryOps::export();
+        let slot_plan = plan_slot_backfill(pool, &data, pool_cfg.policy.max_shards);
 
         if let Some(pid) = ShardingRegistryOps::tenant_shard(pool, tenant)
             && exclude_pid != Some(pid)
@@ -163,7 +165,7 @@ impl ShardingPolicy {
         }
 
         // Prefer an existing shard with spare capacity.
-        let shards_with_capacity: Vec<_> = view
+        let shards_with_capacity: Vec<_> = data
             .iter()
             .filter(|(pid, entry)| {
                 entry.pool.as_ref() == pool
@@ -261,10 +263,10 @@ struct SlotBackfillPlan {
 
 fn plan_slot_backfill(
     pool: &str,
-    view: &[(Principal, ShardEntryView)],
+    view: &[(Principal, ShardEntry)],
     max_slots: u32,
 ) -> SlotBackfillPlan {
-    let mut entries: Vec<(Principal, ShardEntryView)> = view
+    let mut entries: Vec<(Principal, ShardEntry)> = view
         .iter()
         .filter(|(_, entry)| entry.pool.as_ref() == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))
@@ -315,13 +317,11 @@ fn plan_slot_backfill(
     SlotBackfillPlan { slots, occupied }
 }
 
-const UNASSIGNED_SLOT: u32 = u32::MAX;
-
-const fn entry_has_assigned_slot(entry: &ShardEntryView) -> bool {
-    entry.slot != UNASSIGNED_SLOT
+const fn entry_has_assigned_slot(entry: &ShardEntry) -> bool {
+    entry.slot != ShardEntry::UNASSIGNED_SLOT
 }
 
-const fn entry_has_capacity(entry: &ShardEntryView) -> bool {
+const fn entry_has_capacity(entry: &ShardEntry) -> bool {
     entry.count < entry.capacity
 }
 
