@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
-        snapshot::TopologyNodeView,
+        snapshot::{TopologyChildView, TopologyNodeView},
     },
     model::memory::{CanisterEntry, CanisterSummary},
 };
@@ -38,9 +38,23 @@ pub fn canister_summary_to_topology_node(
 }
 
 #[must_use]
-pub fn canister_summary_from_topology_node(node: &TopologyNodeView) -> CanisterSummary {
+pub fn canister_summary_to_topology_child(
+    pid: Principal,
+    summary: &CanisterSummary,
+) -> TopologyChildView {
+    TopologyChildView {
+        pid,
+        role: summary.role.clone(),
+    }
+}
+
+#[must_use]
+pub fn canister_summary_from_topology_child(
+    node: &TopologyChildView,
+    parent_pid: Principal,
+) -> CanisterSummary {
     CanisterSummary {
         role: node.role.clone(),
-        parent_pid: node.parent_pid,
+        parent_pid: Some(parent_pid),
     }
 }

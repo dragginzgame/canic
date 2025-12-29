@@ -125,7 +125,7 @@ impl TopologySnapshotBuilder {
         let mut children_map = HashMap::new();
 
         for parent in &parents {
-            let children = SubnetRegistryOps::children_view(parent.pid);
+            let children = SubnetRegistryOps::children_child_view(parent.pid);
             children_map.insert(parent.pid, children);
         }
 
