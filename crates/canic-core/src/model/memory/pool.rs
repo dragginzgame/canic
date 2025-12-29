@@ -12,11 +12,16 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
+//
+// Stable storage
+//
+
 eager_static! {
-    static CANISTER_POOL: RefCell<BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(
-            ic_memory!(CanisterPool, CANISTER_POOL_ID),
-        ));
+    static CANISTER_POOL: RefCell<
+        BTreeMap<Principal, CanisterPoolEntry, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(
+        BTreeMap::init(ic_memory!(CanisterPool, CANISTER_POOL_ID)),
+    );
 }
 
 ///
@@ -47,12 +52,23 @@ impl CanisterPoolStatus {
 }
 
 ///
-/// CanisterPoolEntry
+/// CanisterPoolHeader
+/// Immutable, ordering-relevant metadata.
+/// Set once at registration and must never change.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolEntry {
+pub struct CanisterPoolHeader {
     pub created_at: u64,
+}
+
+///
+/// CanisterPoolState
+/// Mutable lifecycle state.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolState {
     pub cycles: Cycles,
     #[serde(default)]
     pub status: CanisterPoolStatus,
@@ -64,6 +80,17 @@ pub struct CanisterPoolEntry {
     pub module_hash: Option<Vec<u8>>,
 }
 
+///
+/// CanisterPoolEntry
+/// Composite entry stored in stable memory.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolEntry {
+    pub header: CanisterPoolHeader,
+    pub state: CanisterPoolState,
+}
+
 impl_storable_unbounded!(CanisterPoolEntry);
 
 ///
@@ -73,7 +100,8 @@ impl_storable_unbounded!(CanisterPoolEntry);
 pub struct CanisterPool;
 
 impl CanisterPool {
-    /// Register a canister into the pool.
+    /// Register a new canister into the pool.
+    /// Sets ordering state (`created_at`) exactly once.
     pub fn register(
         pid: Principal,
         cycles: Cycles,
@@ -83,12 +111,16 @@ impl CanisterPool {
         module_hash: Option<Vec<u8>>,
     ) {
         let entry = CanisterPoolEntry {
-            created_at: now_secs(),
-            cycles,
-            status,
-            role,
-            parent,
-            module_hash,
+            header: CanisterPoolHeader {
+                created_at: now_secs(),
+            },
+            state: CanisterPoolState {
+                cycles,
+                status,
+                role,
+                parent,
+                module_hash,
+            },
         };
 
         CANISTER_POOL.with_borrow_mut(|map| {
@@ -96,40 +128,68 @@ impl CanisterPool {
         });
     }
 
+    //
+    // Updates (stable-structures friendly)
+    //
+
+    /// Transform the mutable state of an existing entry, preserving the immutable header.
+    ///
+    /// This avoids `get_mut()` (not available in stable-structures BTreeMap) and
+    /// makes ordering invariants structural: callers cannot change `created_at`.
+    pub(crate) fn update_state_with<F>(pid: Principal, f: F) -> bool
+    where
+        F: FnOnce(CanisterPoolState) -> CanisterPoolState,
+    {
+        CANISTER_POOL.with_borrow_mut(|map| {
+            let Some(old) = map.get(&pid) else {
+                return false;
+            };
+
+            let new_state = f(old.state);
+            let new_entry = CanisterPoolEntry {
+                header: old.header, // preserved
+                state: new_state,
+            };
+
+            map.insert(pid, new_entry);
+            true
+        })
+    }
+
+    //
+    // Queries
+    //
+
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<CanisterPoolEntry> {
         CANISTER_POOL.with_borrow(|map| map.get(&pid))
     }
 
     #[must_use]
-    pub(crate) fn update(pid: Principal, entry: CanisterPoolEntry) -> bool {
-        CANISTER_POOL.with_borrow_mut(|map| {
-            if map.contains_key(&pid) {
-                map.insert(pid, entry);
-                true
-            } else {
-                false
-            }
-        })
+    pub(crate) fn contains(pid: &Principal) -> bool {
+        CANISTER_POOL.with_borrow(|map| map.contains_key(pid))
     }
 
-    /// Pop the oldest ready canister from the pool.
+    #[must_use]
+    pub(crate) fn len() -> u64 {
+        CANISTER_POOL.with_borrow(|map| map.len())
+    }
+
+    // --- Removal --------------------------------------------------------
+
+    /// Pop the oldest READY canister from the pool.
+    /// Policy: FIFO among entries whose state is `Ready`.
     #[must_use]
     pub(crate) fn pop_ready() -> Option<(Principal, CanisterPoolEntry)> {
         CANISTER_POOL.with_borrow_mut(|map| {
-            let min_pid = map
+            let pid = map
                 .iter()
-                .filter(|entry| entry.value().status.is_ready())
-                .min_by_key(|entry| entry.value().created_at)
-                .map(|entry| *entry.key())?;
-            map.remove(&min_pid).map(|entry| (min_pid, entry))
-        })
-    }
+                .filter(|e| e.value().state.status.is_ready())
+                .min_by_key(|e| e.value().header.created_at)
+                .map(|e| *e.key())?;
 
-    /// Return true if the pool contains the given canister.
-    #[must_use]
-    pub(crate) fn contains(pid: &Principal) -> bool {
-        CANISTER_POOL.with_borrow(|map| map.contains_key(pid))
+            map.remove(&pid).map(|entry| (pid, entry))
+        })
     }
 
     /// Remove a specific canister from the pool, returning its entry.
@@ -138,34 +198,26 @@ impl CanisterPool {
         CANISTER_POOL.with_borrow_mut(|map| map.remove(pid))
     }
 
-    /// Remove a specific canister from the pool.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn remove(pid: &Principal) -> Option<CanisterPoolEntry> {
-        CANISTER_POOL.with_borrow_mut(|map| map.remove(pid))
-    }
+    //
+    // Export
+    //
 
-    /// Export the pool as a vector of (Principal, Entry).
     #[must_use]
     pub(crate) fn export() -> CanisterPoolData {
         CANISTER_POOL.with_borrow(BTreeMap::to_vec)
     }
 
-    /// Clear the pool (mainly for tests).
+    //
+    // Test helpers
+    //
+
     #[cfg(test)]
     pub(crate) fn clear() {
         CANISTER_POOL.with_borrow_mut(BTreeMap::clear);
     }
 
-    /// Return the current pool size.
-    #[must_use]
-    pub(crate) fn len() -> u64 {
-        CANISTER_POOL.with_borrow(|map| map.len())
-    }
-
-    /// Return whether the pool is empty.
-    #[must_use]
     #[cfg(test)]
+    #[must_use]
     pub(crate) fn is_empty() -> bool {
         CANISTER_POOL.with_borrow(|map| map.is_empty())
     }
@@ -211,15 +263,91 @@ mod tests {
         let data = CanisterPool::export();
         assert_eq!(data.len(), 2);
 
-        let entry1 = data.iter().find(|(id, _)| *id == p1).unwrap();
-        assert_eq!(entry1.1.cycles, 100u128.into());
+        let (_, e1) = data.iter().find(|(id, _)| *id == p1).unwrap();
+        let (_, e2) = data.iter().find(|(id, _)| *id == p2).unwrap();
 
-        let entry2 = data.iter().find(|(id, _)| *id == p2).unwrap();
-        assert_eq!(entry2.1.cycles, 200u128.into());
+        assert_eq!(e1.state.cycles, 100u128.into());
+        assert_eq!(e2.state.cycles, 200u128.into());
+
+        // header must exist and be non-zero
+        assert!(e1.header.created_at > 0);
+        assert!(e2.header.created_at > 0);
     }
 
     #[test]
-    fn remove_specific_pid() {
+    fn pop_ready_returns_oldest_by_created_at() {
+        CanisterPool::clear();
+
+        let p1 = pid(1);
+        let p2 = pid(2);
+
+        CanisterPool::register(
+            p1,
+            1u128.into(),
+            CanisterPoolStatus::Ready,
+            None,
+            None,
+            None,
+        );
+
+        // ensure ordering difference
+        std::thread::sleep(std::time::Duration::from_millis(1));
+
+        CanisterPool::register(
+            p2,
+            2u128.into(),
+            CanisterPoolStatus::Ready,
+            None,
+            None,
+            None,
+        );
+
+        let (pid, entry) = CanisterPool::pop_ready().expect("expected ready entry");
+        assert_eq!(pid, p1);
+        assert_eq!(entry.state.cycles, 1u128.into());
+    }
+
+    #[test]
+    fn update_state_preserves_header() {
+        CanisterPool::clear();
+
+        let p = pid(1);
+
+        CanisterPool::register(
+            p,
+            10u128.into(),
+            CanisterPoolStatus::PendingReset,
+            None,
+            None,
+            None,
+        );
+
+        let before = CanisterPool::get(p).unwrap().header.created_at;
+
+        let updated = CanisterPool::update_state_with(p, |mut state| {
+            state.cycles = 99u128.into();
+            state.status = CanisterPoolStatus::Ready;
+            state
+        });
+
+        assert!(updated);
+
+        let entry = CanisterPool::get(p).unwrap();
+        assert_eq!(entry.state.cycles, 99u128.into());
+        assert!(entry.state.status.is_ready());
+        assert_eq!(entry.header.created_at, before);
+    }
+
+    #[test]
+    fn update_state_returns_false_for_missing_pid() {
+        CanisterPool::clear();
+
+        let updated = CanisterPool::update_state_with(pid(9), |state| state);
+        assert!(!updated);
+    }
+
+    #[test]
+    fn take_removes_specific_entry() {
         CanisterPool::clear();
 
         let p1 = pid(1);
@@ -242,13 +370,12 @@ mod tests {
             None,
         );
 
-        let removed = CanisterPool::remove(&p1).unwrap();
-        assert_eq!(removed.cycles, 123u128.into());
+        let removed = CanisterPool::take(&p1).unwrap();
+        assert_eq!(removed.state.cycles, 123u128.into());
 
-        // only p2 should remain
-        let data = CanisterPool::export();
-        assert_eq!(data.len(), 1);
-        assert_eq!(data[0].0, p2);
+        let remaining = CanisterPool::export();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].0, p2);
     }
 
     #[test]

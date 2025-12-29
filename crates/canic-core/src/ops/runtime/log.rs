@@ -1,56 +1,55 @@
 use crate::{
     Error,
-    dto::log::LogEntryView,
-    dto::page::{Page, PageRequest},
+    cdk::utils::time::now_secs,
+    dto::{
+        log::LogEntryView,
+        page::{Page, PageRequest},
+    },
     log::Level,
-    model::memory::log::{Log, RetentionSummary as ModelRetentionSummary, apply_retention},
-    ops::adapter::log::log_entry_to_view,
-    ops::view::paginate_vec,
+    model::memory::log::{Log, RetentionSummary, apply_retention_with_cfg},
+    ops::{adapter::log::log_entry_to_view, config::ConfigOps, view::paginate_vec},
 };
-
-///
-/// RetentionSummary
-/// Ops-level summary for retention sweeps.
-///
-
-#[derive(Clone, Debug, Default)]
-pub struct RetentionSummary {
-    pub before: u64,
-    pub retained: u64,
-    pub dropped_by_age: u64,
-    pub dropped_by_limit: u64,
-}
-
-impl RetentionSummary {
-    #[must_use]
-    pub const fn dropped_total(&self) -> u64 {
-        self.dropped_by_age + self.dropped_by_limit
-    }
-}
-
-pub type LogEntryDto = LogEntryView;
 
 ///
 /// LogOps
 ///
-/// Read-only facade over stable log storage.
+/// Logging operations.
 ///
-/// This is a **view op**:
-/// - no mutation
-/// - no policy
-/// - safe to call directly from query endpoints
+/// Contains both:
+/// - control ops (runtime log append, retention sweeps)
+/// - view ops (paging, filtering, snapshot views)
+///
+/// Callers must ensure that control ops are only invoked
+/// from update/workflow contexts, while view ops are safe
+/// for query endpoints.
 ///
 
 pub struct LogOps;
 
 impl LogOps {
+    pub fn append_runtime_log(
+        crate_name: &str,
+        topic: Option<&str>,
+        level: Level,
+        message: &str,
+    ) -> Result<u64, Error> {
+        if !crate::log::is_ready() {
+            return Ok(0);
+        }
+
+        let cfg = ConfigOps::log_config();
+        let now = now_secs();
+
+        Log::append(&cfg, now, crate_name, topic, level, message)
+    }
+
     #[must_use]
     pub fn page(
         crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
         request: PageRequest,
-    ) -> Page<LogEntryDto> {
+    ) -> Page<LogEntryView> {
         let mut entries = Log::snapshot();
 
         // Filter
@@ -67,7 +66,7 @@ impl LogOps {
         // Newest first
         entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        let views: Vec<LogEntryDto> = entries.iter().map(log_entry_to_view).collect();
+        let views: Vec<LogEntryView> = entries.iter().map(log_entry_to_view).collect();
 
         paginate_vec(views, request)
     }
@@ -75,11 +74,8 @@ impl LogOps {
 
 /// Apply log retention policy and return a summary.
 pub fn apply_log_retention() -> Result<RetentionSummary, Error> {
-    let summary: ModelRetentionSummary = apply_retention()?;
-    Ok(RetentionSummary {
-        before: summary.before,
-        retained: summary.retained,
-        dropped_by_age: summary.dropped_by_age,
-        dropped_by_limit: summary.dropped_by_limit,
-    })
+    let cfg = ConfigOps::log_config();
+    let now = now_secs();
+
+    apply_retention_with_cfg(&cfg, now)
 }

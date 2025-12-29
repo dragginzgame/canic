@@ -21,6 +21,14 @@ pub type SubnetDirectoryData = Vec<(CanisterRole, Principal)>;
 ///
 /// SubnetDirectory
 ///
+/// Stable-memory–backed model relation mapping subnet-scoped canister
+/// roles to their principals.
+///
+/// Invariants:
+/// - Each role appears at most once.
+/// - This directory is authoritative and replaced wholesale on import.
+/// - View/snapshot representations are constructed in higher layers.
+///
 
 pub struct SubnetDirectory;
 

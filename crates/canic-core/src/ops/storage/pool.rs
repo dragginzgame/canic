@@ -3,7 +3,7 @@ use crate::{
     cdk::types::Principal,
     dto::pool::{CanisterPoolEntryView, CanisterPoolView},
     ids::CanisterRole,
-    model::memory::pool::{CanisterPool, CanisterPoolEntry, CanisterPoolStatus},
+    model::memory::pool::{CanisterPool, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus},
     ops::{
         adapter::pool::{canister_pool_entry_to_view, canister_pool_to_view},
         config::ConfigOps,
@@ -15,10 +15,18 @@ use crate::{
 /// PoolOps
 /// Stable storage wrapper for the canister pool registry.
 ///
-
+/// This module contains *storage* operations:
+/// - register entries
+/// - mutate existing entry state (without reordering)
+/// - export and basic lookups
+///
 pub struct PoolOps;
 
 impl PoolOps {
+    //
+    // ---- Registration ----
+    //
+
     pub fn register_ready(
         pid: Principal,
         cycles: Cycles,
@@ -36,8 +44,12 @@ impl PoolOps {
         );
     }
 
+    //
+    // ---- State transitions ----
+    //
+
     pub fn mark_pending_reset(pid: Principal) {
-        Self::register_or_update(
+        Self::register_or_update_state(
             pid,
             Cycles::default(),
             CanisterPoolStatus::PendingReset,
@@ -46,20 +58,34 @@ impl PoolOps {
     }
 
     pub fn mark_ready(pid: Principal, cycles: Cycles) {
-        Self::register_or_update(pid, cycles, CanisterPoolStatus::Ready, None);
+        Self::register_or_update_state(pid, cycles, CanisterPoolStatus::Ready, None);
     }
 
     pub fn mark_failed(pid: Principal, err: &Error) {
         let status = CanisterPoolStatus::Failed {
             reason: err.to_string(),
         };
-        Self::register_or_update(pid, Cycles::default(), status, None);
+        Self::register_or_update_state(pid, Cycles::default(), status, None);
     }
+
+    //
+    // ---- Views ----
+    //
 
     #[must_use]
     pub fn get_view(pid: Principal) -> Option<CanisterPoolEntryView> {
         CanisterPool::get(pid).map(|entry| canister_pool_entry_to_view(&entry))
     }
+
+    #[must_use]
+    pub fn export_view() -> CanisterPoolView {
+        let data = CanisterPool::export();
+        canister_pool_to_view(data)
+    }
+
+    //
+    // ---- Mechanical storage access ----
+    //
 
     #[must_use]
     pub(crate) fn pop_ready() -> Option<(Principal, CanisterPoolEntry)> {
@@ -77,29 +103,35 @@ impl PoolOps {
     }
 
     #[must_use]
-    pub fn export_view() -> CanisterPoolView {
-        let data = CanisterPool::export();
-
-        canister_pool_to_view(data)
-    }
-
-    #[must_use]
     pub fn len() -> u64 {
         CanisterPool::len()
     }
 
-    fn register_or_update(
+    //
+    // ---- Internal helper ----
+    //
+
+    fn register_or_update_state(
         pid: Principal,
         cycles: Cycles,
         status: CanisterPoolStatus,
         role: Option<CanisterRole>,
     ) {
-        if let Some(mut entry) = CanisterPool::get(pid) {
-            entry.cycles = cycles;
-            entry.status = status;
-            entry.role = role.or(entry.role);
-            let _ = CanisterPool::update(pid, entry);
-        } else {
+        // Try update first: preserves header/created_at by construction.
+        let updated = CanisterPool::update_state_with(pid, |mut state: CanisterPoolState| {
+            state.cycles = cycles.clone();
+            state.status = status.clone();
+
+            // Preserve existing role unless caller supplies a replacement.
+            if role.is_some() {
+                state.role.clone_from(&role);
+            }
+
+            state
+        });
+
+        if !updated {
+            // For new entries, we don’t know parent/module_hash here (same as before).
             CanisterPool::register(pid, cycles, status, role, None, None);
         }
     }

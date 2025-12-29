@@ -26,6 +26,13 @@ pub type AppRegistryData = Vec<(Principal, Principal)>;
 ///
 /// AppRegistry
 ///
+/// Stable-memory–backed model relation mapping subnet principals to their
+/// corresponding root principals.
+///
+/// This registry is authoritative and is populated via internal lifecycle
+/// operations. It is exported for snapshot/view construction but is not
+/// imported wholesale.
+///
 
 pub struct AppRegistry;
 

@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     config::{
         Config, ConfigModel,
-        schema::{CanisterConfig, ScalingConfig, SubnetConfig},
+        schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, env::EnvOps},
@@ -85,6 +85,11 @@ impl ConfigOps {
     #[must_use]
     pub fn controllers() -> Vec<Principal> {
         Config::get().controllers.clone()
+    }
+
+    #[must_use]
+    pub fn log_config() -> LogConfig {
+        Config::get().log.clone()
     }
 
     /// Fetch the configuration record for the *current* subnet.

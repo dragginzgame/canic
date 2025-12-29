@@ -1,4 +1,4 @@
-use crate::model::memory::{env::Env, log::Log};
+use crate::{model::memory::env::Env, ops::runtime::log::LogOps};
 use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ pub fn set_ready() {
 
 #[must_use]
 pub fn is_ready() -> bool {
-    LOG_READY.with(|ready| ready.get())
+    LOG_READY.with(Cell::get)
 }
 
 #[macro_export]
@@ -81,7 +81,7 @@ macro_rules! log {
 
             // append entry
             let crate_name = env!("CARGO_PKG_NAME");
-            let _ = $crate::log::__append_to_stable_log(crate_name, topic_opt, level, &message);
+            let _ = $crate::log::__append_runtime_log(crate_name, topic_opt, level, &message);
 
             let ty_raw = $crate::log::__canister_role_string().unwrap_or_else(|| "...".to_string());
 
@@ -115,13 +115,13 @@ macro_rules! log {
 ///
 
 #[doc(hidden)]
-pub fn __append_to_stable_log(
+pub fn __append_runtime_log(
     crate_name: &str,
     topic: Option<&str>,
     level: Level,
     message: &str,
 ) -> Result<u64, crate::Error> {
-    Log::append(crate_name, topic, level, message)
+    LogOps::append_runtime_log(crate_name, topic, level, message)
 }
 
 #[doc(hidden)]

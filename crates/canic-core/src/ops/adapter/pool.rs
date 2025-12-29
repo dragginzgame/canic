@@ -17,12 +17,12 @@ fn canister_pool_status_to_view(status: &CanisterPoolStatus) -> CanisterPoolStat
 #[must_use]
 pub fn canister_pool_entry_to_view(entry: &CanisterPoolEntry) -> CanisterPoolEntryView {
     CanisterPoolEntryView {
-        created_at: entry.created_at,
-        cycles: entry.cycles.clone(),
-        status: canister_pool_status_to_view(&entry.status),
-        role: entry.role.clone(),
-        parent: entry.parent,
-        module_hash: entry.module_hash.clone(),
+        created_at: entry.header.created_at,
+        cycles: entry.state.cycles.clone(),
+        status: canister_pool_status_to_view(&entry.state.status),
+        role: entry.state.role.clone(),
+        parent: entry.state.parent,
+        module_hash: entry.state.module_hash.clone(),
     }
 }
 

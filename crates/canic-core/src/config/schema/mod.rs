@@ -125,14 +125,16 @@ impl Validate for ConfigModel {
             validate_subnet_role_len(subnet_role, "subnet")?;
         }
 
-        //  Validate that prime subnet exists
+        self.log.validate()?;
+
+        // Validate that prime subnet exists
         let prime = SubnetRole::PRIME;
         let prime_subnet = self
             .subnets
             .get(&prime)
             .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
 
-        //  Validate that every app_directory entry exists in prime.canisters
+        // Validate that every app_directory entry exists in prime.canisters
         for canister_role in &self.app_directory {
             validate_canister_role_len(canister_role, "app directory canister")?;
             let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {

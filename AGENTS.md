@@ -443,9 +443,16 @@ Rules:
 
 ### Doc comments
 
-* Use padded doc comments on types
+* Struct doc comments must be exactly:
+  * `///`
+  * `/// StructName`
+  * `///`
+  * (blank line)
+  * then the `struct` definition
 * Keep comments directly adjacent
 * Use section banners for structure
+* Large groups of related functions must be separated with a header divider like:
+  * `// --- Removal --------------------------------------------------------`
 
 ---
 

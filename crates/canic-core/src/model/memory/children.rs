@@ -1,3 +1,14 @@
+//! CanisterChildren
+//!
+//! Stable-memory–backed projection of direct child canisters for the
+//! current canister.
+//!
+//! This is not an authoritative registry. Entries are populated via
+//! topology snapshot import during cascade workflows and represent
+//! a cached view of the global subnet registry.
+//!
+//! The contents are replaced wholesale on import.
+
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
