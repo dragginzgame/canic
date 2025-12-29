@@ -6,11 +6,18 @@ use crate::{
 ///
 /// Icrc10Registry
 ///
+/// Runtime projection of supported ICRC standards based on static IC spec
+/// and dynamic canister configuration.
+///
+/// - ICRC-10 is always supported.
+/// - Additional standards are opt-in via config.
+/// - This is a pure, recomputed view (no storage, no persistence).
+///
 
 pub struct Icrc10Registry;
 
 impl Icrc10Registry {
-    fn standards() -> Vec<Icrc10Standard> {
+    fn enabled_standards() -> Vec<Icrc10Standard> {
         let config = Config::get();
         let mut supported = vec![Icrc10Standard::Icrc10];
 
@@ -30,13 +37,13 @@ impl Icrc10Registry {
     /// Checks whether the given standard is currently registered.
     #[must_use]
     pub fn is_registered(standard: Icrc10Standard) -> bool {
-        Self::standards().contains(&standard)
+        matches!(standard, Icrc10Standard::Icrc10) || Self::enabled_standards().contains(&standard)
     }
 
     /// Returns `(name, url)` for all supported standards from the static list.
     #[must_use]
     pub fn supported_standards() -> Vec<(String, String)> {
-        let reg = Self::standards();
+        let reg = Self::enabled_standards();
 
         ICRC_10_SUPPORTED_STANDARDS
             .iter()
