@@ -21,7 +21,11 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
-            ::canic::core::lifecycle::init::nonroot_init($canister_role, payload, args.clone());
+            ::canic::core::lifecycle::init::init_nonroot_canister(
+                $canister_role,
+                payload,
+                args.clone(),
+            );
 
             // ---- userland lifecycle hooks (scheduled last) ----
             ::canic::core::ops::ic::timer::TimerOps::set(
@@ -40,7 +44,7 @@ macro_rules! start {
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::upgrade::nonroot_post_upgrade($canister_role);
+            ::canic::core::lifecycle::upgrade::post_upgrade_nonroot_canister($canister_role);
 
             // ---- userland lifecycle hooks (scheduled last) ----
             ::canic::core::ops::ic::timer::TimerOps::set(
@@ -79,7 +83,7 @@ macro_rules! start_root {
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::init::root_init(identity);
+            ::canic::core::lifecycle::init::init_root_canister(identity);
 
             // ---- userland lifecycle hooks (scheduled last) ----
             ::canic::core::ops::ic::timer::TimerOps::set(
@@ -98,7 +102,7 @@ macro_rules! start_root {
             ::canic::core::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::upgrade::root_post_upgrade();
+            ::canic::core::lifecycle::upgrade::post_upgrade_root_canister();
 
             // ---- userland lifecycle hooks (scheduled last) ----
             ::canic::core::ops::ic::timer::TimerOps::set(

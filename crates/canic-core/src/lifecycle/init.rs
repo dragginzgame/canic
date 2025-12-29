@@ -1,8 +1,12 @@
 //! IC init lifecycle adapters.
 //!
-//! This module contains synchronous glue code that adapts the IC `init` hook
-//! into async bootstrap workflows. It must remain minimal and side-effect
-//! limited to environment seeding and state import.
+//! This module adapts the synchronous IC `init` hook into the system’s
+//! two-phase initialization model:
+//! 1. synchronous runtime seeding
+//! 2. asynchronous bootstrap workflows scheduled via the timer
+//!
+//! This layer must remain minimal and must not contain orchestration,
+//! policy, or domain logic.
 
 use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
@@ -12,23 +16,43 @@ use crate::{
 };
 use core::time::Duration;
 
-pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
-    workflow::runtime::nonroot_init(role, payload);
+pub fn init_root_canister(identity: SubnetIdentity) {
+    // Perform minimal synchronous runtime seeding during IC init.
+    workflow::runtime::init_root_canister(identity);
 
-    // Spawn async bootstrap workflow
-    TimerOps::set(Duration::ZERO, "canic:bootstrap:nonroot_init", async move {
-        workflow::bootstrap::nonroot_init(args).await;
-    });
+    // Schedule async bootstrap immediately after init returns.
+    TimerOps::set(
+        Duration::ZERO,
+        "canic:bootstrap:init_root_canister",
+        async {
+            // Root bootstrap failure is fatal: the subnet must not
+            // continue in a partially initialized state.
+            if let Err(err) = workflow::bootstrap::bootstrap_init_root_canister().await {
+                let msg = format!("root bootstrap failed: {err}");
+                crate::cdk::api::trap(&msg);
+            }
+        },
+    );
 }
 
-pub fn root_init(identity: SubnetIdentity) {
-    workflow::runtime::root_init(identity);
+pub fn init_nonroot_canister(
+    role: CanisterRole,
+    payload: CanisterInitPayload,
+    args: Option<Vec<u8>>,
+) {
+    // Perform minimal synchronous runtime seeding during IC init.
+    workflow::runtime::init_nonroot_canister(role, payload);
 
-    // Spawn async bootstrap workflow
-    TimerOps::set(Duration::ZERO, "canic:bootstrap:root_init", async {
-        if let Err(err) = workflow::bootstrap::root_init().await {
-            let msg = format!("root bootstrap failed: {err}");
-            crate::cdk::api::trap(&msg);
-        }
-    });
+    // Schedule async bootstrap immediately after init returns.
+    // Duration::ZERO ensures execution on the next tick without
+    // blocking the init hook.
+    TimerOps::set(
+        Duration::ZERO,
+        "canic:bootstrap:init_nonroot_canister",
+        async move {
+            // Non-root bootstrap failures are handled internally and
+            // must not abort canister initialization.
+            workflow::bootstrap::bootstrap_init_nonroot_canister(args).await;
+        },
+    );
 }

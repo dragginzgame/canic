@@ -80,7 +80,7 @@ impl PoolOps {
 
     #[must_use]
     pub fn get_view(pid: Principal) -> Option<CanisterPoolEntryView> {
-        CanisterPool::get(pid).map(|entry| canister_pool_entry_to_view(&entry))
+        CanisterPool::get(pid).map(|entry| canister_pool_entry_to_view(&entry.header, &entry.state))
     }
 
     // ------- Export ------------------------

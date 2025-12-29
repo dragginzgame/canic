@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// Bootstrap workflow for the root canister during init.
-pub async fn root_init() -> Result<(), Error> {
+pub async fn bootstrap_init_root_canister() -> Result<(), Error> {
     // Example sequence — adjust as needed
     root_set_subnet_id().await;
     root_import_pool_from_config().await;
@@ -28,7 +28,7 @@ pub async fn root_init() -> Result<(), Error> {
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
-pub async fn root_post_upgrade() {
+pub async fn bootstrap_post_upgrade_root_canister() {
     root_set_subnet_id().await;
     root_import_pool_from_config().await;
 }
