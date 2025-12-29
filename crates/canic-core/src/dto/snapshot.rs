@@ -30,7 +30,19 @@ pub struct StateSnapshotView {
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct TopologySnapshotView {
     pub parents: Vec<TopologyNodeView>,
-    pub children_map: HashMap<Principal, Vec<TopologyNodeView>>,
+    /// Children keyed by their parent pid.
+    pub children_map: HashMap<Principal, Vec<TopologyChildView>>,
+}
+
+///
+/// TopologyChildView
+/// Child node for parent-keyed topology maps.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct TopologyChildView {
+    pub pid: Principal,
+    pub role: CanisterRole,
 }
 
 ///

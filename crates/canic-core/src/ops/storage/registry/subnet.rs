@@ -2,11 +2,17 @@ use crate::{
     Error, ThisError,
     cdk::types::Principal,
     config::schema::CanisterCardinality,
-    dto::{registry::SubnetRegistryView, snapshot::TopologyNodeView},
+    dto::{
+        registry::SubnetRegistryView,
+        snapshot::{TopologyChildView, TopologyNodeView},
+    },
     ids::CanisterRole,
     model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
     ops::{
-        adapter::{canister::canister_summary_to_topology_node, registry::subnet_registry_to_view},
+        adapter::{
+            canister::{canister_summary_to_topology_child, canister_summary_to_topology_node},
+            registry::subnet_registry_to_view,
+        },
         config::ConfigOps,
         storage::registry::RegistryOpsError,
     },
@@ -131,6 +137,15 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
             .into_iter()
             .map(|(pid, summary)| canister_summary_to_topology_node(pid, &summary))
+            .collect()
+    }
+
+    /// Direct children (one level) as topology child views.
+    #[must_use]
+    pub(crate) fn children_child_view(pid: Principal) -> Vec<TopologyChildView> {
+        SubnetRegistry::children(pid)
+            .into_iter()
+            .map(|(pid, summary)| canister_summary_to_topology_child(pid, &summary))
             .collect()
     }
 

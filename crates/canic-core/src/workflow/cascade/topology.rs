@@ -116,7 +116,7 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
         .cloned()
         .unwrap_or_default();
     warn_if_large("nonroot fanout", children.len());
-    CanisterChildrenOps::import_view(children);
+    CanisterChildrenOps::import_view(self_pid, children);
 
     if let Some(next_pid) = next {
         let next_snapshot = match slice_snapshot_for_child(next_pid, snapshot) {
@@ -217,7 +217,7 @@ fn slice_snapshot_for_child(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::CanisterRole;
+    use crate::{dto::snapshot::TopologyChildView, ids::CanisterRole};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -228,6 +228,13 @@ mod tests {
             pid,
             role: CanisterRole::new("test"),
             parent_pid,
+        }
+    }
+
+    fn c(pid: Principal) -> TopologyChildView {
+        TopologyChildView {
+            pid,
+            role: CanisterRole::new("test"),
         }
     }
 
@@ -258,8 +265,8 @@ mod tests {
 
         let parents = vec![n(root, None), n(hub, Some(root)), n(inst, Some(hub))];
         let mut children_map = HashMap::new();
-        children_map.insert(root, vec![n(hub, Some(root))]);
-        children_map.insert(hub, vec![n(inst, Some(hub))]);
+        children_map.insert(root, vec![c(hub)]);
+        children_map.insert(hub, vec![c(inst)]);
         children_map.insert(inst, vec![]);
 
         let snapshot = TopologySnapshotView {
