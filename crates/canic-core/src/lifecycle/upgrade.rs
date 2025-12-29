@@ -26,7 +26,8 @@ use core::time::Duration;
 /// only role context needs to be restored before delegating.
 pub fn nonroot_post_upgrade(role: CanisterRole) {
     // Restore role context (env data already persisted)
-    EnvOps::restore_role(role);
+    EnvOps::restore_role(role.clone());
+    workflow::runtime::nonroot_post_upgrade(role);
 
     // Delegate to async bootstrap workflow
     TimerOps::set(Duration::ZERO, "canic:bootstrap:nonroot_upgrade", async {
@@ -40,6 +41,7 @@ pub fn nonroot_post_upgrade(role: CanisterRole) {
 pub fn root_post_upgrade() {
     // Restore root environment context
     EnvOps::restore_root();
+    workflow::runtime::root_post_upgrade();
 
     // Delegate to async bootstrap workflow
     TimerOps::set(Duration::ZERO, "canic:bootstrap:root_upgrade", async {
