@@ -1,15 +1,13 @@
 #![allow(clippy::cast_possible_truncation)]
+
 use crate::{
     Error, ThisError,
-    cdk::{
-        structures::{
-            DefaultMemoryImpl,
-            log::{Log as StableLogImpl, WriteError},
-            memory::VirtualMemory,
-        },
-        utils::time,
+    cdk::structures::{
+        DefaultMemoryImpl,
+        log::{Log as StableLogImpl, WriteError},
+        memory::VirtualMemory,
     },
-    config::{Config, schema::LogConfig},
+    config::schema::LogConfig,
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
@@ -22,47 +20,53 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};
 
-//
-// Stable Log Storage (ic-stable-structures)
-//
+///
+/// StableLog
+///
 
-type StableLogStorage =
+type StableLog =
     StableLogImpl<LogEntry, VirtualMemory<DefaultMemoryImpl>, VirtualMemory<DefaultMemoryImpl>>;
 
-// Marker structs for ic_memory! macro
 struct LogIndexMemory;
 struct LogDataMemory;
 
-fn create_log() -> StableLogStorage {
-    StableLogImpl::new(
-        ic_memory!(LogIndexMemory, LOG_INDEX_ID),
-        ic_memory!(LogDataMemory, LOG_DATA_ID),
-    )
+#[derive(Clone)]
+struct LogMemory {
+    index: VirtualMemory<DefaultMemoryImpl>,
+    data: VirtualMemory<DefaultMemoryImpl>,
+}
+
+impl LogMemory {
+    fn new() -> Self {
+        Self {
+            index: ic_memory!(LogIndexMemory, LOG_INDEX_ID),
+            data: ic_memory!(LogDataMemory, LOG_DATA_ID),
+        }
+    }
 }
 
 eager_static! {
-    static LOG: RefCell<StableLogStorage> = RefCell::new(create_log());
+    static LOG_MEMORY: LogMemory = LogMemory::new();
 }
 
-// Small helpers for readability
-fn with_log<R>(f: impl FnOnce(&StableLogStorage) -> R) -> R {
-    LOG.with_borrow(|l| f(l))
+fn create_log() -> StableLog {
+    LOG_MEMORY.with(|mem| StableLogImpl::new(mem.index.clone(), mem.data.clone()))
 }
 
-fn with_log_mut<R>(f: impl FnOnce(&mut StableLogStorage) -> R) -> R {
-    LOG.with_borrow_mut(|l| f(l))
+eager_static! {
+    static LOG: RefCell<StableLog> = RefCell::new(create_log());
 }
 
-pub fn log_config() -> LogConfig {
-    Config::get().log.clone()
+fn with_log<R>(f: impl FnOnce(&StableLog) -> R) -> R {
+    LOG.with_borrow(f)
 }
 
-const TRUNCATION_SUFFIX: &str = "...[truncated]";
+fn with_log_mut<R>(f: impl FnOnce(&mut StableLog) -> R) -> R {
+    LOG.with_borrow_mut(f)
+}
 
 ///
 /// LogError
-/// it's ok to have errors in this model-layer struct as logs have more
-/// error cases than B-Tree maps
 ///
 
 #[derive(Debug, ThisError)]
@@ -104,18 +108,6 @@ pub struct LogEntry {
     pub message: String,
 }
 
-impl LogEntry {
-    pub(crate) fn new(crate_name: &str, level: Level, topic: Option<&str>, msg: &str) -> Self {
-        Self {
-            crate_name: crate_name.to_string(),
-            created_at: time::now_secs(),
-            level,
-            topic: topic.map(ToString::to_string),
-            message: msg.to_string(),
-        }
-    }
-}
-
 impl_storable_unbounded!(LogEntry);
 
 ///
@@ -125,9 +117,9 @@ impl_storable_unbounded!(LogEntry);
 pub struct Log;
 
 impl Log {
-    // -------- Append --------
-
     pub(crate) fn append<T, M>(
+        cfg: &LogConfig,
+        now_secs: u64,
         crate_name: &str,
         topic: Option<T>,
         level: Level,
@@ -137,41 +129,22 @@ impl Log {
         T: ToString,
         M: AsRef<str>,
     {
-        let topic_normalized = Self::normalize_topic(topic);
-        let entry = LogEntry::new(
-            crate_name,
-            level,
-            topic_normalized.as_deref(),
-            message.as_ref(),
-        );
-
-        Self::append_entry(entry)
-    }
-
-    /// Append an entry, returning its log index.
-    /// When logging is disabled (`max_entries == 0`), returns 0 and does not write.
-    pub(crate) fn append_entry(entry: LogEntry) -> Result<u64, Error> {
-        let cfg = log_config();
-
         if cfg.max_entries == 0 {
             return Ok(0);
         }
 
-        let entry = maybe_truncate_entry(entry, cfg.max_entry_bytes);
+        let entry = LogEntry {
+            crate_name: crate_name.to_string(),
+            created_at: now_secs,
+            level,
+            topic: normalize_topic(topic),
+            message: message.as_ref().to_string(),
+        };
 
-        with_log(|log| log.append(&entry))
-            .map_err(LogError::from)
-            .map_err(Error::from)
+        let entry = truncate_entry(entry, cfg.max_entry_bytes);
+        append_raw(&entry)
     }
 
-    // -------- Helper -----------
-
-    fn normalize_topic<T: ToString>(topic: Option<T>) -> Option<String> {
-        topic.as_ref().map(|t| t.to_string().to_case(Case::Snake))
-    }
-
-    /// Export a snapshot of all log entries (unsorted).
-    /// Intended for read facades (pagination/filtering lives above).
     #[must_use]
     pub(crate) fn snapshot() -> Vec<LogEntry> {
         let mut out = Vec::new();
@@ -196,56 +169,45 @@ pub struct RetentionSummary {
     pub dropped_by_limit: u64,
 }
 
-// apply_retention
-// currently using the local config
-pub fn apply_retention() -> Result<RetentionSummary, Error> {
-    let cfg = log_config();
-    let original_len = with_log(StableLogImpl::len);
+impl RetentionSummary {
+    #[must_use]
+    pub const fn dropped_total(&self) -> u64 {
+        self.dropped_by_age + self.dropped_by_limit
+    }
+}
+
+pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<RetentionSummary, Error> {
+    let before = with_log(StableLog::len);
 
     if cfg.max_entries == 0 {
         with_log_mut(|log| *log = create_log());
         return Ok(RetentionSummary {
-            before: original_len,
+            before,
             retained: 0,
             dropped_by_age: 0,
-            dropped_by_limit: original_len,
+            dropped_by_limit: before,
         });
     }
 
-    let now = time::now_secs();
-    let max_entries = cfg.max_entries;
-    let max_entries_usize = usize::try_from(max_entries).unwrap_or(usize::MAX);
-
-    if original_len == 0 {
+    if before == 0 {
         return Ok(RetentionSummary::default());
     }
 
-    // Fast path: no age filter and we are already within limits.
-    if cfg.max_age_secs.is_none() && original_len <= max_entries {
-        return Ok(RetentionSummary {
-            before: original_len,
-            retained: original_len,
-            dropped_by_age: 0,
-            dropped_by_limit: 0,
-        });
-    }
-
-    let mut retained = VecDeque::with_capacity(
-        max_entries_usize.min(usize::try_from(original_len).unwrap_or(usize::MAX)),
-    );
+    let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
+    let mut retained = VecDeque::new();
     let mut eligible = 0u64;
 
     with_log(|log| {
         for entry in log.iter() {
-            if let Some(age) = cfg.max_age_secs
-                && now.saturating_sub(entry.created_at) > age
+            if let Some(max_age) = cfg.max_age_secs
+                && now_secs.saturating_sub(entry.created_at) > max_age
             {
                 continue;
             }
 
             eligible += 1;
             retained.push_back(entry);
-            if retained.len() > max_entries_usize {
+            if retained.len() > max_entries {
                 retained.pop_front();
             }
         }
@@ -253,41 +215,59 @@ pub fn apply_retention() -> Result<RetentionSummary, Error> {
 
     let retained_len = retained.len() as u64;
     let dropped_by_age = if cfg.max_age_secs.is_some() {
-        original_len.saturating_sub(eligible)
+        before.saturating_sub(eligible)
     } else {
         0
     };
     let dropped_by_limit = eligible.saturating_sub(retained_len);
-    let changed = dropped_by_age > 0 || dropped_by_limit > 0;
 
-    let summary = RetentionSummary {
-        before: original_len,
+    if dropped_by_age == 0 && dropped_by_limit == 0 {
+        return Ok(RetentionSummary {
+            before,
+            retained: retained_len,
+            dropped_by_age: 0,
+            dropped_by_limit: 0,
+        });
+    }
+
+    with_log_mut(|log| *log = create_log());
+    for entry in retained {
+        let entry = truncate_entry(entry, cfg.max_entry_bytes);
+        append_raw(&entry)?;
+    }
+
+    Ok(RetentionSummary {
+        before,
         retained: retained_len,
         dropped_by_age,
         dropped_by_limit,
-    };
-
-    if !changed {
-        return Ok(summary);
-    }
-
-    // Rewrite
-    with_log_mut(|log| *log = create_log());
-    for entry in retained {
-        let entry = maybe_truncate_entry(entry, cfg.max_entry_bytes);
-        with_log(|log| log.append(&entry))
-            .map_err(LogError::from)
-            .map_err(Error::from)?;
-    }
-
-    Ok(summary)
+    })
 }
 
-fn maybe_truncate_entry(mut entry: LogEntry, max_entry_bytes: u32) -> LogEntry {
-    if let Some(message) = truncate_message(&entry.message, max_entry_bytes) {
-        entry.message = message;
-    }
+//
+// ─────────────────────────────────────────────────────────────
+// Internal helpers (mechanical)
+// ─────────────────────────────────────────────────────────────
+//
 
+const TRUNCATION_SUFFIX: &str = "...[truncated]";
+
+fn append_raw(entry: &LogEntry) -> Result<u64, Error> {
+    with_log(|log| log.append(entry))
+        .map_err(LogError::from)
+        .map_err(Error::from)
+}
+
+// Centralizes topic normalization to enforce invariants.
+#[allow(clippy::single_option_map)]
+fn normalize_topic<T: ToString>(topic: Option<T>) -> Option<String> {
+    topic.map(|t| t.to_string().to_case(Case::Snake))
+}
+
+fn truncate_entry(mut entry: LogEntry, max_bytes: u32) -> LogEntry {
+    if let Some(msg) = truncate_message(&entry.message, max_bytes) {
+        entry.message = msg;
+    }
     entry
 }
 

@@ -1,3 +1,16 @@
+//! SubnetRegistry
+//!
+//! Authoritative persistent registry of subnet canisters and their
+//! hierarchical relationships.
+//!
+//! Invariants:
+//! - Each canister has at most one parent.
+//! - The root canister has no parent.
+//! - Parent relationships may form arbitrary DAGs; cycles are tolerated
+//!   and handled defensively during traversal.
+//! - This module does not enforce role uniqueness or root singularity;
+//!   callers are responsible for maintaining those invariants.
+
 use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},

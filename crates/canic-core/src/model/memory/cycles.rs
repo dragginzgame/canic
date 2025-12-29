@@ -26,9 +26,6 @@ const STORAGE_RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 ///
 /// CycleTracker
 ///
-/// NOTE : Can't really do tests for this here, it really needs e2e because I can't
-/// declare M: Memory as a generic right now, it breaks ic-stable-structures/other ic packages
-///
 
 pub struct CycleTracker {
     map: BTreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
@@ -88,8 +85,6 @@ impl CycleTracker {
     }
 
     fn insert(&mut self, now: u64, cycles: Cycles) -> bool {
-        self.map.insert(now, cycles);
-
-        true
+        self.map.insert(now, cycles).is_some()
     }
 }

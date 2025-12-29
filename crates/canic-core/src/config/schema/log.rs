@@ -1,3 +1,4 @@
+use super::{ConfigSchemaError, Validate};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -13,6 +14,8 @@ mod defaults {
         16_384
     }
 }
+
+pub const MAX_LOG_ENTRIES: u64 = 100_000;
 
 ///
 /// LogConfig
@@ -38,5 +41,18 @@ impl Default for LogConfig {
             max_entry_bytes: defaults::max_entry_bytes(),
             max_age_secs: None,
         }
+    }
+}
+
+impl Validate for LogConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        if self.max_entries > MAX_LOG_ENTRIES {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "log.max_entries {} exceeds max {}",
+                self.max_entries, MAX_LOG_ENTRIES
+            )));
+        }
+
+        Ok(())
     }
 }
