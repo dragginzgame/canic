@@ -13,7 +13,12 @@
 //! - Encode policy decisions
 //! - Call ops beyond minimal environment restoration
 
-use crate::{cdk::futures::spawn, ids::CanisterRole, ops::env::EnvOps, workflow};
+use crate::{
+    ids::CanisterRole,
+    ops::{env::EnvOps, ic::timer::TimerOps},
+    workflow,
+};
+use core::time::Duration;
 
 /// Post-upgrade entrypoint for non-root canisters.
 ///
@@ -24,7 +29,7 @@ pub fn nonroot_post_upgrade(role: CanisterRole) {
     EnvOps::restore_role(role);
 
     // Delegate to async bootstrap workflow
-    spawn(async {
+    TimerOps::set(Duration::ZERO, "canic:bootstrap:nonroot_upgrade", async {
         workflow::bootstrap::nonroot_post_upgrade().await;
     });
 }
@@ -37,7 +42,7 @@ pub fn root_post_upgrade() {
     EnvOps::restore_root();
 
     // Delegate to async bootstrap workflow
-    spawn(async {
+    TimerOps::set(Duration::ZERO, "canic:bootstrap:root_upgrade", async {
         workflow::bootstrap::root_post_upgrade().await;
     });
 }

@@ -93,12 +93,6 @@ impl ShardEntry {
         })
     }
 
-    /// Whether this shard has room for more tenants.
-    #[must_use]
-    pub const fn has_capacity(&self) -> bool {
-        self.count < self.capacity
-    }
-
     const fn slot_default() -> u32 {
         Self::UNASSIGNED_SLOT
     }

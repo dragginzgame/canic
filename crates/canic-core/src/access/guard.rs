@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError, access::AccessError, model::memory::state::AppMode,
+    Error, ThisError, access::AccessError, dto::state::AppModeView,
     ops::storage::state::AppStateOps,
 };
 
@@ -28,9 +28,9 @@ impl From<GuardError> for Error {
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_app_query() -> Result<(), Error> {
-    match AppStateOps::get_mode() {
-        AppMode::Enabled | AppMode::Readonly => Ok(()),
-        AppMode::Disabled => Err(GuardError::AppDisabled.into()),
+    match AppStateOps::export_view().mode {
+        AppModeView::Enabled | AppModeView::Readonly => Ok(()),
+        AppModeView::Disabled => Err(GuardError::AppDisabled.into()),
     }
 }
 
@@ -41,9 +41,9 @@ pub fn guard_app_query() -> Result<(), Error> {
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
 pub fn guard_app_update() -> Result<(), Error> {
-    match AppStateOps::get_mode() {
-        AppMode::Enabled => Ok(()),
-        AppMode::Readonly => Err(GuardError::AppReadonly.into()),
-        AppMode::Disabled => Err(GuardError::AppDisabled.into()),
+    match AppStateOps::export_view().mode {
+        AppModeView::Enabled => Ok(()),
+        AppModeView::Readonly => Err(GuardError::AppReadonly.into()),
+        AppModeView::Disabled => Err(GuardError::AppDisabled.into()),
     }
 }

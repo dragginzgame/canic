@@ -5,6 +5,56 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+Below is a polished, release-quality changelog entry suitable for **v0.7**. It is written to communicate architectural significance rather than individual commits, and to read credibly to both maintainers and advanced users.
+
+---
+
+## [v0.7.0] — 2025-12-29 - Architecture Consolidation & Runtime Discipline
+
+This release is a structural milestone focused on clarifying responsibility boundaries, eliminating architectural ambiguity, and hardening runtime behavior across the system. While user-visible behavior is largely unchanged, the internal model is now significantly more coherent, testable, and extensible.
+
+### Highlights
+
+* **Strict Layer Separation Enforced**
+
+  * Clear demarcation between **model**, **ops**, **workflow**, and **runtime** concerns.
+  * Storage-backed state, runtime orchestration, and view/DTO adaptation are now explicitly separated.
+  * Removed implicit cross-layer coupling and eliminated several “gray area” abstractions.
+
+* **Model ↔ View Canonicalization**
+
+  * Systematic `From`/adapter patterns established between model types and DTO/view representations.
+  * Storage types no longer leak into API or workflow layers.
+  * Enables safer refactors, clearer invariants, and more predictable serialization boundaries.
+
+* **Runtime vs Storage Semantics Clarified**
+
+  * Runtime logic moved out of storage-oriented ops where side effects or scheduling were previously ambiguous.
+  * Ops are now narrowly scoped to deterministic state transitions and validation.
+  * Workflow owns orchestration, propagation, and cascade semantics.
+
+* **Topology & Cascade Hardening**
+
+  * Topology synchronization rewritten around explicit bundle semantics.
+  * Parent/child propagation is now validated hop-by-hop with cycle and termination guarantees.
+  * Failures abort cleanly instead of producing partial or inconsistent topology state.
+
+* **Policy-Driven Pool & Lifecycle Logic**
+
+  * Pool admissibility and lifecycle checks are now explicitly policy-based and side-effect free.
+  * Local vs network-dependent behavior is isolated and testable.
+  * Runtime enforcement no longer conflates eligibility checks with mutation.
+
+* **Metrics & Instrumentation Cleanup**
+
+  * HTTP and runtime metrics normalized behind canonical method/label mapping.
+  * DTO conversion paths are explicit and consistent with the broader view strategy.
+
+### Why This Matters
+
+v0.7 dramatically reduces architectural entropy. It makes the system easier to reason about, safer to evolve, and far more resistant to subtle bugs caused by layer leakage or mixed responsibilities. This release lays the foundation for future features without accumulating technical debt.
+
+
 ## [0.6.20] - 2025-12-26
 ### Added
 - Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that

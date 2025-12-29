@@ -8,6 +8,7 @@ use crate::{
     ops::{
         OpsError,
         adapter::env::{env_data_from_view, env_data_to_view},
+        ic::{Network, build_network},
     },
 };
 
@@ -90,7 +91,7 @@ impl EnvOps {
             subnet_pid: Some(subnet_pid),
             subnet_role: Some(subnet_role),
             canister_role: Some(CanisterRole::ROOT),
-            parent_pid: None,
+            parent_pid: Some(prime_root_pid),
         };
 
         if let Err(err) = Self::import_data(env) {
@@ -104,7 +105,8 @@ impl EnvOps {
     pub fn init(env: EnvView, role: CanisterRole) {
         let mut env = env_data_from_view(env);
         // Override contextual role (do not trust payload blindly)
-        env.canister_role = Some(role);
+        env.canister_role = Some(role.clone());
+        env = ensure_nonroot_env(role, env);
 
         // Import validates required fields and persists
         if let Err(err) = Self::import_data(env) {
@@ -305,4 +307,48 @@ fn assert_initialized() {
             && Env::get_prime_root_pid().is_some(),
         "EnvOps called before environment initialization"
     );
+}
+
+fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvData) -> EnvData {
+    let mut missing = Vec::new();
+    if env.prime_root_pid.is_none() {
+        missing.push("prime_root_pid");
+    }
+    if env.subnet_role.is_none() {
+        missing.push("subnet_role");
+    }
+    if env.subnet_pid.is_none() {
+        missing.push("subnet_pid");
+    }
+    if env.root_pid.is_none() {
+        missing.push("root_pid");
+    }
+    if env.canister_role.is_none() {
+        missing.push("canister_role");
+    }
+    if env.parent_pid.is_none() {
+        missing.push("parent_pid");
+    }
+
+    if missing.is_empty() {
+        return env;
+    }
+
+    assert!(
+        build_network() != Some(Network::Ic),
+        "nonroot init missing env fields on ic: {}",
+        missing.join(", ")
+    );
+
+    let root_pid = Principal::from_slice(&[0xBB; 29]);
+    let subnet_pid = Principal::from_slice(&[0xAA; 29]);
+
+    env.prime_root_pid.get_or_insert(root_pid);
+    env.subnet_role.get_or_insert(SubnetRole::PRIME);
+    env.subnet_pid.get_or_insert(subnet_pid);
+    env.root_pid.get_or_insert(root_pid);
+    env.canister_role.get_or_insert(canister_role);
+    env.parent_pid.get_or_insert(root_pid);
+
+    env
 }

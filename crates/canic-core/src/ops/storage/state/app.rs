@@ -36,8 +36,10 @@ impl From<AppStateOpsError> for Error {
 pub struct AppStateOps;
 
 impl AppStateOps {
+    // todo please help codex - this is only used by a test so false positive on dead_code
     #[must_use]
-    pub(crate) fn get_mode() -> AppMode {
+    #[cfg(test)]
+    pub fn get_mode() -> AppMode {
         AppState::get_mode()
     }
 

@@ -18,10 +18,8 @@ use crate::{
     Error,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
-    ops::{
-        config::ConfigOps,
-        storage::sharding::{ShardEntry, ShardingRegistryOps},
-    },
+    dto::placement::ShardEntryView,
+    ops::{config::ConfigOps, storage::sharding::ShardingRegistryOps},
     policy::placement::sharding::{
         ShardingPolicyError,
         hrw::HrwSelector,
@@ -150,7 +148,7 @@ impl ShardingPolicy {
     ) -> Result<ShardingPlan, Error> {
         let pool_cfg = Self::get_pool_config(pool)?;
         let metrics = pool_metrics(pool);
-        let view = ShardingRegistryOps::export();
+        let view = ShardingRegistryOps::export_view();
         let slot_plan = plan_slot_backfill(pool, &view, pool_cfg.policy.max_shards);
 
         if let Some(pid) = ShardingRegistryOps::tenant_shard(pool, tenant)
@@ -168,7 +166,9 @@ impl ShardingPolicy {
         let shards_with_capacity: Vec<_> = view
             .iter()
             .filter(|(pid, entry)| {
-                entry.pool.as_ref() == pool && entry.has_capacity() && exclude_pid != Some(*pid)
+                entry.pool.as_ref() == pool
+                    && entry_has_capacity(entry)
+                    && exclude_pid != Some(*pid)
             })
             .map(|(pid, _)| *pid)
             .collect();
@@ -261,10 +261,10 @@ struct SlotBackfillPlan {
 
 fn plan_slot_backfill(
     pool: &str,
-    view: &[(Principal, ShardEntry)],
+    view: &[(Principal, ShardEntryView)],
     max_slots: u32,
 ) -> SlotBackfillPlan {
-    let mut entries: Vec<(Principal, ShardEntry)> = view
+    let mut entries: Vec<(Principal, ShardEntryView)> = view
         .iter()
         .filter(|(_, entry)| entry.pool.as_ref() == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))
@@ -276,7 +276,7 @@ fn plan_slot_backfill(
     let mut occupied = BTreeSet::<u32>::new();
 
     for (pid, entry) in &entries {
-        if entry.has_assigned_slot() {
+        if entry_has_assigned_slot(entry) {
             slots.insert(*pid, entry.slot);
             occupied.insert(entry.slot);
         }
@@ -296,7 +296,7 @@ fn plan_slot_backfill(
 
     let mut idx = 0usize;
     for (pid, entry) in &entries {
-        if entry.has_assigned_slot() {
+        if entry_has_assigned_slot(entry) {
             continue;
         }
 
@@ -313,6 +313,16 @@ fn plan_slot_backfill(
     }
 
     SlotBackfillPlan { slots, occupied }
+}
+
+const UNASSIGNED_SLOT: u32 = u32::MAX;
+
+const fn entry_has_assigned_slot(entry: &ShardEntryView) -> bool {
+    entry.slot != UNASSIGNED_SLOT
+}
+
+const fn entry_has_capacity(entry: &ShardEntryView) -> bool {
+    entry.count < entry.capacity
 }
 
 ///

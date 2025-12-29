@@ -92,12 +92,6 @@ impl ShardingRegistryOps {
         ShardingRegistry::with(|core| core.get_entry(&pid))
     }
 
-    /// Export all shard entries.
-    #[must_use]
-    pub(crate) fn export() -> Vec<(Principal, ShardEntry)> {
-        ShardingRegistry::export()
-    }
-
     /// Export all shard entries as a public view.
     #[must_use]
     pub fn export_view() -> ShardingRegistryView {

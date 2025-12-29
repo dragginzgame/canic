@@ -5,16 +5,17 @@
 //! limited to environment seeding and state import.
 
 use crate::{
-    cdk::futures::spawn,
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::CanisterRole,
     ops::{
         adapter,
         env::EnvOps,
+        ic::timer::TimerOps,
         storage::directory::{AppDirectoryOps, SubnetDirectoryOps},
     },
     workflow,
 };
+use core::time::Duration;
 
 pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Option<Vec<u8>>) {
     EnvOps::init(payload.env, role);
@@ -26,7 +27,7 @@ pub fn nonroot_init(role: CanisterRole, payload: CanisterInitPayload, args: Opti
     SubnetDirectoryOps::import(subnet_dir);
 
     // Spawn async bootstrap workflow
-    spawn(async move {
+    TimerOps::set(Duration::ZERO, "canic:bootstrap:nonroot_init", async move {
         workflow::bootstrap::nonroot_init(args).await;
     });
 }
@@ -35,7 +36,7 @@ pub fn root_init(identity: SubnetIdentity) {
     EnvOps::init_root(identity);
 
     // Spawn async bootstrap workflow
-    spawn(async {
+    TimerOps::set(Duration::ZERO, "canic:bootstrap:root_init", async {
         workflow::bootstrap::root_init().await;
     });
 }
