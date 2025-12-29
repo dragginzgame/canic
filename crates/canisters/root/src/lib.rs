@@ -10,7 +10,7 @@ use canic::{
     core::{
         access::policy::is_prime_subnet,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
-        ops::rpc::create_canister_request,
+        ops::{rpc::create_canister_request, wasm::WasmOps},
     },
     prelude::*,
 };
@@ -22,6 +22,11 @@ use std::collections::HashMap;
 //
 
 canic::start_root!();
+
+canic::eager_init!({
+    // Populate the in-memory WASM registry for provisioning before bootstrap.
+    WasmOps::import_static(WASMS);
+});
 
 async fn canic_setup() {}
 async fn canic_install() {}

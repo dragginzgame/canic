@@ -1,6 +1,6 @@
 use canic::{
     Error,
-    cdk::types::Principal,
+    cdk::types::{Principal, TC},
     core::{
         dto::{
             canister::{CanisterEntryView, CanisterSummaryView},
@@ -10,7 +10,6 @@ use canic::{
         },
         ids::{CanisterRole, SubnetRole},
     },
-    types::TC,
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};

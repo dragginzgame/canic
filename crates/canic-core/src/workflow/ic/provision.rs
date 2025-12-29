@@ -98,13 +98,15 @@ pub(crate) async fn rebuild_directories_from_registry(
     let mut builder = StateSnapshotBuilder::new();
 
     if include_app {
-        let view = RootAppDirectoryBuilder::build_from_registry();
-        builder = builder.with_app_directory_view(app_directory_to_view(view));
+        let data = RootAppDirectoryBuilder::build_from_registry();
+        AppDirectoryOps::import(data.clone());
+        builder = builder.with_app_directory_view(app_directory_to_view(data));
     }
 
     if include_subnet {
-        let view = RootSubnetDirectoryBuilder::build_from_registry();
-        builder = builder.with_subnet_directory_view(subnet_directory_to_view(view));
+        let data = RootSubnetDirectoryBuilder::build_from_registry();
+        SubnetDirectoryOps::import(data.clone());
+        builder = builder.with_subnet_directory_view(subnet_directory_to_view(data));
     }
 
     builder

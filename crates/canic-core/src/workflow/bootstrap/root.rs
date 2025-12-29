@@ -1,17 +1,19 @@
 use crate::{
     Error,
     cdk::api::{canister_self, trap},
-    dto::rpc::CreateCanisterParent,
     log::Topic,
     ops::{
         config::ConfigOps,
         env::EnvOps,
         ic::{Network, build_network},
         prelude::*,
-        rpc::create_canister_request,
         storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },
-    workflow::{ic::network::try_get_current_subnet_pid, pool::pool_import_canister},
+    workflow::{
+        ic::network::try_get_current_subnet_pid,
+        orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
+        pool::pool_import_canister,
+    },
 };
 
 /// Bootstrap workflow for the root canister during init.
@@ -151,7 +153,12 @@ pub async fn root_create_canisters() -> Result<(), Error> {
             continue;
         }
 
-        create_canister_request::<()>(role, CreateCanisterParent::Root, None).await?;
+        CanisterLifecycleOrchestrator::apply(LifecycleEvent::Create {
+            role: role.clone(),
+            parent: canister_self(),
+            extra_arg: None,
+        })
+        .await?;
     }
 
     // Reporting pass: emit the current topology for observability/debugging.
