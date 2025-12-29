@@ -1,12 +1,15 @@
+pub mod icrc21;
+
 use crate::{api::Call, perf};
 use std::future::Future;
 
 /// Dispatch a synchronous query endpoint.
 pub fn dispatch_query<R>(call: Call, f: impl FnOnce() -> R) -> R {
     perf::enter_endpoint();
-    let result = f();
+    let res = f();
     perf::exit_endpoint(call);
-    result
+
+    res
 }
 
 /// Dispatch an asynchronous query endpoint.
@@ -15,17 +18,19 @@ where
     F: Future<Output = R>,
 {
     perf::enter_endpoint();
-    let result = f().await;
+    let res = f().await;
     perf::exit_endpoint(call);
-    result
+
+    res
 }
 
 /// Dispatch a synchronous update endpoint.
 pub fn dispatch_update<R>(call: Call, f: impl FnOnce() -> R) -> R {
     perf::enter_endpoint();
-    let result = f();
+    let res = f();
     perf::exit_endpoint(call);
-    result
+
+    res
 }
 
 /// Dispatch an asynchronous update endpoint.
@@ -34,7 +39,8 @@ where
     F: Future<Output = R>,
 {
     perf::enter_endpoint();
-    let result = f().await;
+    let res = f().await;
     perf::exit_endpoint(call);
-    result
+
+    res
 }
