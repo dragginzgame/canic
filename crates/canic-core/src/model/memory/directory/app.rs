@@ -21,6 +21,13 @@ pub type AppDirectoryData = Vec<(CanisterRole, Principal)>;
 ///
 /// AppDirectory
 ///
+/// Stable-memory–backed directory mapping canister roles to principals.
+///
+/// Invariants:
+/// - Each role appears at most once.
+/// - The directory is authoritative; imports replace all existing entries.
+/// - This structure is persisted and replicated via snapshot import/export.
+///
 
 pub struct AppDirectory;
 

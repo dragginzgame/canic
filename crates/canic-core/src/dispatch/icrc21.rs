@@ -21,10 +21,17 @@ pub type ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageR
 ///
 /// Icrc21Registry
 ///
+/// Runtime dispatch table for ICRC-21 consent message handlers.
+///
+/// Invariants:
+/// - Handlers must be registered during init/startup before any
+///   ICRC-21 consent_message calls occur.
+/// - Registry is process-local and cleared on upgrade.
+///
 
-pub struct Icrc21Registry {}
+pub struct Icrc21Dispatcher {}
 
-impl Icrc21Registry {
+impl Icrc21Dispatcher {
     ///
     /// Use the builder at
     /// https://docs.rs/icrc-ledger-types/latest/icrc_ledger_types/icrc21/lib/struct.ConsentMessageBuilder.html
