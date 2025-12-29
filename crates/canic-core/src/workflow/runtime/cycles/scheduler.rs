@@ -1,5 +1,5 @@
 use crate::{
-    cdk::{futures::spawn, timers::TimerId, utils::time::now_secs},
+    cdk::{futures::spawn, timers::TimerId, types::Cycles, utils::time::now_secs},
     log,
     log::Topic,
     ops::{
@@ -9,7 +9,6 @@ use crate::{
         ic::{canister_cycle_balance, timer::TimerOps},
         storage::cycles::CycleTrackerOps,
     },
-    types::Cycles,
 };
 use std::{cell::RefCell, time::Duration};
 

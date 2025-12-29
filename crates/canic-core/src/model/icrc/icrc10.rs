@@ -1,6 +1,6 @@
 use crate::{
+    cdk::spec::icrc::icrc10::{ICRC_10_SUPPORTED_STANDARDS, Icrc10Standard},
     config::Config,
-    spec::icrc::icrc10::{ICRC_10_SUPPORTED_STANDARDS, Icrc10Standard},
 };
 
 ///

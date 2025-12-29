@@ -10,10 +10,10 @@
 
 use crate::{
     Error, ThisError,
+    cdk::types::BoundedString64,
     config::schema::ScalePool,
     dto::placement::WorkerEntryView,
     ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
-    types::BoundedString64,
 };
 
 ///

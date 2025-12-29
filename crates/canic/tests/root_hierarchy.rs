@@ -100,7 +100,7 @@ fn setup_root() -> &'static Setup {
         }
 
         let SubnetRegistryView(registry) = pic
-            .query_call(root_id, "canic_SUBNET_REGISTRY", ())
+            .query_call(root_id, "canic_subnet_registry", ())
             .expect("query registry");
 
         let subnet_directory_page: Page<(CanisterRole, Principal)> = pic
@@ -331,7 +331,7 @@ fn worker_topology_cascades_through_parent() {
 
     // Registry on root should show a new worker under scale_hub.
     let SubnetRegistryView(registry_after) = pic
-        .query_call(root_id, "canic_SUBNET_REGISTRY", ())
+        .query_call(root_id, "canic_subnet_registry", ())
         .expect("registry after worker creation");
     let worker_count_after = registry_after
         .iter()

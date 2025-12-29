@@ -60,7 +60,7 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            types::{Account, Int, Nat, Principal, Subaccount},
+            types::{Account, Cycles, Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
         log,
@@ -69,7 +69,6 @@ pub mod prelude {
             OpsError,
             ic::{call::Call, call_and_decode},
         },
-        types::Cycles,
     };
     pub use serde::{Deserialize, Serialize};
 }

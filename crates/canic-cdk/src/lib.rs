@@ -22,6 +22,8 @@ pub use ic_cdk_timers as timers;
 pub use ic_signature_verification as signature_verification;
 pub use icrc_ledger_types;
 
+pub mod env;
+pub mod spec;
 pub mod structures;
 pub mod types;
 pub mod utils;

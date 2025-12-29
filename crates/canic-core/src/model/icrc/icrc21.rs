@@ -1,4 +1,4 @@
-use crate::spec::icrc::icrc21::{
+use crate::cdk::spec::icrc::icrc21::{
     ConsentMessage, ConsentMessageRequest, ConsentMessageResponse, ErrorInfo,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -48,9 +48,9 @@ impl Icrc21Registry {
         Self::register(method, move |req| {
             let message = generator(&req);
 
-            ConsentMessageResponse::Ok(crate::spec::icrc::icrc21::ConsentInfo {
+            ConsentMessageResponse::Ok(crate::cdk::spec::icrc::icrc21::ConsentInfo {
                 consent_message: ConsentMessage::GenericDisplayMessage(message),
-                metadata: crate::spec::icrc::icrc21::ConsentMessageMetadata {
+                metadata: crate::cdk::spec::icrc::icrc21::ConsentMessageMetadata {
                     language: "en".to_string(),
                     utc_offset_minutes: None,
                 },
@@ -68,7 +68,7 @@ impl Icrc21Registry {
         match Self::get_handler(&req.method) {
             Some(handler) => handler(req),
             None => ConsentMessageResponse::Err(
-                crate::spec::icrc::icrc21::Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
+                crate::cdk::spec::icrc::icrc21::Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
                     description: "No handler registered for this method.".to_string(),
                 }),
             ),

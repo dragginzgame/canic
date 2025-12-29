@@ -13,7 +13,8 @@ mod canister {
     async fn canic_install() {}
     async fn canic_upgrade() {}
 
-    // Minimal WASMS set required by the macro; empty in this example.
+    // Minimal WASMS set required by the macro; empty in this example
+    #[expect(dead_code)]
     pub static WASMS: &[(CanisterRole, &[u8])] = &[];
 
     #[canic_update]

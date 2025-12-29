@@ -1,4 +1,4 @@
-use canic_cdk::utils::wasm::get_wasm_hash;
+use crate::utils::wasm::get_wasm_hash;
 
 ///
 /// WasmModule

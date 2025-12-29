@@ -12,11 +12,8 @@ pub mod sns;
 /// Shared imports for spec modules so type definitions stay concise.
 pub mod prelude {
     pub use crate::{
-        cdk::{
-            candid::{CandidType, Principal},
-            types::{Account, Int, Nat, Subaccount},
-        },
-        ids::CanisterRole,
+        candid::{CandidType, Principal},
+        types::{Account, Int, Nat, Subaccount},
     };
     pub use serde::Deserialize;
     pub use serde_bytes::ByteBuf;

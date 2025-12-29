@@ -1,4 +1,4 @@
-use crate::cdk::types::Account;
+use crate::types::Account;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 

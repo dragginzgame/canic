@@ -1,5 +1,4 @@
-use crate::dto::prelude::*;
-use canic_types::BoundedString64;
+use crate::{cdk::types::BoundedString64, dto::prelude::*};
 
 ///
 /// ScalingRegistryView

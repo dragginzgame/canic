@@ -1,14 +1,13 @@
 use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-        types::Principal,
+        types::{Cycles, Principal},
         utils::time::now_secs,
     },
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_unbounded,
     model::memory::id::pool::CANISTER_POOL_ID,
-    types::Cycles,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

@@ -8,7 +8,6 @@ members = [
     "crates/canic-macros",
     "crates/canic-memory",
     "crates/canic-testkit",
-    "crates/canic-types",
     "crates/canic-utils",
     "crates/canisters/app",
     "crates/canisters/auth",
@@ -49,7 +48,6 @@ canic-internal = { version = "0.6.20", path = "crates/canic-internal" }
 canic-macros = { version = "0.6.20", path = "crates/canic-macros" }
 canic-memory = { version = "0.6.20", path = "crates/canic-memory" }
 canic-testkit = { version = "0.6.20", path = "crates/canic-testkit" }
-canic-types = { version = "0.6.20", path = "crates/canic-types" }
 canic-utils = { version = "0.6.20", path = "crates/canic-utils" }
 convert_case = "0.10"
 crc32fast = "1.5"
@@ -117,7 +115,6 @@ canic-internal = { path = "crates/canic-internal" }
 canic-macros = { path = "crates/canic-macros" }
 canic-memory = { path = "crates/canic-memory" }
 canic-testkit = { path = "crates/canic-testkit" }
-canic-types = { path = "crates/canic-types" }
 canic-utils = { path = "crates/canic-utils" }
 
 # profiles

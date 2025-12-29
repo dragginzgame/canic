@@ -1,10 +1,12 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::{
+        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+        types::BoundedString64,
+    },
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
     model::memory::id::scaling::SCALING_REGISTRY_ID,
-    types::BoundedString64,
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};

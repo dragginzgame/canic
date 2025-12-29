@@ -7,9 +7,9 @@ use canic_cdk::{
         BTreeMap as StableBTreeMap, DefaultMemoryImpl,
         memory::{MemoryId, VirtualMemory},
     },
+    types::BoundedString256,
     utils::time::now_secs,
 };
-use canic_types::BoundedString256;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;

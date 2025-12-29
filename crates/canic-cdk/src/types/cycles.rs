@@ -1,11 +1,4 @@
-//!
-//! Cycle-denominated helpers covering human-friendly parsing, config shorthands,
-//! and arithmetic wrappers used by ops modules.
-//! The constants offer readable units (K/M/B/T/Q) while `Cycles` wraps `Nat`
-//! with derived math traits and serde helpers.
-//!
-
-use canic_cdk::{
+use crate::{
     candid::{CandidType, Nat},
     structures::{Storable, storable::Bound},
 };

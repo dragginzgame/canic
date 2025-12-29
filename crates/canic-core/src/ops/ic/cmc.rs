@@ -2,11 +2,14 @@
 
 use crate::{
     Error,
-    env::nns::CYCLES_MINTING_CANISTER,
-    ops::ic::call::Call,
-    spec::ic::cycles::{
-        IcpXdrConversionRate, IcpXdrConversionRateCertifiedResponse, IcpXdrConversionRateResponse,
+    cdk::{
+        env::nns::CYCLES_MINTING_CANISTER,
+        spec::ic::cycles::{
+            IcpXdrConversionRate, IcpXdrConversionRateCertifiedResponse,
+            IcpXdrConversionRateResponse,
+        },
     },
+    ops::ic::call::Call,
 };
 
 ///
@@ -25,5 +28,6 @@ pub async fn get_icp_xdr_conversion_rate() -> Result<IcpXdrConversionRate, Error
     }
 
     let plain = candid::decode_one::<IcpXdrConversionRateResponse>(&response)?;
+
     Ok(plain.data)
 }
