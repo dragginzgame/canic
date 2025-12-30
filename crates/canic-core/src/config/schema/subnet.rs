@@ -176,9 +176,13 @@ impl Validate for SubnetConfig {
 /// PoolImport
 /// Per-environment import lists for canister pools.
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PoolImport {
+    /// Optional count of canisters to import immediately before queuing the rest.
+    #[serde(default)]
+    pub initial: Option<u16>,
     #[serde(default)]
     pub local: Vec<Principal>,
     #[serde(default)]

@@ -9,7 +9,7 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 
 ---
 
-## [v0.7.0] — 2025-12-29 - Architecture Consolidation & Runtime Discipline
+## [v0.7.0] — 2025-12-30 - Architecture Consolidation & Runtime Discipline
 
 This release is a structural milestone focused on clarifying responsibility boundaries, eliminating architectural ambiguity, and hardening runtime behavior across the system. While user-visible behavior is largely unchanged, the internal model is now significantly more coherent, testable, and extensible.
 
