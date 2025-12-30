@@ -15,7 +15,7 @@ use crate::{
     ops::{
         adapter::directory::{app_directory_from_view, subnet_directory_from_view},
         ic::{Network, build_network},
-        runtime::{env::EnvOps, memory::MemoryRegistryOps},
+        runtime::{env::EnvOps, memory::MemoryOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             registry::SubnetRegistryOps,
@@ -65,7 +65,7 @@ fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
 }
 
 fn init_memory_or_trap(phase: &str) {
-    if let Err(err) = MemoryRegistryOps::init_memory() {
+    if let Err(err) = MemoryOps::init_memory() {
         fatal(phase, format!("memory init failed: {err}"));
     }
 }
@@ -198,7 +198,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
 
     // --- Phase 2: Payload registration ---
     let env = ensure_nonroot_env(canister_role, payload.env);
-    if let Err(err) = EnvOps::import(env) {
+    if let Err(err) = EnvOps::import_view(env) {
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 

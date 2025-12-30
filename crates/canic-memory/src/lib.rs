@@ -7,22 +7,18 @@
 
 pub mod macros;
 pub mod manager;
-pub mod ops;
 pub mod registry;
 pub mod runtime;
 pub mod serialize;
 
-// export cdk
 pub use ::canic_cdk as cdk;
 
 // internal types
 pub use manager::MEMORY_MANAGER;
-pub use registry::{
-    MemoryRange, MemoryRegistry, MemoryRegistryEntry, MemoryRegistryError, MemoryRegistryView,
-    drain_pending_ranges, drain_pending_registrations,
-};
 pub use runtime::init_eager_tls;
+pub use thiserror::Error as ThisError;
 
+// re-exports
 #[doc(hidden)]
 pub mod __reexports {
     pub use ctor;

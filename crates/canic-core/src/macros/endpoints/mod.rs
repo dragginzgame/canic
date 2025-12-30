@@ -57,13 +57,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_memory_registry() -> ::canic::core::ops::runtime::memory::MemoryRegistryView {
-            $crate::ops::runtime::memory::MemoryRegistryOps::export()
+        fn canic_memory_registry() -> ::canic::core::dto::memory::MemoryRegistryView {
+            $crate::ops::runtime::memory::MemoryOps::export_view()
         }
 
         #[canic_query]
         fn canic_env() -> ::canic::core::dto::env::EnvView {
-            $crate::ops::runtime::env::EnvOps::export()
+            $crate::ops::runtime::env::EnvOps::export_view()
         }
 
         #[canic_query]

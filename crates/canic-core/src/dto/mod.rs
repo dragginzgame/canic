@@ -27,6 +27,7 @@ pub mod canister;
 pub mod directory;
 pub mod env;
 pub mod log;
+pub mod memory;
 pub mod metrics;
 pub mod page;
 pub mod placement;
