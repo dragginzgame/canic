@@ -14,10 +14,7 @@ pub use canic_memory::MemoryRegistryError;
 pub use env::Env;
 pub use types::*;
 
-use crate::{
-    Error,
-    model::{ModelError, memory::log::LogError},
-};
+use crate::{Error, model::ModelError};
 use thiserror::Error as ThisError;
 
 ///
@@ -89,8 +86,8 @@ pub enum MemoryError {
     #[error(transparent)]
     MemoryRegistryError(#[from] MemoryRegistryError),
 
-    #[error(transparent)]
-    LogError(#[from] LogError),
+    #[error("log write failed: current_size={current_size}, delta={delta}")]
+    LogWriteFailed { current_size: u64, delta: u64 },
 }
 
 impl From<MemoryError> for Error {

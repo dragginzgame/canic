@@ -1,9 +1,8 @@
 pub mod icrc;
 pub mod memory;
 pub mod metrics;
-pub mod wasm;
 
-use crate::model::{memory::MemoryError, wasm::WasmRegistryError};
+use crate::model::memory::MemoryError;
 use thiserror::Error as ThisError;
 
 ///
@@ -14,7 +13,4 @@ use thiserror::Error as ThisError;
 pub enum ModelError {
     #[error(transparent)]
     MemoryError(#[from] MemoryError),
-
-    #[error(transparent)]
-    WasmRegistryError(#[from] WasmRegistryError),
 }

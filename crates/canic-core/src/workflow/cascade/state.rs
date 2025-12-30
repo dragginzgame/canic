@@ -15,9 +15,8 @@ use super::warn_if_large;
 use crate::{
     Error,
     dto::snapshot::StateSnapshotView,
-    log::Topic,
     ops::{
-        prelude::*,
+        ic::call_and_decode,
         runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
@@ -26,7 +25,10 @@ use crate::{
             state::{AppStateOps, SubnetStateOps},
         },
     },
-    workflow::snapshot::{state_snapshot_debug, state_snapshot_is_empty},
+    workflow::{
+        prelude::*,
+        snapshot::{state_snapshot_debug, state_snapshot_is_empty},
+    },
 };
 
 //

@@ -10,10 +10,8 @@
 
 use crate::{
     Error,
-    cdk::candid::Principal,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    infra::ic::call_and_decode,
-    ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    ops::{ic::call_and_decode, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,

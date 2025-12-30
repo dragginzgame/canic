@@ -10,7 +10,7 @@ use canic::{
     core::{
         access::policy::is_prime_subnet,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
-        ops::{rpc::create_canister_request, wasm::WasmOps},
+        ops::{rpc::create_canister_request, runtime::wasm::WasmOps},
     },
     prelude::*,
 };

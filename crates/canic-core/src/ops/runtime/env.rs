@@ -233,7 +233,7 @@ impl EnvOps {
 
     /// Ensure the caller is the root canister.
     pub fn require_root() -> Result<(), Error> {
-        let root_pid = EnvOps::root_pid()?;
+        let root_pid = Self::root_pid()?;
 
         if root_pid == canister_self() {
             Ok(())
@@ -244,7 +244,7 @@ impl EnvOps {
 
     /// Ensure the caller is not the root canister.
     pub fn deny_root() -> Result<(), Error> {
-        let root_pid = EnvOps::root_pid()?; // explicit mapping
+        let root_pid = Self::root_pid()?; // explicit mapping
 
         if root_pid == canister_self() {
             Err(EnvOpsError::IsRoot.into())

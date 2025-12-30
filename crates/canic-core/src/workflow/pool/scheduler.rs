@@ -15,16 +15,17 @@
 
 use crate::{
     Error,
-    log::Topic,
     model::memory::pool::CanisterPoolStatus,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
-        prelude::*,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
     policy::pool::PoolPolicyError,
-    workflow::pool::{admissibility::check_can_enter_pool, mark_failed, reset_into_pool},
+    workflow::{
+        pool::{admissibility::check_can_enter_pool, mark_failed, reset_into_pool},
+        prelude::*,
+    },
 };
 use std::{cell::RefCell, time::Duration};
 

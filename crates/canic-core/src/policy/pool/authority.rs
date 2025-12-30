@@ -8,7 +8,7 @@ use super::PoolPolicyError;
 /// Require that the caller is authorized to perform pool admin operations.
 ///
 /// Current policy: root-only.
-pub fn require_pool_admin(is_root: bool) -> Result<(), PoolPolicyError> {
+pub const fn require_pool_admin(is_root: bool) -> Result<(), PoolPolicyError> {
     if is_root {
         Ok(())
     } else {
