@@ -1,5 +1,3 @@
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -11,9 +9,7 @@ thread_local! {
 /// Enumerates the resource-heavy actions we track.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum SystemMetricKind {
     CanisterCall,
@@ -31,23 +27,6 @@ pub enum SystemMetricKind {
 }
 
 ///
-/// SystemMetricEntry
-/// Snapshot entry pairing a metric kind with its count.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct SystemMetricEntry {
-    pub kind: SystemMetricKind,
-    pub count: u64,
-}
-
-///
-/// SystemMetricsSnapshot
-///
-
-pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
-
-///
 /// SystemMetrics
 /// Thin facade over the action metrics counters.
 ///
@@ -63,18 +42,9 @@ impl SystemMetrics {
         });
     }
 
-    /// Return a snapshot of all counters.
     #[must_use]
-    pub fn snapshot() -> Vec<SystemMetricEntry> {
-        SYSTEM_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(kind, count)| SystemMetricEntry {
-                    kind: *kind,
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<SystemMetricKind, u64> {
+        SYSTEM_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     #[cfg(test)]
@@ -90,24 +60,76 @@ impl SystemMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
-    fn system_metrics_increments_and_snapshots() {
+    fn system_metrics_start_empty() {
+        SystemMetrics::reset();
+
+        let raw = SystemMetrics::export_raw();
+        assert!(raw.is_empty());
+    }
+
+    #[test]
+    fn increment_increases_counter() {
+        SystemMetrics::reset();
+
+        SystemMetrics::increment(SystemMetricKind::CanisterCall);
+
+        let raw = SystemMetrics::export_raw();
+        assert_eq!(raw.get(&SystemMetricKind::CanisterCall), Some(&1));
+    }
+
+    #[test]
+    fn increment_accumulates() {
+        SystemMetrics::reset();
+
+        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+
+        let raw = SystemMetrics::export_raw();
+        assert_eq!(raw.get(&SystemMetricKind::HttpOutcall), Some(&3));
+    }
+
+    #[test]
+    fn metrics_are_isolated_per_kind() {
         SystemMetrics::reset();
 
         SystemMetrics::increment(SystemMetricKind::CreateCanister);
-        SystemMetrics::increment(SystemMetricKind::CreateCanister);
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
+        SystemMetrics::increment(SystemMetricKind::DeleteCanister);
+        SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
-        let snapshot = SystemMetrics::snapshot();
-        let as_map: HashMap<SystemMetricKind, u64> = snapshot
-            .into_iter()
-            .map(|entry| (entry.kind, entry.count))
-            .collect();
+        let raw = SystemMetrics::export_raw();
 
-        assert_eq!(as_map.get(&SystemMetricKind::CreateCanister), Some(&2));
-        assert_eq!(as_map.get(&SystemMetricKind::InstallCode), Some(&1));
-        assert!(!as_map.contains_key(&SystemMetricKind::CanisterCall));
+        assert_eq!(raw.get(&SystemMetricKind::CreateCanister), Some(&1));
+        assert_eq!(raw.get(&SystemMetricKind::DeleteCanister), Some(&2));
+    }
+
+    #[test]
+    fn reset_clears_all_metrics() {
+        SystemMetrics::reset();
+
+        SystemMetrics::increment(SystemMetricKind::UpgradeCode);
+        SystemMetrics::increment(SystemMetricKind::UpdateSettings);
+
+        SystemMetrics::reset();
+
+        let raw = SystemMetrics::export_raw();
+        assert!(raw.is_empty());
+    }
+
+    #[test]
+    fn increment_saturates_at_u64_max() {
+        SystemMetrics::reset();
+
+        // Force near-overflow state
+        SYSTEM_METRICS.with_borrow_mut(|counts| {
+            counts.insert(SystemMetricKind::TimerScheduled, u64::MAX);
+        });
+
+        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
+
+        let raw = SystemMetrics::export_raw();
+        assert_eq!(raw.get(&SystemMetricKind::TimerScheduled), Some(&u64::MAX));
     }
 }

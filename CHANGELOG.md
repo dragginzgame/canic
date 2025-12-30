@@ -5,18 +5,75 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+Below is a polished, release-quality changelog entry suitable for **v0.7**. It is written to communicate architectural significance rather than individual commits, and to read credibly to both maintainers and advanced users.
+
+---
+
+## [v0.7.0] — 2025-12-30 - Architecture Consolidation & Runtime Discipline
+
+This release is a structural milestone focused on clarifying responsibility boundaries, eliminating architectural ambiguity, and hardening runtime behavior across the system. While user-visible behavior is largely unchanged, the internal model is now significantly more coherent, testable, and extensible.
+
+### Highlights
+
+* **Strict Layer Separation Enforced**
+
+  * Clear demarcation between **model**, **ops**, **workflow**, and **runtime** concerns.
+  * Storage-backed state, runtime orchestration, and view/DTO adaptation are now explicitly separated.
+  * Removed implicit cross-layer coupling and eliminated several “gray area” abstractions.
+
+* **Model ↔ View Canonicalization**
+
+  * Systematic `From`/adapter patterns established between model types and DTO/view representations.
+  * Storage types no longer leak into API or workflow layers.
+  * Enables safer refactors, clearer invariants, and more predictable serialization boundaries.
+
+* **Runtime vs Storage Semantics Clarified**
+
+  * Runtime logic moved out of storage-oriented ops where side effects or scheduling were previously ambiguous.
+  * Ops are now narrowly scoped to deterministic state transitions and validation.
+  * Workflow owns orchestration, propagation, and cascade semantics.
+
+* **Topology & Cascade Hardening**
+
+  * Topology synchronization rewritten around explicit bundle semantics.
+  * Parent/child propagation is now validated hop-by-hop with cycle and termination guarantees.
+  * Failures abort cleanly instead of producing partial or inconsistent topology state.
+
+* **Policy-Driven Pool & Lifecycle Logic**
+
+  * Pool admissibility and lifecycle checks are now explicitly policy-based and side-effect free.
+  * Local vs network-dependent behavior is isolated and testable.
+  * Runtime enforcement no longer conflates eligibility checks with mutation.
+
+* **Metrics & Instrumentation Cleanup**
+
+  * HTTP and runtime metrics normalized behind canonical method/label mapping.
+  * DTO conversion paths are explicit and consistent with the broader view strategy.
+
+### Why This Matters
+
+v0.7 dramatically reduces architectural entropy. It makes the system easier to reason about, safer to evolve, and far more resistant to subtle bugs caused by layer leakage or mixed responsibilities. This release lays the foundation for future features without accumulating technical debt.
+
+
 ## [0.6.20] - 2025-12-26
 ### Added
 - Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that
   directory roles must be singleton (`cardinality = "single"`).
+- Added typed endpoint identity (`EndpointCall`, `EndpointId`, `EndpointCallKind`) derived by macros and propagated through dispatch
+  and metrics (endpoint labels are no longer user-supplied).
+- Added `log.max_entries` validation (<= 100,000) to prevent unbounded log retention.
+- Added a log readiness gate so logging is a no-op until runtime initialization completes.
 
 ### Changed
 - App/subnet directories now map roles to a single `Principal`.
 - Registry registration now rejects duplicate principals and singleton-role collisions.
+- Topology snapshots now use `TopologyChildView` in `children_map` to avoid redundant parent identifiers.
+- Pool entry views are assembled from split header/state parts to avoid duplicating identity fields.
 
 ### Fixed
 - Subnet registry subtree traversal now guards against parent cycles.
 - Pool export validates readiness and metadata before removing entries.
+- Certified-data signature ops now enforce update-only context to prevent query traps.
 
 ## [0.6.19] - Perf Stack
 - Endpoint dispatch now records exclusive perf totals via a scoped stack; removed `perf_scope` from the prelude and dropped the `defer` dependency.  This means that endpoints can call each other and the correct performance metrics are logged.
@@ -24,8 +81,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.6.18] - 2025-12-24
 ### Added
 - Added `log.max_entry_bytes` to cap per-entry log message size and truncate oversized entries.
-- `PageRequest` now implements `Default` (same as `PageRequest::DEFAULT`).
 - Pool admin queued imports now return a summary with pool status counts and skip reasons.
+
+### Changed
+- `PageRequest` no longer implements `Default`; callers must use `PageRequest::new` or `PageRequest::bounded`.
 
 ### Fixed
 - `EnvOps::import` now returns a typed error when required env fields are missing, and non-root init traps with a clear message.
@@ -47,12 +106,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - App state now cascades during directory syncs so newly created canisters match root mode.
 
 ## [0.6.13] - 2025-12-21
-  - Enforced env/config invariants: ConfigOps::current_*/EnvOps::* now used infallibly; removed obsolete error handling
-    and warning fallbacks in auth, RPC, timers, and runtime startup.
+  - Env/config accessors are fallible: ConfigOps::current_* and EnvOps::* return `Result`, and callers propagate or
+    handle errors; lifecycle entrypoints trap on missing env/config with clear messages.
   - Directory ops hardened: added infallible get accessors, made canic_subnet_directory infallible, and aligned tests/
     endpoints accordingly.
-  - Env semantics tightened: import now validates required fields; root/non‑root predicates now use infallible getters;
-    removed unused env helpers; try_* env accessors are test‑only.
+  - Env semantics tightened: import validates required fields; root/non‑root predicates tolerate missing env with safe
+    fallbacks; removed unused env helpers; try_* env accessors are test‑only.
   - Bootstrapping + local fallback clarified: get_current_subnet_pid renamed to try_get_current_subnet_pid; local
     non‑root env fallback uses deterministic principals; IC still traps on missing env.
   - Init payload safety: removed CanisterInitPayload::empty and Default, added CanisterInitPayload::new.

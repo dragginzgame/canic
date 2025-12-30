@@ -1,5 +1,4 @@
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
+use crate::dto::prelude::*;
 
 ///
 /// Page
@@ -25,10 +24,6 @@ pub struct PageRequest {
 
 impl PageRequest {
     pub const MAX_LIMIT: u64 = 1_000;
-    pub const DEFAULT: Self = Self {
-        limit: 50,
-        offset: 0,
-    };
 
     #[must_use]
     pub const fn new(limit: u64, offset: u64) -> Self {
@@ -45,11 +40,5 @@ impl PageRequest {
     #[must_use]
     pub fn clamped(self) -> Self {
         Self::bounded(self.limit, self.offset)
-    }
-}
-
-impl Default for PageRequest {
-    fn default() -> Self {
-        Self::DEFAULT
     }
 }

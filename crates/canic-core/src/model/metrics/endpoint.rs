@@ -1,5 +1,3 @@
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -19,10 +17,10 @@ thread_local! {
 /// Internal attempt/completion counters.
 ///
 
-#[derive(Default)]
-struct EndpointAttemptCounts {
-    attempted: u64,
-    completed: u64,
+#[derive(Clone, Default)]
+pub struct EndpointAttemptCounts {
+    pub attempted: u64,
+    pub completed: u64,
 }
 
 ///
@@ -30,50 +28,11 @@ struct EndpointAttemptCounts {
 /// Internal ok/err counters for Result-returning endpoints.
 ///
 
-#[derive(Default)]
-struct EndpointResultCounts {
-    ok: u64,
-    err: u64,
-}
-
-// -----------------------------------------------------------------------------
-// Public metric DTOs
-// -----------------------------------------------------------------------------
-
-///
-/// EndpointAttemptMetricEntry
-/// Public metric entry for endpoint attempt/completion.
-///
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointAttemptMetricEntry {
-    pub endpoint: String,
-    pub attempted: u64,
-    pub completed: u64,
-}
-
-///
-/// EndpointAttemptMetricsSnapshot
-///
-
-pub type EndpointAttemptMetricsSnapshot = Vec<EndpointAttemptMetricEntry>;
-
-///
-/// EndpointResultMetricEntry
-/// Public metric entry for endpoint ok/err outcomes.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointResultMetricEntry {
-    pub endpoint: String,
+#[derive(Clone, Default)]
+pub struct EndpointResultCounts {
     pub ok: u64,
     pub err: u64,
 }
-
-///
-/// EndpointResultMetricsSnapshot
-///
-
-pub type EndpointResultMetricsSnapshot = Vec<EndpointResultMetricEntry>;
 
 // -----------------------------------------------------------------------------
 // Metrics state + operations
@@ -106,17 +65,8 @@ impl EndpointAttemptMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> EndpointAttemptMetricsSnapshot {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(endpoint, c)| EndpointAttemptMetricEntry {
-                    endpoint: (*endpoint).to_string(),
-                    attempted: c.attempted,
-                    completed: c.completed,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<&'static str, EndpointAttemptCounts> {
+        ENDPOINT_ATTEMPT_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     #[cfg(test)]
@@ -151,17 +101,8 @@ impl EndpointResultMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> EndpointResultMetricsSnapshot {
-        ENDPOINT_RESULT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(endpoint, c)| EndpointResultMetricEntry {
-                    endpoint: (*endpoint).to_string(),
-                    ok: c.ok,
-                    err: c.err,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<&'static str, EndpointResultCounts> {
+        ENDPOINT_RESULT_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     #[cfg(test)]
@@ -177,45 +118,151 @@ impl EndpointResultMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+
+    const EP_A: &str = "endpoint_a";
+    const EP_B: &str = "endpoint_b";
+
+    // -------------------------------------------------------------------------
+    // EndpointAttemptMetrics
+    // -------------------------------------------------------------------------
 
     #[test]
-    fn endpoint_attempt_metrics_track_attempted_and_completed() {
+    fn attempt_metrics_start_empty() {
         EndpointAttemptMetrics::reset();
 
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_attempted("b");
-        EndpointAttemptMetrics::increment_completed("a");
-
-        let snapshot = EndpointAttemptMetrics::snapshot();
-        let mut map: HashMap<String, (u64, u64)> = snapshot
-            .into_iter()
-            .map(|e| (e.endpoint, (e.attempted, e.completed)))
-            .collect();
-
-        assert_eq!(map.remove("a"), Some((2, 1)));
-        assert_eq!(map.remove("b"), Some((1, 0)));
-        assert!(map.is_empty());
+        let raw = EndpointAttemptMetrics::export_raw();
+        assert!(raw.is_empty());
     }
 
     #[test]
-    fn endpoint_result_metrics_track_ok_and_err() {
+    fn increment_attempted_increases_attempted_only() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+
+        let raw = EndpointAttemptMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.attempted, 1);
+        assert_eq!(counts.completed, 0);
+    }
+
+    #[test]
+    fn increment_completed_increases_completed_only() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_completed(EP_A);
+
+        let raw = EndpointAttemptMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.attempted, 0);
+        assert_eq!(counts.completed, 1);
+    }
+
+    #[test]
+    fn attempt_and_completed_accumulate_independently() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointAttemptMetrics::increment_completed(EP_A);
+
+        let raw = EndpointAttemptMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.attempted, 2);
+        assert_eq!(counts.completed, 1);
+    }
+
+    #[test]
+    fn attempt_metrics_are_per_endpoint() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointAttemptMetrics::increment_completed(EP_B);
+
+        let raw = EndpointAttemptMetrics::export_raw();
+
+        let a = raw.get(EP_A).unwrap();
+        let b = raw.get(EP_B).unwrap();
+
+        assert_eq!(a.attempted, 1);
+        assert_eq!(a.completed, 0);
+
+        assert_eq!(b.attempted, 0);
+        assert_eq!(b.completed, 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // EndpointResultMetrics
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn result_metrics_start_empty() {
         EndpointResultMetrics::reset();
 
-        EndpointResultMetrics::increment_ok("a");
-        EndpointResultMetrics::increment_ok("a");
-        EndpointResultMetrics::increment_err("a");
-        EndpointResultMetrics::increment_err("b");
+        let raw = EndpointResultMetrics::export_raw();
+        assert!(raw.is_empty());
+    }
 
-        let snapshot = EndpointResultMetrics::snapshot();
-        let mut map: HashMap<String, (u64, u64)> = snapshot
-            .into_iter()
-            .map(|e| (e.endpoint, (e.ok, e.err)))
-            .collect();
+    #[test]
+    fn increment_ok_increases_ok_only() {
+        EndpointResultMetrics::reset();
 
-        assert_eq!(map.remove("a"), Some((2, 1)));
-        assert_eq!(map.remove("b"), Some((0, 1)));
-        assert!(map.is_empty());
+        EndpointResultMetrics::increment_ok(EP_A);
+
+        let raw = EndpointResultMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.ok, 1);
+        assert_eq!(counts.err, 0);
+    }
+
+    #[test]
+    fn increment_err_increases_err_only() {
+        EndpointResultMetrics::reset();
+
+        EndpointResultMetrics::increment_err(EP_A);
+
+        let raw = EndpointResultMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.ok, 0);
+        assert_eq!(counts.err, 1);
+    }
+
+    #[test]
+    fn ok_and_err_accumulate_independently() {
+        EndpointResultMetrics::reset();
+
+        EndpointResultMetrics::increment_ok(EP_A);
+        EndpointResultMetrics::increment_ok(EP_A);
+        EndpointResultMetrics::increment_err(EP_A);
+
+        let raw = EndpointResultMetrics::export_raw();
+        let counts = raw.get(EP_A).unwrap();
+
+        assert_eq!(counts.ok, 2);
+        assert_eq!(counts.err, 1);
+    }
+
+    #[test]
+    fn result_metrics_are_per_endpoint() {
+        EndpointResultMetrics::reset();
+
+        EndpointResultMetrics::increment_ok(EP_A);
+        EndpointResultMetrics::increment_err(EP_B);
+
+        let raw = EndpointResultMetrics::export_raw();
+
+        let a = raw.get(EP_A).unwrap();
+        let b = raw.get(EP_B).unwrap();
+
+        assert_eq!(a.ok, 1);
+        assert_eq!(a.err, 0);
+
+        assert_eq!(b.ok, 0);
+        assert_eq!(b.err, 1);
     }
 }

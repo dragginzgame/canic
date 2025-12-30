@@ -1,132 +1,48 @@
-//! IC-related ops helpers.
+//! Ops-level façade for Internet Computer primitives.
 //!
-//! This module groups low-level IC concerns (management canister calls, ICC call
-//! wrappers, HTTP outcalls, timers) under a single namespace to keep `ops/`
-//! navigable.
+//! This module defines the **approved IC surface area** for the rest of the system.
+//! It deliberately sits between higher layers (workflow, endpoints, macros) and
+//! the low-level IC infrastructure implementations in `infra::ic`.
+//!
+//! Design intent:
+//! - `infra::ic` owns **raw, minimal IC bindings**
+//!   (management canister calls, signatures, timers, randomness, etc.).
+//! - `ops::ic` owns the **public contract** exposed to application code.
+//!
+//! As a result, most items here are **re-exports** rather than reimplementations.
+//! This is intentional:
+//! - It prevents higher layers from depending on `infra` directly.
+//! - It allows `infra` to be refactored or replaced without touching call sites.
+//! - It centralizes IC usage under a single, stable import path.
+//!
+//! Wrapping vs pass-through:
+//! - Items are **wrapped** here when ops-level concerns apply
+//!   (metrics, logging, perf tracking, lifecycle conventions).
+//! - Items are **passed through** unchanged when the raw IC API is already
+//!   the desired abstraction and no additional policy or orchestration is needed.
+//!
+//! In other words:
+//! - `infra::ic` answers “how does the IC work?”
+//! - `ops::ic` answers “what IC functionality is allowed to be used?”
+//!
+//! This module intentionally contains no policy decisions and no workflow logic.
 
 pub mod call;
-pub mod cmc;
 pub mod http;
-pub mod ledger;
 pub mod mgmt;
-pub mod payment;
-pub mod provision;
-pub mod signature;
-pub mod timer;
-pub mod xrc;
 
-pub use mgmt::*;
+pub use crate::infra::ic::{Network, build_network, build_network_from_dfx_network};
+pub use call::Call;
+pub use mgmt::{
+    call_and_decode, canister_cycle_balance, canister_status, create_canister, delete_canister,
+    deposit_cycles, get_cycles, install_code, raw_rand, uninstall_code, update_settings,
+    upgrade_canister,
+};
 
-use crate::{Error, ThisError, ops::OpsError};
-
-///
-/// IcOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum IcOpsError {
-    #[error(transparent)]
-    ProvisionOpsError(#[from] provision::ProvisionOpsError),
-
-    #[error(transparent)]
-    SignatureOpsError(#[from] signature::SignatureOpsError),
+pub mod signature {
+    pub use crate::infra::ic::signature::*;
 }
 
-impl From<IcOpsError> for Error {
-    fn from(err: IcOpsError) -> Self {
-        OpsError::from(err).into()
-    }
-}
-
-///
-/// Network
-/// Identifies the environment the canister believes it runs in.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Network {
-    Ic,
-    Local,
-}
-
-impl Network {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Ic => "ic",
-            Self::Local => "local",
-        }
-    }
-}
-
-impl core::fmt::Display for Network {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-///
-/// build_network_from_dfx_network
-/// Pure helper for `build_network()`, exposed for testing and reuse.
-///
-
-#[must_use]
-pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Option<Network> {
-    match dfx_network {
-        Some("local") => Some(Network::Local),
-        Some("ic") => Some(Network::Ic),
-
-        _ => None,
-    }
-}
-
-///
-/// build_network
-/// Returns the network inferred at *build time* from `DFX_NETWORK`.
-/// This value is baked into the Wasm and does not reflect runtime state.
-///
-/// ChatGPT 5.2 Final, Precise Verdict
-///
-/// ✅ Yes, this works exactly as you say
-/// ✅ It is valid IC/Wasm code
-/// ❌ It is not runtime detection
-/// ⚠️ The danger is semantic, not technical
-/// ✅ Safe if treated as a build-time constant
-/// ❌ Dangerous if treated as authoritative runtime truth
-///
-
-#[must_use]
-pub fn build_network() -> Option<Network> {
-    build_network_from_dfx_network(option_env!("DFX_NETWORK"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_network_from_dfx_network_parses_ic() {
-        assert_eq!(
-            build_network_from_dfx_network(Some("ic")),
-            Some(Network::Ic)
-        );
-    }
-
-    #[test]
-    fn build_network_from_dfx_network_parses_local() {
-        assert_eq!(
-            build_network_from_dfx_network(Some("local")),
-            Some(Network::Local)
-        );
-    }
-
-    #[test]
-    fn build_network_from_dfx_network_rejects_unknown() {
-        assert_eq!(build_network_from_dfx_network(Some("nope")), None);
-    }
-
-    #[test]
-    fn build_network_from_dfx_network_handles_missing() {
-        assert_eq!(build_network_from_dfx_network(None), None);
-    }
+pub mod timer {
+    pub use crate::ops::runtime::timer::{TimerId, TimerOps};
 }

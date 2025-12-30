@@ -1,6 +1,10 @@
 use crate::{
-    model::icrc::{Icrc10Registry, Icrc21Registry},
-    spec::icrc::{icrc10::Icrc10Standard, icrc21::ConsentMessageRequest},
+    cdk::spec::icrc::{
+        icrc10::Icrc10Standard,
+        icrc21::{ConsentMessageRequest, ConsentMessageResponse},
+    },
+    dispatch::icrc21::Icrc21Dispatcher,
+    model::icrc::Icrc10Registry,
 };
 
 ///
@@ -33,9 +37,9 @@ impl Icrc21Ops {
     /// Register a consent message handler for a method.
     pub fn register<F>(method: &str, handler: F)
     where
-        F: Fn(ConsentMessageRequest) -> crate::spec::icrc::icrc21::ConsentMessageResponse + 'static,
+        F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
     {
-        Icrc21Registry::register(method, handler);
+        Icrc21Dispatcher::register(method, handler);
     }
 
     /// Register a consent message generator for a method (static message).
@@ -43,14 +47,12 @@ impl Icrc21Ops {
     where
         F: Fn(&ConsentMessageRequest) -> String + 'static,
     {
-        Icrc21Registry::register_static_with(method, generator);
+        Icrc21Dispatcher::register_static_with(method, generator);
     }
 
     /// Generate a consent message using registered handlers.
     #[must_use]
-    pub fn consent_message(
-        req: ConsentMessageRequest,
-    ) -> crate::spec::icrc::icrc21::ConsentMessageResponse {
-        Icrc21Registry::consent_message(req)
+    pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
+        Icrc21Dispatcher::consent_message(req)
     }
 }

@@ -1,27 +1,17 @@
-//! Ops-scoped IC helpers.
-//!
-//! These wrappers attach ops-level concerns such as metrics recording around
-//! IC management canister calls and common ICC call patterns.
-
 use crate::{
     Error,
     cdk::{
-        mgmt::{
-            self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
-            CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
-            UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
-        },
+        mgmt::{CanisterInstallMode, CanisterStatusResult, UpdateSettingsArgs},
+        types::Cycles,
         utils::wasm::get_wasm_hash,
     },
-    env::nns::NNS_REGISTRY_CANISTER,
+    infra::ic::mgmt as infra_mgmt,
     log,
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::{ic::call::Call, storage::CanisterInitPayload},
-    spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
-    types::Cycles,
+    ops::ic::call::Call,
 };
-use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{CandidType, Principal, decode_one, utils::ArgumentEncoder};
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -32,17 +22,10 @@ pub async fn create_canister(
     controllers: Vec<Principal>,
     cycles: Cycles,
 ) -> Result<Principal, Error> {
-    let settings = Some(CanisterSettings {
-        controllers: Some(controllers),
-        ..Default::default()
-    });
-    let args = CreateCanisterArgs { settings };
-
-    let pid = mgmt::create_canister_with_extra_cycles(&args, cycles.to_u128())
-        .await?
-        .canister_id;
+    let pid = infra_mgmt::create_canister(controllers, cycles).await?;
 
     SystemMetrics::increment(SystemMetricKind::CreateCanister);
+
     Ok(pid)
 }
 
@@ -52,12 +35,10 @@ pub async fn create_canister(
 
 /// Query the management canister for a canister's status and record metrics.
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
-    let args = CanisterStatusArgs {
-        canister_id: canister_pid,
-    };
+    let status = infra_mgmt::canister_status(canister_pid).await?;
 
-    let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
     SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+
     Ok(status)
 }
 
@@ -68,25 +49,22 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 /// Returns the local canister's cycle balance (cheap).
 #[must_use]
 pub fn canister_cycle_balance() -> Cycles {
-    crate::cdk::api::canister_cycle_balance().into()
+    infra_mgmt::canister_cycle_balance()
 }
 
 /// Deposits cycles into a canister and records metrics.
 pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
-    let args = DepositCyclesArgs {
-        canister_id: canister_pid,
-    };
-    mgmt::deposit_cycles(&args, cycles)
-        .await
-        .map_err(Error::from)?;
+    infra_mgmt::deposit_cycles(canister_pid, cycles).await?;
 
     SystemMetrics::increment(SystemMetricKind::DepositCycles);
+
     Ok(())
 }
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
     let status = canister_status(canister_pid).await?;
+
     Ok(status.cycles.into())
 }
 
@@ -101,41 +79,9 @@ pub async fn raw_rand() -> Result<[u8; 32], Error> {
     let len = bytes.len();
     let seed: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| Error::CustomError(format!("raw_rand returned {len} bytes")))?;
+        .map_err(|_| Error::custom(format!("raw_rand returned {len} bytes")))?;
 
     Ok(seed)
-}
-
-//
-// ────────────────────────────── TOPOLOGY LOOKUPS ─────────────────────────────
-//
-
-/// Queries the NNS registry for the subnet that this canister belongs to and records ICC metrics.
-pub async fn try_get_current_subnet_pid() -> Result<Option<Principal>, Error> {
-    let request = GetSubnetForCanisterRequest::new(crate::cdk::api::canister_self());
-
-    let subnet_id_opt = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-        .with_arg(request)
-        .await?
-        .candid::<GetSubnetForCanisterResponse>()?
-        .map_err(Error::CallFailed)?
-        .subnet_id;
-
-    if let Some(subnet_id) = subnet_id_opt {
-        log!(
-            Topic::Topology,
-            Info,
-            "try_get_current_subnet_pid: {subnet_id}"
-        );
-    } else {
-        log!(
-            Topic::Topology,
-            Warn,
-            "try_get_current_subnet_pid: not found"
-        );
-    }
-
-    Ok(subnet_id_opt)
 }
 
 //
@@ -149,17 +95,7 @@ pub async fn install_code<T: ArgumentEncoder>(
     wasm: &[u8],
     args: T,
 ) -> Result<(), Error> {
-    let arg = encode_args(args)?;
-    let install_args = InstallCodeArgs {
-        mode,
-        canister_id: canister_pid,
-        wasm_module: WasmModule::from(wasm),
-        arg,
-    };
-
-    mgmt::install_code(&install_args)
-        .await
-        .map_err(Error::from)?;
+    infra_mgmt::install_code(mode, canister_pid, wasm, args).await?;
 
     let metric_kind = match mode {
         CanisterInstallMode::Install => SystemMetricKind::InstallCode,
@@ -169,17 +105,6 @@ pub async fn install_code<T: ArgumentEncoder>(
     SystemMetrics::increment(metric_kind);
 
     Ok(())
-}
-
-/// Installs or reinstalls a Canic non-root canister with the standard init args.
-pub async fn install_canic_code(
-    mode: CanisterInstallMode,
-    canister_pid: Principal,
-    wasm: &[u8],
-    payload: CanisterInitPayload,
-    extra_arg: Option<Vec<u8>>,
-) -> Result<(), Error> {
-    install_code(mode, canister_pid, wasm, (payload, extra_arg)).await
 }
 
 /// Upgrades a canister to the provided wasm when the module hash differs.
@@ -212,23 +137,23 @@ pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<()
 
 /// Uninstalls code from a canister and records metrics.
 pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
-    let args = UninstallCodeArgs {
-        canister_id: canister_pid,
-    };
+    infra_mgmt::uninstall_code(canister_pid).await?;
 
-    mgmt::uninstall_code(&args).await.map_err(Error::from)?;
     SystemMetrics::increment(SystemMetricKind::UninstallCode);
+
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "🗑️ uninstall_code: {canister_pid}"
+    );
 
     Ok(())
 }
 
 /// Deletes a canister (code + controllers) via the management canister and records metrics.
 pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
-    let args = DeleteCanisterArgs {
-        canister_id: canister_pid,
-    };
+    infra_mgmt::delete_canister(canister_pid).await?;
 
-    mgmt::delete_canister(&args).await.map_err(Error::from)?;
     SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
     Ok(())
@@ -240,7 +165,7 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
 
 /// Updates canister settings via the management canister and records metrics.
 pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
-    mgmt::update_settings(args).await.map_err(Error::from)?;
+    infra_mgmt::update_settings(args).await?;
     SystemMetrics::increment(SystemMetricKind::UpdateSettings);
     Ok(())
 }

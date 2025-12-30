@@ -1,27 +1,32 @@
-//! Business-logic helpers that sit between endpoint handlers and the state
-//! layer.
+//! Operations layer.
 //!
-//! The ops layer orchestrates multi-step workflows such as provisioning new
-//! canisters,  running scaling/sharding policies, and
-//! synchronizing topology snapshots. Endpoint macros call into these modules so
-//! the public surface remains thin while policy, logging, and validation live
-//! here.
+//! Ops functions are fallible and must not trap.
+//! All unrecoverable failures are handled at lifecycle boundaries.
+//!
+//! This module contains two kinds of operations:
+//!
+//! 1. **Control ops**
+//!    - Mutate state
+//!    - Perform orchestration
+//!    - Call IC management APIs
+//!    - Must be invoked via workflow
+//!
+//! 2. **View ops**
+//!    - Read-only facades over internal state
+//!    - Perform snapshotting, aggregation, pagination
+//!    - Safe to call directly from query endpoints
+//!
+//! Examples of view ops include registry exports and metrics views.
 
-pub mod bootstrap;
-pub mod command;
+pub(crate) mod adapter;
 pub mod config;
 pub mod ic;
 pub mod icrc;
-pub mod orchestration;
 pub mod perf;
-pub mod placement;
-pub mod pool;
-pub mod random;
 pub mod rpc;
 pub mod runtime;
-pub mod service;
 pub mod storage;
-pub mod wasm;
+pub mod view;
 
 use std::time::Duration;
 
@@ -54,21 +59,18 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            types::{Account, Int, Nat, Principal, Subaccount},
+            types::{Account, Cycles, Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
         log,
         log::Level,
-        ops::{
-            OpsError,
-            ic::{call::Call, call_and_decode},
-        },
-        types::Cycles,
+        ops::OpsError,
+        ops::ic::{call::Call, call_and_decode},
     };
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, ops::storage::env::EnvOps};
+use crate::ThisError;
 
 ///
 /// OpsError
@@ -77,49 +79,15 @@ use crate::{ThisError, ops::storage::env::EnvOps};
 
 #[derive(Debug, ThisError)]
 pub enum OpsError {
-    /// Raised when a function requires root context, but was called from a child.
-    #[error("operation must be called from the root canister")]
-    NotRoot,
-
-    /// Raised when a function must not be called from root.
-    #[error("operation cannot be called from the root canister")]
-    IsRoot,
-
     #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
-
-    #[error(transparent)]
-    IcOpsError(#[from] ic::IcOpsError),
-
-    #[error(transparent)]
-    OrchestrationOpsError(#[from] orchestration::OrchestrationOpsError),
-
-    #[error(transparent)]
-    PoolOpsError(#[from] pool::PoolOpsError),
 
     #[error(transparent)]
     RpcOpsError(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
+    RuntimeOpsError(#[from] runtime::RuntimeOpsError),
+
+    #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
-}
-
-impl OpsError {
-    /// Ensure the caller is the root canister.
-    pub fn require_root() -> Result<(), Self> {
-        if EnvOps::is_root() {
-            Ok(())
-        } else {
-            Err(Self::NotRoot)
-        }
-    }
-
-    /// Ensure the caller is not the root canister.
-    pub fn deny_root() -> Result<(), Self> {
-        if EnvOps::is_root() {
-            Err(Self::IsRoot)
-        } else {
-            Ok(())
-        }
-    }
 }

@@ -2,14 +2,10 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{directory::DirectoryView, id::directory::APP_DIRECTORY_ID},
+    model::memory::id::directory::APP_DIRECTORY_ID,
 };
 use candid::Principal;
 use std::cell::RefCell;
-
-//
-// APP_DIRECTORY
-//
 
 eager_static! {
     static APP_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
@@ -17,7 +13,20 @@ eager_static! {
 }
 
 ///
+/// AppDirectoryData
+///
+
+pub type AppDirectoryData = Vec<(CanisterRole, Principal)>;
+
+///
 /// AppDirectory
+///
+/// Stable-memory–backed directory mapping canister roles to principals.
+///
+/// Invariants:
+/// - Each role appears at most once.
+/// - The directory is authoritative; imports replace all existing entries.
+/// - This structure is persisted and replicated via snapshot import/export.
 ///
 
 pub struct AppDirectory;
@@ -25,7 +34,7 @@ pub struct AppDirectory;
 impl AppDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn view() -> DirectoryView {
+    pub(crate) fn export() -> AppDirectoryData {
         APP_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
@@ -33,10 +42,10 @@ impl AppDirectory {
         })
     }
 
-    pub(crate) fn import(view: DirectoryView) {
+    pub(crate) fn import(data: AppDirectoryData) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (role, pid) in view {
+            for (role, pid) in data {
                 map.insert(role, pid);
             }
         });

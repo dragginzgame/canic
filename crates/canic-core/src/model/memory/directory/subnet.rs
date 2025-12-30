@@ -2,14 +2,10 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{directory::DirectoryView, id::directory::SUBNET_DIRECTORY_ID},
+    model::memory::id::directory::SUBNET_DIRECTORY_ID,
 };
 use candid::Principal;
 use std::cell::RefCell;
-
-//
-// SUBNET_DIRECTORY
-//
 
 eager_static! {
     static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
@@ -17,7 +13,21 @@ eager_static! {
 }
 
 ///
+/// SubnetDirectoryData
+///
+
+pub type SubnetDirectoryData = Vec<(CanisterRole, Principal)>;
+
+///
 /// SubnetDirectory
+///
+/// Stable-memory–backed model relation mapping subnet-scoped canister
+/// roles to their principals.
+///
+/// Invariants:
+/// - Each role appears at most once.
+/// - This directory is authoritative and replaced wholesale on import.
+/// - View/snapshot representations are constructed in higher layers.
 ///
 
 pub struct SubnetDirectory;
@@ -25,7 +35,7 @@ pub struct SubnetDirectory;
 impl SubnetDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn view() -> DirectoryView {
+    pub(crate) fn export() -> SubnetDirectoryData {
         SUBNET_DIRECTORY.with_borrow(|map| {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
@@ -33,10 +43,10 @@ impl SubnetDirectory {
         })
     }
 
-    pub(crate) fn import(view: DirectoryView) {
+    pub(crate) fn import(data: SubnetDirectoryData) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (role, pid) in view {
+            for (role, pid) in data {
                 map.insert(role, pid);
             }
         });

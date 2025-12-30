@@ -2,10 +2,13 @@ use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::
 use canic::{
     Error,
     core::{
-        ids::{CanisterRole, SubnetRole},
-        ops::storage::{
-            CanisterInitPayload, directory::DirectoryView, env::EnvData, topology::SubnetIdentity,
+        dto::{
+            abi::v1::CanisterInitPayload,
+            directory::{AppDirectoryView, SubnetDirectoryView},
+            env::EnvView,
+            subnet::SubnetIdentity,
         },
+        ids::{CanisterRole, SubnetRole},
     },
 };
 use derive_more::{Deref, DerefMut};
@@ -119,8 +122,8 @@ impl Pic {
         &self,
         role: CanisterRole,
         wasm: Vec<u8>,
-        app_directory: DirectoryView,
-        subnet_directory: DirectoryView,
+        app_directory: AppDirectoryView,
+        subnet_directory: SubnetDirectoryView,
     ) -> Result<Principal, Error> {
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, 1_000_000_000_000);
@@ -178,7 +181,7 @@ impl Pic {
 ///
 /// Init semantics:
 /// - Root canisters receive a `SubnetIdentity` (direct root bootstrap).
-/// - Non-root canisters receive `EnvData` + optional directory snapshots.
+/// - Non-root canisters receive `EnvView` + optional directory snapshots.
 ///
 /// Directory handling:
 /// - By default, directory views are empty for standalone installs.
@@ -194,7 +197,7 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
         // Provide a minimal, deterministic env payload for standalone installs.
         let root_pid = Principal::from_slice(&[0xBB; 29]);
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        let env = EnvData {
+        let env = EnvView {
             prime_root_pid: Some(root_pid),
             subnet_role: Some(SubnetRole::PRIME),
             subnet_pid: Some(subnet_pid),
@@ -202,9 +205,14 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
             canister_role: Some(role),
             parent_pid: Some(root_pid),
         };
+
         // Intentional: local standalone installs don't need directory views unless a test
         // exercises directory-dependent auth/endpoints.
-        let payload = CanisterInitPayload::new(env, Vec::new(), Vec::new());
+        let payload = CanisterInitPayload::new(
+            env,
+            AppDirectoryView(Vec::new()),
+            SubnetDirectoryView(Vec::new()),
+        );
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
     }?;
 
@@ -213,8 +221,8 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
 
 fn install_args_with_directories(
     role: CanisterRole,
-    app_directory: DirectoryView,
-    subnet_directory: DirectoryView,
+    app_directory: AppDirectoryView,
+    subnet_directory: SubnetDirectoryView,
 ) -> Result<Vec<u8>, Error> {
     let args = if role.is_root() {
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
@@ -222,7 +230,7 @@ fn install_args_with_directories(
     } else {
         let root_pid = Principal::from_slice(&[0xBB; 29]);
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        let env = EnvData {
+        let env = EnvView {
             prime_root_pid: Some(root_pid),
             subnet_role: Some(SubnetRole::PRIME),
             subnet_pid: Some(subnet_pid),

@@ -10,6 +10,7 @@ use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
+use crate::api::{EndpointCall, EndpointId};
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
     #[cfg(not(test))]
@@ -73,7 +74,6 @@ pub enum PerfKey {
 /// Tracks an active endpoint scope and accumulated child instructions.
 ///
 
-#[derive(Debug, Default)]
 struct PerfFrame {
     start: u64,
     child_instructions: u64,
@@ -116,8 +116,11 @@ pub fn record(key: PerfKey, delta: u64) {
     });
 }
 
-pub fn record_endpoint(func: &str, delta_instructions: u64) {
-    record(PerfKey::Endpoint(func.to_string()), delta_instructions);
+pub fn record_endpoint(endpoint: EndpointId, delta_instructions: u64) {
+    record(
+        PerfKey::Endpoint(endpoint.name.to_string()),
+        delta_instructions,
+    );
 }
 
 pub fn record_timer(label: &str, delta_instructions: u64) {
@@ -130,8 +133,8 @@ pub(crate) fn enter_endpoint() {
 }
 
 /// End the most recent endpoint scope and record exclusive instructions.
-pub(crate) fn exit_endpoint(label: &str) {
-    exit_endpoint_at(label, perf_counter());
+pub(crate) fn exit_endpoint(call: EndpointCall) {
+    exit_endpoint_at(call.endpoint, perf_counter());
 }
 
 fn enter_endpoint_at(start: u64) {
@@ -152,11 +155,11 @@ fn enter_endpoint_at(start: u64) {
     });
 }
 
-fn exit_endpoint_at(label: &str, end: u64) {
+fn exit_endpoint_at(endpoint: EndpointId, end: u64) {
     PERF_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         let Some(frame) = stack.pop() else {
-            record_endpoint(label, end);
+            record_endpoint(endpoint, end);
             return;
         };
 
@@ -167,7 +170,7 @@ fn exit_endpoint_at(label: &str, end: u64) {
             parent.child_instructions = parent.child_instructions.saturating_add(total);
         }
 
-        record_endpoint(label, exclusive);
+        record_endpoint(endpoint, exclusive);
     });
 }
 
@@ -227,9 +230,9 @@ mod tests {
 
         enter_endpoint_at(200);
         checkpoint_at(230);
-        exit_endpoint_at("child", 260);
+        exit_endpoint_at(EndpointId::new("child"), 260);
 
-        exit_endpoint_at("parent", 300);
+        exit_endpoint_at(EndpointId::new("parent"), 300);
 
         let parent = entry_for("parent");
         let child = entry_for("child");

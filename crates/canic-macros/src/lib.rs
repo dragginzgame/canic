@@ -4,7 +4,7 @@
 //! (`#[query]`, `#[update]`), routed through `canic::cdk::*`.
 //!
 //! Pipeline enforced by generated wrappers:
-//!   guard → auth → policy → dispatch
+//!   guard → auth → rule → dispatch
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -60,7 +60,7 @@ mod parse {
         pub app_guard: bool,
         pub user_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Expr>,
+        pub rules: Vec<Expr>,
     }
 
     pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
@@ -81,7 +81,7 @@ mod parse {
         let mut app_guard = false;
         let mut user_guard = false;
         let mut auth = None::<AuthSpec>;
-        let mut policies = Vec::<Expr>::new();
+        let mut rules = Vec::<Expr>::new();
 
         for meta in metas {
             match meta {
@@ -135,10 +135,10 @@ mod parse {
                     auth = Some(AuthSpec::All(rules));
                 }
 
-                // policy(...)
+                // rule(...)
                 //
-                // Parse as Expr so you can do policy(local_only()), policy(max_rounds(rounds, 10_000)), etc.
-                Meta::List(list) if list.path.is_ident("policy") => {
+                // Parse as Expr so you can do rule(local_only()), rule(max_rounds(rounds, 10_000)), etc.
+                Meta::List(list) if list.path.is_ident("rule") => {
                     let parsed = Punctuated::<Expr, Token![,]>::parse_terminated
                         .parse2(list.tokens.clone())?
                         .into_iter()
@@ -147,11 +147,11 @@ mod parse {
                     if parsed.is_empty() {
                         return Err(syn::Error::new_spanned(
                             list,
-                            "`policy(...)` expects at least one policy expression",
+                            "`rule(...)` expects at least one rule expression",
                         ));
                     }
 
-                    policies.extend(parsed);
+                    rules.extend(parsed);
                 }
 
                 // explicit CDK guard = ...
@@ -172,7 +172,7 @@ mod parse {
             app_guard,
             user_guard,
             auth,
-            policies,
+            rules,
         })
     }
     const fn empty() -> ParsedArgs {
@@ -181,7 +181,7 @@ mod parse {
             app_guard: false,
             user_guard: false,
             auth: None,
-            policies: Vec::new(),
+            rules: Vec::new(),
         }
     }
 
@@ -220,7 +220,7 @@ mod validate {
         pub forwarded: Vec<TokenStream2>,
         pub app_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Expr>,
+        pub rules: Vec<Expr>,
     }
 
     pub fn validate(
@@ -264,10 +264,10 @@ mod validate {
             ));
         }
 
-        if !parsed.policies.is_empty() && !returns_result(sig) {
+        if !parsed.rules.is_empty() && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`policy(...)` requires `Result<_, From<canic::Error>>`",
+                "`rule(...)` requires `Result<_, From<canic::Error>>`",
             ));
         }
 
@@ -275,7 +275,7 @@ mod validate {
             forwarded: parsed.forwarded,
             app_guard: parsed.app_guard,
             auth: parsed.auth,
-            policies: parsed.policies,
+            rules: parsed.rules,
         })
     }
 
@@ -286,6 +286,7 @@ mod validate {
         let syn::Type::Path(ty) = &**ty else {
             return false;
         };
+
         ty.path
             .segments
             .last()
@@ -328,29 +329,31 @@ mod expand {
             ..orig_sig.clone()
         };
 
-        let label = orig_name.to_string();
+        let call_ident = format_ident!("__canic_call");
+        let call_decl = call_decl(kind, &call_ident, &orig_name);
 
-        let attempted = attempted(&label);
-        let guard = guard(kind, args.app_guard, &label);
-        let auth = auth(args.auth.as_ref(), &label);
-        let policy = policy(&args.policies, &label);
+        let attempted = attempted(&call_ident);
+        let guard = guard(kind, args.app_guard, &call_ident);
+        let auth = auth(args.auth.as_ref(), &call_ident);
+        let rule = rule(&args.rules, &call_ident);
 
         let call_args = match extract_args(&orig_sig) {
             Ok(v) => v,
             Err(e) => return e.to_compile_error().into(),
         };
 
-        let call = call(asyncness, dispatch, &label, impl_name, &call_args);
-        let completion = completion(&label, returns_result, call);
+        let dispatch_call = dispatch_call(asyncness, dispatch, &call_ident, impl_name, &call_args);
+        let completion = completion(&call_ident, returns_result, dispatch_call);
 
         quote! {
            #(#attrs)*
            #cdk_attr
             #vis #wrapper_sig {
+                #call_decl
                 #attempted
                 #guard
                 #auth
-                #policy
+                #rule
                 #completion
             }
 
@@ -381,37 +384,55 @@ mod expand {
         }
     }
 
-    fn record_access_denied(label: &String, kind: TokenStream2) -> TokenStream2 {
+    fn call_decl(
+        kind: EndpointKind,
+        call_ident: &syn::Ident,
+        orig_name: &syn::Ident,
+    ) -> TokenStream2 {
+        let call_kind = match kind {
+            EndpointKind::Query => quote!(::canic::core::api::EndpointCallKind::Query),
+            EndpointKind::Update => quote!(::canic::core::api::EndpointCallKind::Update),
+        };
+
         quote! {
-            ::canic::core::ops::runtime::metrics::AccessMetrics::increment(#label, #kind);
+            let #call_ident = ::canic::core::api::EndpointCall {
+                endpoint: ::canic::core::api::EndpointId::new(stringify!(#orig_name)),
+                kind: #call_kind,
+            };
         }
     }
 
-    fn attempted(label: &String) -> TokenStream2 {
+    fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
         quote! {
-            ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_attempted(#label);
+            ::canic::core::ops::runtime::metrics::AccessMetrics::increment(#call, #kind);
         }
     }
 
-    fn guard(kind: EndpointKind, enabled: bool, label: &String) -> TokenStream2 {
+    fn attempted(call: &syn::Ident) -> TokenStream2 {
+        quote! {
+            ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_attempted(#call);
+        }
+    }
+
+    fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
         if !enabled {
             return quote!();
         }
 
         let metric = record_access_denied(
-            label,
+            call,
             quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Guard),
         );
 
         match kind {
             EndpointKind::Query => quote! {
-                if let Err(err) = ::canic::core::guard::guard_app_query() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_query() {
                     #metric
                     return Err(err.into());
                 }
             },
             EndpointKind::Update => quote! {
-                if let Err(err) = ::canic::core::guard::guard_app_update() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_update() {
                     #metric
                     return Err(err.into());
                 }
@@ -419,9 +440,9 @@ mod expand {
         }
     }
 
-    fn auth(auth: Option<&AuthSpec>, label: &String) -> TokenStream2 {
+    fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
         let metric = record_access_denied(
-            label,
+            call,
             quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Auth),
         );
 
@@ -442,17 +463,17 @@ mod expand {
         }
     }
 
-    fn policy(policies: &[Expr], label: &String) -> TokenStream2 {
-        if policies.is_empty() {
+    fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
+        if rules.is_empty() {
             return quote!();
         }
 
         let metric = record_access_denied(
-            label,
-            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Policy),
+            call,
+            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Rule),
         );
 
-        let checks = policies.iter().map(|expr| {
+        let checks = rules.iter().map(|expr| {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric
@@ -463,35 +484,39 @@ mod expand {
         quote!(#(#checks)*)
     }
 
-    fn call(
+    fn dispatch_call(
         asyncness: bool,
         dispatch: TokenStream2,
-        label: &String,
+        call: &syn::Ident,
         impl_name: syn::Ident,
         call_args: &[TokenStream2],
     ) -> TokenStream2 {
         if asyncness {
             quote! {
-                #dispatch(#label, || async move {
+                #dispatch(#call, || async move {
                     #impl_name(#(#call_args),*).await
                 }).await
             }
         } else {
             quote! {
-                #dispatch(#label, || {
+                #dispatch(#call, || {
                     #impl_name(#(#call_args),*)
                 })
             }
         }
     }
 
-    fn completion(label: &String, returns_result: bool, call: TokenStream2) -> TokenStream2 {
+    fn completion(
+        call: &syn::Ident,
+        returns_result: bool,
+        dispatch_call: TokenStream2,
+    ) -> TokenStream2 {
         let result_metrics = if returns_result {
             quote! {
                 if out.is_ok() {
-                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_ok(#label);
+                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_ok(#call);
                 } else {
-                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_err(#label);
+                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_err(#call);
                 }
             }
         } else {
@@ -500,8 +525,8 @@ mod expand {
 
         quote! {
             {
-                let out = #call;
-                ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_completed(#label);
+                let out = #dispatch_call;
+                ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_completed(#call);
                 #result_metrics
                 out
             }

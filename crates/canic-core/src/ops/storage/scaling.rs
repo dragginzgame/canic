@@ -1,26 +1,37 @@
-pub use crate::model::memory::scaling::{ScalingRegistryView, WorkerEntry};
-
-use crate::{cdk::types::Principal, model::memory::scaling::ScalingRegistry};
+use crate::{
+    cdk::types::Principal,
+    dto::placement::ScalingRegistryView,
+    model::memory::scaling::{ScalingRegistry, WorkerEntry},
+    ops::adapter::placement::worker_entry_to_view,
+};
 
 ///
-/// ScalingWorkerRegistryStorageOps
+/// ScalingRegistryOps
 /// Stable storage wrapper for the scaling worker registry.
 ///
 
-pub struct ScalingWorkerRegistryStorageOps;
+pub struct ScalingRegistryOps;
 
-impl ScalingWorkerRegistryStorageOps {
-    pub fn insert(pid: Principal, entry: WorkerEntry) {
-        ScalingRegistry::insert(pid, entry);
+impl ScalingRegistryOps {
+    pub(crate) fn upsert(pid: Principal, entry: WorkerEntry) {
+        ScalingRegistry::upsert(pid, entry);
     }
 
     #[must_use]
-    pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntry)> {
-        ScalingRegistry::find_by_pool(pool)
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn count_by_pool(pool: &str) -> u32 {
+        ScalingRegistry::find_by_pool(pool).len() as u32
     }
 
     #[must_use]
-    pub fn export() -> ScalingRegistryView {
-        ScalingRegistry::export()
+    pub fn export_view() -> ScalingRegistryView {
+        let data = ScalingRegistry::export();
+
+        let view = data
+            .into_iter()
+            .map(|(pid, entry)| (pid, worker_entry_to_view(&entry)))
+            .collect();
+
+        ScalingRegistryView(view)
     }
 }

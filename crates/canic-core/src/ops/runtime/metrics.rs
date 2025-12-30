@@ -1,294 +1,207 @@
-pub use crate::model::metrics::{access::*, endpoint::*, http::*, icc::*, system::*, timer::*};
-use crate::{
-    dto::page::{Page, PageRequest},
-    perf::{PerfKey, entries as perf_entries},
+pub use crate::dto::metrics::{
+    access::{AccessMetricEntry, AccessMetricKind},
+    endpoint::EndpointHealthView,
+    http::HttpMetricEntry,
+    icc::IccMetricEntry,
+    system::SystemMetricEntry,
+    timer::TimerMetricEntry,
 };
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
+use crate::{
+    api::EndpointCall,
+    dto::page::{Page, PageRequest},
+    model::metrics::{
+        access::AccessMetrics as ModelAccessMetrics,
+        endpoint::{
+            EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
+            EndpointResultMetrics as ModelEndpointResultMetrics,
+        },
+        http::HttpMetrics,
+        icc::IccMetrics,
+        system::{SystemMetricKind, SystemMetrics},
+        timer::TimerMetrics,
+    },
+    ops::{
+        adapter::metrics::{
+            access::{access_metric_kind_from_view, access_metrics_to_view},
+            endpoint::endpoint_health_to_view,
+            http::http_metrics_to_view,
+            icc::icc_metrics_to_view,
+            system::system_metrics_to_view,
+            timer::timer_metrics_to_view,
+        },
+        view::paginate_vec,
+    },
+};
+
+pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
+
+pub struct AccessMetrics;
+
+impl AccessMetrics {
+    pub fn increment(call: EndpointCall, kind: AccessMetricKind) {
+        let model_kind = access_metric_kind_from_view(kind);
+        ModelAccessMetrics::increment(call.endpoint.name, model_kind);
+    }
+}
+
+pub struct EndpointAttemptMetrics;
+
+impl EndpointAttemptMetrics {
+    pub fn increment_attempted(call: EndpointCall) {
+        ModelEndpointAttemptMetrics::increment_attempted(call.endpoint.name);
+    }
+
+    pub fn increment_completed(call: EndpointCall) {
+        ModelEndpointAttemptMetrics::increment_completed(call.endpoint.name);
+    }
+}
+
+pub struct EndpointResultMetrics;
+
+impl EndpointResultMetrics {
+    pub fn increment_ok(call: EndpointCall) {
+        ModelEndpointResultMetrics::increment_ok(call.endpoint.name);
+    }
+
+    pub fn increment_err(call: EndpointCall) {
+        ModelEndpointResultMetrics::increment_err(call.endpoint.name);
+    }
+}
 
 ///
 /// MetricsOps
-/// Thin ops-layer facade over volatile metrics state.
+/// Read-side façade over volatile metrics state.
 ///
-
 pub struct MetricsOps;
 
-///
-/// EndpointHealthEntry
-/// Derived endpoint-level health view joined at read time.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointHealthEntry {
-    pub endpoint: String,
-    pub attempted: u64,
-    pub denied: u64,
-    pub completed: u64,
-    pub ok: u64,
-    pub err: u64,
-    pub avg_instr: u64,
-    pub total_instr: u64,
-}
-
 impl MetricsOps {
-    /// Export the current metrics snapshot.
+    /// System-level action counters.
+    #[must_use]
+    pub fn system_page(request: PageRequest) -> Page<SystemMetricEntry> {
+        let raw = SystemMetrics::export_raw();
+        let mut entries = system_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| a.kind.cmp(&b.kind));
+
+        paginate_vec(entries, request)
+    }
+
+    /// System-level action counters without pagination.
     #[must_use]
     pub fn system_snapshot() -> SystemMetricsSnapshot {
-        let mut entries = SystemMetrics::snapshot();
+        let raw = SystemMetrics::export_raw();
+        let mut entries = system_metrics_to_view(raw);
+
         entries.sort_by(|a, b| a.kind.cmp(&b.kind));
+
         entries
     }
 
-    /// Export the current HTTP metrics snapshot.
-    #[must_use]
-    pub fn http_snapshot() -> HttpMetricsSnapshot {
-        HttpMetrics::snapshot()
-    }
-
-    /// Export the current HTTP metrics snapshot as a stable, paged view.
+    /// HTTP outcall counters.
     #[must_use]
     pub fn http_page(request: PageRequest) -> Page<HttpMetricEntry> {
-        let mut entries = Self::http_snapshot();
-        entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.url.cmp(&b.url)));
-        paginate(entries, request)
+        let raw = HttpMetrics::export_raw();
+        let mut entries = http_metrics_to_view(raw);
+
+        entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
+
+        paginate_vec(entries, request)
     }
 
-    /// Export the current ICC metrics snapshot.
-    #[must_use]
-    pub fn icc_snapshot() -> IccMetricsSnapshot {
-        IccMetrics::snapshot()
-    }
-
-    /// Export the current ICC metrics snapshot as a stable, paged view.
+    /// Inter-canister call counters.
     #[must_use]
     pub fn icc_page(request: PageRequest) -> Page<IccMetricEntry> {
-        let mut entries = Self::icc_snapshot();
+        let raw = IccMetrics::export_raw();
+        let mut entries = icc_metrics_to_view(raw);
+
         entries.sort_by(|a, b| {
             a.target
                 .as_slice()
                 .cmp(b.target.as_slice())
                 .then_with(|| a.method.cmp(&b.method))
         });
-        paginate(entries, request)
+
+        paginate_vec(entries, request)
     }
 
-    /// Export the current timer metrics snapshot.
-    #[must_use]
-    pub fn timer_snapshot() -> TimerMetricsSnapshot {
-        TimerMetrics::snapshot()
-    }
-
-    /// Export the current timer metrics snapshot as a stable, paged view.
+    /// Timer execution counters.
     #[must_use]
     pub fn timer_page(request: PageRequest) -> Page<TimerMetricEntry> {
-        let mut entries = Self::timer_snapshot();
+        let raw = TimerMetrics::export_raw();
+        let mut entries = timer_metrics_to_view(raw);
+
         entries.sort_by(|a, b| {
             a.mode
                 .cmp(&b.mode)
                 .then_with(|| a.delay_ms.cmp(&b.delay_ms))
                 .then_with(|| a.label.cmp(&b.label))
         });
-        paginate(entries, request)
+
+        paginate_vec(entries, request)
     }
 
-    /// Export the current access metrics snapshot.
-    #[must_use]
-    pub fn access_snapshot() -> AccessMetricsSnapshot {
-        AccessMetrics::snapshot()
-    }
-
-    /// Export the current access metrics snapshot as a stable, paged view.
+    /// Access-denial counters.
     #[must_use]
     pub fn access_page(request: PageRequest) -> Page<AccessMetricEntry> {
-        let mut entries = Self::access_snapshot();
+        let raw = ModelAccessMetrics::export_raw();
+        let mut entries = access_metrics_to_view(raw);
+
         entries.sort_by(|a, b| {
             a.endpoint
                 .cmp(&b.endpoint)
                 .then_with(|| a.kind.cmp(&b.kind))
         });
-        paginate(entries, request)
+
+        paginate_vec(entries, request)
     }
 
-    /// Derived endpoint health view (attempts + denials + results + perf).
+    /// Derived endpoint health view (attempts + denials + results).
     #[must_use]
-    pub fn endpoint_health_page(request: PageRequest) -> Page<EndpointHealthEntry> {
-        Self::endpoint_health_page_excluding(request, None)
+    pub fn endpoint_health_page(
+        request: PageRequest,
+        exclude_endpoint: Option<&str>,
+    ) -> Page<EndpointHealthView> {
+        let attempts = ModelEndpointAttemptMetrics::export_raw();
+        let results = ModelEndpointResultMetrics::export_raw();
+        let access = ModelAccessMetrics::export_raw();
+
+        let mut entries = endpoint_health_to_view(attempts, results, access, exclude_endpoint);
+
+        entries.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+
+        paginate_vec(entries, request)
     }
 
-    /// Derived endpoint health view (attempts + denials + results + perf), optionally excluding an
-    /// endpoint label (useful to avoid self-observation artifacts for the view endpoint itself).
     #[must_use]
     pub fn endpoint_health_page_excluding(
         request: PageRequest,
         exclude_endpoint: Option<&str>,
-    ) -> Page<EndpointHealthEntry> {
-        let attempt_snapshot = EndpointAttemptMetrics::snapshot();
-        let result_snapshot = EndpointResultMetrics::snapshot();
-        let access_snapshot = AccessMetrics::snapshot();
-        let perf_snapshot = perf_endpoint_snapshot();
-
-        let mut attempts: HashMap<String, (u64, u64)> = HashMap::new();
-        for entry in attempt_snapshot {
-            attempts.insert(entry.endpoint, (entry.attempted, entry.completed));
-        }
-
-        let mut results: HashMap<String, (u64, u64)> = HashMap::new();
-        for entry in result_snapshot {
-            results.insert(entry.endpoint, (entry.ok, entry.err));
-        }
-
-        let mut denied: HashMap<String, u64> = HashMap::new();
-        for entry in access_snapshot {
-            let counter = denied.entry(entry.endpoint).or_insert(0);
-            *counter = counter.saturating_add(entry.count);
-        }
-
-        let mut endpoints = BTreeSet::<String>::new();
-        endpoints.extend(attempts.keys().cloned());
-        endpoints.extend(results.keys().cloned());
-        endpoints.extend(denied.keys().cloned());
-        endpoints.extend(perf_snapshot.keys().cloned());
-
-        let entries = endpoints
-            .into_iter()
-            .filter(|endpoint| match exclude_endpoint {
-                Some(excluded) => endpoint != excluded,
-                None => true,
-            })
-            .map(|endpoint| {
-                let (attempted, completed) = attempts.get(&endpoint).copied().unwrap_or((0, 0));
-
-                // Aggregated access denials (auth + policy), per endpoint.
-                let denied = denied.get(&endpoint).copied().unwrap_or(0);
-                let (ok, err) = results.get(&endpoint).copied().unwrap_or((0, 0));
-
-                let (perf_count, total_instr) =
-                    perf_snapshot.get(&endpoint).copied().unwrap_or((0, 0));
-                let avg_instr = if perf_count == 0 {
-                    0
-                } else {
-                    total_instr / perf_count
-                };
-
-                EndpointHealthEntry {
-                    endpoint,
-                    attempted,
-                    denied,
-                    completed,
-                    ok,
-                    err,
-                    avg_instr,
-                    total_instr,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        paginate(entries, request)
+    ) -> Page<EndpointHealthView> {
+        Self::endpoint_health_page(request, exclude_endpoint)
     }
 }
 
-// -----------------------------------------------------------------------------
-// Pagination
-// -----------------------------------------------------------------------------
-
-#[must_use]
-fn paginate<T>(entries: Vec<T>, request: PageRequest) -> Page<T> {
-    let request = request.clamped();
-    let total = entries.len() as u64;
-    let (start, end) = pagination_bounds(total, request);
-
-    let entries = entries.into_iter().skip(start).take(end - start).collect();
-
-    Page { entries, total }
+/// Record a single HTTP outcall for system metrics.
+pub fn record_http_outcall() {
+    SystemMetrics::increment(SystemMetricKind::HttpOutcall);
 }
 
-#[allow(clippy::cast_possible_truncation)]
-fn pagination_bounds(total: u64, request: PageRequest) -> (usize, usize) {
-    let start = request.offset.min(total);
-    let end = request.offset.saturating_add(request.limit).min(total);
-
-    let start = start as usize;
-    let end = end as usize;
-
-    (start, end)
-}
-
-// -----------------------------------------------------------------------------
-// Joins
-// -----------------------------------------------------------------------------
-
-/// perf_endpoint_snapshot
-///
-/// NOTE:
-/// If perf_entries() ever returns multiple entries per endpoint (e.g.:
-/// multiple call sites
-/// multiple timers
-/// future instrumentation changes),
-/// you will silently overwrite earlier values.
 #[must_use]
-fn perf_endpoint_snapshot() -> HashMap<String, (u64, u64)> {
-    let mut out = HashMap::<String, (u64, u64)>::new();
-
-    for entry in perf_entries() {
-        let PerfKey::Endpoint(label) = &entry.key else {
-            continue;
-        };
-
-        let slot = out.entry(label.clone()).or_insert((0, 0));
-        slot.0 = slot.0.saturating_add(entry.count);
-        slot.1 = slot.1.saturating_add(entry.total_instructions);
+pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
+    if let Some(label) = label {
+        return label.to_string();
     }
 
-    out
-}
+    let without_fragment = url.split('#').next().unwrap_or(url);
+    let without_query = without_fragment
+        .split('?')
+        .next()
+        .unwrap_or(without_fragment);
 
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::perf;
-
-    #[test]
-    fn endpoint_health_joins_tables() {
-        EndpointAttemptMetrics::reset();
-        EndpointResultMetrics::reset();
-        AccessMetrics::reset();
-        perf::reset();
-
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_attempted("a");
-        EndpointAttemptMetrics::increment_completed("a");
-        EndpointResultMetrics::increment_ok("a");
-        perf::record_endpoint("a", 1_000);
-
-        EndpointAttemptMetrics::increment_attempted("b");
-        AccessMetrics::increment("b", AccessMetricKind::Auth);
-
-        let page = MetricsOps::endpoint_health_page(PageRequest::new(10, 0));
-        assert_eq!(page.total, 2);
-
-        let a = &page.entries[0];
-        assert_eq!(a.endpoint, "a");
-        assert_eq!(a.attempted, 2);
-        assert_eq!(a.denied, 0);
-        assert_eq!(a.completed, 1);
-        assert_eq!(a.ok, 1);
-        assert_eq!(a.err, 0);
-        assert_eq!(a.total_instr, 1_000);
-        assert_eq!(a.avg_instr, 1_000);
-
-        let b = &page.entries[1];
-        assert_eq!(b.endpoint, "b");
-        assert_eq!(b.attempted, 1);
-        assert_eq!(b.denied, 1);
-        assert_eq!(b.completed, 0);
-        assert_eq!(b.ok, 0);
-        assert_eq!(b.err, 0);
-        assert_eq!(b.total_instr, 0);
-        assert_eq!(b.avg_instr, 0);
+    let trimmed = without_query.trim();
+    if trimmed.is_empty() {
+        url.to_string()
+    } else {
+        trimmed.to_string()
     }
 }

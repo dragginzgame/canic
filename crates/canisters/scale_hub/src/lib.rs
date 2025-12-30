@@ -7,7 +7,10 @@
 
 use candid::Principal;
 use canic::{
-    core::{Error, ops::placement::scaling::ScalingRegistryOps},
+    core::{
+        Error, cdk::utils::time::now_secs, policy::placement::scaling::ScalingPolicy,
+        workflow::placement::scaling::ScalingWorkflow,
+    },
     prelude::*,
 };
 use canic_internal::canister::SCALE_HUB;
@@ -32,7 +35,7 @@ async fn canic_upgrade() {}
 /// no authentication needed as for canic testing
 #[canic_update]
 async fn create_worker() -> Result<Principal, Error> {
-    let worker_pid = ScalingRegistryOps::create_worker(POOL_NAME).await?;
+    let worker_pid = ScalingWorkflow::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
 }
@@ -42,7 +45,7 @@ async fn create_worker() -> Result<Principal, Error> {
 #[canic_query]
 async fn plan_create_worker() -> Result<bool, Error> {
     // Example: return whether scaling policy says "yes, spawn"
-    let plan = ScalingRegistryOps::plan_create_worker(POOL_NAME)?;
+    let plan = ScalingPolicy::plan_create_worker(POOL_NAME, now_secs())?;
 
     Ok(plan.should_spawn)
 }

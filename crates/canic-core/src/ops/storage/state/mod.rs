@@ -6,4 +6,20 @@ mod subnet;
 pub use app::*;
 pub use subnet::*;
 
-pub use crate::model::memory::state::{AppStateData, SubnetStateData};
+use crate::{Error, ThisError, ops::storage::StorageOpsError};
+
+///
+/// StateOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum StateOpsError {
+    #[error(transparent)]
+    AppStateOpsError(#[from] app::AppStateOpsError),
+}
+
+impl From<StateOpsError> for Error {
+    fn from(err: StateOpsError) -> Self {
+        StorageOpsError::StateOpsError(err).into()
+    }
+}

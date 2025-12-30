@@ -3,7 +3,7 @@
 // Compile with `--features ic` to include the canister module.
 
 mod canister {
-    use canic::{core::ids::CanisterRole, prelude::*};
+    use canic::prelude::*;
 
     // Set up a minimal root canister with default hooks.
     canic::start_root!();
@@ -13,7 +13,8 @@ mod canister {
     async fn canic_install() {}
     async fn canic_upgrade() {}
 
-    // Minimal WASMS set required by the macro; empty in this example.
+    // Minimal WASMS set required by the macro; empty in this example
+    #[expect(dead_code)]
     pub static WASMS: &[(CanisterRole, &[u8])] = &[];
 
     #[canic_update]

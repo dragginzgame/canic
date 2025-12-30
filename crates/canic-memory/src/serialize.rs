@@ -1,18 +1,18 @@
 //!
-//! MiniCBOR-powered serialization helpers ensuring deterministic codecs across
+//! serde_cbor-powered serialization helpers ensuring deterministic codecs across
 //! canisters. Provides a thin wrapper with shared error handling for CBOR
 //! round-trips in stable structures.
 //!
 
-use minicbor_serde::{from_slice, to_vec};
 use serde::{Serialize, de::DeserializeOwned};
+use serde_cbor::{from_slice, to_vec};
 use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
 ///
 /// SerializeError
 ///
-/// Error variants wrapping MiniCBOR serialization or deserialization failures
+/// Error variants wrapping CBOR serialization or deserialization failures
 /// so callers can bubble them up uniformly.
 ///
 
@@ -26,7 +26,7 @@ pub enum SerializeError {
 }
 
 ///
-/// Serialize a value into CBOR bytes using MiniCBOR.
+/// Serialize a value into CBOR bytes using serde_cbor.
 ///
 pub fn serialize<T>(t: &T) -> Result<Vec<u8>, SerializeError>
 where
@@ -38,7 +38,7 @@ where
 }
 
 ///
-/// Deserialize CBOR bytes into a value using MiniCBOR.
+/// Deserialize CBOR bytes into a value using serde_cbor.
 ///
 pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where

@@ -19,12 +19,15 @@ canic-cdk = { workspace = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
 canic-memory = { workspace = true }
-canic-types = { workspace = true }
 canic-utils = { workspace = true }
 ic-cdk = { workspace = true }
 
 [build-dependencies]
 canic-core = { workspace = true }
+
+[dev-dependencies]
+canic-internal = { workspace = true }
+canic-testkit = { workspace = true }
 
 [lints]
 workspace = true

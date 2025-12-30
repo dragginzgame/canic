@@ -28,8 +28,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
-            req: ::canic::core::spec::icrc::icrc21::ConsentMessageRequest,
-        ) -> ::canic::core::spec::icrc::icrc21::ConsentMessageResponse {
+            req: ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageRequest,
+        ) -> ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageResponse {
             $crate::ops::icrc::Icrc21Ops::consent_message(req)
         }
 
@@ -57,13 +57,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_memory_registry() -> ::canic::core::ops::storage::memory::MemoryRegistryView {
-            $crate::ops::storage::memory::MemoryRegistryOps::export()
+        fn canic_memory_registry() -> ::canic::core::ops::runtime::memory::MemoryRegistryView {
+            $crate::ops::runtime::memory::MemoryRegistryOps::export()
         }
 
         #[canic_query]
-        fn canic_env() -> ::canic::core::ops::storage::env::EnvData {
-            $crate::ops::storage::env::EnvOps::export()
+        fn canic_env() -> ::canic::core::dto::env::EnvView {
+            $crate::ops::runtime::env::EnvOps::export()
         }
 
         #[canic_query]
@@ -72,7 +72,7 @@ macro_rules! canic_endpoints {
             topic: Option<String>,
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::log::LogEntryDto> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::log::LogEntryView> {
             ::canic::core::ops::runtime::log::LogOps::page(crate_name, topic, min_level, page)
         }
 
@@ -127,7 +127,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::EndpointHealthEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::endpoint::EndpointHealthView> {
             ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
                 page,
                 Some(stringify!(canic_metrics_endpoint_health)),
@@ -139,13 +139,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_app_state() -> ::canic::core::ops::storage::state::AppStateData {
-            $crate::ops::storage::state::AppStateOps::export()
+        fn canic_app_state() -> ::canic::core::dto::state::AppStateView {
+            $crate::ops::storage::state::AppStateOps::export_view()
         }
 
         #[canic_query]
-        fn canic_subnet_state() -> ::canic::core::ops::storage::state::SubnetStateData {
-            $crate::ops::storage::state::SubnetStateOps::export()
+        fn canic_subnet_state() -> ::canic::core::dto::state::SubnetStateView {
+            $crate::ops::storage::state::SubnetStateOps::export_view()
         }
 
         //
@@ -179,8 +179,8 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::storage::CanisterSummary> {
-            ::canic::core::ops::storage::topology::subnet::SubnetCanisterChildrenOps::page(page)
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
+            ::canic::core::ops::storage::children::CanisterChildrenOps::page(page)
         }
 
         //
@@ -190,28 +190,28 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::types::Cycles)> {
-            $crate::ops::runtime::cycles::CycleTrackerOps::page(page)
+        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
+            $crate::ops::storage::cycles::CycleTrackerOps::page(page)
         }
 
         //
         // SCALING
         //
 
-        #[canic_query(auth_any(::canic::core::auth::is_controller))]
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::ops::placement::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::ops::placement::scaling::ScalingRegistryOps::export())
+        -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::scaling::ScalingRegistryOps::export_view())
         }
 
         //
         // SHARDING
         //
 
-        #[canic_query(auth_any(::canic::core::auth::is_controller))]
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::core::ops::placement::sharding::ShardingRegistryDto, ::canic::Error> {
-            Ok($crate::ops::placement::sharding::ShardingPolicyOps::export())
+        -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::Error> {
+            Ok($crate::ops::storage::sharding::ShardingRegistryOps::export_view())
         }
 
         //

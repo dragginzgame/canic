@@ -7,9 +7,9 @@ use canic_cdk::{
         BTreeMap as StableBTreeMap, DefaultMemoryImpl,
         memory::{MemoryId, VirtualMemory},
     },
+    types::BoundedString256,
     utils::time::now_secs,
 };
-use canic_types::BoundedString256;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -134,7 +134,6 @@ pub enum MemoryRegistryError {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryRange {
-    pub crate_key: BoundedString256,
     pub start: u8,
     pub end: u8,
     pub created_at: u64,
@@ -146,12 +145,11 @@ impl MemoryRange {
         start: u8,
         end: u8,
     ) -> Result<Self, MemoryRegistryError> {
-        let crate_key = BoundedString256::try_new(crate_name).map_err(|_| {
+        let _ = BoundedString256::try_new(crate_name).map_err(|_| {
             MemoryRegistryError::CrateKeyTooLong(crate_name.to_string(), crate_name.len())
         })?;
 
         Ok(Self {
-            crate_key,
             start,
             end,
             created_at: now_secs(),

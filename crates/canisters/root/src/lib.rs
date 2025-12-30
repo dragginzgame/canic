@@ -8,8 +8,9 @@
 use canic::{
     Error,
     core::{
-        access::policy::is_prime_subnet,
-        ops::rpc::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+        access::rule::is_prime_subnet,
+        dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
+        ops::{rpc::create_canister_request, runtime::wasm::WasmOps},
     },
     prelude::*,
 };
@@ -21,6 +22,11 @@ use std::collections::HashMap;
 //
 
 canic::start_root!();
+
+canic::eager_init!({
+    // Populate the in-memory WASM registry for provisioning before bootstrap.
+    WasmOps::import_static_quiet(WASMS);
+});
 
 async fn canic_setup() {}
 async fn canic_install() {}
@@ -85,7 +91,7 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
 
 /// create_blank
 /// Controller-only helper for local Canic testing.
-#[canic_update(guard(app), auth_any(is_controller), policy(is_prime_subnet))]
+#[canic_update(guard(app), auth_any(is_controller), rule(is_prime_subnet))]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
