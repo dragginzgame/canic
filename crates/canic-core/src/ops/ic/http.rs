@@ -1,8 +1,8 @@
-pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult};
-
 use crate::{
     Error,
-    cdk::mgmt::http_request,
+    infra::ic::http::{
+        HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
+    },
     ops::{adapter::metrics::http::record_http_request, runtime::metrics::record_http_outcall},
 };
 use num_traits::ToPrimitive;
@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 
 ///
 /// Http
+/// Approved, observable HTTP helpers over the IC management API.
 ///
 
 pub struct Http;
@@ -54,7 +55,7 @@ impl Http {
             ..Default::default()
         };
 
-        let res = http_request(&args)
+        let res = http_request_raw(&args)
             .await
             .map_err(|e| Error::HttpRequest(e.to_string()))?;
 
@@ -77,8 +78,8 @@ impl Http {
         // metrics
         Self::record_metrics(args.method, &args.url, label);
 
-        http_request(&args)
+        http_request_raw(&args)
             .await
-            .map_err(|e| crate::Error::HttpRequest(e.to_string()))
+            .map_err(|e| Error::HttpRequest(e.to_string()))
     }
 }

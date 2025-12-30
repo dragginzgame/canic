@@ -6,6 +6,7 @@
 
 pub mod call;
 pub mod cmc;
+pub mod http;
 pub mod ledger;
 pub mod mgmt;
 pub mod signature;
