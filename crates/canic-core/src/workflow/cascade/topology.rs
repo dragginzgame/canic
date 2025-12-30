@@ -8,13 +8,17 @@
 //! and forwards a further-trimmed snapshot to the next hop. Failures are logged
 //! and abort the cascade rather than continuing with partial data.
 
-use super::warn_if_large;
 use crate::{
     Error,
+    cdk::candid::Principal,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    log::Topic,
-    ops::{OpsError, prelude::*, storage::children::CanisterChildrenOps},
-    workflow::{cascade::CascadeError, snapshot::TopologySnapshotBuilder},
+    infra::ic::call_and_decode,
+    ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    workflow::{
+        cascade::{CascadeError, warn_if_large},
+        prelude::*,
+        snapshot::TopologySnapshotBuilder,
+    },
 };
 use std::collections::HashMap;
 
@@ -25,7 +29,7 @@ use std::collections::HashMap;
 //
 
 pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     let snapshot = match TopologySnapshotBuilder::for_target(target_pid) {
         Ok(builder) => builder.build(),
@@ -94,9 +98,9 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 //
 
 pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), Error> {
-    OpsError::deny_root()?;
-    let self_pid = canister_self();
+    EnvOps::deny_root()?;
 
+    let self_pid = canister_self();
     let next = match next_child_on_path(self_pid, &snapshot.parents) {
         Ok(next) => next,
         Err(err) => {
