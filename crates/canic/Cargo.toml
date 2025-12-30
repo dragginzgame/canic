@@ -26,7 +26,7 @@ ic-cdk = { workspace = true }
 canic-core = { workspace = true }
 
 [dev-dependencies]
-canic-internal = { workspace = true }
+canic-internal = { path = "../canic-internal" }
 canic-testkit = { workspace = true }
 
 [lints]
