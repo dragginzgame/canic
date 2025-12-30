@@ -5,10 +5,8 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ids::CanisterRole,
-    ops::{
-        prelude::*,
-        rpc::{Rpc, RpcOpsError, execute_rpc},
-    },
+    infra::rpc::{Rpc, RpcOpsError, execute_rpc},
+    ops::prelude::*,
 };
 use candid::encode_one;
 

@@ -4,9 +4,9 @@ use crate::{
         env::nns::NNS_REGISTRY_CANISTER,
         spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     },
+    infra::ic::call::Call,
     log,
     log::Topic,
-    ops::ic::call::Call,
 };
 use candid::Principal;
 

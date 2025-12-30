@@ -9,7 +9,7 @@ use crate::{
     model::memory::children::{CanisterChildren, CanisterChildrenData},
     ops::{
         adapter::canister::{canister_summary_from_topology_child, canister_summary_to_view},
-        env::EnvOps,
+        runtime::env::EnvOps,
         storage::registry::SubnetRegistryOps,
     },
 };

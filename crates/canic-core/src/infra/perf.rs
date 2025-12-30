@@ -1,9 +1,7 @@
 use crate::{
     dto::page::{Page, PageRequest},
-    perf,
+    perf::{self, PerfEntry},
 };
-
-pub use crate::perf::PerfEntry;
 
 ///
 /// PerfOps

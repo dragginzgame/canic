@@ -1,12 +1,12 @@
 use crate::{
     cdk::{futures::spawn, timers::TimerId, types::Cycles, utils::time::now_secs},
+    infra::{ic::canister_cycle_balance, rpc::cycles_request},
     log,
     log::Topic,
     ops::{
         OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
         config::ConfigOps,
-        env::EnvOps,
-        ic::{canister_cycle_balance, timer::TimerOps},
+        runtime::{env::EnvOps, timer::TimerOps},
         storage::cycles::CycleTrackerOps,
     },
 };
@@ -59,8 +59,6 @@ fn evaluate_policies(cycles: Cycles) {
 }
 
 fn check_auto_topup(cycles: Cycles) {
-    use crate::ops::rpc::cycles_request;
-
     let canister_cfg = match ConfigOps::current_canister() {
         Ok(cfg) => cfg,
         Err(err) => {

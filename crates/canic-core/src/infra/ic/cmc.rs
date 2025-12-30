@@ -9,7 +9,7 @@ use crate::{
             IcpXdrConversionRateResponse,
         },
     },
-    ops::ic::call::Call,
+    infra::ic::call::Call,
 };
 
 ///

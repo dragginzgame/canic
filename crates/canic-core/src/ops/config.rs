@@ -5,7 +5,7 @@ use crate::{
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
     },
     ids::{CanisterRole, SubnetRole},
-    ops::{OpsError, env::EnvOps},
+    ops::{OpsError, runtime::env::EnvOps},
 };
 use candid::Principal;
 use std::sync::Arc;

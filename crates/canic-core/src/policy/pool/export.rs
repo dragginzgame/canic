@@ -29,7 +29,6 @@ pub fn can_export(
     }
 
     let role = role.ok_or(PoolPolicyError::MissingRole)?;
-
     let module_hash = module_hash.ok_or(PoolPolicyError::MissingModuleHash)?;
 
     Ok((role, module_hash))

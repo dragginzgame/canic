@@ -7,7 +7,8 @@ use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
     dto::rpc::{Request, Response},
-    ops::{OpsError, env::EnvOps, ic::call::Call},
+    infra::ic::call::Call,
+    ops::{OpsError, runtime::env::EnvOps},
 };
 use serde::de::DeserializeOwned;
 
@@ -24,7 +25,7 @@ pub trait Rpc {
 }
 
 ///
-/// RpcOpsError
+/// RpcInfraError
 ///
 
 #[derive(Debug, ThisError)]

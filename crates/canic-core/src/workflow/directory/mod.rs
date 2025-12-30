@@ -6,7 +6,7 @@ use crate::{
     dto::directory::{AppDirectoryView, SubnetDirectoryView},
     ops::{
         adapter::directory::{app_directory_to_view, subnet_directory_to_view},
-        env::EnvOps,
+        runtime::env::EnvOps,
         storage::directory::{AppDirectoryOps, SubnetDirectoryOps},
     },
 };

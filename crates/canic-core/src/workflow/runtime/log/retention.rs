@@ -3,8 +3,10 @@ use crate::{
     log::Topic,
     ops::{
         OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
-        ic::timer::{TimerId, TimerOps},
-        runtime::log::apply_log_retention,
+        runtime::{
+            log::apply_log_retention,
+            timer::{TimerId, TimerOps},
+        },
     },
 };
 use std::{cell::RefCell, time::Duration};

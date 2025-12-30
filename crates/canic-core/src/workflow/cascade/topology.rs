@@ -145,7 +145,7 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
 async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshotView) -> Result<(), Error> {
     call_and_decode::<Result<(), Error>>(
         *pid,
-        crate::ops::rpc::methods::CANIC_SYNC_TOPOLOGY,
+        crate::infra::rpc::methods::CANIC_SYNC_TOPOLOGY,
         snapshot,
     )
     .await?

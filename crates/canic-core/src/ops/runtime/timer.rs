@@ -1,97 +1,176 @@
-//! Perf-instrumented timer helpers that auto-label with module + function name.
-//!
-//! These macros wrap [`TimerOps`](crate::ops::ic::timer::TimerOps) so callers can
-//! schedule work without manually threading labels. Labels are constructed
-//! as `module_path!()::function_name`.
+pub use crate::cdk::timers::TimerId;
+
+use crate::{
+    cdk::timers::{
+        clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
+        set_timer_interval as cdk_set_timer_interval,
+    },
+    infra::perf::PerfOps,
+    model::metrics::{
+        system::{SystemMetricKind, SystemMetrics},
+        timer::{TimerMetrics, TimerMode},
+    },
+    perf::perf_counter,
+};
+use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
 ///
-/// timer
-/// Schedule a one-shot timer with an auto-generated label.
+/// TimerOps
 ///
-/// # Examples
-/// - `timer!(Duration::from_secs(5), do_cleanup);`
-/// - `timer!(Duration::ZERO, my_task, arg1, arg2);`
-///
-#[macro_export]
-macro_rules! timer {
-    ($delay:expr, $func:path $(, $($args:tt)*)? ) => {{
-        let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::ic::timer::TimerOps::set($delay, label, $func($($($args)*)?))
-    }};
-}
 
-///
-/// timer_guarded
-/// Schedule a one-shot timer if none is already scheduled for the slot.
-/// Returns true when a new timer was scheduled.
-///
-/// # Examples
-/// - `timer_guarded!(MY_TIMER, Duration::from_secs(5), do_cleanup);`
-/// - `timer_guarded!(MY_TIMER, Duration::ZERO, my_task, arg1, arg2);`
-///
-#[macro_export]
-macro_rules! timer_guarded {
-    ($slot:path, $delay:expr, $func:path $(, $($args:tt)*)? ) => {{
-        let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::ic::timer::TimerOps::set_guarded(
-            &$slot,
-            $delay,
-            label,
-            $func($($($args)*)?),
-        )
-    }};
-}
+pub struct TimerOps;
 
-///
-/// timer_interval
-/// Schedule a repeating timer with an auto-generated label.
-///
-/// # Examples
-/// - `timer_interval!(Duration::from_secs(60), heartbeat);`
-/// - `timer_interval!(Duration::from_secs(10), tick, state.clone());`
-///
-#[macro_export]
-macro_rules! timer_interval {
-    ($interval:expr, $func:path $(, $($args:tt)*)? ) => {{
-        let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::ic::timer::TimerOps::set_interval(
-            $interval,
-            label,
-            move || $func($($($args)*)?),
-        )
-    }};
-}
+impl TimerOps {
+    /// Schedules a one-shot timer.
+    /// The task is a single Future, consumed exactly once.
+    pub fn set(
+        delay: Duration,
+        label: impl Into<String>,
+        task: impl Future<Output = ()> + 'static,
+    ) -> TimerId {
+        let label = label.into();
 
-///
-/// timer_interval_guarded
-/// Schedule an init timer that installs a repeating timer for the slot.
-/// Returns true when a new timer was scheduled.
-///
-/// # Examples
-/// - `timer_interval_guarded!(MY_TIMER, Duration::ZERO, init_task; Duration::from_secs(60), tick);`
-/// - `timer_interval_guarded!(MY_TIMER, Duration::from_secs(2), init; Duration::from_secs(10), tick, state.clone());`
-///
-#[macro_export]
-macro_rules! timer_interval_guarded {
-    (
-        $slot:path,
-        $init_delay:expr,
-        $init_func:path $(, $($init_args:tt)*)?
-        ;
-        $interval:expr,
-        $tick_func:path $(, $($tick_args:tt)*)?
-    ) => {{
-        let init_label = concat!(module_path!(), "::", stringify!($init_func));
-        let tick_label = concat!(module_path!(), "::", stringify!($tick_func));
+        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
+        TimerMetrics::ensure(TimerMode::Once, delay, label.as_str());
 
-        $crate::ops::ic::timer::TimerOps::set_guarded_interval(
-            &$slot,
-            $init_delay,
-            init_label,
-            move || $init_func($($($init_args)*)?),
-            $interval,
-            tick_label,
-            move || $tick_func($($($tick_args)*)?),
-        )
-    }};
+        cdk_set_timer(delay, async move {
+            TimerMetrics::increment(TimerMode::Once, delay, label.as_str());
+
+            let start = perf_counter();
+            task.await;
+            let end = perf_counter();
+
+            PerfOps::record(label.as_str(), end.saturating_sub(start));
+        })
+    }
+
+    /// Schedules a repeating timer.
+    /// The task is a closure that produces a fresh Future on each tick.
+    pub fn set_interval<F, Fut>(interval: Duration, label: impl Into<String>, task: F) -> TimerId
+    where
+        F: FnMut() -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static,
+    {
+        // Avoid cloning the String every tick.
+        let label = Rc::new(label.into());
+
+        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
+        TimerMetrics::ensure(TimerMode::Interval, interval, label.as_str());
+
+        let task = Rc::new(RefCell::new(task));
+
+        cdk_set_timer_interval(interval, move || {
+            let label = Rc::clone(&label);
+            let task = Rc::clone(&task);
+
+            async move {
+                TimerMetrics::increment(TimerMode::Interval, interval, label.as_str());
+
+                let start = perf_counter();
+                let fut = { (task.borrow_mut())() };
+                fut.await;
+                let end = perf_counter();
+
+                PerfOps::record(label.as_str(), end.saturating_sub(start));
+            }
+        })
+    }
+
+    /// Clears a previously scheduled timer.
+    pub fn clear(id: TimerId) {
+        cdk_clear_timer(id);
+    }
+
+    /// Schedule a one-shot timer only if the slot is empty.
+    /// Returns true when a new timer was scheduled.
+    pub fn set_guarded(
+        slot: &'static LocalKey<RefCell<Option<TimerId>>>,
+        delay: Duration,
+        label: impl Into<String>,
+        task: impl Future<Output = ()> + 'static,
+    ) -> bool {
+        slot.with_borrow_mut(|entry| {
+            if entry.is_some() {
+                return false;
+            }
+
+            let id = Self::set(delay, label, task);
+            *entry = Some(id);
+            true
+        })
+    }
+
+    /// Schedule a guarded init timer that installs a repeating interval timer.
+    /// Returns true when a new timer was scheduled.
+    /// The interval is only installed if the slot still holds the init timer.
+    pub fn set_guarded_interval<FInit, InitFut, FTick, TickFut>(
+        slot: &'static LocalKey<RefCell<Option<TimerId>>>,
+        init_delay: Duration,
+        init_label: impl Into<String>,
+        init_task: FInit,
+        interval: Duration,
+        interval_label: impl Into<String>,
+        tick_task: FTick,
+    ) -> bool
+    where
+        FInit: FnOnce() -> InitFut + 'static,
+        InitFut: Future<Output = ()> + 'static,
+        FTick: FnMut() -> TickFut + 'static,
+        TickFut: Future<Output = ()> + 'static,
+    {
+        let init_label = init_label.into();
+        let interval_label = interval_label.into();
+
+        slot.with_borrow_mut(|entry| {
+            if entry.is_some() {
+                return false;
+            }
+
+            let init_id_cell = Rc::new(RefCell::new(None));
+            let init_id_cell_task = Rc::clone(&init_id_cell);
+
+            let init_id = Self::set(init_delay, init_label, async move {
+                init_task().await;
+
+                let init_id = init_id_cell_task.borrow();
+                let Some(init_id) = init_id.as_ref() else {
+                    return;
+                };
+
+                let still_armed = slot.with_borrow(|slot_val| slot_val.as_ref() == Some(init_id));
+                if !still_armed {
+                    return;
+                }
+
+                let interval_id = Self::set_interval(interval, interval_label, tick_task);
+
+                // Atomically replace the slot value and clear the previous timer id.
+                // This prevents orphaned timers if callers clear around the handover.
+                slot.with_borrow_mut(|slot_val| {
+                    let old = slot_val.replace(interval_id);
+                    if let Some(old_id) = old
+                        && old_id != interval_id
+                    {
+                        Self::clear(old_id);
+                    }
+                });
+            });
+
+            *init_id_cell.borrow_mut() = Some(init_id);
+            *entry = Some(init_id);
+            true
+        })
+    }
+
+    /// Clear a guarded timer slot if present.
+    /// Returns true when a timer was cleared.
+    #[must_use]
+    pub fn clear_guarded(slot: &'static LocalKey<RefCell<Option<TimerId>>>) -> bool {
+        slot.with_borrow_mut(|entry| {
+            entry.take().is_some_and(|id| {
+                Self::clear(id);
+                true
+            })
+        })
+    }
 }

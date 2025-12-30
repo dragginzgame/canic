@@ -59,14 +59,21 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 ### Added
 - Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that
   directory roles must be singleton (`cardinality = "single"`).
+- Added typed endpoint identity (`Call`, `EndpointId`, `CallKind`) derived by macros and propagated through dispatch
+  and metrics (endpoint labels are no longer user-supplied).
+- Added `log.max_entries` validation (<= 100,000) to prevent unbounded log retention.
+- Added a log readiness gate so logging is a no-op until runtime initialization completes.
 
 ### Changed
 - App/subnet directories now map roles to a single `Principal`.
 - Registry registration now rejects duplicate principals and singleton-role collisions.
+- Topology snapshots now use `TopologyChildView` in `children_map` to avoid redundant parent identifiers.
+- Pool entry views are assembled from split header/state parts to avoid duplicating identity fields.
 
 ### Fixed
 - Subnet registry subtree traversal now guards against parent cycles.
 - Pool export validates readiness and metadata before removing entries.
+- Certified-data signature ops now enforce update-only context to prevent query traps.
 
 ## [0.6.19] - Perf Stack
 - Endpoint dispatch now records exclusive perf totals via a scoped stack; removed `perf_scope` from the prelude and dropped the `defer` dependency.  This means that endpoints can call each other and the correct performance metrics are logged.
@@ -74,8 +81,10 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 ## [0.6.18] - 2025-12-24
 ### Added
 - Added `log.max_entry_bytes` to cap per-entry log message size and truncate oversized entries.
-- `PageRequest` now implements `Default` (same as `PageRequest::DEFAULT`).
 - Pool admin queued imports now return a summary with pool status counts and skip reasons.
+
+### Changed
+- `PageRequest` no longer implements `Default`; callers must use `PageRequest::new` or `PageRequest::bounded`.
 
 ### Fixed
 - `EnvOps::import` now returns a typed error when required env fields are missing, and non-root init traps with a clear message.
@@ -97,12 +106,12 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 - App state now cascades during directory syncs so newly created canisters match root mode.
 
 ## [0.6.13] - 2025-12-21
-  - Enforced env/config invariants: ConfigOps::current_*/EnvOps::* now used infallibly; removed obsolete error handling
-    and warning fallbacks in auth, RPC, timers, and runtime startup.
+  - Env/config accessors are fallible: ConfigOps::current_* and EnvOps::* return `Result`, and callers propagate or
+    handle errors; lifecycle entrypoints trap on missing env/config with clear messages.
   - Directory ops hardened: added infallible get accessors, made canic_subnet_directory infallible, and aligned tests/
     endpoints accordingly.
-  - Env semantics tightened: import now validates required fields; root/non‑root predicates now use infallible getters;
-    removed unused env helpers; try_* env accessors are test‑only.
+  - Env semantics tightened: import validates required fields; root/non‑root predicates tolerate missing env with safe
+    fallbacks; removed unused env helpers; try_* env accessors are test‑only.
   - Bootstrapping + local fallback clarified: get_current_subnet_pid renamed to try_get_current_subnet_pid; local
     non‑root env fallback uses deterministic principals; IC still traps on missing env.
   - Init payload safety: removed CanisterInitPayload::empty and Default, added CanisterInitPayload::new.

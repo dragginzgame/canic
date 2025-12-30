@@ -16,7 +16,7 @@
 use crate::{
     cdk::api::trap,
     ids::CanisterRole,
-    ops::{env::EnvOps, ic::timer::TimerOps},
+    ops::runtime::{env::EnvOps, timer::TimerOps},
     workflow,
 };
 use core::time::Duration;

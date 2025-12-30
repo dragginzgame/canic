@@ -1,14 +1,13 @@
 use crate::{
     Error, ThisError,
     cdk::{api::canister_self, types::Principal},
-    dto::env::EnvView,
-    dto::subnet::SubnetIdentity,
+    dto::{env::EnvView, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
+    infra::ic::{Network, build_network},
     model::memory::Env,
     ops::{
-        OpsError,
         adapter::env::{env_data_from_view, env_data_to_view},
-        ic::{Network, build_network},
+        runtime::RuntimeOpsError,
     },
 };
 
@@ -41,7 +40,7 @@ pub enum EnvOpsError {
 
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
-        OpsError::from(err).into()
+        RuntimeOpsError::from(err).into()
     }
 }
 

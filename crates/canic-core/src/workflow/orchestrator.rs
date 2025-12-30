@@ -2,11 +2,11 @@ use crate::{
     Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
+    infra::canister::install_code_with_extra_arg,
+    infra::ic::{mgmt::delete_canister, upgrade_canister},
     log,
     log::Topic,
     ops::{
-        canister::install_code_with_extra_arg,
-        ic::{IcOpsError, mgmt::delete_canister, upgrade_canister},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             pool::PoolOps,
@@ -68,9 +68,6 @@ pub enum OrchestratorError {
 
     #[error("cannot build init payload for {0}: missing parent pid")]
     MissingParentPid(Principal),
-
-    #[error(transparent)]
-    IcOpsError(#[from] IcOpsError),
 }
 
 impl From<OrchestratorError> for Error {

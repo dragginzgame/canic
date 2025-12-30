@@ -9,18 +9,16 @@ use crate::{
         types::{Cycles, TC},
     },
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
+    infra::ic::{
+        get_cycles,
+        mgmt::{create_canister, uninstall_code},
+        update_settings,
+    },
     log,
     log::Topic,
-    ops::{
-        ic::{
-            get_cycles,
-            mgmt::{create_canister, uninstall_code},
-            update_settings,
-        },
-        storage::{
-            pool::{PoolOps, pool_controllers},
-            registry::SubnetRegistryOps,
-        },
+    ops::storage::{
+        pool::{PoolOps, pool_controllers},
+        registry::SubnetRegistryOps,
     },
     policy::{self, pool::PoolPolicyError},
 };

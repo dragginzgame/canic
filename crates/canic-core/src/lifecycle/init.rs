@@ -11,7 +11,7 @@
 use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::CanisterRole,
-    ops::ic::timer::TimerOps,
+    ops::runtime::timer::TimerOps,
     workflow,
 };
 use core::time::Duration;

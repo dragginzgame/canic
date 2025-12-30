@@ -26,6 +26,7 @@ pub mod config;
 pub mod dispatch;
 pub mod dto;
 pub mod ids;
+pub mod infra;
 pub mod lifecycle;
 pub mod log;
 pub mod macros;
@@ -78,6 +79,9 @@ pub enum Error {
 
     #[error("{0}")]
     CustomError(String),
+
+    #[error("{0}")]
+    InfraError(String),
 
     #[error("{0}")]
     ModelError(String),
@@ -163,6 +167,7 @@ impl Error {
 
 from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
+from_to_string!(infra::InfraError, InfraError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
 from_to_string!(policy::PolicyError, PolicyError);

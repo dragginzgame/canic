@@ -11,10 +11,8 @@ use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
     dto::rpc::CreateCanisterParent,
-    ops::{
-        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
-        storage::scaling::ScalingRegistryOps,
-    },
+    infra::rpc::create_canister_request,
+    ops::{adapter::placement::worker_entry_from_view, storage::scaling::ScalingRegistryOps},
     policy::placement::scaling::{ScalingPlan, ScalingPolicy},
 };
 use candid::Principal;

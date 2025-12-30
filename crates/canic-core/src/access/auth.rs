@@ -13,7 +13,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        env::EnvOps,
+        runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},

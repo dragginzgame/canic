@@ -2,7 +2,7 @@ use crate::ops::storage::sharding::ShardingRegistryOps;
 
 ///
 /// PoolMetrics
-/// Aggregated metrics for a pool (derived view, therefore ops).
+/// Aggregated metrics for a pool
 ///
 
 #[derive(Clone, Copy, Debug)]

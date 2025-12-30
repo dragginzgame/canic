@@ -19,8 +19,8 @@ use crate::{
     model::memory::pool::CanisterPoolStatus,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
-        ic::timer::{TimerId, TimerOps},
         prelude::*,
+        runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
     policy::pool::PoolPolicyError,

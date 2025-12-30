@@ -1,9 +1,7 @@
 use crate::{
     cdk::types::Principal,
-    ops::{
-        ic::{Network, build_network, canister_status},
-        storage::registry::SubnetRegistryOps,
-    },
+    infra::ic::{Network, build_network, canister_status},
+    ops::storage::registry::SubnetRegistryOps,
     policy::pool::{
         PoolPolicyError,
         admissibility::{policy_can_enter_pool, policy_is_importable_on_local},

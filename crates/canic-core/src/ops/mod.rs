@@ -19,18 +19,10 @@
 //! Examples of view ops include registry exports and metrics views.
 
 pub(crate) mod adapter;
-pub mod canister;
 pub mod config;
-pub mod env;
-pub mod ic;
-pub mod icrc;
-pub mod memory;
-pub mod perf;
-pub mod rpc;
 pub mod runtime;
 pub mod storage;
 pub mod view;
-pub mod wasm;
 
 use std::time::Duration;
 
@@ -66,17 +58,15 @@ pub mod prelude {
             types::{Account, Cycles, Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
+        infra::ic::{call::Call, call_and_decode},
         log,
         log::Level,
-        ops::{
-            OpsError,
-            ic::{call::Call, call_and_decode},
-        },
+        ops::OpsError,
     };
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, cdk::api::canister_self, model::memory::Env, ops::env::EnvOpsError};
+use crate::{ThisError, cdk::api::canister_self, ops::runtime::env::EnvOps};
 
 ///
 /// OpsError
@@ -97,16 +87,7 @@ pub enum OpsError {
     ConfigOpsError(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
-    EnvOpsError(#[from] env::EnvOpsError),
-
-    #[error(transparent)]
-    IcOpsError(#[from] ic::IcOpsError),
-
-    #[error(transparent)]
-    MemoryRegistryOpsError(#[from] memory::MemoryRegistryOpsError),
-
-    #[error(transparent)]
-    RpcOpsError(#[from] rpc::RpcOpsError),
+    RuntimeOpsError(#[from] runtime::RuntimeOpsError),
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
@@ -115,7 +96,7 @@ pub enum OpsError {
 impl OpsError {
     /// Ensure the caller is the root canister.
     pub fn require_root() -> Result<(), Self> {
-        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+        let root_pid = EnvOps::get_root_pid()?;
 
         if root_pid == canister_self() {
             Ok(())
@@ -126,7 +107,7 @@ impl OpsError {
 
     /// Ensure the caller is not the root canister.
     pub fn deny_root() -> Result<(), Self> {
-        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+        let root_pid = EnvOps::get_root_pid()?;
 
         if root_pid == canister_self() {
             Err(Self::IsRoot)
