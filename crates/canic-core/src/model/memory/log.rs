@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    Error, ThisError,
+    Error,
     cdk::structures::{
         DefaultMemoryImpl,
         log::{Log as StableLogImpl, WriteError},
@@ -63,36 +63,6 @@ fn with_log<R>(f: impl FnOnce(&StableLog) -> R) -> R {
 
 fn with_log_mut<R>(f: impl FnOnce(&mut StableLog) -> R) -> R {
     LOG.with_borrow_mut(f)
-}
-
-///
-/// LogError
-///
-
-#[derive(Debug, ThisError)]
-pub enum LogError {
-    #[error("log write failed: current_size={current_size}, delta={delta}")]
-    WriteFailed { current_size: u64, delta: u64 },
-}
-
-impl From<WriteError> for LogError {
-    fn from(err: WriteError) -> Self {
-        match err {
-            WriteError::GrowFailed {
-                current_size,
-                delta,
-            } => Self::WriteFailed {
-                current_size,
-                delta,
-            },
-        }
-    }
-}
-
-impl From<LogError> for Error {
-    fn from(err: LogError) -> Self {
-        MemoryError::from(err).into()
-    }
 }
 
 ///
@@ -254,8 +224,20 @@ const TRUNCATION_SUFFIX: &str = "...[truncated]";
 
 fn append_raw(entry: &LogEntry) -> Result<u64, Error> {
     with_log(|log| log.append(entry))
-        .map_err(LogError::from)
+        .map_err(map_write_error)
         .map_err(Error::from)
+}
+
+const fn map_write_error(err: WriteError) -> MemoryError {
+    match err {
+        WriteError::GrowFailed {
+            current_size,
+            delta,
+        } => MemoryError::LogWriteFailed {
+            current_size,
+            delta,
+        },
+    }
 }
 
 // Centralizes topic normalization to enforce invariants.

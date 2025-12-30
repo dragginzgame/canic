@@ -15,18 +15,15 @@ use crate::{
     log::Topic,
     ops::{
         adapter::directory::{app_directory_from_view, subnet_directory_from_view},
-        memory::MemoryRegistryOps,
-        runtime::env::EnvOps,
+        runtime::{env::EnvOps, memory::MemoryRegistryOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             registry::SubnetRegistryOps,
         },
     },
-    workflow::runtime,
+    workflow,
 };
 use canic_memory::runtime::init_eager_tls;
-
-use crate::{ops::OpsError, workflow};
 
 ///
 /// Runtime
@@ -38,14 +35,14 @@ pub struct Runtime;
 impl Runtime {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
-        runtime::cycles::scheduler::start();
-        runtime::log::retention::start();
-        runtime::random::scheduler::start();
+        workflow::runtime::cycles::scheduler::start();
+        workflow::runtime::log::retention::start();
+        workflow::runtime::random::scheduler::start();
     }
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        OpsError::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
+        EnvOps::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
 
         // start shared timers too
         Self::start_all();

@@ -10,7 +10,6 @@ use crate::{
         view::paginate_vec,
     },
 };
-use candid::Principal;
 
 ///
 /// AppDirectoryOps

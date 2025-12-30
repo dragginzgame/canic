@@ -1,11 +1,9 @@
 use crate::{
     Error,
-    cdk::api::{canister_self, trap},
+    cdk::api::trap,
     infra::ic::{Network, build_network},
-    log::Topic,
     ops::{
         config::ConfigOps,
-        prelude::*,
         runtime::env::EnvOps,
         storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },
@@ -13,6 +11,7 @@ use crate::{
         ic::network::try_get_current_subnet_pid,
         orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
         pool::pool_import_canister,
+        prelude::*,
     },
 };
 

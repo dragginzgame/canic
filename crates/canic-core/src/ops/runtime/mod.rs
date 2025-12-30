@@ -14,19 +14,14 @@ use crate::{Error, ThisError, ops::OpsError};
 
 #[derive(Debug, ThisError)]
 pub enum RuntimeOpsError {
-    /// Raised when a function requires root context, but was called from a child.
-    #[error("operation must be called from the root canister")]
-    NotRoot,
-
-    /// Raised when a function must not be called from root.
-    #[error("operation cannot be called from the root canister")]
-    IsRoot,
-
     #[error(transparent)]
     EnvOpsError(#[from] env::EnvOpsError),
 
     #[error(transparent)]
     MemoryRegistryOpsError(#[from] memory::MemoryRegistryOpsError),
+
+    #[error(transparent)]
+    WasmOpsError(#[from] wasm::WasmOpsError),
 }
 
 impl From<RuntimeOpsError> for Error {

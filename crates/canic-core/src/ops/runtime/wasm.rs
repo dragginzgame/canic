@@ -1,6 +1,8 @@
-use crate::{Error, cdk::types::WasmModule, ids::CanisterRole, log, log::Topic};
+use crate::{
+    Error, ThisError, cdk::types::WasmModule, ids::CanisterRole, log, log::Topic,
+    ops::runtime::RuntimeOpsError,
+};
 use std::{cell::RefCell, collections::HashMap};
-use thiserror::Error as ThisError;
 
 thread_local! {
     ///
@@ -19,14 +21,14 @@ thread_local! {
 ///
 
 #[derive(Debug, ThisError)]
-pub enum WasmError {
+pub enum WasmOpsError {
     #[error("wasm '{0}' not found")]
     WasmNotFound(CanisterRole),
 }
 
-impl From<WasmError> for Error {
-    fn from(err: WasmError) -> Self {
-        err.into()
+impl From<WasmOpsError> for Error {
+    fn from(err: WasmOpsError) -> Self {
+        RuntimeOpsError::WasmOpsError(err).into()
     }
 }
 
@@ -46,7 +48,7 @@ impl WasmOps {
 
     /// Fetch a WASM module or return an error if missing.
     pub fn try_get(role: &CanisterRole) -> Result<WasmModule, Error> {
-        Self::get(role).ok_or_else(|| WasmError::WasmNotFound(role.clone()).into())
+        Self::get(role).ok_or_else(|| WasmOpsError::WasmNotFound(role.clone()).into())
     }
 
     /// Import a static slice of (role, wasm bytes) at startup.
@@ -84,7 +86,8 @@ impl WasmOps {
 
     /// Clear the registry (tests only).
     #[cfg(test)]
+    #[expect(dead_code)]
     pub(crate) fn clear_for_test() {
-        WASM_REGISTRY.with_borrow_mut(|reg| reg.clear());
+        WASM_REGISTRY.with_borrow_mut(HashMap::clear);
     }
 }

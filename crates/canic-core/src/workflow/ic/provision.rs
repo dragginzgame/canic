@@ -10,7 +10,7 @@
 
 use crate::{
     Error,
-    cdk::{api::canister_self, mgmt::CanisterInstallMode},
+    cdk::mgmt::CanisterInstallMode,
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
@@ -32,7 +32,6 @@ use crate::{
         snapshot::StateSnapshotBuilder,
     },
 };
-use candid::Principal;
 use thiserror::Error as ThisError;
 
 pub(crate) fn build_nonroot_init_payload(

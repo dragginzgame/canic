@@ -1,9 +1,7 @@
 use crate::{
     Error,
-    cdk::types::Principal,
     cdk::utils::time::now_secs,
     dto::pool::{CanisterPoolEntryView, CanisterPoolView},
-    ids::CanisterRole,
     model::memory::pool::{
         CanisterPool, CanisterPoolData, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus,
     },

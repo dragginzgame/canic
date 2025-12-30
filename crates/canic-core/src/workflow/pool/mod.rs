@@ -6,7 +6,7 @@ use crate::{
     Error,
     cdk::{
         mgmt::{CanisterSettings, UpdateSettingsArgs},
-        types::{Cycles, TC},
+        types::TC,
     },
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
@@ -20,7 +20,6 @@ use crate::{
     policy::{self, pool::PoolPolicyError},
     workflow::prelude::*,
 };
-use candid::Principal;
 
 /// Default cycles allocated to freshly created pool canisters.
 const POOL_CANISTER_CYCLES: u128 = 5 * TC;

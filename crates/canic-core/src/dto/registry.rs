@@ -1,8 +1,4 @@
-use crate::{
-    dto::{canister::CanisterEntryView, prelude::*},
-    ids::CanisterRole,
-};
-use candid::{CandidType, Principal};
+use crate::dto::{canister::CanisterEntryView, prelude::*};
 
 ///
 /// AppRegistryView

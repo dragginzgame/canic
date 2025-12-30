@@ -3,7 +3,7 @@
 // Compile with `--features ic` to include the canister module.
 
 mod canister {
-    use canic::{core::ids::CanisterRole, prelude::*};
+    use canic::prelude::*;
 
     // Set up a minimal root canister with default hooks.
     canic::start_root!();

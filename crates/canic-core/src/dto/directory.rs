@@ -1,5 +1,4 @@
-use crate::{dto::prelude::*, ids::CanisterRole};
-use candid::Principal;
+use crate::dto::prelude::*;
 
 ///
 /// AppDirectoryView

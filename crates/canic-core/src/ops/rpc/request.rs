@@ -5,7 +5,6 @@ use crate::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
-    ids::CanisterRole,
     ops::{prelude::*, runtime::env::EnvOps},
 };
 use candid::encode_one;
@@ -23,17 +22,17 @@ pub enum RequestOpsError {
     #[error("child canister {0} not found")]
     ChildNotFound(Principal),
 
-    #[error("canister {0} is not a child of caller {1}")]
-    NotChildOfCaller(Principal, Principal),
-
-    #[error("canister {0}'s parent was not found")]
-    ParentNotFound(Principal),
-
     #[error("invalid response type")]
     InvalidResponseType,
 
     #[error("create_canister: missing new pid")]
     MissingNewCanisterPid,
+
+    #[error("canister {0} is not a child of caller {1}")]
+    NotChildOfCaller(Principal, Principal),
+
+    #[error("canister {0}'s parent was not found")]
+    ParentNotFound(Principal),
 }
 
 impl From<RequestOpsError> for Error {
