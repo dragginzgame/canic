@@ -17,8 +17,8 @@ use crate::{
     dto::snapshot::StateSnapshotView,
     log::Topic,
     ops::{
-        OpsError,
         prelude::*,
+        runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -37,7 +37,7 @@ use crate::{
 ///
 /// No-op if the snapshot is empty.
 pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
         log!(
@@ -82,7 +82,7 @@ pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Erro
 /// - apply it locally
 /// - forward it to direct children
 pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    OpsError::deny_root()?;
+    EnvOps::deny_root()?;
 
     if state_snapshot_is_empty(snapshot) {
         log!(
@@ -131,7 +131,7 @@ pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), E
 ///
 /// Only valid on non-root canisters.
 fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    OpsError::deny_root()?;
+    EnvOps::deny_root()?;
 
     // states
     if let Some(state) = snapshot.app_state {

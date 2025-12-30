@@ -5,9 +5,9 @@ use crate::{
         CyclesResponse, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ops::{
-        OpsError,
         ic::deposit_cycles,
         rpc::RequestOpsError,
+        runtime::env::EnvOps,
         storage::{directory::SubnetDirectoryOps, registry::SubnetRegistryOps},
     },
     workflow::{
@@ -18,7 +18,7 @@ use crate::{
 
 // create_canister_response
 pub async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     let caller = msg_caller();
     let role = req.canister_role.clone();
@@ -68,7 +68,7 @@ pub async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Res
 
 // upgrade_canister_response
 pub async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     let caller = msg_caller();
     let registry_entry = SubnetRegistryOps::get(req.canister_pid)
@@ -89,7 +89,7 @@ pub async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<R
 
 // cycles_response
 pub async fn cycles_response(req: &CyclesRequest) -> Result<Response, Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     deposit_cycles(msg_caller(), req.cycles).await?;
 

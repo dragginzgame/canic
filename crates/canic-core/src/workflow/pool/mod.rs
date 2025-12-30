@@ -9,14 +9,16 @@ use crate::{
         types::{Cycles, TC},
     },
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
-    log,
-    log::Topic,
-    ops::ic::{create_canister, get_cycles, uninstall_code, update_settings},
-    ops::storage::{
-        pool::{PoolOps, pool_controllers},
-        registry::SubnetRegistryOps,
+    ops::{
+        ic::{create_canister, get_cycles, uninstall_code, update_settings},
+        runtime::env::EnvOps,
+        storage::{
+            pool::{PoolOps, pool_controllers},
+            registry::SubnetRegistryOps,
+        },
     },
     policy::{self, pool::PoolPolicyError},
+    workflow::prelude::*,
 };
 use candid::Principal;
 
@@ -58,11 +60,21 @@ fn mark_failed(pid: Principal, err: &Error) {
 }
 
 // -----------------------------------------------------------------------------
+// Auth
+// -----------------------------------------------------------------------------
+
+fn require_pool_admin() -> Result<(), Error> {
+    EnvOps::require_root()?;
+
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
 // Creation
 // -----------------------------------------------------------------------------
 
 pub async fn pool_create_canister() -> Result<Principal, Error> {
-    policy::pool::authority::require_pool_admin()?;
+    require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
     let pid = create_canister(pool_controllers()?, cycles.clone()).await?;
@@ -77,7 +89,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 // -----------------------------------------------------------------------------
 
 pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
-    policy::pool::authority::require_pool_admin()?;
+    require_pool_admin()?;
     admissibility::check_can_enter_pool(pid).await?;
 
     mark_pending_reset(pid);
@@ -105,7 +117,7 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
 // -----------------------------------------------------------------------------
 
 pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
-    policy::pool::authority::require_pool_admin()?;
+    require_pool_admin()?;
 
     // Must exist in registry to be recycled
     let entry = SubnetRegistryOps::get(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
@@ -130,7 +142,7 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
 // -----------------------------------------------------------------------------
 
 pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBatchResult, Error> {
-    policy::pool::authority::require_pool_admin()?;
+    require_pool_admin()?;
 
     let total = pids.len() as u64;
 
@@ -180,7 +192,7 @@ pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBa
 pub async fn pool_export_canister(
     pid: Principal,
 ) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
-    policy::pool::authority::require_pool_admin()?;
+    require_pool_admin()?;
 
     let entry = PoolOps::get_view(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
 

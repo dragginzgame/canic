@@ -14,7 +14,6 @@ use crate::{
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
-        OpsError,
         adapter::directory::{app_directory_to_view, subnet_directory_to_view},
         config::ConfigOps,
         ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
@@ -170,7 +169,7 @@ pub async fn create_and_install_canister(
 /// 3. Cascade topology
 /// 4. Sync directories
 pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
-    OpsError::require_root()?;
+    EnvOps::require_root()?;
 
     // Phase 0: uninstall code
     uninstall_code(pid).await?;
