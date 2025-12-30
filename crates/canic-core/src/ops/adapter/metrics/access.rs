@@ -7,7 +7,7 @@ const fn access_metric_kind_to_view(kind: ModelAccessMetricKind) -> AccessMetric
     match kind {
         ModelAccessMetricKind::Auth => AccessMetricKind::Auth,
         ModelAccessMetricKind::Guard => AccessMetricKind::Guard,
-        ModelAccessMetricKind::Policy => AccessMetricKind::Policy,
+        ModelAccessMetricKind::Rule => AccessMetricKind::Rule,
     }
 }
 
@@ -16,7 +16,7 @@ pub const fn access_metric_kind_from_view(kind: AccessMetricKind) -> ModelAccess
     match kind {
         AccessMetricKind::Auth => ModelAccessMetricKind::Auth,
         AccessMetricKind::Guard => ModelAccessMetricKind::Guard,
-        AccessMetricKind::Policy => ModelAccessMetricKind::Policy,
+        AccessMetricKind::Rule => ModelAccessMetricKind::Rule,
     }
 }
 

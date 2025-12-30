@@ -15,7 +15,7 @@ thread_local! {
 pub enum AccessMetricKind {
     Auth,
     Guard,
-    Policy,
+    Rule,
 }
 
 ///
@@ -77,7 +77,7 @@ mod tests {
         AccessMetrics::increment("foo", AccessMetricKind::Guard);
         AccessMetrics::increment("foo", AccessMetricKind::Guard);
         AccessMetrics::increment("foo", AccessMetricKind::Auth);
-        AccessMetrics::increment("bar", AccessMetricKind::Policy);
+        AccessMetrics::increment("bar", AccessMetricKind::Rule);
 
         let raw = AccessMetrics::export_raw();
         let mut map: HashMap<(String, AccessMetricKind), u64> = raw
@@ -94,7 +94,7 @@ mod tests {
             Some(1)
         );
         assert_eq!(
-            map.remove(&("bar".to_string(), AccessMetricKind::Policy)),
+            map.remove(&("bar".to_string(), AccessMetricKind::Rule)),
             Some(1)
         );
         assert!(map.is_empty());

@@ -10,7 +10,7 @@ use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::api::{Call, EndpointId};
+use crate::api::{EndpointCall, EndpointId};
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
     #[cfg(not(test))]
@@ -133,7 +133,7 @@ pub(crate) fn enter_endpoint() {
 }
 
 /// End the most recent endpoint scope and record exclusive instructions.
-pub(crate) fn exit_endpoint(call: Call) {
+pub(crate) fn exit_endpoint(call: EndpointCall) {
     exit_endpoint_at(call.endpoint, perf_counter());
 }
 

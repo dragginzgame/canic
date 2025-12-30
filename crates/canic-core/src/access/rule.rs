@@ -6,11 +6,11 @@ use crate::{
 };
 
 ///
-/// PolicyError
+/// RuleError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum PolicyError {
+pub enum RuleError {
     #[error("this endpoint is only available on the prime subnet")]
     NotPrimeSubnet,
 
@@ -23,14 +23,14 @@ pub enum PolicyError {
     BuildNetworkMismatch { expected: Network, actual: Network },
 }
 
-impl From<PolicyError> for Error {
-    fn from(err: PolicyError) -> Self {
-        AccessError::PolicyError(err).into()
+impl From<RuleError> for Error {
+    fn from(err: RuleError) -> Self {
+        AccessError::RuleError(err).into()
     }
 }
 
 ///
-/// Policies
+/// Rules
 ///
 
 #[allow(clippy::unused_async)]
@@ -38,7 +38,7 @@ pub async fn is_prime_subnet() -> Result<(), Error> {
     if EnvOps::is_prime_subnet() {
         Ok(())
     } else {
-        Err(PolicyError::NotPrimeSubnet.into())
+        Err(RuleError::NotPrimeSubnet.into())
     }
 }
 
@@ -66,13 +66,13 @@ pub async fn build_network_local() -> Result<(), Error> {
 /// Helpers
 ///
 
-pub(crate) fn check_build_network(expected: Network) -> Result<(), PolicyError> {
+pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleError> {
     let actual = build_network();
 
     match actual {
         Some(actual) if actual == expected => Ok(()),
-        Some(actual) => Err(PolicyError::BuildNetworkMismatch { expected, actual }),
-        None => Err(PolicyError::BuildNetworkUnknown),
+        Some(actual) => Err(RuleError::BuildNetworkMismatch { expected, actual }),
+        None => Err(RuleError::BuildNetworkUnknown),
     }
 }
 
@@ -84,12 +84,12 @@ pub(crate) fn check_build_network(expected: Network) -> Result<(), PolicyError> 
 mod tests {
     use super::*;
 
-    fn check(expected: Network, actual: Option<Network>) -> Result<(), PolicyError> {
+    fn check(expected: Network, actual: Option<Network>) -> Result<(), RuleError> {
         // Inline the same logic but with injected `actual`
         match actual {
             Some(actual) if actual == expected => Ok(()),
-            Some(actual) => Err(PolicyError::BuildNetworkMismatch { expected, actual }),
-            None => Err(PolicyError::BuildNetworkUnknown),
+            Some(actual) => Err(RuleError::BuildNetworkMismatch { expected, actual }),
+            None => Err(RuleError::BuildNetworkUnknown),
         }
     }
 
@@ -104,7 +104,7 @@ mod tests {
         let err = check(Network::Ic, Some(Network::Local)).unwrap_err();
 
         match err {
-            PolicyError::BuildNetworkMismatch { expected, actual } => {
+            RuleError::BuildNetworkMismatch { expected, actual } => {
                 assert_eq!(expected, Network::Ic);
                 assert_eq!(actual, Network::Local);
             }
@@ -115,6 +115,6 @@ mod tests {
     #[test]
     fn build_network_unknown_errors() {
         let err = check(Network::Ic, None).unwrap_err();
-        assert!(matches!(err, PolicyError::BuildNetworkUnknown));
+        assert!(matches!(err, RuleError::BuildNetworkUnknown));
     }
 }

@@ -12,7 +12,7 @@ use crate::dto::prelude::*;
 pub enum AccessMetricKind {
     Auth,
     Guard,
-    Policy,
+    Rule,
 }
 
 ///

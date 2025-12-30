@@ -1,21 +1,21 @@
 use crate::api::endpoint::EndpointId;
 
 ///
-/// Call
+/// EndpointCall
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Call {
+pub struct EndpointCall {
     pub endpoint: EndpointId,
-    pub kind: CallKind,
+    pub kind: EndpointCallKind,
 }
 
 ///
-/// CallKind
+/// EndpointCallKind
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum CallKind {
+pub enum EndpointCallKind {
     Query,
     QueryComposite,
     Update,
