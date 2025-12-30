@@ -28,6 +28,7 @@
 //! This module intentionally contains no policy decisions and no workflow logic.
 
 pub mod call;
+pub mod http;
 pub mod mgmt;
 
 pub use crate::infra::ic::{Network, build_network, build_network_from_dfx_network};

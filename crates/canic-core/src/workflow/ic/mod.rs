@@ -1,4 +1,3 @@
-pub mod http;
 pub mod network;
 pub mod payment;
 pub mod provision;
