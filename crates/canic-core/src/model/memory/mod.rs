@@ -10,12 +10,8 @@ pub mod sharding;
 pub mod state;
 pub mod types;
 
-pub use canic_memory::MemoryRegistryError;
 pub use env::Env;
 pub use types::*;
-
-use crate::{Error, model::ModelError};
-use thiserror::Error as ThisError;
 
 ///
 /// CANIC is only allowed to allocate within this inclusive range.
@@ -76,16 +72,15 @@ pub mod id {
     }
 }
 
+use crate::{Error, model::ModelError};
+use thiserror::Error as ThisError;
+
 ///
 /// MemoryError
 ///
 
 #[derive(Debug, ThisError)]
 pub enum MemoryError {
-    // top level registry error
-    #[error(transparent)]
-    MemoryRegistryError(#[from] MemoryRegistryError),
-
     #[error("log write failed: current_size={current_size}, delta={delta}")]
     LogWriteFailed { current_size: u64, delta: u64 },
 }

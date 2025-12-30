@@ -18,7 +18,7 @@ pub enum RuntimeOpsError {
     EnvOpsError(#[from] env::EnvOpsError),
 
     #[error(transparent)]
-    MemoryRegistryOpsError(#[from] memory::MemoryRegistryOpsError),
+    MemoryOpsError(#[from] memory::MemoryOpsError),
 
     #[error(transparent)]
     WasmOpsError(#[from] wasm::WasmOpsError),

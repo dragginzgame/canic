@@ -103,54 +103,21 @@ impl EnvOps {
             parent_pid: Some(prime_root_pid),
         };
 
-        Self::import_data(env)
+        Self::import(env)
     }
 
     /// Initialize environment state for a non-root canister during init.
     ///
     /// This function must only be called from the IC `init` hook.
-    pub fn init(env: EnvView, role: CanisterRole) -> Result<(), Error> {
+    pub fn init_from_view(env: EnvView, role: CanisterRole) -> Result<(), Error> {
         let mut env = env_data_from_view(env);
+
         // Override contextual role (do not trust payload blindly)
         env.canister_role = Some(role.clone());
         env = ensure_nonroot_env(role, env)?;
 
         // Import validates required fields and persists
-        Self::import_data(env)
-    }
-
-    pub fn import(env: EnvView) -> Result<(), Error> {
-        let env = env_data_from_view(env);
-        Self::import_data(env)
-    }
-
-    fn import_data(env: EnvData) -> Result<(), Error> {
-        let mut missing = Vec::new();
-        if env.prime_root_pid.is_none() {
-            missing.push("prime_root_pid");
-        }
-        if env.subnet_role.is_none() {
-            missing.push("subnet_role");
-        }
-        if env.subnet_pid.is_none() {
-            missing.push("subnet_pid");
-        }
-        if env.root_pid.is_none() {
-            missing.push("root_pid");
-        }
-        if env.canister_role.is_none() {
-            missing.push("canister_role");
-        }
-        if env.parent_pid.is_none() {
-            missing.push("parent_pid");
-        }
-
-        if !missing.is_empty() {
-            return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
-        }
-
-        Env::import(env);
-        Ok(())
+        Self::import(env)
     }
 
     pub fn set_prime_root_pid(pid: Principal) {
@@ -287,13 +254,53 @@ impl EnvOps {
     }
 
     // ---------------------------------------------------------------------
-    // Export
+    // Export / Import
     // ---------------------------------------------------------------------
 
     /// Export a snapshot of the current environment metadata.
     #[must_use]
-    pub fn export() -> EnvView {
+    pub fn export() -> EnvData {
+        Env::export()
+    }
+
+    #[must_use]
+    pub fn export_view() -> EnvView {
         env_data_to_view(Env::export())
+    }
+
+    pub fn import(data: EnvData) -> Result<(), Error> {
+        let mut missing = Vec::new();
+        if data.prime_root_pid.is_none() {
+            missing.push("prime_root_pid");
+        }
+        if data.subnet_role.is_none() {
+            missing.push("subnet_role");
+        }
+        if data.subnet_pid.is_none() {
+            missing.push("subnet_pid");
+        }
+        if data.root_pid.is_none() {
+            missing.push("root_pid");
+        }
+        if data.canister_role.is_none() {
+            missing.push("canister_role");
+        }
+        if data.parent_pid.is_none() {
+            missing.push("parent_pid");
+        }
+
+        if !missing.is_empty() {
+            return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
+        }
+
+        Env::import(data);
+
+        Ok(())
+    }
+
+    pub fn import_view(env: EnvView) -> Result<(), Error> {
+        let data = env_data_from_view(env);
+        Self::import(data)
     }
 }
 

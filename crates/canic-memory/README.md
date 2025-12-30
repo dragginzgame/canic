@@ -24,8 +24,7 @@ Sample boot logs when everything is wired correctly:
 
 - `manager` — thread-local `MemoryManager<DefaultMemoryImpl>` used by all helpers.
 - `registry` — range reservation + ID registry with pending queues for macro-driven registration.
-- `ops` — helper to flush pending reservations/registrations into the registry during startup.
-- `runtime` — eager TLS initialization helper.
+- `runtime` — eager TLS initialization and registry startup helpers.
 - `macros` — `ic_memory!`, `ic_memory_range!`, `eager_static!`, `eager_init!`.
 
 ## Quick start
@@ -55,15 +54,15 @@ thread_local! {
 
 ### Flush pending registrations during startup
 
-Call the ops helper once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
+Call the runtime registry initializer once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
 
 ```rust
-use canic_memory::ops::MemoryRegistryOps;
+use canic_memory::runtime::registry::MemoryRegistryRuntime;
 
 fn init_memory() {
     // Optionally reserve an initial range for this crate before flushing queues.
     // Pass `None` if you reserve exclusively via `ic_memory_range!` calls.
-    MemoryRegistryOps::init_memory(Some((env!("CARGO_PKG_NAME"), 10, 19))).unwrap();
+    MemoryRegistryRuntime::init(Some((env!("CARGO_PKG_NAME"), 10, 19))).unwrap();
 }
 ```
 
@@ -84,6 +83,7 @@ Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar)
 
 ```rust
 use canic_memory::{eager_init, eager_static, runtime::init_eager_tls};
+use canic_memory::runtime::registry::MemoryRegistryRuntime;
 use std::cell::RefCell;
 
 eager_static! {
@@ -98,7 +98,7 @@ fn init() {
     // force eager TLS initialization first
     init_eager_tls();
     // then flush memory registrations
-    canic_memory::ops::MemoryRegistryOps::init_memory(None).unwrap();
+    MemoryRegistryRuntime::init(None).unwrap();
 }
 ```
 
@@ -121,7 +121,7 @@ Handle these at init time so your canister fails fast on invalid memory layout.
 #[test]
 fn reserves_and_registers() {
     canic_memory::registry::reset_for_tests();
-    canic_memory::ops::MemoryRegistryOps::init_memory(Some(("my_crate", 1, 2))).unwrap();
+    canic_memory::runtime::registry::MemoryRegistryRuntime::init(Some(("my_crate", 1, 2))).unwrap();
     canic_memory::registry::MemoryRegistry::register(1, "my_crate", "Slot").unwrap();
 }
 ```
