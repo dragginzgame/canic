@@ -4,9 +4,8 @@ use crate::{
     Error,
     cdk::timers::TimerId,
     config::schema::{RandomnessConfig, RandomnessSource},
-    infra::ic::mgmt::raw_rand,
     log::Topic,
-    ops::{config::ConfigOps, runtime::timer::TimerOps},
+    ops::{config::ConfigOps, ic::raw_rand, runtime::timer::TimerOps},
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};

@@ -1,7 +1,7 @@
-//! IC-related ops helpers.
+//! IC-related infra helpers.
 //!
 //! This module groups low-level IC concerns (management canister calls, ICC call
-//! wrappers, HTTP outcalls, timers) under a single namespace to keep `ops/`
+//! wrappers, HTTP outcalls, timers) under a single namespace to keep `infra/`
 //! navigable.
 
 pub mod call;

@@ -9,13 +9,9 @@ use crate::{
         types::{Cycles, TC},
     },
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
-    infra::ic::{
-        get_cycles,
-        mgmt::{create_canister, uninstall_code},
-        update_settings,
-    },
     log,
     log::Topic,
+    ops::ic::{create_canister, get_cycles, uninstall_code, update_settings},
     ops::storage::{
         pool::{PoolOps, pool_controllers},
         registry::SubnetRegistryOps,

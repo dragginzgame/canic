@@ -1,11 +1,12 @@
 pub mod canister;
 pub mod env;
 pub mod log;
+pub mod memory;
 pub mod metrics;
 pub mod timer;
 pub mod wasm;
 
-use crate::ThisError;
+use crate::{Error, ThisError, ops::OpsError};
 
 ///
 /// RuntimeOpsError
@@ -25,8 +26,11 @@ pub enum RuntimeOpsError {
     EnvOpsError(#[from] env::EnvOpsError),
 
     #[error(transparent)]
-    MemoryInfraError(#[from] memory::MemoryInfraError),
+    MemoryRegistryOpsError(#[from] memory::MemoryRegistryOpsError),
+}
 
-    #[error(transparent)]
-    RpcInfraError(#[from] rpc::RpcInfraError),
+impl From<RuntimeOpsError> for Error {
+    fn from(err: RuntimeOpsError) -> Self {
+        OpsError::from(err).into()
+    }
 }

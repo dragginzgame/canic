@@ -2,17 +2,16 @@ use crate::{
     Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
     ids::CanisterRole,
-    infra::canister::install_code_with_extra_arg,
-    infra::ic::{mgmt::delete_canister, upgrade_canister},
     log,
     log::Topic,
+    ops::ic::{delete_canister, upgrade_canister},
     ops::{
+        runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             pool::PoolOps,
             registry::SubnetRegistryOps,
         },
-        wasm::WasmOps,
     },
     workflow::{
         WorkflowError,

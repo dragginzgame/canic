@@ -11,7 +11,7 @@ use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
     dto::rpc::CreateCanisterParent,
-    infra::rpc::create_canister_request,
+    ops::rpc::create_canister_request,
     ops::{adapter::placement::worker_entry_from_view, storage::scaling::ScalingRegistryOps},
     policy::placement::scaling::{ScalingPlan, ScalingPolicy},
 };

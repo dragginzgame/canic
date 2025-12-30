@@ -161,10 +161,6 @@ async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<
     let debug = state_snapshot_debug(snapshot);
     log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
 
-    call_and_decode::<Result<(), Error>>(
-        *pid,
-        crate::infra::rpc::methods::CANIC_SYNC_STATE,
-        snapshot,
-    )
-    .await?
+    call_and_decode::<Result<(), Error>>(*pid, crate::ops::rpc::methods::CANIC_SYNC_STATE, snapshot)
+        .await?
 }

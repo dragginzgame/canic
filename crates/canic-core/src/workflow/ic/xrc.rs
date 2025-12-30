@@ -6,7 +6,7 @@ use crate::{
         env::nns::EXCHANGE_RATE_CANISTER,
         spec::ic::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
     },
-    infra::ic::call::Call,
+    ops::ic::call::Call,
 };
 
 /// Default cycles to attach to XRC calls.

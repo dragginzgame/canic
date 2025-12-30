@@ -9,9 +9,9 @@ use crate::{
     config::schema::{ShardPool, ShardPoolPolicy},
     dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
-    infra::rpc::create_canister_request,
     log,
     log::Topic,
+    ops::rpc::create_canister_request,
     ops::storage::sharding::ShardingRegistryOps,
     policy::placement::sharding::{
         ShardingPolicyError,

@@ -4,9 +4,10 @@ use crate::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
-    infra::{ic::deposit_cycles, rpc::RequestOpsError},
     ops::{
         OpsError,
+        ic::deposit_cycles,
+        rpc::RequestOpsError,
         storage::{directory::SubnetDirectoryOps, registry::SubnetRegistryOps},
     },
     workflow::{

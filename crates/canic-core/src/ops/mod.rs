@@ -20,6 +20,10 @@
 
 pub(crate) mod adapter;
 pub mod config;
+pub mod ic;
+pub mod icrc;
+pub mod perf;
+pub mod rpc;
 pub mod runtime;
 pub mod storage;
 pub mod view;
@@ -58,10 +62,10 @@ pub mod prelude {
             types::{Account, Cycles, Int, Nat, Principal, Subaccount},
         },
         ids::CanisterRole,
-        infra::ic::{call::Call, call_and_decode},
         log,
         log::Level,
         ops::OpsError,
+        ops::ic::{call::Call, call_and_decode},
     };
     pub use serde::{Deserialize, Serialize};
 }
@@ -85,6 +89,9 @@ pub enum OpsError {
 
     #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
+
+    #[error(transparent)]
+    RpcOpsError(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
     RuntimeOpsError(#[from] runtime::RuntimeOpsError),
