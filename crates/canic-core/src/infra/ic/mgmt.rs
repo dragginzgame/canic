@@ -12,7 +12,6 @@ use crate::{
             UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
         },
         types::Cycles,
-        utils::wasm::get_wasm_hash,
     },
     infra::ic::call::Call,
 };
@@ -94,7 +93,7 @@ pub async fn raw_rand() -> Result<[u8; 32], Error> {
     let len = bytes.len();
     let seed: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| Error::CustomError(format!("raw_rand returned {len} bytes")))?;
+        .map_err(|_| Error::Custom(format!("raw_rand returned {len} bytes")))?;
 
     Ok(seed)
 }
@@ -125,15 +124,8 @@ pub async fn install_code<T: ArgumentEncoder>(
     Ok(())
 }
 
-/// Upgrades a canister to the provided wasm when the module hash differs.
-///
-/// No-op when the canister already runs the same module.
+/// Upgrades a canister to the provided wasm.
 pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
-    let status = canister_status(canister_pid).await?;
-    if status.module_hash == Some(get_wasm_hash(wasm)) {
-        return Ok(());
-    }
-
     install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
 
     Ok(())

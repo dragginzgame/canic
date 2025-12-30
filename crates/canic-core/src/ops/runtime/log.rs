@@ -13,17 +13,11 @@ use crate::{
 ///
 /// LogOps
 ///
-/// Logging operations.
-///
-/// Contains both:
-/// - control ops (runtime log append, retention sweeps)
-/// - view ops (paging, filtering, snapshot views)
+/// Logging control operations.
 ///
 /// Callers must ensure that control ops are only invoked
-/// from update/workflow contexts, while view ops are safe
-/// for query endpoints.
+/// from update/workflow contexts.
 ///
-
 pub struct LogOps;
 
 impl LogOps {
@@ -42,7 +36,26 @@ impl LogOps {
 
         Log::append(&cfg, now, crate_name, topic, level, message)
     }
+}
 
+impl LogOps {
+    /// Apply log retention policy and return a summary.
+    pub fn apply_retention() -> Result<RetentionSummary, Error> {
+        let cfg = ConfigOps::log_config()?;
+        let now = now_secs();
+
+        apply_retention_with_cfg(&cfg, now)
+    }
+}
+
+///
+/// LogViewOps
+///
+/// Read-only log views and pagination helpers.
+///
+pub struct LogViewOps;
+
+impl LogViewOps {
     #[must_use]
     pub fn page(
         crate_name: Option<String>,
@@ -70,12 +83,4 @@ impl LogOps {
 
         paginate_vec(views, request)
     }
-}
-
-/// Apply log retention policy and return a summary.
-pub fn apply_log_retention() -> Result<RetentionSummary, Error> {
-    let cfg = ConfigOps::log_config()?;
-    let now = now_secs();
-
-    apply_retention_with_cfg(&cfg, now)
 }

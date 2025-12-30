@@ -36,9 +36,9 @@ fn capitalize_first(word: &str) -> String {
     }
 }
 
-//
-// TESTS
-//
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

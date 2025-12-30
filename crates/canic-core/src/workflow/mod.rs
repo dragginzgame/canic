@@ -39,11 +39,14 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum WorkflowError {
     #[error(transparent)]
-    CascadeError(#[from] cascade::CascadeError),
+    Cascade(#[from] cascade::CascadeError),
 
     #[error(transparent)]
-    IcError(#[from] ic::IcError),
+    Ic(#[from] ic::IcError),
 
     #[error(transparent)]
-    OrchestrationError(#[from] orchestrator::OrchestratorError),
+    Orchestrator(#[from] orchestrator::OrchestratorError),
+
+    #[error(transparent)]
+    Placement(#[from] placement::PlacementError),
 }

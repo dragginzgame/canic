@@ -37,10 +37,14 @@ pub mod perf;
 pub mod policy;
 pub mod workflow;
 
-pub use ::canic_cdk as cdk;
-pub use ::canic_memory as memory;
-pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
-pub use ::canic_utils as utils;
+pub use {
+    ::canic_cdk as cdk,
+    ::canic_memory as memory,
+    ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
+    ::canic_utils as utils,
+    dto::error::{Error, ErrorCode},
+    thiserror::Error as ThisError,
+};
 
 /// Internal re-exports required for macro expansion.
 /// Not part of the public API.
@@ -49,13 +53,10 @@ pub mod __reexports {
     pub use ::ctor;
 }
 
-pub use thiserror::Error as ThisError;
-
 use crate::cdk::{
     call::{CallFailed, CandidDecodeFailed, Error as CallError},
-    candid::{CandidType, Error as CandidError},
+    candid::Error as CandidError,
 };
-use serde::Deserialize;
 
 ///
 /// Crate Version
@@ -66,115 +67,185 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
 /// Error
-/// top level error should handle all sub-errors, but not expose the child candid types
+///
+/// Internal, structured error type.
+///
+/// This error:
+/// - is NOT Candid-exposed
+/// - is NOT stable across versions
+/// - may evolve freely
+///
+/// All canister endpoints must convert this into a public error envelope.
 ///
 
-#[derive(CandidType, Debug, Deserialize, ThisError)]
-pub enum Error {
-    #[error("{0}")]
-    AccessError(String),
+#[derive(Debug, ThisError)]
+pub enum CanicError {
+    #[error(transparent)]
+    Access(#[from] access::AccessError),
 
-    #[error("{0}")]
-    ConfigError(String),
+    #[error(transparent)]
+    Config(#[from] config::ConfigError),
 
-    #[error("{0}")]
-    CustomError(String),
+    #[error(transparent)]
+    Infra(#[from] infra::InfraError),
 
-    #[error("{0}")]
-    InfraError(String),
+    #[error(transparent)]
+    Model(#[from] model::ModelError),
 
-    #[error("{0}")]
-    ModelError(String),
+    #[error(transparent)]
+    Ops(#[from] ops::OpsError),
 
-    #[error("{0}")]
-    OpsError(String),
+    #[error(transparent)]
+    Policy(#[from] policy::PolicyError),
 
-    #[error("{0}")]
-    PolicyError(String),
+    #[error(transparent)]
+    Workflow(#[from] workflow::WorkflowError),
 
-    #[error("{0}")]
-    SerializeError(String),
-
-    #[error("{0}")]
-    WorkflowError(String),
-
-    ///
-    /// Http Errors
-    ///
-
+    // ---------------------------------------------------------------------
+    // HTTP / networking
+    // ---------------------------------------------------------------------
     #[error("http request failed: {0}")]
     HttpRequest(String),
 
     #[error("http error status: {0}")]
-    HttpErrorCode(u32),
+    HttpStatus(u32),
 
     #[error("http decode failed: {0}")]
-    HttpDecode(String),
+    HttpDecode(#[from] serde_json::Error),
 
-    ///
-    /// Test Error
-    /// as we don't want to import dev-dependencies
-    ///
+    // ---------------------------------------------------------------------
+    // IC / Candid
+    // ---------------------------------------------------------------------
+    #[error(transparent)]
+    Call(#[from] CallError),
 
-    #[error("{0}")]
-    TestError(String),
+    #[error(transparent)]
+    CallFailed(#[from] CallFailed),
 
-    ///
-    /// Common IC errors
-    ///
-    /// CallError          : should be automatic with ?
-    /// CallFailed         : use this for wrapping <T, String> return values
-    /// CandidError        : for decode_one errors etc.  automatic
-    /// CandidDecodeFailed : automatic for calls like ::candid<T>()
-    ///
+    #[error(transparent)]
+    Candid(#[from] CandidError),
 
-    #[error("call error: {0}")]
-    CallError(String),
+    #[error(transparent)]
+    CandidDecode(#[from] CandidDecodeFailed),
 
-    #[error("call failed: {0}")]
-    CallFailed(String),
+    // ---------------------------------------------------------------------
+    // Utility / test-only
+    // ---------------------------------------------------------------------
+    #[error("test error: {0}")]
+    Test(String),
 
-    #[error("candid error: {0}")]
-    CandidError(String),
-
-    #[error("candid decode failed: {0}")]
-    CandidDecodeFailed(String),
+    #[error("custom error: {0}")]
+    Custom(String),
 }
 
-macro_rules! from_to_string {
-    ($from:ty, $variant:ident) => {
-        impl From<$from> for Error {
-            fn from(e: $from) -> Self {
-                Error::$variant(e.to_string())
+impl CanicError {
+    pub fn public(&self) -> Error {
+        match self {
+            // ---------------------------------------------------------
+            // Access / authorization
+            // ---------------------------------------------------------
+            Self::Access(_) => Self::public_message(ErrorCode::Unauthorized, "unauthorized"),
+
+            // ---------------------------------------------------------
+            // Input / configuration
+            // ---------------------------------------------------------
+            Self::Config(_) => {
+                Self::public_message(ErrorCode::InvalidInput, "invalid configuration")
             }
+            Self::Candid(_) | Self::CandidDecode(_) => {
+                Self::public_message(ErrorCode::InvalidInput, "invalid input")
+            }
+
+            // ---------------------------------------------------------
+            // Policy decisions
+            // ---------------------------------------------------------
+            Self::Policy(_) => Self::public_message(ErrorCode::Conflict, "policy rejected"),
+
+            // ---------------------------------------------------------
+            // State / invariants
+            // ---------------------------------------------------------
+            Self::Model(_) => {
+                Self::public_message(ErrorCode::InvariantViolation, "invariant violation")
+            }
+
+            // ---------------------------------------------------------
+            // Infrastructure / execution
+            // ---------------------------------------------------------
+            Self::Infra(_) | Self::Ops(_) | Self::Workflow(_) => {
+                Self::public_message(ErrorCode::Internal, "internal error")
+            }
+            Self::Call(_) | Self::CallFailed(_) => {
+                Self::public_message(ErrorCode::Internal, "ic call failed")
+            }
+
+            // ---------------------------------------------------------
+            // HTTP
+            // ---------------------------------------------------------
+            Self::HttpStatus(code) => Self::public_http_status(*code),
+            Self::HttpRequest(_) => {
+                Self::public_message(ErrorCode::Internal, "http request failed")
+            }
+            Self::HttpDecode(_) => Self::public_message(ErrorCode::Internal, "http decode failed"),
+
+            // ---------------------------------------------------------
+            // Fallbacks
+            // ---------------------------------------------------------
+            Self::Custom(msg) => Error {
+                code: ErrorCode::Internal,
+                message: msg.clone(),
+            },
+            Self::Test(msg) => Error {
+                code: ErrorCode::Internal,
+                message: msg.clone(),
+            },
         }
-    };
-}
-
-impl Error {
-    /// Build a custom error from a string without defining a new variant.
-    #[must_use]
-    pub fn custom<S: Into<String>>(s: S) -> Self {
-        Self::CustomError(s.into())
     }
 
-    /// Build a test error to avoid extra dev-only dependencies.
+    fn public_message(code: ErrorCode, message: &'static str) -> Error {
+        Error {
+            code,
+            message: message.to_string(),
+        }
+    }
+
+    fn public_http_status(status: u32) -> Error {
+        let code = match status {
+            401 | 403 => ErrorCode::Unauthorized,
+            404 => ErrorCode::NotFound,
+            409 => ErrorCode::Conflict,
+            429 => ErrorCode::ResourceExhausted,
+            400..=499 => ErrorCode::InvalidInput,
+            500..=599 => ErrorCode::Internal,
+            _ => ErrorCode::Internal,
+        };
+
+        Error {
+            code,
+            message: format!("http status {status}"),
+        }
+    }
+
+    /// Build a custom error without introducing a new variant.
     #[must_use]
-    pub fn test<S: Into<String>>(s: S) -> Self {
-        Self::TestError(s.into())
+    pub fn custom<S: Into<String>>(msg: S) -> Self {
+        Self::Custom(msg.into())
+    }
+
+    /// Test-only helper to avoid dev-dependencies.
+    #[must_use]
+    pub fn test<S: Into<String>>(msg: S) -> Self {
+        Self::Test(msg.into())
     }
 }
 
-from_to_string!(access::AccessError, AccessError);
-from_to_string!(config::ConfigError, ConfigError);
-from_to_string!(infra::InfraError, InfraError);
-from_to_string!(model::ModelError, ModelError);
-from_to_string!(ops::OpsError, OpsError);
-from_to_string!(policy::PolicyError, PolicyError);
-from_to_string!(workflow::WorkflowError, WorkflowError);
+impl From<&CanicError> for Error {
+    fn from(err: &CanicError) -> Self {
+        err.public()
+    }
+}
 
-from_to_string!(serde_json::Error, HttpDecode);
-from_to_string!(CallError, CallError);
-from_to_string!(CallFailed, CallFailed);
-from_to_string!(CandidDecodeFailed, CandidDecodeFailed);
-from_to_string!(CandidError, CandidError);
+impl From<CanicError> for Error {
+    fn from(err: CanicError) -> Self {
+        Error::from(&err)
+    }
+}

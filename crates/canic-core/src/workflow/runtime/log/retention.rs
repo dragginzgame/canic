@@ -4,7 +4,7 @@ use crate::{
     ops::{
         OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
         runtime::{
-            log::apply_log_retention,
+            log::LogOps,
             timer::{TimerId, TimerOps},
         },
     },
@@ -42,7 +42,7 @@ pub fn stop() {
 /// Run a retention sweep immediately.
 #[must_use]
 pub fn retain() -> bool {
-    match apply_log_retention() {
+    match LogOps::apply_retention() {
         Ok(summary) => {
             let dropped = summary.dropped_total();
             if dropped > 0 {

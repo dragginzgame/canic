@@ -60,7 +60,7 @@ pub(crate) fn build_nonroot_init_payload(
 #[derive(Debug, ThisError)]
 pub enum ProvisionError {
     #[error("install failed for {pid}: {source}")]
-    InstallFailed { pid: Principal, source: Error },
+    InstallFailed { pid: Principal, source: Box<Error> },
 }
 
 impl From<ProvisionError> for Error {
@@ -146,7 +146,11 @@ pub async fn create_and_install_canister(
                 "failed to delete canister after install failure: {pid} ({delete_err})"
             );
         }
-        return Err(ProvisionError::InstallFailed { pid, source: err }.into());
+        return Err(ProvisionError::InstallFailed {
+            pid,
+            source: Box::new(err),
+        }
+        .into());
     }
 
     Ok(pid)

@@ -3,7 +3,6 @@ use crate::{
     cdk::{
         mgmt::{CanisterInstallMode, CanisterStatusResult, UpdateSettingsArgs},
         types::Cycles,
-        utils::wasm::get_wasm_hash,
     },
     infra::ic::mgmt as infra_mgmt,
     log,
@@ -107,21 +106,8 @@ pub async fn install_code<T: ArgumentEncoder>(
     Ok(())
 }
 
-/// Upgrades a canister to the provided wasm when the module hash differs.
-///
-/// No-op when the canister already runs the same module.
+/// Upgrades a canister to the provided wasm.
 pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
-    let status = canister_status(canister_pid).await?;
-    if status.module_hash == Some(get_wasm_hash(wasm)) {
-        log!(
-            Topic::CanisterLifecycle,
-            Info,
-            "canister_upgrade: {canister_pid} already running target module"
-        );
-
-        return Ok(());
-    }
-
     install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
 
     #[allow(clippy::cast_precision_loss)]

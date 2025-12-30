@@ -73,7 +73,12 @@ macro_rules! canic_endpoints {
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::log::LogEntryView> {
-            ::canic::core::ops::runtime::log::LogOps::page(crate_name, topic, min_level, page)
+            ::canic::core::ops::runtime::log::LogViewOps::page(
+                crate_name,
+                topic,
+                min_level,
+                page,
+            )
         }
 
         //

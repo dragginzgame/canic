@@ -21,9 +21,9 @@ pub fn to_constant_case(s: &str) -> String {
     constant_case
 }
 
-//
-// TESTS
-//
+///
+/// TESTS
+///
 
 /// Tests converting strings to snake case. Runs through a series of test cases,
 /// converting input strings to snake case and comparing the result to the
