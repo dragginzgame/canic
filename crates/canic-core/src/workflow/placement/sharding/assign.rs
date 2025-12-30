@@ -63,13 +63,13 @@ impl ShardAllocator {
 }
 
 ///
-/// ShardingOps
+/// ShardingWorkflow
 /// High-level orchestration flows for tenant assignment and rebalancing.
 ///
 
-pub struct ShardingOps;
+pub struct ShardingWorkflow;
 
-impl ShardingOps {
+impl ShardingWorkflow {
     /// Plan a tenant assignment without mutating state.
     pub fn plan_assign_to_pool(
         pool: &str,
@@ -282,7 +282,8 @@ mod tests {
         ShardingRegistryOps::assign("primary", "tenant-b", shard_a).unwrap();
 
         let moved =
-            futures::executor::block_on(ShardingOps::drain_shard("primary", shard_a, 1)).unwrap();
+            futures::executor::block_on(ShardingWorkflow::drain_shard("primary", shard_a, 1))
+                .unwrap();
         assert_eq!(moved, 1);
 
         let entry_a = ShardingRegistryOps::get(shard_a).unwrap();

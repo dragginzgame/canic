@@ -10,7 +10,7 @@ use canic::{
     Error,
     core::{
         policy::placement::sharding::policy::ShardingPolicy,
-        workflow::placement::sharding::assign::ShardingOps,
+        workflow::placement::sharding::assign::ShardingWorkflow,
     },
     prelude::*,
 };
@@ -35,7 +35,7 @@ async fn canic_upgrade() {}
 // don't need authentication as this is a local canic test
 #[canic_update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
-    let shard_pid = ShardingOps::assign_to_pool(POOL_NAME, pid.to_string()).await?;
+    let shard_pid = ShardingWorkflow::assign_to_pool(POOL_NAME, pid.to_string()).await?;
 
     Ok(shard_pid)
 }
