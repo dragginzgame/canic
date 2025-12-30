@@ -11,7 +11,7 @@ use crate::{
         spec::icrc::icrc2::{Allowance, AllowanceArgs, TransferFromArgs, TransferFromResult},
         types::{Account, Principal},
     },
-    ops::ic::call::Call,
+    infra::ic::call::Call,
 };
 
 ///

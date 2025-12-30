@@ -9,25 +9,24 @@ pub mod cmc;
 pub mod ledger;
 pub mod mgmt;
 pub mod signature;
-pub mod timer;
 
 pub use mgmt::*;
 
-use crate::{Error, ThisError, ops::OpsError};
+use crate::{Error, ThisError, infra::InfraError};
 
 ///
-/// IcOpsError
+/// IcInfraError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum IcOpsError {
+pub enum IcInfraError {
     #[error(transparent)]
-    SignatureOpsError(#[from] signature::SignatureOpsError),
+    SignatureInfraError(#[from] signature::SignatureOpsError),
 }
 
-impl From<IcOpsError> for Error {
-    fn from(err: IcOpsError) -> Self {
-        OpsError::from(err).into()
+impl From<IcInfraError> for Error {
+    fn from(err: IcInfraError) -> Self {
+        InfraError::from(err).into()
     }
 }
 

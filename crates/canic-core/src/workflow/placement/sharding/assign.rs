@@ -9,9 +9,10 @@ use crate::{
     config::schema::{ShardPool, ShardPoolPolicy},
     dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
+    infra::rpc::create_canister_request,
     log,
     log::Topic,
-    ops::{rpc::create_canister_request, storage::sharding::ShardingRegistryOps},
+    ops::storage::sharding::ShardingRegistryOps,
     policy::placement::sharding::{
         ShardingPolicyError,
         metrics::pool_metrics,
@@ -226,7 +227,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::{CanisterRole, SubnetRole},
-        ops::{env::EnvOps, storage::sharding::ShardingRegistryOps},
+        ops::{runtime::env::EnvOps, storage::sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 

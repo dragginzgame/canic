@@ -1,12 +1,12 @@
 use crate::{
     Error,
     cdk::api::{canister_self, trap},
+    infra::ic::{Network, build_network},
     log::Topic,
     ops::{
         config::ConfigOps,
-        env::EnvOps,
-        ic::{Network, build_network},
         prelude::*,
+        runtime::env::EnvOps,
         storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },
     workflow::{

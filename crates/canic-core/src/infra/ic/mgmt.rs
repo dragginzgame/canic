@@ -14,10 +14,10 @@ use crate::{
         types::Cycles,
         utils::wasm::get_wasm_hash,
     },
+    infra::ic::call::Call,
     log,
     log::Topic,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::ic::call::Call,
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 

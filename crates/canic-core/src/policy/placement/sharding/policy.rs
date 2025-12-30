@@ -28,7 +28,6 @@ use crate::{
         metrics::{PoolMetrics, pool_metrics},
     },
 };
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -36,7 +35,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Result of a dry-run shard assignment plan (including the desired slot index).
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct ShardingPlan {
     pub state: ShardingPlanState,
     pub target_slot: Option<u32>,
@@ -51,7 +50,7 @@ pub struct ShardingPlan {
 /// Structured reason for creation denial.
 ///
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CreateBlockedReason {
     PoolAtCapacity,
     NoFreeSlots,
@@ -73,7 +72,7 @@ impl std::fmt::Display for CreateBlockedReason {
 /// Outcome variants of a dry-run shard plan.
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub enum ShardingPlanState {
     /// Tenant already has a shard assigned.
     AlreadyAssigned { pid: Principal },
@@ -335,7 +334,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::CanisterRole,
-        ops::{env::EnvOps, storage::sharding::ShardingRegistryOps},
+        ops::{runtime::env::EnvOps, storage::sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 
