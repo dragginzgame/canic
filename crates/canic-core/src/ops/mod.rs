@@ -70,7 +70,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{ThisError, cdk::api::canister_self, ops::runtime::env::EnvOps};
+use crate::ThisError;
 
 ///
 /// OpsError
@@ -79,14 +79,6 @@ use crate::{ThisError, cdk::api::canister_self, ops::runtime::env::EnvOps};
 
 #[derive(Debug, ThisError)]
 pub enum OpsError {
-    /// Raised when a function requires root context, but was called from a child.
-    #[error("operation must be called from the root canister")]
-    NotRoot,
-
-    /// Raised when a function must not be called from root.
-    #[error("operation cannot be called from the root canister")]
-    IsRoot,
-
     #[error(transparent)]
     ConfigOpsError(#[from] config::ConfigOpsError),
 
@@ -98,28 +90,4 @@ pub enum OpsError {
 
     #[error(transparent)]
     StorageOpsError(#[from] storage::StorageOpsError),
-}
-
-impl OpsError {
-    /// Ensure the caller is the root canister.
-    pub fn require_root() -> Result<(), Self> {
-        let root_pid = EnvOps::get_root_pid()?;
-
-        if root_pid == canister_self() {
-            Ok(())
-        } else {
-            Err(Self::NotRoot)
-        }
-    }
-
-    /// Ensure the caller is not the root canister.
-    pub fn deny_root() -> Result<(), Self> {
-        let root_pid = EnvOps::get_root_pid()?;
-
-        if root_pid == canister_self() {
-            Err(Self::IsRoot)
-        } else {
-            Ok(())
-        }
-    }
 }

@@ -19,6 +19,14 @@ use crate::model::memory::env::EnvData;
 
 #[derive(Debug, ThisError)]
 pub enum EnvOpsError {
+    /// Raised when a function requires root context, but was called from a child.
+    #[error("operation must be called from the root canister")]
+    NotRoot,
+
+    /// Raised when a function must not be called from root.
+    #[error("operation cannot be called from the root canister")]
+    IsRoot,
+
     #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
@@ -37,6 +45,8 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet role")]
     SubnetRoleUnavailable,
 }
+
+impl EnvOpsError {}
 
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
@@ -215,6 +225,32 @@ impl EnvOps {
 
     pub fn parent_pid() -> Result<Principal, Error> {
         Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
+    }
+
+    // ---------------------------------------------------------------------
+    // Errors
+    // ---------------------------------------------------------------------
+
+    /// Ensure the caller is the root canister.
+    pub fn require_root() -> Result<(), Error> {
+        let root_pid = EnvOps::root_pid()?;
+
+        if root_pid == canister_self() {
+            Ok(())
+        } else {
+            Err(EnvOpsError::NotRoot.into())
+        }
+    }
+
+    /// Ensure the caller is not the root canister.
+    pub fn deny_root() -> Result<(), Error> {
+        let root_pid = EnvOps::root_pid()?; // explicit mapping
+
+        if root_pid == canister_self() {
+            Err(EnvOpsError::IsRoot.into())
+        } else {
+            Ok(())
+        }
     }
 
     // ---------------------------------------------------------------------

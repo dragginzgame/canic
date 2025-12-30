@@ -6,7 +6,7 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ids::CanisterRole,
-    ops::prelude::*,
+    ops::{prelude::*, runtime::env::EnvOps},
 };
 use candid::encode_one;
 
@@ -131,7 +131,7 @@ impl Rpc for UpgradeCanisterRpc {
 ///
 
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
-    OpsError::deny_root()?;
+    EnvOps::deny_root()?;
 
     super::execute_rpc(CyclesRpc { cycles }).await
 }
