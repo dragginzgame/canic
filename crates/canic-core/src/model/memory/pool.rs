@@ -27,7 +27,10 @@ eager_static! {
 /// CanisterPoolData
 ///
 
-pub type CanisterPoolData = Vec<(Principal, CanisterPoolEntry)>;
+#[derive(Clone, Debug)]
+pub struct CanisterPoolData {
+    pub entries: Vec<(Principal, CanisterPoolEntry)>,
+}
 
 ///
 /// CanisterPoolStatus
@@ -198,7 +201,9 @@ impl CanisterPool {
 
     #[must_use]
     pub(crate) fn export() -> CanisterPoolData {
-        CANISTER_POOL.with_borrow(BTreeMap::to_vec)
+        CanisterPoolData {
+            entries: CANISTER_POOL.with_borrow(BTreeMap::to_vec),
+        }
     }
 
     //
@@ -276,10 +281,10 @@ mod tests {
         );
 
         let data = CanisterPool::export();
-        assert_eq!(data.len(), 2);
+        assert_eq!(data.entries.len(), 2);
 
-        let (_, e1) = data.iter().find(|(id, _)| *id == p1).unwrap();
-        let (_, e2) = data.iter().find(|(id, _)| *id == p2).unwrap();
+        let (_, e1) = data.entries.iter().find(|(id, _)| *id == p1).unwrap();
+        let (_, e2) = data.entries.iter().find(|(id, _)| *id == p2).unwrap();
 
         assert_eq!(e1.state.cycles, 100u128.into());
         assert_eq!(e2.state.cycles, 200u128.into());
@@ -374,8 +379,8 @@ mod tests {
         assert_eq!(removed.state.cycles, 123u128.into());
 
         let remaining = CanisterPool::export();
-        assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].0, p2);
+        assert_eq!(remaining.entries.len(), 1);
+        assert_eq!(remaining.entries[0].0, p2);
     }
 
     #[test]

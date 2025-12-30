@@ -11,6 +11,7 @@ use crate::{
         adapter::canister::{canister_summary_from_topology_child, canister_summary_to_view},
         runtime::env::EnvOps,
         storage::registry::SubnetRegistryOps,
+        view::clamp_page_request,
     },
 };
 
@@ -25,7 +26,9 @@ impl CanisterChildrenOps {
     /// Root rebuilds from the registry; others use imported snapshot.
     fn resolve_children() -> CanisterChildrenData {
         if EnvOps::is_root() {
-            SubnetRegistryOps::children(canister_self())
+            CanisterChildrenData {
+                entries: SubnetRegistryOps::children(canister_self()),
+            }
         } else {
             CanisterChildren::export()
         }
@@ -35,14 +38,15 @@ impl CanisterChildrenOps {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn page(request: PageRequest) -> Page<CanisterSummaryView> {
-        let request = request.clamped();
+        let request = clamp_page_request(request);
         let all = Self::resolve_children();
 
-        let total = all.len() as u64;
+        let entries = &all.entries;
+        let total = entries.len() as u64;
         let start = request.offset.min(total) as usize;
         let end = request.offset.saturating_add(request.limit).min(total) as usize;
 
-        let entries = all[start..end]
+        let entries = entries[start..end]
             .iter()
             .map(|(_, summary)| canister_summary_to_view(summary))
             .collect();
@@ -54,6 +58,7 @@ impl CanisterChildrenOps {
     #[must_use]
     pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummaryView> {
         Self::resolve_children()
+            .entries
             .into_iter()
             .find(|(p, _)| p == pid)
             .map(|(_, summary)| canister_summary_to_view(&summary))
@@ -63,6 +68,7 @@ impl CanisterChildrenOps {
     #[must_use]
     pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterSummaryView> {
         Self::resolve_children()
+            .entries
             .into_iter()
             .find(|(_, summary)| &summary.role == role)
             .map(|(_, summary)| canister_summary_to_view(&summary))
@@ -72,6 +78,7 @@ impl CanisterChildrenOps {
     #[must_use]
     pub(crate) fn pids() -> Vec<Principal> {
         Self::resolve_children()
+            .entries
             .into_iter()
             .map(|(pid, _)| pid)
             .collect()
@@ -79,13 +86,13 @@ impl CanisterChildrenOps {
 
     /// Import identity-bearing children data from a topology snapshot view.
     pub(crate) fn import_view(parent_pid: Principal, children: Vec<TopologyChildView>) {
-        let data = children
+        let entries = children
             .into_iter()
             .map(|node| {
                 let summary = canister_summary_from_topology_child(&node, parent_pid);
                 (node.pid, summary)
             })
             .collect();
-        CanisterChildren::import(data);
+        CanisterChildren::import(CanisterChildrenData { entries });
     }
 }

@@ -1,9 +1,9 @@
 use crate::{
     Error,
     cdk::api::trap,
-    infra::ic::{Network, build_network},
     ops::{
         config::ConfigOps,
+        ic::{Network, build_network},
         runtime::env::EnvOps,
         storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
     },

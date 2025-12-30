@@ -1,5 +1,6 @@
 use crate::{
     dto::page::{Page, PageRequest},
+    ops::view::clamp_page_request,
     perf::{self},
 };
 
@@ -18,7 +19,7 @@ impl PerfOps {
 
     #[must_use]
     pub fn snapshot(request: PageRequest) -> Page<PerfEntry> {
-        let request = request.clamped();
+        let request = clamp_page_request(request);
         let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
 

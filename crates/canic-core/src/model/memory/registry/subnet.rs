@@ -32,7 +32,10 @@ eager_static! {
 /// SubnetRegistryData
 ///
 
-pub type SubnetRegistryData = Vec<(Principal, CanisterEntry)>;
+#[derive(Clone, Debug)]
+pub struct SubnetRegistryData {
+    pub entries: Vec<(Principal, CanisterEntry)>,
+}
 
 ///
 /// SubnetRegistry
@@ -172,13 +175,13 @@ impl SubnetRegistry {
     /// the original canister (if found) plus all its descendants.
     #[must_use]
     pub(crate) fn subtree(root_pid: Principal) -> Vec<(Principal, CanisterSummary)> {
-        let entries: Vec<(Principal, CanisterEntry)> = Self::export();
+        let entries = Self::export();
 
         // Build parent -> children map
         let mut children: HashMap<Principal, Vec<(Principal, CanisterEntry)>> = HashMap::new();
         let mut root: Option<CanisterEntry> = None;
 
-        for (pid, entry) in entries {
+        for (pid, entry) in entries.entries {
             if pid == root_pid {
                 root = Some(entry.clone());
             }
@@ -249,7 +252,9 @@ impl SubnetRegistry {
     /// Returns all canister entries as a vector.
     #[must_use]
     pub(crate) fn export() -> SubnetRegistryData {
-        Self::with_entries(|iter| iter.map(|e| (*e.key(), e.value())).collect())
+        SubnetRegistryData {
+            entries: Self::with_entries(|iter| iter.map(|e| (*e.key(), e.value())).collect()),
+        }
     }
 }
 

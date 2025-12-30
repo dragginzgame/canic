@@ -150,7 +150,7 @@ impl ShardingPolicy {
         let pool_cfg = Self::get_pool_config(pool)?;
         let metrics = pool_metrics(pool);
         let data = ShardingRegistryOps::export();
-        let slot_plan = plan_slot_backfill(pool, &data, pool_cfg.policy.max_shards);
+        let slot_plan = plan_slot_backfill(pool, &data.entries, pool_cfg.policy.max_shards);
 
         if let Some(pid) = ShardingRegistryOps::tenant_shard(pool, tenant)
             && exclude_pid != Some(pid)
@@ -165,6 +165,7 @@ impl ShardingPolicy {
 
         // Prefer an existing shard with spare capacity.
         let shards_with_capacity: Vec<_> = data
+            .entries
             .iter()
             .filter(|(pid, entry)| {
                 entry.pool.as_ref() == pool

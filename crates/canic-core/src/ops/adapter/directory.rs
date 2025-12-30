@@ -5,20 +5,20 @@ use crate::{
 
 #[must_use]
 pub fn app_directory_from_view(view: AppDirectoryView) -> AppDirectoryData {
-    view.0
+    AppDirectoryData { entries: view.0 }
 }
 
 #[must_use]
 pub fn subnet_directory_from_view(view: SubnetDirectoryView) -> SubnetDirectoryData {
-    view.0
+    SubnetDirectoryData { entries: view.0 }
 }
 
 #[must_use]
-pub const fn app_directory_to_view(data: AppDirectoryData) -> AppDirectoryView {
-    AppDirectoryView(data)
+pub fn app_directory_to_view(data: AppDirectoryData) -> AppDirectoryView {
+    AppDirectoryView(data.entries)
 }
 
 #[must_use]
-pub const fn subnet_directory_to_view(data: SubnetDirectoryData) -> SubnetDirectoryView {
-    SubnetDirectoryView(data)
+pub fn subnet_directory_to_view(data: SubnetDirectoryData) -> SubnetDirectoryView {
+    SubnetDirectoryView(data.entries)
 }

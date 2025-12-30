@@ -15,7 +15,7 @@
 
 use crate::{
     Error,
-    model::memory::pool::CanisterPoolStatus,
+    dto::pool::CanisterPoolStatusView,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
         runtime::timer::{TimerId, TimerOps},
@@ -124,16 +124,17 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = PoolOps::export()
+    let mut pending: Vec<_> = PoolOps::export_view()
+        .0
         .into_iter()
-        .filter(|(_, e)| matches!(e.state.status, CanisterPoolStatus::PendingReset))
+        .filter(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
         .collect();
 
     if pending.is_empty() {
         return Ok(());
     }
 
-    pending.sort_by_key(|(_, e)| e.header.created_at);
+    pending.sort_by_key(|(_, e)| e.created_at);
 
     for (pid, _) in pending.into_iter().take(limit) {
         match check_can_enter_pool(pid).await {
@@ -176,9 +177,10 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 }
 
 fn has_pending_reset() -> bool {
-    PoolOps::export()
+    PoolOps::export_view()
+        .0
         .into_iter()
-        .any(|(_, e)| matches!(e.state.status, CanisterPoolStatus::PendingReset))
+        .any(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
 }
 
 //

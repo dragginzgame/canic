@@ -1,4 +1,4 @@
-# canic-internal
+# canic-canisters-common
 
 Internal helpers and fixtures used by the Canic workspace (integration scaffolding, shared constants).
 

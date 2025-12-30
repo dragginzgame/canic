@@ -204,7 +204,6 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-core",
- "canic-internal",
  "canic-macros",
  "canic-memory",
  "canic-testkit",

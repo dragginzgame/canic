@@ -11,8 +11,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::rpc::create_canister_request,
-    ops::storage::sharding::ShardingRegistryOps,
+    ops::{rpc::create_canister_request, storage::sharding::ShardingRegistryOps},
     policy::placement::sharding::{
         ShardingPolicyError,
         metrics::pool_metrics,
@@ -71,6 +70,16 @@ impl ShardAllocator {
 pub struct ShardingOps;
 
 impl ShardingOps {
+    /// Plan a tenant assignment without mutating state.
+    pub fn plan_assign_to_pool(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<ShardingPlanState, Error> {
+        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
+
+        Ok(plan.state)
+    }
+
     /// Assign a tenant to the given pool, creating a shard if necessary.
     pub async fn assign_to_pool(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;

@@ -1,5 +1,9 @@
 use crate::{
-    cdk::candid::Principal, ids::CanisterRole, ops::storage::registry::SubnetRegistryOps, policy,
+    cdk::candid::Principal,
+    dto::directory::{AppDirectoryView, SubnetDirectoryView},
+    ids::CanisterRole,
+    ops::storage::registry::SubnetRegistryOps,
+    policy,
 };
 use std::collections::BTreeMap;
 
@@ -11,7 +15,7 @@ pub struct RootAppDirectoryBuilder;
 
 impl RootAppDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
+    pub fn build_from_registry() -> AppDirectoryView {
         let entries = SubnetRegistryOps::export_roles();
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
@@ -21,7 +25,7 @@ impl RootAppDirectoryBuilder {
             }
         }
 
-        map.into_iter().collect()
+        AppDirectoryView(map.into_iter().collect())
     }
 }
 ///
@@ -32,7 +36,7 @@ pub struct RootSubnetDirectoryBuilder;
 
 impl RootSubnetDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> Vec<(CanisterRole, Principal)> {
+    pub fn build_from_registry() -> SubnetDirectoryView {
         let entries = SubnetRegistryOps::export_roles();
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
@@ -42,6 +46,6 @@ impl RootSubnetDirectoryBuilder {
             }
         }
 
-        map.into_iter().collect()
+        SubnetDirectoryView(map.into_iter().collect())
     }
 }

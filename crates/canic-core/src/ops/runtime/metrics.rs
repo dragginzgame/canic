@@ -35,6 +35,10 @@ use crate::{
 
 pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 
+///
+/// AccessMetrics
+///
+
 pub struct AccessMetrics;
 
 impl AccessMetrics {
@@ -43,6 +47,10 @@ impl AccessMetrics {
         ModelAccessMetrics::increment(call.endpoint.name, model_kind);
     }
 }
+
+///
+/// EndpointAttemptMetrics
+///
 
 pub struct EndpointAttemptMetrics;
 
@@ -55,6 +63,10 @@ impl EndpointAttemptMetrics {
         ModelEndpointAttemptMetrics::increment_completed(call.endpoint.name);
     }
 }
+
+///
+/// EndpointResultMetrics
+///
 
 pub struct EndpointResultMetrics;
 
@@ -72,6 +84,7 @@ impl EndpointResultMetrics {
 /// MetricsOps
 /// Read-side façade over volatile metrics state.
 ///
+
 pub struct MetricsOps;
 
 impl MetricsOps {

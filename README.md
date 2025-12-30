@@ -15,7 +15,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 ## Highlights
 
 * 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic::build!`, and `canic::build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
-* 🪶 **Core utilities** – `canic::core` exposes perf counters, bounded types, MiniCBOR serializers, and deterministic utilities without pulling in the full ops stack.
+* 🪶 **Core utilities** – `canic::core` exposes perf counters and deterministic utilities; use `canic::core::cdk::types` for bounded types and `canic::utils` for helpers.
 * 🧠 **State layers** – opinionated separation for stable memory, volatile state, orchestration logic, and public endpoints.
 * 🗺️ **Topology‑aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 * 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per‑node direct children, validate roots/cycles, and fail fast to avoid quadratic fan‑out.
@@ -26,7 +26,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
 * 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.92.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
-For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`verify`) instead of feeding raw principals into `ic-signature-verification`; `verify` builds the proper DER canister‑sig public key and domain‑prefixed message to avoid slice panics on short (10‑byte) canister IDs. Pass the signing domain and seed from the caller rather than hardcoding them.
+For canister signatures, use the ops façade (`ops::ic::signature::prepare`/`get`/`verify`) instead of feeding raw principals into `ic-signature-verification`; `verify` builds the proper DER canister‑sig public key and domain‑prefixed message to avoid slice panics on short (10‑byte) canister IDs. Pass the signing domain and seed from the caller rather than hardcoding them.
 
 ## 📁 Repository Layout
 
@@ -39,18 +39,18 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
   * `src/config/` – configuration loaders, validators, and schema helpers.
   * `src/dispatch.rs` – endpoint routing helpers used by the macros.
   * `src/dto/` – candid‑friendly DTOs for paging and exports.
-  * `src/env/` – curated canister ID constants (ck, NNS, SNS) and helpers.
   * `src/ids/` – strongly‑typed role identifiers (`CanisterRole`, `SubnetRole`, etc.).
+  * `src/infra/` – low‑level IC capability bindings (no domain logic).
   * `src/log.rs` – logging macros.
   * `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
   * `src/model/` – stable‑memory registries plus volatile state caches that back the ops layer.
-  * `src/ops/` – orchestration/business logic bridging model to endpoints (including instrumented IC/ledger helpers).
-  * `src/spec/` – representations of external IC specs (ICRC, NNS, SNS, etc.).
+  * `src/ops/` – application services bridging model to endpoints (includes single‑step IC/timer façades).
+  * `src/policy/` – pure decision logic for eligibility, placement, scaling, sharding.
+  * `src/workflow/` – orchestration, retries, cascades, and multi‑step behaviors.
   * `benches/` – criterion benchmarks for MiniCBOR serialization.
 * `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
-* `crates/canic-types/` – candid‑friendly domain types (cycles, decimals, bounded strings, WASM helpers).
 * `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
 * `crates/canic-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable‑structures glue).
@@ -71,7 +71,6 @@ For canister signatures, use the ops façade (`ops::signature::prepare`/`get`/`v
   * `env/` – local environment utilities (e.g., shared env updates).
   * `env.sh` – shared environment bootstrap for scripts and tooling.
 * `.github/workflows/` – CI pipelines (fmt, clippy, tests, release).
-* `.githooks/` – optional git hooks; `pre-commit` formats and runs cargo sort before committing.
 
 ## Getting Started
 
@@ -135,10 +134,10 @@ Canic follows a strict layered design to keep boundaries stable and refactors ch
 * `access/` – boundary helpers (auth, guards, endpoint‑adjacent policy). These components translate requests and enforce access rules and **must not depend on concrete `model` types**.
 * `model::memory` – stable data backed by `ic-stable-structures` (e.g. shard registries, pool entries).
 * `model::*` (non‑memory) – volatile in‑process registries and caches that reset on upgrade (e.g. WASM registry, metrics registries).
-* `ops/` – orchestration and business logic. This is the **only layer allowed to bridge model and boundary‑facing code** via traits, views, and projections.
-* `endpoints/` – macro‑generated IC entrypoints that deserialize inputs, invoke access helpers, and delegate to `ops/`, keeping canister boundaries thin.
-
-**Temporary exception (during ongoing refactors):** legacy read‑only endpoints may access stable storage directly only where no ops façade exists yet. New code must not introduce direct access to `model::*` outside of `ops/`.
+* `ops/` – application services that bridge model to boundary code via views and projections; single‑step IC/timer façades are allowed.
+* `policy/` – pure decision logic (no mutation, no IC calls).
+* `workflow/` – orchestration and multi‑step behavior over time.
+* `endpoints/` – macro‑generated IC entrypoints that deserialize inputs, invoke access helpers, and delegate to `workflow` or `ops`.
 
 ## Capabilities & Endpoints
 
@@ -148,7 +147,7 @@ Sharding is configured via `canic.toml` and executed through the ops layer. The 
 
 ```rust
 canic_sharding_registry()
-    -> Result<canic::core::ops::placement::sharding::ShardingRegistryDto, canic::Error>
+    -> Result<canic::core::dto::placement::ShardingRegistryView, canic::Error>
 ```
 
 ### Scaling & Pool Capacity ⚖️
@@ -161,7 +160,7 @@ canic_sharding_registry()
 * `canic_app_directory(PageRequest)` returns the prime root directory view for operator dashboards.
 * `canic_subnet_directory(PageRequest)` exposes the per‑subnet directory so children can discover peers.
 
-Use `PageRequest::DEFAULT`, `PageRequest::default()`, or `PageRequest::bounded(limit, offset)` to avoid passing raw integers into queries.
+Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 
 ### ICRC Support 📚
 
@@ -170,7 +169,7 @@ The base endpoint bundle includes:
 * `icrc10_supported_standards()`
 * `icrc21_canister_call_consent_message(request)`
 
-Register consent messages via `model::icrc::Icrc21Registry` (or the `ops::ic::icrc` helpers) for rich UX flows.
+Register consent messages via `ops::icrc::Icrc21Ops::register*` for rich UX flows.
 
 The `Account` textual encoding matches the ICRC reference (CRC32 → base32, no padding) so checksums align with `icrc-ledger-types`; use `Display`/`FromStr` instead of hand‑rolling account strings.
 

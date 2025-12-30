@@ -24,7 +24,10 @@ eager_static! {
 /// ScalingRegistryData
 ///
 
-pub type ScalingRegistryData = Vec<(Principal, WorkerEntry)>;
+#[derive(Clone, Debug)]
+pub struct ScalingRegistryData {
+    pub entries: Vec<(Principal, WorkerEntry)>,
+}
 
 ///
 /// ScalingRegistry
@@ -44,18 +47,23 @@ impl ScalingRegistry {
     /// Lookup all workers in a given pool
     #[must_use]
     pub(crate) fn find_by_pool(pool: &str) -> ScalingRegistryData {
-        SCALING_REGISTRY.with_borrow(|map| {
-            map.iter()
-                .filter(|e| e.value().pool.as_ref() == pool)
-                .map(|e| (*e.key(), e.value()))
-                .collect()
-        })
+        ScalingRegistryData {
+            entries: SCALING_REGISTRY.with_borrow(|map| {
+                map.iter()
+                    .filter(|e| e.value().pool.as_ref() == pool)
+                    .map(|e| (*e.key(), e.value()))
+                    .collect()
+            }),
+        }
     }
 
     /// Export full registry
     #[must_use]
     pub(crate) fn export() -> ScalingRegistryData {
-        SCALING_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
+        ScalingRegistryData {
+            entries: SCALING_REGISTRY
+                .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
+        }
     }
 }
 

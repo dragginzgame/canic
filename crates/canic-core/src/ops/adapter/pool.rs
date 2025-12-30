@@ -34,6 +34,7 @@ pub fn canister_pool_entry_to_view(
 #[must_use]
 pub fn canister_pool_to_view(data: CanisterPoolData) -> CanisterPoolView {
     let view = data
+        .entries
         .into_iter()
         .map(|(pid, entry)| {
             (

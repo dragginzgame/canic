@@ -412,14 +412,14 @@ fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), Orch
 
 fn assert_directories_match_registry() -> Result<(), Error> {
     let app_built = RootAppDirectoryBuilder::build_from_registry();
-    let app_exported = AppDirectoryOps::export();
+    let app_exported = AppDirectoryOps::export_view();
 
     if app_built != app_exported {
         return Err(OrchestratorError::AppDirectoryDiverged.into());
     }
 
     let subnet_built = RootSubnetDirectoryBuilder::build_from_registry();
-    let subnet_exported = SubnetDirectoryOps::export();
+    let subnet_exported = SubnetDirectoryOps::export_view();
 
     if subnet_built != subnet_exported {
         return Err(OrchestratorError::SubnetDirectoryDiverged.into());

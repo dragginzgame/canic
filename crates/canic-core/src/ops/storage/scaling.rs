@@ -20,7 +20,7 @@ impl ScalingRegistryOps {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn count_by_pool(pool: &str) -> u32 {
-        ScalingRegistry::find_by_pool(pool).len() as u32
+        ScalingRegistry::find_by_pool(pool).entries.len() as u32
     }
 
     #[must_use]
@@ -28,6 +28,7 @@ impl ScalingRegistryOps {
         let data = ScalingRegistry::export();
 
         let view = data
+            .entries
             .into_iter()
             .map(|(pid, entry)| (pid, worker_entry_to_view(&entry)))
             .collect();

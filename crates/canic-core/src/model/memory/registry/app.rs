@@ -21,7 +21,10 @@ eager_static! {
 /// AppRegistryData
 ///
 
-pub type AppRegistryData = Vec<(Principal, Principal)>;
+#[derive(Clone, Debug)]
+pub struct AppRegistryData {
+    pub entries: Vec<(Principal, Principal)>,
+}
 
 ///
 /// AppRegistry
@@ -39,6 +42,9 @@ pub struct AppRegistry;
 impl AppRegistry {
     #[must_use]
     pub(crate) fn export() -> AppRegistryData {
-        APP_REGISTRY.with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect())
+        AppRegistryData {
+            entries: APP_REGISTRY
+                .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
+        }
     }
 }

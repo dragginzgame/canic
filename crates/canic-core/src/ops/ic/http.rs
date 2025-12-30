@@ -1,10 +1,8 @@
 use crate::{
     Error,
-    // Raw IC HTTP passthrough (infra layer)
     infra::ic::http::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
-    // Observability (ops layer)
     ops::{adapter::metrics::http::record_http_request, runtime::metrics::record_http_outcall},
 };
 use num_traits::ToPrimitive;
