@@ -4,7 +4,7 @@
 //! (`#[query]`, `#[update]`), routed through `canic::cdk::*`.
 //!
 //! Pipeline enforced by generated wrappers:
-//!   guard → auth → policy → dispatch
+//!   guard → auth → rule → dispatch
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -60,7 +60,7 @@ mod parse {
         pub app_guard: bool,
         pub user_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Expr>,
+        pub rules: Vec<Expr>,
     }
 
     pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
@@ -81,7 +81,7 @@ mod parse {
         let mut app_guard = false;
         let mut user_guard = false;
         let mut auth = None::<AuthSpec>;
-        let mut policies = Vec::<Expr>::new();
+        let mut rules = Vec::<Expr>::new();
 
         for meta in metas {
             match meta {
@@ -135,10 +135,10 @@ mod parse {
                     auth = Some(AuthSpec::All(rules));
                 }
 
-                // policy(...)
+                // rule(...)
                 //
-                // Parse as Expr so you can do policy(local_only()), policy(max_rounds(rounds, 10_000)), etc.
-                Meta::List(list) if list.path.is_ident("policy") => {
+                // Parse as Expr so you can do rule(local_only()), rule(max_rounds(rounds, 10_000)), etc.
+                Meta::List(list) if list.path.is_ident("rule") => {
                     let parsed = Punctuated::<Expr, Token![,]>::parse_terminated
                         .parse2(list.tokens.clone())?
                         .into_iter()
@@ -147,11 +147,11 @@ mod parse {
                     if parsed.is_empty() {
                         return Err(syn::Error::new_spanned(
                             list,
-                            "`policy(...)` expects at least one policy expression",
+                            "`rule(...)` expects at least one rule expression",
                         ));
                     }
 
-                    policies.extend(parsed);
+                    rules.extend(parsed);
                 }
 
                 // explicit CDK guard = ...
@@ -172,7 +172,7 @@ mod parse {
             app_guard,
             user_guard,
             auth,
-            policies,
+            rules,
         })
     }
     const fn empty() -> ParsedArgs {
@@ -181,7 +181,7 @@ mod parse {
             app_guard: false,
             user_guard: false,
             auth: None,
-            policies: Vec::new(),
+            rules: Vec::new(),
         }
     }
 
@@ -220,7 +220,7 @@ mod validate {
         pub forwarded: Vec<TokenStream2>,
         pub app_guard: bool,
         pub auth: Option<AuthSpec>,
-        pub policies: Vec<Expr>,
+        pub rules: Vec<Expr>,
     }
 
     pub fn validate(
@@ -264,10 +264,10 @@ mod validate {
             ));
         }
 
-        if !parsed.policies.is_empty() && !returns_result(sig) {
+        if !parsed.rules.is_empty() && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`policy(...)` requires `Result<_, From<canic::Error>>`",
+                "`rule(...)` requires `Result<_, From<canic::Error>>`",
             ));
         }
 
@@ -275,7 +275,7 @@ mod validate {
             forwarded: parsed.forwarded,
             app_guard: parsed.app_guard,
             auth: parsed.auth,
-            policies: parsed.policies,
+            rules: parsed.rules,
         })
     }
 
@@ -335,7 +335,7 @@ mod expand {
         let attempted = attempted(&call_ident);
         let guard = guard(kind, args.app_guard, &call_ident);
         let auth = auth(args.auth.as_ref(), &call_ident);
-        let policy = policy(&args.policies, &call_ident);
+        let rule = rule(&args.rules, &call_ident);
 
         let call_args = match extract_args(&orig_sig) {
             Ok(v) => v,
@@ -353,7 +353,7 @@ mod expand {
                 #attempted
                 #guard
                 #auth
-                #policy
+                #rule
                 #completion
             }
 
@@ -390,12 +390,12 @@ mod expand {
         orig_name: &syn::Ident,
     ) -> TokenStream2 {
         let call_kind = match kind {
-            EndpointKind::Query => quote!(::canic::core::api::CallKind::Query),
-            EndpointKind::Update => quote!(::canic::core::api::CallKind::Update),
+            EndpointKind::Query => quote!(::canic::core::api::EndpointCallKind::Query),
+            EndpointKind::Update => quote!(::canic::core::api::EndpointCallKind::Update),
         };
 
         quote! {
-            let #call_ident = ::canic::core::api::Call {
+            let #call_ident = ::canic::core::api::EndpointCall {
                 endpoint: ::canic::core::api::EndpointId::new(stringify!(#orig_name)),
                 kind: #call_kind,
             };
@@ -463,17 +463,17 @@ mod expand {
         }
     }
 
-    fn policy(policies: &[Expr], call: &syn::Ident) -> TokenStream2 {
-        if policies.is_empty() {
+    fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
+        if rules.is_empty() {
             return quote!();
         }
 
         let metric = record_access_denied(
             call,
-            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Policy),
+            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Rule),
         );
 
-        let checks = policies.iter().map(|expr| {
+        let checks = rules.iter().map(|expr| {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric

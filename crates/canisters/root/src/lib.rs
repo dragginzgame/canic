@@ -8,7 +8,7 @@
 use canic::{
     Error,
     core::{
-        access::policy::is_prime_subnet,
+        access::rule::is_prime_subnet,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
         ops::{rpc::create_canister_request, runtime::wasm::WasmOps},
     },
@@ -91,7 +91,7 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
 
 /// create_blank
 /// Controller-only helper for local Canic testing.
-#[canic_update(guard(app), auth_any(is_controller), policy(is_prime_subnet))]
+#[canic_update(guard(app), auth_any(is_controller), rule(is_prime_subnet))]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }

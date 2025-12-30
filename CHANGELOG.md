@@ -59,7 +59,7 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 ### Added
 - Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that
   directory roles must be singleton (`cardinality = "single"`).
-- Added typed endpoint identity (`Call`, `EndpointId`, `CallKind`) derived by macros and propagated through dispatch
+- Added typed endpoint identity (`EndpointCall`, `EndpointId`, `EndpointCallKind`) derived by macros and propagated through dispatch
   and metrics (endpoint labels are no longer user-supplied).
 - Added `log.max_entries` validation (<= 100,000) to prevent unbounded log retention.
 - Added a log readiness gate so logging is a no-op until runtime initialization completes.
