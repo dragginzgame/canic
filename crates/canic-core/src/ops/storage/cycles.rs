@@ -2,6 +2,7 @@ use crate::{
     cdk::types::Cycles,
     dto::page::{Page, PageRequest},
     model::memory::cycles::CycleTracker,
+    ops::view::clamp_page_request,
 };
 
 ///
@@ -28,7 +29,7 @@ impl CycleTrackerOps {
 
     #[must_use]
     pub fn list_entries(request: PageRequest) -> Vec<(u64, Cycles)> {
-        let request = request.clamped();
+        let request = clamp_page_request(request);
 
         let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);

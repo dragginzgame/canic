@@ -11,10 +11,10 @@ use crate::{
     },
     dto::{abi::v1::CanisterInitPayload, env::EnvView, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
-    infra::ic::{Network, build_network},
     log::Topic,
     ops::{
         adapter::directory::{app_directory_from_view, subnet_directory_from_view},
+        ic::{Network, build_network},
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},

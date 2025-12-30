@@ -110,7 +110,6 @@ wildcard_imports = "allow"
 canic = { path = "crates/canic" }
 canic-cdk = { path = "crates/canic-cdk" }
 canic-core = { path = "crates/canic-core" }
-canic-internal = { path = "crates/canic-internal" }
 canic-macros = { path = "crates/canic-macros" }
 canic-memory = { path = "crates/canic-memory" }
 canic-testkit = { path = "crates/canic-testkit" }

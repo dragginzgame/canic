@@ -9,6 +9,16 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 
 ---
 
+## [Unreleased]
+### Added
+- Added workflow RPC client helper for create-canister requests and workflow planning helpers for scaling/sharding.
+
+### Changed
+- Routed workflow IC network access through `ops::ic` to preserve layer boundaries.
+- Refactored directory builders to return view types and updated workflow directory sync to use view imports/exports.
+- Aligned core layering/lifecycle docs with AGENTS guidance.
+- Updated example canisters to call workflow helpers instead of policy/ops directly.
+
 ## [v0.7.0] — 2025-12-30 - Architecture Consolidation & Runtime Discipline
 
 This release is a structural milestone focused on clarifying responsibility boundaries, eliminating architectural ambiguity, and hardening runtime behavior across the system. While user-visible behavior is largely unchanged, the internal model is now significantly more coherent, testable, and extensible.
@@ -84,7 +94,7 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 - Pool admin queued imports now return a summary with pool status counts and skip reasons.
 
 ### Changed
-- `PageRequest` no longer implements `Default`; callers must use `PageRequest::new` or `PageRequest::bounded`.
+- `PageRequest` no longer implements `Default`; callers must construct it directly (`PageRequest { limit, offset }`).
 
 ### Fixed
 - `EnvOps::import` now returns a typed error when required env fields are missing, and non-root init traps with a clear message.
@@ -114,7 +124,7 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
     fallbacks; removed unused env helpers; try_* env accessors are test‑only.
   - Bootstrapping + local fallback clarified: get_current_subnet_pid renamed to try_get_current_subnet_pid; local
     non‑root env fallback uses deterministic principals; IC still traps on missing env.
-  - Init payload safety: removed CanisterInitPayload::empty and Default, added CanisterInitPayload::new.
+  - Init payload safety: removed CanisterInitPayload::empty and Default; construct via struct literal.
   - Testkit upgrades: non‑root installs now pass deterministic EnvData; optional helper added to install with custom
     directories; directories are empty by default by intent.
   - Docs updated: AGENTS.md + CONFIG.md now explain runtime invariants and local/IC behavior.

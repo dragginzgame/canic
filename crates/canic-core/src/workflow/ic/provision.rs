@@ -14,7 +14,6 @@ use crate::{
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
-        adapter::directory::{app_directory_to_view, subnet_directory_to_view},
         config::ConfigOps,
         ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
         runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
@@ -47,11 +46,11 @@ pub(crate) fn build_nonroot_init_payload(
         parent_pid: Some(parent_pid),
     };
 
-    Ok(CanisterInitPayload::new(
+    Ok(CanisterInitPayload {
         env,
-        app_directory_to_view(AppDirectoryOps::export()),
-        subnet_directory_to_view(SubnetDirectoryOps::export()),
-    ))
+        app_directory: AppDirectoryOps::export_view(),
+        subnet_directory: SubnetDirectoryOps::export_view(),
+    })
 }
 
 ///
@@ -92,15 +91,15 @@ pub(crate) async fn rebuild_directories_from_registry(
     let mut builder = StateSnapshotBuilder::new();
 
     if include_app {
-        let data = RootAppDirectoryBuilder::build_from_registry();
-        AppDirectoryOps::import(data.clone());
-        builder = builder.with_app_directory_view(app_directory_to_view(data));
+        let view = RootAppDirectoryBuilder::build_from_registry();
+        AppDirectoryOps::import_view(view.clone());
+        builder = builder.with_app_directory_view(view);
     }
 
     if include_subnet {
-        let data = RootSubnetDirectoryBuilder::build_from_registry();
-        SubnetDirectoryOps::import(data.clone());
-        builder = builder.with_subnet_directory_view(subnet_directory_to_view(data));
+        let view = RootSubnetDirectoryBuilder::build_from_registry();
+        SubnetDirectoryOps::import_view(view.clone());
+        builder = builder.with_subnet_directory_view(view);
     }
 
     Ok(builder)

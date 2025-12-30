@@ -21,7 +21,7 @@ pub fn pool_metrics(pool: &str) -> PoolMetrics {
     let mut cap = 0;
     let mut used = 0;
 
-    for (_, e) in &data {
+    for (_, e) in &data.entries {
         if e.capacity > 0 && e.pool.as_ref() == pool {
             active += 1;
             cap += u64::from(e.capacity);

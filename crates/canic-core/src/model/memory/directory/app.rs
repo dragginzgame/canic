@@ -16,7 +16,10 @@ eager_static! {
 /// AppDirectoryData
 ///
 
-pub type AppDirectoryData = Vec<(CanisterRole, Principal)>;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppDirectoryData {
+    pub entries: Vec<(CanisterRole, Principal)>,
+}
 
 ///
 /// AppDirectory
@@ -35,17 +38,19 @@ impl AppDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
     pub(crate) fn export() -> AppDirectoryData {
-        APP_DIRECTORY.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
+        AppDirectoryData {
+            entries: APP_DIRECTORY.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| (entry.key().clone(), entry.value()))
+                    .collect()
+            }),
+        }
     }
 
     pub(crate) fn import(data: AppDirectoryData) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
-            for (role, pid) in data {
+            for (role, pid) in data.entries {
                 map.insert(role, pid);
             }
         });

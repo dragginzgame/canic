@@ -205,12 +205,27 @@ Includes:
 * `ops::storage` — thin façades over `model/memory`
 * `ops::adapter` — domain → view / DTO mapping
 
+### Platform Ops Exception (Normative)
+
+Ops **may** perform **single-step platform side effects** when acting as the
+**approved system façade**, including:
+
+* IC calls (including management/system canisters)
+* cycle attachment
+* timer scheduling
+* runtime metrics and instrumentation
+
+Constraints:
+
+* ops must remain **single-step**
+* ops must not encode **business meaning**
+* ops must not perform **multi-step orchestration**
+* ops must not loop, retry, or branch on policy
+* ops must not decide *whether* an action should occur
+
 Ops must not:
 
 * define business policy
-* perform IC management calls
-* use async
-* schedule timers
 * coordinate multi-step behavior
 
 Rule:
@@ -245,6 +260,7 @@ Forbidden:
 * timers
 * side effects
 * serialization (`CandidType`, `Serialize`, `Deserialize`)
+* DTO dependencies
 
 Rule:
 
@@ -405,8 +421,12 @@ Rules:
 Lifecycle adapters must not import DTOs into model state directly.
 All DTO → Data projection must occur via ops adapters.
 
-There must be **no difference** in execution model between init and upgrade.
+Init and post-upgrade must follow the same execution structure:
 
+* synchronous environment restoration
+* scheduling (never awaiting) async bootstrap work
+
+Differences in state initialization (e.g. payload import on init only) are permitted and must be explicit.
 ---
 
 ### User lifecycle hooks
@@ -511,6 +531,7 @@ Before merging:
 * [ ] DTOs are data-only
 * [ ] No model internals leaked publicly
 * [ ] Lifecycle adapters spawn, never await
+* [ ] Ops side effects are single-step
 
 ---
 

@@ -1,10 +1,14 @@
 use candid::{CandidType, Deserialize, define_function};
 use serde::Serialize;
 
-pub type HeaderField = (String, String);
-
 // Define the callback function type using the macro
 define_function!(pub CallbackFunc : () -> () query);
+
+///
+/// HeaderField
+///
+
+pub type HeaderField = (String, String);
 
 ///
 /// HttpRequest

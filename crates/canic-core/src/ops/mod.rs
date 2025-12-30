@@ -7,7 +7,7 @@
 //!
 //! 1. **Control ops**
 //!    - Mutate state
-//!    - Perform orchestration
+//!    - Perform single-step platform side effects
 //!    - Call IC management APIs
 //!    - Must be invoked via workflow
 //!

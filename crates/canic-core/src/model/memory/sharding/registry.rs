@@ -8,7 +8,10 @@ use candid::Principal;
 /// ShardingRegistryData
 ///
 
-pub type ShardingRegistryData = Vec<(Principal, ShardEntry)>;
+#[derive(Clone, Debug)]
+pub struct ShardingRegistryData {
+    pub entries: Vec<(Principal, ShardEntry)>,
+}
 
 ///
 /// ShardingRegistry
@@ -89,6 +92,8 @@ impl ShardingRegistry {
     /// Exports all shard entries (for inspection or snapshot purposes).
     #[must_use]
     pub(crate) fn export() -> ShardingRegistryData {
-        Self::with(ShardingCore::all_entries)
+        ShardingRegistryData {
+            entries: Self::with(ShardingCore::all_entries),
+        }
     }
 }

@@ -6,10 +6,10 @@
 ///
 /// IMPORTANT:
 /// - This macro must remain **thin**
-/// - It must not schedule timers
 /// - It must not perform orchestration
 /// - It must not contain async logic
 /// - It must not encode policy
+/// - It may schedule async hooks via timers, but must never await them
 ///
 /// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
 #[macro_export]
@@ -71,7 +71,7 @@ macro_rules! start {
 /// - The macro does NOT perform root orchestration
 /// - The macro does NOT import WASMs
 /// - The macro does NOT create canisters
-/// - The macro does NOT schedule timers
+/// - The macro may schedule async hooks via timers, but must never await them
 ///
 /// All root-specific behavior lives in `workflow::bootstrap`.
 #[macro_export]

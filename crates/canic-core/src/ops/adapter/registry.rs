@@ -5,13 +5,14 @@ use crate::{
 };
 
 #[must_use]
-pub const fn app_registry_to_view(data: AppRegistryData) -> AppRegistryView {
-    AppRegistryView(data)
+pub fn app_registry_to_view(data: AppRegistryData) -> AppRegistryView {
+    AppRegistryView(data.entries)
 }
 
 #[must_use]
 pub fn subnet_registry_to_view(data: SubnetRegistryData) -> SubnetRegistryView {
     let entries = data
+        .entries
         .into_iter()
         .map(|(_, entry)| {
             let role = entry.role.clone();

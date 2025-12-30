@@ -162,6 +162,7 @@ impl SubnetRegistryOps {
     #[must_use]
     pub(crate) fn export_roles() -> Vec<(Principal, CanisterRole)> {
         SubnetRegistry::export()
+            .entries
             .into_iter()
             .map(|(pid, entry)| (pid, entry.role))
             .collect()
@@ -189,7 +190,7 @@ impl SubnetRegistryOps {
     pub(crate) fn parent_chain(
         target: Principal,
     ) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
-        let registry_len = SubnetRegistry::export().len();
+        let registry_len = SubnetRegistry::export().entries.len();
 
         let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
         let mut seen: HashSet<Principal> = HashSet::new();

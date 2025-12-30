@@ -106,7 +106,10 @@ fn setup_root() -> &'static Setup {
             .query_call(
                 root_id,
                 "canic_subnet_directory",
-                (PageRequest::new(100, 0),),
+                (PageRequest {
+                    limit: 100,
+                    offset: 0,
+                },),
             )
             .expect("query subnet directory");
 
@@ -200,13 +203,23 @@ fn directories_are_consistent_across_canisters() {
     let print_counts = true;
 
     let root_app_dir: Page<(CanisterRole, Principal)> = pic
-        .query_call(root_id, "canic_app_directory", (PageRequest::new(100, 0),))
+        .query_call(
+            root_id,
+            "canic_app_directory",
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
+        )
         .expect("root app directory");
     let root_subnet_dir: Page<(CanisterRole, Principal)> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
-            (PageRequest::new(100, 0),),
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
         )
         .expect("root subnet directory");
 
@@ -223,14 +236,20 @@ fn directories_are_consistent_across_canisters() {
             .query_call(
                 *entry_pid,
                 "canic_app_directory",
-                (PageRequest::new(100, 0),),
+                (PageRequest {
+                    limit: 100,
+                    offset: 0,
+                },),
             )
             .expect("child app directory");
         let subnet_dir: Page<(CanisterRole, Principal)> = pic
             .query_call(
                 *entry_pid,
                 "canic_subnet_directory",
-                (PageRequest::new(100, 0),),
+                (PageRequest {
+                    limit: 100,
+                    offset: 0,
+                },),
             )
             .expect("child subnet directory");
 
@@ -279,7 +298,10 @@ fn subnet_children_matches_registry_on_root() {
         .query_call(
             root_id,
             "canic_subnet_canister_children",
-            (PageRequest::new(100, 0),),
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
         )
         .expect("query root subnet children");
 
@@ -348,7 +370,10 @@ fn worker_topology_cascades_through_parent() {
         .query_call(
             scale_hub_pid,
             "canic_subnet_canister_children",
-            (PageRequest::new(100, 0),),
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
         )
         .expect("scale_hub subnet children");
     let worker_children = children_page

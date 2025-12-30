@@ -208,11 +208,11 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
 
         // Intentional: local standalone installs don't need directory views unless a test
         // exercises directory-dependent auth/endpoints.
-        let payload = CanisterInitPayload::new(
+        let payload = CanisterInitPayload {
             env,
-            AppDirectoryView(Vec::new()),
-            SubnetDirectoryView(Vec::new()),
-        );
+            app_directory: AppDirectoryView(Vec::new()),
+            subnet_directory: SubnetDirectoryView(Vec::new()),
+        };
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
     }?;
 
@@ -238,7 +238,11 @@ fn install_args_with_directories(
             canister_role: Some(role),
             parent_pid: Some(root_pid),
         };
-        let payload = CanisterInitPayload::new(env, app_directory, subnet_directory);
+        let payload = CanisterInitPayload {
+            env,
+            app_directory,
+            subnet_directory,
+        };
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
     }?;
 

@@ -72,6 +72,13 @@ impl ScalingWorkflow {
 
         Ok(pid)
     }
+
+    /// Plan whether a worker should be created according to policy.
+    pub fn plan_create_worker(pool: &str) -> Result<bool, Error> {
+        let plan = ScalingPolicy::plan_create_worker(pool, now_secs())?;
+
+        Ok(plan.should_spawn)
+    }
 }
 
 fn plan_entry_to_view(entry: ScalingWorkerPlanEntry) -> WorkerEntryView {

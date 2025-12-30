@@ -21,18 +21,15 @@ impl AppDirectoryOps {
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
         AppDirectory::export()
+            .entries
             .into_iter()
             .find_map(|(t, pid)| (t == *role).then_some(pid))
     }
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate_vec(AppDirectory::export(), request)
-    }
-
-    #[must_use]
-    pub(crate) fn export() -> AppDirectoryData {
-        AppDirectory::export()
+        let data = AppDirectory::export();
+        paginate_vec(data.entries, request)
     }
 
     /// Export app directory as a public view.

@@ -102,6 +102,7 @@ impl ShardingRegistryOps {
     pub fn export_view() -> ShardingRegistryView {
         let data = ShardingRegistry::export();
         let view = data
+            .entries
             .into_iter()
             .map(|(pid, entry)| (pid, shard_entry_to_view(&entry)))
             .collect();

@@ -21,19 +21,16 @@ pub struct SubnetDirectoryOps;
 impl SubnetDirectoryOps {
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
-        SubnetDirectory::export()
+        let data = SubnetDirectory::export();
+        data.entries
             .iter()
             .find_map(|(t, pid)| (t == role).then_some(*pid))
     }
 
     #[must_use]
     pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        paginate_vec(SubnetDirectory::export(), request)
-    }
-
-    #[must_use]
-    pub(crate) fn export() -> SubnetDirectoryData {
-        SubnetDirectory::export()
+        let data = SubnetDirectory::export();
+        paginate_vec(data.entries, request)
     }
 
     /// Export subnet directory as a public view.
