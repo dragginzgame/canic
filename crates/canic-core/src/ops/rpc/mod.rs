@@ -1,14 +1,15 @@
 pub(crate) mod methods;
 mod request;
-mod response;
 
 pub use request::*;
-pub use response::*;
 
 use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
-    ops::{OpsError, ic::call::Call, storage::env::EnvOps},
+    dto::rpc::{Request, Response},
+    ops::OpsError,
+    ops::ic::call::Call,
+    ops::runtime::env::EnvOps,
 };
 use serde::de::DeserializeOwned;
 
@@ -42,7 +43,7 @@ impl From<RpcOpsError> for Error {
 
 // execute_rpc
 async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
-    let root_pid = EnvOps::root_pid();
+    let root_pid = EnvOps::root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())

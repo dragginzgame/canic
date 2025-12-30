@@ -1,7 +1,7 @@
 use crate::{
+    cdk::types::{Cycles, TC},
     config::schema::{ConfigSchemaError, NAME_MAX_BYTES, Validate},
     ids::CanisterRole,
-    types::{Cycles, TC},
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod defaults {
     use super::Cycles;
 
-    pub fn initial_cycles() -> Cycles {
+    pub const fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
     }
 }
@@ -176,9 +176,13 @@ impl Validate for SubnetConfig {
 /// PoolImport
 /// Per-environment import lists for canister pools.
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PoolImport {
+    /// Optional count of canisters to import immediately before queuing the rest.
+    #[serde(default)]
+    pub initial: Option<u16>,
     #[serde(default)]
     pub local: Vec<Principal>,
     #[serde(default)]

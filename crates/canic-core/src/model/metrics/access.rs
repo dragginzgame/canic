@@ -1,4 +1,3 @@
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -11,14 +10,12 @@ thread_local! {
 /// Enumerates the access-control stage that rejected the call.
 ///
 
-#[derive(
-    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[remain::sorted]
 pub enum AccessMetricKind {
     Auth,
     Guard,
-    Policy,
+    Rule,
 }
 
 ///
@@ -26,29 +23,11 @@ pub enum AccessMetricKind {
 /// Uniquely identifies a rejected access attempt by endpoint + stage.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AccessMetricKey {
     pub endpoint: String,
     pub kind: AccessMetricKind,
 }
-
-///
-/// AccessMetricEntry
-/// Snapshot entry pairing an endpoint/stage with its count.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AccessMetricEntry {
-    pub endpoint: String,
-    pub kind: AccessMetricKind,
-    pub count: u64,
-}
-
-///
-/// AccessMetricsSnapshot
-///
-
-pub type AccessMetricsSnapshot = Vec<AccessMetricEntry>;
 
 ///
 /// AccessMetrics
@@ -71,19 +50,9 @@ impl AccessMetrics {
         });
     }
 
-    /// Snapshot all access metrics.
     #[must_use]
-    pub fn snapshot() -> AccessMetricsSnapshot {
-        ACCESS_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, count)| AccessMetricEntry {
-                    endpoint: key.endpoint.clone(),
-                    kind: key.kind,
-                    count: *count,
-                })
-                .collect()
-        })
+    pub fn export_raw() -> HashMap<AccessMetricKey, u64> {
+        ACCESS_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
     #[cfg(test)]
@@ -108,12 +77,12 @@ mod tests {
         AccessMetrics::increment("foo", AccessMetricKind::Guard);
         AccessMetrics::increment("foo", AccessMetricKind::Guard);
         AccessMetrics::increment("foo", AccessMetricKind::Auth);
-        AccessMetrics::increment("bar", AccessMetricKind::Policy);
+        AccessMetrics::increment("bar", AccessMetricKind::Rule);
 
-        let snapshot = AccessMetrics::snapshot();
-        let mut map: HashMap<(String, AccessMetricKind), u64> = snapshot
+        let raw = AccessMetrics::export_raw();
+        let mut map: HashMap<(String, AccessMetricKind), u64> = raw
             .into_iter()
-            .map(|entry| ((entry.endpoint, entry.kind), entry.count))
+            .map(|(key, count)| ((key.endpoint, key.kind), count))
             .collect();
 
         assert_eq!(
@@ -125,7 +94,7 @@ mod tests {
             Some(1)
         );
         assert_eq!(
-            map.remove(&("bar".to_string(), AccessMetricKind::Policy)),
+            map.remove(&("bar".to_string(), AccessMetricKind::Rule)),
             Some(1)
         );
         assert!(map.is_empty());

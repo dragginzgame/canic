@@ -7,7 +7,10 @@
 
 use canic::{
     Error,
-    core::ops::rpc::{CreateCanisterParent, CreateCanisterResponse, create_canister_request},
+    core::{
+        dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
+        ops::rpc::create_canister_request,
+    },
     prelude::*,
 };
 use canic_internal::canister::BLANK;
@@ -26,7 +29,7 @@ async fn canic_upgrade() {}
 /// no authentication needed as its for local canic testing
 #[canic_update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
-    create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None).await
+    create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None::<()>).await
 }
 
 export_candid!();

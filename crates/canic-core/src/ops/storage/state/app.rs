@@ -1,14 +1,17 @@
-pub use crate::model::memory::state::AppMode;
-
 use crate::{
-    Error, ThisError, log,
+    Error, ThisError,
+    dto::state::{AppCommand, AppStateView},
+    log,
     log::Topic,
-    model::memory::state::{AppState, AppStateData},
-    ops::storage::StorageOpsError,
+    model::memory::state::{AppMode, AppState},
+    ops::{
+        adapter::state::{app_state_from_view, app_state_to_view},
+        storage::state::StateOpsError,
+    },
 };
-use candid::CandidType;
-use derive_more::Display;
-use serde::Deserialize;
+
+#[cfg(test)]
+use crate::model::memory::state::AppStateData;
 
 ///
 /// AppStateOpsError
@@ -22,19 +25,8 @@ pub enum AppStateOpsError {
 
 impl From<AppStateOpsError> for Error {
     fn from(err: AppStateOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        StateOpsError::from(err).into()
     }
-}
-
-///
-/// AppCommand
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq)]
-pub enum AppCommand {
-    Start,
-    Readonly,
-    Stop,
 }
 
 ///
@@ -44,13 +36,11 @@ pub enum AppCommand {
 pub struct AppStateOps;
 
 impl AppStateOps {
+    // todo please help codex - this is only used by a test so false positive on dead_code
     #[must_use]
+    #[cfg(test)]
     pub fn get_mode() -> AppMode {
         AppState::get_mode()
-    }
-
-    pub fn set_mode(mode: AppMode) {
-        AppState::set_mode(mode);
     }
 
     pub fn command(cmd: AppCommand) -> Result<(), Error> {
@@ -73,13 +63,24 @@ impl AppStateOps {
         Ok(())
     }
 
-    pub fn import(data: AppStateData) {
+    #[cfg(test)]
+    pub(crate) fn import(data: AppStateData) {
         AppState::import(data);
     }
 
+    /// Import app state from a public view.
+    pub fn import_view(view: AppStateView) {
+        let data = app_state_from_view(view);
+        AppState::import(data);
+    }
+
+    /// Export app state as a public view.
+    /// Export app state as a public view.
     #[must_use]
-    pub fn export() -> AppStateData {
-        AppState::export()
+    pub fn export_view() -> AppStateView {
+        let data = AppState::export();
+
+        app_state_to_view(data)
     }
 }
 

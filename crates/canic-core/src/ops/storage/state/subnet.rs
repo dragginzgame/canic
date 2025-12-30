@@ -1,8 +1,8 @@
-use crate::model::memory::state::{SubnetState, SubnetStateData};
-
-//
-// Stable-memory adapter
-//
+use crate::{
+    dto::state::SubnetStateView,
+    model::memory::state::SubnetState,
+    ops::adapter::state::{subnet_state_from_view, subnet_state_to_view},
+};
 
 ///
 /// SubnetStateOps
@@ -11,12 +11,17 @@ use crate::model::memory::state::{SubnetState, SubnetStateData};
 pub struct SubnetStateOps;
 
 impl SubnetStateOps {
-    pub fn import(data: SubnetStateData) {
+    /// Import subnet state from a public view.
+    pub fn import_view(view: SubnetStateView) {
+        let data = subnet_state_from_view(view);
         SubnetState::import(data);
     }
 
+    /// Export subnet state as a public view.
     #[must_use]
-    pub fn export() -> SubnetStateData {
-        SubnetState::export()
+    pub fn export_view() -> SubnetStateView {
+        let data = SubnetState::export();
+
+        subnet_state_to_view(data)
     }
 }

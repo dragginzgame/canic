@@ -7,7 +7,6 @@
 //! Use update calls for randomness so the PRNG state advances, and seed in
 //! init + post_upgrade via timers.
 //!
-use candid::CandidType;
 use rand_chacha::{
     ChaCha20Rng,
     rand_core::{RngCore, SeedableRng},
@@ -27,7 +26,7 @@ thread_local! {
 /// Errors raised when randomness is unavailable.
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum RngError {
     RngNotInitialized(String),
 }

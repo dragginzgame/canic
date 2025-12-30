@@ -1,13 +1,11 @@
+use super::{Rpc, RpcOpsError};
 use crate::{
     Error, ThisError,
-    ids::CanisterRole,
-    ops::{
-        prelude::*,
-        rpc::{
-            CreateCanisterResponse, CyclesResponse, Response, Rpc, RpcOpsError,
-            UpgradeCanisterResponse, execute_rpc,
-        },
+    dto::rpc::{
+        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
+        CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
+    ops::{prelude::*, runtime::env::EnvOps},
 };
 use candid::encode_one;
 
@@ -24,83 +22,23 @@ pub enum RequestOpsError {
     #[error("child canister {0} not found")]
     ChildNotFound(Principal),
 
-    #[error("canister {0} is not a child of caller {1}")]
-    NotChildOfCaller(Principal, Principal),
-
-    #[error("canister {0}'s parent was not found")]
-    ParentNotFound(Principal),
-
     #[error("invalid response type")]
     InvalidResponseType,
 
     #[error("create_canister: missing new pid")]
     MissingNewCanisterPid,
+
+    #[error("canister {0} is not a child of caller {1}")]
+    NotChildOfCaller(Principal, Principal),
+
+    #[error("canister {0}'s parent was not found")]
+    ParentNotFound(Principal),
 }
 
 impl From<RequestOpsError> for Error {
     fn from(err: RequestOpsError) -> Self {
         RpcOpsError::from(err).into()
     }
-}
-
-///
-/// Request
-/// Root-directed orchestration commands.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum Request {
-    CreateCanister(CreateCanisterRequest),
-    UpgradeCanister(UpgradeCanisterRequest),
-    Cycles(CyclesRequest),
-}
-
-///
-/// CreateCanisterRequest
-/// Payload for [`Request::CreateCanister`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CreateCanisterRequest {
-    pub canister_role: CanisterRole,
-    pub parent: CreateCanisterParent,
-    pub extra_arg: Option<Vec<u8>>,
-}
-
-///
-/// CreateCanisterParent
-/// Parent-location choices for a new canister
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum CreateCanisterParent {
-    Root,
-    /// Use the requesting canister as parent.
-    ThisCanister,
-    /// Use the requesting canister's parent (creates a sibling).
-    Parent,
-    Canister(Principal),
-    Directory(CanisterRole),
-}
-
-///
-/// UpgradeCanisterRequest
-/// Payload for [`Request::UpgradeCanister`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct UpgradeCanisterRequest {
-    pub canister_pid: Principal,
-}
-
-///
-/// CyclesRequest
-/// Payload for [`Request::Cycles`]
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CyclesRequest {
-    pub cycles: u128,
 }
 
 ///
@@ -117,13 +55,17 @@ where
 {
     let extra_arg = extra.map(encode_one).transpose()?;
 
-    execute_rpc(CreateCanisterRpc {
+    super::execute_rpc(CreateCanisterRpc {
         canister_role: canister_role.clone(),
         parent,
         extra_arg,
     })
     .await
 }
+
+///
+/// CreateCanisterRpc
+///
 
 pub struct CreateCanisterRpc {
     pub canister_role: CanisterRole,
@@ -158,7 +100,7 @@ impl Rpc for CreateCanisterRpc {
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
-    execute_rpc(UpgradeCanisterRpc { canister_pid }).await
+    super::execute_rpc(UpgradeCanisterRpc { canister_pid }).await
 }
 
 pub struct UpgradeCanisterRpc {
@@ -188,9 +130,9 @@ impl Rpc for UpgradeCanisterRpc {
 ///
 
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
-    OpsError::deny_root()?;
+    EnvOps::deny_root()?;
 
-    execute_rpc(CyclesRpc { cycles }).await
+    super::execute_rpc(CyclesRpc { cycles }).await
 }
 
 pub struct CyclesRpc {

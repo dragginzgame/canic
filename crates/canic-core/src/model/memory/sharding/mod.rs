@@ -5,15 +5,13 @@ pub use registry::*;
 use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-        types::Principal,
+        types::{BoundedString64, BoundedString128, Principal},
     },
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
     model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-    types::{BoundedString64, BoundedString128},
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -35,7 +33,7 @@ eager_static! {
 /// Composite key: (pool, tenant) → shard
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ShardKey {
     pub pool: BoundedString64,
     pub tenant: BoundedString128,
@@ -59,7 +57,7 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 /// (bare-bones; policy like has_capacity is higher-level)
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardEntry {
     /// Logical slot index within the pool (assigned deterministically).
     #[serde(default = "ShardEntry::slot_default")]
@@ -92,22 +90,6 @@ impl ShardEntry {
             pool,
             created_at,
         })
-    }
-
-    /// Whether this shard has room for more tenants.
-    #[must_use]
-    pub const fn has_capacity(&self) -> bool {
-        self.count < self.capacity
-    }
-
-    /// Returns load in basis points (0–10_000), or `None` if capacity is 0.
-    #[must_use]
-    pub const fn load_bps(&self) -> Option<u64> {
-        if self.capacity == 0 {
-            None
-        } else {
-            Some((self.count as u64).saturating_mul(10_000) / self.capacity as u64)
-        }
     }
 
     const fn slot_default() -> u32 {

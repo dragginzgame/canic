@@ -12,10 +12,13 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::storage::{
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
-        env::EnvOps,
-        topology::{SubnetCanisterChildrenOps, SubnetCanisterRegistryOps},
+    ops::{
+        runtime::env::EnvOps,
+        storage::{
+            children::CanisterChildrenOps,
+            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            registry::SubnetRegistryOps,
+        },
     },
 };
 use candid::Principal;
@@ -146,7 +149,7 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
 #[macro_export]
 macro_rules! auth_require_all {
     ($($f:expr),* $(,)?) => {{
-        $crate::auth::require_all(vec![
+        $crate::access::auth::require_all(vec![
             $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};
@@ -159,7 +162,7 @@ macro_rules! auth_require_all {
 #[macro_export]
 macro_rules! auth_require_any {
     ($($f:expr),* $(,)?) => {{
-        $crate::auth::require_any(vec![
+        $crate::access::auth::require_any(vec![
             $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};
@@ -174,12 +177,9 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pid = AppDirectoryOps::try_get(&role)?;
-
-        if pid == caller {
-            Ok(())
-        } else {
-            Err(AuthError::NotAppDirectoryType(caller, role.clone()))?
+        match AppDirectoryOps::get(&role) {
+            Some(pid) if pid == caller => Ok(()),
+            _ => Err(AuthError::NotAppDirectoryType(caller, role).into()),
         }
     })
 }
@@ -189,12 +189,9 @@ pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleR
 #[must_use]
 pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        let pid = SubnetDirectoryOps::try_get(&role)?;
-
-        if pid == caller {
-            Ok(())
-        } else {
-            Err(AuthError::NotSubnetDirectoryType(caller, role.clone()))?
+        match SubnetDirectoryOps::get(&role) {
+            Some(pid) if pid == caller => Ok(()),
+            _ => Err(AuthError::NotSubnetDirectoryType(caller, role).into()),
         }
     })
 }
@@ -204,7 +201,7 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        SubnetCanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
+        CanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
 
         Ok(())
     })
@@ -228,7 +225,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = EnvOps::root_pid();
+        let root_pid = EnvOps::root_pid()?;
 
         if caller == root_pid {
             Ok(())
@@ -243,7 +240,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = EnvOps::parent_pid();
+        let parent_pid = EnvOps::parent_pid()?;
 
         if parent_pid == caller {
             Ok(())
@@ -286,9 +283,10 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        match SubnetCanisterRegistryOps::get(caller) {
-            Some(_) => Ok(()),
-            None => Err(AuthError::NotRegisteredToSubnet(caller))?,
+        if SubnetRegistryOps::is_registered(caller) {
+            Ok(())
+        } else {
+            Err(AuthError::NotRegisteredToSubnet(caller))?
         }
     })
 }
@@ -299,7 +297,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         use crate::config::Config;
-        let cfg = Config::get();
+        let cfg = Config::get()?;
 
         if !cfg.is_whitelisted(&caller) {
             Err(AuthError::NotWhitelisted(caller))?;

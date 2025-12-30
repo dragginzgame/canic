@@ -10,33 +10,36 @@
 //! Canic is organized to keep endpoint code thin and policies centralized:
 //! - `access/` contains guard/auth/policy helpers for boundary enforcement.
 //! - `model/` owns storage (stable memory) and in-process registries/caches.
-//! - `ops/` implements workflows (provisioning, scaling, sharding, pool management).
+//! - `workflow/` implements orchestration and lifecycle workflows.
+//! - `ops/` provides mechanical, reusable side-effecting operations.
 //! - `macros/` provides public macro entrypoints and endpoint bundles.
 //!
 //! The default flow is: endpoints → ops → model.
-pub mod access;
 
 // -----------------------------------------------------------------------------
 // Phase 0: path coherence re-exports (no behavior change)
 // -----------------------------------------------------------------------------
 
-pub use access::{auth, guard, policy};
+pub mod access;
+pub mod api;
 pub mod config;
 pub mod dispatch;
 pub mod dto;
-pub mod env;
 pub mod ids;
+pub mod infra;
+pub mod lifecycle;
 pub mod log;
 pub mod macros;
 pub(crate) mod model;
 pub mod ops;
 pub mod perf;
-pub mod spec;
+pub mod policy;
+pub mod types;
+pub mod workflow;
 
 pub use ::canic_cdk as cdk;
 pub use ::canic_memory as memory;
 pub use ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range};
-pub use ::canic_types as types;
 pub use ::canic_utils as utils;
 
 /// Internal re-exports required for macro expansion.
@@ -63,7 +66,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
 /// Error
-///
 /// top level error should handle all sub-errors, but not expose the child candid types
 ///
 
@@ -79,13 +81,26 @@ pub enum Error {
     CustomError(String),
 
     #[error("{0}")]
+    InfraError(String),
+
+    #[error("{0}")]
     ModelError(String),
 
     #[error("{0}")]
     OpsError(String),
 
     #[error("{0}")]
+    PolicyError(String),
+
+    #[error("{0}")]
     SerializeError(String),
+
+    #[error("{0}")]
+    WorkflowError(String),
+
+    ///
+    /// Http Errors
+    ///
 
     #[error("http request failed: {0}")]
     HttpRequest(String),
@@ -152,10 +167,13 @@ impl Error {
 
 from_to_string!(access::AccessError, AccessError);
 from_to_string!(config::ConfigError, ConfigError);
+from_to_string!(infra::InfraError, InfraError);
 from_to_string!(model::ModelError, ModelError);
 from_to_string!(ops::OpsError, OpsError);
-from_to_string!(serde_json::Error, HttpDecode);
+from_to_string!(policy::PolicyError, PolicyError);
+from_to_string!(workflow::WorkflowError, WorkflowError);
 
+from_to_string!(serde_json::Error, HttpDecode);
 from_to_string!(CallError, CallError);
 from_to_string!(CallFailed, CallFailed);
 from_to_string!(CandidDecodeFailed, CandidDecodeFailed);

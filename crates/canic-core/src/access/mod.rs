@@ -1,6 +1,6 @@
 pub mod auth;
 pub mod guard;
-pub mod policy;
+pub mod rule;
 
 use crate::ThisError;
 
@@ -17,5 +17,5 @@ pub enum AccessError {
     GuardError(#[from] guard::GuardError),
 
     #[error(transparent)]
-    PolicyError(#[from] policy::PolicyError),
+    RuleError(#[from] rule::RuleError),
 }

@@ -1,146 +1,81 @@
 use crate::{
     Error,
-    dto::page::{Page, PageRequest},
-    log,
-    log::{Level, Topic},
-    model::memory::log::{LogEntry, StableLog, apply_retention},
-    ops::{
-        OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
-        ic::timer::{TimerId, TimerOps},
+    cdk::utils::time::now_secs,
+    dto::{
+        log::LogEntryView,
+        page::{Page, PageRequest},
     },
+    log::Level,
+    model::memory::log::{Log, RetentionSummary, apply_retention_with_cfg},
+    ops::{adapter::log::log_entry_to_view, config::ConfigOps, view::paginate_vec},
 };
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, time::Duration};
-
-thread_local! {
-    static RETENTION_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
-
-/// How often to enforce retention after the first sweep.
-const RETENTION_INTERVAL: Duration = OPS_LOG_RETENTION_INTERVAL;
-
-///
-/// LogEntryDto
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct LogEntryDto {
-    pub index: u64,
-    pub created_at: u64,
-    pub crate_name: String,
-    pub level: Level,
-    pub topic: Option<String>,
-    pub message: String,
-}
-
-impl LogEntryDto {
-    fn from_indexed_entry(index: usize, entry: LogEntry) -> Self {
-        Self {
-            index: index as u64,
-            created_at: entry.created_at,
-            crate_name: entry.crate_name,
-            level: entry.level,
-            topic: entry.topic,
-            message: entry.message,
-        }
-    }
-}
 
 ///
 /// LogOps
+///
+/// Logging operations.
+///
+/// Contains both:
+/// - control ops (runtime log append, retention sweeps)
+/// - view ops (paging, filtering, snapshot views)
+///
+/// Callers must ensure that control ops are only invoked
+/// from update/workflow contexts, while view ops are safe
+/// for query endpoints.
 ///
 
 pub struct LogOps;
 
 impl LogOps {
-    /// Start periodic log retention sweeps. Safe to call multiple times.
-    pub fn start_retention() {
-        let _ = TimerOps::set_guarded_interval(
-            &RETENTION_TIMER,
-            OPS_INIT_DELAY,
-            "log_retention:init",
-            || async {
-                let _ = Self::retain();
-            },
-            RETENTION_INTERVAL,
-            "log_retention:interval",
-            || async {
-                let _ = Self::retain();
-            },
-        );
-    }
-
-    /// Stop periodic retention sweeps.
-    pub fn stop_retention() {
-        let _ = TimerOps::clear_guarded(&RETENTION_TIMER);
-    }
-
-    /// Run a retention sweep immediately.
-    /// This enforces configured retention limits on stable logs.
-    #[must_use]
-    pub fn retain() -> bool {
-        match apply_retention() {
-            Ok(summary) => {
-                let dropped = summary.dropped_total();
-                if dropped > 0 {
-                    let before = summary.before;
-                    let retained = summary.retained;
-                    let dropped_by_age = summary.dropped_by_age;
-                    let dropped_by_limit = summary.dropped_by_limit;
-                    log!(
-                        Topic::Memory,
-                        Info,
-                        "log retention: dropped={dropped} (age={dropped_by_age}, limit={dropped_by_limit}), before={before}, retained={retained}"
-                    );
-                }
-                true
-            }
-            Err(err) => {
-                log!(Topic::Memory, Warn, "log retention failed: {err}");
-                false
-            }
-        }
-    }
-
-    /// Append a log entry to stable storage.
-    pub fn append<T, M>(
+    pub fn append_runtime_log(
         crate_name: &str,
-        topic: Option<T>,
+        topic: Option<&str>,
         level: Level,
-        message: M,
-    ) -> Result<u64, Error>
-    where
-        T: ToString,
-        M: AsRef<str>,
-    {
-        StableLog::append(crate_name, topic, level, message)
+        message: &str,
+    ) -> Result<u64, Error> {
+        if !crate::log::is_ready() {
+            return Ok(0);
+        }
+
+        let cfg = ConfigOps::log_config()?;
+        let now = now_secs();
+
+        Log::append(&cfg, now, crate_name, topic, level, message)
     }
 
-    ///
-    /// Export a page of log entries and the total count.
-    ///
     #[must_use]
     pub fn page(
         crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
         request: PageRequest,
-    ) -> Page<LogEntryDto> {
-        let request = request.clamped();
+    ) -> Page<LogEntryView> {
+        let mut entries = Log::snapshot();
 
-        let (raw_entries, total) = StableLog::entries_page_filtered(
-            crate_name.as_deref(),
-            topic.as_deref(),
-            min_level,
-            request,
-        );
+        // Filter
+        if let Some(ref name) = crate_name {
+            entries.retain(|e| &e.crate_name == name);
+        }
+        if let Some(ref t) = topic {
+            entries.retain(|e| e.topic.as_deref() == Some(t.as_str()));
+        }
+        if let Some(min) = min_level {
+            entries.retain(|e| e.level >= min);
+        }
 
-        let entries = raw_entries
-            .into_iter()
-            .map(|(i, entry)| LogEntryDto::from_indexed_entry(i, entry))
-            .collect();
+        // Newest first
+        entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        Page { entries, total }
+        let views: Vec<LogEntryView> = entries.iter().map(log_entry_to_view).collect();
+
+        paginate_vec(views, request)
     }
+}
+
+/// Apply log retention policy and return a summary.
+pub fn apply_log_retention() -> Result<RetentionSummary, Error> {
+    let cfg = ConfigOps::log_config()?;
+    let now = now_secs();
+
+    apply_retention_with_cfg(&cfg, now)
 }

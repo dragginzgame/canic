@@ -8,7 +8,6 @@ members = [
     "crates/canic-macros",
     "crates/canic-memory",
     "crates/canic-testkit",
-    "crates/canic-types",
     "crates/canic-utils",
     "crates/canisters/app",
     "crates/canisters/auth",
@@ -25,7 +24,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.92.0"
 edition = "2024"
-version = "0.6.20"
+version = "0.7.0"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -42,15 +41,14 @@ base32 = "0.5"
 
 # canic crates
 candid = { version = "0.10", default-features = false }
-canic = { version = "0.6.20", path = "crates/canic" }
-canic-cdk = { version = "0.6.20", path = "crates/canic-cdk" }
-canic-core = { version = "0.6.20", path = "crates/canic-core" }
-canic-internal = { version = "0.6.20", path = "crates/canic-internal" }
-canic-macros = { version = "0.6.20", path = "crates/canic-macros" }
-canic-memory = { version = "0.6.20", path = "crates/canic-memory" }
-canic-testkit = { version = "0.6.20", path = "crates/canic-testkit" }
-canic-types = { version = "0.6.20", path = "crates/canic-types" }
-canic-utils = { version = "0.6.20", path = "crates/canic-utils" }
+canic = { version = "0.7.0", path = "crates/canic" }
+canic-cdk = { version = "0.7.0", path = "crates/canic-cdk" }
+canic-core = { version = "0.7.0", path = "crates/canic-core" }
+canic-internal = { version = "0.7.0", path = "crates/canic-internal" }
+canic-macros = { version = "0.7.0", path = "crates/canic-macros" }
+canic-memory = { version = "0.7.0", path = "crates/canic-memory" }
+canic-testkit = { version = "0.7.0", path = "crates/canic-testkit" }
+canic-utils = { version = "0.7.0", path = "crates/canic-utils" }
 convert_case = "0.10"
 crc32fast = "1.5"
 criterion = "0.8"
@@ -64,7 +62,6 @@ ic-management-canister-types = "0.3.3"
 ic-signature-verification = "0.2"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.12"
-minicbor-serde = { version = "0.6", features = ["alloc"] }
 num-traits = "0.2"
 pocket-ic = "11.0"
 proc-macro2 = "1.0"
@@ -74,6 +71,7 @@ remain = "0.2"
 rust_decimal = "1.36"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
+serde_cbor = "0.11"
 serde_json = "1.0"
 sha2 = "0.10"
 syn = "2.0"
@@ -117,7 +115,6 @@ canic-internal = { path = "crates/canic-internal" }
 canic-macros = { path = "crates/canic-macros" }
 canic-memory = { path = "crates/canic-memory" }
 canic-testkit = { path = "crates/canic-testkit" }
-canic-types = { path = "crates/canic-types" }
 canic-utils = { path = "crates/canic-utils" }
 
 # profiles
