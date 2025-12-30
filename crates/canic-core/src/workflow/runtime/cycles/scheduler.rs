@@ -1,11 +1,12 @@
 use crate::{
     cdk::{futures::spawn, timers::TimerId, types::Cycles, utils::time::now_secs},
-    infra::{ic::canister_cycle_balance, rpc::cycles_request},
     log,
     log::Topic,
     ops::{
         OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
         config::ConfigOps,
+        ic::canister_cycle_balance,
+        rpc::cycles_request,
         runtime::{env::EnvOps, timer::TimerOps},
         storage::cycles::CycleTrackerOps,
     },

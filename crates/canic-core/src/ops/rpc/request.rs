@@ -1,3 +1,4 @@
+use super::{Rpc, RpcOpsError};
 use crate::{
     Error, ThisError,
     dto::rpc::{
@@ -5,7 +6,6 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ids::CanisterRole,
-    infra::rpc::{Rpc, RpcOpsError, execute_rpc},
     ops::prelude::*,
 };
 use candid::encode_one;
@@ -56,7 +56,7 @@ where
 {
     let extra_arg = extra.map(encode_one).transpose()?;
 
-    execute_rpc(CreateCanisterRpc {
+    super::execute_rpc(CreateCanisterRpc {
         canister_role: canister_role.clone(),
         parent,
         extra_arg,
@@ -101,7 +101,7 @@ impl Rpc for CreateCanisterRpc {
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
-    execute_rpc(UpgradeCanisterRpc { canister_pid }).await
+    super::execute_rpc(UpgradeCanisterRpc { canister_pid }).await
 }
 
 pub struct UpgradeCanisterRpc {
@@ -133,7 +133,7 @@ impl Rpc for UpgradeCanisterRpc {
 pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     OpsError::deny_root()?;
 
-    execute_rpc(CyclesRpc { cycles }).await
+    super::execute_rpc(CyclesRpc { cycles }).await
 }
 
 pub struct CyclesRpc {

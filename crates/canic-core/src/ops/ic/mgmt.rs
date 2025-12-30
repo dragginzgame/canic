@@ -1,22 +1,17 @@
-//! Infra-scoped IC helpers.
-//!
-//! These wrappers provide low-level IC management canister calls and common
-//! ICC call patterns without layering concerns.
-
 use crate::{
     Error,
     cdk::{
-        mgmt::{
-            self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
-            CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
-            UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
-        },
+        mgmt::{CanisterInstallMode, CanisterStatusResult, UpdateSettingsArgs},
         types::Cycles,
         utils::wasm::get_wasm_hash,
     },
-    infra::ic::call::Call,
+    infra::ic::mgmt as infra_mgmt,
+    log,
+    log::Topic,
+    model::metrics::system::{SystemMetricKind, SystemMetrics},
+    ops::ic::call::Call,
 };
-use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{CandidType, Principal, decode_one, utils::ArgumentEncoder};
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -27,15 +22,9 @@ pub async fn create_canister(
     controllers: Vec<Principal>,
     cycles: Cycles,
 ) -> Result<Principal, Error> {
-    let settings = Some(CanisterSettings {
-        controllers: Some(controllers),
-        ..Default::default()
-    });
-    let args = CreateCanisterArgs { settings };
+    let pid = infra_mgmt::create_canister(controllers, cycles).await?;
 
-    let pid = mgmt::create_canister_with_extra_cycles(&args, cycles.to_u128())
-        .await?
-        .canister_id;
+    SystemMetrics::increment(SystemMetricKind::CreateCanister);
 
     Ok(pid)
 }
@@ -46,11 +35,10 @@ pub async fn create_canister(
 
 /// Query the management canister for a canister's status and record metrics.
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
-    let args = CanisterStatusArgs {
-        canister_id: canister_pid,
-    };
+    let status = infra_mgmt::canister_status(canister_pid).await?;
 
-    let status = mgmt::canister_status(&args).await.map_err(Error::from)?;
+    SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+
     Ok(status)
 }
 
@@ -61,17 +49,14 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 /// Returns the local canister's cycle balance (cheap).
 #[must_use]
 pub fn canister_cycle_balance() -> Cycles {
-    crate::cdk::api::canister_cycle_balance().into()
+    infra_mgmt::canister_cycle_balance()
 }
 
 /// Deposits cycles into a canister and records metrics.
 pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
-    let args = DepositCyclesArgs {
-        canister_id: canister_pid,
-    };
-    mgmt::deposit_cycles(&args, cycles)
-        .await
-        .map_err(Error::from)?;
+    infra_mgmt::deposit_cycles(canister_pid, cycles).await?;
+
+    SystemMetrics::increment(SystemMetricKind::DepositCycles);
 
     Ok(())
 }
@@ -94,7 +79,7 @@ pub async fn raw_rand() -> Result<[u8; 32], Error> {
     let len = bytes.len();
     let seed: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| Error::CustomError(format!("raw_rand returned {len} bytes")))?;
+        .map_err(|_| Error::custom(format!("raw_rand returned {len} bytes")))?;
 
     Ok(seed)
 }
@@ -110,17 +95,14 @@ pub async fn install_code<T: ArgumentEncoder>(
     wasm: &[u8],
     args: T,
 ) -> Result<(), Error> {
-    let arg = encode_args(args)?;
-    let install_args = InstallCodeArgs {
-        mode,
-        canister_id: canister_pid,
-        wasm_module: WasmModule::from(wasm),
-        arg,
-    };
+    infra_mgmt::install_code(mode, canister_pid, wasm, args).await?;
 
-    mgmt::install_code(&install_args)
-        .await
-        .map_err(Error::from)?;
+    let metric_kind = match mode {
+        CanisterInstallMode::Install => SystemMetricKind::InstallCode,
+        CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
+        CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
+    };
+    SystemMetrics::increment(metric_kind);
 
     Ok(())
 }
@@ -131,31 +113,49 @@ pub async fn install_code<T: ArgumentEncoder>(
 pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
     let status = canister_status(canister_pid).await?;
     if status.module_hash == Some(get_wasm_hash(wasm)) {
+        log!(
+            Topic::CanisterLifecycle,
+            Info,
+            "canister_upgrade: {canister_pid} already running target module"
+        );
+
         return Ok(());
     }
 
     install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
+
+    #[allow(clippy::cast_precision_loss)]
+    let bytes_fmt = wasm.len() as f64 / 1_000.0;
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "canister_upgrade: {canister_pid} ({bytes_fmt} KB) upgraded"
+    );
 
     Ok(())
 }
 
 /// Uninstalls code from a canister and records metrics.
 pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
-    let args = UninstallCodeArgs {
-        canister_id: canister_pid,
-    };
+    infra_mgmt::uninstall_code(canister_pid).await?;
 
-    mgmt::uninstall_code(&args).await.map_err(Error::from)?;
+    SystemMetrics::increment(SystemMetricKind::UninstallCode);
+
+    log!(
+        Topic::CanisterLifecycle,
+        Ok,
+        "🗑️ uninstall_code: {canister_pid}"
+    );
+
     Ok(())
 }
 
 /// Deletes a canister (code + controllers) via the management canister and records metrics.
 pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
-    let args = DeleteCanisterArgs {
-        canister_id: canister_pid,
-    };
+    infra_mgmt::delete_canister(canister_pid).await?;
 
-    mgmt::delete_canister(&args).await.map_err(Error::from)?;
+    SystemMetrics::increment(SystemMetricKind::DeleteCanister);
+
     Ok(())
 }
 
@@ -165,7 +165,8 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
 
 /// Updates canister settings via the management canister and records metrics.
 pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
-    mgmt::update_settings(args).await.map_err(Error::from)?;
+    infra_mgmt::update_settings(args).await?;
+    SystemMetrics::increment(SystemMetricKind::UpdateSettings);
     Ok(())
 }
 

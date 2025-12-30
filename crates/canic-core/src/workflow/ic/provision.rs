@@ -13,19 +13,17 @@ use crate::{
     cdk::{api::canister_self, mgmt::CanisterInstallMode},
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
-    infra::ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
     ops::{
         OpsError,
         adapter::directory::{app_directory_to_view, subnet_directory_to_view},
-        canister::install_code_with_extra_arg,
         config::ConfigOps,
-        env::EnvOps,
+        ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
+        runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
             pool::PoolOps,
             registry::SubnetRegistryOps,
         },
-        wasm::WasmOps,
     },
     workflow::{
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},

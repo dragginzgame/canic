@@ -2,21 +2,20 @@ use crate::{Error, cdk::types::WasmModule, ids::CanisterRole, log, log::Topic};
 use std::{cell::RefCell, collections::HashMap};
 use thiserror::Error as ThisError;
 
-//
-// Runtime WASM registry
-//
-// Application-owned, in-memory registry mapping canister roles
-// to their embedded WASM modules. This is runtime state, not domain
-// state and not infrastructure plumbing.
-//
-
 thread_local! {
+    ///
+    /// Runtime WASM registry
+    ///
+    /// Application-owned, in-memory registry mapping canister roles
+    /// to their embedded WASM modules. This is runtime state, not domain
+    /// state and not infrastructure plumbing.
+    ///
     static WASM_REGISTRY: RefCell<HashMap<CanisterRole, WasmModule>> =
         RefCell::new(HashMap::new());
 }
 
 ///
-/// WasmError
+/// WasmOpsError
 ///
 
 #[derive(Debug, ThisError)]
@@ -32,13 +31,13 @@ impl From<WasmError> for Error {
 }
 
 ///
-/// Wasm
+/// WasmOps
 /// Runtime API for accessing embedded WASM modules.
 ///
 
-pub struct Wasm;
+pub struct WasmOps;
 
-impl Wasm {
+impl WasmOps {
     /// Fetch a WASM module for the given canister role, if registered.
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<WasmModule> {

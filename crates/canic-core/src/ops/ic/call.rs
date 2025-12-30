@@ -1,8 +1,14 @@
-use crate::cdk::{call::Call as IcCall, candid::Principal};
+use crate::{
+    cdk::{call::Call as IcCall, candid::Principal},
+    model::metrics::{
+        icc::IccMetrics,
+        system::{SystemMetricKind, SystemMetrics},
+    },
+};
 
 ///
 /// Call
-/// Wrapper around `ic_cdk::api::call::Call`.
+/// Wrapper around `ic_cdk::api::call::Call` that records metrics.
 ///
 
 pub struct Call;
@@ -12,6 +18,9 @@ impl Call {
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> IcCall<'_, '_> {
         let canister_id: Principal = canister_id.into();
 
+        SystemMetrics::increment(SystemMetricKind::CanisterCall);
+        IccMetrics::increment(canister_id, method);
+
         IcCall::bounded_wait(canister_id, method)
     }
 
@@ -19,6 +28,9 @@ impl Call {
     #[must_use]
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> IcCall<'_, '_> {
         let canister_id: Principal = canister_id.into();
+
+        SystemMetrics::increment(SystemMetricKind::CanisterCall);
+        IccMetrics::increment(canister_id, method);
 
         IcCall::unbounded_wait(canister_id, method)
     }

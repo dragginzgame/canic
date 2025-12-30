@@ -1,7 +1,4 @@
 pub mod ic;
-pub mod icrc;
-pub mod perf;
-pub mod rpc;
 
 use crate::ThisError;
 
