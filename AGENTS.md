@@ -426,6 +426,9 @@ Init and post-upgrade must follow the same execution structure:
 * synchronous environment restoration
 * scheduling (never awaiting) async bootstrap work
 
+Init and post-upgrade share the same execution model (synchronous adapter, async bootstrap),
+but may differ in validation because init consumes external payloads while post-upgrade restores
+trusted stable state.
 Differences in state initialization (e.g. payload import on init only) are permitted and must be explicit.
 ---
 

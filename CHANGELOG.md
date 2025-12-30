@@ -12,12 +12,20 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 ## [Unreleased]
 ### Added
 - Added workflow RPC client helper for create-canister requests and workflow planning helpers for scaling/sharding.
+- Added DTO types for memory registry endpoints.
 
 ### Changed
 - Routed workflow IC network access through `ops::ic` to preserve layer boundaries.
 - Refactored directory builders to return view types and updated workflow directory sync to use view imports/exports.
 - Aligned core layering/lifecycle docs with AGENTS guidance.
 - Updated example canisters to call workflow helpers instead of policy/ops directly.
+- Switched canic-memory startup integration to `runtime::registry` and refreshed its README.
+- Moved upgrade decisioning into policy and made ops/infra upgrades purely mechanical.
+- Centralized non-root env defaulting in `EnvOps` instead of workflow runtime.
+- Split log control ops from log view ops (`LogOps` vs `LogViewOps`).
+
+### Fixed
+- Memory registry endpoint now returns a proper DTO view and maps registry entries without leaking internal types.
 
 ## [v0.7.0] — 2025-12-30 - Architecture Consolidation & Runtime Discipline
 

@@ -41,14 +41,14 @@ pub fn to_snake_case(s: &str) -> String {
     snake_case.trim_matches('_').to_string()
 }
 
-//
-// TESTS
-//
+///
+/// TESTS
+///
 
-#[cfg(test)]
 /// Tests converting strings to snake case. Runs through a series of test cases,
 /// converting input strings to snake case and comparing the result to the
 /// expected output.
+#[cfg(test)]
 mod tests {
     use super::*;
 

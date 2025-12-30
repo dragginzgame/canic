@@ -77,7 +77,7 @@ impl Http {
         // Validate HTTP status code
         let status: u32 = res.status.0.to_u32().unwrap_or(0);
         if !(200..300).contains(&status) {
-            return Err(Error::HttpErrorCode(status));
+            return Err(Error::HttpStatus(status));
         }
 
         // Deserialize response body

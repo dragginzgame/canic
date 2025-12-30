@@ -1,6 +1,7 @@
 pub mod directory;
 pub mod placement;
 pub mod pool;
+pub mod upgrade;
 
 use crate::ThisError;
 

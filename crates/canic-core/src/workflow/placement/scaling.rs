@@ -16,6 +16,7 @@ use crate::{
         storage::scaling::ScalingRegistryOps,
     },
     policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
+    workflow::placement::PlacementError,
 };
 use candid::Principal;
 
@@ -32,7 +33,7 @@ pub enum ScalingWorkflowError {
 
 impl From<ScalingWorkflowError> for Error {
     fn from(err: ScalingWorkflowError) -> Self {
-        Self::WorkflowError(err.to_string())
+        PlacementError::Scaling(err).into()
     }
 }
 

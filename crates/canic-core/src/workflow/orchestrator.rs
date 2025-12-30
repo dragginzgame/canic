@@ -4,7 +4,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::ic::{delete_canister, upgrade_canister},
+    ops::ic::{canister_status, delete_canister, upgrade_canister},
     ops::{
         runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
         storage::{
@@ -13,6 +13,7 @@ use crate::{
             registry::SubnetRegistryOps,
         },
     },
+    policy::upgrade::plan_upgrade,
     workflow::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
@@ -210,6 +211,9 @@ impl CanisterLifecycleOrchestrator {
             SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
         let wasm = WasmOps::try_get(&entry.role)?;
+        let target_hash = wasm.module_hash();
+        let status = canister_status(pid).await?;
+        let plan = plan_upgrade(status.module_hash, target_hash.clone());
 
         if let Some(parent_pid) = entry.parent_pid {
             assert_parent_exists(parent_pid)?;
@@ -217,9 +221,20 @@ impl CanisterLifecycleOrchestrator {
         }
         assert_not_in_pool(pid)?;
 
+        if !plan.should_upgrade {
+            log!(
+                Topic::CanisterLifecycle,
+                Info,
+                "canister_upgrade: {pid} already running target module"
+            );
+            SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
+            assert_module_hash(pid, target_hash)?;
+            return Ok(LifecycleResult::default());
+        }
+
         upgrade_canister(pid, wasm.bytes()).await?;
-        SubnetRegistryOps::update_module_hash(pid, wasm.module_hash());
-        assert_module_hash(pid, wasm.module_hash())?;
+        SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
+        assert_module_hash(pid, target_hash)?;
 
         Ok(LifecycleResult::default())
     }

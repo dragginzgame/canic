@@ -7,9 +7,7 @@ use crate::{
     Error, ThisError,
     cdk::candid::CandidType,
     dto::rpc::{Request, Response},
-    ops::OpsError,
-    ops::ic::call::Call,
-    ops::runtime::env::EnvOps,
+    ops::{OpsError, ic::call::Call, runtime::env::EnvOps},
 };
 use serde::de::DeserializeOwned;
 

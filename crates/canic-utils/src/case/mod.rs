@@ -4,12 +4,12 @@ mod constant;
 mod snake;
 mod title;
 
-//
-// utils/case
-//
-// all case operations come through here as we have to include
-// multiple crates to get the desired behaviour
-//
+///
+/// case
+///
+/// all case operations come through here as we have to include
+/// multiple crates to get the desired behaviour
+///
 
 // Case
 #[derive(Clone, Copy, Debug, Display)]
@@ -27,9 +27,9 @@ pub enum Case {
     UpperKebab, // or TRAIN-CASE
 }
 
-//
-// Casing
-//
+///
+/// Casing
+///
 
 pub trait Casing<T: std::fmt::Display> {
     fn to_case(&self, case: Case) -> String;
