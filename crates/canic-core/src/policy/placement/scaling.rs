@@ -12,7 +12,7 @@ use crate::{
     Error, ThisError,
     cdk::types::BoundedString64,
     config::schema::ScalePool,
-    dto::placement::WorkerEntryView,
+    ids::CanisterRole,
     ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
 };
 
@@ -32,20 +32,30 @@ pub enum ScalingPolicyError {
 
 impl From<ScalingPolicyError> for Error {
     fn from(err: ScalingPolicyError) -> Self {
-        Self::OpsError(err.to_string())
+        crate::policy::PolicyError::from(err).into()
     }
 }
 
 ///
+/// ScalingWorkerPlanEntry
+///
+
+#[derive(Clone, Debug)]
+pub struct ScalingWorkerPlanEntry {
+    pub pool: BoundedString64,
+    pub canister_role: CanisterRole,
+    pub created_at_secs: u64,
+}
+
+///
 /// ScalingPlan
-/// Result of a dry-run evaluation for scaling decisions
 ///
 
 #[derive(Clone, Debug)]
 pub struct ScalingPlan {
     pub should_spawn: bool,
     pub reason: String,
-    pub worker_entry: Option<WorkerEntryView>,
+    pub worker_entry: Option<ScalingWorkerPlanEntry>,
 }
 
 ///
@@ -75,7 +85,7 @@ impl ScalingPolicy {
 
         // Min bound check
         if worker_count < policy.min_workers {
-            let entry = WorkerEntryView {
+            let entry = ScalingWorkerPlanEntry {
                 pool: BoundedString64::new(pool),
                 canister_role: pool_cfg.canister_role,
                 created_at_secs,

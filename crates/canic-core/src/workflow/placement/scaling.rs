@@ -10,10 +10,12 @@
 use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
-    dto::rpc::CreateCanisterParent,
-    ops::rpc::create_canister_request,
-    ops::{adapter::placement::worker_entry_from_view, storage::scaling::ScalingRegistryOps},
-    policy::placement::scaling::{ScalingPlan, ScalingPolicy},
+    dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
+    ops::{
+        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
+        storage::scaling::ScalingRegistryOps,
+    },
+    policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
 };
 use candid::Principal;
 
@@ -53,11 +55,11 @@ impl ScalingWorkflow {
             return Err(ScalingWorkflowError::PlanRejected(reason))?;
         }
 
-        let entry_view = worker_entry.ok_or_else(|| {
+        let entry_plan = worker_entry.ok_or_else(|| {
             ScalingWorkflowError::PlanRejected("worker entry missing for spawn plan".to_string())
         })?;
 
-        let role = entry_view.canister_role.clone();
+        let role = entry_plan.canister_role.clone();
 
         // 3. Create the canister
         let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
@@ -65,9 +67,17 @@ impl ScalingWorkflow {
             .new_canister_pid;
 
         // 4. Register in memory
-        let entry = worker_entry_from_view(entry_view);
+        let entry = worker_entry_from_view(plan_entry_to_view(entry_plan));
         ScalingRegistryOps::upsert(pid, entry);
 
         Ok(pid)
+    }
+}
+
+fn plan_entry_to_view(entry: ScalingWorkerPlanEntry) -> WorkerEntryView {
+    WorkerEntryView {
+        pool: entry.pool,
+        canister_role: entry.canister_role,
+        created_at_secs: entry.created_at_secs,
     }
 }
