@@ -10,7 +10,7 @@ use crate::{
     workflow::{
         ic::network::try_get_current_subnet_pid,
         orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
-        pool::pool_import_canister,
+        pool::{pool_import_canister, pool_import_queued_canisters},
         prelude::*,
     },
 };
@@ -107,27 +107,61 @@ pub async fn root_import_pool_from_config() {
         }
     };
 
+    let initial_limit = subnet_cfg
+        .pool
+        .import
+        .initial
+        .map_or(subnet_cfg.pool.minimum_size as usize, |count| {
+            count as usize
+        });
+
+    if initial_limit == 0 && !subnet_cfg.auto_create.is_empty() {
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import initial=0 with auto_create enabled; new canisters may be created before queued imports are ready"
+        );
+    }
+
     if import_list.is_empty() {
         return;
     }
+    let (initial, queued) = import_list.split_at(initial_limit.min(import_list.len()));
 
-    let mut attempted = 0_u64;
     let mut imported = 0_u64;
-    let mut skipped = 0_u64;
-    let mut failed = 0_u64;
+    let mut immediate_skipped = 0_u64;
+    let mut immediate_failed = 0_u64;
 
-    for pid in import_list {
-        attempted += 1;
-        match pool_import_canister(pid).await {
+    let mut queued_added = 0_u64;
+    let mut queued_requeued = 0_u64;
+    let mut queued_skipped = 0_u64;
+    let mut queued_failed = 0_u64;
+
+    for pid in initial {
+        match pool_import_canister(*pid).await {
             Ok(()) => {
-                if PoolOps::contains(&pid) {
+                if PoolOps::contains(pid) {
                     imported += 1;
                 } else {
-                    skipped += 1;
+                    immediate_skipped += 1;
                 }
             }
             Err(_) => {
-                failed += 1;
+                immediate_failed += 1;
+            }
+        }
+    }
+
+    if !queued.is_empty() {
+        match pool_import_queued_canisters(queued.to_vec()).await {
+            Ok(result) => {
+                queued_added = result.added;
+                queued_requeued = result.requeued;
+                queued_skipped = result.skipped;
+            }
+            Err(err) => {
+                queued_failed = queued.len() as u64;
+                log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
             }
         }
     }
@@ -135,8 +169,27 @@ pub async fn root_import_pool_from_config() {
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import summary: configured={attempted}, imported={imported}, skipped={skipped}, failed={failed}"
+        "pool import immediate summary: configured={}, imported={imported}, skipped={immediate_skipped}, failed={immediate_failed}",
+        initial.len()
     );
+
+    if !queued.is_empty() {
+        if queued_failed > 0 {
+            log!(
+                Topic::CanisterPool,
+                Warn,
+                "pool import queued summary: configured={}, failed={queued_failed}",
+                queued.len()
+            );
+        } else {
+            log!(
+                Topic::CanisterPool,
+                Info,
+                "pool import queued summary: configured={}, added={queued_added}, requeued={queued_requeued}, skipped={queued_skipped}",
+                queued.len()
+            );
+        }
+    }
 }
 
 /// Ensures all statically configured canisters for this subnet exist.

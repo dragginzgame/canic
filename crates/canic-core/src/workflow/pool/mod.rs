@@ -176,12 +176,18 @@ pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBa
         }
     }
 
-    Ok(PoolBatchResult {
+    let result = PoolBatchResult {
         total,
         added,
         requeued,
         skipped,
-    })
+    };
+
+    if result.added > 0 || result.requeued > 0 {
+        scheduler::schedule();
+    }
+
+    Ok(result)
 }
 
 // -----------------------------------------------------------------------------
