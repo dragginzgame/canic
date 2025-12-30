@@ -14,5 +14,8 @@ pub enum PolicyError {
     PoolPolicyError(#[from] pool::PoolPolicyError),
 
     #[error(transparent)]
+    ScalingPolicyError(#[from] placement::scaling::ScalingPolicyError),
+
+    #[error(transparent)]
     ShardingPolicyError(#[from] placement::sharding::ShardingPolicyError),
 }
