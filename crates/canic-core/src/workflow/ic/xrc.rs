@@ -42,6 +42,7 @@ pub async fn get_exchange_rate_with_cycles(
 
     match res {
         GetExchangeRateResult::Ok(rate) => Ok(rate),
+
         GetExchangeRateResult::Err(err) => {
             Err(Error::custom(format!("xrc get_exchange_rate: {err:?}")))
         }
