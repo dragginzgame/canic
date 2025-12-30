@@ -34,7 +34,6 @@ pub(crate) mod model;
 pub mod ops;
 pub mod perf;
 pub mod policy;
-pub mod types;
 pub mod workflow;
 
 pub use ::canic_cdk as cdk;

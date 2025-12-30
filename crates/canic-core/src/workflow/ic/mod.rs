@@ -1,5 +1,4 @@
 pub mod network;
-pub mod payment;
 pub mod provision;
 pub mod xrc;
 
