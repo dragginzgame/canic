@@ -5,20 +5,20 @@ pub mod xrc;
 use crate::{Error, ThisError, workflow::WorkflowError};
 
 ///
-/// IcError
+/// IcWorkflowError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum IcError {
+pub enum IcWorkflowError {
     #[error(transparent)]
-    ProvisionOps(#[from] provision::ProvisionError),
+    ProvisionWorkflow(#[from] provision::ProvisionWorkflowError),
 
     #[error(transparent)]
-    Xrc(#[from] xrc::XrcWorkflowError),
+    XrcWorkflow(#[from] xrc::XrcWorkflowError),
 }
 
-impl From<IcError> for Error {
-    fn from(err: IcError) -> Self {
+impl From<IcWorkflowError> for Error {
+    fn from(err: IcWorkflowError) -> Self {
         WorkflowError::from(err).into()
     }
 }

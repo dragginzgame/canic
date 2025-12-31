@@ -18,7 +18,7 @@
 //!
 //! Examples of view ops include registry exports and metrics views.
 
-pub(crate) mod adapter;
+pub mod adapter;
 pub mod config;
 pub mod ic;
 pub mod icrc;
@@ -57,7 +57,7 @@ pub const OPS_POOL_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 pub mod prelude {
     pub use crate::{
         cdk::{
-            api::{canister_self, msg_caller},
+            api::canister_self,
             candid::CandidType,
             types::{Account, Cycles, Int, Nat, Principal, Subaccount},
         },

@@ -10,9 +10,13 @@ use crate::{
 ///
 /// Icrc10Ops
 ///
+/// Used by macro-generated endpoints in downstream crates.
+///
 
+#[allow(dead_code)]
 pub struct Icrc10Ops;
 
+#[allow(dead_code)]
 impl Icrc10Ops {
     /// Return the supported standards as `(name, url)` tuples.
     #[must_use]
@@ -30,9 +34,13 @@ impl Icrc10Ops {
 ///
 /// Icrc21Ops
 ///
+/// Used by macro-generated endpoints in downstream crates.
+///
 
+#[allow(dead_code)]
 pub struct Icrc21Ops;
 
+#[allow(dead_code)]
 impl Icrc21Ops {
     /// Register a consent message handler for a method.
     pub fn register<F>(method: &str, handler: F)
