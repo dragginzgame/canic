@@ -1,0 +1,21 @@
+use crate::{ids::CanisterRole, ops::runtime::wasm::WasmOps};
+
+/// Runtime WASM registration API.
+///
+/// Public, user-callable helpers for registering embedded WASM modules
+/// during canister initialization.
+///
+/// This module exists to expose a stable surface to downstream canisters
+/// without making `WasmOps` public.
+///
+/// Layering:
+///     user canister → api → ops → runtime state
+///
+pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
+    WasmOps::import_static(wasms);
+}
+
+/// Quiet variant without logging.
+pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
+    WasmOps::import_static_quiet(wasms);
+}

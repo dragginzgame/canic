@@ -33,7 +33,7 @@ macro_rules! timer {
 macro_rules! timer_guarded {
     ($slot:path, $delay:expr, $func:path $(, $($args:tt)*)? ) => {{
         let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::ops::ic::timer::TimerOps::set_guarded(
+        $crate::api::timer::set_guarded(
             &$slot,
             $delay,
             label,
@@ -54,7 +54,7 @@ macro_rules! timer_guarded {
 macro_rules! timer_interval {
     ($interval:expr, $func:path $(, $($args:tt)*)? ) => {{
         let label = concat!(module_path!(), "::", stringify!($func));
-        $crate::api::timer::TimerOps::set_interval(
+        $crate::api::timer::set_interval(
             $interval,
             label,
             move || $func($($($args)*)?),
@@ -84,7 +84,7 @@ macro_rules! timer_interval_guarded {
         let init_label = concat!(module_path!(), "::", stringify!($init_func));
         let tick_label = concat!(module_path!(), "::", stringify!($tick_func));
 
-        $crate::api::timer::TimerOps::set_guarded_interval(
+        $crate::api::timer::set_guarded_interval(
             &$slot,
             $init_delay,
             init_label,
