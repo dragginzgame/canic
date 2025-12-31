@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    PublicError,
     cdk::candid::CandidType,
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     ids::CanisterRole,
@@ -13,13 +13,16 @@ use crate::{
 /// workflow instead of ops directly.
 ///
 
+#[allow(dead_code)]
 pub async fn create_canister_request<A>(
     canister_role: &CanisterRole,
     parent: CreateCanisterParent,
     extra: Option<A>,
-) -> Result<CreateCanisterResponse, Error>
+) -> Result<CreateCanisterResponse, PublicError>
 where
     A: CandidType + Send + Sync,
 {
-    rpc::create_canister_request_internal(canister_role, parent, extra).await
+    rpc::create_canister_request_internal(canister_role, parent, extra)
+        .await
+        .map_err(PublicError::from)
 }

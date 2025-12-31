@@ -32,7 +32,7 @@ pub mod lifecycle;
 pub mod log;
 pub mod macros;
 pub(crate) mod model;
-pub mod ops;
+pub(crate) mod ops;
 pub mod perf;
 pub mod policy;
 pub mod workflow;
@@ -186,6 +186,6 @@ impl From<&Error> for PublicError {
 
 impl From<Error> for PublicError {
     fn from(err: Error) -> Self {
-        PublicError::from(&err)
+        Self::from(&err)
     }
 }

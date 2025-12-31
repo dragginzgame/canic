@@ -66,7 +66,10 @@ pub struct ScalingPolicy;
 
 impl ScalingPolicy {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn plan_create_worker(pool: &str, created_at_secs: u64) -> Result<ScalingPlan, Error> {
+    pub(crate) fn plan_create_worker(
+        pool: &str,
+        created_at_secs: u64,
+    ) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
@@ -109,10 +112,6 @@ impl ScalingPolicy {
             ),
             worker_entry: None,
         })
-    }
-
-    pub fn should_spawn_worker(pool: &str, now_secs: u64) -> Result<bool, Error> {
-        Ok(Self::plan_create_worker(pool, now_secs)?.should_spawn)
     }
 
     fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {

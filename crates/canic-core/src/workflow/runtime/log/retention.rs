@@ -35,6 +35,7 @@ pub fn start() {
 }
 
 /// Stop periodic retention sweeps.
+#[expect(dead_code)]
 pub fn stop() {
     let _ = TimerOps::clear_guarded(&RETENTION_TIMER);
 }

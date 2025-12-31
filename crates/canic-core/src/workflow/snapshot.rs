@@ -120,7 +120,7 @@ pub struct TopologySnapshotBuilder {
 }
 
 impl TopologySnapshotBuilder {
-    pub fn for_target(target_pid: Principal) -> Result<Self, Error> {
+    pub(crate) fn for_target(target_pid: Principal) -> Result<Self, Error> {
         let parents = SubnetRegistryOps::parent_chain_view(target_pid)?;
         let mut children_map = HashMap::new();
 

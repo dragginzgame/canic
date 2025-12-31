@@ -40,6 +40,7 @@ pub fn start() {
 }
 
 /// Stop recurring cycle tracking.
+#[expect(dead_code)]
 pub fn stop() {
     let _ = TimerOps::clear_guarded(&TIMER);
 }

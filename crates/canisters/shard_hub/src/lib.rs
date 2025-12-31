@@ -40,7 +40,7 @@ async fn register_principal(pid: Principal) -> Result<Principal, PublicError> {
 async fn plan_register_principal(pid: Principal) -> Result<String, PublicError> {
     let plan = ShardingWorkflow::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
-    Ok(format!("{:?}", plan))
+    Ok(format!("{plan:?}"))
 }
 
 export_candid!();

@@ -28,7 +28,7 @@ const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 // Reset
 // -----------------------------------------------------------------------------
 
-pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
+pub(crate) async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
@@ -72,7 +72,7 @@ fn require_pool_admin() -> Result<(), Error> {
 // Creation
 // -----------------------------------------------------------------------------
 
-pub async fn pool_create_canister() -> Result<Principal, Error> {
+pub(crate) async fn pool_create_canister() -> Result<Principal, Error> {
     require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
@@ -87,7 +87,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
 // Import
 // -----------------------------------------------------------------------------
 
-pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
+pub(crate) async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     require_pool_admin()?;
     admissibility::check_can_enter_pool(pid).await?;
 
@@ -115,7 +115,7 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
 // Recycle
 // -----------------------------------------------------------------------------
 
-pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
+pub(crate) async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
     require_pool_admin()?;
 
     // Must exist in registry to be recycled
@@ -140,7 +140,9 @@ pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
 // Bulk import
 // -----------------------------------------------------------------------------
 
-pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBatchResult, Error> {
+pub(crate) async fn pool_import_queued_canisters(
+    pids: Vec<Principal>,
+) -> Result<PoolBatchResult, Error> {
     require_pool_admin()?;
 
     let total = pids.len() as u64;
@@ -194,7 +196,7 @@ pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBa
 // Export
 // -----------------------------------------------------------------------------
 
-pub async fn pool_export_canister(
+pub(crate) async fn pool_export_canister(
     pid: Principal,
 ) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
     require_pool_admin()?;

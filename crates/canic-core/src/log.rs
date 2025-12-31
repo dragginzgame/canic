@@ -115,7 +115,7 @@ macro_rules! log {
 ///
 
 #[doc(hidden)]
-pub fn __append_runtime_log(
+pub(crate) fn __append_runtime_log(
     crate_name: &str,
     topic: Option<&str>,
     level: Level,
@@ -126,6 +126,6 @@ pub fn __append_runtime_log(
 
 #[doc(hidden)]
 #[must_use]
-pub fn __canister_role_string() -> Option<String> {
+pub(crate) fn __canister_role_string() -> Option<String> {
     Env::get_canister_role().map(|role| role.to_string())
 }

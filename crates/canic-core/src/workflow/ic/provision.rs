@@ -9,7 +9,7 @@
 //! installing WASM modules, and cascading state updates to descendants.
 
 use crate::{
-    Error,
+    Error, PublicError,
     cdk::mgmt::CanisterInstallMode,
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
@@ -170,7 +170,7 @@ pub(crate) async fn create_and_install_canister(
 /// 2. Remove from SubnetRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
-pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
+pub(crate) async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
     EnvOps::require_root()?;
 
     // Phase 0: uninstall code
@@ -208,9 +208,19 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
 /// Allocate a canister ID and ensure it meets the initial cycle target.
 ///
 /// Reuses a canister from the pool if available; otherwise creates a new one.
-pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
+pub(crate) async fn allocate_canister_internal(role: &CanisterRole) -> Result<Principal, Error> {
     let (pid, _) = allocate_canister_with_source(role).await?;
+
     Ok(pid)
+}
+
+/// Allocate a canister ID and ensure it meets the initial cycle target.
+///
+/// Reuses a canister from the pool if available; otherwise creates a new one.
+pub async fn allocate_canister(role: &CanisterRole) -> Result<Principal, PublicError> {
+    allocate_canister_internal(role)
+        .await
+        .map_err(PublicError::from)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
