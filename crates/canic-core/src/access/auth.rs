@@ -16,8 +16,8 @@ use crate::{
         runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            registry::SubnetRegistryOps,
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            registry::subnet::SubnetRegistryOps,
         },
     },
 };

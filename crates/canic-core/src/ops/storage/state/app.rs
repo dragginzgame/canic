@@ -1,11 +1,10 @@
 use crate::{
     Error, ThisError,
     dto::state::{AppCommand, AppStateView},
-    log,
-    log::Topic,
     model::memory::state::{AppMode, AppState},
     ops::{
         adapter::state::{app_state_from_view, app_state_to_view},
+        prelude::*,
         storage::state::StateOpsError,
     },
 };

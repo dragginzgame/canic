@@ -1,11 +1,10 @@
 use crate::{
     Error, ThisError,
-    infra::InfraError,
     infra::ic::http::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
     ops::{
-        OpsError, adapter::metrics::http::record_http_request,
+        adapter::metrics::http::record_http_request, prelude::*,
         runtime::metrics::record_http_outcall,
     },
 };
@@ -93,7 +92,7 @@ impl Http {
         };
 
         // Perform raw HTTP outcall via infra
-        let res = http_request_raw(&args).await.map_err(InfraError::from)?;
+        let res = http_request_raw(&args).await?;
 
         // Validate HTTP status code
         let status: u32 = res.status.0.to_u32().unwrap_or(0);
@@ -124,7 +123,7 @@ impl Http {
         Self::record_metrics(args.method, &args.url, label);
 
         // Delegate to infra without additional interpretation
-        let res = http_request_raw(&args).await.map_err(InfraError::from)?;
+        let res = http_request_raw(&args).await?;
 
         Ok(res)
     }

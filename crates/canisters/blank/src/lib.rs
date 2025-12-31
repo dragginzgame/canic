@@ -9,7 +9,7 @@ use canic::{
     PublicError,
     core::{
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
-        ops::rpc::create_canister_request,
+        workflow::rpc::create_canister_request_public,
     },
     prelude::*,
 };
@@ -29,7 +29,8 @@ async fn canic_upgrade() {}
 /// no authentication needed as its for local canic testing
 #[canic_update]
 async fn create_blank() -> Result<CreateCanisterResponse, PublicError> {
-    create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None::<()>).await
+    create_canister_request_public::<()>(&BLANK, CreateCanisterParent::ThisCanister, None::<()>)
+        .await
 }
 
 export_candid!();

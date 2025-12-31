@@ -15,7 +15,10 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    model::memory::{CanisterEntry, CanisterSummary, id::registry::SUBNET_REGISTRY_ID},
+    model::memory::{
+        id::registry::SUBNET_REGISTRY_ID,
+        types::{CanisterEntry, CanisterSummary},
+    },
 };
 use candid::Principal;
 use std::{

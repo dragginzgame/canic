@@ -1,10 +1,8 @@
 use crate::{
     dto::page::{Page, PageRequest},
     ops::view::clamp_page_request,
-    perf::{self},
+    perf::{self, PerfEntry},
 };
-
-pub use crate::perf::PerfEntry;
 
 ///
 /// PerfOps

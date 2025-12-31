@@ -19,6 +19,7 @@ pub enum SystemMetricKind {
     DepositCycles,
     HttpOutcall,
     InstallCode,
+    RawRand,
     ReinstallCode,
     TimerScheduled,
     UninstallCode,

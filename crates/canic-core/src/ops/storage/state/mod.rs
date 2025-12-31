@@ -1,10 +1,7 @@
 //! Stable-memory state adapters.
 
-mod app;
-mod subnet;
-
-pub use app::*;
-pub use subnet::*;
+pub mod app;
+pub mod subnet;
 
 use crate::{Error, ThisError, ops::storage::StorageOpsError};
 

@@ -4,8 +4,8 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::ic::{canister_status_internal, delete_canister, upgrade_canister},
     ops::{
+        ic::mgmt::{canister_status, delete_canister, upgrade_canister},
         runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
         storage::{
             directory::{AppDirectoryOps, SubnetDirectoryOps},
@@ -212,7 +212,7 @@ impl CanisterLifecycleOrchestrator {
 
         let wasm = WasmOps::try_get(&entry.role)?;
         let target_hash = wasm.module_hash();
-        let status = canister_status_internal(pid).await?;
+        let status = canister_status(pid).await?;
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
 
         if let Some(parent_pid) = entry.parent_pid {

@@ -23,14 +23,14 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-            $crate::ops::icrc::Icrc10Ops::supported_standards()
+            $crate::workflow::endpoints::icrc10_supported_standards()
         }
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageResponse {
-            $crate::ops::icrc::Icrc21Ops::consent_message(req)
+            $crate::workflow::endpoints::icrc21_canister_call_consent_message(req)
         }
 
         //
@@ -58,12 +58,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_memory_registry() -> ::canic::core::dto::memory::MemoryRegistryView {
-            $crate::ops::runtime::memory::MemoryOps::export_view()
+            $crate::workflow::endpoints::canic_memory_registry()
         }
 
         #[canic_query]
         fn canic_env() -> ::canic::core::dto::env::EnvView {
-            $crate::ops::runtime::env::EnvOps::export_view()
+            $crate::workflow::endpoints::canic_env()
         }
 
         #[canic_query]
@@ -73,12 +73,7 @@ macro_rules! canic_endpoints {
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::log::LogEntryView> {
-            ::canic::core::ops::runtime::log::LogViewOps::page(
-                crate_name,
-                topic,
-                min_level,
-                page,
-            )
+            $crate::workflow::endpoints::canic_log(crate_name, topic, min_level, page)
         }
 
         //
@@ -87,21 +82,21 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_metrics_system() -> ::canic::core::ops::runtime::metrics::SystemMetricsSnapshot {
-            ::canic::core::ops::runtime::metrics::MetricsOps::system_snapshot()
+            $crate::workflow::endpoints::canic_metrics_system()
         }
 
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::IccMetricEntry> {
-            ::canic::core::ops::runtime::metrics::MetricsOps::icc_page(page)
+            $crate::workflow::endpoints::canic_metrics_icc(page)
         }
 
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::HttpMetricEntry> {
-            ::canic::core::ops::runtime::metrics::MetricsOps::http_page(page)
+            $crate::workflow::endpoints::canic_metrics_http(page)
         }
 
         #[canic_query]
@@ -109,7 +104,7 @@ macro_rules! canic_endpoints {
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::TimerMetricEntry>
         {
-            ::canic::core::ops::runtime::metrics::MetricsOps::timer_page(page)
+            $crate::workflow::endpoints::canic_metrics_timer(page)
         }
 
         #[canic_query]
@@ -117,7 +112,7 @@ macro_rules! canic_endpoints {
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::AccessMetricEntry>
         {
-            ::canic::core::ops::runtime::metrics::MetricsOps::access_page(page)
+            $crate::workflow::endpoints::canic_metrics_access(page)
         }
 
         // metrics, but lives in the perf module
@@ -125,7 +120,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_perf(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::perf::PerfEntry> {
-            ::canic::core::ops::perf::PerfOps::snapshot(page)
+            $crate::workflow::endpoints::canic_metrics_perf(page)
         }
 
         // derived_view
@@ -133,10 +128,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::endpoint::EndpointHealthView> {
-            ::canic::core::ops::runtime::metrics::MetricsOps::endpoint_health_page_excluding(
-                page,
-                Some(stringify!(canic_metrics_endpoint_health)),
-            )
+            $crate::workflow::endpoints::canic_metrics_endpoint_health(page)
         }
 
         //
@@ -145,12 +137,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_app_state() -> ::canic::core::dto::state::AppStateView {
-            $crate::ops::storage::state::AppStateOps::export_view()
+            $crate::workflow::endpoints::canic_app_state()
         }
 
         #[canic_query]
         fn canic_subnet_state() -> ::canic::core::dto::state::SubnetStateView {
-            $crate::ops::storage::state::SubnetStateOps::export_view()
+            $crate::workflow::endpoints::canic_subnet_state()
         }
 
         //
@@ -164,7 +156,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::storage::directory::AppDirectoryOps::page(page)
+            $crate::workflow::endpoints::canic_app_directory(page)
         }
 
         #[canic_query]
@@ -174,7 +166,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::ops::storage::directory::SubnetDirectoryOps::page(page)
+            $crate::workflow::endpoints::canic_subnet_directory(page)
         }
 
         //
@@ -185,7 +177,7 @@ macro_rules! canic_endpoints {
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
-            ::canic::core::ops::storage::children::CanisterChildrenOps::page(page)
+            $crate::workflow::endpoints::canic_subnet_canister_children(page)
         }
 
         //
@@ -196,7 +188,7 @@ macro_rules! canic_endpoints {
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
-            $crate::ops::storage::cycles::CycleTrackerOps::page(page)
+            $crate::workflow::endpoints::canic_cycle_tracker(page)
         }
 
         //
@@ -206,7 +198,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
         -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::PublicError> {
-            Ok($crate::ops::storage::scaling::ScalingRegistryOps::export_view())
+            $crate::workflow::endpoints::canic_scaling_registry()
         }
 
         //
@@ -216,7 +208,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
         -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::PublicError> {
-            Ok($crate::ops::storage::sharding::ShardingRegistryOps::export_view())
+            $crate::workflow::endpoints::canic_sharding_registry()
         }
 
         //
@@ -252,8 +244,7 @@ macro_rules! canic_endpoints {
         #[canic_update]
         async fn icts_canister_status()
         -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
-            use $crate::cdk::api::{canister_self, msg_caller};
-            use $crate::ops::ic::canister_status;
+            use $crate::cdk::api::msg_caller;
 
             static ICTS_CALLER: ::std::sync::LazyLock<::candid::Principal> =
                 ::std::sync::LazyLock::new(|| {
@@ -265,9 +256,7 @@ macro_rules! canic_endpoints {
                 return Err("unauthorized".to_string());
             }
 
-            canister_status(canister_self())
-                .await
-                .map_err(|err| err.message)
+            $crate::workflow::endpoints::icts_canister_status().await
         }
     };
 }

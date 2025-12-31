@@ -7,7 +7,7 @@ use crate::{
     },
     log::Level,
     model::memory::log::{Log, RetentionSummary, apply_retention_with_cfg},
-    ops::{adapter::log::log_entry_to_view, config::ConfigOps, view::paginate_vec},
+    ops::{adapter::log::log_entry_to_view, config::ConfigOps, view::paginate::paginate_vec},
 };
 
 ///

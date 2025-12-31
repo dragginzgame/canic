@@ -27,7 +27,7 @@ pub mod config;
 pub mod dispatch;
 pub mod dto;
 pub mod ids;
-pub mod infra;
+pub(crate) mod infra;
 pub mod lifecycle;
 pub mod log;
 pub mod macros;

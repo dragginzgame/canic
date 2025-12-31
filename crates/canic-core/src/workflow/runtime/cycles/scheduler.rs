@@ -5,8 +5,8 @@ use crate::{
     ops::{
         OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
         config::ConfigOps,
-        ic::canister_cycle_balance,
-        rpc::cycles_request,
+        ic::mgmt::canister_cycle_balance,
+        rpc::request::cycles_request,
         runtime::{env::EnvOps, timer::TimerOps},
         storage::cycles::CycleTrackerOps,
     },
