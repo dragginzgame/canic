@@ -7,6 +7,7 @@
 //! No orchestration or business logic should live here.
 
 pub mod endpoints;
+pub mod timer;
 
 ///
 /// EndpointCall

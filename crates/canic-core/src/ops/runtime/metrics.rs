@@ -2,25 +2,10 @@ use crate::{
     api::EndpointCall,
     dto::{
         metrics::{
-            access::{AccessMetricEntry, AccessMetricKind},
-            endpoint::EndpointHealthView,
-            http::HttpMetricEntry,
-            icc::IccMetricEntry,
-            system::SystemMetricEntry,
-            timer::TimerMetricEntry,
+            AccessMetricEntry, AccessMetricKind, EndpointHealthView, HttpMetricEntry,
+            IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
-    },
-    model::metrics::{
-        access::AccessMetrics as ModelAccessMetrics,
-        endpoint::{
-            EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
-            EndpointResultMetrics as ModelEndpointResultMetrics,
-        },
-        http::HttpMetrics,
-        icc::IccMetrics,
-        system::{SystemMetricKind, SystemMetrics},
-        timer::TimerMetrics,
     },
     ops::{
         adapter::metrics::{
@@ -33,7 +18,22 @@ use crate::{
         },
         view::paginate::paginate_vec,
     },
+    storage::metrics::{
+        access::AccessMetrics as ModelAccessMetrics,
+        endpoint::{
+            EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
+            EndpointResultMetrics as ModelEndpointResultMetrics,
+        },
+        http::HttpMetrics,
+        icc::IccMetrics,
+        system::{SystemMetricKind, SystemMetrics},
+        timer::TimerMetrics,
+    },
 };
+
+///
+/// SystemMetricsSnapshot
+///
 
 pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
 

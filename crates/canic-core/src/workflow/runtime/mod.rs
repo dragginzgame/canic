@@ -15,8 +15,8 @@ use crate::{
         adapter::directory::{app_directory_from_view, subnet_directory_from_view},
         runtime::{env::EnvOps, memory::MemoryOps},
         storage::{
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            registry::SubnetRegistryOps,
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            registry::subnet::SubnetRegistryOps,
         },
     },
     workflow,

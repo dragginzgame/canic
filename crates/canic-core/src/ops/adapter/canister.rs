@@ -4,7 +4,7 @@ use crate::{
         canister::{CanisterEntryView, CanisterSummaryView},
         snapshot::{TopologyChildView, TopologyNodeView},
     },
-    model::memory::{CanisterEntry, CanisterSummary},
+    storage::canister::{CanisterEntry, CanisterSummary},
 };
 
 #[must_use]

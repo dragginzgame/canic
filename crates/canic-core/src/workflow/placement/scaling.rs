@@ -10,12 +10,12 @@
 use crate::{
     Error, PublicError, ThisError,
     cdk::utils::time::now_secs,
+    domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
     dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
     ops::{
-        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
+        adapter::placement::worker_entry_from_view, rpc::request::create_canister_request,
         storage::scaling::ScalingRegistryOps,
     },
-    policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
     workflow::placement::PlacementError,
 };
 use candid::Principal;

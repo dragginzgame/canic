@@ -25,16 +25,16 @@ pub mod access;
 pub mod api;
 pub mod config;
 pub mod dispatch;
+pub mod domain;
 pub mod dto;
 pub mod ids;
 pub(crate) mod infra;
 pub mod lifecycle;
 pub mod log;
 pub mod macros;
-pub(crate) mod model;
 pub(crate) mod ops;
 pub mod perf;
-pub mod policy;
+pub(crate) mod storage;
 pub mod workflow;
 
 pub use {
@@ -82,16 +82,16 @@ pub(crate) enum Error {
     Config(#[from] config::ConfigError),
 
     #[error(transparent)]
-    Infra(#[from] infra::InfraError),
+    Domain(#[from] domain::DomainError),
 
     #[error(transparent)]
-    Model(#[from] model::ModelError),
+    Infra(#[from] infra::InfraError),
 
     #[error(transparent)]
     Ops(#[from] ops::OpsError),
 
     #[error(transparent)]
-    Policy(#[from] policy::PolicyError),
+    Storage(#[from] storage::StorageError),
 
     #[error(transparent)]
     Workflow(#[from] workflow::WorkflowError),
@@ -115,12 +115,12 @@ impl Error {
             // ---------------------------------------------------------
             // Policy decisions
             // ---------------------------------------------------------
-            Self::Policy(_) => Self::public_message(ErrorCode::Conflict, "policy rejected"),
+            Self::Domain(_) => Self::public_message(ErrorCode::Conflict, "policy rejected"),
 
             // ---------------------------------------------------------
             // State / invariants
             // ---------------------------------------------------------
-            Self::Model(_) => {
+            Self::Storage(_) => {
                 Self::public_message(ErrorCode::InvariantViolation, "invariant violation")
             }
 
@@ -137,23 +137,6 @@ impl Error {
         PublicError {
             code,
             message: message.to_string(),
-        }
-    }
-
-    fn public_http_status(status: u32) -> PublicError {
-        let code = match status {
-            401 | 403 => ErrorCode::Unauthorized,
-            404 => ErrorCode::NotFound,
-            409 => ErrorCode::Conflict,
-            429 => ErrorCode::ResourceExhausted,
-            400..=499 => ErrorCode::InvalidInput,
-            500..=599 => ErrorCode::Internal,
-            _ => ErrorCode::Internal,
-        };
-
-        PublicError {
-            code,
-            message: format!("http status {status}"),
         }
     }
 }

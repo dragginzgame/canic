@@ -1,6 +1,6 @@
 use crate::{
     dto::directory::{AppDirectoryView, SubnetDirectoryView},
-    model::memory::directory::{AppDirectoryData, SubnetDirectoryData},
+    storage::memory::directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
 };
 
 #[must_use]

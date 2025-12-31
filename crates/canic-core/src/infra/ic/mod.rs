@@ -12,7 +12,7 @@ pub mod mgmt;
 pub mod nns;
 pub mod signature;
 
-use crate::ThisError;
+use crate::infra::prelude::*;
 
 ///
 /// IcInfraError

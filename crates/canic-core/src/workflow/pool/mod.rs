@@ -8,16 +8,16 @@ use crate::{
         mgmt::{CanisterSettings, UpdateSettingsArgs},
         types::TC,
     },
+    domain::policy::{self, pool::PoolPolicyError},
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
-        ic::{create_canister, get_cycles, uninstall_code, update_settings},
+        ic::mgmt::{create_canister, get_cycles, uninstall_code, update_settings},
         runtime::env::EnvOps,
         storage::{
             pool::{PoolOps, pool_controllers},
-            registry::SubnetRegistryOps,
+            registry::subnet::SubnetRegistryOps,
         },
     },
-    policy::{self, pool::PoolPolicyError},
     workflow::prelude::*,
 };
 

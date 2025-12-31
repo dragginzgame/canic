@@ -24,7 +24,7 @@ use crate::{
         },
     },
     workflow::{
-        directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::IcWorkflowError,
         pool::pool_import_canister,
         prelude::*,

@@ -2,13 +2,13 @@ use crate::{
     Error,
     cdk::utils::time::now_secs,
     dto::pool::{CanisterPoolEntryView, CanisterPoolView},
-    model::memory::pool::{
-        CanisterPool, CanisterPoolData, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus,
-    },
     ops::{
         adapter::pool::{canister_pool_entry_to_view, canister_pool_to_view},
         config::ConfigOps,
         prelude::*,
+    },
+    storage::memory::pool::{
+        CanisterPool, CanisterPoolData, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus,
     },
 };
 

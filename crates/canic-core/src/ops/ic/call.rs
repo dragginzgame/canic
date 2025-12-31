@@ -1,6 +1,6 @@
 use crate::{
     cdk::{call::Call as IcCall, candid::Principal},
-    model::metrics::{
+    storage::metrics::{
         icc::IccMetrics,
         system::{SystemMetricKind, SystemMetrics},
     },

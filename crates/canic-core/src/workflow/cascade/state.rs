@@ -11,21 +11,21 @@
 //! - All persistence happens via ops
 //!
 
-use super::{CascadeError, warn_if_large};
 use crate::{
     Error, PublicError,
     dto::snapshot::StateSnapshotView,
     ops::{
-        ic::call_and_decode,
+        ic::mgmt::call_and_decode,
         runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
-            registry::SubnetRegistryOps,
-            state::{AppStateOps, SubnetStateOps},
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            registry::subnet::SubnetRegistryOps,
+            state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
     workflow::{
+        cascade::{CascadeError, warn_if_large},
         prelude::*,
         snapshot::{state_snapshot_debug, state_snapshot_is_empty},
     },

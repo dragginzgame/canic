@@ -1,13 +1,20 @@
-pub(crate) use crate::model::memory::sharding::ShardEntry;
-
 use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
     dto::placement::ShardingRegistryView,
     ids::CanisterRole,
-    model::memory::sharding::{ShardKey, ShardingRegistry, ShardingRegistryData},
     ops::{adapter::placement::shard_entry_to_view, storage::StorageOpsError},
+    storage::memory::sharding::{
+        ShardKey,
+        registry::{ShardingRegistry, ShardingRegistryData},
+    },
 };
+
+///
+/// ShardEntry
+/// Domain data types re-exported for ops consumers.
+///
+pub use crate::storage::memory::sharding::ShardEntry;
 
 ///
 /// ShardingRegistryOps

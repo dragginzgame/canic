@@ -63,7 +63,7 @@ pub mod prelude {
         ids::CanisterRole,
         log,
         log::Topic,
-        ops::{OpsError, ic::call::Call},
+        ops::OpsError,
     };
 }
 

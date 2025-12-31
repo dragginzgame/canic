@@ -1,6 +1,6 @@
 pub mod registry;
 
-use crate::{ThisError, infra::InfraError, infra::ic::IcInfraError};
+use crate::infra::{ic::IcInfraError, prelude::*};
 
 ///
 /// NnsInfraError

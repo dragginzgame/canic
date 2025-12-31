@@ -11,7 +11,9 @@
 use crate::{
     Error, PublicError,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    ops::{ic::call_and_decode, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    ops::{
+        ic::mgmt::call_and_decode, runtime::env::EnvOps, storage::children::CanisterChildrenOps,
+    },
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,

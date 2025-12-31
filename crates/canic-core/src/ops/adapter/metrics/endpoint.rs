@@ -1,6 +1,6 @@
 use crate::{
-    dto::metrics::endpoint::EndpointHealthView,
-    model::metrics::{
+    dto::metrics::EndpointHealthView,
+    storage::metrics::{
         access::AccessMetricKey,
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
     },

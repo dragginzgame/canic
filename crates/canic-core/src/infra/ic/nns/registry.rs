@@ -3,13 +3,8 @@ use crate::{
     cdk::{
         env::nns::NNS_REGISTRY_CANISTER,
         spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
-        types::Principal,
     },
-    infra::InfraError,
-    infra::ic::nns::NnsInfraError,
-    log,
-    log::Topic,
-    ops::ic::call::Call,
+    infra::{ic::nns::NnsInfraError, prelude::*},
 };
 
 ///

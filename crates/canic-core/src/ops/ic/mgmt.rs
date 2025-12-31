@@ -10,8 +10,8 @@ use crate::{
         types::Cycles,
     },
     infra,
-    model::metrics::system::{SystemMetricKind, SystemMetrics},
     ops::prelude::*,
+    storage::metrics::system::{SystemMetricKind, SystemMetrics},
 };
 use candid::{CandidType, Principal, utils::ArgumentEncoder};
 

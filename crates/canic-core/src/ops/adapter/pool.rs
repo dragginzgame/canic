@@ -1,6 +1,6 @@
 use crate::{
     dto::pool::{CanisterPoolEntryView, CanisterPoolStatusView, CanisterPoolView},
-    model::memory::pool::{
+    storage::memory::pool::{
         CanisterPoolData, CanisterPoolHeader, CanisterPoolState, CanisterPoolStatus,
     },
 };

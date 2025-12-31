@@ -4,11 +4,11 @@ use crate::{
         page::{Page, PageRequest},
     },
     ids::CanisterRole,
-    model::memory::directory::{SubnetDirectory, SubnetDirectoryData},
     ops::{
         adapter::directory::{subnet_directory_from_view, subnet_directory_to_view},
-        view::paginate_vec,
+        view::paginate::paginate_vec,
     },
+    storage::memory::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
 };
 use candid::Principal;
 

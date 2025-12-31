@@ -1,4 +1,4 @@
-use crate::{dto::metrics::icc::IccMetricEntry, model::metrics::icc::IccMetricKey};
+use crate::{dto::metrics::IccMetricEntry, storage::metrics::icc::IccMetricKey};
 
 #[must_use]
 pub fn icc_metrics_to_view(

@@ -1,16 +1,13 @@
 use crate::{
     Error, ThisError,
     dto::state::{AppCommand, AppStateView},
-    model::memory::state::{AppMode, AppState},
     ops::{
         adapter::state::{app_state_from_view, app_state_to_view},
         prelude::*,
         storage::state::StateOpsError,
     },
+    storage::memory::state::app::{AppMode, AppState, AppStateData},
 };
-
-#[cfg(test)]
-use crate::model::memory::state::AppStateData;
 
 ///
 /// AppStateOpsError
@@ -62,7 +59,6 @@ impl AppStateOps {
         Ok(())
     }
 
-    #[cfg(test)]
     pub(crate) fn import(data: AppStateData) {
         AppState::import(data);
     }

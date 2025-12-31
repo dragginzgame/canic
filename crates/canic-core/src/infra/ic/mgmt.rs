@@ -12,10 +12,8 @@ use crate::{
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
             UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
         },
-        types::Cycles,
     },
-    infra::ic::call::Call,
-    infra::{InfraError, ic::IcInfraError},
+    infra::{ic::IcInfraError, prelude::*},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 

@@ -6,13 +6,13 @@ use crate::{
         snapshot::TopologyChildView,
     },
     ids::CanisterRole,
-    model::memory::children::{CanisterChildren, CanisterChildrenData},
     ops::{
         adapter::canister::{canister_summary_from_topology_child, canister_summary_to_view},
         runtime::env::EnvOps,
-        storage::registry::SubnetRegistryOps,
-        view::clamp_page_request,
+        storage::registry::subnet::SubnetRegistryOps,
+        view::paginate::clamp_page_request,
     },
+    storage::memory::children::{CanisterChildren, CanisterChildrenData},
 };
 
 ///
