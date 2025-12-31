@@ -81,38 +81,38 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_metrics_system() -> ::canic::core::ops::runtime::metrics::SystemMetricsSnapshot {
+        fn canic_metrics_system() -> ::canic::core::api::runtime::metrics::SystemMetricsSnapshot {
             $crate::api::endpoints::canic_metrics_system()
         }
 
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::IccMetricEntry> {
-            $crate::workflow::endpoints::canic_metrics_icc(page)
+        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::IccMetricEntry> {
+            $crate::api::endpoints::canic_metrics_icc(page)
         }
 
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::HttpMetricEntry> {
-            $crate::workflow::endpoints::canic_metrics_http(page)
+        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::HttpMetricEntry> {
+            $crate::api::endpoints::canic_metrics_http(page)
         }
 
         #[canic_query]
         fn canic_metrics_timer(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::TimerMetricEntry>
+        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::TimerMetricEntry>
         {
-            $crate::workflow::endpoints::canic_metrics_timer(page)
+            $crate::api::endpoints::canic_metrics_timer(page)
         }
 
         #[canic_query]
         fn canic_metrics_access(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::runtime::metrics::AccessMetricEntry>
+        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::AccessMetricEntry>
         {
-            $crate::workflow::endpoints::canic_metrics_access(page)
+            $crate::api::endpoints::canic_metrics_access(page)
         }
 
         // metrics, but lives in the perf module
@@ -120,7 +120,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_perf(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::ops::perf::PerfEntry> {
-            $crate::workflow::endpoints::canic_metrics_perf(page)
+            $crate::api::endpoints::canic_metrics_perf(page)
         }
 
         // derived_view
@@ -128,7 +128,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::EndpointHealthView> {
-            $crate::workflow::endpoints::canic_metrics_endpoint_health(page)
+            $crate::api::endpoints::canic_metrics_endpoint_health(page)
         }
 
         //
@@ -137,12 +137,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_app_state() -> ::canic::core::dto::state::AppStateView {
-            $crate::workflow::endpoints::canic_app_state()
+            $crate::api::endpoints::canic_app_state()
         }
 
         #[canic_query]
         fn canic_subnet_state() -> ::canic::core::dto::state::SubnetStateView {
-            $crate::workflow::endpoints::canic_subnet_state()
+            $crate::api::endpoints::canic_subnet_state()
         }
 
         //
@@ -156,7 +156,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::workflow::endpoints::canic_app_directory(page)
+            $crate::api::endpoints::canic_app_directory(page)
         }
 
         #[canic_query]
@@ -166,7 +166,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::workflow::endpoints::canic_subnet_directory(page)
+            $crate::api::endpoints::canic_subnet_directory(page)
         }
 
         //
@@ -177,7 +177,7 @@ macro_rules! canic_endpoints {
         fn canic_subnet_canister_children(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
-            $crate::workflow::endpoints::canic_subnet_canister_children(page)
+            $crate::api::endpoints::canic_subnet_canister_children(page)
         }
 
         //
@@ -188,7 +188,7 @@ macro_rules! canic_endpoints {
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
-            $crate::workflow::endpoints::canic_cycle_tracker(page)
+            $crate::api::endpoints::canic_cycle_tracker(page)
         }
 
         //
@@ -198,7 +198,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
         -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_scaling_registry()
+            $crate::api::endpoints::canic_scaling_registry()
         }
 
         //
@@ -208,7 +208,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
         -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_sharding_registry()
+            $crate::api::endpoints::canic_sharding_registry()
         }
 
         //

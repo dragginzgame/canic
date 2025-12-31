@@ -1,0 +1,47 @@
+use crate::{api::EndpointCall, ops};
+
+///
+/// EndpointResultMetrics
+/// Endpoint result metrics exposed to user code and macros
+///
+
+pub struct EndpointResultMetrics;
+
+impl EndpointResultMetrics {
+    pub fn increment_ok(call: EndpointCall) {
+        ops::runtime::metrics::EndpointResultMetrics::increment_ok(call);
+    }
+
+    pub fn increment_err(call: EndpointCall) {
+        ops::runtime::metrics::EndpointResultMetrics::increment_err(call);
+    }
+}
+
+///
+/// EndpointAttemptMetrics
+///
+
+pub struct EndpointAttemptMetrics;
+
+impl EndpointAttemptMetrics {
+    pub fn increment_attempted(call: EndpointCall) {
+        ops::runtime::metrics::EndpointAttemptMetrics::increment_attempted(call);
+    }
+
+    pub fn increment_completed(call: EndpointCall) {
+        ops::runtime::metrics::EndpointAttemptMetrics::increment_completed(call);
+    }
+}
+
+///
+/// AccessMetrics
+/// (access / denial metrics)
+///
+
+pub struct AccessMetrics;
+
+impl AccessMetrics {
+    pub fn increment(call: EndpointCall, kind: crate::dto::metrics::AccessMetricKind) {
+        ops::runtime::metrics::AccessMetrics::increment(call, kind);
+    }
+}

@@ -12,6 +12,7 @@ use crate::{
     Error, ThisError,
     cdk::types::BoundedString64,
     config::schema::ScalePool,
+    domain::policy::PolicyError,
     ids::CanisterRole,
     ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
 };
@@ -32,7 +33,7 @@ pub enum ScalingPolicyError {
 
 impl From<ScalingPolicyError> for Error {
     fn from(err: ScalingPolicyError) -> Self {
-        crate::policy::PolicyError::from(err).into()
+        PolicyError::from(err).into()
     }
 }
 
