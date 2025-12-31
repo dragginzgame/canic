@@ -81,37 +81,35 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_metrics_system() -> ::canic::core::api::runtime::metrics::SystemMetricsSnapshot {
+        fn canic_metrics_system() -> Vec<::canic::core::dto::metrics::SystemMetricsEntry> {
             $crate::api::endpoints::canic_metrics_system()
         }
 
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::IccMetricEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::IccMetricEntry> {
             $crate::api::endpoints::canic_metrics_icc(page)
         }
 
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::HttpMetricEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::HttpMetricEntry> {
             $crate::api::endpoints::canic_metrics_http(page)
         }
 
         #[canic_query]
         fn canic_metrics_timer(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::TimerMetricEntry>
-        {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::TimerMetricEntry> {
             $crate::api::endpoints::canic_metrics_timer(page)
         }
 
         #[canic_query]
         fn canic_metrics_access(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::api::runtime::metrics::AccessMetricEntry>
-        {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::AccessMetricEntry> {
             $crate::api::endpoints::canic_metrics_access(page)
         }
 

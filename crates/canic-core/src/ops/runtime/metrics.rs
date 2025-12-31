@@ -32,12 +32,6 @@ use crate::{
 };
 
 ///
-/// SystemMetricsSnapshot
-///
-
-pub type SystemMetricsSnapshot = Vec<SystemMetricEntry>;
-
-///
 /// AccessMetrics
 ///
 
@@ -103,7 +97,7 @@ impl MetricsOps {
 
     /// System-level action counters without pagination.
     #[must_use]
-    pub fn system_snapshot() -> SystemMetricsSnapshot {
+    pub fn system_snapshot() -> Vec<SystemMetricEntry> {
         let raw = SystemMetrics::export_raw();
         let mut entries = system_metrics_to_view(raw);
 
