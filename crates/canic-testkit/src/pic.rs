@@ -1,6 +1,6 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
-    Error,
+    PublicError,
     core::{
         dto::{
             abi::v1::CanisterInitPayload,
@@ -102,7 +102,7 @@ impl Pic {
         &self,
         role: CanisterRole,
         wasm: Vec<u8>,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, PublicError> {
         // Create and fund the canister.
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, 1_000_000_000_000);
@@ -124,7 +124,7 @@ impl Pic {
         wasm: Vec<u8>,
         app_directory: AppDirectoryView,
         subnet_directory: SubnetDirectoryView,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, PublicError> {
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, 1_000_000_000_000);
 
@@ -140,7 +140,7 @@ impl Pic {
         canister_id: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, Error>
+    ) -> Result<T, PublicError>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
@@ -149,7 +149,10 @@ impl Pic {
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
-            .map_err(|e| Error::test(e.to_string()))?;
+            .map_err(|_| PublicError {
+                code: canic::core::ErrorCode::Internal,
+                message: "test error".to_string(),
+            })?;
 
         decode_one(&result).map_err(Into::into)
     }
@@ -160,7 +163,7 @@ impl Pic {
         canister_id: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, Error>
+    ) -> Result<T, PublicError>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
@@ -169,7 +172,10 @@ impl Pic {
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)
-            .map_err(|e| Error::test(e.to_string()))?;
+            .map_err(|_| PublicError {
+                code: canic::core::ErrorCode::Internal,
+                message: "test error".to_string(),
+            })?;
 
         decode_one(&result).map_err(Into::into)
     }
@@ -188,7 +194,7 @@ impl Pic {
 /// - Directory-dependent logic is opt-in via `install_args_with_directories`.
 /// - Root-provisioned installs will populate directories via cascade.
 ///
-fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
+fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
     let args = if role.is_root() {
         // Provide a deterministic subnet principal for PocketIC runs.
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
@@ -223,7 +229,7 @@ fn install_args_with_directories(
     role: CanisterRole,
     app_directory: AppDirectoryView,
     subnet_directory: SubnetDirectoryView,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>, PublicError> {
     let args = if role.is_root() {
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
         encode_one(SubnetIdentity::Manual(subnet_pid))

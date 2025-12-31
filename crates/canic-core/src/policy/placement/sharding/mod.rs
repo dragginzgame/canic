@@ -22,6 +22,6 @@ pub enum ShardingPolicyError {
 
 impl From<ShardingPolicyError> for Error {
     fn from(err: ShardingPolicyError) -> Self {
-        PolicyError::ShardingPolicyError(err).into()
+        PolicyError::ShardingPolicy(err).into()
     }
 }

@@ -12,5 +12,5 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum ModelError {
     #[error(transparent)]
-    MemoryError(#[from] MemoryError),
+    Memory(#[from] MemoryError),
 }

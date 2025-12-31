@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use canic::{Error, prelude::*};
+use canic::{PublicError, prelude::*};
 use canic_internal::canister::TEST;
 
 //
@@ -32,7 +32,7 @@ async fn canic_upgrade() {}
 
 /// main test endpoint for things that can fail
 #[canic_update]
-async fn test() -> Result<(), Error> {
+async fn test() -> Result<(), PublicError> {
     Ok(())
 }
 

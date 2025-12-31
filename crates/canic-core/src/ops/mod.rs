@@ -80,14 +80,14 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum OpsError {
     #[error(transparent)]
-    ConfigOpsError(#[from] config::ConfigOpsError),
+    ConfigOps(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
-    RpcOpsError(#[from] rpc::RpcOpsError),
+    RpcOps(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]
-    RuntimeOpsError(#[from] runtime::RuntimeOpsError),
+    RuntimeOps(#[from] runtime::RuntimeOpsError),
 
     #[error(transparent)]
-    StorageOpsError(#[from] storage::StorageOpsError),
+    StorageOps(#[from] storage::StorageOpsError),
 }

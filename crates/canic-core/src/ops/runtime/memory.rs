@@ -26,7 +26,7 @@ pub enum MemoryOpsError {
 
 impl From<MemoryOpsError> for Error {
     fn from(err: MemoryOpsError) -> Self {
-        RuntimeOpsError::MemoryOpsError(err).into()
+        RuntimeOpsError::MemoryOps(err).into()
     }
 }
 

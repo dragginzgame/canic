@@ -6,7 +6,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{
-    Error,
+    PublicError,
     core::{
         access::rule::is_prime_subnet,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
@@ -92,14 +92,14 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
 /// create_blank
 /// Controller-only helper for local Canic testing.
 #[canic_update(guard(app), auth_any(is_controller), rule(is_prime_subnet))]
-async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+async fn create_blank() -> Result<CreateCanisterResponse, PublicError> {
     create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
 }
 
 /// stress_perf
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
 #[canic_update(guard(app), auth_any(is_controller))]
-async fn stress_perf(rounds: u32) -> Result<u64, Error> {
+async fn stress_perf(rounds: u32) -> Result<u64, PublicError> {
     let mut acc: u64 = 0;
     let mut map: HashMap<u64, u64> = HashMap::with_capacity(rounds as usize);
 

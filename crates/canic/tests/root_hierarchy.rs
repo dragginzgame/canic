@@ -1,5 +1,5 @@
 use canic::{
-    Error,
+    PublicError,
     cdk::types::{Principal, TC},
     core::{
         dto::{
@@ -339,7 +339,7 @@ fn worker_topology_cascades_through_parent() {
         .count();
 
     // Create a worker via the scale_hub canister.
-    let worker_pid: Result<Result<Principal, Error>, Error> =
+    let worker_pid: Result<Result<Principal, PublicError>, PublicError> =
         pic.update_call(scale_hub_pid, "create_worker", ());
     let _worker_pid = worker_pid
         .expect("create worker via scale_hub (transport)")

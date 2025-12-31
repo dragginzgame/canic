@@ -45,7 +45,7 @@ pub enum ShardingRegistryOpsError {
 
 impl From<ShardingRegistryOpsError> for Error {
     fn from(err: ShardingRegistryOpsError) -> Self {
-        StorageOpsError::ShardingRegistryOpsError(err).into()
+        StorageOpsError::ShardingRegistryOps(err).into()
     }
 }
 

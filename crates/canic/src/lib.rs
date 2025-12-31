@@ -11,7 +11,7 @@
 // -----------------------------------------------------------------------------
 // Re-exports
 // -----------------------------------------------------------------------------
-pub use canic_core::{Error, build, build_root, log, log::Level, start, start_root};
+pub use canic_core::{PublicError, build, build_root, log, log::Level, start, start_root};
 pub use canic_memory::{
     eager_init, eager_static, ic_memory, ic_memory_range, impl_storable_bounded,
     impl_storable_unbounded,
@@ -46,7 +46,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod prelude {
     pub use crate::{
-        Error as CanicError,
+        PublicError,
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,

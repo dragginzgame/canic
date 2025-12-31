@@ -13,7 +13,7 @@
 
 use super::warn_if_large;
 use crate::{
-    Error,
+    Error, PublicError,
     dto::snapshot::StateSnapshotView,
     ops::{
         ic::call_and_decode,
@@ -163,6 +163,13 @@ async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<
     let debug = state_snapshot_debug(snapshot);
     log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
 
-    call_and_decode::<Result<(), Error>>(*pid, crate::ops::rpc::methods::CANIC_SYNC_STATE, snapshot)
-        .await?
+    let result = call_and_decode::<Result<(), PublicError>>(
+        *pid,
+        crate::ops::rpc::methods::CANIC_SYNC_STATE,
+        snapshot,
+    )
+    .await?;
+
+    // Boundary: convert PublicError from child call into internal Error.
+    result.map_err(Error::from)
 }

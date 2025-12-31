@@ -15,13 +15,13 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum RuntimeOpsError {
     #[error(transparent)]
-    EnvOpsError(#[from] env::EnvOpsError),
+    EnvOps(#[from] env::EnvOpsError),
 
     #[error(transparent)]
-    MemoryOpsError(#[from] memory::MemoryOpsError),
+    MemoryOps(#[from] memory::MemoryOpsError),
 
     #[error(transparent)]
-    WasmOpsError(#[from] wasm::WasmOpsError),
+    WasmOps(#[from] wasm::WasmOpsError),
 }
 
 impl From<RuntimeOpsError> for Error {

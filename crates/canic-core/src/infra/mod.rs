@@ -27,5 +27,5 @@ pub mod prelude {
 #[derive(Debug, ThisError)]
 pub enum InfraError {
     #[error(transparent)]
-    IcInfraError(#[from] ic::IcInfraError),
+    IcInfra(#[from] ic::IcInfraError),
 }

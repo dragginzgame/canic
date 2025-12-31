@@ -28,7 +28,7 @@ pub enum WasmOpsError {
 
 impl From<WasmOpsError> for Error {
     fn from(err: WasmOpsError) -> Self {
-        RuntimeOpsError::WasmOpsError(err).into()
+        RuntimeOpsError::WasmOps(err).into()
     }
 }
 

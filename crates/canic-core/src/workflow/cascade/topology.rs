@@ -9,7 +9,7 @@
 //! and abort the cascade rather than continuing with partial data.
 
 use crate::{
-    Error,
+    Error, PublicError,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
     ops::{ic::call_and_decode, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
     workflow::{
@@ -145,12 +145,15 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
 //
 
 async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshotView) -> Result<(), Error> {
-    call_and_decode::<Result<(), Error>>(
+    let result = call_and_decode::<Result<(), PublicError>>(
         *pid,
         crate::ops::rpc::methods::CANIC_SYNC_TOPOLOGY,
         snapshot,
     )
-    .await?
+    .await?;
+
+    // Boundary: convert PublicError from child call into internal Error.
+    result.map_err(Error::from)
 }
 
 //

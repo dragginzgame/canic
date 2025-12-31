@@ -2,7 +2,7 @@ use std::{env, fs, io, path::PathBuf};
 
 use candid::{Decode, Principal, encode_one};
 use canic::{
-    Error,
+    PublicError,
     core::{
         dto::{
             registry::SubnetRegistryView,
@@ -138,8 +138,8 @@ fn new_canister_inherits_app_state_after_enable() {
             encode_one(AppCommand::Start).unwrap(),
         )
         .expect("call canic_app");
-    let app_result: Result<(), Error> =
-        Decode!(&res, Result<(), Error>).expect("decode canic_app response");
+    let app_result: Result<(), PublicError> =
+        Decode!(&res, Result<(), PublicError>).expect("decode canic_app response");
     if let Err(err) = app_result {
         panic!("canic_app failed: {err}");
     }
@@ -153,8 +153,9 @@ fn new_canister_inherits_app_state_after_enable() {
             encode_one(()).unwrap(),
         )
         .expect("call create_blank");
-    let create_result: Result<CreateCanisterResponse, Error> =
-        Decode!(&res, Result<CreateCanisterResponse, Error>).expect("decode create_blank response");
+    let create_result: Result<CreateCanisterResponse, PublicError> =
+        Decode!(&res, Result<CreateCanisterResponse, PublicError>)
+            .expect("decode create_blank response");
     let new_pid = create_result.expect("create_blank failed").new_canister_pid;
 
     for _ in 0..10 {

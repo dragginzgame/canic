@@ -8,7 +8,7 @@ macro_rules! canic_endpoints_root {
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_app(
             cmd: ::canic::core::dto::state::AppCommand,
-        ) -> Result<(), ::canic::Error> {
+        ) -> Result<(), ::canic::PublicError> {
             ::canic::core::workflow::app::AppStateOrchestrator::apply_command(cmd).await
         }
 
@@ -16,7 +16,7 @@ macro_rules! canic_endpoints_root {
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
-        ) -> Result<::canic::core::dto::rpc::UpgradeCanisterResponse, ::canic::Error> {
+        ) -> Result<::canic::core::dto::rpc::UpgradeCanisterResponse, ::canic::PublicError> {
             let res = $crate::ops::rpc::upgrade_canister_request(canister_pid).await?;
 
             Ok(res)
@@ -28,7 +28,7 @@ macro_rules! canic_endpoints_root {
         #[canic_update(auth_any(::canic::core::access::auth::is_registered_to_subnet))]
         async fn canic_response(
             request: ::canic::core::dto::rpc::Request,
-        ) -> Result<::canic::core::dto::rpc::Response, ::canic::Error> {
+        ) -> Result<::canic::core::dto::rpc::Response, ::canic::PublicError> {
             let response = $crate::workflow::rpc::handler::response(request).await?;
 
             Ok(response)
@@ -42,7 +42,7 @@ macro_rules! canic_endpoints_root {
         ))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
-        ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::Error> {
+        ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::PublicError> {
             $crate::ops::ic::canister_status(pid).await
         }
 
@@ -51,7 +51,7 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
-        async fn canic_config() -> Result<String, ::canic::Error> {
+        async fn canic_config() -> Result<String, ::canic::PublicError> {
             $crate::ops::config::ConfigOps::export_toml()
         }
 
@@ -75,14 +75,14 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         async fn canic_pool_list()
-        -> Result<::canic::core::dto::pool::CanisterPoolView, ::canic::Error> {
+        -> Result<::canic::core::dto::pool::CanisterPoolView, ::canic::PublicError> {
             Ok($crate::ops::storage::pool::PoolOps::export_view())
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_pool_admin(
             cmd: ::canic::core::dto::pool::PoolAdminCommand,
-        ) -> Result<::canic::core::dto::pool::PoolAdminResponse, ::canic::Error> {
+        ) -> Result<::canic::core::dto::pool::PoolAdminResponse, ::canic::PublicError> {
             ::canic::core::workflow::pool::admin::handle_admin(cmd).await
         }
     };
@@ -99,14 +99,14 @@ macro_rules! canic_endpoints_nonroot {
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_state(
             snapshot: ::canic::core::dto::snapshot::StateSnapshotView,
-        ) -> Result<(), ::canic::Error> {
+        ) -> Result<(), ::canic::PublicError> {
             $crate::workflow::cascade::state::nonroot_cascade_state(&snapshot).await
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
             snapshot: ::canic::core::dto::snapshot::TopologySnapshotView,
-        ) -> Result<(), ::canic::Error> {
+        ) -> Result<(), ::canic::PublicError> {
             $crate::workflow::cascade::topology::nonroot_cascade_topology(&snapshot).await
         }
     };

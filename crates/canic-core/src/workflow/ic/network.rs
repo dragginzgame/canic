@@ -1,12 +1,6 @@
 use crate::{
-    Error,
-    cdk::{
-        env::nns::NNS_REGISTRY_CANISTER,
-        spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
-    },
-    log,
+    Error, cdk::api::canister_self, infra::ic::nns::registry::get_subnet_for_canister, log,
     log::Topic,
-    ops::ic::call::Call,
 };
 use candid::Principal;
 
@@ -15,15 +9,8 @@ use candid::Principal;
 //
 
 /// Queries the NNS registry for the subnet that this canister belongs to and records ICC metrics.
-pub async fn try_get_current_subnet_pid() -> Result<Option<Principal>, Error> {
-    let request = GetSubnetForCanisterRequest::new(crate::cdk::api::canister_self());
-
-    let subnet_id_opt = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-        .with_arg(request)
-        .await?
-        .candid::<GetSubnetForCanisterResponse>()?
-        .map_err(Error::CallFailed)?
-        .subnet_id;
+pub(crate) async fn try_get_current_subnet_pid() -> Result<Option<Principal>, Error> {
+    let subnet_id_opt = get_subnet_for_canister(canister_self()).await?;
 
     if let Some(subnet_id) = subnet_id_opt {
         log!(

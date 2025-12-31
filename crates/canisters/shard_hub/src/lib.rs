@@ -7,7 +7,7 @@
 
 use candid::Principal;
 use canic::{
-    Error,
+    PublicError,
     core::{
         policy::placement::sharding::policy::ShardingPolicy,
         workflow::placement::sharding::assign::ShardingWorkflow,
@@ -34,7 +34,7 @@ async fn canic_upgrade() {}
 
 // don't need authentication as this is a local canic test
 #[canic_update]
-async fn register_principal(pid: Principal) -> Result<Principal, Error> {
+async fn register_principal(pid: Principal) -> Result<Principal, PublicError> {
     let shard_pid = ShardingWorkflow::assign_to_pool(POOL_NAME, pid.to_string()).await?;
 
     Ok(shard_pid)
@@ -42,7 +42,7 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 
 /// Dry-run the player registration decision using config-driven policy.
 #[canic_query]
-async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
+async fn plan_register_principal(pid: Principal) -> Result<String, PublicError> {
     let plan = ShardingPolicy::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
     Ok(format!("{:?}", plan.state))
