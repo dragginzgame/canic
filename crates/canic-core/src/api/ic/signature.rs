@@ -2,7 +2,7 @@ use crate::{Error, PublicError, infra};
 
 ///
 /// Signature
-/// Workflow-facing wrappers over IC signature helpers for endpoints.
+/// wrappers over IC signature helpers for endpoints
 ///
 
 pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), PublicError> {

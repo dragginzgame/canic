@@ -514,9 +514,9 @@ mod expand {
         let result_metrics = if returns_result {
             quote! {
                 if out.is_ok() {
-                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_ok(#call);
+                    ::canic::core::api::runtime::metrics::EndpointResultMetrics::increment_ok(#call);
                 } else {
-                    ::canic::core::ops::runtime::metrics::EndpointResultMetrics::increment_err(#call);
+                    ::canic::core::api::runtime::metrics::EndpointResultMetrics::increment_err(#call);
                 }
             }
         } else {
@@ -526,7 +526,7 @@ mod expand {
         quote! {
             {
                 let out = #dispatch_call;
-                ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_completed(#call);
+                ::canic::core::api::runtime::metrics::EndpointAttemptMetrics::increment_completed(#call);
                 #result_metrics
                 out
             }

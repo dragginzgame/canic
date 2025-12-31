@@ -14,7 +14,8 @@ pub enum DomainError {
 }
 
 impl DomainError {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
+    #[allow(clippy::unused_self)]
     fn public(&self) -> PublicError {
         unreachable!("DomainError::public is not yet semantically diverse");
     }
