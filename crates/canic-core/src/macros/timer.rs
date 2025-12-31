@@ -84,7 +84,7 @@ macro_rules! timer_interval_guarded {
         let init_label = concat!(module_path!(), "::", stringify!($init_func));
         let tick_label = concat!(module_path!(), "::", stringify!($tick_func));
 
-        $crate::ops::ic::timer::TimerOps::set_guarded_interval(
+        $crate::api::timer::TimerOps::set_guarded_interval(
             &$slot,
             $init_delay,
             init_label,

@@ -13,7 +13,7 @@ use crate::{
         memory::MemoryRegistryView,
         metrics::{
             AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
-            TimerMetricEntry,
+            SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
         placement::{ScalingRegistryView, ShardingRegistryView},
@@ -27,12 +27,7 @@ use crate::{
     log::Level,
     ops::{
         icrc::{Icrc10Ops, Icrc21Ops},
-        runtime::{
-            env::EnvOps,
-            log::LogViewOps,
-            memory::MemoryOps,
-            metrics::{MetricsOps, SystemMetricsSnapshot},
-        },
+        runtime::{env::EnvOps, log::LogViewOps, memory::MemoryOps, metrics::MetricsOps},
         storage::{
             children::CanisterChildrenOps,
             cycles::CycleTrackerOps,
@@ -91,7 +86,7 @@ pub fn canic_log(
 //
 
 #[must_use]
-pub fn canic_metrics_system() -> SystemMetricsSnapshot {
+pub fn canic_metrics_system() -> Vec<SystemMetricEntry> {
     MetricsOps::system_snapshot()
 }
 

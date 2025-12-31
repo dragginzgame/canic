@@ -8,7 +8,9 @@ use crate::{cdk::call::Call as IcCall, infra::prelude::*};
 pub struct Call;
 
 impl Call {
+    /// not used yet
     #[must_use]
+    #[expect(dead_code)]
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> IcCall<'_, '_> {
         let canister_id: Principal = canister_id.into();
 
