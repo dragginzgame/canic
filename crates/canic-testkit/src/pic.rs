@@ -145,7 +145,8 @@ impl Pic {
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let bytes: Vec<u8> = encode_args(args)?;
+        let bytes: Vec<u8> = encode_args(args)
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
@@ -154,7 +155,8 @@ impl Pic {
                 message: "test error".to_string(),
             })?;
 
-        decode_one(&result).map_err(Into::into)
+        decode_one(&result)
+            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
     }
 
     /// Generic query call helper.
@@ -168,7 +170,8 @@ impl Pic {
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let bytes: Vec<u8> = encode_args(args)?;
+        let bytes: Vec<u8> = encode_args(args)
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)
@@ -177,7 +180,8 @@ impl Pic {
                 message: "test error".to_string(),
             })?;
 
-        decode_one(&result).map_err(Into::into)
+        decode_one(&result)
+            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
     }
 }
 
@@ -199,6 +203,7 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
         // Provide a deterministic subnet principal for PocketIC runs.
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
         encode_one(SubnetIdentity::Manual(subnet_pid))
+            .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
     } else {
         // Provide a minimal, deterministic env payload for standalone installs.
         let root_pid = Principal::from_slice(&[0xBB; 29]);
@@ -220,6 +225,7 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
             subnet_directory: SubnetDirectoryView(Vec::new()),
         };
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
     }?;
 
     Ok(args)
@@ -233,6 +239,7 @@ fn install_args_with_directories(
     let args = if role.is_root() {
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
         encode_one(SubnetIdentity::Manual(subnet_pid))
+            .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
     } else {
         let root_pid = Principal::from_slice(&[0xBB; 29]);
         let subnet_pid = Principal::from_slice(&[0xAA; 29]);
@@ -250,6 +257,7 @@ fn install_args_with_directories(
             subnet_directory,
         };
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
     }?;
 
     Ok(args)

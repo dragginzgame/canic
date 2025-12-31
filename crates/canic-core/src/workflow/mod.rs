@@ -1,5 +1,5 @@
 pub mod app;
-pub mod bootstrap;
+pub(crate) mod bootstrap;
 pub mod cascade;
 pub mod command;
 pub mod directory;
@@ -9,7 +9,7 @@ pub mod orchestrator;
 pub mod placement;
 pub mod pool;
 pub mod rpc;
-pub mod runtime;
+pub(crate) mod runtime;
 pub mod snapshot;
 
 ///

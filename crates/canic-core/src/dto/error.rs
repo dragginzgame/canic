@@ -1,4 +1,5 @@
 use crate::dto::prelude::*;
+use std::fmt::{self, Display};
 
 ///
 /// Error
@@ -10,8 +11,14 @@ pub struct Error {
     pub message: String,
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{:?}] {}", self.code, self.message)
+    }
+}
+
 impl Error {
-    #[inline]
+    #[must_use]
     pub const fn new(code: ErrorCode, message: String) -> Self {
         Self { code, message }
     }

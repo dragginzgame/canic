@@ -221,6 +221,7 @@ macro_rules! canic_endpoints {
 
         //
         // ICTS
+        // extra endpoints for each canister as per rem.codes
         //
 
         #[canic_query]
@@ -247,9 +248,10 @@ macro_rules! canic_endpoints {
             ]
         }
 
+        /// ICTS add-on endpoint: returns string errors by design.
         #[canic_update]
         async fn icts_canister_status()
-        -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::PublicError> {
+        -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
             use $crate::cdk::api::{canister_self, msg_caller};
             use $crate::ops::ic::canister_status;
 
@@ -260,10 +262,12 @@ macro_rules! canic_endpoints {
                 });
 
             if msg_caller() != *ICTS_CALLER {
-                return Err(::canic::PublicError::unauthorised())
+                return Err("unauthorized".to_string());
             }
 
-            canister_status(canister_self()).await
+            canister_status(canister_self())
+                .await
+                .map_err(|err| err.message)
         }
     };
 }

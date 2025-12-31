@@ -73,6 +73,7 @@ pub enum AuthError {
 }
 
 impl AuthError {
+    #[must_use]
     pub fn public(&self) -> PublicError {
         PublicError::unauthorized(self.to_string())
     }

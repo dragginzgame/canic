@@ -95,7 +95,9 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 // ===========================================================================
 //
 
-pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), Error> {
+pub(crate) async fn nonroot_cascade_topology_internal(
+    snapshot: &TopologySnapshotView,
+) -> Result<(), Error> {
     EnvOps::deny_root()?;
 
     let self_pid = canister_self();
@@ -138,6 +140,12 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
     Ok(())
 }
 
+pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), PublicError> {
+    nonroot_cascade_topology_internal(snapshot)
+        .await
+        .map_err(PublicError::from)
+}
+
 //
 // ===========================================================================
 //  HELPERS
@@ -153,7 +161,7 @@ async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshotView) -> Resu
     .await?;
 
     // Boundary: convert PublicError from child call into internal Error.
-    result.map_err(Error::from)
+    result.map_err(|err| CascadeError::ChildRejected(err).into())
 }
 
 //

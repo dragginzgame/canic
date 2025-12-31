@@ -83,6 +83,9 @@ pub enum OpsError {
     ConfigOps(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
+    HttpOps(#[from] ic::http::HttpOpsError),
+
+    #[error(transparent)]
     RpcOps(#[from] rpc::RpcOpsError),
 
     #[error(transparent)]

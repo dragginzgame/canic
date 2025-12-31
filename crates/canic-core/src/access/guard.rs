@@ -23,6 +23,7 @@ impl From<GuardError> for Error {
 }
 
 impl GuardError {
+    #[must_use]
     pub fn public(&self) -> PublicError {
         PublicError::unauthorized(self.to_string())
     }

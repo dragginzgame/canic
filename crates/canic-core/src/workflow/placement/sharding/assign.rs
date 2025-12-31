@@ -4,14 +4,14 @@
 //! Depends on [`policy`] for validation and [`registry`] for state.
 
 use crate::{
-    Error,
+    Error, PublicError,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::{rpc::create_canister_request, storage::sharding::ShardingRegistryOps},
+    ops::{rpc::create_canister_request_internal, storage::sharding::ShardingRegistryOps},
     policy::placement::sharding::{
         ShardingPolicyError,
         metrics::pool_metrics,
@@ -43,7 +43,7 @@ impl ShardAllocator {
             .into());
         }
 
-        let response = create_canister_request::<Vec<u8>>(
+        let response = create_canister_request_internal::<Vec<u8>>(
             canister_role,
             CreateCanisterParent::ThisCanister,
             extra_arg,
@@ -71,7 +71,7 @@ pub struct ShardingWorkflow;
 
 impl ShardingWorkflow {
     /// Plan a tenant assignment without mutating state.
-    pub fn plan_assign_to_pool(
+    pub(crate) fn plan_assign_to_pool_internal(
         pool: &str,
         tenant: impl AsRef<str>,
     ) -> Result<ShardingPlanState, Error> {
@@ -80,8 +80,18 @@ impl ShardingWorkflow {
         Ok(plan.state)
     }
 
+    pub fn plan_assign_to_pool(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<ShardingPlanState, PublicError> {
+        Self::plan_assign_to_pool_internal(pool, tenant).map_err(PublicError::from)
+    }
+
     /// Assign a tenant to the given pool, creating a shard if necessary.
-    pub async fn assign_to_pool(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
+    pub(crate) async fn assign_to_pool_internal(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<Principal, Error> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
         Self::assign_with_policy(
             &pool_cfg.canister_role,
@@ -93,8 +103,17 @@ impl ShardingWorkflow {
         .await
     }
 
+    pub async fn assign_to_pool(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<Principal, PublicError> {
+        Self::assign_to_pool_internal(pool, tenant)
+            .await
+            .map_err(PublicError::from)
+    }
+
     /// Assign a tenant according to pool policy and HRW selection.
-    pub async fn assign_with_policy(
+    pub(crate) async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
         tenant: &str,

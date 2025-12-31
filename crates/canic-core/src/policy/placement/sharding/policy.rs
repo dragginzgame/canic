@@ -127,13 +127,16 @@ impl ShardingPolicy {
 
     /// Perform a dry-run plan for assigning a tenant to a shard.
     /// Never creates or mutates registry state.
-    pub fn plan_assign_to_pool(pool: &str, tenant: impl AsRef<str>) -> Result<ShardingPlan, Error> {
+    pub(crate) fn plan_assign_to_pool(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<ShardingPlan, Error> {
         Self::plan_internal(pool, tenant.as_ref(), None)
     }
 
     /// Plan a reassignment for a tenant currently on `donor_pid`, excluding that shard.
     /// Never creates or mutates registry state.
-    pub fn plan_reassign_from_shard(
+    pub(crate) fn plan_reassign_from_shard(
         pool: &str,
         tenant: impl AsRef<str>,
         donor_pid: Principal,

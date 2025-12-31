@@ -12,11 +12,12 @@
 //!
 
 use crate::{
-    Error, ThisError,
+    ThisError,
     cdk::{
         api::{certified_data_set, in_replicated_execution},
         types::Principal,
     },
+    infra::InfraError,
     infra::ic::IcInfraError,
 };
 use ic_canister_sig_creation::{
@@ -43,9 +44,12 @@ pub enum SignatureOpsError {
 
     #[error("invalid signature")]
     InvalidSignature,
+
+    #[error("signature preparation must be called from an update context")]
+    UpdateContextRequired,
 }
 
-impl From<SignatureOpsError> for Error {
+impl From<SignatureOpsError> for InfraError {
     fn from(err: SignatureOpsError) -> Self {
         IcInfraError::from(err).into()
     }
@@ -61,7 +65,7 @@ impl From<SignatureOpsError> for Error {
 /// - `message` is the data being signed.
 /// - must be called from an update context
 ///
-pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
+pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InfraError> {
     ensure_update_context()?;
 
     let sig_inputs = CanisterSigInputs {
@@ -104,7 +108,7 @@ pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
 /// High-level convenience helper that combines [`prepare`] and [`get`]
 /// in one call. Suitable for simple use-cases where you don’t split update/query.
 ///
-pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, InfraError> {
     prepare(domain, seed, message)?;
 
     Ok(get(domain, seed, message))
@@ -126,7 +130,7 @@ pub fn verify(
     message: &[u8],
     signature_cbor: &[u8],
     issuer_pid: Principal,
-) -> Result<(), Error> {
+) -> Result<(), InfraError> {
     // 1️⃣ Parse CBOR
     parse_canister_sig_cbor(signature_cbor).map_err(|_| SignatureOpsError::CannotParseSignature)?;
 
@@ -160,17 +164,16 @@ fn domain_prefixed_message(domain: &[u8], message: &[u8]) -> Vec<u8> {
     buf.push(domain.len() as u8);
     buf.extend_from_slice(domain);
     buf.extend_from_slice(message);
+
     buf
 }
 
-fn ensure_update_context() -> Result<(), Error> {
+fn ensure_update_context() -> Result<(), InfraError> {
     if in_replicated_execution() {
         return Ok(());
     }
 
-    Err(Error::custom(
-        "signature preparation must be called from an update context",
-    ))
+    Err(SignatureOpsError::UpdateContextRequired.into())
 }
 
 ///

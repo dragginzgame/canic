@@ -12,6 +12,9 @@ use crate::{Error, ThisError, workflow::WorkflowError};
 pub enum IcError {
     #[error(transparent)]
     ProvisionOps(#[from] provision::ProvisionError),
+
+    #[error(transparent)]
+    Xrc(#[from] xrc::XrcWorkflowError),
 }
 
 impl From<IcError> for Error {

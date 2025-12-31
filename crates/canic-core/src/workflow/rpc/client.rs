@@ -21,5 +21,5 @@ pub async fn create_canister_request<A>(
 where
     A: CandidType + Send + Sync,
 {
-    rpc::create_canister_request(canister_role, parent, extra).await
+    rpc::create_canister_request_internal(canister_role, parent, extra).await
 }

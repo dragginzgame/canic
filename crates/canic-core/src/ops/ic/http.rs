@@ -1,12 +1,35 @@
 use crate::{
-    Error,
+    Error, ThisError,
+    infra::InfraError,
     infra::ic::http::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
-    ops::{adapter::metrics::http::record_http_request, runtime::metrics::record_http_outcall},
+    ops::{
+        OpsError, adapter::metrics::http::record_http_request,
+        runtime::metrics::record_http_outcall,
+    },
 };
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
+
+///
+/// HttpOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum HttpOpsError {
+    #[error("http error status: {0}")]
+    HttpStatus(u32),
+
+    #[error("http decode failed: {0}")]
+    HttpDecode(String),
+}
+
+impl From<HttpOpsError> for Error {
+    fn from(err: HttpOpsError) -> Self {
+        OpsError::from(err).into()
+    }
+}
 
 ///
 /// Http
@@ -70,18 +93,17 @@ impl Http {
         };
 
         // Perform raw HTTP outcall via infra
-        let res = http_request_raw(&args)
-            .await
-            .map_err(|e| Error::HttpRequest(e.to_string()))?;
+        let res = http_request_raw(&args).await.map_err(InfraError::from)?;
 
         // Validate HTTP status code
         let status: u32 = res.status.0.to_u32().unwrap_or(0);
         if !(200..300).contains(&status) {
-            return Err(Error::HttpStatus(status));
+            return Err(HttpOpsError::HttpStatus(status).into());
         }
 
         // Deserialize response body
-        serde_json::from_slice(&res.body).map_err(Into::into)
+        serde_json::from_slice(&res.body)
+            .map_err(|err| HttpOpsError::HttpDecode(err.to_string()).into())
     }
 
     //
@@ -102,8 +124,8 @@ impl Http {
         Self::record_metrics(args.method, &args.url, label);
 
         // Delegate to infra without additional interpretation
-        http_request_raw(&args)
-            .await
-            .map_err(|e| Error::HttpRequest(e.to_string()))
+        let res = http_request_raw(&args).await.map_err(InfraError::from)?;
+
+        Ok(res)
     }
 }
