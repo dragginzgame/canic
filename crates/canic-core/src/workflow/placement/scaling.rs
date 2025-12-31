@@ -8,11 +8,11 @@
 //! All async and IC interactions live here.
 
 use crate::{
-    Error, ThisError,
+    Error, PublicError, ThisError,
     cdk::utils::time::now_secs,
     dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
     ops::{
-        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
+        adapter::placement::worker_entry_from_view, rpc::create_canister_request_internal,
         storage::scaling::ScalingRegistryOps,
     },
     policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
@@ -44,7 +44,7 @@ pub struct ScalingWorkflow;
 
 impl ScalingWorkflow {
     /// Create a new worker canister in the given pool, if policy allows.
-    pub async fn create_worker(pool: &str) -> Result<Principal, Error> {
+    pub(crate) async fn create_worker_internal(pool: &str) -> Result<Principal, Error> {
         // 1. Evaluate policy
         let ScalingPlan {
             should_spawn,
@@ -63,9 +63,10 @@ impl ScalingWorkflow {
         let role = entry_plan.canister_role.clone();
 
         // 3. Create the canister
-        let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
-            .await?
-            .new_canister_pid;
+        let pid =
+            create_canister_request_internal::<()>(&role, CreateCanisterParent::ThisCanister, None)
+                .await?
+                .new_canister_pid;
 
         // 4. Register in memory
         let entry = worker_entry_from_view(plan_entry_to_view(entry_plan));
@@ -74,11 +75,21 @@ impl ScalingWorkflow {
         Ok(pid)
     }
 
+    pub async fn create_worker(pool: &str) -> Result<Principal, PublicError> {
+        Self::create_worker_internal(pool)
+            .await
+            .map_err(PublicError::from)
+    }
+
     /// Plan whether a worker should be created according to policy.
-    pub fn plan_create_worker(pool: &str) -> Result<bool, Error> {
+    pub(crate) fn plan_create_worker_internal(pool: &str) -> Result<bool, Error> {
         let plan = ScalingPolicy::plan_create_worker(pool, now_secs())?;
 
         Ok(plan.should_spawn)
+    }
+
+    pub fn plan_create_worker(pool: &str) -> Result<bool, PublicError> {
+        Self::plan_create_worker_internal(pool).map_err(PublicError::from)
     }
 }
 

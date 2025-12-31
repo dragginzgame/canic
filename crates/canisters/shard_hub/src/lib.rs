@@ -7,12 +7,7 @@
 
 use candid::Principal;
 use canic::{
-    PublicError,
-    core::{
-        policy::placement::sharding::policy::ShardingPolicy,
-        workflow::placement::sharding::assign::ShardingWorkflow,
-    },
-    prelude::*,
+    PublicError, core::workflow::placement::sharding::assign::ShardingWorkflow, prelude::*,
 };
 use canic_internal::canister::SHARD_HUB;
 
@@ -43,9 +38,9 @@ async fn register_principal(pid: Principal) -> Result<Principal, PublicError> {
 /// Dry-run the player registration decision using config-driven policy.
 #[canic_query]
 async fn plan_register_principal(pid: Principal) -> Result<String, PublicError> {
-    let plan = ShardingPolicy::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
+    let plan = ShardingWorkflow::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
-    Ok(format!("{:?}", plan.state))
+    Ok(format!("{:?}", plan))
 }
 
 export_candid!();

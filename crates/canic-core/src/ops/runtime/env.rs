@@ -36,6 +36,9 @@ pub enum EnvOpsError {
     #[error("failed to determine current parent principal")]
     ParentPidUnavailable,
 
+    #[error("failed to determine current prime root principal")]
+    PrimeRootPidUnavailable,
+
     #[error("failed to determine current root principal")]
     RootPidUnavailable,
 
@@ -74,7 +77,7 @@ impl EnvOps {
     /// Initialize environment state for the root canister during init.
     ///
     /// This must only be called from the IC `init` hook.
-    pub fn init_root(identity: SubnetIdentity) -> Result<(), Error> {
+    pub(crate) fn init_root(identity: SubnetIdentity) -> Result<(), Error> {
         let self_pid = canister_self();
 
         let (subnet_pid, subnet_role, prime_root_pid) = match identity {
@@ -109,7 +112,7 @@ impl EnvOps {
     /// Initialize environment state for a non-root canister during init.
     ///
     /// This function must only be called from the IC `init` hook.
-    pub fn init_from_view(env: EnvView, role: CanisterRole) -> Result<(), Error> {
+    pub(crate) fn init_from_view(env: EnvView, role: CanisterRole) -> Result<(), Error> {
         let mut env = env_data_from_view(env);
 
         // Override contextual role (do not trust payload blindly)
@@ -187,7 +190,7 @@ impl EnvOps {
     }
 
     pub fn prime_root_pid() -> Result<Principal, Error> {
-        Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::RootPidUnavailable.into())
+        Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::PrimeRootPidUnavailable.into())
     }
 
     pub fn parent_pid() -> Result<Principal, Error> {

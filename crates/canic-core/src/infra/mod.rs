@@ -1,6 +1,12 @@
 pub mod ic;
 
-use crate::ThisError;
+use crate::{
+    ThisError,
+    cdk::{
+        call::{CallFailed, CandidDecodeFailed, Error as CallError},
+        candid::Error as CandidError,
+    },
+};
 
 ///
 /// Prelude
@@ -28,4 +34,16 @@ pub mod prelude {
 pub enum InfraError {
     #[error(transparent)]
     IcInfra(#[from] ic::IcInfraError),
+
+    #[error(transparent)]
+    Call(#[from] CallError),
+
+    #[error(transparent)]
+    CallFailed(#[from] CallFailed),
+
+    #[error(transparent)]
+    Candid(#[from] CandidError),
+
+    #[error(transparent)]
+    CandidDecode(#[from] CandidDecodeFailed),
 }

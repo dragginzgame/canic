@@ -14,7 +14,7 @@ pub mod signature;
 
 pub use mgmt::*;
 
-use crate::{Error, ThisError, infra::InfraError};
+use crate::ThisError;
 
 ///
 /// IcInfraError
@@ -23,16 +23,19 @@ use crate::{Error, ThisError, infra::InfraError};
 #[derive(Debug, ThisError)]
 pub enum IcInfraError {
     #[error(transparent)]
+    HttpInfra(#[from] http::HttpInfraError),
+
+    #[error(transparent)]
+    LedgerInfra(#[from] ledger::LedgerInfraError),
+
+    #[error(transparent)]
+    MgmtInfra(#[from] mgmt::MgmtInfraError),
+
+    #[error(transparent)]
     NnsInfra(#[from] nns::NnsInfraError),
 
     #[error(transparent)]
     SignatureInfra(#[from] signature::SignatureOpsError),
-}
-
-impl From<IcInfraError> for Error {
-    fn from(err: IcInfraError) -> Self {
-        InfraError::from(err).into()
-    }
 }
 
 ///

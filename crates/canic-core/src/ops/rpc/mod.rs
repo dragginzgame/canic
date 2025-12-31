@@ -2,11 +2,13 @@ pub(crate) mod methods;
 mod request;
 
 pub use request::*;
+pub(crate) use request::{create_canister_request_internal, upgrade_canister_request_internal};
 
 use crate::{
     Error, PublicError, ThisError,
     cdk::candid::CandidType,
     dto::rpc::{Request, Response},
+    infra::InfraError,
     ops::{OpsError, ic::call::Call, runtime::env::EnvOps},
 };
 use serde::de::DeserializeOwned;
@@ -31,6 +33,9 @@ pub trait Rpc {
 pub enum RpcOpsError {
     #[error(transparent)]
     RequestOps(#[from] request::RequestOpsError),
+
+    #[error("rpc rejected: {0:?}")]
+    RemoteRejected(PublicError),
 }
 
 impl From<RpcOpsError> for Error {
@@ -45,14 +50,16 @@ async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())
-        .await?;
+        .await
+        .map_err(InfraError::from)?;
 
     // Boundary: convert RPC PublicError into internal Error.
     let response: Response = call_response
-        .candid::<Result<Response, PublicError>>()?
-        .map_err(Error::from)?;
+        .candid::<Result<Response, PublicError>>()
+        .map_err(InfraError::from)?
+        .map_err(RpcOpsError::RemoteRejected)?;
 
-    R::try_from_response(response)
-        .map_err(RpcOpsError::from)
-        .map_err(Error::from)
+    let response = R::try_from_response(response).map_err(RpcOpsError::from)?;
+
+    Ok(response)
 }

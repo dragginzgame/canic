@@ -45,7 +45,7 @@ impl From<MemoryOpsError> for Error {
 pub struct MemoryOps;
 
 impl MemoryOps {
-    pub fn init() -> Result<(), Error> {
+    pub(crate) fn init() -> Result<(), Error> {
         // Ensure TLS-backed globals are initialized
         init_eager_tls();
 
@@ -59,7 +59,7 @@ impl MemoryOps {
         Ok(())
     }
 
-    pub fn init_memory() -> Result<(), Error> {
+    pub(crate) fn init_memory() -> Result<(), Error> {
         Self::init()
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     ops::{
-        ic::{Network, build_network, canister_status},
+        ic::{Network, build_network, canister_status_internal},
         storage::registry::SubnetRegistryOps,
     },
     policy::pool::{
@@ -44,7 +44,7 @@ async fn probe_importable_on_local(pid: Principal) -> Result<(), String> {
         return Ok(());
     }
 
-    match canister_status(pid).await {
+    match canister_status_internal(pid).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
     }

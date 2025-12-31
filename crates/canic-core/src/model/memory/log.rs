@@ -112,7 +112,9 @@ impl Log {
         };
 
         let entry = truncate_entry(entry, cfg.max_entry_bytes);
-        append_raw(&entry)
+        let id = append_raw(&entry)?;
+
+        Ok(id)
     }
 
     #[must_use]
@@ -222,10 +224,8 @@ pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<Retent
 
 const TRUNCATION_SUFFIX: &str = "...[truncated]";
 
-fn append_raw(entry: &LogEntry) -> Result<u64, Error> {
-    with_log(|log| log.append(entry))
-        .map_err(map_write_error)
-        .map_err(Error::from)
+fn append_raw(entry: &LogEntry) -> Result<u64, MemoryError> {
+    with_log(|log| log.append(entry)).map_err(map_write_error)
 }
 
 const fn map_write_error(err: WriteError) -> MemoryError {

@@ -1,10 +1,11 @@
 use crate::{
-    Error, ThisError,
+    ThisError,
     cdk::{
         env::nns::NNS_REGISTRY_CANISTER,
         spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
         types::Principal,
     },
+    infra::InfraError,
     infra::ic::nns::NnsInfraError,
     log,
     log::Topic,
@@ -17,16 +18,12 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum NnsRegistryInfraError {
-    /// The response could not be decoded as expected
-    #[error("failed to decode NNS registry response")]
-    DecodeFailed,
-
     /// The registry explicitly rejected the request
     #[error("NNS registry rejected the request")]
     Rejected,
 }
 
-impl From<NnsRegistryInfraError> for Error {
+impl From<NnsRegistryInfraError> for InfraError {
     fn from(err: NnsRegistryInfraError) -> Self {
         NnsInfraError::from(err).into()
     }
@@ -43,7 +40,7 @@ impl From<NnsRegistryInfraError> for Error {
 
 pub(crate) async fn get_subnet_for_canister(
     pid: Principal,
-) -> Result<Option<Principal>, NnsRegistryInfraError> {
+) -> Result<Option<Principal>, InfraError> {
     let request = GetSubnetForCanisterRequest::new(pid);
 
     let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
@@ -59,7 +56,7 @@ pub(crate) async fn get_subnet_for_canister(
                 Warn,
                 "NNS registry rejected get_subnet_for_canister: {msg}"
             );
-            Err(NnsRegistryInfraError::Rejected)
+            Err(NnsRegistryInfraError::Rejected.into())
         }
     }
 }

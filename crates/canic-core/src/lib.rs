@@ -53,11 +53,6 @@ pub mod __reexports {
     pub use ::ctor;
 }
 
-use crate::cdk::{
-    call::{CallFailed, CandidDecodeFailed, Error as CallError},
-    candid::Error as CandidError,
-};
-
 ///
 /// Crate Version
 ///
@@ -102,40 +97,10 @@ pub(crate) enum Error {
     Workflow(#[from] workflow::WorkflowError),
 
     // ---------------------------------------------------------------------
-    // HTTP / networking
-    // ---------------------------------------------------------------------
-    #[error("http request failed: {0}")]
-    HttpRequest(String),
-
-    #[error("http error status: {0}")]
-    HttpStatus(u32),
-
-    #[error("http decode failed: {0}")]
-    HttpDecode(#[from] serde_json::Error),
-
-    // ---------------------------------------------------------------------
-    // IC / Candid
-    // ---------------------------------------------------------------------
-    #[error(transparent)]
-    Call(#[from] CallError),
-
-    #[error(transparent)]
-    CallFailed(#[from] CallFailed),
-
-    #[error(transparent)]
-    Candid(#[from] CandidError),
-
-    #[error(transparent)]
-    CandidDecode(#[from] CandidDecodeFailed),
-
-    // ---------------------------------------------------------------------
     // Utility / test-only
     // ---------------------------------------------------------------------
     #[error("test error: {0}")]
     Test(String),
-
-    #[error("custom error: {0}")]
-    Custom(String),
 }
 
 impl Error {
@@ -151,9 +116,6 @@ impl Error {
             // ---------------------------------------------------------
             Self::Config(_) => {
                 Self::public_message(ErrorCode::InvalidInput, "invalid configuration")
-            }
-            Self::Candid(_) | Self::CandidDecode(_) => {
-                Self::public_message(ErrorCode::InvalidInput, "invalid input")
             }
 
             // ---------------------------------------------------------
@@ -174,26 +136,10 @@ impl Error {
             Self::Infra(_) | Self::Ops(_) | Self::Workflow(_) => {
                 Self::public_message(ErrorCode::Internal, "internal error")
             }
-            Self::Call(_) | Self::CallFailed(_) => {
-                Self::public_message(ErrorCode::Internal, "ic call failed")
-            }
-
-            // ---------------------------------------------------------
-            // HTTP
-            // ---------------------------------------------------------
-            Self::HttpStatus(code) => Self::public_http_status(*code),
-            Self::HttpRequest(_) => {
-                Self::public_message(ErrorCode::Internal, "http request failed")
-            }
-            Self::HttpDecode(_) => Self::public_message(ErrorCode::Internal, "http decode failed"),
 
             // ---------------------------------------------------------
             // Fallbacks
             // ---------------------------------------------------------
-            Self::Custom(msg) => PublicError {
-                code: ErrorCode::Internal,
-                message: msg.clone(),
-            },
             Self::Test(msg) => PublicError {
                 code: ErrorCode::Internal,
                 message: msg.clone(),
@@ -225,12 +171,6 @@ impl Error {
         }
     }
 
-    /// Build a custom error without introducing a new variant.
-    #[must_use]
-    pub fn custom<S: Into<String>>(msg: S) -> Self {
-        Self::Custom(msg.into())
-    }
-
     /// Test-only helper to avoid dev-dependencies.
     #[must_use]
     pub fn test<S: Into<String>>(msg: S) -> Self {
@@ -247,11 +187,5 @@ impl From<&Error> for PublicError {
 impl From<Error> for PublicError {
     fn from(err: Error) -> Self {
         PublicError::from(&err)
-    }
-}
-
-impl From<PublicError> for Error {
-    fn from(err: PublicError) -> Self {
-        Self::Custom(err.message)
     }
 }

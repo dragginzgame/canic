@@ -4,15 +4,52 @@
 //! consistent Canic API surface.
 
 use crate::{
-    Error,
+    ThisError,
     cdk::{
         api,
         env::ck::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},
-        spec::icrc::icrc2::{Allowance, AllowanceArgs, TransferFromArgs, TransferFromResult},
+        spec::icrc::icrc2::{
+            Allowance, AllowanceArgs, TransferFromArgs, TransferFromError, TransferFromResult,
+        },
         types::{Account, Principal},
     },
+    infra::InfraError,
+    infra::ic::IcInfraError,
     infra::ic::call::Call,
 };
+
+///
+/// LedgerInfraError
+///
+
+#[derive(Debug, ThisError)]
+pub enum LedgerInfraError {
+    #[error("insufficient {symbol} allowance: has {allowance}, needs {required}")]
+    InsufficientAllowance {
+        symbol: &'static str,
+        allowance: u64,
+        required: u64,
+    },
+
+    #[error("{symbol} allowance expired at {expires_at_nanos} (now {now_nanos})")]
+    AllowanceExpired {
+        symbol: &'static str,
+        expires_at_nanos: u64,
+        now_nanos: u64,
+    },
+
+    #[error("{symbol} icrc2_transfer_from failed: {error:?}")]
+    TransferFromRejected {
+        symbol: &'static str,
+        error: TransferFromError,
+    },
+}
+
+impl From<LedgerInfraError> for InfraError {
+    fn from(err: LedgerInfraError) -> Self {
+        IcInfraError::from(err).into()
+    }
+}
 
 ///
 /// LedgerMeta
@@ -65,7 +102,7 @@ pub async fn icrc2_allowance(
     ledger_id: Principal,
     account: Account,
     spender: Account,
-) -> Result<Allowance, Error> {
+) -> Result<Allowance, InfraError> {
     let args = AllowanceArgs { account, spender };
 
     let allowance: Allowance = Call::unbounded_wait(ledger_id, "icrc2_allowance")
@@ -86,7 +123,7 @@ pub async fn validate_allowance(
     payer: Principal,
     spender: Account,
     required_amount: u64,
-) -> Result<(), Error> {
+) -> Result<(), InfraError> {
     let meta = ledger_meta(ledger_id);
 
     let payer_account = Account {
@@ -97,19 +134,23 @@ pub async fn validate_allowance(
     let allowance = icrc2_allowance(ledger_id, payer_account, spender).await?;
 
     if allowance.allowance < required_amount {
-        return Err(Error::custom(format!(
-            "insufficient {} allowance: has {}, needs {}",
-            meta.symbol, allowance.allowance, required_amount
-        )));
+        return Err(LedgerInfraError::InsufficientAllowance {
+            symbol: meta.symbol,
+            allowance: allowance.allowance,
+            required: required_amount,
+        }
+        .into());
     }
 
     if let Some(expires_at_nanos) = allowance.expires_at {
         let now_nanos = api::time();
         if expires_at_nanos <= now_nanos {
-            return Err(Error::custom(format!(
-                "{} allowance has expired",
-                meta.symbol
-            )));
+            return Err(LedgerInfraError::AllowanceExpired {
+                symbol: meta.symbol,
+                expires_at_nanos,
+                now_nanos,
+            }
+            .into());
         }
     }
 
@@ -127,7 +168,7 @@ pub async fn icrc2_transfer_from(
     to: Account,
     amount: u64,
     memo: Option<Vec<u8>>,
-) -> Result<u64, Error> {
+) -> Result<u64, InfraError> {
     let meta = ledger_meta(ledger_id);
 
     let from_account = Account {
@@ -150,9 +191,10 @@ pub async fn icrc2_transfer_from(
 
     match result {
         TransferFromResult::Ok(block_index) => Ok(block_index),
-        TransferFromResult::Err(err) => Err(Error::custom(format!(
-            "{} icrc2_transfer_from failed: {err:?}",
-            meta.symbol
-        ))),
+        TransferFromResult::Err(err) => Err(LedgerInfraError::TransferFromRejected {
+            symbol: meta.symbol,
+            error: err,
+        }
+        .into()),
     }
 }

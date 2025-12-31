@@ -1,6 +1,6 @@
 use super::{Rpc, RpcOpsError};
 use crate::{
-    Error, ThisError,
+    Error, PublicError, ThisError,
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
@@ -45,7 +45,7 @@ impl From<RequestOpsError> for Error {
 /// CreateCanister
 ///
 
-pub async fn create_canister_request<A>(
+pub(crate) async fn create_canister_request_internal<A>(
     canister_role: &CanisterRole,
     parent: CreateCanisterParent,
     extra: Option<A>,
@@ -53,7 +53,10 @@ pub async fn create_canister_request<A>(
 where
     A: CandidType + Send + Sync,
 {
-    let extra_arg = extra.map(encode_one).transpose()?;
+    let extra_arg = extra
+        .map(encode_one)
+        .transpose()
+        .map_err(crate::infra::InfraError::from)?;
 
     super::execute_rpc(CreateCanisterRpc {
         canister_role: canister_role.clone(),
@@ -61,6 +64,19 @@ where
         extra_arg,
     })
     .await
+}
+
+pub async fn create_canister_request<A>(
+    canister_role: &CanisterRole,
+    parent: CreateCanisterParent,
+    extra: Option<A>,
+) -> Result<CreateCanisterResponse, PublicError>
+where
+    A: CandidType + Send + Sync,
+{
+    create_canister_request_internal(canister_role, parent, extra)
+        .await
+        .map_err(PublicError::from)
 }
 
 ///
@@ -97,10 +113,18 @@ impl Rpc for CreateCanisterRpc {
 /// Ask root to upgrade a child canister to its latest registered WASM.
 ///
 
-pub async fn upgrade_canister_request(
+pub(crate) async fn upgrade_canister_request_internal(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     super::execute_rpc(UpgradeCanisterRpc { canister_pid }).await
+}
+
+pub async fn upgrade_canister_request(
+    canister_pid: Principal,
+) -> Result<UpgradeCanisterResponse, PublicError> {
+    upgrade_canister_request_internal(canister_pid)
+        .await
+        .map_err(PublicError::from)
 }
 
 pub struct UpgradeCanisterRpc {
@@ -129,7 +153,7 @@ impl Rpc for UpgradeCanisterRpc {
 /// Request a cycle transfer from root to the current canister.
 ///
 
-pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
+pub(crate) async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     EnvOps::deny_root()?;
 
     super::execute_rpc(CyclesRpc { cycles }).await

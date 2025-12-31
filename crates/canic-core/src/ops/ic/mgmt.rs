@@ -1,9 +1,10 @@
 use crate::{
-    Error,
+    Error, PublicError,
     cdk::{
         mgmt::{CanisterInstallMode, CanisterStatusResult, UpdateSettingsArgs},
         types::Cycles,
     },
+    infra::InfraError,
     infra::ic::mgmt as infra_mgmt,
     log,
     log::Topic,
@@ -33,12 +34,20 @@ pub async fn create_canister(
 //
 
 /// Query the management canister for a canister's status and record metrics.
-pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
+pub(crate) async fn canister_status_internal(
+    canister_pid: Principal,
+) -> Result<CanisterStatusResult, Error> {
     let status = infra_mgmt::canister_status(canister_pid).await?;
 
     SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
     Ok(status)
+}
+
+pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, PublicError> {
+    canister_status_internal(canister_pid)
+        .await
+        .map_err(PublicError::from)
 }
 
 //
@@ -62,7 +71,7 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
-    let status = canister_status(canister_pid).await?;
+    let status = canister_status_internal(canister_pid).await?;
 
     Ok(status.cycles.into())
 }
@@ -73,12 +82,14 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 
 /// Query the management canister for raw randomness and record metrics.
 pub async fn raw_rand() -> Result<[u8; 32], Error> {
-    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand").await?;
-    let bytes: Vec<u8> = decode_one(&response)?;
+    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand")
+        .await
+        .map_err(InfraError::from)?;
+    let bytes: Vec<u8> = decode_one(&response).map_err(InfraError::from)?;
     let len = bytes.len();
     let seed: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| Error::custom(format!("raw_rand returned {len} bytes")))?;
+        .map_err(|_| InfraError::from(infra_mgmt::MgmtInfraError::RawRandInvalidLength { len }))?;
 
     Ok(seed)
 }
@@ -169,7 +180,9 @@ pub async fn call_and_decode<T: CandidType + for<'de> candid::Deserialize<'de>>(
     let response = Call::unbounded_wait(pid, method)
         .with_arg(arg)
         .await
-        .map_err(Error::from)?;
+        .map_err(InfraError::from)?;
 
-    candid::decode_one(&response).map_err(Error::from)
+    let decoded = candid::decode_one(&response).map_err(InfraError::from)?;
+
+    Ok(decoded)
 }

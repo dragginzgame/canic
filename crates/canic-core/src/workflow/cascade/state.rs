@@ -11,7 +11,7 @@
 //! - All persistence happens via ops
 //!
 
-use super::warn_if_large;
+use super::{CascadeError, warn_if_large};
 use crate::{
     Error, PublicError,
     dto::snapshot::StateSnapshotView,
@@ -38,7 +38,7 @@ use crate::{
 /// Cascade a state snapshot from the root canister to its direct children.
 ///
 /// No-op if the snapshot is empty.
-pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
+pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
     EnvOps::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -83,7 +83,9 @@ pub async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Erro
 /// Cascade a snapshot from a non-root canister:
 /// - apply it locally
 /// - forward it to direct children
-pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
+pub(crate) async fn nonroot_cascade_state_internal(
+    snapshot: &StateSnapshotView,
+) -> Result<(), Error> {
     EnvOps::deny_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -123,6 +125,12 @@ pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), E
     }
 
     Ok(())
+}
+
+pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), PublicError> {
+    nonroot_cascade_state_internal(snapshot)
+        .await
+        .map_err(PublicError::from)
 }
 
 //
@@ -171,5 +179,5 @@ async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<
     .await?;
 
     // Boundary: convert PublicError from child call into internal Error.
-    result.map_err(Error::from)
+    result.map_err(|err| CascadeError::ChildRejected(err).into())
 }

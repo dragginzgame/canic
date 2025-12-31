@@ -118,7 +118,7 @@ pub(crate) async fn rebuild_directories_from_registry(
 /// 2. Install WASM + bootstrap initial state
 /// 3. Register canister in SubnetRegistry
 /// 4. Cascade topology + sync directories
-pub async fn create_and_install_canister(
+pub(crate) async fn create_and_install_canister(
     role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,

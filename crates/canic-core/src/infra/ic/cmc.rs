@@ -1,7 +1,6 @@
 //! Cycles minting canister (CMC) helpers.
 
 use crate::{
-    Error,
     cdk::{
         env::nns::CYCLES_MINTING_CANISTER,
         spec::ic::cycles::{
@@ -9,6 +8,7 @@ use crate::{
             IcpXdrConversionRateResponse,
         },
     },
+    infra::InfraError,
     infra::ic::call::Call,
 };
 
@@ -17,7 +17,7 @@ use crate::{
 /// Fetch the current ICP/XDR conversion rate from the CMC.
 ///
 
-pub async fn get_icp_xdr_conversion_rate() -> Result<IcpXdrConversionRate, Error> {
+pub async fn get_icp_xdr_conversion_rate() -> Result<IcpXdrConversionRate, InfraError> {
     let response =
         Call::unbounded_wait(*CYCLES_MINTING_CANISTER, "get_icp_xdr_conversion_rate").await?;
 
