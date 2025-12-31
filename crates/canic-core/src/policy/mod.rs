@@ -12,11 +12,11 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum PolicyError {
     #[error(transparent)]
-    PoolPolicyError(#[from] pool::PoolPolicyError),
+    PoolPolicy(#[from] pool::PoolPolicyError),
 
     #[error(transparent)]
-    ScalingPolicyError(#[from] placement::scaling::ScalingPolicyError),
+    ScalingPolicy(#[from] placement::scaling::ScalingPolicyError),
 
     #[error(transparent)]
-    ShardingPolicyError(#[from] placement::sharding::ShardingPolicyError),
+    ShardingPolicy(#[from] placement::sharding::ShardingPolicyError),
 }

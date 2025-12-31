@@ -11,7 +11,7 @@ use crate::{Error, ThisError, workflow::WorkflowError};
 #[derive(Debug, ThisError)]
 pub enum IcError {
     #[error(transparent)]
-    ProvisionOpsError(#[from] provision::ProvisionError),
+    ProvisionOps(#[from] provision::ProvisionError),
 }
 
 impl From<IcError> for Error {

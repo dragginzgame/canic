@@ -9,6 +9,7 @@ pub mod cmc;
 pub mod http;
 pub mod ledger;
 pub mod mgmt;
+pub mod nns;
 pub mod signature;
 
 pub use mgmt::*;
@@ -22,7 +23,10 @@ use crate::{Error, ThisError, infra::InfraError};
 #[derive(Debug, ThisError)]
 pub enum IcInfraError {
     #[error(transparent)]
-    SignatureInfraError(#[from] signature::SignatureOpsError),
+    NnsInfra(#[from] nns::NnsInfraError),
+
+    #[error(transparent)]
+    SignatureInfra(#[from] signature::SignatureOpsError),
 }
 
 impl From<IcInfraError> for Error {

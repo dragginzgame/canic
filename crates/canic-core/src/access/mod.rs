@@ -11,11 +11,11 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum AccessError {
     #[error(transparent)]
-    AuthError(#[from] auth::AuthError),
+    Auth(#[from] auth::AuthError),
 
     #[error(transparent)]
-    GuardError(#[from] guard::GuardError),
+    Guard(#[from] guard::GuardError),
 
     #[error(transparent)]
-    RuleError(#[from] rule::RuleError),
+    Rule(#[from] rule::RuleError),
 }

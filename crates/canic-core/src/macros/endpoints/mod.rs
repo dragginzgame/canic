@@ -205,7 +205,7 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::Error> {
+        -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::PublicError> {
             Ok($crate::ops::storage::scaling::ScalingRegistryOps::export_view())
         }
 
@@ -215,7 +215,7 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::Error> {
+        -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::PublicError> {
             Ok($crate::ops::storage::sharding::ShardingRegistryOps::export_view())
         }
 
@@ -249,7 +249,7 @@ macro_rules! canic_endpoints {
 
         #[canic_update]
         async fn icts_canister_status()
-        -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::Error> {
+        -> Result<::canic::cdk::management_canister::CanisterStatusResult, ::canic::PublicError> {
             use $crate::cdk::api::{canister_self, msg_caller};
             use $crate::ops::ic::canister_status;
 
@@ -260,7 +260,7 @@ macro_rules! canic_endpoints {
                 });
 
             if msg_caller() != *ICTS_CALLER {
-                return Err(::canic::Error::custom("Unauthorized"));
+                return Err(::canic::PublicError::unauthorised())
             }
 
             canister_status(canister_self()).await

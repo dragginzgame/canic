@@ -17,17 +17,17 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
-    RegistryOpsError(#[from] registry::RegistryOpsError),
+    RegistryOps(#[from] registry::RegistryOpsError),
 
     #[error(transparent)]
-    ShardingRegistryOpsError(#[from] sharding::ShardingRegistryOpsError),
+    ShardingRegistryOps(#[from] sharding::ShardingRegistryOpsError),
 
     #[error(transparent)]
-    StateOpsError(#[from] state::StateOpsError),
+    StateOps(#[from] state::StateOpsError),
 }
 
 impl From<StorageOpsError> for Error {
     fn from(err: StorageOpsError) -> Self {
-        OpsError::StorageOpsError(err).into()
+        OpsError::StorageOps(err).into()
     }
 }

@@ -6,7 +6,7 @@
 //! return [`AuthRuleResult`].
 
 use crate::{
-    Error, ThisError,
+    Error, PublicError, ThisError,
     access::AccessError,
     cdk::api::{canister_self, msg_caller},
     ids::CanisterRole,
@@ -72,37 +72,47 @@ pub enum AuthError {
     NotWhitelisted(Principal),
 }
 
+impl AuthError {
+    pub fn public(&self) -> PublicError {
+        PublicError::unauthorized(self.to_string())
+    }
+}
+
 impl From<AuthError> for Error {
     fn from(err: AuthError) -> Self {
-        AccessError::AuthError(err).into()
+        AccessError::Auth(err).into()
     }
 }
 
 /// Callable issuing an authorization decision for a given caller.
-pub type AuthRuleFn =
-    Box<dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + Sync>;
+pub type AuthRuleFn = Box<
+    dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), PublicError>> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Future produced by an [`AuthRuleFn`].
-pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), PublicError>> + Send>>;
 
 /// Require that all provided rules pass for the current caller.
 ///
 /// Returns the first failing rule error, or [`AuthError::NoRulesDefined`] if
 /// `rules` is empty.
-pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
+pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), PublicError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
-        return Err(AuthError::NoRulesDefined.into());
+        return Err(AuthError::NoRulesDefined.public());
     }
 
     for rule in rules {
         if let Err(err) = rule(caller).await {
-            let err_msg = err.to_string();
             log!(
                 Topic::Auth,
                 Warn,
-                "auth failed (all) caller={caller}: {err_msg}"
+                "auth failed (all) caller={caller}: {} ({:?})",
+                err.message.as_str(),
+                err.code
             );
 
             return Err(err);
@@ -116,11 +126,11 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
 ///
 /// Returns the last failing rule error if none pass, or
 /// [`AuthError::NoRulesDefined`] if `rules` is empty.
-pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
+pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), PublicError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
-        return Err(AuthError::NoRulesDefined.into());
+        return Err(AuthError::NoRulesDefined.public());
     }
 
     let mut last_error = None;
@@ -131,12 +141,13 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), Error> {
         }
     }
 
-    let err = last_error.unwrap_or_else(|| AuthError::InvalidState.into());
-    let err_msg = err.to_string();
+    let err = last_error.unwrap_or_else(|| AuthError::InvalidState.public());
     log!(
         Topic::Auth,
         Warn,
-        "auth failed (any) caller={caller}: {err_msg}"
+        "auth failed (any) caller={caller}: {} ({:?})",
+        err.message.as_str(),
+        err.code
     );
 
     Err(err)
@@ -179,7 +190,7 @@ pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleR
     Box::pin(async move {
         match AppDirectoryOps::get(&role) {
             Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthError::NotAppDirectoryType(caller, role).into()),
+            _ => Err(AuthError::NotAppDirectoryType(caller, role).public()),
         }
     })
 }
@@ -191,7 +202,7 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
     Box::pin(async move {
         match SubnetDirectoryOps::get(&role) {
             Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthError::NotSubnetDirectoryType(caller, role).into()),
+            _ => Err(AuthError::NotSubnetDirectoryType(caller, role).public()),
         }
     })
 }
@@ -201,7 +212,8 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        CanisterChildrenOps::find_by_pid(&caller).ok_or(AuthError::NotChild(caller))?;
+        CanisterChildrenOps::find_by_pid(&caller)
+            .ok_or_else(|| AuthError::NotChild(caller).public())?;
 
         Ok(())
     })
@@ -215,7 +227,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
         if crate::cdk::api::is_controller(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotController(caller).into())
+            Err(AuthError::NotController(caller).public())
         }
     })
 }
@@ -225,12 +237,12 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = EnvOps::root_pid()?;
+        let root_pid = EnvOps::root_pid().map_err(to_public)?;
 
         if caller == root_pid {
             Ok(())
         } else {
-            Err(AuthError::NotRoot(caller))?
+            Err(AuthError::NotRoot(caller).public())
         }
     })
 }
@@ -240,12 +252,12 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = EnvOps::parent_pid()?;
+        let parent_pid = EnvOps::parent_pid().map_err(to_public)?;
 
         if parent_pid == caller {
             Ok(())
         } else {
-            Err(AuthError::NotParent(caller))?
+            Err(AuthError::NotParent(caller).public())
         }
     })
 }
@@ -258,7 +270,7 @@ pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
         if caller == expected {
             Ok(())
         } else {
-            Err(AuthError::NotPrincipal(caller, expected))?
+            Err(AuthError::NotPrincipal(caller, expected).public())
         }
     })
 }
@@ -271,7 +283,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
         if caller == canister_self() {
             Ok(())
         } else {
-            Err(AuthError::NotSameCanister(caller))?
+            Err(AuthError::NotSameCanister(caller).public())
         }
     })
 }
@@ -286,7 +298,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
         if SubnetRegistryOps::is_registered(caller) {
             Ok(())
         } else {
-            Err(AuthError::NotRegisteredToSubnet(caller))?
+            Err(AuthError::NotRegisteredToSubnet(caller).public())
         }
     })
 }
@@ -297,12 +309,17 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
         use crate::config::Config;
-        let cfg = Config::get()?;
+        let cfg = Config::get().map_err(to_public)?;
 
         if !cfg.is_whitelisted(&caller) {
-            Err(AuthError::NotWhitelisted(caller))?;
+            return Err(AuthError::NotWhitelisted(caller).public());
         }
 
         Ok(())
     })
+}
+
+fn to_public(err: Error) -> PublicError {
+    // Boundary: convert internal error to public error.
+    PublicError::from(err)
 }

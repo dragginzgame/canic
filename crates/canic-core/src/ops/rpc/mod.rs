@@ -4,7 +4,7 @@ mod request;
 pub use request::*;
 
 use crate::{
-    Error, ThisError,
+    Error, PublicError, ThisError,
     cdk::candid::CandidType,
     dto::rpc::{Request, Response},
     ops::{OpsError, ic::call::Call, runtime::env::EnvOps},
@@ -30,7 +30,7 @@ pub trait Rpc {
 #[derive(Debug, ThisError)]
 pub enum RpcOpsError {
     #[error(transparent)]
-    RequestOpsError(#[from] request::RequestOpsError),
+    RequestOps(#[from] request::RequestOpsError),
 }
 
 impl From<RpcOpsError> for Error {
@@ -47,7 +47,10 @@ async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
         .with_arg(rpc.into_request())
         .await?;
 
-    let response = call_response.candid::<Result<Response, Error>>()??;
+    // Boundary: convert RPC PublicError into internal Error.
+    let response: Response = call_response
+        .candid::<Result<Response, PublicError>>()?
+        .map_err(Error::from)?;
 
     R::try_from_response(response)
         .map_err(RpcOpsError::from)

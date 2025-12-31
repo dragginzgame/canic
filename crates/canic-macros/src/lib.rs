@@ -252,7 +252,7 @@ mod validate {
             if !returns_result(sig) {
                 return Err(syn::Error::new_spanned(
                     &sig.output,
-                    "authorized endpoints must return `Result<_, From<canic::Error>>`",
+                    "authorized endpoints must return `Result<_, From<canic::PublicError>>`",
                 ));
             }
         }
@@ -260,14 +260,14 @@ mod validate {
         if parsed.app_guard && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`app` guard requires `Result<_, From<canic::Error>>`",
+                "`app` guard requires `Result<_, From<canic::PublicError>>`",
             ));
         }
 
         if !parsed.rules.is_empty() && !returns_result(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "`rule(...)` requires `Result<_, From<canic::Error>>`",
+                "`rule(...)` requires `Result<_, From<canic::PublicError>>`",
             ));
         }
 

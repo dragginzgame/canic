@@ -15,11 +15,11 @@ use crate::{Error, ThisError, ops::storage::StorageOpsError};
 #[derive(Debug, ThisError)]
 pub enum StateOpsError {
     #[error(transparent)]
-    AppStateOpsError(#[from] app::AppStateOpsError),
+    AppStateOps(#[from] app::AppStateOpsError),
 }
 
 impl From<StateOpsError> for Error {
     fn from(err: StateOpsError) -> Self {
-        StorageOpsError::StateOpsError(err).into()
+        StorageOpsError::StateOps(err).into()
     }
 }

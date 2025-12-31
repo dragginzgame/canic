@@ -42,7 +42,7 @@ pub use {
     ::canic_memory as memory,
     ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
     ::canic_utils as utils,
-    dto::error::{Error, ErrorCode},
+    dto::error::{Error as PublicError, ErrorCode},
     thiserror::Error as ThisError,
 };
 
@@ -79,7 +79,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 #[derive(Debug, ThisError)]
-pub enum CanicError {
+pub(crate) enum Error {
     #[error(transparent)]
     Access(#[from] access::AccessError),
 
@@ -138,8 +138,8 @@ pub enum CanicError {
     Custom(String),
 }
 
-impl CanicError {
-    pub fn public(&self) -> Error {
+impl Error {
+    pub fn public(&self) -> PublicError {
         match self {
             // ---------------------------------------------------------
             // Access / authorization
@@ -190,25 +190,25 @@ impl CanicError {
             // ---------------------------------------------------------
             // Fallbacks
             // ---------------------------------------------------------
-            Self::Custom(msg) => Error {
+            Self::Custom(msg) => PublicError {
                 code: ErrorCode::Internal,
                 message: msg.clone(),
             },
-            Self::Test(msg) => Error {
+            Self::Test(msg) => PublicError {
                 code: ErrorCode::Internal,
                 message: msg.clone(),
             },
         }
     }
 
-    fn public_message(code: ErrorCode, message: &'static str) -> Error {
-        Error {
+    fn public_message(code: ErrorCode, message: &'static str) -> PublicError {
+        PublicError {
             code,
             message: message.to_string(),
         }
     }
 
-    fn public_http_status(status: u32) -> Error {
+    fn public_http_status(status: u32) -> PublicError {
         let code = match status {
             401 | 403 => ErrorCode::Unauthorized,
             404 => ErrorCode::NotFound,
@@ -219,7 +219,7 @@ impl CanicError {
             _ => ErrorCode::Internal,
         };
 
-        Error {
+        PublicError {
             code,
             message: format!("http status {status}"),
         }
@@ -238,14 +238,20 @@ impl CanicError {
     }
 }
 
-impl From<&CanicError> for Error {
-    fn from(err: &CanicError) -> Self {
+impl From<&Error> for PublicError {
+    fn from(err: &Error) -> Self {
         err.public()
     }
 }
 
-impl From<CanicError> for Error {
-    fn from(err: CanicError) -> Self {
-        Error::from(&err)
+impl From<Error> for PublicError {
+    fn from(err: Error) -> Self {
+        PublicError::from(&err)
+    }
+}
+
+impl From<PublicError> for Error {
+    fn from(err: PublicError) -> Self {
+        Self::Custom(err.message)
     }
 }

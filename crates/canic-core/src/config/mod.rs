@@ -40,7 +40,7 @@ pub enum ConfigError {
 
     /// Wrapper for data schema-level errors.
     #[error(transparent)]
-    ConfigSchemaError(#[from] ConfigSchemaError),
+    ConfigSchema(#[from] ConfigSchemaError),
 }
 
 ///

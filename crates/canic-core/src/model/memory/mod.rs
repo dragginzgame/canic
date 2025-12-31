@@ -87,6 +87,6 @@ pub enum MemoryError {
 
 impl From<MemoryError> for Error {
     fn from(err: MemoryError) -> Self {
-        ModelError::MemoryError(err).into()
+        ModelError::Memory(err).into()
     }
 }

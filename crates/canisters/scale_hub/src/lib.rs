@@ -7,8 +7,9 @@
 
 use candid::Principal;
 use canic::{
+    PublicError,
     core::{
-        Error, cdk::utils::time::now_secs, policy::placement::scaling::ScalingPolicy,
+        cdk::utils::time::now_secs, policy::placement::scaling::ScalingPolicy,
         workflow::placement::scaling::ScalingWorkflow,
     },
     prelude::*,
@@ -34,7 +35,7 @@ async fn canic_upgrade() {}
 /// Create a new worker in the given pool.
 /// no authentication needed as for canic testing
 #[canic_update]
-async fn create_worker() -> Result<Principal, Error> {
+async fn create_worker() -> Result<Principal, PublicError> {
     let worker_pid = ScalingWorkflow::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
@@ -43,7 +44,7 @@ async fn create_worker() -> Result<Principal, Error> {
 /// Dry-run the worker creation decision using config-driven policy.
 /// no authentication needed as for canic testing
 #[canic_query]
-async fn plan_create_worker() -> Result<bool, Error> {
+async fn plan_create_worker() -> Result<bool, PublicError> {
     // Example: return whether scaling policy says "yes, spawn"
     let plan = ScalingPolicy::plan_create_worker(POOL_NAME, now_secs())?;
 
