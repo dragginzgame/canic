@@ -113,7 +113,7 @@ impl Rpc for CreateCanisterRpc {
 /// Ask root to upgrade a child canister to its latest registered WASM.
 ///
 
-pub(crate) async fn upgrade_canister_request_internal(
+pub async fn upgrade_canister_request_internal(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     super::execute_rpc(UpgradeCanisterRpc { canister_pid }).await
@@ -153,7 +153,7 @@ impl Rpc for UpgradeCanisterRpc {
 /// Request a cycle transfer from root to the current canister.
 ///
 
-pub(crate) async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
+pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
     EnvOps::deny_root()?;
 
     super::execute_rpc(CyclesRpc { cycles }).await

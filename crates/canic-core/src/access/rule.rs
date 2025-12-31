@@ -30,6 +30,7 @@ impl From<RuleError> for Error {
 }
 
 impl RuleError {
+    #[must_use]
     pub fn public(&self) -> PublicError {
         PublicError::unauthorized(self.to_string())
     }

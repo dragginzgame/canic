@@ -50,7 +50,7 @@ pub enum ConfigError {
 pub struct Config {}
 
 impl Config {
-    pub fn get() -> Result<Arc<ConfigModel>, Error> {
+    pub(crate) fn get() -> Result<Arc<ConfigModel>, Error> {
         CONFIG.with(|cfg| {
             if let Some(config) = cfg.borrow().as_ref() {
                 return Ok(config.clone());
@@ -90,7 +90,7 @@ impl Config {
     }
 
     /// Return the current config as a TOML string.
-    pub fn to_toml() -> Result<String, Error> {
+    pub(crate) fn to_toml() -> Result<String, Error> {
         let cfg = Self::get()?;
 
         toml::to_string_pretty(&*cfg)

@@ -126,7 +126,7 @@ impl LifecycleResult {
 pub struct CanisterLifecycleOrchestrator;
 
 impl CanisterLifecycleOrchestrator {
-    pub async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
+    pub(crate) async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
         let root_pid = canister_self();
 
         match event {

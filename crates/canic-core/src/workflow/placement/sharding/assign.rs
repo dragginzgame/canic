@@ -176,7 +176,7 @@ impl ShardingWorkflow {
     }
 
     /// Drain up to `limit` tenants from a shard into others or new shards.
-    pub async fn drain_shard(
+    pub(crate) async fn drain_shard_internal(
         pool: &str,
         donor_shard_pid: Principal,
         limit: u32,
@@ -237,6 +237,17 @@ impl ShardingWorkflow {
         }
 
         Ok(moved)
+    }
+
+    /// Drain up to `limit` tenants from a shard into others or new shards.
+    pub async fn drain_shard(
+        pool: &str,
+        donor_shard_pid: Principal,
+        limit: u32,
+    ) -> Result<u32, PublicError> {
+        Self::drain_shard_internal(pool, donor_shard_pid, limit)
+            .await
+            .map_err(PublicError::from)
     }
 
     /// Internal: fetch shard pool config for the current canister.
@@ -300,9 +311,10 @@ mod tests {
         ShardingRegistryOps::assign("primary", "tenant-a", shard_a).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-b", shard_a).unwrap();
 
-        let moved =
-            futures::executor::block_on(ShardingWorkflow::drain_shard("primary", shard_a, 1))
-                .unwrap();
+        let moved = futures::executor::block_on(ShardingWorkflow::drain_shard_internal(
+            "primary", shard_a, 1,
+        ))
+        .unwrap();
         assert_eq!(moved, 1);
 
         let entry_a = ShardingRegistryOps::get(shard_a).unwrap();

@@ -148,7 +148,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
 
     // --- Phase 2: Payload registration ---
-    if let Err(err) = EnvOps::init_from_view(payload.env, canister_role.clone()) {
+    if let Err(err) = EnvOps::init_from_view(payload.env, canister_role) {
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 

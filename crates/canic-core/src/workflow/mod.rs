@@ -4,7 +4,7 @@ pub mod cascade;
 pub mod command;
 pub mod directory;
 pub mod ic;
-pub mod lifecycle;
+pub(crate) mod lifecycle;
 pub mod orchestrator;
 pub mod placement;
 pub mod pool;
