@@ -25,13 +25,29 @@ use crate::{
     },
     workflow::{
         directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-        ic::IcError,
+        ic::IcWorkflowError,
         pool::pool_import_canister,
         prelude::*,
         snapshot::StateSnapshotBuilder,
     },
 };
 use thiserror::Error as ThisError;
+
+///
+/// ProvisionWorkflowError
+///
+
+#[derive(Debug, ThisError)]
+pub enum ProvisionWorkflowError {
+    #[error("install failed for {pid}")]
+    InstallFailed { pid: Principal },
+}
+
+impl From<ProvisionWorkflowError> for Error {
+    fn from(err: ProvisionWorkflowError) -> Self {
+        IcWorkflowError::from(err).into()
+    }
+}
 
 pub(crate) fn build_nonroot_init_payload(
     role: &CanisterRole,
@@ -51,22 +67,6 @@ pub(crate) fn build_nonroot_init_payload(
         app_directory: AppDirectoryOps::export_view(),
         subnet_directory: SubnetDirectoryOps::export_view(),
     })
-}
-
-///
-/// ProvisionError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ProvisionError {
-    #[error("install failed for {pid}: {source}")]
-    InstallFailed { pid: Principal, source: Box<Error> },
-}
-
-impl From<ProvisionError> for Error {
-    fn from(err: ProvisionError) -> Self {
-        IcError::from(err).into()
-    }
 }
 
 //
@@ -130,7 +130,10 @@ pub(crate) async fn create_and_install_canister(
     let (pid, source) = allocate_canister_with_source(role).await?;
 
     // Phase 2: installation
-    if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
+    if install_canister(pid, role, parent_pid, extra_arg)
+        .await
+        .is_err()
+    {
         if source == AllocationSource::Pool {
             if let Err(recycle_err) = pool_import_canister(pid).await {
                 log!(
@@ -146,11 +149,8 @@ pub(crate) async fn create_and_install_canister(
                 "failed to delete canister after install failure: {pid} ({delete_err})"
             );
         }
-        return Err(ProvisionError::InstallFailed {
-            pid,
-            source: Box::new(err),
-        }
-        .into());
+
+        return Err(ProvisionWorkflowError::InstallFailed { pid }.into());
     }
 
     Ok(pid)

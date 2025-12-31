@@ -13,9 +13,13 @@ use crate::{
 /// - Additional standards are opt-in via config.
 /// - This is a pure, recomputed view (no storage, no persistence).
 ///
+/// Used by macro-generated endpoints in downstream crates.
+///
 
+#[allow(dead_code)]
 pub struct Icrc10Registry;
 
+#[allow(dead_code)]
 impl Icrc10Registry {
     fn enabled_standards() -> Vec<Icrc10Standard> {
         let mut supported = vec![Icrc10Standard::Icrc10];

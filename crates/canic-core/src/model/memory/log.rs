@@ -125,6 +125,7 @@ impl Log {
                 out.push(entry);
             }
         });
+
         out
     }
 }

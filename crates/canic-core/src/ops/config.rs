@@ -1,5 +1,5 @@
 use crate::{
-    Error, PublicError, ThisError,
+    Error, ThisError,
     config::{
         Config, ConfigModel,
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
@@ -43,22 +43,14 @@ impl From<ConfigOpsError> for Error {
 pub struct ConfigOps;
 
 impl ConfigOps {
-    // ---------------------------------------------------------------------
-    // Boundary / endpoint-facing helpers
-    // ---------------------------------------------------------------------
-
-    pub fn export_toml() -> Result<String, PublicError> {
-        Self::export_toml_internal().map_err(PublicError::from)
+    /// Export the full current configuration as TOML.
+    pub(crate) fn export_toml() -> Result<String, Error> {
+        Config::to_toml()
     }
 
     // ---------------------------------------------------------------------
     // Explicit / fallible lookups
     // ---------------------------------------------------------------------
-
-    /// Export the full current configuration as TOML.
-    pub(crate) fn export_toml_internal() -> Result<String, Error> {
-        Config::to_toml()
-    }
 
     /// Fetch a subnet configuration by role.
     pub(crate) fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {

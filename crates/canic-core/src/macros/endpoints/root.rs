@@ -52,7 +52,7 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_config() -> Result<String, ::canic::PublicError> {
-            $crate::ops::config::ConfigOps::export_toml()
+            $crate::workflow::config::export_toml()
         }
 
         //

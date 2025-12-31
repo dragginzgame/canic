@@ -95,12 +95,6 @@ pub(crate) enum Error {
 
     #[error(transparent)]
     Workflow(#[from] workflow::WorkflowError),
-
-    // ---------------------------------------------------------------------
-    // Utility / test-only
-    // ---------------------------------------------------------------------
-    #[error("test error: {0}")]
-    Test(String),
 }
 
 impl Error {
@@ -136,14 +130,6 @@ impl Error {
             Self::Infra(_) | Self::Ops(_) | Self::Workflow(_) => {
                 Self::public_message(ErrorCode::Internal, "internal error")
             }
-
-            // ---------------------------------------------------------
-            // Fallbacks
-            // ---------------------------------------------------------
-            Self::Test(msg) => PublicError {
-                code: ErrorCode::Internal,
-                message: msg.clone(),
-            },
         }
     }
 
@@ -169,12 +155,6 @@ impl Error {
             code,
             message: format!("http status {status}"),
         }
-    }
-
-    /// Test-only helper to avoid dev-dependencies.
-    #[must_use]
-    pub fn test<S: Into<String>>(msg: S) -> Self {
-        Self::Test(msg.into())
     }
 }
 

@@ -10,7 +10,7 @@ use crate::{
     },
     infra::InfraError,
     ops::ic::call::Call,
-    workflow::ic::IcError,
+    workflow::ic::IcWorkflowError,
 };
 
 /// Default cycles to attach to XRC calls.
@@ -31,7 +31,7 @@ pub enum XrcWorkflowError {
 
 impl From<XrcWorkflowError> for Error {
     fn from(err: XrcWorkflowError) -> Self {
-        IcError::from(err).into()
+        IcWorkflowError::from(err).into()
     }
 }
 
@@ -40,6 +40,7 @@ impl From<XrcWorkflowError> for Error {
 /// Calls XRC `get_exchange_rate` and normalizes errors into `crate::Error`.
 ///
 
+#[expect(dead_code)]
 pub(crate) async fn get_exchange_rate(req: GetExchangeRateRequest) -> Result<ExchangeRate, Error> {
     get_exchange_rate_with_cycles(req, DEFAULT_XRC_CYCLES).await
 }

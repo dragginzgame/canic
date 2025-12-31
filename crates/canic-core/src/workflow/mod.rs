@@ -2,6 +2,7 @@ pub mod app;
 pub(crate) mod bootstrap;
 pub mod cascade;
 pub mod command;
+pub mod config;
 pub mod directory;
 pub mod ic;
 pub(crate) mod lifecycle;
@@ -42,7 +43,7 @@ pub enum WorkflowError {
     Cascade(#[from] cascade::CascadeError),
 
     #[error(transparent)]
-    Ic(#[from] ic::IcError),
+    IcWorkflow(#[from] ic::IcWorkflowError),
 
     #[error(transparent)]
     Orchestrator(#[from] orchestrator::OrchestratorError),
