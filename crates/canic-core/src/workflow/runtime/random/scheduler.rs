@@ -5,7 +5,7 @@ use crate::{
     cdk::timers::TimerId,
     config::schema::{RandomnessConfig, RandomnessSource},
     log::Topic,
-    ops::{config::ConfigOps, ic::raw_rand, runtime::timer::TimerOps},
+    ops::{config::ConfigOps, ic::mgmt::raw_rand, runtime::timer::TimerOps},
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};

@@ -6,16 +6,16 @@
 use crate::{
     ThisError,
     cdk::{
+        self,
         mgmt::{
-            self, CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
+            CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
             UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
         },
         types::Cycles,
     },
-    infra::InfraError,
-    infra::ic::IcInfraError,
     infra::ic::call::Call,
+    infra::{InfraError, ic::IcInfraError},
 };
 use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
@@ -48,9 +48,10 @@ pub async fn create_canister(
         controllers: Some(controllers),
         ..Default::default()
     });
+
     let args = CreateCanisterArgs { settings };
 
-    let pid = mgmt::create_canister_with_extra_cycles(&args, cycles.to_u128())
+    let pid = cdk::mgmt::create_canister_with_extra_cycles(&args, cycles.to_u128())
         .await?
         .canister_id;
 
@@ -61,13 +62,14 @@ pub async fn create_canister(
 // ────────────────────────────── CANISTER STATUS ──────────────────────────────
 //
 
-/// Query the management canister for a canister's status and record metrics.
+/// Query the management canister for a canister's status.
 pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, InfraError> {
     let args = CanisterStatusArgs {
         canister_id: canister_pid,
     };
 
-    let status = mgmt::canister_status(&args).await?;
+    let status = cdk::mgmt::canister_status(&args).await?;
+
     Ok(status)
 }
 
@@ -78,15 +80,16 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 /// Returns the local canister's cycle balance (cheap).
 #[must_use]
 pub fn canister_cycle_balance() -> Cycles {
-    crate::cdk::api::canister_cycle_balance().into()
+    cdk::api::canister_cycle_balance().into()
 }
 
-/// Deposits cycles into a canister and records metrics.
+/// Deposits cycles into a canister.
 pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), InfraError> {
     let args = DepositCyclesArgs {
         canister_id: canister_pid,
     };
-    mgmt::deposit_cycles(&args, cycles).await?;
+
+    cdk::mgmt::deposit_cycles(&args, cycles).await?;
 
     Ok(())
 }
@@ -102,11 +105,13 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InfraError> {
 // ──────────────────────────────── RANDOMNESS ────────────────────────────────
 //
 
-/// Query the management canister for raw randomness and record metrics.
+/// Query the management canister for raw randomness.
 pub async fn raw_rand() -> Result<[u8; 32], InfraError> {
     let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand").await?;
+
     let bytes: Vec<u8> = decode_one(&response)?;
     let len = bytes.len();
+
     let seed: [u8; 32] = bytes
         .try_into()
         .map_err(|_| MgmtInfraError::RawRandInvalidLength { len })?;
@@ -118,7 +123,7 @@ pub async fn raw_rand() -> Result<[u8; 32], InfraError> {
 // ────────────────────────────── INSTALL / UNINSTALL ──────────────────────────
 //
 
-/// Installs or upgrades a canister with the given wasm + args and records metrics.
+/// Installs or upgrades a canister with the given wasm + args.
 pub async fn install_code<T: ArgumentEncoder>(
     mode: CanisterInstallMode,
     canister_pid: Principal,
@@ -126,6 +131,7 @@ pub async fn install_code<T: ArgumentEncoder>(
     args: T,
 ) -> Result<(), InfraError> {
     let arg = encode_args(args)?;
+
     let install_args = InstallCodeArgs {
         mode,
         canister_id: canister_pid,
@@ -133,35 +139,35 @@ pub async fn install_code<T: ArgumentEncoder>(
         arg,
     };
 
-    mgmt::install_code(&install_args).await?;
+    cdk::mgmt::install_code(&install_args).await?;
 
     Ok(())
 }
 
 /// Upgrades a canister to the provided wasm.
 pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), InfraError> {
-    install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
-
-    Ok(())
+    install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await
 }
 
-/// Uninstalls code from a canister and records metrics.
+/// Uninstalls code from a canister.
 pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InfraError> {
     let args = UninstallCodeArgs {
         canister_id: canister_pid,
     };
 
-    mgmt::uninstall_code(&args).await?;
+    cdk::mgmt::uninstall_code(&args).await?;
+
     Ok(())
 }
 
-/// Deletes a canister (code + controllers) via the management canister and records metrics.
+/// Deletes a canister (code + controllers) via the management canister.
 pub async fn delete_canister(canister_pid: Principal) -> Result<(), InfraError> {
     let args = DeleteCanisterArgs {
         canister_id: canister_pid,
     };
 
-    mgmt::delete_canister(&args).await?;
+    cdk::mgmt::delete_canister(&args).await?;
+
     Ok(())
 }
 
@@ -169,9 +175,10 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), InfraError> 
 // ─────────────────────────────── SETTINGS API ────────────────────────────────
 //
 
-/// Updates canister settings via the management canister and records metrics.
+/// Updates canister settings via the management canister.
 pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InfraError> {
-    mgmt::update_settings(args).await?;
+    cdk::mgmt::update_settings(args).await?;
+
     Ok(())
 }
 

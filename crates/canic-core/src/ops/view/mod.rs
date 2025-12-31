@@ -1,3 +1,1 @@
-mod paginate;
-
-pub use paginate::*;
+pub mod paginate;

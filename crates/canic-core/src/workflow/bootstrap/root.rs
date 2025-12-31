@@ -1,11 +1,14 @@
 use crate::{
     Error,
     cdk::api::trap,
+    infra::ic::{Network, build_network},
     ops::{
         config::ConfigOps,
-        ic::{Network, build_network},
         runtime::env::EnvOps,
-        storage::{directory::SubnetDirectoryOps, pool::PoolOps, registry::SubnetRegistryOps},
+        storage::{
+            directory::subnet::SubnetDirectoryOps, pool::PoolOps,
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     workflow::{
         ic::network::try_get_current_subnet_pid,

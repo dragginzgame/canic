@@ -1,10 +1,11 @@
 use super::{Rpc, RpcOpsError};
 use crate::{
-    Error, PublicError, ThisError,
+    Error, ThisError,
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
+    infra::InfraError,
     ops::{prelude::*, runtime::env::EnvOps},
 };
 use candid::encode_one;
@@ -45,7 +46,7 @@ impl From<RequestOpsError> for Error {
 /// CreateCanister
 ///
 
-pub(crate) async fn create_canister_request_internal<A>(
+pub async fn create_canister_request<A>(
     canister_role: &CanisterRole,
     parent: CreateCanisterParent,
     extra: Option<A>,
@@ -56,7 +57,7 @@ where
     let extra_arg = extra
         .map(encode_one)
         .transpose()
-        .map_err(crate::infra::InfraError::from)?;
+        .map_err(InfraError::from)?;
 
     super::execute_rpc(CreateCanisterRpc {
         canister_role: canister_role.clone(),
@@ -64,19 +65,6 @@ where
         extra_arg,
     })
     .await
-}
-
-pub async fn create_canister_request<A>(
-    canister_role: &CanisterRole,
-    parent: CreateCanisterParent,
-    extra: Option<A>,
-) -> Result<CreateCanisterResponse, PublicError>
-where
-    A: CandidType + Send + Sync,
-{
-    create_canister_request_internal(canister_role, parent, extra)
-        .await
-        .map_err(PublicError::from)
 }
 
 ///
@@ -113,19 +101,15 @@ impl Rpc for CreateCanisterRpc {
 /// Ask root to upgrade a child canister to its latest registered WASM.
 ///
 
-pub async fn upgrade_canister_request_internal(
+pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     super::execute_rpc(UpgradeCanisterRpc { canister_pid }).await
 }
 
-pub async fn upgrade_canister_request(
-    canister_pid: Principal,
-) -> Result<UpgradeCanisterResponse, PublicError> {
-    upgrade_canister_request_internal(canister_pid)
-        .await
-        .map_err(PublicError::from)
-}
+///
+/// UpgradeCanisterRpc
+///
 
 pub struct UpgradeCanisterRpc {
     pub canister_pid: Principal,
@@ -158,6 +142,10 @@ pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
 
     super::execute_rpc(CyclesRpc { cycles }).await
 }
+
+///
+/// CyclesRpc
+///
 
 pub struct CyclesRpc {
     pub cycles: u128,

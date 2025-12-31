@@ -12,7 +12,7 @@ use crate::{
     cdk::utils::time::now_secs,
     dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
     ops::{
-        adapter::placement::worker_entry_from_view, rpc::create_canister_request_internal,
+        adapter::placement::worker_entry_from_view, rpc::create_canister_request,
         storage::scaling::ScalingRegistryOps,
     },
     policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
@@ -63,10 +63,9 @@ impl ScalingWorkflow {
         let role = entry_plan.canister_role.clone();
 
         // 3. Create the canister
-        let pid =
-            create_canister_request_internal::<()>(&role, CreateCanisterParent::ThisCanister, None)
-                .await?
-                .new_canister_pid;
+        let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
+            .await?
+            .new_canister_pid;
 
         // 4. Register in memory
         let entry = worker_entry_from_view(plan_entry_to_view(entry_plan));

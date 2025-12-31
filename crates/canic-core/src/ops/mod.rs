@@ -53,21 +53,18 @@ pub const OPS_POOL_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 /// Prelude
 ///
 
-/// Common imports for ops submodules and consumers.
 pub mod prelude {
     pub use crate::{
         cdk::{
             api::canister_self,
             candid::CandidType,
-            types::{Account, Cycles, Int, Nat, Principal, Subaccount},
+            types::{Cycles, Principal},
         },
         ids::CanisterRole,
         log,
-        log::Level,
-        ops::OpsError,
-        ops::ic::{call::Call, call_and_decode},
+        log::Topic,
+        ops::{OpsError, ic::call::Call},
     };
-    pub use serde::{Deserialize, Serialize};
 }
 
 use crate::ThisError;

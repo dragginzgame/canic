@@ -15,12 +15,12 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
         config::ConfigOps,
-        ic::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
+        ic::mgmt::{create_canister, delete_canister, deposit_cycles, get_cycles, uninstall_code},
         runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
         storage::{
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
-            registry::SubnetRegistryOps,
+            registry::subnet::SubnetRegistryOps,
         },
     },
     workflow::{

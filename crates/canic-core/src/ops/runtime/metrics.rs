@@ -1,14 +1,16 @@
-pub use crate::dto::metrics::{
-    access::{AccessMetricEntry, AccessMetricKind},
-    endpoint::EndpointHealthView,
-    http::HttpMetricEntry,
-    icc::IccMetricEntry,
-    system::SystemMetricEntry,
-    timer::TimerMetricEntry,
-};
 use crate::{
     api::EndpointCall,
-    dto::page::{Page, PageRequest},
+    dto::{
+        metrics::{
+            access::{AccessMetricEntry, AccessMetricKind},
+            endpoint::EndpointHealthView,
+            http::HttpMetricEntry,
+            icc::IccMetricEntry,
+            system::SystemMetricEntry,
+            timer::TimerMetricEntry,
+        },
+        page::{Page, PageRequest},
+    },
     model::metrics::{
         access::AccessMetrics as ModelAccessMetrics,
         endpoint::{
@@ -29,7 +31,7 @@ use crate::{
             system::system_metrics_to_view,
             timer::timer_metrics_to_view,
         },
-        view::paginate_vec,
+        view::paginate::paginate_vec,
     },
 };
 

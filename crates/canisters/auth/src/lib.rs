@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 
-use canic::{core::ops::ic::signature, prelude::*};
+use canic::{core::workflow::ic::signature, prelude::*};
 use canic_internal::canister::AUTH;
 
 //

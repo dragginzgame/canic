@@ -11,7 +11,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::{rpc::create_canister_request_internal, storage::sharding::ShardingRegistryOps},
+    ops::{rpc::request::create_canister_request, storage::sharding::ShardingRegistryOps},
     policy::placement::sharding::{
         ShardingPolicyError,
         metrics::pool_metrics,
@@ -43,7 +43,7 @@ impl ShardAllocator {
             .into());
         }
 
-        let response = create_canister_request_internal::<Vec<u8>>(
+        let response = create_canister_request::<Vec<u8>>(
             canister_role,
             CreateCanisterParent::ThisCanister,
             extra_arg,

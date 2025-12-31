@@ -1,5 +1,3 @@
-pub use crate::cdk::timers::TimerId;
-
 use crate::{
     cdk::timers::{
         clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
@@ -13,6 +11,13 @@ use crate::{
     perf::perf_counter,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
+
+///
+/// TimerId
+/// handy re-export
+///
+
+pub type TimerId = crate::cdk::timers::TimerId;
 
 ///
 /// TimerOps

@@ -5,10 +5,10 @@ use crate::{
         CyclesResponse, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ops::{
-        ic::deposit_cycles,
-        rpc::RequestOpsError,
+        ic::mgmt::deposit_cycles,
+        rpc::request::RequestOpsError,
         runtime::env::EnvOps,
-        storage::{directory::SubnetDirectoryOps, registry::SubnetRegistryOps},
+        storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
         orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},

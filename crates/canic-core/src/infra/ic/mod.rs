@@ -12,8 +12,6 @@ pub mod mgmt;
 pub mod nns;
 pub mod signature;
 
-pub use mgmt::*;
-
 use crate::ThisError;
 
 ///

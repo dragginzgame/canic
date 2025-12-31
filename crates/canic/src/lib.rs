@@ -56,9 +56,7 @@ pub mod prelude {
             access::auth::{is_child, is_controller, is_parent, is_root},
             auth_require_all, auth_require_any,
             ids::CanisterRole,
-            log,
-            ops::ic::{call::Call, http::Http},
-            perf, timer, timer_interval,
+            log, perf, timer, timer_interval,
         },
         macros::{canic_query, canic_update},
     };

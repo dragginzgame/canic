@@ -1,6 +1,8 @@
 use crate::{
-    Error, ThisError, cdk::types::WasmModule, ids::CanisterRole, log, log::Topic,
-    ops::runtime::RuntimeOpsError,
+    Error, ThisError,
+    cdk::types::WasmModule,
+    ids::CanisterRole,
+    ops::{prelude::*, runtime::RuntimeOpsError},
 };
 use std::{cell::RefCell, collections::HashMap};
 

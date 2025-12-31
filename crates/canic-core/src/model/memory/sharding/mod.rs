@@ -1,6 +1,4 @@
-mod registry;
-
-pub use registry::*;
+pub mod registry;
 
 use crate::{
     cdk::{
@@ -10,7 +8,10 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
-    model::memory::id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+    model::memory::{
+        id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+        sharding::registry::ShardingRegistry,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -129,15 +130,15 @@ impl<M: Memory> ShardingCore<M> {
     // Registry CRUD
     // ---------------------------
 
-    pub(crate) fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
+    pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
         self.registry.insert(pid, entry);
     }
 
-    pub(crate) fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
+    pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
         self.registry.get(pid)
     }
 
-    pub(crate) fn all_entries(&self) -> Vec<(Principal, ShardEntry)> {
+    pub fn all_entries(&self) -> Vec<(Principal, ShardEntry)> {
         self.registry
             .iter()
             .map(|e| (*e.key(), e.value()))
@@ -148,19 +149,20 @@ impl<M: Memory> ShardingCore<M> {
     // Assignments CRUD
     // ---------------------------
 
-    pub(crate) fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
+    pub fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
         self.assignments.insert(key, shard);
     }
 
-    pub(crate) fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
+    #[allow(dead_code)] // Used by future rebalance / eviction workflows
+    pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
         self.assignments.remove(key)
     }
 
-    pub(crate) fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
+    pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
         self.assignments.get(key)
     }
 
-    pub(crate) fn all_assignments(&self) -> Vec<(ShardKey, Principal)> {
+    pub fn all_assignments(&self) -> Vec<(ShardKey, Principal)> {
         self.assignments
             .iter()
             .map(|e| (e.key().clone(), e.value()))

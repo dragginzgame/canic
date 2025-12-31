@@ -1,6 +1,6 @@
 use crate::{
     Error, PublicError, ThisError, access::AccessError, dto::state::AppModeView,
-    ops::storage::state::AppStateOps,
+    ops::storage::state::app::AppStateOps,
 };
 
 ///

@@ -1,15 +1,12 @@
-pub(crate) mod methods;
-mod request;
-
-pub use request::*;
-pub(crate) use request::{create_canister_request_internal, upgrade_canister_request_internal};
+pub mod methods;
+pub mod request;
 
 use crate::{
     Error, PublicError, ThisError,
     cdk::candid::CandidType,
     dto::rpc::{Request, Response},
     infra::InfraError,
-    ops::{OpsError, ic::call::Call, runtime::env::EnvOps},
+    ops::{OpsError, ic::call::Call, rpc::request::RequestOpsError, runtime::env::EnvOps},
 };
 use serde::de::DeserializeOwned;
 

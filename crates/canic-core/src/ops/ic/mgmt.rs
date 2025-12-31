@@ -1,17 +1,19 @@
+//! ops::ic::mgmt
+//!
+//! Ops-level wrappers over IC management canister calls.
+//! Adds metrics, logging, and normalizes errors into `Error`.
+
 use crate::{
-    Error, PublicError,
+    Error,
     cdk::{
         mgmt::{CanisterInstallMode, CanisterStatusResult, UpdateSettingsArgs},
         types::Cycles,
     },
-    infra::InfraError,
-    infra::ic::mgmt as infra_mgmt,
-    log,
-    log::Topic,
+    infra,
     model::metrics::system::{SystemMetricKind, SystemMetrics},
-    ops::ic::call::Call,
+    ops::prelude::*,
 };
-use candid::{CandidType, Principal, decode_one, utils::ArgumentEncoder};
+use candid::{CandidType, Principal, utils::ArgumentEncoder};
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -22,7 +24,7 @@ pub async fn create_canister(
     controllers: Vec<Principal>,
     cycles: Cycles,
 ) -> Result<Principal, Error> {
-    let pid = infra_mgmt::create_canister(controllers, cycles).await?;
+    let pid = infra::ic::mgmt::create_canister(controllers, cycles).await?;
 
     SystemMetrics::increment(SystemMetricKind::CreateCanister);
 
@@ -33,21 +35,20 @@ pub async fn create_canister(
 // ────────────────────────────── CANISTER STATUS ──────────────────────────────
 //
 
-/// Query the management canister for a canister's status and record metrics.
+/// Internal ops entrypoint used by workflow and other ops helpers.
 pub(crate) async fn canister_status_internal(
     canister_pid: Principal,
 ) -> Result<CanisterStatusResult, Error> {
-    let status = infra_mgmt::canister_status(canister_pid).await?;
+    let status = infra::ic::mgmt::canister_status(canister_pid).await?;
 
     SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
     Ok(status)
 }
 
-pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, PublicError> {
-    canister_status_internal(canister_pid)
-        .await
-        .map_err(PublicError::from)
+/// Public ops wrapper (still internal to the crate).
+pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
+    canister_status_internal(canister_pid).await
 }
 
 //
@@ -57,12 +58,12 @@ pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusRe
 /// Returns the local canister's cycle balance (cheap).
 #[must_use]
 pub fn canister_cycle_balance() -> Cycles {
-    infra_mgmt::canister_cycle_balance()
+    infra::ic::mgmt::canister_cycle_balance()
 }
 
 /// Deposits cycles into a canister and records metrics.
 pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
-    infra_mgmt::deposit_cycles(canister_pid, cycles).await?;
+    infra::ic::mgmt::deposit_cycles(canister_pid, cycles).await?;
 
     SystemMetrics::increment(SystemMetricKind::DepositCycles);
 
@@ -82,14 +83,9 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
 
 /// Query the management canister for raw randomness and record metrics.
 pub async fn raw_rand() -> Result<[u8; 32], Error> {
-    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand")
-        .await
-        .map_err(InfraError::from)?;
-    let bytes: Vec<u8> = decode_one(&response).map_err(InfraError::from)?;
-    let len = bytes.len();
-    let seed: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| InfraError::from(infra_mgmt::MgmtInfraError::RawRandInvalidLength { len }))?;
+    let seed = infra::ic::mgmt::raw_rand().await?;
+
+    SystemMetrics::increment(SystemMetricKind::RawRand);
 
     Ok(seed)
 }
@@ -105,7 +101,7 @@ pub async fn install_code<T: ArgumentEncoder>(
     wasm: &[u8],
     args: T,
 ) -> Result<(), Error> {
-    infra_mgmt::install_code(mode, canister_pid, wasm, args).await?;
+    infra::ic::mgmt::install_code(mode, canister_pid, wasm, args).await?;
 
     let metric_kind = match mode {
         CanisterInstallMode::Install => SystemMetricKind::InstallCode,
@@ -122,11 +118,11 @@ pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<()
     install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
 
     #[allow(clippy::cast_precision_loss)]
-    let bytes_fmt = wasm.len() as f64 / 1_000.0;
+    let bytes_kb = wasm.len() as f64 / 1_000.0;
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "canister_upgrade: {canister_pid} ({bytes_fmt} KB) upgraded"
+        "canister_upgrade: {canister_pid} ({bytes_kb} KB) upgraded"
     );
 
     Ok(())
@@ -134,7 +130,7 @@ pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<()
 
 /// Uninstalls code from a canister and records metrics.
 pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
-    infra_mgmt::uninstall_code(canister_pid).await?;
+    infra::ic::mgmt::uninstall_code(canister_pid).await?;
 
     SystemMetrics::increment(SystemMetricKind::UninstallCode);
 
@@ -147,9 +143,9 @@ pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
     Ok(())
 }
 
-/// Deletes a canister (code + controllers) via the management canister and records metrics.
+/// Deletes a canister (code + controllers) via the management canister.
 pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
-    infra_mgmt::delete_canister(canister_pid).await?;
+    infra::ic::mgmt::delete_canister(canister_pid).await?;
 
     SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
@@ -162,8 +158,10 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
 
 /// Updates canister settings via the management canister and records metrics.
 pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
-    infra_mgmt::update_settings(args).await?;
+    infra::ic::mgmt::update_settings(args).await?;
+
     SystemMetrics::increment(SystemMetricKind::UpdateSettings);
+
     Ok(())
 }
 
@@ -177,12 +175,7 @@ pub async fn call_and_decode<T: CandidType + for<'de> candid::Deserialize<'de>>(
     method: &str,
     arg: impl CandidType,
 ) -> Result<T, Error> {
-    let response = Call::unbounded_wait(pid, method)
-        .with_arg(arg)
-        .await
-        .map_err(InfraError::from)?;
-
-    let decoded = candid::decode_one(&response).map_err(InfraError::from)?;
+    let decoded = infra::ic::mgmt::call_and_decode(pid, method, arg).await?;
 
     Ok(decoded)
 }

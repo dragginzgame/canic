@@ -4,7 +4,7 @@ use crate::{
     dto::{env::EnvView, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
     infra::ic::{Network, build_network},
-    model::memory::Env,
+    model::memory::env::Env,
     ops::{
         adapter::env::{env_data_from_view, env_data_to_view},
         runtime::RuntimeOpsError,
