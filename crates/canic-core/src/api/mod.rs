@@ -9,10 +9,11 @@
 pub mod app;
 pub mod endpoints;
 pub mod ic;
+pub mod metrics;
 pub mod perf;
 pub mod rpc;
-pub mod runtime;
 pub mod timer;
+pub mod wasm;
 
 ///
 /// EndpointCall

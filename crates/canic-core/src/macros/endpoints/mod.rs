@@ -81,7 +81,7 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_metrics_system() -> Vec<::canic::core::dto::metrics::SystemMetricsEntry> {
+        fn canic_metrics_system() -> Vec<::canic::core::dto::metrics::SystemMetricEntry> {
             $crate::api::endpoints::canic_metrics_system()
         }
 
@@ -117,7 +117,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_perf(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::api::perf::PerfEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::perf::PerfEntry> {
             $crate::api::endpoints::canic_metrics_perf(page)
         }
 
@@ -254,7 +254,7 @@ macro_rules! canic_endpoints {
                 return Err("unauthorized".to_string());
             }
 
-            $crate::workflow::endpoints::icts_canister_status().await
+            $crate::api::endpoints::icts_canister_status().await
         }
     };
 }

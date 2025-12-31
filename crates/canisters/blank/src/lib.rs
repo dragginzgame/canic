@@ -8,8 +8,8 @@
 use canic::{
     PublicError,
     core::{
+        api::rpc::request::create_canister_request,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
-        workflow::rpc::request::create_canister_request,
     },
     prelude::*,
 };
