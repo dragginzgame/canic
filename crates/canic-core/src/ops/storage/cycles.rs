@@ -1,8 +1,8 @@
 use crate::{
     cdk::types::Cycles,
     dto::page::{Page, PageRequest},
-    model::memory::cycles::CycleTracker,
-    ops::view::clamp_page_request,
+    ops::view::paginate::clamp_page_request,
+    storage::memory::cycles::CycleTracker,
 };
 
 ///

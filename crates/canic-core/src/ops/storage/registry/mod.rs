@@ -10,7 +10,7 @@ use crate::{Error, ThisError, ops::storage::StorageOpsError};
 #[derive(Debug, ThisError)]
 pub enum RegistryOpsError {
     #[error(transparent)]
-    SubnetRegistryOps(#[from] SubnetRegistryOpsError),
+    SubnetRegistryOps(#[from] subnet::SubnetRegistryOpsError),
 }
 
 impl From<RegistryOpsError> for Error {

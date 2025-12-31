@@ -1,7 +1,7 @@
 use crate::{
     dto::registry::{AppRegistryView, SubnetRegistryView},
-    model::memory::registry::{AppRegistryData, SubnetRegistryData},
     ops::adapter::canister::canister_entry_to_view,
+    storage::memory::registry::{app::AppRegistryData, subnet::SubnetRegistryData},
 };
 
 #[must_use]

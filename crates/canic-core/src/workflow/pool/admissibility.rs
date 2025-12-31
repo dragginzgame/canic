@@ -1,13 +1,11 @@
 use crate::{
     cdk::types::Principal,
-    ops::{
-        ic::{Network, build_network, canister_status},
-        storage::registry::SubnetRegistryOps,
-    },
-    policy::pool::{
+    domain::policy::pool::{
         PoolPolicyError,
         admissibility::{policy_can_enter_pool, policy_is_importable_on_local},
     },
+    infra::ic::{Network, build_network},
+    ops::{ic::mgmt::canister_status, storage::registry::subnet::SubnetRegistryOps},
 };
 
 #[inline]

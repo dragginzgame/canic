@@ -1,13 +1,12 @@
-pub mod builders;
-
-pub use builders::*;
+pub mod builder;
 
 use crate::{
     dto::directory::{AppDirectoryView, SubnetDirectoryView},
     ops::{
         runtime::env::EnvOps,
-        storage::directory::{AppDirectoryOps, SubnetDirectoryOps},
+        storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
     },
+    workflow::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
 };
 
 ///

@@ -1,7 +1,7 @@
 use crate::{
     dto::state::SubnetStateView,
-    model::memory::state::SubnetState,
     ops::adapter::state::{subnet_state_from_view, subnet_state_to_view},
+    storage::memory::state::subnet::SubnetState,
 };
 
 ///

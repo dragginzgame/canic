@@ -3,12 +3,12 @@ use crate::{
         clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
         set_timer_interval as cdk_set_timer_interval,
     },
-    model::metrics::{
+    ops::perf::PerfOps,
+    perf::perf_counter,
+    storage::metrics::{
         system::{SystemMetricKind, SystemMetrics},
         timer::{TimerMetrics, TimerMode},
     },
-    ops::perf::PerfOps,
-    perf::perf_counter,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 

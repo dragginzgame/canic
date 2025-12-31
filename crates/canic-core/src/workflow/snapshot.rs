@@ -15,9 +15,9 @@ use crate::{
         state::{AppStateView, SubnetStateView},
     },
     ops::storage::{
-        directory::{AppDirectoryOps, SubnetDirectoryOps},
-        registry::SubnetRegistryOps,
-        state::{AppStateOps, SubnetStateOps},
+        directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+        registry::subnet::SubnetRegistryOps,
+        state::{app::AppStateOps, subnet::SubnetStateOps},
     },
 };
 use candid::Principal;

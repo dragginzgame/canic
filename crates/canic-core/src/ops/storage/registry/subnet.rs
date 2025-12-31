@@ -1,14 +1,12 @@
 use crate::{
     Error, ThisError,
-    cdk::types::Principal,
-    cdk::utils::time::now_secs,
+    cdk::{types::Principal, utils::time::now_secs},
     config::schema::CanisterCardinality,
     dto::{
         registry::SubnetRegistryView,
         snapshot::{TopologyChildView, TopologyNodeView},
     },
     ids::CanisterRole,
-    model::memory::{CanisterEntry, CanisterSummary, registry::SubnetRegistry},
     ops::{
         adapter::{
             canister::{canister_summary_to_topology_child, canister_summary_to_topology_node},
@@ -16,6 +14,10 @@ use crate::{
         },
         config::ConfigOps,
         storage::registry::RegistryOpsError,
+    },
+    storage::{
+        canister::{CanisterEntry, CanisterSummary},
+        memory::registry::subnet::SubnetRegistry,
     },
 };
 use std::collections::HashSet;

@@ -1,6 +1,6 @@
 use crate::{
-    dto::metrics::access::{AccessMetricEntry, AccessMetricKind},
-    model::metrics::access::{AccessMetricKey, AccessMetricKind as ModelAccessMetricKind},
+    dto::metrics::{AccessMetricEntry, AccessMetricKind},
+    storage::metrics::access::{AccessMetricKey, AccessMetricKind as ModelAccessMetricKind},
 };
 
 const fn access_metric_kind_to_view(kind: ModelAccessMetricKind) -> AccessMetricKind {

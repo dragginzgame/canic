@@ -1,4 +1,4 @@
-use crate::{dto::log::LogEntryView, model::memory::log::LogEntry};
+use crate::{dto::log::LogEntryView, storage::memory::log::LogEntry};
 
 #[must_use]
 pub fn log_entry_to_view(entry: &LogEntry) -> LogEntryView {

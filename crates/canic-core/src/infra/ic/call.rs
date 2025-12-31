@@ -1,4 +1,4 @@
-use crate::cdk::{call::Call as IcCall, candid::Principal};
+use crate::{cdk::call::Call as IcCall, infra::prelude::*};
 
 ///
 /// Call

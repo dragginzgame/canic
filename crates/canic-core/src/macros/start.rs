@@ -18,18 +18,14 @@ macro_rules! start {
         #[::canic::cdk::init]
         fn init(payload: ::canic::core::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             // Load embedded configuration early.
-            ::canic::core::__canic_load_config!();
+            $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
-            ::canic::core::lifecycle::init::init_nonroot_canister(
-                $canister_role,
-                payload,
-                args.clone(),
-            );
+            $crate::lifecycle::init::init_nonroot_canister($canister_role, payload, args.clone());
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            ::canic::core::ops::ic::timer::TimerOps::set(
-                ::core::time::Duration::ZERO,
+            $crate::api::timer::set_lifecycle_timer(
+                ::std::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
                     canic_setup().await;
@@ -41,13 +37,13 @@ macro_rules! start {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             // Reload embedded configuration on upgrade.
-            ::canic::core::__canic_load_config!();
+            $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::upgrade::post_upgrade_nonroot_canister($canister_role);
+            $crate::lifecycle::upgrade::post_upgrade_nonroot_canister($canister_role);
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            ::canic::core::ops::ic::timer::TimerOps::set(
+            $crate::api::timer::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -57,8 +53,8 @@ macro_rules! start {
             );
         }
 
-        ::canic::core::canic_endpoints!();
-        ::canic::core::canic_endpoints_nonroot!();
+        $crate::canic_endpoints!();
+        $crate::canic_endpoints_nonroot!();
     };
 }
 
@@ -80,13 +76,13 @@ macro_rules! start_root {
         #[::canic::cdk::init]
         fn init(identity: ::canic::core::dto::subnet::SubnetIdentity) {
             // Load embedded configuration early.
-            ::canic::core::__canic_load_config!();
+            $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::init::init_root_canister(identity);
+            $crate::lifecycle::init::init_root_canister(identity);
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            ::canic::core::ops::ic::timer::TimerOps::set(
+            $crate::api::timer::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -99,13 +95,13 @@ macro_rules! start_root {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             // Reload embedded configuration on upgrade.
-            ::canic::core::__canic_load_config!();
+            $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            ::canic::core::lifecycle::upgrade::post_upgrade_root_canister();
+            $crate::lifecycle::upgrade::post_upgrade_root_canister();
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            ::canic::core::ops::ic::timer::TimerOps::set(
+            $crate::api::timer::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -115,10 +111,11 @@ macro_rules! start_root {
             );
         }
 
-        ::canic::core::canic_endpoints!();
-        ::canic::core::canic_endpoints_root!();
+        $crate::canic_endpoints!();
+        $crate::canic_endpoints_root!();
     };
 }
+
 //
 // Private helpers
 //

@@ -6,8 +6,8 @@ use crate::{
         page::{Page, PageRequest},
     },
     log::Level,
-    model::memory::log::{Log, RetentionSummary, apply_retention_with_cfg},
     ops::{adapter::log::log_entry_to_view, config::ConfigOps, view::paginate::paginate_vec},
+    storage::memory::log::{Log, RetentionSummary, apply_retention_with_cfg},
 };
 
 ///

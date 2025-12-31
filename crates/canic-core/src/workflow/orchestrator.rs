@@ -1,6 +1,7 @@
 use crate::{
     Error, ThisError,
     cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
+    domain::policy::upgrade::plan_upgrade,
     ids::CanisterRole,
     log,
     log::Topic,
@@ -8,16 +9,15 @@ use crate::{
         ic::mgmt::{canister_status, delete_canister, upgrade_canister},
         runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
         storage::{
-            directory::{AppDirectoryOps, SubnetDirectoryOps},
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
-            registry::SubnetRegistryOps,
+            registry::subnet::SubnetRegistryOps,
         },
     },
-    policy::upgrade::plan_upgrade,
     workflow::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
-        directory::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::provision::{
             build_nonroot_init_payload, create_and_install_canister,
             rebuild_directories_from_registry,

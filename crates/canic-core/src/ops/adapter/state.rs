@@ -1,6 +1,9 @@
 use crate::{
     dto::state::{AppModeView, AppStateView, SubnetStateView},
-    model::memory::state::{AppMode, AppStateData, SubnetStateData},
+    storage::memory::state::{
+        app::{AppMode, AppStateData},
+        subnet::SubnetStateData,
+    },
 };
 
 #[must_use]

@@ -1,8 +1,8 @@
 use crate::{
     cdk::types::Principal,
     dto::placement::ScalingRegistryView,
-    model::memory::scaling::{ScalingRegistry, WorkerEntry},
     ops::adapter::placement::worker_entry_to_view,
+    storage::memory::scaling::{ScalingRegistry, WorkerEntry},
 };
 
 ///

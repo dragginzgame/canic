@@ -1,7 +1,7 @@
 use crate::{
     Error, PublicError,
     dto::state::AppCommand,
-    ops::{runtime::env::EnvOps, storage::state::AppStateOps},
+    ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
     workflow::{cascade::state::root_cascade_state, snapshot::StateSnapshotBuilder},
 };
 

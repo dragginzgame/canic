@@ -1,4 +1,4 @@
-use crate::{dto::metrics::system::SystemMetricEntry, model::metrics::system::SystemMetricKind};
+use crate::{dto::metrics::SystemMetricEntry, storage::metrics::system::SystemMetricKind};
 
 #[must_use]
 pub fn system_metrics_to_view(
@@ -21,6 +21,7 @@ fn kind_to_string(kind: SystemMetricKind) -> String {
         SystemMetricKind::DepositCycles => "DepositCycles",
         SystemMetricKind::HttpOutcall => "HttpOutcall",
         SystemMetricKind::InstallCode => "InstallCode",
+        SystemMetricKind::RawRand => "RawRand",
         SystemMetricKind::ReinstallCode => "ReinstallCode",
         SystemMetricKind::TimerScheduled => "TimerScheduled",
         SystemMetricKind::UninstallCode => "UninstallCode",

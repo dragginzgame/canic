@@ -8,8 +8,7 @@ use crate::{
             IcpXdrConversionRateResponse,
         },
     },
-    infra::InfraError,
-    infra::ic::call::Call,
+    infra::prelude::*,
 };
 
 ///

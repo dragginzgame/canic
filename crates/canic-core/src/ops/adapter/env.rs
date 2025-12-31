@@ -1,4 +1,4 @@
-use crate::{dto::env::EnvView, model::memory::env::EnvData};
+use crate::{dto::env::EnvView, storage::memory::env::EnvData};
 
 #[must_use]
 pub fn env_data_from_view(view: EnvView) -> EnvData {

@@ -1,6 +1,6 @@
 use crate::{
-    dto::registry::AppRegistryView, model::memory::registry::AppRegistry,
-    ops::adapter::registry::app_registry_to_view,
+    dto::registry::AppRegistryView, ops::adapter::registry::app_registry_to_view,
+    storage::memory::registry::app::AppRegistry,
 };
 
 ///

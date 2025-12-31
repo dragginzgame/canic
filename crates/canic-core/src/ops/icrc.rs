@@ -4,7 +4,7 @@ use crate::{
         icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     },
     dispatch::icrc21::Icrc21Dispatcher,
-    model::icrc::icrc10::Icrc10Registry,
+    domain::icrc::icrc10::Icrc10Registry,
 };
 
 ///

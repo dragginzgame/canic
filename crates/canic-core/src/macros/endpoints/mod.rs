@@ -23,14 +23,14 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-            $crate::workflow::endpoints::icrc10_supported_standards()
+            $crate::api::endpoints::icrc10_supported_standards()
         }
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageResponse {
-            $crate::workflow::endpoints::icrc21_canister_call_consent_message(req)
+            $crate::api::endpoints::icrc21_canister_call_consent_message(req)
         }
 
         //
@@ -58,12 +58,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_memory_registry() -> ::canic::core::dto::memory::MemoryRegistryView {
-            $crate::workflow::endpoints::canic_memory_registry()
+            $crate::api::endpoints::canic_memory_registry()
         }
 
         #[canic_query]
         fn canic_env() -> ::canic::core::dto::env::EnvView {
-            $crate::workflow::endpoints::canic_env()
+            $crate::api::endpoints::canic_env()
         }
 
         #[canic_query]
@@ -73,7 +73,7 @@ macro_rules! canic_endpoints {
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::log::LogEntryView> {
-            $crate::workflow::endpoints::canic_log(crate_name, topic, min_level, page)
+            $crate::api::endpoints::canic_log(crate_name, topic, min_level, page)
         }
 
         //
@@ -82,7 +82,7 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_metrics_system() -> ::canic::core::ops::runtime::metrics::SystemMetricsSnapshot {
-            $crate::workflow::endpoints::canic_metrics_system()
+            $crate::api::endpoints::canic_metrics_system()
         }
 
         #[canic_query]
@@ -127,7 +127,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::endpoint::EndpointHealthView> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::EndpointHealthView> {
             $crate::workflow::endpoints::canic_metrics_endpoint_health(page)
         }
 

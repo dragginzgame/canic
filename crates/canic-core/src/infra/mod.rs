@@ -14,16 +14,12 @@ use crate::{
 
 pub mod prelude {
     pub use crate::{
-        cdk::{
-            api::{canister_self, msg_caller},
-            candid::CandidType,
-            types::{Account, Cycles, Int, Nat, Principal, Subaccount},
-        },
-        ids::CanisterRole,
+        ThisError,
+        cdk::types::{Account, Cycles, Principal},
+        infra::{InfraError, ic::call::Call},
         log,
-        log::{Level, Topic},
+        log::Topic,
     };
-    pub use serde::{Deserialize, Serialize};
 }
 
 ///

@@ -7,16 +7,16 @@ use crate::{
     Error, PublicError,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
+    domain::policy::placement::sharding::{
+        ShardingPolicyError,
+        metrics::pool_metrics,
+        policy::{ShardingPlanState, ShardingPolicy},
+    },
     dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
     log,
     log::Topic,
     ops::{rpc::request::create_canister_request, storage::sharding::ShardingRegistryOps},
-    policy::placement::sharding::{
-        ShardingPolicyError,
-        metrics::pool_metrics,
-        policy::{ShardingPlanState, ShardingPolicy},
-    },
 };
 
 ///

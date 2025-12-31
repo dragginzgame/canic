@@ -1,6 +1,6 @@
 use crate::{
-    dto::metrics::timer::TimerMetricEntry,
-    model::metrics::timer::{TimerMetricKey, TimerMode},
+    dto::metrics::TimerMetricEntry,
+    storage::metrics::timer::{TimerMetricKey, TimerMode},
 };
 
 #[must_use]

@@ -11,7 +11,10 @@ use crate::{
         env::EnvView,
         log::LogEntryView,
         memory::MemoryRegistryView,
-        metrics::endpoint::EndpointHealthView,
+        metrics::{
+            AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
+            TimerMetricEntry,
+        },
         page::{Page, PageRequest},
         placement::{ScalingRegistryView, ShardingRegistryView},
         pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
@@ -24,15 +27,11 @@ use crate::{
     log::Level,
     ops::{
         icrc::{Icrc10Ops, Icrc21Ops},
-        perf::PerfEntry,
         runtime::{
             env::EnvOps,
             log::LogViewOps,
             memory::MemoryOps,
-            metrics::{
-                AccessMetricEntry, HttpMetricEntry, IccMetricEntry, MetricsOps,
-                SystemMetricsSnapshot, TimerMetricEntry,
-            },
+            metrics::{MetricsOps, SystemMetricsSnapshot},
         },
         storage::{
             children::CanisterChildrenOps,
@@ -45,6 +44,7 @@ use crate::{
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
+    perf::PerfEntry,
     workflow,
 };
 
@@ -52,10 +52,12 @@ use crate::{
 // ICRC
 //
 
+#[must_use]
 pub fn icrc10_supported_standards() -> Vec<(String, String)> {
     Icrc10Ops::supported_standards()
 }
 
+#[must_use]
 pub fn icrc21_canister_call_consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
     Icrc21Ops::consent_message(req)
 }
@@ -64,14 +66,17 @@ pub fn icrc21_canister_call_consent_message(req: ConsentMessageRequest) -> Conse
 // CANISTER HELPERS
 //
 
+#[must_use]
 pub fn canic_memory_registry() -> MemoryRegistryView {
     MemoryOps::export_view()
 }
 
+#[must_use]
 pub fn canic_env() -> EnvView {
     EnvOps::export_view()
 }
 
+#[must_use]
 pub fn canic_log(
     crate_name: Option<String>,
     topic: Option<String>,
@@ -85,30 +90,37 @@ pub fn canic_log(
 // METRICS
 //
 
+#[must_use]
 pub fn canic_metrics_system() -> SystemMetricsSnapshot {
     MetricsOps::system_snapshot()
 }
 
+#[must_use]
 pub fn canic_metrics_icc(page: PageRequest) -> Page<IccMetricEntry> {
     MetricsOps::icc_page(page)
 }
 
+#[must_use]
 pub fn canic_metrics_http(page: PageRequest) -> Page<HttpMetricEntry> {
     MetricsOps::http_page(page)
 }
 
+#[must_use]
 pub fn canic_metrics_timer(page: PageRequest) -> Page<TimerMetricEntry> {
     MetricsOps::timer_page(page)
 }
 
+#[must_use]
 pub fn canic_metrics_access(page: PageRequest) -> Page<AccessMetricEntry> {
     MetricsOps::access_page(page)
 }
 
+#[must_use]
 pub fn canic_metrics_perf(page: PageRequest) -> Page<PerfEntry> {
     crate::ops::perf::PerfOps::snapshot(page)
 }
 
+#[must_use]
 pub fn canic_metrics_endpoint_health(page: PageRequest) -> Page<EndpointHealthView> {
     MetricsOps::endpoint_health_page_excluding(page, Some("canic_metrics_endpoint_health"))
 }
@@ -117,10 +129,12 @@ pub fn canic_metrics_endpoint_health(page: PageRequest) -> Page<EndpointHealthVi
 // STATE
 //
 
+#[must_use]
 pub fn canic_app_state() -> AppStateView {
     AppStateOps::export_view()
 }
 
+#[must_use]
 pub fn canic_subnet_state() -> SubnetStateView {
     SubnetStateOps::export_view()
 }
@@ -129,10 +143,12 @@ pub fn canic_subnet_state() -> SubnetStateView {
 // REGISTRIES
 //
 
+#[must_use]
 pub fn canic_app_registry() -> AppRegistryView {
     AppRegistryOps::export_view()
 }
 
+#[must_use]
 pub fn canic_subnet_registry() -> SubnetRegistryView {
     SubnetRegistryOps::export_view()
 }
@@ -141,10 +157,12 @@ pub fn canic_subnet_registry() -> SubnetRegistryView {
 // DIRECTORY VIEWS
 //
 
+#[must_use]
 pub fn canic_app_directory(page: PageRequest) -> Page<(CanisterRole, Principal)> {
     AppDirectoryOps::page(page)
 }
 
+#[must_use]
 pub fn canic_subnet_directory(page: PageRequest) -> Page<(CanisterRole, Principal)> {
     SubnetDirectoryOps::page(page)
 }
@@ -153,6 +171,7 @@ pub fn canic_subnet_directory(page: PageRequest) -> Page<(CanisterRole, Principa
 // TOPOLOGY
 //
 
+#[must_use]
 pub fn canic_subnet_canister_children(page: PageRequest) -> Page<CanisterSummaryView> {
     CanisterChildrenOps::page(page)
 }
@@ -161,6 +180,7 @@ pub fn canic_subnet_canister_children(page: PageRequest) -> Page<CanisterSummary
 // CYCLES
 //
 
+#[must_use]
 pub fn canic_cycle_tracker(page: PageRequest) -> Page<(u64, Cycles)> {
     CycleTrackerOps::page(page)
 }
@@ -202,7 +222,7 @@ pub async fn canic_response(request: Request) -> Result<Response, PublicError> {
 }
 
 pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusResult, PublicError> {
-    crate::ops::ic::canister_status(pid)
+    crate::ops::ic::mgmt::canister_status(pid)
         .await
         .map_err(PublicError::from)
 }
@@ -236,7 +256,7 @@ pub async fn canic_sync_topology(snapshot: TopologySnapshotView) -> Result<(), P
 //
 
 pub async fn icts_canister_status() -> Result<CanisterStatusResult, String> {
-    crate::ops::ic::canister_status(canister_self())
+    crate::ops::ic::mgmt::canister_status(canister_self())
         .await
         .map_err(|err| err.to_string())
 }

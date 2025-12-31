@@ -9,7 +9,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_app(
             cmd: ::canic::core::dto::state::AppCommand,
         ) -> Result<(), ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_app(cmd).await
+            $crate::api::endpoints::canic_app(cmd).await
         }
 
         // canic_canister_upgrade
@@ -17,7 +17,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::core::dto::rpc::UpgradeCanisterResponse, ::canic::PublicError> {
-            let res = $crate::workflow::endpoints::canic_canister_upgrade(canister_pid).await?;
+            let res = $crate::api::endpoints::canic_canister_upgrade(canister_pid).await?;
 
             Ok(res)
         }
@@ -29,7 +29,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_response(
             request: ::canic::core::dto::rpc::Request,
         ) -> Result<::canic::core::dto::rpc::Response, ::canic::PublicError> {
-            let response = $crate::workflow::endpoints::canic_response(request).await?;
+            let response = $crate::api::endpoints::canic_response(request).await?;
 
             Ok(response)
         }
@@ -43,7 +43,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_canister_status(pid).await
+            $crate::api::endpoints::canic_canister_status(pid).await
         }
 
         //
@@ -52,7 +52,7 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_config() -> Result<String, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_config()
+            $crate::api::endpoints::canic_config()
         }
 
         //
@@ -61,12 +61,12 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         fn canic_app_registry() -> ::canic::core::dto::registry::AppRegistryView {
-            $crate::workflow::endpoints::canic_app_registry()
+            $crate::api::endpoints::canic_app_registry()
         }
 
         #[canic_query]
         fn canic_subnet_registry() -> ::canic::core::dto::registry::SubnetRegistryView {
-            $crate::workflow::endpoints::canic_subnet_registry()
+            $crate::api::endpoints::canic_subnet_registry()
         }
 
         //
@@ -76,14 +76,14 @@ macro_rules! canic_endpoints_root {
         #[canic_query]
         async fn canic_pool_list()
         -> Result<::canic::core::dto::pool::CanisterPoolView, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_pool_list()
+            $crate::api::endpoints::canic_pool_list()
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_pool_admin(
             cmd: ::canic::core::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::core::dto::pool::PoolAdminResponse, ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_pool_admin(cmd).await
+            $crate::api::endpoints::canic_pool_admin(cmd).await
         }
     };
 }
@@ -100,14 +100,14 @@ macro_rules! canic_endpoints_nonroot {
         async fn canic_sync_state(
             snapshot: ::canic::core::dto::snapshot::StateSnapshotView,
         ) -> Result<(), ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_sync_state(snapshot).await
+            $crate::api::endpoints::canic_sync_state(snapshot).await
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
             snapshot: ::canic::core::dto::snapshot::TopologySnapshotView,
         ) -> Result<(), ::canic::PublicError> {
-            $crate::workflow::endpoints::canic_sync_topology(snapshot).await
+            $crate::api::endpoints::canic_sync_topology(snapshot).await
         }
     };
 }

@@ -15,13 +15,13 @@
 
 use crate::{
     Error,
+    domain::policy::pool::PoolPolicyError,
     dto::pool::CanisterPoolStatusView,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
-    policy::pool::PoolPolicyError,
     workflow::{
         pool::{admissibility::check_can_enter_pool, mark_failed, reset_into_pool},
         prelude::*,

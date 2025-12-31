@@ -1,8 +1,8 @@
 use crate::{
     CRATE_NAME, Error, ThisError,
     dto::memory::{MemoryRegistryEntryView, MemoryRegistryView},
-    model::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
     ops::{prelude::*, runtime::RuntimeOpsError},
+    storage::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
 use canic_memory::{
     registry::{MemoryRange, MemoryRegistryError},

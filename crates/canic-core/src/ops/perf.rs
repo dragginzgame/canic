@@ -1,6 +1,6 @@
 use crate::{
     dto::page::{Page, PageRequest},
-    ops::view::clamp_page_request,
+    ops::view::paginate::clamp_page_request,
     perf::{self, PerfEntry},
 };
 

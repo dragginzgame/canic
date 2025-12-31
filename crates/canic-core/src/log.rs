@@ -1,4 +1,4 @@
-use crate::{model::memory::env::Env, ops::runtime::log::LogOps};
+use crate::{ops::runtime::log::LogOps, storage::memory::env::Env};
 use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};

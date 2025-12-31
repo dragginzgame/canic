@@ -1,8 +1,8 @@
 use crate::{
     cdk::mgmt::HttpMethod,
-    dto::metrics::http::HttpMetricEntry,
-    model::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics},
+    dto::metrics::HttpMetricEntry,
     ops::runtime::metrics::normalize_http_label,
+    storage::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics},
 };
 
 /// Increment HTTP metric using mgmt API types.

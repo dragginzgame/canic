@@ -3,12 +3,12 @@ use crate::{
         directory::AppDirectoryView,
         page::{Page, PageRequest},
     },
-    model::memory::directory::{AppDirectory, AppDirectoryData},
     ops::{
         adapter::directory::{app_directory_from_view, app_directory_to_view},
         prelude::*,
-        view::paginate_vec,
+        view::paginate::paginate_vec,
     },
+    storage::memory::directory::app::{AppDirectory, AppDirectoryData},
 };
 
 ///

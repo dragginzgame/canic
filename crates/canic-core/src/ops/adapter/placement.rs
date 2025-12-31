@@ -1,6 +1,6 @@
 use crate::{
     dto::placement::{ShardEntryView, WorkerEntryView},
-    model::memory::{scaling::WorkerEntry, sharding::ShardEntry},
+    storage::memory::{scaling::WorkerEntry, sharding::ShardEntry},
 };
 
 #[must_use]
