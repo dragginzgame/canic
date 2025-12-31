@@ -5,10 +5,9 @@
 
 #![allow(clippy::unused_async)]
 
-use std::time::Duration;
-
 use canic::{PublicError, prelude::*};
 use canic_internal::canister::TEST;
+use std::time::Duration;
 
 //
 // CANIC

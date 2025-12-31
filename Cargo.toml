@@ -95,6 +95,7 @@ use_self = "warn"
 # always allow
 doc_markdown = "allow"
 empty_line_after_doc_comments = "allow"
+enum_variant_names = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_inception = "allow"

@@ -36,7 +36,7 @@ pub async fn create_canister(
 //
 
 /// Internal ops entrypoint used by workflow and other ops helpers.
-pub(crate) async fn canister_status_internal(
+pub async fn canister_status_internal(
     canister_pid: Principal,
 ) -> Result<CanisterStatusResult, Error> {
     let status = infra::ic::mgmt::canister_status(canister_pid).await?;

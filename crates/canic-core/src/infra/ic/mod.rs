@@ -18,7 +18,6 @@ use crate::infra::prelude::*;
 /// IcInfraError
 ///
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Debug, ThisError)]
 pub enum IcInfraError {
     #[error(transparent)]

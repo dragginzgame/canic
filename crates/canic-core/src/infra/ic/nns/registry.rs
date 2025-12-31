@@ -33,9 +33,7 @@ impl From<NnsRegistryInfraError> for InfraError {
 /// - never leaks protocol details
 ///
 
-pub(crate) async fn get_subnet_for_canister(
-    pid: Principal,
-) -> Result<Option<Principal>, InfraError> {
+pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, InfraError> {
     let request = GetSubnetForCanisterRequest::new(pid);
 
     let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")

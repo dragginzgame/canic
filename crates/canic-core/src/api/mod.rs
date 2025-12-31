@@ -6,8 +6,11 @@
 //!
 //! No orchestration or business logic should live here.
 
+pub mod app;
 pub mod endpoints;
 pub mod ic;
+pub mod perf;
+pub mod rpc;
 pub mod runtime;
 pub mod timer;
 
