@@ -119,7 +119,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_perf(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::ops::perf::PerfEntry> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::api::perf::PerfEntry> {
             $crate::api::endpoints::canic_metrics_perf(page)
         }
 

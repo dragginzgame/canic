@@ -1,3 +1,5 @@
+pub mod handler;
+
 use crate::{
     Error,
     cdk::{candid::CandidType, types::Principal},
@@ -7,7 +9,7 @@ use crate::{
 };
 
 ///
-/// RPC client helpers.
+/// RPC helpers
 ///
 /// Workflow wrappers around ops-level RPC calls so endpoints can depend on
 /// workflow instead of ops directly.

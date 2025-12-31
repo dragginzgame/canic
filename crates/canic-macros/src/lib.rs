@@ -404,13 +404,13 @@ mod expand {
 
     fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
         quote! {
-            ::canic::core::ops::runtime::metrics::AccessMetrics::increment(#call, #kind);
+            ::canic::core::api::runtime::metrics::AccessMetrics::increment(#call, #kind);
         }
     }
 
     fn attempted(call: &syn::Ident) -> TokenStream2 {
         quote! {
-            ::canic::core::ops::runtime::metrics::EndpointAttemptMetrics::increment_attempted(#call);
+            ::canic::core::api::runtime::metrics::EndpointAttemptMetrics::increment_attempted(#call);
         }
     }
 
@@ -421,7 +421,7 @@ mod expand {
 
         let metric = record_access_denied(
             call,
-            quote!(::canic::core::ops::runtime::metrics::AccessMetricKind::Guard),
+            quote!(::canic::core::api::runtime::metrics::AccessMetricKind::Guard),
         );
 
         match kind {

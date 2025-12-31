@@ -206,19 +206,19 @@ pub fn canic_sharding_registry() -> Result<ShardingRegistryView, PublicError> {
 //
 
 pub async fn canic_app(cmd: AppCommand) -> Result<(), PublicError> {
-    workflow::app::AppStateOrchestrator::apply_command(cmd).await
+    crate::api::app::apply_command(cmd).await
 }
 
 pub async fn canic_canister_upgrade(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, PublicError> {
-    workflow::rpc::client::upgrade_canister_request(canister_pid)
+    workflow::rpc::request::upgrade_canister_request(canister_pid)
         .await
         .map_err(PublicError::from)
 }
 
 pub async fn canic_response(request: Request) -> Result<Response, PublicError> {
-    workflow::rpc::handler::response(request).await
+    workflow::rpc::request::handler::response(request).await
 }
 
 pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusResult, PublicError> {
