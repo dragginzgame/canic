@@ -218,7 +218,7 @@ pub fn canic_config() -> Result<String, PublicError> {
 }
 
 pub fn canic_pool_list() -> Result<CanisterPoolView, PublicError> {
-    Ok(workflow::query::registry::pool_list_view())
+    Ok(workflow::query::pool::pool_list_view())
 }
 
 pub async fn canic_pool_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {

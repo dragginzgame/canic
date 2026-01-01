@@ -16,7 +16,3 @@ pub(crate) fn app_registry_view() -> AppRegistryView {
 pub(crate) fn subnet_registry_view() -> SubnetRegistryView {
     SubnetRegistryOps::export_view()
 }
-
-pub(crate) fn pool_list_view() -> CanisterPoolView {
-    PoolOps::export_view()
-}
