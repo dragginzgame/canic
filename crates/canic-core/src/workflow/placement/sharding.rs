@@ -12,7 +12,7 @@ use crate::{
         metrics::pool_metrics,
         policy::{ShardingPlanState, ShardingPolicy},
     },
-    dto::rpc::CreateCanisterParent,
+    dto::{placement::ShardingPlanStateView, rpc::CreateCanisterParent},
     ids::CanisterRole,
     log,
     log::Topic,
@@ -70,16 +70,6 @@ impl ShardAllocator {
 pub struct ShardingWorkflow;
 
 impl ShardingWorkflow {
-    /// Plan a tenant assignment without mutating state.
-    pub(crate) fn plan_assign_to_pool(
-        pool: &str,
-        tenant: impl AsRef<str>,
-    ) -> Result<ShardingPlanState, Error> {
-        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
-
-        Ok(plan.state)
-    }
-
     /// Assign a tenant to the given pool, creating a shard if necessary.
     pub(crate) async fn assign_to_pool(
         pool: &str,
@@ -159,6 +149,16 @@ impl ShardingWorkflow {
         }
     }
 
+    /// Plan a tenant assignment without mutating state.
+    pub(crate) fn plan_assign_to_pool(
+        pool: &str,
+        tenant: impl AsRef<str>,
+    ) -> Result<ShardingPlanStateView, Error> {
+        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
+
+        Ok(plan_state_to_view(plan.state))
+    }
+
     /// Drain up to `limit` tenants from a shard into others or new shards.
     pub(crate) async fn drain_shard(
         pool: &str,
@@ -226,6 +226,19 @@ impl ShardingWorkflow {
     /// Internal: fetch shard pool config for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
         ShardingPolicy::get_pool_config(pool)
+    }
+}
+
+fn plan_state_to_view(state: ShardingPlanState) -> ShardingPlanStateView {
+    match state {
+        ShardingPlanState::AlreadyAssigned { pid } => {
+            ShardingPlanStateView::AlreadyAssigned { pid }
+        }
+        ShardingPlanState::UseExisting { pid } => ShardingPlanStateView::UseExisting { pid },
+        ShardingPlanState::CreateAllowed => ShardingPlanStateView::CreateAllowed,
+        ShardingPlanState::CreateBlocked { reason } => ShardingPlanStateView::CreateBlocked {
+            reason: reason.to_string(),
+        },
     }
 }
 

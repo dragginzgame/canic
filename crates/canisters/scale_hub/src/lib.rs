@@ -5,8 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
-use candid::Principal;
-use canic::{PublicError, core::workflow::placement::scaling::ScalingWorkflow, prelude::*};
+use canic::{PublicError, cdk::types::Principal, core::api, prelude::*};
 use canic_internal::canister::SCALE_HUB;
 
 const POOL_NAME: &str = "scales";
@@ -29,7 +28,7 @@ async fn canic_upgrade() {}
 /// no authentication needed as for canic testing
 #[canic_update]
 async fn create_worker() -> Result<Principal, PublicError> {
-    let worker_pid = ScalingWorkflow::create_worker(POOL_NAME).await?;
+    let worker_pid = api::placement::scaling::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
 }
@@ -39,7 +38,7 @@ async fn create_worker() -> Result<Principal, PublicError> {
 #[canic_query]
 async fn plan_create_worker() -> Result<bool, PublicError> {
     // Example: return whether scaling policy says "yes, spawn"
-    ScalingWorkflow::plan_create_worker(POOL_NAME)
+    api::placement::scaling::plan_create_worker(POOL_NAME)
 }
 
 export_candid!();

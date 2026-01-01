@@ -9,7 +9,11 @@
 use crate::utils::hash::hash_u64;
 use candid::Principal;
 
-/// HRW-based shard selector.
+///
+/// HrwSelector
+/// HRW-based shard selector
+///
+
 pub struct HrwSelector;
 
 impl HrwSelector {

@@ -40,6 +40,7 @@ impl From<ScalingWorkflowError> for Error {
 ///
 /// ScalingWorkflow
 ///
+
 pub struct ScalingWorkflow;
 
 impl ScalingWorkflow {
@@ -75,7 +76,7 @@ impl ScalingWorkflow {
     }
 
     /// Plan whether a worker should be created according to policy.
-    pub(crate) fn plan_create_worker_(pool: &str) -> Result<bool, Error> {
+    pub(crate) fn plan_create_worker(pool: &str) -> Result<bool, Error> {
         let plan = ScalingPolicy::plan_create_worker(pool, now_secs())?;
 
         Ok(plan.should_spawn)
