@@ -27,7 +27,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         async {
             // Root bootstrap failure is fatal: the subnet must not
             // continue in a partially initialized state.
-            if let Err(err) = workflow::bootstrap::bootstrap_init_root_canister().await {
+            if let Err(err) = workflow::bootstrap::root::bootstrap_init_root_canister().await {
                 let msg = format!("root bootstrap failed: {err}");
                 crate::cdk::api::trap(&msg);
             }
@@ -52,7 +52,7 @@ pub fn init_nonroot_canister(
         async move {
             // Non-root bootstrap failures are handled internally and
             // must not abort canister initialization.
-            workflow::bootstrap::bootstrap_init_nonroot_canister(args).await;
+            workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister(args).await;
         },
     );
 }

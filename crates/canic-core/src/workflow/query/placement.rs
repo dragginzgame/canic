@@ -1,10 +1,7 @@
 use crate::{
     dto::placement::{ScalingRegistryView, ShardingRegistryView},
-    ops::storage::placement::{
-        adapter::{shard_entry_to_view, worker_entry_to_view},
-        scaling::ScalingRegistryOps,
-        sharding::ShardingRegistryOps,
-    },
+    ops::storage::placement::{scaling::ScalingRegistryOps, sharding::ShardingRegistryOps},
+    workflow::placement::adapter::{shard_entry_to_view, worker_entry_to_view},
 };
 
 pub(crate) fn scaling_registry_view() -> ScalingRegistryView {

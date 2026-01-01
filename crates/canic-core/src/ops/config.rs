@@ -90,6 +90,8 @@ impl ConfigOps {
     }
 
     /// Fetch the configuration record for the *current* subnet.
+    ///
+    /// Requires that environment initialization has completed.
     pub(crate) fn current_subnet() -> Result<SubnetConfig, Error> {
         let subnet_role = EnvOps::subnet_role()?;
 

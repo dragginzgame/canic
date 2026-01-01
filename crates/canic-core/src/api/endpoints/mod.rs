@@ -156,8 +156,8 @@ pub fn canic_subnet_directory(page: PageRequest) -> Page<(CanisterRole, Principa
 //
 
 #[must_use]
-pub fn canic_subnet_canister_children(page: PageRequest) -> Page<CanisterSummaryView> {
-    workflow::query::directory::subnet_canister_children_page(page)
+pub fn canic_canister_children(page: PageRequest) -> Page<CanisterSummaryView> {
+    workflow::query::children::canister_children_page(page)
 }
 
 //

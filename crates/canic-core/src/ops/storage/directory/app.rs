@@ -1,15 +1,33 @@
 use crate::{
-    dto::{
-        directory::AppDirectoryView,
-        page::{Page, PageRequest},
-    },
-    ops::{
-        adapter::directory::{app_directory_from_view, app_directory_to_view},
-        prelude::*,
-        view::paginate::paginate_vec,
-    },
+    cdk::types::Principal,
+    ids::CanisterRole,
     storage::memory::directory::app::{AppDirectory, AppDirectoryData},
 };
+
+///
+/// AppDirectorySnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct AppDirectorySnapshot {
+    pub entries: Vec<(CanisterRole, Principal)>,
+}
+
+impl From<AppDirectoryData> for AppDirectorySnapshot {
+    fn from(data: AppDirectoryData) -> Self {
+        Self {
+            entries: data.entries,
+        }
+    }
+}
+
+impl From<AppDirectorySnapshot> for AppDirectoryData {
+    fn from(snapshot: AppDirectorySnapshot) -> Self {
+        Self {
+            entries: snapshot.entries,
+        }
+    }
+}
 
 ///
 /// AppDirectoryOps
@@ -18,34 +36,41 @@ use crate::{
 pub struct AppDirectoryOps;
 
 impl AppDirectoryOps {
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
+
     #[must_use]
-    pub fn get(role: &CanisterRole) -> Option<Principal> {
+    pub fn snapshot() -> AppDirectorySnapshot {
+        AppDirectory::export().into()
+    }
+
+    // -------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------
+
+    pub(crate) fn import(snapshot: AppDirectorySnapshot) {
+        let data: AppDirectoryData = snapshot.into();
+        AppDirectory::import(data);
+    }
+
+    // -------------------------------------------------------------
+    // Internal helpers (ops-only)
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn matches(role: &CanisterRole, caller: Principal) -> bool {
         AppDirectory::export()
             .entries
-            .into_iter()
-            .find_map(|(t, pid)| (t == *role).then_some(pid))
+            .iter()
+            .any(|(r, pid)| r == role && *pid == caller)
     }
 
     #[must_use]
-    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        let data = AppDirectory::export();
-        paginate_vec(data.entries, request)
-    }
-
-    /// Export app directory as a public view.
-    #[must_use]
-    pub fn export_view() -> AppDirectoryView {
-        let data = AppDirectory::export();
-        app_directory_to_view(data)
-    }
-
-    pub(crate) fn import(data: AppDirectoryData) {
-        AppDirectory::import(data);
-    }
-
-    /// Import app directory from a public view.
-    pub fn import_view(view: AppDirectoryView) {
-        let data = app_directory_from_view(view);
-        AppDirectory::import(data);
+    pub fn contains(role: &CanisterRole) -> bool {
+        AppDirectory::export()
+            .entries
+            .iter()
+            .any(|(r, _)| r == role)
     }
 }

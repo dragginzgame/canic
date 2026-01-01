@@ -1,18 +1,17 @@
 use crate::{
-    dto::{
-        pool::CanisterPoolView,
-        registry::{AppRegistryView, SubnetRegistryView},
-    },
-    ops::storage::{
-        pool::PoolOps,
-        registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
+    dto::registry::{AppRegistryView, SubnetRegistryView},
+    ops::storage::registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
+    workflow::registry::adapter::{
+        app_registry_view_from_snapshot, subnet_registry_view_from_snapshot,
     },
 };
 
 pub(crate) fn app_registry_view() -> AppRegistryView {
-    AppRegistryOps::export_view()
+    let snapshot = AppRegistryOps::snapshot();
+    app_registry_view_from_snapshot(snapshot)
 }
 
 pub(crate) fn subnet_registry_view() -> SubnetRegistryView {
-    SubnetRegistryOps::export_view()
+    let snapshot = SubnetRegistryOps::snapshot();
+    subnet_registry_view_from_snapshot(snapshot)
 }

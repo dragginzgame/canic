@@ -71,7 +71,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// - may evolve freely
 ///
 /// All canister endpoints must convert this into a public error envelope
-/// defined in dto/.s
+/// defined in dto/.
 ///
 
 #[derive(Debug, ThisError)]

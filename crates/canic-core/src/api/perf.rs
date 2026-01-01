@@ -1,10 +1,10 @@
 use crate::{
     dto::page::{Page, PageRequest},
-    ops::perf::PerfOps,
     perf::PerfEntry,
+    workflow,
 };
 
 #[must_use]
 pub fn snapshot(request: PageRequest) -> Page<PerfEntry> {
-    PerfOps::snapshot(request)
+    workflow::query::metrics::metrics_perf_page(request)
 }

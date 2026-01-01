@@ -189,14 +189,15 @@ impl CanisterPool {
         })
     }
 
-    /// Remove a specific canister from the pool, returning its entry.
-    #[must_use]
-    pub(crate) fn take(pid: &Principal) -> Option<CanisterPoolEntry> {
-        CANISTER_POOL.with_borrow_mut(|map| map.remove(pid))
+    /// Remove a specific canister from the pool.
+    ///
+    /// Idempotent: no-op if the canister does not exist.
+    pub(crate) fn remove(pid: &Principal) {
+        let _ = CANISTER_POOL.with_borrow_mut(|map| map.remove(pid));
     }
 
     //
-    // Export
+    // Canonical export (storage-level)
     //
 
     #[must_use]
@@ -375,8 +376,7 @@ mod tests {
             2,
         );
 
-        let removed = CanisterPool::take(&p1).unwrap();
-        assert_eq!(removed.state.cycles, 123u128.into());
+        CanisterPool::remove(&p1);
 
         let remaining = CanisterPool::export();
         assert_eq!(remaining.entries.len(), 1);

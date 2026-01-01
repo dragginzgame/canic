@@ -25,14 +25,14 @@ use candid::Principal;
 use std::pin::Pin;
 
 ///
-/// AuthError
+/// AuthAccessError
 ///
 /// Each variant captures the principal that failed a rule (where relevant),
 /// making it easy to emit actionable diagnostics in logs.
 ///
 
 #[derive(Debug, ThisError)]
-pub enum AuthError {
+pub enum AuthAccessError {
     /// Guardrail for unreachable states (should not be observed in practice).
     #[error("invalid error state - this should never happen")]
     InvalidState,
@@ -75,8 +75,8 @@ pub enum AuthError {
     NotWhitelisted(Principal),
 }
 
-impl From<AuthError> for Error {
-    fn from(err: AuthError) -> Self {
+impl From<AuthAccessError> for Error {
+    fn from(err: AuthAccessError) -> Self {
         AccessError::Auth(err).into()
     }
 }
@@ -99,7 +99,7 @@ pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
-        return Err(AuthError::NoRulesDefined.into());
+        return Err(AuthAccessError::NoRulesDefined.into());
     }
 
     for rule in rules {
@@ -125,7 +125,7 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
     let caller = msg_caller();
 
     if rules.is_empty() {
-        return Err(AuthError::NoRulesDefined.into());
+        return Err(AuthAccessError::NoRulesDefined.into());
     }
 
     let mut last_error = None;
@@ -136,7 +136,7 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
         }
     }
 
-    let err = last_error.unwrap_or_else(|| AuthError::InvalidState.into());
+    let err = last_error.unwrap_or_else(|| AuthAccessError::InvalidState.into());
     log!(
         Topic::Auth,
         Warn,
@@ -181,13 +181,13 @@ macro_rules! auth_require_any {
 #[must_use]
 pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        match AppDirectoryOps::get(&role) {
-            Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthError::NotAppDirectoryType(caller, role).into()),
+        if AppDirectoryOps::matches(&role, caller) {
+            Ok(())
+        } else {
+            Err(AuthAccessError::NotAppDirectoryType(caller, role).into())
         }
     })
 }
-
 /// Ensure the caller matches the subnet directory entry recorded for `role`.
 /// Use for admin endpoints that expect specific subnet directory canisters.
 #[must_use]
@@ -195,7 +195,7 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
     Box::pin(async move {
         match SubnetDirectoryOps::get(&role) {
             Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthError::NotSubnetDirectoryType(caller, role).into()),
+            _ => Err(AuthAccessError::NotSubnetDirectoryType(caller, role).into()),
         }
     })
 }
@@ -205,10 +205,11 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
 #[must_use]
 pub fn is_child(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        CanisterChildrenOps::find_by_pid(&caller)
-            .ok_or(AccessError::Auth(AuthError::NotChild(caller)))?;
-
-        Ok(())
+        if CanisterChildrenOps::contains_pid(&caller) {
+            Ok(())
+        } else {
+            Err(AuthAccessError::NotChild(caller).into())
+        }
     })
 }
 
@@ -220,7 +221,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
         if crate::cdk::api::is_controller(&caller) {
             Ok(())
         } else {
-            Err(AuthError::NotController(caller).into())
+            Err(AuthAccessError::NotController(caller).into())
         }
     })
 }
@@ -235,7 +236,7 @@ pub fn is_root(caller: Principal) -> AuthRuleResult {
         if caller == root_pid {
             Ok(())
         } else {
-            Err(AuthError::NotRoot(caller).into())
+            Err(AuthAccessError::NotRoot(caller).into())
         }
     })
 }
@@ -250,7 +251,7 @@ pub fn is_parent(caller: Principal) -> AuthRuleResult {
         if parent_pid == caller {
             Ok(())
         } else {
-            Err(AuthError::NotParent(caller).into())
+            Err(AuthAccessError::NotParent(caller).into())
         }
     })
 }
@@ -263,7 +264,7 @@ pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
         if caller == expected {
             Ok(())
         } else {
-            Err(AuthError::NotPrincipal(caller, expected).into())
+            Err(AuthAccessError::NotPrincipal(caller, expected).into())
         }
     })
 }
@@ -276,7 +277,7 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
         if caller == canister_self() {
             Ok(())
         } else {
-            Err(AuthError::NotSameCanister(caller).into())
+            Err(AuthAccessError::NotSameCanister(caller).into())
         }
     })
 }
@@ -291,7 +292,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
         if SubnetRegistryOps::is_registered(caller) {
             Ok(())
         } else {
-            Err(AuthError::NotRegisteredToSubnet(caller).into())
+            Err(AuthAccessError::NotRegisteredToSubnet(caller).into())
         }
     })
 }
@@ -305,7 +306,7 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
         let cfg = Config::get().map_err(to_access)?;
 
         if !cfg.is_whitelisted(&caller) {
-            return Err(AuthError::NotWhitelisted(caller).into());
+            return Err(AuthAccessError::NotWhitelisted(caller).into());
         }
 
         Ok(())
@@ -313,5 +314,5 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
 }
 
 fn to_access(err: Error) -> AccessError {
-    AccessError::Auth(AuthError::DependencyUnavailable(err.to_string()))
+    AuthAccessError::DependencyUnavailable(err.to_string()).into()
 }

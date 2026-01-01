@@ -172,10 +172,10 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_subnet_canister_children(
+        fn canic_canister_children(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
-            $crate::api::endpoints::canic_subnet_canister_children(page)
+            $crate::api::endpoints::canic_canister_children(page)
         }
 
         //

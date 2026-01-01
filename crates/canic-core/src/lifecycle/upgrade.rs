@@ -37,7 +37,7 @@ pub fn post_upgrade_root_canister() {
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_root_canister",
         async {
-            workflow::bootstrap::bootstrap_post_upgrade_root_canister().await;
+            workflow::bootstrap::root::bootstrap_post_upgrade_root_canister().await;
         },
     );
 }
@@ -59,7 +59,7 @@ pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",
         async {
-            workflow::bootstrap::bootstrap_post_upgrade_nonroot_canister().await;
+            workflow::bootstrap::nonroot::bootstrap_post_upgrade_nonroot_canister().await;
         },
     );
 }

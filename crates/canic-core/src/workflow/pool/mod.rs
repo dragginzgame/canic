@@ -6,6 +6,7 @@ pub mod scheduler;
 
 use crate::{
     Error,
+    access::env,
     cdk::{
         mgmt::{CanisterSettings, UpdateSettingsArgs},
         types::TC,
@@ -14,7 +15,6 @@ use crate::{
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
         ic::mgmt::{create_canister, get_cycles, uninstall_code, update_settings},
-        runtime::env::EnvOps,
         storage::{pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{pool::controllers::pool_controllers, prelude::*, query::pool::pool_entry_view},
@@ -62,7 +62,7 @@ fn mark_failed(pid: Principal, err: &Error) {
 // -----------------------------------------------------------------------------
 
 fn require_pool_admin() -> Result<(), Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
 
     Ok(())
 }
@@ -205,7 +205,7 @@ pub(crate) async fn pool_export_canister(
     let is_ready = matches!(entry.status, CanisterPoolStatusView::Ready);
     let (role, hash) = policy::pool::export::can_export(is_ready, entry.role, entry.module_hash)?;
 
-    let _ = PoolOps::take(&pid);
+    PoolOps::remove(&pid);
 
     Ok((role, hash))
 }

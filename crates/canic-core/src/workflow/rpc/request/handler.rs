@@ -1,13 +1,13 @@
 use crate::{
     Error,
+    access::env,
     dto::rpc::{Request, Response},
-    ops::runtime::env::EnvOps,
     workflow::lifecycle::{create_canister_response, cycles_response, upgrade_canister_response},
 };
 
 /// Handle a root-bound orchestration request and produce a [`Response`].
 pub(crate) async fn response(req: Request) -> Result<Response, Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
 
     match req {
         Request::CreateCanister(req) => create_canister_response(&req).await,

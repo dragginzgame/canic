@@ -3,22 +3,13 @@
 //! Ops functions are fallible and must not trap.
 //! All unrecoverable failures are handled at lifecycle boundaries.
 //!
-//! This module contains two kinds of operations:
+//! This module contains operational primitives and snapshots:
+//! - Mutate state and perform single-step platform side effects
+//! - Read and export internal state as snapshots
 //!
-//! 1. **Control ops**
-//!    - Mutate state
-//!    - Perform single-step platform side effects
-//!    - Call IC management APIs
-//!    - Must be invoked via workflow
-//!
-//! 2. **View ops**
-//!    - Read-only facades over internal state
-//!    - Perform snapshotting, aggregation, pagination
-//!    - Safe to call directly from query endpoints
-//!
-//! Examples of view ops include registry exports and metrics views.
+//! Ops must not construct DTO views or perform pagination.
+//! Projection and paging are owned by workflow/query.
 
-pub mod adapter;
 pub mod config;
 pub mod ic;
 pub mod icrc;
@@ -26,7 +17,6 @@ pub mod perf;
 pub mod rpc;
 pub mod runtime;
 pub mod storage;
-pub mod view;
 
 use std::time::Duration;
 

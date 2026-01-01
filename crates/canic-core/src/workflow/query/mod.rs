@@ -1,10 +1,14 @@
 pub mod canister;
+pub mod children;
 pub mod cycles;
 pub mod directory;
 pub mod env;
 pub mod icrc;
 pub mod log;
+pub mod memory;
 pub mod metrics;
+pub mod metrics_adapter;
+pub mod paginate;
 pub mod placement;
 pub mod pool;
 pub mod registry;

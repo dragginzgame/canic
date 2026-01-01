@@ -1,14 +1,14 @@
 use crate::{
-    Error, ThisError, access::AccessError, dto::state::AppModeView,
-    ops::storage::state::app::AppStateOps,
+    Error, ThisError, access::AccessError, ops::storage::state::app::AppStateOps,
+    storage::memory::state::app::AppMode,
 };
 
 ///
-/// GuardError
+/// GuardAccessError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum GuardError {
+pub enum GuardAccessError {
     #[error("application is disabled")]
     AppDisabled,
 
@@ -16,8 +16,8 @@ pub enum GuardError {
     AppReadonly,
 }
 
-impl From<GuardError> for Error {
-    fn from(err: GuardError) -> Self {
+impl From<GuardAccessError> for Error {
+    fn from(err: GuardAccessError) -> Self {
         AccessError::Guard(err).into()
     }
 }
@@ -28,9 +28,11 @@ impl From<GuardError> for Error {
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_app_query() -> Result<(), AccessError> {
-    match AppStateOps::export_view().mode {
-        AppModeView::Enabled | AppModeView::Readonly => Ok(()),
-        AppModeView::Disabled => Err(GuardError::AppDisabled.into()),
+    let mode = AppStateOps::snapshot().mode.unwrap_or(AppMode::Disabled);
+
+    match mode {
+        AppMode::Enabled | AppMode::Readonly => Ok(()),
+        AppMode::Disabled => Err(GuardAccessError::AppDisabled.into()),
     }
 }
 
@@ -41,9 +43,11 @@ pub fn guard_app_query() -> Result<(), AccessError> {
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
 pub fn guard_app_update() -> Result<(), AccessError> {
-    match AppStateOps::export_view().mode {
-        AppModeView::Enabled => Ok(()),
-        AppModeView::Readonly => Err(GuardError::AppReadonly.into()),
-        AppModeView::Disabled => Err(GuardError::AppDisabled.into()),
+    let mode = AppStateOps::snapshot().mode.unwrap_or(AppMode::Disabled);
+
+    match mode {
+        AppMode::Enabled => Ok(()),
+        AppMode::Readonly => Err(GuardAccessError::AppReadonly.into()),
+        AppMode::Disabled => Err(GuardAccessError::AppDisabled.into()),
     }
 }

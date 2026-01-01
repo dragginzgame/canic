@@ -10,6 +10,7 @@
 
 use crate::{
     Error,
+    access::env,
     cdk::mgmt::CanisterInstallMode,
     config::Config,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
@@ -64,7 +65,7 @@ pub(crate) fn build_nonroot_init_payload(
 
     Ok(CanisterInitPayload {
         env,
-        app_directory: AppDirectoryOps::export_view(),
+        app_directory: AppDirectoryOps::export(),
         subnet_directory: SubnetDirectoryOps::export_view(),
     })
 }
@@ -171,7 +172,7 @@ pub(crate) async fn create_and_install_canister(
 /// 3. Cascade topology
 /// 4. Sync directories
 pub(crate) async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
 
     // Phase 0: uninstall code
     uninstall_code(pid).await?;

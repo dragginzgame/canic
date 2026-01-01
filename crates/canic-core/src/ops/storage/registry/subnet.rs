@@ -2,22 +2,11 @@ use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
     config::schema::CanisterCardinality,
-    dto::{
-        registry::SubnetRegistryView,
-        snapshot::{TopologyChildView, TopologyNodeView},
-    },
     ids::CanisterRole,
-    ops::{
-        adapter::{
-            canister::{canister_summary_to_topology_child, canister_summary_to_topology_node},
-            registry::subnet_registry_to_view,
-        },
-        config::ConfigOps,
-        storage::registry::RegistryOpsError,
-    },
+    ops::{config::ConfigOps, storage::registry::RegistryOpsError},
     storage::{
         canister::{CanisterEntry, CanisterSummary},
-        memory::registry::subnet::SubnetRegistry,
+        memory::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
 use std::collections::HashSet;
@@ -56,6 +45,32 @@ pub enum SubnetRegistryOpsError {
 impl From<SubnetRegistryOpsError> for Error {
     fn from(err: SubnetRegistryOpsError) -> Self {
         RegistryOpsError::from(err).into()
+    }
+}
+
+///
+/// SubnetRegistrySnapshot
+/// Internal, operational snapshot of the subnet registry.
+///
+
+#[derive(Clone, Debug)]
+pub struct SubnetRegistrySnapshot {
+    pub entries: Vec<(Principal, CanisterEntry)>,
+}
+
+impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
+    fn from(data: SubnetRegistryData) -> Self {
+        Self {
+            entries: data.entries,
+        }
+    }
+}
+
+impl From<SubnetRegistrySnapshot> for SubnetRegistryData {
+    fn from(snapshot: SubnetRegistrySnapshot) -> Self {
+        Self {
+            entries: snapshot.entries,
+        }
     }
 }
 
@@ -136,31 +151,25 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
     }
 
-    /// Direct children (one level) as topology views.
-    #[must_use]
-    pub(crate) fn children_view(pid: Principal) -> Vec<TopologyNodeView> {
-        SubnetRegistry::children(pid)
-            .into_iter()
-            .map(|(pid, summary)| canister_summary_to_topology_node(pid, &summary))
-            .collect()
-    }
-
-    /// Direct children (one level) as topology child views.
-    #[must_use]
-    pub(crate) fn children_child_view(pid: Principal) -> Vec<TopologyChildView> {
-        SubnetRegistry::children(pid)
-            .into_iter()
-            .map(|(pid, summary)| canister_summary_to_topology_child(pid, &summary))
-            .collect()
-    }
-
     /// Full subtree rooted at `pid`.
     #[must_use]
     pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
         SubnetRegistry::subtree(pid)
     }
 
-    /// Canonical registry export (identity + role only).
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn snapshot() -> SubnetRegistrySnapshot {
+        SubnetRegistry::export().into()
+    }
+
+    // -------------------------------------------------------------
+    // Narrow projections (ops-safe)
+    // -------------------------------------------------------------
+
     #[must_use]
     pub(crate) fn export_roles() -> Vec<(Principal, CanisterRole)> {
         SubnetRegistry::export()
@@ -168,13 +177,6 @@ impl SubnetRegistryOps {
             .into_iter()
             .map(|(pid, entry)| (pid, entry.role))
             .collect()
-    }
-
-    #[must_use]
-    pub fn export_view() -> SubnetRegistryView {
-        let data = SubnetRegistry::export();
-
-        subnet_registry_to_view(data)
     }
 
     // ---------------------------------------------------------------------
@@ -227,16 +229,8 @@ impl SubnetRegistryOps {
         }
 
         chain.reverse();
-        Ok(chain)
-    }
 
-    /// Parent chain as topology views (root → … → target).
-    pub(crate) fn parent_chain_view(target: Principal) -> Result<Vec<TopologyNodeView>, Error> {
-        let chain = Self::parent_chain(target)?;
-        Ok(chain
-            .into_iter()
-            .map(|(pid, summary)| canister_summary_to_topology_node(pid, &summary))
-            .collect())
+        Ok(chain)
     }
 }
 

@@ -42,6 +42,17 @@ pub struct AccessMetrics;
 
 impl AccessMetrics {
     pub fn increment(call: EndpointCall, kind: crate::dto::metrics::AccessMetricKind) {
+        let kind = match kind {
+            crate::dto::metrics::AccessMetricKind::Auth => {
+                crate::storage::metrics::access::AccessMetricKind::Auth
+            }
+            crate::dto::metrics::AccessMetricKind::Guard => {
+                crate::storage::metrics::access::AccessMetricKind::Guard
+            }
+            crate::dto::metrics::AccessMetricKind::Rule => {
+                crate::storage::metrics::access::AccessMetricKind::Rule
+            }
+        };
         ops::runtime::metrics::AccessMetrics::increment(call, kind);
     }
 }

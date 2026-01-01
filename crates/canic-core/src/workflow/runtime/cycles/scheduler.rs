@@ -1,4 +1,5 @@
 use crate::{
+    access::env,
     cdk::{futures::spawn, timers::TimerId, types::Cycles, utils::time::now_secs},
     log,
     log::Topic,
@@ -90,7 +91,10 @@ fn check_auto_topup(cycles: Cycles) {
     }
 
     spawn(async move {
-        let result = cycles_request(topup.amount.to_u128()).await;
+        let result = match env::deny_root() {
+            Ok(()) => cycles_request(topup.amount.to_u128()).await,
+            Err(err) => Err(err),
+        };
 
         TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
             *in_flight = false;

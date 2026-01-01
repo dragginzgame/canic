@@ -1,9 +1,4 @@
-use crate::{
-    cdk::types::Cycles,
-    dto::page::{Page, PageRequest},
-    ops::view::paginate::clamp_page_request,
-    storage::memory::cycles::CycleTracker,
-};
+use crate::{cdk::types::Cycles, storage::memory::cycles::CycleTracker};
 
 ///
 /// CycleTrackerOps
@@ -11,6 +6,16 @@ use crate::{
 ///
 
 pub struct CycleTrackerOps;
+
+///
+/// CycleTrackerSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct CycleTrackerSnapshot {
+    pub entries: Vec<(u64, Cycles)>,
+    pub total: u64,
+}
 
 impl CycleTrackerOps {
     #[must_use]
@@ -28,20 +33,10 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn list_entries(request: PageRequest) -> Vec<(u64, Cycles)> {
-        let request = clamp_page_request(request);
-
-        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
-        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-
-        CycleTracker::entries(offset, limit)
-    }
-
-    #[must_use]
-    pub fn page(request: PageRequest) -> Page<(u64, Cycles)> {
-        let entries = Self::list_entries(request);
+    pub fn snapshot() -> CycleTrackerSnapshot {
         let total = Self::len();
+        let entries = CycleTracker::entries(0, usize::MAX);
 
-        Page { entries, total }
+        CycleTrackerSnapshot { entries, total }
     }
 }
