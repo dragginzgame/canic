@@ -1,9 +1,10 @@
+pub mod cascade;
 pub mod methods;
 pub mod request;
 
 use crate::{
     Error, PublicError, ThisError,
-    cdk::candid::CandidType,
+    cdk::candid::{CandidType, Principal},
     dto::rpc::{Request, Response},
     infra::InfraError,
     ops::{OpsError, ic::call::Call, rpc::request::RequestOpsError, runtime::env::EnvOps},
@@ -41,8 +42,31 @@ impl From<RpcOpsError> for Error {
     }
 }
 
-// execute_rpc
-async fn execute_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
+// call_rpc_result
+pub async fn call_rpc_result<T>(
+    pid: Principal,
+    method: &str,
+    arg: impl CandidType,
+) -> Result<T, Error>
+where
+    T: CandidType + for<'de> candid::Deserialize<'de>,
+{
+    let call = Call::unbounded_wait(pid, method)
+        .with_arg(arg)
+        .await
+        .map_err(InfraError::from)?;
+
+    // Explicit decode target is required
+    let res: Result<T, PublicError> = call
+        .candid::<Result<T, PublicError>>()
+        .map_err(InfraError::from)?;
+
+    // PublicError is consumed HERE, in ops
+    res.map_err(|err| RpcOpsError::RemoteRejected(err).into())
+}
+
+// execute_root_response_rpc
+async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
     let root_pid = EnvOps::root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)

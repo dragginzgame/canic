@@ -4,6 +4,7 @@ pub mod cascade;
 pub mod command;
 pub mod config;
 pub mod directory;
+pub mod facade;
 pub mod ic;
 pub(crate) mod lifecycle;
 pub mod orchestrator;

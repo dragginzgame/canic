@@ -170,11 +170,14 @@ pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
 //
 
 /// Calls a method on a canister and candid-decodes the response into `T`.
-pub async fn call_and_decode<T: CandidType + for<'de> candid::Deserialize<'de>>(
+pub async fn call_and_decode<T>(
     pid: Principal,
     method: &str,
     arg: impl CandidType,
-) -> Result<T, Error> {
+) -> Result<T, Error>
+where
+    T: CandidType + for<'de> candid::Deserialize<'de>,
+{
     let decoded = infra::ic::mgmt::call_and_decode(pid, method, arg).await?;
 
     Ok(decoded)

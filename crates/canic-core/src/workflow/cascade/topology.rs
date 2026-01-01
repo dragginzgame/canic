@@ -11,9 +11,7 @@
 use crate::{
     Error, PublicError,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    ops::{
-        ic::mgmt::call_and_decode, runtime::env::EnvOps, storage::children::CanisterChildrenOps,
-    },
+    ops::{self, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,
@@ -155,15 +153,9 @@ pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result
 //
 
 async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshotView) -> Result<(), Error> {
-    let result = call_and_decode::<Result<(), PublicError>>(
-        *pid,
-        crate::ops::rpc::methods::CANIC_SYNC_TOPOLOGY,
-        snapshot,
-    )
-    .await?;
-
-    // Boundary: convert PublicError from child call into internal Error.
-    result.map_err(|err| CascadeError::ChildRejected(err).into())
+    ops::rpc::cascade::send_topology_snapshot(*pid, snapshot)
+        .await
+        .map_err(|_| CascadeError::ChildRejected(*pid).into())
 }
 
 //
