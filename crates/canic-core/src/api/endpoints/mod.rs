@@ -1,5 +1,5 @@
 use crate::{
-    PublicError,
+    PublicError, api,
     cdk::{
         api::canister_self,
         mgmt::CanisterStatusResult,
@@ -202,7 +202,9 @@ pub async fn canic_canister_upgrade(
 }
 
 pub async fn canic_response(request: Request) -> Result<Response, PublicError> {
-    workflow::rpc::request::handler::response(request).await
+    workflow::rpc::request::handler::response(request)
+        .await
+        .map_err(PublicError::from)
 }
 
 pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusResult, PublicError> {
@@ -212,7 +214,7 @@ pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusResul
 }
 
 pub fn canic_config() -> Result<String, PublicError> {
-    workflow::config::export_toml()
+    api::config::export_toml()
 }
 
 pub fn canic_pool_list() -> Result<CanisterPoolView, PublicError> {
@@ -220,7 +222,9 @@ pub fn canic_pool_list() -> Result<CanisterPoolView, PublicError> {
 }
 
 pub async fn canic_pool_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {
-    workflow::pool::admin::handle_admin(cmd).await
+    workflow::pool::admin::handle_admin(cmd)
+        .await
+        .map_err(PublicError::from)
 }
 
 //
@@ -228,11 +232,15 @@ pub async fn canic_pool_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse
 //
 
 pub async fn canic_sync_state(snapshot: StateSnapshotView) -> Result<(), PublicError> {
-    workflow::cascade::state::nonroot_cascade_state(&snapshot).await
+    workflow::cascade::state::nonroot_cascade_state(&snapshot)
+        .await
+        .map_err(PublicError::from)
 }
 
 pub async fn canic_sync_topology(snapshot: TopologySnapshotView) -> Result<(), PublicError> {
-    workflow::cascade::topology::nonroot_cascade_topology(&snapshot).await
+    workflow::cascade::topology::nonroot_cascade_topology(&snapshot)
+        .await
+        .map_err(PublicError::from)
 }
 
 //

@@ -9,7 +9,7 @@
 //! and abort the cascade rather than continuing with partial data.
 
 use crate::{
-    Error, PublicError,
+    Error,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
     ops::{self, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
     workflow::{
@@ -95,9 +95,7 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 // ===========================================================================
 //
 
-pub(crate) async fn nonroot_cascade_topology_internal(
-    snapshot: &TopologySnapshotView,
-) -> Result<(), Error> {
+pub(crate) async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), Error> {
     EnvOps::deny_root()?;
 
     let self_pid = canister_self();
@@ -138,12 +136,6 @@ pub(crate) async fn nonroot_cascade_topology_internal(
     }
 
     Ok(())
-}
-
-pub async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), PublicError> {
-    nonroot_cascade_topology_internal(snapshot)
-        .await
-        .map_err(PublicError::from)
 }
 
 //

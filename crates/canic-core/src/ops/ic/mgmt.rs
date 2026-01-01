@@ -36,19 +36,12 @@ pub async fn create_canister(
 //
 
 /// Internal ops entrypoint used by workflow and other ops helpers.
-pub async fn canister_status_internal(
-    canister_pid: Principal,
-) -> Result<CanisterStatusResult, Error> {
+pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
     let status = infra::ic::mgmt::canister_status(canister_pid).await?;
 
     SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
     Ok(status)
-}
-
-/// Public ops wrapper (still internal to the crate).
-pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
-    canister_status_internal(canister_pid).await
 }
 
 //
@@ -72,7 +65,7 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
-    let status = canister_status_internal(canister_pid).await?;
+    let status = canister_status(canister_pid).await?;
 
     Ok(status.cycles.into())
 }
