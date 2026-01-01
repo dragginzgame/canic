@@ -16,46 +16,49 @@ use crate::dto::{
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize)]
 pub struct StateSnapshotView {
-    // states
     pub app_state: Option<AppStateView>,
     pub subnet_state: Option<SubnetStateView>,
-
-    // directories
     pub app_directory: Option<AppDirectoryView>,
     pub subnet_directory: Option<SubnetDirectoryView>,
 }
 
 ///
 /// TopologySnapshotView
-/// Snapshot of canister topology relationships.
+/// Partial topology snapshot used for cascade.
+/// Contains:
+/// - a parent path (root -> target)
+/// - direct children for each node on that path only
+///
+/// This is not a full topology export.
+///
 /// Pure DTO.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TopologySnapshotView {
-    pub parents: Vec<TopologyNodeView>,
+    pub parents: Vec<TopologyPathNodeView>,
     /// Children keyed by their parent pid (at most one entry per parent).
-    pub children_map: HashMap<Principal, Vec<TopologyChildView>>,
+    pub children_map: HashMap<Principal, Vec<TopologyDirectChildView>>,
 }
 
 ///
-/// TopologyChildView
-/// Child node for parent-keyed topology maps.
+/// TopologyDirectChildView
+/// Direct child node for parent-keyed topology maps.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologyChildView {
+pub struct TopologyDirectChildView {
     pub pid: Principal,
     pub role: CanisterRole,
 }
 
 ///
-/// TopologyNodeView
-/// Snapshot node for topology traversal (includes identity).
+/// TopologyPathNodeView
+/// Snapshot node for parent-path traversal (includes identity).
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologyNodeView {
+pub struct TopologyPathNodeView {
     pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,

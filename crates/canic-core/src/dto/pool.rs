@@ -21,7 +21,24 @@ use crate::{cdk::types::Cycles, dto::prelude::*};
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolView(pub Vec<(Principal, CanisterPoolEntryView)>);
+pub struct CanisterPoolView {
+    pub entries: Vec<CanisterPoolEntryView>,
+}
+
+///
+/// CanisterPoolEntryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CanisterPoolEntryView {
+    pub pid: Principal,
+    pub created_at: u64,
+    pub cycles: Cycles,
+    pub status: CanisterPoolStatusView,
+    pub role: Option<CanisterRole>,
+    pub parent: Option<Principal>,
+    pub module_hash: Option<Vec<u8>>,
+}
 
 ///
 /// CanisterPoolStatusView
@@ -32,20 +49,6 @@ pub enum CanisterPoolStatusView {
     PendingReset,
     Ready,
     Failed { reason: String },
-}
-
-///
-/// CanisterPoolEntryView
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolEntryView {
-    pub created_at: u64,
-    pub cycles: Cycles,
-    pub status: CanisterPoolStatusView,
-    pub role: Option<CanisterRole>,
-    pub parent: Option<Principal>,
-    pub module_hash: Option<Vec<u8>>,
 }
 
 ///

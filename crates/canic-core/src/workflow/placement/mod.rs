@@ -1,4 +1,5 @@
-pub mod adapter;
+pub mod mapper;
+pub mod query;
 pub mod scaling;
 pub mod sharding;
 

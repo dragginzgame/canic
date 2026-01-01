@@ -24,10 +24,6 @@ pub async fn require_any(rules: Vec<access::auth::AuthRuleFn>) -> Result<(), Pub
     access::auth::require_any(rules).await.map_err(to_public)
 }
 
-pub async fn is_prime_subnet() -> Result<(), PublicError> {
-    access::rule::is_prime_subnet().await.map_err(to_public)
-}
-
 pub async fn build_network_ic() -> Result<(), PublicError> {
     access::rule::build_network_ic().await.map_err(to_public)
 }

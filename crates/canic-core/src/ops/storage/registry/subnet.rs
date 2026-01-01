@@ -9,7 +9,7 @@ use crate::{
         memory::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 ///
 /// SubnetRegistryOpsError
@@ -74,11 +74,72 @@ impl From<SubnetRegistrySnapshot> for SubnetRegistryData {
     }
 }
 
+impl SubnetRegistrySnapshot {
+    /// Return the canonical parent chain for a canister, using this snapshot.
+    ///
+    /// Returned order: root → … → target
+    ///
+    /// Invariants enforced:
+    /// - no cycles
+    /// - bounded by registry size
+    /// - terminates at ROOT
+    pub(crate) fn parent_chain(
+        &self,
+        target: Principal,
+    ) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
+        let registry_len = self.entries.len();
+        let mut index = HashMap::new();
+
+        for (pid, entry) in &self.entries {
+            index.insert(*pid, entry.clone());
+        }
+
+        let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
+        let mut seen: HashSet<Principal> = HashSet::new();
+        let mut pid = target;
+
+        loop {
+            if !seen.insert(pid) {
+                return Err(SubnetRegistryOpsError::ParentChainCycle(pid).into());
+            }
+
+            let entry = index
+                .get(&pid)
+                .ok_or(SubnetRegistryOpsError::CanisterNotFound(pid))?;
+
+            if seen.len() > registry_len {
+                return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
+            }
+
+            let summary = CanisterSummary::from(entry);
+            let parent = entry.parent_pid;
+
+            chain.push((pid, summary));
+
+            if let Some(parent_pid) = parent {
+                pid = parent_pid;
+            } else {
+                if entry.role != CanisterRole::ROOT {
+                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
+                }
+                break;
+            }
+        }
+
+        chain.reverse();
+
+        Ok(chain)
+    }
+}
+
 ///
 /// SubnetRegistryOps
 ///
 /// Semantic operations over the subnet registry.
 /// Enforces cardinality, parent-chain invariants, and traversal safety.
+///
+/// Invariant: non-root workflows must not call SubnetRegistryOps directly.
+/// Non-root fanout should use the children cache populated by topology cascade.
 ///
 
 pub struct SubnetRegistryOps;

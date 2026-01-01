@@ -11,8 +11,11 @@
 use crate::{
     Error,
     access::env,
-    dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    ops::{self, storage::children::CanisterChildrenOps},
+    dto::snapshot::{TopologyPathNodeView, TopologySnapshotView},
+    ops::{
+        self,
+        storage::children::{CanisterChildrenOps, ChildSnapshot, ChildrenSnapshot},
+    },
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,
@@ -118,8 +121,20 @@ pub(crate) async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) ->
         .get(&self_pid)
         .cloned()
         .unwrap_or_default();
+
+    // Invariant: children cache is only updated via topology cascade.
     warn_if_large("nonroot fanout", children.len());
-    CanisterChildrenOps::import_view(self_pid, children);
+    let children_snapshot = ChildrenSnapshot {
+        entries: children
+            .into_iter()
+            .map(|child| ChildSnapshot {
+                pid: child.pid,
+                role: child.role,
+                parent_pid: Some(self_pid),
+            })
+            .collect(),
+    };
+    CanisterChildrenOps::import(children_snapshot);
 
     if let Some(next_pid) = next {
         let next_snapshot = match slice_snapshot_for_child(next_pid, snapshot) {
@@ -159,7 +174,7 @@ async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshotView) -> Resu
 
 fn next_child_on_path(
     self_pid: Principal,
-    parents: &[TopologyNodeView],
+    parents: &[TopologyPathNodeView],
 ) -> Result<Option<Principal>, Error> {
     let Some(first) = parents.first() else {
         return Err(CascadeError::InvalidParentChain.into());
@@ -217,22 +232,22 @@ fn slice_snapshot_for_child(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dto::snapshot::TopologyChildView, ids::CanisterRole};
+    use crate::{dto::snapshot::TopologyDirectChildView, ids::CanisterRole};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
-    fn n(pid: Principal, parent_pid: Option<Principal>) -> TopologyNodeView {
-        TopologyNodeView {
+    fn n(pid: Principal, parent_pid: Option<Principal>) -> TopologyPathNodeView {
+        TopologyPathNodeView {
             pid,
             role: CanisterRole::new("test"),
             parent_pid,
         }
     }
 
-    fn c(pid: Principal) -> TopologyChildView {
-        TopologyChildView {
+    fn c(pid: Principal) -> TopologyDirectChildView {
+        TopologyDirectChildView {
             pid,
             role: CanisterRole::new("test"),
         }

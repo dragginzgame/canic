@@ -93,13 +93,13 @@ pub(crate) async fn rebuild_directories_from_registry(
 
     if include_app {
         let view = RootAppDirectoryBuilder::build_from_registry();
-        AppDirectoryOps::import_view(view.clone());
+        AppDirectoryOps::import(view.clone());
         builder = builder.with_app_directory_view(view);
     }
 
     if include_subnet {
         let view = RootSubnetDirectoryBuilder::build_from_registry();
-        SubnetDirectoryOps::import_view(view.clone());
+        SubnetDirectoryOps::import(view.clone());
         builder = builder.with_subnet_directory_view(view);
     }
 
@@ -229,7 +229,8 @@ async fn allocate_canister_with_source(
     let target = cfg.initial_cycles;
 
     // Reuse from pool
-    if let Some((pid, _)) = PoolOps::pop_ready() {
+    if let Some(entry) = PoolOps::pop_ready() {
+        let pid = entry.pid;
         let mut current = get_cycles(pid).await?;
 
         if current < target {

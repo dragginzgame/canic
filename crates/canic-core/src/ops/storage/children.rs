@@ -18,6 +18,8 @@ pub struct ChildSnapshot {
 ///
 /// ChildrenSnapshot
 /// Internal snapshot of direct children.
+/// Projection of cached children; canonical derivation is
+/// `SubnetRegistry::children` / `SubnetRegistryOps::children`.
 ///
 
 pub struct ChildrenSnapshot {
@@ -27,6 +29,8 @@ pub struct ChildrenSnapshot {
 ///
 /// CanisterChildrenOps
 ///
+/// Invariant: the children cache is updated only via topology cascade
+/// (workflow::cascade::topology::nonroot_cascade_topology).
 
 pub struct CanisterChildrenOps;
 

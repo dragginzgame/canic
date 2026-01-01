@@ -216,26 +216,22 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn icts_name() -> String {
-            env!("CARGO_PKG_NAME").to_string()
+            $crate::api::endpoints::icts::icts_name()
         }
 
         #[canic_query]
         fn icts_version() -> String {
-            env!("CARGO_PKG_VERSION").to_string()
+            $crate::api::endpoints::icts::icts_version()
         }
 
         #[canic_query]
         fn icts_description() -> String {
-            env!("CARGO_PKG_DESCRIPTION").to_string()
+            $crate::api::endpoints::icts::icts_description()
         }
 
         #[canic_query]
         fn icts_metadata() -> Vec<(String, String)> {
-            vec![
-                ("name".to_string(), icts_name()),
-                ("version".to_string(), icts_version()),
-                ("description".to_string(), icts_description()),
-            ]
+            $crate::api::endpoints::icts::icts_metadata()
         }
 
         /// ICTS add-on endpoint: returns string errors by design.
@@ -254,7 +250,7 @@ macro_rules! canic_endpoints {
                 return Err("unauthorized".to_string());
             }
 
-            $crate::api::endpoints::icts_canister_status().await
+            $crate::api::endpoints::icts::icts_canister_status().await
         }
     };
 }

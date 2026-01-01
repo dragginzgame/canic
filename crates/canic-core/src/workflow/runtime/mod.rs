@@ -1,11 +1,9 @@
 pub mod cycles;
-pub mod env;
 pub mod log;
 pub mod random;
 
 use crate::{
-    VERSION,
-    access::env,
+    VERSION, access,
     cdk::{
         api::{canister_self, trap},
         println,
@@ -14,14 +12,19 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
-        runtime::memory::MemoryRegistryInitSummary,
-        runtime::{env::EnvOps, memory::MemoryOps},
+        runtime::{
+            env::EnvOps,
+            memory::{MemoryOps, MemoryRegistryInitSummary},
+        },
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow,
+    workflow::{
+        self,
+        directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+    },
 };
 use canic_memory::runtime::init_eager_tls;
 
@@ -42,7 +45,7 @@ impl Runtime {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        env::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
+        access::env::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
 
         // start shared timers too
         Self::start_all();
@@ -175,12 +178,14 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
-    if let Err(err) = EnvOps::init_from_view(payload.env, canister_role) {
+    if let Err(err) = crate::workflow::env::init_env_from_view(payload.env, canister_role) {
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 
-    AppDirectoryOps::import(app_directory_from_view(payload.app_directory));
-    SubnetDirectoryOps::import(subnet_directory_from_view(payload.subnet_directory));
+    AppDirectoryOps::import(AppDirectoryMapper::view_to_snapshot(payload.app_directory));
+    SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_snapshot(
+        payload.subnet_directory,
+    ));
 
     // --- Phase 3: Service startup ---
     Runtime::start_all();

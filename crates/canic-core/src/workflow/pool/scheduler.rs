@@ -21,7 +21,6 @@ use crate::{
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
-    storage::memory::pool::CanisterPoolStatus,
     workflow::{
         pool::{admissibility::check_can_enter_pool, mark_failed, mark_ready, reset_into_pool},
         prelude::*,
@@ -124,33 +123,29 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = PoolOps::iter()
-        .filter(|(_, entry)| matches!(entry.state.status, CanisterPoolStatus::PendingReset))
-        .collect();
+    for _ in 0..limit {
+        let Some(entry) = PoolOps::pop_pending_reset() else {
+            break;
+        };
 
-    if pending.is_empty() {
-        return Ok(());
-    }
+        let pid = entry.pid;
 
-    pending.sort_by_key(|(_, entry)| entry.header.created_at);
-
-    for (pid, _) in pending.into_iter().take(limit) {
         match check_can_enter_pool(pid).await {
             Ok(()) => {}
 
             Err(PoolPolicyError::RegisteredInSubnet(_)) => {
-                // Permanently forbidden → remove from pool
-                let _ = PoolOps::take(&pid);
+                PoolOps::remove(&pid);
                 continue;
             }
 
             Err(PoolPolicyError::NonImportableOnLocal { .. }) => {
-                // Temporarily not admissible → skip, leave pending
+                // Not admissible yet → requeue
+                PoolOps::mark_pending_reset(pid);
                 continue;
             }
 
             Err(_) => {
-                // Defensive: unknown policy failure
+                PoolOps::mark_pending_reset(pid);
                 continue;
             }
         }
@@ -172,11 +167,9 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 
     Ok(())
 }
-
 fn has_pending_reset() -> bool {
-    PoolOps::iter().any(|(_, entry)| matches!(entry.state.status, CanisterPoolStatus::PendingReset))
+    PoolOps::has_pending_reset()
 }
-
 //
 // TEST HOOKS
 //
