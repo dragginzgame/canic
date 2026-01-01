@@ -1,13 +1,8 @@
 use crate::{
     Error, ThisError,
     cdk::{api::canister_self, types::Principal},
-    dto::{env::EnvView, subnet::SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
-    infra::ic::{Network, build_network},
-    ops::{
-        adapter::env::{env_data_from_view, env_data_to_view},
-        runtime::RuntimeOpsError,
-    },
+    ops::runtime::RuntimeOpsError,
     storage::memory::env::{Env, EnvData},
 };
 
@@ -47,11 +42,80 @@ pub enum EnvOpsError {
     SubnetRoleUnavailable,
 }
 
-impl EnvOpsError {}
-
 impl From<EnvOpsError> for Error {
     fn from(err: EnvOpsError) -> Self {
         RuntimeOpsError::from(err).into()
+    }
+}
+
+///
+/// EnvSnapshot
+/// Internal, operational snapshot of environment state.
+///
+/// - May be incomplete during initialization
+/// - Not stable or serialized
+/// - Used only by workflow and ops
+///
+
+pub struct EnvSnapshot {
+    pub prime_root_pid: Option<Principal>,
+    pub subnet_role: Option<SubnetRole>,
+    pub subnet_pid: Option<Principal>,
+    pub root_pid: Option<Principal>,
+    pub canister_role: Option<CanisterRole>,
+    pub parent_pid: Option<Principal>,
+}
+
+impl From<EnvData> for EnvSnapshot {
+    fn from(data: EnvData) -> Self {
+        Self {
+            prime_root_pid: data.prime_root_pid,
+            subnet_role: data.subnet_role,
+            subnet_pid: data.subnet_pid,
+            root_pid: data.root_pid,
+            canister_role: data.canister_role,
+            parent_pid: data.parent_pid,
+        }
+    }
+}
+
+impl TryFrom<EnvSnapshot> for EnvData {
+    type Error = EnvOpsError;
+
+    fn try_from(snapshot: EnvSnapshot) -> Result<Self, Self::Error> {
+        let mut missing = Vec::new();
+
+        if snapshot.prime_root_pid.is_none() {
+            missing.push("prime_root_pid");
+        }
+        if snapshot.subnet_role.is_none() {
+            missing.push("subnet_role");
+        }
+        if snapshot.subnet_pid.is_none() {
+            missing.push("subnet_pid");
+        }
+        if snapshot.root_pid.is_none() {
+            missing.push("root_pid");
+        }
+        if snapshot.canister_role.is_none() {
+            missing.push("canister_role");
+        }
+        if snapshot.parent_pid.is_none() {
+            missing.push("parent_pid");
+        }
+
+        if !missing.is_empty() {
+            return Err(EnvOpsError::MissingFields(missing.join(", ")));
+        }
+
+        Ok(EnvData {
+            prime_root_pid: snapshot.prime_root_pid,
+            subnet_role: snapshot.subnet_role,
+            subnet_pid: snapshot.subnet_pid,
+            root_pid: snapshot.root_pid,
+            canister_role: snapshot.canister_role,
+            parent_pid: snapshot.parent_pid,
+        })
     }
 }
 
@@ -71,55 +135,6 @@ impl EnvOps {
     // ---------------------------------------------------------------------
     // Initialization / import
     // ---------------------------------------------------------------------
-
-    /// Initialize environment state for the root canister during init.
-    ///
-    /// This must only be called from the IC `init` hook.
-    pub(crate) fn init_root(identity: SubnetIdentity) -> Result<(), Error> {
-        let self_pid = canister_self();
-
-        let (subnet_pid, subnet_role, prime_root_pid) = match identity {
-            SubnetIdentity::Prime => {
-                // Prime subnet: root == prime root == subnet
-                (self_pid, SubnetRole::PRIME, self_pid)
-            }
-
-            SubnetIdentity::Standard(params) => {
-                // Standard subnet syncing from prime
-                (self_pid, params.subnet_type, params.prime_root_pid)
-            }
-
-            SubnetIdentity::Manual(pid) => {
-                // Test/support only: explicit subnet override
-                (pid, SubnetRole::MANUAL, pid)
-            }
-        };
-
-        let env = EnvData {
-            prime_root_pid: Some(prime_root_pid),
-            root_pid: Some(self_pid),
-            subnet_pid: Some(subnet_pid),
-            subnet_role: Some(subnet_role),
-            canister_role: Some(CanisterRole::ROOT),
-            parent_pid: Some(prime_root_pid),
-        };
-
-        Self::import(env)
-    }
-
-    /// Initialize environment state for a non-root canister during init.
-    ///
-    /// This function must only be called from the IC `init` hook.
-    pub(crate) fn init_from_view(env: EnvView, role: CanisterRole) -> Result<(), Error> {
-        let mut env = env_data_from_view(env);
-
-        // Override contextual role (do not trust payload blindly)
-        env.canister_role = Some(role.clone());
-        env = ensure_nonroot_env(role, env)?;
-
-        // Import validates required fields and persists
-        Self::import(env)
-    }
 
     pub fn set_prime_root_pid(pid: Principal) {
         Env::set_prime_root_pid(pid);
@@ -196,29 +211,22 @@ impl EnvOps {
     }
 
     // ---------------------------------------------------------------------
-    // Errors
+    // Snapshot / Import
     // ---------------------------------------------------------------------
 
-    /// Ensure the caller is the root canister.
-    pub fn require_root() -> Result<(), Error> {
-        let root_pid = Self::root_pid()?;
+    /// Export a snapshot of the current environment metadata.
+    #[must_use]
+    pub fn snapshot() -> EnvSnapshot {
+        let data = Env::export(); // storage-level export
 
-        if root_pid == canister_self() {
-            Ok(())
-        } else {
-            Err(EnvOpsError::NotRoot.into())
-        }
+        data.into()
     }
 
-    /// Ensure the caller is not the root canister.
-    pub fn deny_root() -> Result<(), Error> {
-        let root_pid = Self::root_pid()?; // explicit mapping
+    pub fn import(snapshot: EnvSnapshot) -> Result<(), Error> {
+        let data: EnvData = snapshot.try_into()?;
+        Env::import(data);
 
-        if root_pid == canister_self() {
-            Err(EnvOpsError::IsRoot.into())
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     // ---------------------------------------------------------------------
@@ -253,56 +261,6 @@ impl EnvOps {
         Env::set_canister_role(role);
         Ok(())
     }
-
-    // ---------------------------------------------------------------------
-    // Export / Import
-    // ---------------------------------------------------------------------
-
-    /// Export a snapshot of the current environment metadata.
-    #[must_use]
-    pub fn export() -> EnvData {
-        Env::export()
-    }
-
-    #[must_use]
-    pub fn export_view() -> EnvView {
-        env_data_to_view(Env::export())
-    }
-
-    pub fn import(data: EnvData) -> Result<(), Error> {
-        let mut missing = Vec::new();
-        if data.prime_root_pid.is_none() {
-            missing.push("prime_root_pid");
-        }
-        if data.subnet_role.is_none() {
-            missing.push("subnet_role");
-        }
-        if data.subnet_pid.is_none() {
-            missing.push("subnet_pid");
-        }
-        if data.root_pid.is_none() {
-            missing.push("root_pid");
-        }
-        if data.canister_role.is_none() {
-            missing.push("canister_role");
-        }
-        if data.parent_pid.is_none() {
-            missing.push("parent_pid");
-        }
-
-        if !missing.is_empty() {
-            return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
-        }
-
-        Env::import(data);
-
-        Ok(())
-    }
-
-    pub fn import_view(env: EnvView) -> Result<(), Error> {
-        let data = env_data_from_view(env);
-        Self::import(data)
-    }
 }
 
 fn assert_initialized() -> Result<(), Error> {
@@ -322,46 +280,4 @@ fn assert_initialized() -> Result<(), Error> {
     } else {
         Err(EnvOpsError::MissingFields(missing.join(", ")).into())
     }
-}
-
-fn ensure_nonroot_env(canister_role: CanisterRole, mut env: EnvData) -> Result<EnvData, Error> {
-    let mut missing = Vec::new();
-    if env.prime_root_pid.is_none() {
-        missing.push("prime_root_pid");
-    }
-    if env.subnet_role.is_none() {
-        missing.push("subnet_role");
-    }
-    if env.subnet_pid.is_none() {
-        missing.push("subnet_pid");
-    }
-    if env.root_pid.is_none() {
-        missing.push("root_pid");
-    }
-    if env.canister_role.is_none() {
-        missing.push("canister_role");
-    }
-    if env.parent_pid.is_none() {
-        missing.push("parent_pid");
-    }
-
-    if missing.is_empty() {
-        return Ok(env);
-    }
-
-    if build_network() == Some(Network::Ic) {
-        return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
-    }
-
-    let root_pid = Principal::from_slice(&[0xBB; 29]);
-    let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-
-    env.prime_root_pid.get_or_insert(root_pid);
-    env.subnet_role.get_or_insert(SubnetRole::PRIME);
-    env.subnet_pid.get_or_insert(subnet_pid);
-    env.root_pid.get_or_insert(root_pid);
-    env.canister_role.get_or_insert(canister_role);
-    env.parent_pid.get_or_insert(root_pid);
-
-    Ok(env)
 }

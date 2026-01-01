@@ -1,10 +1,12 @@
 use crate::{
     Error,
-    cdk::api::trap,
+    cdk::api::{canister_self, trap},
+    dto::subnet::SubnetIdentity,
+    ids::{CanisterRole, SubnetRole},
     infra::ic::{Network, build_network},
     ops::{
         config::ConfigOps,
-        runtime::env::EnvOps,
+        runtime::env::{EnvOps, EnvSnapshot},
         storage::{
             directory::subnet::SubnetDirectoryOps, pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
@@ -18,12 +20,20 @@ use crate::{
     },
 };
 
+/// ---------------------------------------------------------------------------
+/// Root bootstrap entrypoints
+/// ---------------------------------------------------------------------------
+
 /// Bootstrap workflow for the root canister during init.
 pub async fn bootstrap_init_root_canister() -> Result<(), Error> {
-    // Example sequence — adjust as needed
-    root_set_subnet_id().await;
-    root_import_pool_from_config().await;
+    // 1. Initialize canonical environment identity
+    root_init_env(ConfigOps::current_subnet()?)?;
 
+    // 2. Refine / enrich runtime environment
+    root_set_subnet_id().await?;
+
+    // 3. Bootstrap dependent subsystems
+    root_import_pool_from_config().await;
     root_create_canisters().await?;
 
     Ok(())
@@ -31,30 +41,72 @@ pub async fn bootstrap_init_root_canister() -> Result<(), Error> {
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
-    root_set_subnet_id().await;
+    // Environment already exists; only enrich + reconcile
+    let _ = root_set_subnet_id().await;
     root_import_pool_from_config().await;
 }
 
-/// Initializes the subnet identifier for the root canister.
+/// ---------------------------------------------------------------------------
+/// Environment initialization
+/// ---------------------------------------------------------------------------
+
+/// Initialize canonical environment state for the root canister.
 ///
-/// This attempts to resolve the subnet ID via the NNS registry and records it
-/// into durable environment state. This value is required by downstream
-/// topology, placement, and orchestration logic.
+/// Must be called exactly once during the IC `init` hook.
+pub(crate) fn root_init_env(identity: SubnetIdentity) -> Result<(), Error> {
+    let self_pid = canister_self();
+
+    let (subnet_pid, subnet_role, prime_root_pid) = match identity {
+        SubnetIdentity::Prime => {
+            // Prime subnet: root == prime root == subnet
+            (self_pid, SubnetRole::PRIME, self_pid)
+        }
+
+        SubnetIdentity::Standard(params) => {
+            // Standard subnet syncing from prime
+            (self_pid, params.subnet_type, params.prime_root_pid)
+        }
+
+        SubnetIdentity::Manual(pid) => {
+            // Test/support only: explicit subnet override
+            (pid, SubnetRole::MANUAL, pid)
+        }
+    };
+
+    let snapshot = EnvSnapshot {
+        prime_root_pid: Some(prime_root_pid),
+        root_pid: Some(self_pid),
+        subnet_pid: Some(subnet_pid),
+        subnet_role: Some(subnet_role),
+        canister_role: Some(CanisterRole::ROOT),
+        parent_pid: Some(prime_root_pid),
+    };
+
+    EnvOps::import(snapshot)
+}
+
+/// ---------------------------------------------------------------------------
+/// Environment enrichment
+/// ---------------------------------------------------------------------------
+
+/// Resolve and persist the subnet identifier for the root canister.
 ///
-/// If the registry is unavailable (e.g. PocketIC or local testing), the
-/// canister's own principal is used as a deterministic fallback.
-pub async fn root_set_subnet_id() {
-    // Preferred path: query the NNS registry for the subnet this canister
-    // currently belongs to.
-    let subnet_result = try_get_current_subnet_pid().await;
-    match subnet_result {
+/// On IC:
+/// - Failure to resolve subnet ID is fatal.
+///
+/// On local / test networks:
+/// - Falls back to `canister_self()` deterministically.
+pub async fn root_set_subnet_id() -> Result<(), Error> {
+    let network = build_network();
+
+    match try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
-            return;
+            return Ok(());
         }
 
         Ok(None) => {
-            if build_network() == Some(Network::Ic) {
+            if network == Some(Network::Ic) {
                 let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
                 log!(Topic::Topology, Error, "{msg}");
                 trap(msg);
@@ -62,7 +114,7 @@ pub async fn root_set_subnet_id() {
         }
 
         Err(err) => {
-            if build_network() == Some(Network::Ic) {
+            if network == Some(Network::Ic) {
                 let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
                 log!(Topic::Topology, Error, "{msg}");
                 trap(&msg);
@@ -70,8 +122,7 @@ pub async fn root_set_subnet_id() {
         }
     }
 
-    // Fallback path: environments without a registry (e.g. PocketIC).
-    // Using self ensures a stable, non-null subnet identifier.
+    // Fallback path for non-IC environments
     let fallback = canister_self();
     EnvOps::set_subnet_pid(fallback);
 
@@ -80,11 +131,17 @@ pub async fn root_set_subnet_id() {
         Info,
         "try_get_current_subnet_pid unavailable; using self as subnet: {fallback}"
     );
+
+    Ok(())
 }
+
+/// ---------------------------------------------------------------------------
+/// Pool bootstrap
+/// ---------------------------------------------------------------------------
 
 /// Import any statically configured pool canisters for this subnet.
 ///
-/// Import failures are summarized so bootstrap can continue.
+/// Failures are summarized so bootstrap can continue.
 pub async fn root_import_pool_from_config() {
     let subnet_cfg = match ConfigOps::current_subnet() {
         Ok(cfg) => cfg,
@@ -97,6 +154,7 @@ pub async fn root_import_pool_from_config() {
             return;
         }
     };
+
     let import_list = match build_network() {
         Some(Network::Local) => subnet_cfg.pool.import.local,
         Some(Network::Ic) => subnet_cfg.pool.import.ic,
@@ -122,13 +180,14 @@ pub async fn root_import_pool_from_config() {
         log!(
             Topic::CanisterPool,
             Warn,
-            "pool import initial=0 with auto_create enabled; new canisters may be created before queued imports are ready"
+            "pool import initial=0 with auto_create enabled; canisters may be created before queued imports are ready"
         );
     }
 
     if import_list.is_empty() {
         return;
     }
+
     let (initial, queued) = import_list.split_at(initial_limit.min(import_list.len()));
 
     let mut imported = 0_u64;
@@ -149,9 +208,7 @@ pub async fn root_import_pool_from_config() {
                     immediate_skipped += 1;
                 }
             }
-            Err(_) => {
-                immediate_failed += 1;
-            }
+            Err(_) => immediate_failed += 1,
         }
     }
 
@@ -195,20 +252,14 @@ pub async fn root_import_pool_from_config() {
     }
 }
 
-/// Ensures all statically configured canisters for this subnet exist.
-///
-/// This function:
-/// - Reads the subnet configuration
-/// - Issues creation requests for any auto-create roles
-/// - Emits a summary of the resulting topology
-///
-/// Intended to run during root bootstrap or upgrade flows.
-/// Safe to re-run: skips roles that already exist in the subnet registry.
+/// ---------------------------------------------------------------------------
+/// Canister creation
+/// ---------------------------------------------------------------------------
+
+/// Ensure all statically configured canisters for this subnet exist.
 pub async fn root_create_canisters() -> Result<(), Error> {
-    // Load the effective configuration for the current subnet.
     let subnet_cfg = ConfigOps::current_subnet()?;
 
-    // Creation pass: ensure all auto-create canister roles exist.
     for role in &subnet_cfg.auto_create {
         if let Some(pid) = SubnetDirectoryOps::get(role) {
             log!(
@@ -227,7 +278,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
         .await?;
     }
 
-    // Reporting pass: emit the current topology for observability/debugging.
+    // Emit topology summary
     for (pid, role) in SubnetRegistryOps::export_roles() {
         log!(Topic::Init, Info, "🥫 {} ({})", role, pid);
     }

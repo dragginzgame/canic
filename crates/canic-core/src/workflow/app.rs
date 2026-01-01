@@ -1,7 +1,8 @@
 use crate::{
     Error,
+    access::env,
     dto::state::AppCommand,
-    ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
+    ops::storage::state::app::AppStateOps,
     workflow::{cascade::state::root_cascade_state, snapshot::StateSnapshotBuilder},
 };
 
@@ -19,7 +20,7 @@ use crate::{
 /// exclusively at the API boundary.
 ///
 pub(crate) async fn apply_command(cmd: AppCommand) -> Result<(), Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
     AppStateOps::command(cmd)?;
 
     let snapshot = StateSnapshotBuilder::new().with_app_state().build();

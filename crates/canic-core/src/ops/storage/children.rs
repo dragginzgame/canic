@@ -1,19 +1,28 @@
 use crate::{
-    cdk::{api::canister_self, types::Principal},
-    dto::{
-        canister::CanisterSummaryView,
-        page::{Page, PageRequest},
-        snapshot::TopologyChildView,
-    },
+    cdk::types::Principal,
     ids::CanisterRole,
-    ops::{
-        adapter::canister::{canister_summary_from_topology_child, canister_summary_to_view},
-        runtime::env::EnvOps,
-        storage::registry::subnet::SubnetRegistryOps,
-        view::paginate::clamp_page_request,
-    },
     storage::memory::children::{CanisterChildren, CanisterChildrenData},
 };
+
+///
+/// ChildSnapshot
+/// Internal, operational snapshot of a child canister.
+///
+
+pub struct ChildSnapshot {
+    pub pid: Principal,
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+}
+
+///
+/// ChildrenSnapshot
+/// Internal snapshot of direct children.
+///
+
+pub struct ChildrenSnapshot {
+    pub entries: Vec<ChildSnapshot>,
+}
 
 ///
 /// CanisterChildrenOps
@@ -22,77 +31,73 @@ use crate::{
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {
-    /// Resolve the authoritative internal children data.
-    /// Root rebuilds from the registry; others use imported snapshot.
-    fn resolve_children() -> CanisterChildrenData {
-        if EnvOps::is_root() {
-            CanisterChildrenData {
-                entries: SubnetRegistryOps::children(canister_self()),
-            }
-        } else {
-            CanisterChildren::export()
-        }
+    // -------------------------------------------------------------
+    // Lookup helpers (internal)
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn contains_pid(pid: &Principal) -> bool {
+        Self::snapshot().entries.iter().any(|e| &e.pid == pid)
     }
 
-    /// Return a paginated public view of direct children.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn page(request: PageRequest) -> Page<CanisterSummaryView> {
-        let request = clamp_page_request(request);
-        let all = Self::resolve_children();
-
-        let entries = &all.entries;
-        let total = entries.len() as u64;
-        let start = request.offset.min(total) as usize;
-        let end = request.offset.saturating_add(request.limit).min(total) as usize;
-
-        let entries = entries[start..end]
-            .iter()
-            .map(|(_, summary)| canister_summary_to_view(summary))
-            .collect();
-
-        Page { entries, total }
+    pub fn find_by_pid(pid: &Principal) -> Option<ChildSnapshot> {
+        Self::snapshot().entries.into_iter().find(|e| &e.pid == pid)
     }
 
-    /// Lookup a child by principal (internal-only, identity based).
     #[must_use]
-    pub(crate) fn find_by_pid(pid: &Principal) -> Option<CanisterSummaryView> {
-        Self::resolve_children()
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<ChildSnapshot> {
+        Self::snapshot()
             .entries
             .into_iter()
-            .find(|(p, _)| p == pid)
-            .map(|(_, summary)| canister_summary_to_view(&summary))
+            .find(|e| &e.role == role)
     }
 
-    /// Lookup the first child of a given role.
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterSummaryView> {
-        Self::resolve_children()
+    pub fn pids() -> Vec<Principal> {
+        Self::snapshot()
             .entries
             .into_iter()
-            .find(|(_, summary)| &summary.role == role)
-            .map(|(_, summary)| canister_summary_to_view(&summary))
-    }
-
-    /// Export child principals only (crate-private).
-    #[must_use]
-    pub(crate) fn pids() -> Vec<Principal> {
-        Self::resolve_children()
-            .entries
-            .into_iter()
-            .map(|(pid, _)| pid)
+            .map(|e| e.pid)
             .collect()
     }
 
-    /// Import identity-bearing children data from a topology snapshot view.
-    pub(crate) fn import_view(parent_pid: Principal, children: Vec<TopologyChildView>) {
-        let entries = children
+    // -------------------------------------------------------------
+    // Import / Snapshot
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn snapshot() -> ChildrenSnapshot {
+        let data = CanisterChildren::export();
+
+        ChildrenSnapshot {
+            entries: data
+                .entries
+                .into_iter()
+                .map(|(pid, summary)| ChildSnapshot {
+                    pid,
+                    role: summary.role,
+                    parent_pid: summary.parent_pid,
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn import(snapshot: ChildrenSnapshot) {
+        let entries = snapshot
+            .entries
             .into_iter()
-            .map(|node| {
-                let summary = canister_summary_from_topology_child(&node, parent_pid);
-                (node.pid, summary)
+            .map(|e| {
+                (
+                    e.pid,
+                    crate::storage::canister::CanisterSummary {
+                        role: e.role,
+                        parent_pid: e.parent_pid,
+                    },
+                )
             })
             .collect();
+
         CanisterChildren::import(CanisterChildrenData { entries });
     }
 }

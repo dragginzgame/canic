@@ -1,8 +1,4 @@
-use crate::{
-    dto::page::{Page, PageRequest},
-    ops::view::paginate::clamp_page_request,
-    perf::{self, PerfEntry},
-};
+use crate::perf::{self, PerfEntry};
 
 ///
 /// PerfOps
@@ -10,21 +6,26 @@ use crate::{
 
 pub struct PerfOps;
 
+///
+/// PerfSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct PerfSnapshot {
+    pub entries: Vec<PerfEntry>,
+    pub total: u64,
+}
+
 impl PerfOps {
     pub(crate) fn record(label: &str, delta: u64) {
         perf::record_timer(label, delta);
     }
 
     #[must_use]
-    pub fn snapshot(request: PageRequest) -> Page<PerfEntry> {
-        let request = clamp_page_request(request);
-        let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
-        let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-
+    pub fn snapshot() -> PerfSnapshot {
         let entries = perf::entries();
         let total = entries.len() as u64;
-        let entries = entries.into_iter().skip(offset).take(limit).collect();
 
-        Page { entries, total }
+        PerfSnapshot { entries, total }
     }
 }

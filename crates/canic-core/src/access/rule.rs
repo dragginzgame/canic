@@ -2,18 +2,14 @@ use crate::{
     Error, ThisError,
     access::AccessError,
     infra::ic::{Network, build_network},
-    ops::runtime::env::EnvOps,
 };
 
 ///
-/// RuleError
+/// RuleAccessError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum RuleError {
-    #[error("this endpoint is only available on the prime subnet")]
-    NotPrimeSubnet,
-
+pub enum RuleAccessError {
     #[error("this endpoint requires a build-time network (DFX_NETWORK) of either 'ic' or 'local'")]
     BuildNetworkUnknown,
 
@@ -23,8 +19,8 @@ pub enum RuleError {
     BuildNetworkMismatch { expected: Network, actual: Network },
 }
 
-impl From<RuleError> for Error {
-    fn from(err: RuleError) -> Self {
+impl From<RuleAccessError> for Error {
+    fn from(err: RuleAccessError) -> Self {
         AccessError::Rule(err).into()
     }
 }
@@ -32,15 +28,6 @@ impl From<RuleError> for Error {
 ///
 /// Rules
 ///
-
-#[allow(clippy::unused_async)]
-pub async fn is_prime_subnet() -> Result<(), AccessError> {
-    if EnvOps::is_prime_subnet() {
-        Ok(())
-    } else {
-        Err(RuleError::NotPrimeSubnet.into())
-    }
-}
 
 ///
 /// build_network_ic
@@ -66,13 +53,13 @@ pub async fn build_network_local() -> Result<(), AccessError> {
 /// Helpers
 ///
 
-pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleError> {
+pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleAccessError> {
     let actual = build_network();
 
     match actual {
         Some(actual) if actual == expected => Ok(()),
-        Some(actual) => Err(RuleError::BuildNetworkMismatch { expected, actual }),
-        None => Err(RuleError::BuildNetworkUnknown),
+        Some(actual) => Err(RuleAccessError::BuildNetworkMismatch { expected, actual }),
+        None => Err(RuleAccessError::BuildNetworkUnknown),
     }
 }
 
@@ -84,12 +71,12 @@ pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleError> {
 mod tests {
     use super::*;
 
-    fn check(expected: Network, actual: Option<Network>) -> Result<(), RuleError> {
+    fn check(expected: Network, actual: Option<Network>) -> Result<(), RuleAccessError> {
         // Inline the same logic but with injected `actual`
         match actual {
             Some(actual) if actual == expected => Ok(()),
-            Some(actual) => Err(RuleError::BuildNetworkMismatch { expected, actual }),
-            None => Err(RuleError::BuildNetworkUnknown),
+            Some(actual) => Err(RuleAccessError::BuildNetworkMismatch { expected, actual }),
+            None => Err(RuleAccessError::BuildNetworkUnknown),
         }
     }
 
@@ -104,7 +91,7 @@ mod tests {
         let err = check(Network::Ic, Some(Network::Local)).unwrap_err();
 
         match err {
-            RuleError::BuildNetworkMismatch { expected, actual } => {
+            RuleAccessError::BuildNetworkMismatch { expected, actual } => {
                 assert_eq!(expected, Network::Ic);
                 assert_eq!(actual, Network::Local);
             }
@@ -115,6 +102,6 @@ mod tests {
     #[test]
     fn build_network_unknown_errors() {
         let err = check(Network::Ic, None).unwrap_err();
-        assert!(matches!(err, RuleError::BuildNetworkUnknown));
+        assert!(matches!(err, RuleAccessError::BuildNetworkUnknown));
     }
 }

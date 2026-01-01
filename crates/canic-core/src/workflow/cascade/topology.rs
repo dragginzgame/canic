@@ -10,8 +10,9 @@
 
 use crate::{
     Error,
+    access::env,
     dto::snapshot::{TopologyNodeView, TopologySnapshotView},
-    ops::{self, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    ops::{self, storage::children::CanisterChildrenOps},
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,
@@ -27,7 +28,7 @@ use std::collections::HashMap;
 //
 
 pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
 
     let snapshot = match TopologySnapshotBuilder::for_target(target_pid) {
         Ok(builder) => builder.build(),
@@ -96,7 +97,7 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 //
 
 pub(crate) async fn nonroot_cascade_topology(snapshot: &TopologySnapshotView) -> Result<(), Error> {
-    EnvOps::deny_root()?;
+    env::deny_root()?;
 
     let self_pid = canister_self();
     let next = match next_child_on_path(self_pid, &snapshot.parents) {

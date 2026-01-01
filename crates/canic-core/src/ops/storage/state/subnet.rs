@@ -1,8 +1,31 @@
-use crate::{
-    dto::state::SubnetStateView,
-    ops::adapter::state::{subnet_state_from_view, subnet_state_to_view},
-    storage::memory::state::subnet::SubnetState,
-};
+use crate::storage::memory::state::subnet::{SubnetState, SubnetStateData};
+
+///
+/// SubnetStateSnapshot
+/// Internal, operational snapshot of subnet state.
+///
+/// NOTE:
+/// - Not serialized
+/// - Not stable
+/// - May grow over time as subnet state evolves
+///
+
+#[derive(Clone, Debug)]
+pub struct SubnetStateSnapshot {
+    // currently empty; add fields as needed
+}
+
+impl From<SubnetStateData> for SubnetStateSnapshot {
+    fn from(_data: SubnetStateData) -> Self {
+        Self {}
+    }
+}
+
+impl From<SubnetStateSnapshot> for SubnetStateData {
+    fn from(_snapshot: SubnetStateSnapshot) -> Self {
+        Self {}
+    }
+}
 
 ///
 /// SubnetStateOps
@@ -11,17 +34,21 @@ use crate::{
 pub struct SubnetStateOps;
 
 impl SubnetStateOps {
-    /// Import subnet state from a public view.
-    pub fn import_view(view: SubnetStateView) {
-        let data = subnet_state_from_view(view);
-        SubnetState::import(data);
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn snapshot() -> SubnetStateSnapshot {
+        SubnetState::export().into()
     }
 
-    /// Export subnet state as a public view.
-    #[must_use]
-    pub fn export_view() -> SubnetStateView {
-        let data = SubnetState::export();
+    // -------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------
 
-        subnet_state_to_view(data)
+    pub fn import(snapshot: SubnetStateSnapshot) {
+        let data: SubnetStateData = snapshot.into();
+        SubnetState::import(data);
     }
 }

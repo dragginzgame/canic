@@ -1,16 +1,34 @@
 use crate::{
-    dto::{
-        directory::SubnetDirectoryView,
-        page::{Page, PageRequest},
-    },
+    cdk::types::Principal,
     ids::CanisterRole,
-    ops::{
-        adapter::directory::{subnet_directory_from_view, subnet_directory_to_view},
-        view::paginate::paginate_vec,
-    },
     storage::memory::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
 };
-use candid::Principal;
+
+///
+/// SubnetDirectorySnapshot
+/// Internal, operational snapshot of subnet directory.
+///
+
+#[derive(Clone, Debug)]
+pub struct SubnetDirectorySnapshot {
+    pub entries: Vec<(CanisterRole, Principal)>,
+}
+
+impl From<SubnetDirectoryData> for SubnetDirectorySnapshot {
+    fn from(data: SubnetDirectoryData) -> Self {
+        Self {
+            entries: data.entries,
+        }
+    }
+}
+
+impl From<SubnetDirectorySnapshot> for SubnetDirectoryData {
+    fn from(snapshot: SubnetDirectorySnapshot) -> Self {
+        Self {
+            entries: snapshot.entries,
+        }
+    }
+}
 
 ///
 /// SubnetDirectoryOps
@@ -19,34 +37,43 @@ use candid::Principal;
 pub struct SubnetDirectoryOps;
 
 impl SubnetDirectoryOps {
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn snapshot() -> SubnetDirectorySnapshot {
+        SubnetDirectory::export().into()
+    }
+
+    // -------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------
+
+    pub(crate) fn import(snapshot: SubnetDirectorySnapshot) {
+        let data: SubnetDirectoryData = snapshot.into();
+        SubnetDirectory::import(data);
+    }
+
+    // -------------------------------------------------------------
+    // Internal helpers (ops-only)
+    // -------------------------------------------------------------
+
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
-        let data = SubnetDirectory::export();
-        data.entries
+        // This is still an ops-level convenience, but it stays snapshot/data-based
+        // and does not leak DTOs.
+        SubnetDirectory::export()
+            .entries
             .iter()
-            .find_map(|(t, pid)| (t == role).then_some(*pid))
+            .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
 
     #[must_use]
-    pub fn page(request: PageRequest) -> Page<(CanisterRole, Principal)> {
-        let data = SubnetDirectory::export();
-        paginate_vec(data.entries, request)
-    }
-
-    /// Export subnet directory as a public view.
-    #[must_use]
-    pub fn export_view() -> SubnetDirectoryView {
-        let data = SubnetDirectory::export();
-        subnet_directory_to_view(data)
-    }
-
-    pub(crate) fn import(data: SubnetDirectoryData) {
-        SubnetDirectory::import(data);
-    }
-
-    /// Import subnet directory from a public view.
-    pub fn import_view(view: SubnetDirectoryView) {
-        let data = subnet_directory_from_view(view);
-        SubnetDirectory::import(data);
+    pub fn contains(role: &CanisterRole) -> bool {
+        SubnetDirectory::export()
+            .entries
+            .iter()
+            .any(|(r, _)| r == role)
     }
 }

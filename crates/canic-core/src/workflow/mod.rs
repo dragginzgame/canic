@@ -3,15 +3,18 @@ pub(crate) mod bootstrap;
 pub mod cascade;
 pub mod command;
 pub mod directory;
+pub mod env;
 pub mod ic;
 pub(crate) mod lifecycle;
 pub mod orchestrator;
 pub mod placement;
 pub mod pool;
 pub mod query;
+pub mod registry;
 pub mod rpc;
 pub(crate) mod runtime;
 pub mod snapshot;
+pub mod state;
 
 ///
 /// Prelude
@@ -40,10 +43,13 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum WorkflowError {
     #[error(transparent)]
+    Bootstrap(#[from] bootstrap::BootstrapError),
+
+    #[error(transparent)]
     Cascade(#[from] cascade::CascadeError),
 
     #[error(transparent)]
-    IcWorkflow(#[from] ic::IcWorkflowError),
+    Ic(#[from] ic::IcWorkflowError),
 
     #[error(transparent)]
     Orchestrator(#[from] orchestrator::OrchestratorError),

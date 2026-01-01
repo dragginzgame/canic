@@ -1,7 +1,33 @@
 use crate::{
-    dto::registry::AppRegistryView, ops::adapter::registry::app_registry_to_view,
-    storage::memory::registry::app::AppRegistry,
+    cdk::types::Principal,
+    storage::memory::registry::app::{AppRegistry, AppRegistryData},
 };
+
+///
+/// AppRegistrySnapshot
+/// Internal, operational snapshot of the app registry.
+///
+
+#[derive(Clone, Debug)]
+pub struct AppRegistrySnapshot {
+    pub entries: Vec<(Principal, Principal)>,
+}
+
+impl From<AppRegistryData> for AppRegistrySnapshot {
+    fn from(data: AppRegistryData) -> Self {
+        Self {
+            entries: data.entries,
+        }
+    }
+}
+
+impl From<AppRegistrySnapshot> for AppRegistryData {
+    fn from(snapshot: AppRegistrySnapshot) -> Self {
+        Self {
+            entries: snapshot.entries,
+        }
+    }
+}
 
 ///
 /// AppRegistryOps
@@ -10,10 +36,12 @@ use crate::{
 pub struct AppRegistryOps;
 
 impl AppRegistryOps {
-    #[must_use]
-    pub fn export_view() -> AppRegistryView {
-        let data = AppRegistry::export();
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
 
-        app_registry_to_view(data)
+    #[must_use]
+    pub fn snapshot() -> AppRegistrySnapshot {
+        AppRegistry::export().into()
     }
 }

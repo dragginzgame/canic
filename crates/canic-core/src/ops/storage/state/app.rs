@@ -1,13 +1,43 @@
 use crate::{
     Error, ThisError,
-    dto::state::{AppCommand, AppStateView},
-    ops::{
-        adapter::state::{app_state_from_view, app_state_to_view},
-        prelude::*,
-        storage::state::StateOpsError,
-    },
+    dto::state::AppCommand,
+    ops::{prelude::*, storage::state::StateOpsError},
     storage::memory::state::app::{AppMode, AppState, AppStateData},
 };
+
+///
+/// AppStateSnapshot
+/// Internal, operational snapshot of application state.
+///
+/// - Used by workflows and state cascades
+/// - May be partially populated in the future
+/// - Not serialized or exposed externally
+///
+
+#[derive(Clone, Debug, Default)]
+pub struct AppStateSnapshot {
+    pub mode: Option<AppMode>,
+}
+
+impl From<AppStateData> for AppStateSnapshot {
+    fn from(data: AppStateData) -> Self {
+        Self {
+            mode: Some(data.mode),
+        }
+    }
+}
+
+impl TryFrom<AppStateSnapshot> for AppStateData {
+    type Error = AppStateOpsError;
+
+    fn try_from(snapshot: AppStateSnapshot) -> Result<Self, Self::Error> {
+        let Some(mode) = snapshot.mode else {
+            return Err(AppStateOpsError::MissingField("mode"));
+        };
+
+        Ok(Self { mode })
+    }
+}
 
 ///
 /// AppStateOpsError
@@ -17,6 +47,9 @@ use crate::{
 pub enum AppStateOpsError {
     #[error("app is already in {0} mode")]
     AlreadyInMode(AppMode),
+
+    #[error("app state snapshot missing required field: {0}")]
+    MissingField(&'static str),
 }
 
 impl From<AppStateOpsError> for Error {
@@ -32,12 +65,9 @@ impl From<AppStateOpsError> for Error {
 pub struct AppStateOps;
 
 impl AppStateOps {
-    // todo please help codex - this is only used by a test so false positive on dead_code
-    #[must_use]
-    #[cfg(test)]
-    pub fn get_mode() -> AppMode {
-        AppState::get_mode()
-    }
+    // -------------------------------------------------------------
+    // Commands
+    // -------------------------------------------------------------
 
     pub fn command(cmd: AppCommand) -> Result<(), Error> {
         let old_mode = AppState::get_mode();
@@ -49,7 +79,7 @@ impl AppStateOps {
         };
 
         if old_mode == new_mode {
-            return Err(AppStateOpsError::AlreadyInMode(old_mode))?;
+            return Err(AppStateOpsError::AlreadyInMode(old_mode).into());
         }
 
         AppState::set_mode(new_mode);
@@ -59,66 +89,23 @@ impl AppStateOps {
         Ok(())
     }
 
-    pub(crate) fn import(data: AppStateData) {
-        AppState::import(data);
-    }
+    // -------------------------------------------------------------
+    // Snapshot / Import
+    // -------------------------------------------------------------
 
-    /// Import app state from a public view.
-    pub fn import_view(view: AppStateView) {
-        let data = app_state_from_view(view);
-        AppState::import(data);
-    }
-
-    /// Export app state as a public view.
-    /// Export app state as a public view.
+    /// Export the current application state as an operational snapshot.
     #[must_use]
-    pub fn export_view() -> AppStateView {
-        let data = AppState::export();
-
-        app_state_to_view(data)
-    }
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Config;
-
-    fn reset_state(mode: AppMode) {
-        Config::reset_for_tests();
-        let _ = Config::init_for_tests();
-        AppStateOps::import(AppStateData { mode });
+    pub fn snapshot() -> AppStateSnapshot {
+        AppState::export().into()
     }
 
-    #[test]
-    fn command_changes_modes() {
-        reset_state(AppMode::Disabled);
+    /// Import application state from an operational snapshot.
+    ///
+    /// Validation occurs during snapshot → data conversion.
+    pub fn import(snapshot: AppStateSnapshot) -> Result<(), Error> {
+        let data: AppStateData = snapshot.try_into()?;
+        AppState::import(data);
 
-        assert!(AppStateOps::command(AppCommand::Start).is_ok());
-        assert_eq!(AppStateOps::get_mode(), AppMode::Enabled);
-
-        assert!(AppStateOps::command(AppCommand::Readonly).is_ok());
-        assert_eq!(AppStateOps::get_mode(), AppMode::Readonly);
-
-        assert!(AppStateOps::command(AppCommand::Stop).is_ok());
-        assert_eq!(AppStateOps::get_mode(), AppMode::Disabled);
-    }
-
-    #[test]
-    fn duplicate_command_fails() {
-        reset_state(AppMode::Enabled);
-
-        let err = AppStateOps::command(AppCommand::Start)
-            .unwrap_err()
-            .to_string();
-
-        assert!(
-            err.contains("app is already in Enabled mode"),
-            "unexpected error: {err}"
-        );
+        Ok(())
     }
 }

@@ -1,4 +1,3 @@
-pub mod adapter;
 pub mod scaling;
 pub mod sharding;
 

@@ -4,8 +4,8 @@ use crate::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
     ops::{
-        adapter::metrics::http::record_http_request, prelude::*,
-        runtime::metrics::record_http_outcall,
+        prelude::*,
+        runtime::metrics::{record_http_outcall, record_http_request},
     },
 };
 use num_traits::ToPrimitive;

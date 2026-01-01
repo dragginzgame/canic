@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod env;
 pub mod guard;
 pub mod rule;
 
@@ -11,13 +12,16 @@ use crate::ThisError;
 #[derive(Debug, ThisError)]
 pub enum AccessError {
     #[error(transparent)]
-    Auth(#[from] auth::AuthError),
+    Auth(#[from] auth::AuthAccessError),
 
     #[error(transparent)]
-    Guard(#[from] guard::GuardError),
+    Env(#[from] env::EnvAccessError),
 
     #[error(transparent)]
-    Rule(#[from] rule::RuleError),
+    Guard(#[from] guard::GuardAccessError),
+
+    #[error(transparent)]
+    Rule(#[from] rule::RuleAccessError),
 
     #[error("access denied: {0}")]
     Denied(String),

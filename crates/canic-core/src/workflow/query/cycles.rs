@@ -2,8 +2,10 @@ use crate::{
     cdk::types::Cycles,
     dto::page::{Page, PageRequest},
     ops::storage::cycles::CycleTrackerOps,
+    workflow::query::paginate::paginate_vec,
 };
 
 pub(crate) fn cycle_tracker_page(page: PageRequest) -> Page<(u64, Cycles)> {
-    CycleTrackerOps::page(page)
+    let snapshot = CycleTrackerOps::snapshot();
+    paginate_vec(snapshot.entries, page)
 }

@@ -19,6 +19,7 @@ use crate::{
         registry::subnet::SubnetRegistryOps,
         state::{app::AppStateOps, subnet::SubnetStateOps},
     },
+    workflow::state::adapter::{app_state_view_from_snapshot, subnet_state_view_from_snapshot},
 };
 use candid::Principal;
 use std::collections::HashMap;
@@ -48,8 +49,8 @@ impl StateSnapshotBuilder {
     pub fn root() -> Self {
         Self {
             snapshot: StateSnapshotView {
-                app_state: Some(AppStateOps::export_view()),
-                subnet_state: Some(SubnetStateOps::export_view()),
+                app_state: Some(app_state_view_from_snapshot(AppStateOps::snapshot())),
+                subnet_state: Some(subnet_state_view_from_snapshot(SubnetStateOps::snapshot())),
                 app_directory: Some(AppDirectoryOps::export_view()),
                 subnet_directory: Some(SubnetDirectoryOps::export_view()),
             },
@@ -58,13 +59,14 @@ impl StateSnapshotBuilder {
 
     #[must_use]
     pub fn with_app_state(mut self) -> Self {
-        self.snapshot.app_state = Some(AppStateOps::export_view());
+        self.snapshot.app_state = Some(app_state_view_from_snapshot(AppStateOps::snapshot()));
         self
     }
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.snapshot.subnet_state = Some(SubnetStateOps::export_view());
+        self.snapshot.subnet_state =
+            Some(subnet_state_view_from_snapshot(SubnetStateOps::snapshot()));
         self
     }
 

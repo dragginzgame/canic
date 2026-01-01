@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod builder;
 
 use crate::{
@@ -6,15 +7,14 @@ use crate::{
         runtime::env::EnvOps,
         storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
     },
-    workflow::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+    workflow::directory::{
+        adapter::{app_directory_view_from_snapshot, subnet_directory_view_from_snapshot},
+        builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+    },
 };
 
 ///
 /// AppDirectoryResolver
-///
-/// Resolves the canonical AppDirectory view:
-/// - Root rebuilds from registry
-/// - Non-root uses imported snapshot
 ///
 
 pub struct AppDirectoryResolver;
@@ -25,17 +25,14 @@ impl AppDirectoryResolver {
         if EnvOps::is_root() {
             RootAppDirectoryBuilder::build_from_registry()
         } else {
-            AppDirectoryOps::export_view()
+            let snapshot = AppDirectoryOps::snapshot();
+            app_directory_view_from_snapshot(snapshot)
         }
     }
 }
 
 ///
 /// SubnetDirectoryResolver
-///
-/// Resolves the canonical SubnetDirectory view:
-/// - Root rebuilds from registry
-/// - Non-root uses imported snapshot
 ///
 
 pub struct SubnetDirectoryResolver;
@@ -46,7 +43,8 @@ impl SubnetDirectoryResolver {
         if EnvOps::is_root() {
             RootSubnetDirectoryBuilder::build_from_registry()
         } else {
-            SubnetDirectoryOps::export_view()
+            let snapshot = SubnetDirectoryOps::snapshot();
+            subnet_directory_view_from_snapshot(snapshot)
         }
     }
 }

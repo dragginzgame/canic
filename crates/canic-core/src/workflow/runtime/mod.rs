@@ -1,9 +1,11 @@
 pub mod cycles;
+pub mod env;
 pub mod log;
 pub mod random;
 
 use crate::{
     VERSION,
+    access::env,
     cdk::{
         api::{canister_self, trap},
         println,
@@ -12,7 +14,7 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     log::Topic,
     ops::{
-        adapter::directory::{app_directory_from_view, subnet_directory_from_view},
+        runtime::memory::MemoryRegistryInitSummary,
         runtime::{env::EnvOps, memory::MemoryOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -40,7 +42,7 @@ impl Runtime {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        EnvOps::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
+        env::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
 
         // start shared timers too
         Self::start_all();
@@ -62,9 +64,31 @@ fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
     trap(&msg);
 }
 
-fn init_memory_or_trap(phase: &str) {
-    if let Err(err) = MemoryOps::init_memory() {
-        fatal(phase, format!("memory init failed: {err}"));
+fn init_memory_or_trap(phase: &str) -> MemoryRegistryInitSummary {
+    match MemoryOps::init_registry() {
+        Ok(summary) => summary,
+        Err(err) => fatal(phase, format!("memory init failed: {err}")),
+    }
+}
+
+fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
+    for range in &summary.ranges {
+        let used = summary
+            .entries
+            .iter()
+            .filter(|entry| entry.id >= range.start && entry.id <= range.end)
+            .count();
+
+        crate::log!(
+            Topic::Memory,
+            Info,
+            "💾 memory.range: {} [{}-{}] ({}/{} slots used)",
+            range.crate_name,
+            range.start,
+            range.end,
+            used,
+            range.end - range.start + 1,
+        );
     }
 }
 
@@ -76,7 +100,7 @@ fn init_memory_or_trap(phase: &str) {
 pub fn init_root_canister(identity: SubnetIdentity) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("init_root_canister");
+    let memory_summary = init_memory_or_trap("init_root_canister");
     crate::log::set_ready();
 
     // log header
@@ -89,6 +113,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         "🔧 --------------------- canic v{VERSION} -----------------------",
     );
     crate::log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
+    log_memory_summary(&memory_summary);
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
@@ -126,9 +151,10 @@ pub fn init_root_canister(identity: SubnetIdentity) {
 pub fn post_upgrade_root_canister() {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("post_upgrade_root_canister");
+    let memory_summary = init_memory_or_trap("post_upgrade_root_canister");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
+    log_memory_summary(&memory_summary);
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
@@ -143,9 +169,10 @@ pub fn post_upgrade_root_canister() {
 pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("init_nonroot_canister");
+    let memory_summary = init_memory_or_trap("init_nonroot_canister");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
+    log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
     if let Err(err) = EnvOps::init_from_view(payload.env, canister_role) {
@@ -166,7 +193,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
 pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
     init_eager_tls();
-    init_memory_or_trap("post_upgrade_nonroot_canister");
+    let memory_summary = init_memory_or_trap("post_upgrade_nonroot_canister");
     crate::log::set_ready();
     crate::log!(
         Topic::Init,
@@ -174,6 +201,7 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
         "🏁 post_upgrade_nonroot_canister: {}",
         canister_role
     );
+    log_memory_summary(&memory_summary);
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 

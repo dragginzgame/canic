@@ -1,15 +1,14 @@
+//! Runtime memory registry primitives.
+//! Exposes init/snapshot helpers without logging or DTO construction.
+
 use crate::{
     CRATE_NAME, Error, ThisError,
-    dto::memory::{MemoryRegistryEntryView, MemoryRegistryView},
-    ops::{prelude::*, runtime::RuntimeOpsError},
+    ops::runtime::RuntimeOpsError,
     storage::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
 use canic_memory::{
-    registry::{MemoryRange, MemoryRegistryError},
-    runtime::{
-        init_eager_tls,
-        registry::{MemoryRegistryInitSummary, MemoryRegistryRuntime},
-    },
+    registry::MemoryRegistryError,
+    runtime::registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
 };
 
 ///
@@ -31,86 +30,106 @@ impl From<MemoryOpsError> for Error {
 ///
 /// MemoryOps
 ///
-/// Platform-level runtime initialization for canic-memory.
-///
-/// This is a single-step, idempotent operation that:
-/// - eagerly initializes TLS
-/// - applies deferred memory range registrations
-///
-/// Must be called during lifecycle bootstrap.
-///
 
 pub struct MemoryOps;
 
-impl MemoryOps {
-    pub(crate) fn init() -> Result<(), Error> {
-        // Ensure TLS-backed globals are initialized
-        init_eager_tls();
+///
+/// MemoryRangeSnapshot
+///
 
-        // Initialize the memory registry with CANIC's reserved range
-        let summary =
-            MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
-                .map_err(MemoryOpsError::from)?;
+#[derive(Clone, Debug)]
+pub struct MemoryRangeSnapshot {
+    pub crate_name: String,
+    pub start: u8,
+    pub end: u8,
+}
 
-        Self::log_summary(&summary);
+///
+/// MemoryRegistryEntrySnapshot
+///
 
-        Ok(())
-    }
+#[derive(Clone, Debug)]
+pub struct MemoryRegistryEntrySnapshot {
+    pub id: u8,
+    pub crate_name: String,
+    pub label: String,
+}
 
-    pub(crate) fn init_memory() -> Result<(), Error> {
-        Self::init()
-    }
+///
+/// MemoryRegistryInitSummary
+///
 
-    #[must_use]
-    pub fn export_view() -> MemoryRegistryView {
-        let entries = MemoryRegistryRuntime::snapshot_entries()
+#[derive(Clone, Debug)]
+pub struct MemoryRegistryInitSummary {
+    pub ranges: Vec<MemoryRangeSnapshot>,
+    pub entries: Vec<MemoryRegistryEntrySnapshot>,
+}
+
+impl MemoryRegistryInitSummary {
+    fn from_raw(summary: RawInitSummary) -> Self {
+        let ranges = summary
+            .ranges
             .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntryView {
+            .map(|(crate_name, range)| MemoryRangeSnapshot {
+                crate_name,
+                start: range.start,
+                end: range.end,
+            })
+            .collect();
+
+        let entries = summary
+            .entries
+            .into_iter()
+            .map(|(id, entry)| MemoryRegistryEntrySnapshot {
                 id,
                 crate_name: entry.crate_name,
                 label: entry.label,
             })
             .collect();
 
-        MemoryRegistryView { entries }
+        Self { ranges, entries }
+    }
+}
+
+impl MemoryOps {
+    pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, Error> {
+        let summary =
+            MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
+                .map_err(MemoryOpsError::from)?;
+
+        Ok(MemoryRegistryInitSummary::from_raw(summary))
     }
 
     #[must_use]
-    pub fn export_ranges() -> Vec<(String, MemoryRange)> {
+    pub fn snapshot_ranges() -> Vec<MemoryRangeSnapshot> {
         MemoryRegistryRuntime::snapshot_ranges()
+            .into_iter()
+            .map(|(crate_name, range)| MemoryRangeSnapshot {
+                crate_name,
+                start: range.start,
+                end: range.end,
+            })
+            .collect()
     }
 
     #[must_use]
-    pub fn get(id: u8) -> Option<MemoryRegistryEntryView> {
-        MemoryRegistryRuntime::get(id).map(|entry| MemoryRegistryEntryView {
+    pub fn snapshot_entries() -> Vec<MemoryRegistryEntrySnapshot> {
+        MemoryRegistryRuntime::snapshot_entries()
+            .into_iter()
+            .map(|(id, entry)| MemoryRegistryEntrySnapshot {
+                id,
+                crate_name: entry.crate_name,
+                label: entry.label,
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn get_entry(id: u8) -> Option<MemoryRegistryEntrySnapshot> {
+        MemoryRegistryRuntime::get(id).map(|entry| MemoryRegistryEntrySnapshot {
             id,
             crate_name: entry.crate_name,
             label: entry.label,
         })
-    }
-
-    fn log_summary(summary: &MemoryRegistryInitSummary) {
-        if !crate::log::is_ready() {
-            return;
-        }
-
-        for (crate_name, range) in &summary.ranges {
-            let used = summary
-                .entries
-                .iter()
-                .filter(|(id, _)| range.contains(*id))
-                .count();
-
-            log!(
-                Topic::Memory,
-                Info,
-                "💾 memory.range: {} [{}-{}] ({}/{} slots used)",
-                crate_name,
-                range.start,
-                range.end,
-                used,
-                range.end - range.start + 1,
-            );
-        }
     }
 }

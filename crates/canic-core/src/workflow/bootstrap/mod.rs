@@ -10,8 +10,24 @@
 //! - perform environment seeding or restoration
 //! - import directory snapshots
 
-mod nonroot;
-mod root;
+pub mod cascade;
+pub mod nonroot;
+pub mod root;
 
-pub use nonroot::*;
-pub use root::*;
+use crate::{Error, ThisError, workflow::WorkflowError};
+
+///
+/// BootstrapError
+///
+
+#[derive(Debug, ThisError)]
+pub enum BootstrapError {
+    #[error("missing required env fields: {0}")]
+    MissingEnvFields(String),
+}
+
+impl From<BootstrapError> for Error {
+    fn from(err: BootstrapError) -> Self {
+        WorkflowError::from(err).into()
+    }
+}

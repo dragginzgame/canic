@@ -13,14 +13,14 @@
 
 use crate::{
     Error,
+    access::env,
     dto::snapshot::StateSnapshotView,
     ops::{
         self,
-        runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-            registry::subnet::SubnetRegistryOps,
+            registry::{adapter::app_registry_view_from_snapshot, subnet::SubnetRegistryOps},
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
@@ -28,6 +28,7 @@ use crate::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,
         snapshot::state_snapshot_is_empty,
+        state::adapter::{app_state_snapshot_from_view, subnet_state_snapshot_from_view},
     },
 };
 
@@ -39,7 +40,7 @@ use crate::{
 ///
 /// No-op if the snapshot is empty.
 pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    EnvOps::require_root()?;
+    env::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
         log!(
@@ -84,7 +85,7 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(
 /// - apply it locally
 /// - forward it to direct children
 pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    EnvOps::deny_root()?;
+    env::deny_root()?;
 
     if state_snapshot_is_empty(snapshot) {
         log!(
@@ -133,22 +134,26 @@ pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Resul
 ///
 /// Only valid on non-root canisters.
 fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
-    EnvOps::deny_root()?;
+    env::deny_root()?;
 
-    // states
-    if let Some(state) = snapshot.app_state {
-        AppStateOps::import_view(state);
-    }
-    if let Some(state) = snapshot.subnet_state {
-        SubnetStateOps::import_view(state);
+    if let Some(view) = snapshot.app_state {
+        let snap = app_state_snapshot_from_view(view);
+        AppStateOps::import(snap)?;
     }
 
-    // directories
-    if let Some(dir) = snapshot.app_directory.clone() {
-        AppDirectoryOps::import_view(dir);
+    if let Some(view) = snapshot.subnet_state {
+        let snap = subnet_state_snapshot_from_view(view);
+        SubnetStateOps::import(snap);
     }
-    if let Some(dir) = snapshot.subnet_directory.clone() {
-        SubnetDirectoryOps::import_view(dir);
+
+    if let Some(view) = snapshot.app_directory {
+        let snap = app_directory_snapshot_from_view(view);
+        AppDirectoryOps::import(snap);
+    }
+
+    if let Some(view) = snapshot.subnet_directory {
+        let snap = subnet_directory_snapshot_from_view(view);
+        SubnetDirectoryOps::import(snap);
     }
 
     Ok(())
