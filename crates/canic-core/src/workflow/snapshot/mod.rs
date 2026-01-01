@@ -1,0 +1,218 @@
+//!
+//! Snapshot assembly helpers.
+//!
+//! This module:
+//! - assembles snapshot DTOs from authoritative state via ops
+//! - exposes builder-style APIs for snapshot construction
+//! - keeps DTOs data-only by placing helper logic here
+//!
+
+pub mod adapter;
+
+use crate::{
+    Error,
+    ids::CanisterRole,
+    ops::storage::{
+        directory::{
+            app::{AppDirectoryOps, AppDirectorySnapshot},
+            subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
+        },
+        registry::subnet::SubnetRegistryOps,
+        state::{
+            app::{AppStateOps, AppStateSnapshot},
+            subnet::{SubnetStateOps, SubnetStateSnapshot},
+        },
+    },
+    workflow::{canister::mapper::CanisterMapper, children::mapper::ChildrenMapper},
+};
+use candid::Principal;
+use std::collections::HashMap;
+
+///
+/// StateSnapshot
+/// Internal workflow snapshot (not a DTO)
+///
+
+#[derive(Default)]
+pub struct StateSnapshot {
+    pub app_state: Option<AppStateSnapshot>,
+    pub subnet_state: Option<SubnetStateSnapshot>,
+    pub app_directory: Option<AppDirectorySnapshot>,
+    pub subnet_directory: Option<SubnetDirectorySnapshot>,
+}
+
+///
+/// StateSnapshotBuilder
+///
+/// Assembles internal `StateSnapshot` values from authoritative state.
+/// DTO conversion happens via `From<StateSnapshot> for StateSnapshotView`.
+///
+
+#[derive(Default)]
+pub struct StateSnapshotBuilder {
+    snapshot: StateSnapshot,
+}
+
+impl StateSnapshotBuilder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            snapshot: StateSnapshot::default(),
+        }
+    }
+
+    /// Construct a snapshot containing the full root state.
+    #[must_use]
+    pub fn root() -> Self {
+        Self::new()
+            .with_app_state()
+            .with_subnet_state()
+            .with_app_directory()
+            .with_subnet_directory()
+    }
+
+    #[must_use]
+    pub fn with_app_state(mut self) -> Self {
+        self.snapshot.app_state = Some(AppStateOps::snapshot());
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_state(mut self) -> Self {
+        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot());
+        self
+    }
+
+    #[must_use]
+    pub fn with_app_directory(mut self) -> Self {
+        self.snapshot.app_directory = Some(AppDirectoryOps::snapshot());
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_directory(mut self) -> Self {
+        self.snapshot.subnet_directory = Some(SubnetDirectoryOps::snapshot());
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> StateSnapshot {
+        self.snapshot
+    }
+}
+
+///
+/// TopologySnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct TopologySnapshot {
+    pub parents: Vec<TopologyPathNode>,
+    pub children_map: HashMap<Principal, Vec<TopologyDirectChild>>,
+}
+
+///
+/// TopologyPathNode
+/// Internal representation of a node in the parent chain.
+///
+#[derive(Clone, Debug)]
+pub struct TopologyPathNode {
+    pub pid: Principal,
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+}
+
+///
+/// TopologyDirectChild
+/// Internal representation of a direct child.
+///
+#[derive(Clone, Debug)]
+pub struct TopologyDirectChild {
+    pub pid: Principal,
+    pub role: CanisterRole,
+}
+
+///
+/// TopologySnapshotBuilder
+///
+/// Workflow helper for assembling topology snapshots.
+///
+pub struct TopologySnapshotBuilder {
+    snapshot: TopologySnapshot,
+}
+
+impl TopologySnapshotBuilder {
+    pub(crate) fn for_target(target_pid: Principal) -> Result<Self, Error> {
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+
+        let parents: Vec<TopologyPathNode> = registry_snapshot
+            .parent_chain(target_pid)?
+            .into_iter()
+            .map(|(pid, summary)| {
+                let node = CanisterMapper::summary_to_topology_node(pid, &summary);
+                TopologyPathNode {
+                    pid: node.pid,
+                    role: node.role,
+                    parent_pid: node.parent_pid,
+                }
+            })
+            .collect();
+
+        let mut children_map = HashMap::new();
+
+        for parent in &parents {
+            let child_snapshot =
+                ChildrenMapper::from_registry_snapshot(&registry_snapshot, parent.pid);
+
+            let children: Vec<TopologyDirectChild> = child_snapshot
+                .entries
+                .into_iter()
+                .map(|child| TopologyDirectChild {
+                    pid: child.pid,
+                    role: child.role,
+                })
+                .collect();
+
+            children_map.insert(parent.pid, children);
+        }
+
+        Ok(Self {
+            snapshot: TopologySnapshot {
+                parents,
+                children_map,
+            },
+        })
+    }
+
+    #[must_use]
+    pub fn build(self) -> TopologySnapshot {
+        self.snapshot
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Snapshot helpers (workflow-owned)
+// -----------------------------------------------------------------------------
+
+#[must_use]
+pub(crate) const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
+    snapshot.app_state.is_none()
+        && snapshot.subnet_state.is_none()
+        && snapshot.app_directory.is_none()
+        && snapshot.subnet_directory.is_none()
+}
+
+#[must_use]
+pub(crate) fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
+    const fn fmt(present: bool, code: &str) -> &str {
+        if present { code } else { ".." }
+    }
+
+    format!(
+        "[{} {} {} {}]",
+        fmt(snapshot.app_state.is_some(), "as"),
+        fmt(snapshot.subnet_state.is_some(), "ss"),
+        fmt(snapshot.app_directory.is_some(), "ad"),
+        fmt(snapshot.subnet_directory.is_some(), "sd"),
+    )
+}

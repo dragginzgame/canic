@@ -19,6 +19,7 @@ use crate::{
     ops::{
         rpc::request::create_canister_request, storage::placement::sharding::ShardingRegistryOps,
     },
+    workflow::placement::mapper::PlacementMapper,
 };
 
 ///
@@ -158,7 +159,7 @@ impl ShardingWorkflow {
     ) -> Result<ShardingPlanStateView, Error> {
         let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
 
-        Ok(plan_state_to_view(plan.state))
+        Ok(PlacementMapper::sharding_plan_state_to_view(plan.state))
     }
 
     /// Drain up to `limit` tenants from a shard into others or new shards.
@@ -228,19 +229,6 @@ impl ShardingWorkflow {
     /// Internal: fetch shard pool config for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
         ShardingPolicy::get_pool_config(pool)
-    }
-}
-
-fn plan_state_to_view(state: ShardingPlanState) -> ShardingPlanStateView {
-    match state {
-        ShardingPlanState::AlreadyAssigned { pid } => {
-            ShardingPlanStateView::AlreadyAssigned { pid }
-        }
-        ShardingPlanState::UseExisting { pid } => ShardingPlanStateView::UseExisting { pid },
-        ShardingPlanState::CreateAllowed => ShardingPlanStateView::CreateAllowed,
-        ShardingPlanState::CreateBlocked { reason } => ShardingPlanStateView::CreateBlocked {
-            reason: reason.to_string(),
-        },
     }
 }
 

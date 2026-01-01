@@ -1,20 +1,27 @@
 pub mod app;
-pub(crate) mod bootstrap;
+pub mod canister;
 pub mod cascade;
+pub mod children;
 pub mod command;
 pub mod directory;
 pub mod env;
 pub mod ic;
-pub(crate) mod lifecycle;
+pub mod icrc;
+pub mod log;
+pub mod memory;
+pub mod metrics;
 pub mod orchestrator;
 pub mod placement;
 pub mod pool;
-pub mod query;
 pub mod registry;
 pub mod rpc;
-pub(crate) mod runtime;
 pub mod snapshot;
 pub mod state;
+pub mod view;
+
+pub(crate) mod bootstrap;
+pub(crate) mod lifecycle;
+pub(crate) mod runtime;
 
 ///
 /// Prelude

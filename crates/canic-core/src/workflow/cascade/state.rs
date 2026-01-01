@@ -2,44 +2,45 @@
 //! State snapshot synchronization routines shared by root and child canisters.
 //!
 //! This module:
-//! - cascades snapshots across the subnet topology
+//! - cascades internal state snapshots across the subnet topology
 //! - applies received snapshots locally on child canisters
 //!
-//! IMPORTANT:
-//! - `StateSnapshotView` is a pure DTO (data only)
-//! - All assembly logic lives in `workflow::snapshot`
-//! - All persistence happens via ops
+//! LAYERING RULES:
+//! - Workflow operates on `StateSnapshot` (internal)
+//! - `StateSnapshotView` is used only for transport (RPC / API)
+//! - Assembly lives in `workflow::snapshot`
+//! - Persistence lives in ops
 //!
 
 use crate::{
     Error,
     access::env,
-    dto::snapshot::StateSnapshotView,
     ops::{
         self,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-            registry::{adapter::app_registry_view_from_snapshot, subnet::SubnetRegistryOps},
+            registry::subnet::SubnetRegistryOps,
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
     workflow::{
         cascade::{CascadeError, warn_if_large},
+        directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
         prelude::*,
-        snapshot::state_snapshot_is_empty,
-        state::adapter::{app_state_snapshot_from_view, subnet_state_snapshot_from_view},
+        snapshot::{StateSnapshot, state_snapshot_is_empty},
+        state::mapper::{AppStateMapper, SubnetStateMapper},
     },
 };
 
 //
-// Cascade logic
+// ROOT CASCADE
 //
 
 /// Cascade a state snapshot from the root canister to its direct children.
 ///
 /// No-op if the snapshot is empty.
-pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
+pub(crate) async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
     env::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -52,15 +53,13 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(
     }
 
     let root_pid = canister_self();
-    let children = SubnetRegistryOps::children_view(root_pid);
-    let child_count = children.len();
-    warn_if_large("root state cascade", child_count);
+    let children = SubnetRegistryOps::children(root_pid);
+    warn_if_large("root state cascade", children.len());
 
     let mut failures = 0;
 
-    for child in children {
-        let pid = child.pid;
-        if let Err(err) = send_snapshot(&pid, snapshot).await {
+    for (pid, _) in children {
+        if let Err(err) = send_snapshot(pid, snapshot).await {
             failures += 1;
             log!(
                 Topic::Sync,
@@ -81,10 +80,14 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(
     Ok(())
 }
 
+//
+// NON-ROOT CASCADE
+//
+
 /// Cascade a snapshot from a non-root canister:
 /// - apply it locally
-/// - forward it to direct children
-pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
+/// - forward it to direct children (from children cache)
+pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
     env::deny_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -99,13 +102,14 @@ pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Resul
     // Apply locally first
     apply_state(snapshot)?;
 
+    // Cascade using children cache (never registry)
     let child_pids = CanisterChildrenOps::pids();
-    let child_count = child_pids.len();
-    warn_if_large("nonroot state cascade", child_count);
+    warn_if_large("nonroot state cascade", child_pids.len());
 
     let mut failures = 0;
+
     for pid in child_pids {
-        if let Err(err) = send_snapshot(&pid, snapshot).await {
+        if let Err(err) = send_snapshot(pid, snapshot).await {
             failures += 1;
             log!(
                 Topic::Sync,
@@ -127,45 +131,45 @@ pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Resul
 }
 
 //
-// Local application
+// LOCAL APPLICATION
 //
 
 /// Apply a received state snapshot locally.
 ///
 /// Only valid on non-root canisters.
-fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
+fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
     env::deny_root()?;
 
-    if let Some(view) = snapshot.app_state {
-        let snap = app_state_snapshot_from_view(view);
-        AppStateOps::import(snap)?;
+    if let Some(app) = &snapshot.app_state {
+        AppStateOps::import(app.clone())?;
     }
 
-    if let Some(view) = snapshot.subnet_state {
-        let snap = subnet_state_snapshot_from_view(view);
-        SubnetStateOps::import(snap);
+    if let Some(subnet) = &snapshot.subnet_state {
+        SubnetStateOps::import(subnet.clone());
     }
 
-    if let Some(view) = snapshot.app_directory {
-        let snap = app_directory_snapshot_from_view(view);
-        AppDirectoryOps::import(snap);
+    if let Some(dir) = &snapshot.app_directory {
+        AppDirectoryOps::import(dir.clone());
     }
 
-    if let Some(view) = snapshot.subnet_directory {
-        let snap = subnet_directory_snapshot_from_view(view);
-        SubnetDirectoryOps::import(snap);
+    if let Some(dir) = &snapshot.subnet_directory {
+        SubnetDirectoryOps::import(dir.clone());
     }
 
     Ok(())
 }
 
 //
-// Transport
+// TRANSPORT
 //
 
 /// Send a state snapshot to another canister.
-async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<(), Error> {
-    ops::rpc::cascade::send_state_snapshot(*pid, snapshot)
+///
+/// Converts internal snapshot → DTO exactly once.
+async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), Error> {
+    let view = snapshot.into();
+
+    ops::rpc::cascade::send_state_snapshot(pid, &view)
         .await
-        .map_err(|_| CascadeError::ChildRejected(*pid).into())
+        .map_err(|_| CascadeError::ChildRejected(pid).into())
 }

@@ -1,4 +1,3 @@
-//! Stable-memory state adapters.
 pub mod app;
 pub mod subnet;
 

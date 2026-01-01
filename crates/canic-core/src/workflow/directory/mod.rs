@@ -1,16 +1,16 @@
-pub mod adapter;
 pub mod builder;
+pub mod mapper;
+pub mod query;
 
 use crate::{
-    dto::directory::{AppDirectoryView, SubnetDirectoryView},
     ops::{
         runtime::env::EnvOps,
-        storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+        storage::directory::{
+            app::{AppDirectoryOps, AppDirectorySnapshot},
+            subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
+        },
     },
-    workflow::directory::{
-        adapter::{app_directory_view_from_snapshot, subnet_directory_view_from_snapshot},
-        builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-    },
+    workflow::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
 };
 
 ///
@@ -21,12 +21,11 @@ pub struct AppDirectoryResolver;
 
 impl AppDirectoryResolver {
     #[must_use]
-    pub fn resolve_view() -> AppDirectoryView {
+    pub fn resolve_view() -> AppDirectorySnapshot {
         if EnvOps::is_root() {
             RootAppDirectoryBuilder::build_from_registry()
         } else {
-            let snapshot = AppDirectoryOps::snapshot();
-            app_directory_view_from_snapshot(snapshot)
+            AppDirectoryOps::snapshot()
         }
     }
 }
@@ -39,12 +38,11 @@ pub struct SubnetDirectoryResolver;
 
 impl SubnetDirectoryResolver {
     #[must_use]
-    pub fn resolve_view() -> SubnetDirectoryView {
+    pub fn resolve_view() -> SubnetDirectorySnapshot {
         if EnvOps::is_root() {
             RootSubnetDirectoryBuilder::build_from_registry()
         } else {
-            let snapshot = SubnetDirectoryOps::snapshot();
-            subnet_directory_view_from_snapshot(snapshot)
+            SubnetDirectoryOps::snapshot()
         }
     }
 }

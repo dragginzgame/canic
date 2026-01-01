@@ -1,7 +1,8 @@
-pub mod adapter;
 pub mod admin;
 pub mod admissibility;
 pub mod controllers;
+pub mod mapper;
+pub mod query;
 pub mod scheduler;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
         ic::mgmt::{create_canister, get_cycles, uninstall_code, update_settings},
         storage::{pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::{pool::controllers::pool_controllers, prelude::*, query::pool::pool_entry_view},
+    workflow::{pool::controllers::pool_controllers, pool::query::pool_entry_view, prelude::*},
 };
 
 /// Default cycles allocated to freshly created pool canisters.

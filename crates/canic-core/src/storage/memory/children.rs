@@ -3,9 +3,10 @@
 //! Stable-memory–backed projection of direct child canisters for the
 //! current canister.
 //!
-//! This is not an authoritative registry. Entries are populated via
-//! topology snapshot import during cascade workflows and represent
-//! a cached view of the global subnet registry.
+//! This is not an authoritative registry. Canonical child derivation lives in
+//! `SubnetRegistry::children` / `SubnetRegistryOps::children`; entries here are
+//! populated via topology snapshot import during cascade workflows and represent
+//! a cached projection of the global subnet registry.
 //!
 //! The contents are replaced wholesale on import.
 
@@ -53,7 +54,7 @@ impl CanisterChildren {
         }
     }
 
-    pub fn import(data: CanisterChildrenData) {
+    pub(crate) fn import(data: CanisterChildrenData) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear();
             for (pid, entry) in data.entries {

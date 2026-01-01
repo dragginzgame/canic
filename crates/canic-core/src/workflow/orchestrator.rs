@@ -354,18 +354,18 @@ impl CanisterLifecycleOrchestrator {
 }
 
 //
-// Topology snapshotting: single source of parent/role for destructive operations.
+// Adjacency snapshotting: single source of parent/role for destructive operations.
 //
 
-struct TopologySnapshot {
+struct CanisterAdjacency {
     role: CanisterRole,
     parent_pid: Option<Principal>,
 }
 
-fn snapshot_topology_required(pid: Principal) -> Result<TopologySnapshot, OrchestratorError> {
+fn snapshot_topology_required(pid: Principal) -> Result<CanisterAdjacency, OrchestratorError> {
     let entry = SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
 
-    Ok(TopologySnapshot {
+    Ok(CanisterAdjacency {
         role: entry.role,
         parent_pid: entry.parent_pid,
     })

@@ -6,5 +6,5 @@ use crate::{
 
 #[must_use]
 pub fn snapshot(request: PageRequest) -> Page<PerfEntry> {
-    workflow::query::metrics::metrics_perf_page(request)
+    workflow::view::metrics::metrics_perf_page(request)
 }

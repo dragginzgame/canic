@@ -85,7 +85,7 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 ### Changed
 - App/subnet directories now map roles to a single `Principal`.
 - Registry registration now rejects duplicate principals and singleton-role collisions.
-- Topology snapshots now use `TopologyChildView` in `children_map` to avoid redundant parent identifiers.
+- Topology snapshots now use `TopologyDirectChildView` in `children_map` to avoid redundant parent identifiers.
 - Pool entry views are assembled from split header/state parts to avoid duplicating identity fields.
 
 ### Fixed
