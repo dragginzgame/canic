@@ -1,9 +1,8 @@
 use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
-    dto::placement::ShardingRegistryView,
     ids::CanisterRole,
-    ops::{adapter::placement::shard_entry_to_view, storage::StorageOpsError},
+    ops::storage::placement::PlacementOpsError,
     storage::memory::sharding::{
         ShardKey,
         registry::{ShardingRegistry, ShardingRegistryData},
@@ -52,7 +51,7 @@ pub enum ShardingRegistryOpsError {
 
 impl From<ShardingRegistryOpsError> for Error {
     fn from(err: ShardingRegistryOpsError) -> Self {
-        StorageOpsError::ShardingRegistryOps(err).into()
+        PlacementOpsError::ShardingRegistryOps(err).into()
     }
 }
 
@@ -96,25 +95,6 @@ impl ShardingRegistryOps {
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<ShardEntry> {
         ShardingRegistry::with(|core| core.get_entry(&pid))
-    }
-
-    /// Export all shard entries as a public view.
-    #[must_use]
-    pub fn export() -> ShardingRegistryData {
-        ShardingRegistry::export()
-    }
-
-    /// Export all shard entries as a public view.
-    #[must_use]
-    pub fn export_view() -> ShardingRegistryView {
-        let data = ShardingRegistry::export();
-        let view = data
-            .entries
-            .into_iter()
-            .map(|(pid, entry)| (pid, shard_entry_to_view(&entry)))
-            .collect();
-
-        ShardingRegistryView(view)
     }
 
     /// Returns the shard assigned to the given tenant (if any).
@@ -228,6 +208,12 @@ impl ShardingRegistryOps {
 
             Ok(())
         })
+    }
+
+    /// Export all shard entries
+    #[must_use]
+    pub fn export() -> ShardingRegistryData {
+        ShardingRegistry::export()
     }
 
     #[cfg(test)]

@@ -3,6 +3,7 @@ use crate::{
     access::{self, AccessError},
 };
 
+#[must_use]
 pub fn to_public(err: AccessError) -> PublicError {
     PublicError::from(Error::from(err))
 }

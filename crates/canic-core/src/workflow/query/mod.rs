@@ -1,8 +1,10 @@
 pub mod canister;
+pub mod cycles;
 pub mod directory;
 pub mod env;
+pub mod icrc;
 pub mod log;
 pub mod metrics;
-pub mod pool;
+pub mod placement;
 pub mod registry;
 pub mod state;

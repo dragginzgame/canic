@@ -70,10 +70,10 @@ impl From<Error> for PublicError {
 impl From<AccessError> for PublicError {
     fn from(err: AccessError) -> Self {
         match err {
-            AccessError::Denied(reason) => PublicError::new(ErrorCode::Forbidden, reason),
-            AccessError::Auth(e) => PublicError::new(ErrorCode::Unauthorized, e.to_string()),
-            AccessError::Guard(e) => PublicError::new(ErrorCode::Forbidden, e.to_string()),
-            AccessError::Rule(e) => PublicError::new(ErrorCode::Forbidden, e.to_string()),
+            AccessError::Denied(reason) => Self::new(ErrorCode::Forbidden, reason),
+            AccessError::Auth(e) => Self::new(ErrorCode::Unauthorized, e.to_string()),
+            AccessError::Guard(e) => Self::new(ErrorCode::Forbidden, e.to_string()),
+            AccessError::Rule(e) => Self::new(ErrorCode::Forbidden, e.to_string()),
         }
     }
 }

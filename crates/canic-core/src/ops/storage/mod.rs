@@ -1,10 +1,9 @@
 pub mod children;
 pub mod cycles;
 pub mod directory;
+pub mod placement;
 pub mod pool;
 pub mod registry;
-pub mod scaling;
-pub mod sharding;
 pub mod state;
 
 use crate::{Error, ThisError, ops::OpsError};
@@ -17,10 +16,10 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
-    RegistryOps(#[from] registry::RegistryOpsError),
+    PlacementOps(#[from] placement::PlacementOpsError),
 
     #[error(transparent)]
-    ShardingRegistryOps(#[from] sharding::ShardingRegistryOpsError),
+    RegistryOps(#[from] registry::RegistryOpsError),
 
     #[error(transparent)]
     StateOps(#[from] state::StateOpsError),

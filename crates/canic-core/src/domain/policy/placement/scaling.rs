@@ -14,7 +14,7 @@ use crate::{
     config::schema::ScalePool,
     domain::policy::PolicyError,
     ids::CanisterRole,
-    ops::{config::ConfigOps, storage::scaling::ScalingRegistryOps},
+    ops::{config::ConfigOps, storage::placement::scaling::ScalingRegistryOps},
 };
 
 ///
