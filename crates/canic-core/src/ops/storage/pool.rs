@@ -1,12 +1,7 @@
 use crate::{
     Error,
     cdk::utils::time::now_secs,
-    dto::pool::{CanisterPoolEntryView, CanisterPoolView},
-    ops::{
-        adapter::pool::{canister_pool_entry_to_view, canister_pool_to_view},
-        config::ConfigOps,
-        prelude::*,
-    },
+    ops::prelude::*,
     storage::memory::pool::{
         CanisterPool, CanisterPoolData, CanisterPoolEntry, CanisterPoolState, CanisterPoolStatus,
     },
@@ -72,15 +67,6 @@ impl PoolOps {
         Self::register_or_update_state(pid, Cycles::default(), status, None);
     }
 
-    //
-    // ---- Views ----
-    //
-
-    #[must_use]
-    pub fn get_view(pid: Principal) -> Option<CanisterPoolEntryView> {
-        CanisterPool::get(pid).map(|entry| canister_pool_entry_to_view(&entry.header, &entry.state))
-    }
-
     // ------- Export ------------------------
 
     #[must_use]
@@ -88,15 +74,15 @@ impl PoolOps {
         CanisterPool::export()
     }
 
-    #[must_use]
-    pub fn export_view() -> CanisterPoolView {
-        let data = CanisterPool::export();
-        canister_pool_to_view(data)
-    }
-
     //
     // ---- Mechanical storage access ----
     //
+
+    /// Fetch a pool entry by canister id.
+    #[must_use]
+    pub fn get(pid: Principal) -> Option<CanisterPoolEntry> {
+        CanisterPool::get(pid)
+    }
 
     #[must_use]
     pub(crate) fn pop_ready() -> Option<(Principal, CanisterPoolEntry)> {
@@ -118,6 +104,11 @@ impl PoolOps {
         CanisterPool::len()
     }
 
+    /// Iterate over all pool entries (read-only, internal).
+    pub fn iter() -> impl Iterator<Item = (Principal, CanisterPoolEntry)> {
+        // Clone data out so the iterator does not hold a borrow
+        CanisterPool::export().entries.into_iter()
+    }
     //
     // ---- Internal helper ----
     //
@@ -147,32 +138,4 @@ impl PoolOps {
             CanisterPool::register(pid, cycles, status, role, None, None, created_at);
         }
     }
-}
-
-/// Return the controller set for pool canisters.
-///
-/// Mechanical helper used by workflow when creating or resetting
-/// pool canisters.
-///
-/// Guarantees:
-/// - Includes all configured controllers from `Config`
-/// - Always includes the root canister as a controller
-/// - Deduplicates the root if already present
-///
-/// This function:
-/// - Does NOT perform authorization checks
-/// - Does NOT mutate state
-/// - Does NOT make IC calls
-///
-/// Policy decisions about *who* should control pool canisters
-/// are assumed to be encoded in configuration.
-pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
-    let mut controllers = ConfigOps::controllers()?;
-
-    let root = canister_self();
-    if !controllers.contains(&root) {
-        controllers.push(root);
-    }
-
-    Ok(controllers)
 }

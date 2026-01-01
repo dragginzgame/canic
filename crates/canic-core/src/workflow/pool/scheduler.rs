@@ -16,14 +16,14 @@
 use crate::{
     Error,
     domain::policy::pool::PoolPolicyError,
-    dto::pool::CanisterPoolStatusView,
     ops::{
         OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
+    storage::memory::pool::CanisterPoolStatus,
     workflow::{
-        pool::{admissibility::check_can_enter_pool, mark_failed, reset_into_pool},
+        pool::{admissibility::check_can_enter_pool, mark_failed, mark_ready, reset_into_pool},
         prelude::*,
     },
 };
@@ -124,23 +124,19 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 }
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
-    let mut pending: Vec<_> = PoolOps::export_view()
-        .0
-        .into_iter()
-        .filter(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
+    let mut pending: Vec<_> = PoolOps::iter()
+        .filter(|(_, entry)| matches!(entry.state.status, CanisterPoolStatus::PendingReset))
         .collect();
 
     if pending.is_empty() {
         return Ok(());
     }
 
-    pending.sort_by_key(|(_, e)| e.created_at);
+    pending.sort_by_key(|(_, entry)| entry.header.created_at);
 
     for (pid, _) in pending.into_iter().take(limit) {
         match check_can_enter_pool(pid).await {
-            Ok(()) => {
-                // admissible, proceed
-            }
+            Ok(()) => {}
 
             Err(PoolPolicyError::RegisteredInSubnet(_)) => {
                 // Permanently forbidden → remove from pool
@@ -158,9 +154,10 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
                 continue;
             }
         }
+
         match reset_into_pool(pid).await {
             Ok(cycles) => {
-                crate::workflow::pool::mark_ready(pid, cycles);
+                mark_ready(pid, cycles);
             }
             Err(err) => {
                 log!(
@@ -177,10 +174,7 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
 }
 
 fn has_pending_reset() -> bool {
-    PoolOps::export_view()
-        .0
-        .into_iter()
-        .any(|(_, e)| matches!(e.status, CanisterPoolStatusView::PendingReset))
+    PoolOps::iter().any(|(_, entry)| matches!(entry.state.status, CanisterPoolStatus::PendingReset))
 }
 
 //

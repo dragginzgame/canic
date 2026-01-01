@@ -6,5 +6,6 @@ pub mod icrc;
 pub mod log;
 pub mod metrics;
 pub mod placement;
+pub mod pool;
 pub mod registry;
 pub mod state;

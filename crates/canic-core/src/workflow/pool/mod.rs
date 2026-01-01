@@ -1,5 +1,7 @@
+pub mod adapter;
 pub mod admin;
 pub mod admissibility;
+pub mod controllers;
 pub mod scheduler;
 
 use crate::{
@@ -13,12 +15,9 @@ use crate::{
     ops::{
         ic::mgmt::{create_canister, get_cycles, uninstall_code, update_settings},
         runtime::env::EnvOps,
-        storage::{
-            pool::{PoolOps, pool_controllers},
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::{pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::prelude::*,
+    workflow::{pool::controllers::pool_controllers, prelude::*, query::pool::pool_entry_view},
 };
 
 /// Default cycles allocated to freshly created pool canisters.
@@ -154,7 +153,7 @@ pub(crate) async fn pool_import_queued_canisters(
     for pid in pids {
         match admissibility::check_can_enter_pool(pid).await {
             Ok(()) => {
-                if let Some(entry) = PoolOps::get_view(pid) {
+                if let Some(entry) = pool_entry_view(pid) {
                     match entry.status {
                         CanisterPoolStatusView::Failed { .. } => {
                             mark_pending_reset(pid);
@@ -201,7 +200,7 @@ pub(crate) async fn pool_export_canister(
 ) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
     require_pool_admin()?;
 
-    let entry = PoolOps::get_view(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
+    let entry = pool_entry_view(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
 
     let is_ready = matches!(entry.status, CanisterPoolStatusView::Ready);
     let (role, hash) = policy::pool::export::can_export(is_ready, entry.role, entry.module_hash)?;
