@@ -7,6 +7,7 @@
 //! No orchestration or business logic should live here.
 
 pub mod app;
+pub mod config;
 pub mod endpoints;
 pub mod ic;
 pub mod metrics;

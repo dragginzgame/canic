@@ -1,7 +1,7 @@
 //! Pool admin command handling.
 
 use crate::{
-    Error, PublicError,
+    Error,
     dto::pool::{PoolAdminCommand, PoolAdminResponse},
     workflow::pool::{
         pool_create_canister, pool_import_canister, pool_import_queued_canisters,
@@ -21,9 +21,7 @@ use crate::{
 /// - Scheduling
 /// - Pool mechanics
 ///
-pub(crate) async fn handle_admin_internal(
-    cmd: PoolAdminCommand,
-) -> Result<PoolAdminResponse, Error> {
+pub(crate) async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
     match cmd {
         PoolAdminCommand::CreateEmpty => {
             let pid = pool_create_canister().await?;
@@ -46,8 +44,4 @@ pub(crate) async fn handle_admin_internal(
             Ok(PoolAdminResponse::QueuedImported { result })
         }
     }
-}
-
-pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {
-    handle_admin_internal(cmd).await.map_err(PublicError::from)
 }

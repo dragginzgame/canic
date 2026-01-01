@@ -2,7 +2,6 @@ pub mod app;
 pub(crate) mod bootstrap;
 pub mod cascade;
 pub mod command;
-pub mod config;
 pub mod directory;
 pub mod facade;
 pub mod ic;

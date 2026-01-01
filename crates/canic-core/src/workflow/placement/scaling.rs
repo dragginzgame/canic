@@ -8,7 +8,7 @@
 //! All async and IC interactions live here.
 
 use crate::{
-    Error, PublicError, ThisError,
+    Error, ThisError,
     cdk::utils::time::now_secs,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
     dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
@@ -44,7 +44,7 @@ pub struct ScalingWorkflow;
 
 impl ScalingWorkflow {
     /// Create a new worker canister in the given pool, if policy allows.
-    pub(crate) async fn create_worker_internal(pool: &str) -> Result<Principal, Error> {
+    pub(crate) async fn create_worker(pool: &str) -> Result<Principal, Error> {
         // 1. Evaluate policy
         let ScalingPlan {
             should_spawn,
@@ -74,21 +74,11 @@ impl ScalingWorkflow {
         Ok(pid)
     }
 
-    pub async fn create_worker(pool: &str) -> Result<Principal, PublicError> {
-        Self::create_worker_internal(pool)
-            .await
-            .map_err(PublicError::from)
-    }
-
     /// Plan whether a worker should be created according to policy.
-    pub(crate) fn plan_create_worker_internal(pool: &str) -> Result<bool, Error> {
+    pub(crate) fn plan_create_worker_(pool: &str) -> Result<bool, Error> {
         let plan = ScalingPolicy::plan_create_worker(pool, now_secs())?;
 
         Ok(plan.should_spawn)
-    }
-
-    pub fn plan_create_worker(pool: &str) -> Result<bool, PublicError> {
-        Self::plan_create_worker_internal(pool).map_err(PublicError::from)
     }
 }
 
