@@ -1,5 +1,6 @@
 use crate::{
     Error,
+    access::AccessError,
     dto::error::{Error as PublicError, ErrorCode},
 };
 
@@ -9,7 +10,7 @@ impl Error {
             // ---------------------------------------------------------
             // Access / authorization
             // ---------------------------------------------------------
-            Self::Access(_) => Self::public_message(ErrorCode::Unauthorized, "unauthorized"),
+            Self::Access(err) => access_error(err),
 
             // ---------------------------------------------------------
             // Input / configuration
@@ -47,6 +48,13 @@ impl Error {
     }
 }
 
+fn access_error(err: &AccessError) -> PublicError {
+    match err {
+        AccessError::Denied(reason) => PublicError::unauthorized(reason.clone()),
+        _ => PublicError::unauthorized("unauthorized"),
+    }
+}
+
 impl From<&Error> for PublicError {
     fn from(err: &Error) -> Self {
         err.public()
@@ -56,5 +64,16 @@ impl From<&Error> for PublicError {
 impl From<Error> for PublicError {
     fn from(err: Error) -> Self {
         Self::from(&err)
+    }
+}
+
+impl From<AccessError> for PublicError {
+    fn from(err: AccessError) -> Self {
+        match err {
+            AccessError::Denied(reason) => PublicError::new(ErrorCode::Forbidden, reason),
+            AccessError::Auth(e) => PublicError::new(ErrorCode::Unauthorized, e.to_string()),
+            AccessError::Guard(e) => PublicError::new(ErrorCode::Forbidden, e.to_string()),
+            AccessError::Rule(e) => PublicError::new(ErrorCode::Forbidden, e.to_string()),
+        }
     }
 }

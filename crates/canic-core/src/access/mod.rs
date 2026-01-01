@@ -18,4 +18,12 @@ pub enum AccessError {
 
     #[error(transparent)]
     Rule(#[from] rule::RuleError),
+
+    #[error("access denied: {0}")]
+    Denied(String),
+}
+
+#[must_use]
+pub fn deny(reason: impl Into<String>) -> AccessError {
+    AccessError::Denied(reason.into())
 }

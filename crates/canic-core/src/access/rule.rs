@@ -1,5 +1,5 @@
 use crate::{
-    Error, PublicError, ThisError,
+    Error, ThisError,
     access::AccessError,
     infra::ic::{Network, build_network},
     ops::runtime::env::EnvOps,
@@ -29,23 +29,16 @@ impl From<RuleError> for Error {
     }
 }
 
-impl RuleError {
-    #[must_use]
-    pub fn public(&self) -> PublicError {
-        PublicError::unauthorized(self.to_string())
-    }
-}
-
 ///
 /// Rules
 ///
 
 #[allow(clippy::unused_async)]
-pub async fn is_prime_subnet() -> Result<(), PublicError> {
+pub async fn is_prime_subnet() -> Result<(), AccessError> {
     if EnvOps::is_prime_subnet() {
         Ok(())
     } else {
-        Err(RuleError::NotPrimeSubnet.public())
+        Err(RuleError::NotPrimeSubnet.into())
     }
 }
 
@@ -55,8 +48,8 @@ pub async fn is_prime_subnet() -> Result<(), PublicError> {
 ///
 
 #[allow(clippy::unused_async)]
-pub async fn build_network_ic() -> Result<(), PublicError> {
-    check_build_network(Network::Ic).map_err(|err| err.public())
+pub async fn build_network_ic() -> Result<(), AccessError> {
+    check_build_network(Network::Ic).map_err(AccessError::from)
 }
 
 ///
@@ -65,8 +58,8 @@ pub async fn build_network_ic() -> Result<(), PublicError> {
 ///
 
 #[allow(clippy::unused_async)]
-pub async fn build_network_local() -> Result<(), PublicError> {
-    check_build_network(Network::Local).map_err(|err| err.public())
+pub async fn build_network_local() -> Result<(), AccessError> {
+    check_build_network(Network::Local).map_err(AccessError::from)
 }
 
 ///
