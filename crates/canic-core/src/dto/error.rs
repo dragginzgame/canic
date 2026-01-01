@@ -4,6 +4,9 @@ use std::fmt::{self, Display};
 ///
 /// Error
 ///
+/// Public-facing error DTO returned across the canister API boundary.
+/// Encodes a stable error code and a human-readable message.
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Error {
@@ -23,37 +26,42 @@ impl Error {
         Self { code, message }
     }
 
-    /// 409
+    /// 409 – Conflict with existing state or resource.
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Conflict, message.into())
     }
 
-    /// 500-class failures
+    /// 403 – Authenticated caller is not permitted to perform this action.
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::Forbidden, message.into())
+    }
+
+    /// 500 – Internal or unexpected failure.
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Internal, message.into())
     }
 
-    /// 400 class failures
+    /// 400 – Invalid input or malformed request.
     pub fn invalid(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvalidInput, message.into())
     }
 
-    /// Broken invariant or impossible state
+    /// 500 – Broken invariant or impossible internal state.
     pub fn invariant(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvariantViolation, message.into())
     }
 
-    /// Resource / quota / capacity exhaustion
+    /// 429 / 507 – Resource, quota, or capacity exhaustion.
     pub fn exhausted(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::ResourceExhausted, message.into())
     }
 
-    /// 404
+    /// 404 – Requested resource was not found.
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::NotFound, message.into())
     }
 
-    /// 401 / 403 class failures
+    /// 401 – Caller is unauthenticated or has an invalid identity.
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message.into())
     }
@@ -62,12 +70,16 @@ impl Error {
 ///
 /// ErrorCode
 ///
+/// Stable public error codes returned by the API.
+/// New variants may be added in the future; consumers must handle unknown values.
+///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
 #[remain::sorted]
 pub enum ErrorCode {
     Conflict,
+    Forbidden,
     Internal,
     InvalidInput,
     InvariantViolation,

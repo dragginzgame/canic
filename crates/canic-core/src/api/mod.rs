@@ -6,6 +6,7 @@
 //!
 //! No orchestration or business logic should live here.
 
+pub mod access;
 pub mod app;
 pub mod config;
 pub mod endpoints;

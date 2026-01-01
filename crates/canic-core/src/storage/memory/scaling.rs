@@ -44,19 +44,6 @@ impl ScalingRegistry {
         });
     }
 
-    /// Lookup all workers in a given pool
-    #[must_use]
-    pub(crate) fn find_by_pool(pool: &str) -> ScalingRegistryData {
-        ScalingRegistryData {
-            entries: SCALING_REGISTRY.with_borrow(|map| {
-                map.iter()
-                    .filter(|e| e.value().pool.as_ref() == pool)
-                    .map(|e| (*e.key(), e.value()))
-                    .collect()
-            }),
-        }
-    }
-
     /// Export full registry
     #[must_use]
     pub(crate) fn export() -> ScalingRegistryData {
