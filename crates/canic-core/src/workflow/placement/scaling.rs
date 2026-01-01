@@ -13,8 +13,8 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
     dto::{placement::WorkerEntryView, rpc::CreateCanisterParent},
     ops::{
-        adapter::placement::worker_entry_from_view, rpc::request::create_canister_request,
-        storage::scaling::ScalingRegistryOps,
+        rpc::request::create_canister_request,
+        storage::placement::{adapter::worker_entry_from_view, scaling::ScalingRegistryOps},
     },
     workflow::placement::PlacementError,
 };

@@ -25,7 +25,7 @@ use crate::{
     },
     ops::{
         config::ConfigOps,
-        storage::sharding::{ShardEntry, ShardingRegistryOps},
+        storage::placement::sharding::{ShardEntry, ShardingRegistryOps},
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -338,7 +338,7 @@ mod tests {
     use crate::{
         config::Config,
         ids::CanisterRole,
-        ops::{runtime::env::EnvOps, storage::sharding::ShardingRegistryOps},
+        ops::{runtime::env::EnvOps, storage::placement::sharding::ShardingRegistryOps},
     };
     use candid::Principal;
 
