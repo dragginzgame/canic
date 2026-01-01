@@ -12,10 +12,10 @@
 //!
 
 use crate::{
-    Error, PublicError,
+    Error,
     dto::snapshot::StateSnapshotView,
     ops::{
-        ic::mgmt::call_and_decode,
+        self,
         runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
@@ -27,7 +27,7 @@ use crate::{
     workflow::{
         cascade::{CascadeError, warn_if_large},
         prelude::*,
-        snapshot::{state_snapshot_debug, state_snapshot_is_empty},
+        snapshot::state_snapshot_is_empty,
     },
 };
 
@@ -83,9 +83,7 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshotView) -> Result<(
 /// Cascade a snapshot from a non-root canister:
 /// - apply it locally
 /// - forward it to direct children
-pub(crate) async fn nonroot_cascade_state_internal(
-    snapshot: &StateSnapshotView,
-) -> Result<(), Error> {
+pub(crate) async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
     EnvOps::deny_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -127,12 +125,6 @@ pub(crate) async fn nonroot_cascade_state_internal(
     Ok(())
 }
 
-pub async fn nonroot_cascade_state(snapshot: &StateSnapshotView) -> Result<(), PublicError> {
-    nonroot_cascade_state_internal(snapshot)
-        .await
-        .map_err(PublicError::from)
-}
-
 //
 // Local application
 //
@@ -168,16 +160,7 @@ fn apply_state(snapshot: &StateSnapshotView) -> Result<(), Error> {
 
 /// Send a state snapshot to another canister.
 async fn send_snapshot(pid: &Principal, snapshot: &StateSnapshotView) -> Result<(), Error> {
-    let debug = state_snapshot_debug(snapshot);
-    log!(Topic::Sync, Info, "💦 sync.state: {debug} -> {pid}");
-
-    let result = call_and_decode::<Result<(), PublicError>>(
-        *pid,
-        crate::ops::rpc::methods::CANIC_SYNC_STATE,
-        snapshot,
-    )
-    .await?;
-
-    // Boundary: convert PublicError from child call into internal Error.
-    result.map_err(|err| CascadeError::ChildRejected(err).into())
+    ops::rpc::cascade::send_state_snapshot(*pid, snapshot)
+        .await
+        .map_err(|_| CascadeError::ChildRejected(*pid).into())
 }

@@ -6,7 +6,7 @@
 pub mod state;
 pub mod topology;
 
-use crate::{Error, PublicError, ThisError, log, log::Topic, workflow::WorkflowError};
+use crate::{Error, ThisError, log, log::Topic, workflow::WorkflowError};
 use candid::Principal;
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
@@ -19,7 +19,7 @@ const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 #[derive(Debug, ThisError)]
 pub enum CascadeError {
     #[error("child rejected cascade: {0:?}")]
-    ChildRejected(PublicError),
+    ChildRejected(Principal),
 
     #[error("canister not found")]
     CanisterNotFound(Principal),
