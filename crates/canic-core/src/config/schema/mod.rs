@@ -111,12 +111,6 @@ impl ConfigModel {
             .as_ref()
             .is_none_or(|w| w.principals.contains(&principal.to_string()))
     }
-
-    /// Return whether ICRC-21 standard support is enabled.
-    #[must_use]
-    pub fn icrc21_enabled(&self) -> bool {
-        self.standards.as_ref().is_some_and(|s| s.icrc21)
-    }
 }
 
 impl Validate for ConfigModel {

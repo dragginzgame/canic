@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     access::AccessError,
-    infra::ic::{Network, build_network},
+    ops::config::network::{Network, build_network},
 };
 
 ///
@@ -29,21 +29,15 @@ impl From<RuleAccessError> for Error {
 /// Rules
 ///
 
-///
 /// build_network_ic
 /// Permits access only when `DFX_NETWORK=ic` was set at build time.
-///
-
 #[allow(clippy::unused_async)]
 pub async fn build_network_ic() -> Result<(), AccessError> {
     check_build_network(Network::Ic).map_err(AccessError::from)
 }
 
-///
 /// build_network_local
 /// Permits access only when `DFX_NETWORK=local` was set at build time.
-///
-
 #[allow(clippy::unused_async)]
 pub async fn build_network_local() -> Result<(), AccessError> {
     check_build_network(Network::Local).map_err(AccessError::from)

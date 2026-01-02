@@ -46,12 +46,6 @@ pub struct SubnetConfig {
 }
 
 impl SubnetConfig {
-    /// Returns the directory canisters for this subnet.
-    #[must_use]
-    pub fn directory_canisters(&self) -> Vec<CanisterRole> {
-        self.subnet_directory.iter().cloned().collect()
-    }
-
     /// Get a canister configuration by role.
     #[must_use]
     pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {

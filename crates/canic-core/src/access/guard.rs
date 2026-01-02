@@ -6,6 +6,7 @@ use crate::{
 
 ///
 /// GuardAccessError
+/// Access errors raised by application state guards.
 ///
 
 #[derive(Debug, ThisError)]

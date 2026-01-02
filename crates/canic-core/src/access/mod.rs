@@ -27,6 +27,7 @@ pub enum AccessError {
     Denied(String),
 }
 
+/// Use this to return a custom access failure from endpoint-specific rules.
 #[must_use]
 pub fn deny(reason: impl Into<String>) -> AccessError {
     AccessError::Denied(reason.into())
