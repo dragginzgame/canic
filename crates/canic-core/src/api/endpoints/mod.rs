@@ -18,7 +18,7 @@ use crate::{
             SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
-        placement::{ScalingRegistryView, ShardingRegistryView},
+        placement::{ScalingRegistryView, ShardingRegistryView, ShardingTenantsView},
         pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
         registry::{AppRegistryView, SubnetRegistryView},
         rpc::{Request, Response, UpgradeCanisterResponse},
@@ -184,6 +184,15 @@ pub fn canic_scaling_registry() -> Result<ScalingRegistryView, PublicError> {
 
 pub fn canic_sharding_registry() -> Result<ShardingRegistryView, PublicError> {
     Ok(workflow::placement::query::sharding_registry_view())
+}
+
+pub fn canic_sharding_tenants(
+    pool: String,
+    shard_pid: Principal,
+) -> Result<ShardingTenantsView, PublicError> {
+    Ok(workflow::placement::query::sharding_tenants_view(
+        &pool, shard_pid,
+    ))
 }
 
 //

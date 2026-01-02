@@ -4,7 +4,7 @@ use crate::{
         page::{Page, PageRequest},
     },
     log::Level,
-    storage::memory::log::Log,
+    ops::runtime::log::LogOps,
     workflow::{log::mapper::LogMapper, view::paginate::paginate_vec},
 };
 
@@ -33,7 +33,7 @@ impl LogQuery {
         min_level: Option<Level>,
         request: PageRequest,
     ) -> Page<LogEntryView> {
-        let mut entries = Log::snapshot();
+        let mut entries = LogOps::snapshot();
 
         // Filter
         if let Some(ref name) = crate_name {

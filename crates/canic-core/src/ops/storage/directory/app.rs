@@ -65,12 +65,4 @@ impl AppDirectoryOps {
             .iter()
             .any(|(r, pid)| r == role && *pid == caller)
     }
-
-    #[must_use]
-    pub fn contains(role: &CanisterRole) -> bool {
-        AppDirectory::export()
-            .entries
-            .iter()
-            .any(|(r, _)| r == role)
-    }
 }

@@ -239,60 +239,6 @@ impl SubnetRegistryOps {
             .map(|(pid, entry)| (pid, entry.role))
             .collect()
     }
-
-    // ---------------------------------------------------------------------
-    // Traversal / invariants
-    // ---------------------------------------------------------------------
-
-    /// Return the canonical parent chain for a canister.
-    ///
-    /// Returned order: root → … → target
-    ///
-    /// Invariants enforced:
-    /// - no cycles
-    /// - bounded by registry size
-    /// - terminates at ROOT
-    pub(crate) fn parent_chain(
-        target: Principal,
-    ) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
-        let registry_len = SubnetRegistry::export().entries.len();
-
-        let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
-        let mut seen: HashSet<Principal> = HashSet::new();
-        let mut pid = target;
-
-        loop {
-            if !seen.insert(pid) {
-                return Err(SubnetRegistryOpsError::ParentChainCycle(pid).into());
-            }
-
-            let Some(entry) = SubnetRegistry::get(pid) else {
-                return Err(SubnetRegistryOpsError::CanisterNotFound(pid).into());
-            };
-
-            if seen.len() > registry_len {
-                return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
-            }
-
-            let summary = CanisterSummary::from(&entry);
-            let parent = entry.parent_pid;
-
-            chain.push((pid, summary));
-
-            if let Some(parent_pid) = parent {
-                pid = parent_pid;
-            } else {
-                if entry.role != CanisterRole::ROOT {
-                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
-                }
-                break;
-            }
-        }
-
-        chain.reverse();
-
-        Ok(chain)
-    }
 }
 
 // -------------------------------------------------------------------------

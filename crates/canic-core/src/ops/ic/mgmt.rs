@@ -65,9 +65,9 @@ pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(),
 
 /// Gets a canister's cycle balance (expensive: calls mgmt canister).
 pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
-    let status = canister_status(canister_pid).await?;
-
-    Ok(status.cycles.into())
+    infra::ic::mgmt::get_cycles(canister_pid)
+        .await
+        .map_err(Error::from)
 }
 
 //

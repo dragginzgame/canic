@@ -38,11 +38,6 @@ impl CycleTracker {
 
     // -------- PUBLIC API (model-facing) -------- //
 
-    #[must_use]
-    pub(crate) fn len() -> u64 {
-        CYCLE_TRACKER.with_borrow(|t| t.map.len())
-    }
-
     pub(crate) fn record(now: u64, cycles: Cycles) {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles));
     }

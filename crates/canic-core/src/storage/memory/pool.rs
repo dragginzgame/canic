@@ -189,14 +189,4 @@ impl PoolStore {
     pub(crate) fn contains(pid: &Principal) -> bool {
         POOL_STORE.with_borrow(|map| map.contains_key(pid))
     }
-
-    #[must_use]
-    pub(crate) fn len() -> u64 {
-        POOL_STORE.with_borrow(|map| map.len())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn clear() {
-        POOL_STORE.with_borrow_mut(BTreeMap::clear);
-    }
 }

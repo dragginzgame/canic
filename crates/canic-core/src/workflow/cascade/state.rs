@@ -14,7 +14,7 @@
 
 use super::{
     CascadeError,
-    snapshot::{StateSnapshot, state_snapshot_is_empty},
+    snapshot::{StateSnapshot, state_snapshot_debug, state_snapshot_is_empty},
     warn_if_large,
 };
 use crate::workflow::cascade::snapshot::adapter::state_snapshot_from_view;
@@ -52,6 +52,13 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), E
         );
         return Ok(());
     }
+
+    log!(
+        Topic::Sync,
+        Info,
+        "💦 sync.state: root_cascade start snapshot={}",
+        state_snapshot_debug(snapshot)
+    );
 
     let root_pid = canister_self();
     let children = SubnetRegistryOps::children(root_pid);
@@ -101,6 +108,13 @@ pub(crate) async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(),
         );
         return Ok(());
     }
+
+    log!(
+        Topic::Sync,
+        Info,
+        "💦 sync.state: nonroot_cascade start snapshot={}",
+        state_snapshot_debug(&snapshot)
+    );
 
     // Apply locally first
     apply_state(&snapshot)?;
