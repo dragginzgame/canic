@@ -38,7 +38,7 @@ pub struct StateSnapshotView {
 pub struct TopologySnapshotView {
     pub parents: Vec<TopologyPathNodeView>,
     /// Children keyed by their parent pid (at most one entry per parent).
-    pub children_map: HashMap<Principal, Vec<TopologyDirectChildView>>,
+    pub children_map: Vec<(Principal, Vec<TopologyDirectChildView>)>,
 }
 
 ///

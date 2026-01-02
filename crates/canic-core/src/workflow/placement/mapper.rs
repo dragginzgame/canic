@@ -42,7 +42,7 @@ impl PlacementMapper {
             slot: entry.slot,
             capacity: entry.capacity,
             count: entry.count,
-            pool: entry.pool.clone(),
+            pool: entry.pool.to_string(),
             canister_role: entry.canister_role.clone(),
             created_at: entry.created_at,
         }

@@ -1,6 +1,6 @@
 //! Non-root bootstrap workflows.
 
-use crate::{log, log::Topic};
+use crate::{Error, log, log::Topic};
 
 ///
 /// Bootstrap workflow for non-root canisters during init.
@@ -10,11 +10,14 @@ use crate::{log, log::Topic};
 ///
 /// Must be safe to retry if scheduling or execution is repeated.
 ///
+/// Errors propagate to the lifecycle adapter, which logs failures without
+/// aborting canister initialization.
+///
 /// `_args` are optional opaque bootstrap arguments forwarded from init.
 /// Currently unused.
 ///
 #[allow(clippy::unused_async)]
-pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) {
+pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), Error> {
     log!(Topic::Init, Info, "non-root bootstrap: init start");
 
     // TODO:
@@ -24,15 +27,17 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) {
     // - emit readiness signals
 
     log!(Topic::Init, Info, "non-root bootstrap: init complete");
+    Ok(())
 }
 
 ///
 /// Bootstrap workflow for non-root canisters after upgrade.
 ///
 /// Must be safe to run multiple times.
+/// Errors propagate to the lifecycle adapter, which logs failures.
 ///
 #[allow(clippy::unused_async)]
-pub async fn bootstrap_post_upgrade_nonroot_canister() {
+pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), Error> {
     log!(Topic::Init, Info, "non-root bootstrap: post-upgrade start");
 
     // TODO:
@@ -45,4 +50,5 @@ pub async fn bootstrap_post_upgrade_nonroot_canister() {
         Info,
         "non-root bootstrap: post-upgrade complete"
     );
+    Ok(())
 }
