@@ -19,7 +19,7 @@ use crate::{
 /// Internally, they delegate to workflow-level RPC implementations,
 /// preserving the layering:
 ///
-///     user canister → api → workflow → ops → infra
+///   user canister -> api -> workflow -> ops -> infra
 ///
 /// Workflow returns internal [`Error`]; conversion to [`PublicError`]
 /// happens exclusively at this API boundary.

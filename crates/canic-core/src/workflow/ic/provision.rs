@@ -26,6 +26,7 @@ use crate::{
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
+        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
         ic::IcWorkflowError,
         pool::pool_import_canister,
@@ -95,10 +96,14 @@ pub(crate) async fn rebuild_directories_from_registry(
     let mut builder = StateSnapshotBuilder::new()?;
 
     if include_app {
+        let app_snapshot = RootAppDirectoryBuilder::build_from_registry();
+        AppDirectoryOps::import(app_snapshot);
         builder = builder.with_app_directory();
     }
 
     if include_subnet {
+        let subnet_snapshot = RootSubnetDirectoryBuilder::build_from_registry();
+        SubnetDirectoryOps::import(subnet_snapshot);
         builder = builder.with_subnet_directory();
     }
 

@@ -14,7 +14,6 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 ///
 
 const PRIME_ROLE: &str = "prime";
-const MANUAL_ROLE: &str = "manual"; // for testing
 
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
@@ -24,7 +23,6 @@ pub struct SubnetRole(pub Cow<'static, str>);
 
 impl SubnetRole {
     pub const PRIME: Self = Self(Cow::Borrowed(PRIME_ROLE));
-    pub const MANUAL: Self = Self(Cow::Borrowed(MANUAL_ROLE));
 
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
