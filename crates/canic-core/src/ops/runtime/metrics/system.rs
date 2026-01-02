@@ -1,4 +1,6 @@
-use crate::storage::metrics::system::{SystemMetricKind as ModelSystemMetricKind, SystemMetrics};
+use crate::ops::runtime::metrics::store::system::{
+    SystemMetricKind as ModelSystemMetricKind, SystemMetrics,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]

@@ -1,7 +1,7 @@
-use crate::ops::runtime::metrics::system::{SystemMetricKind, record_system_metric};
-use crate::storage::metrics::timer::{
+use crate::ops::runtime::metrics::store::timer::{
     TimerMetricKey as ModelTimerMetricKey, TimerMetrics, TimerMode as ModelTimerMode,
 };
+use crate::ops::runtime::metrics::system::{SystemMetricKind, record_system_metric};
 use std::time::Duration;
 
 #[derive(Clone, Debug)]

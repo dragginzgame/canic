@@ -3,9 +3,7 @@ use crate::{
     cdk::utils::time::now_secs,
     log::Level,
     ops::config::ConfigOps,
-    storage::memory::log::{
-        Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention_with_cfg,
-    },
+    storage::memory::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
 };
 
 ///
@@ -66,7 +64,10 @@ impl LogOps {
         let cfg = ConfigOps::log_config()?;
         let now = now_secs();
 
-        apply_retention_with_cfg(&cfg, now)
+        let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
+        let cutoff = cfg.max_age_secs.map(|max_age| now.saturating_sub(max_age));
+
+        apply_retention(cutoff, max_entries, cfg.max_entry_bytes)
     }
 
     // ---------------------------------------------------------------------

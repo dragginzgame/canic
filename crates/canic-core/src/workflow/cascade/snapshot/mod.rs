@@ -18,7 +18,7 @@ use crate::{
         registry::subnet::SubnetRegistryOps,
         state::{
             app::{AppStateOps, AppStateSnapshot},
-            subnet::{SubnetStateOps, SubnetStateSnapshot},
+            subnet::{self, SubnetStateSnapshot},
         },
     },
     workflow::{
@@ -72,7 +72,7 @@ impl StateSnapshotBuilder {
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot());
+        self.snapshot.subnet_state = Some(subnet::snapshot());
         self
     }
 

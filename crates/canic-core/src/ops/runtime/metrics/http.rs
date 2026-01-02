@@ -1,4 +1,4 @@
-use crate::storage::metrics::http::{
+use crate::ops::runtime::metrics::store::http::{
     HttpMethodKind, HttpMetricKey as ModelHttpMetricKey, HttpMetrics,
 };
 

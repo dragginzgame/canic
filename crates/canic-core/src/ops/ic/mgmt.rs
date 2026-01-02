@@ -9,7 +9,8 @@ use crate::{
         self,
         mgmt::{
             CanisterStatusResult, CanisterStatusType, DefiniteCanisterSettings,
-            EnvironmentVariable, LogVisibility as CdkLogVisibility, MemoryMetrics, QueryStats,
+            EnvironmentVariable as CdkEnvironmentVariable, LogVisibility as CdkLogVisibility,
+            MemoryMetrics, QueryStats,
         },
         types::Cycles,
     },
@@ -58,6 +59,16 @@ pub enum LogVisibility {
     Controllers,
     Public,
     AllowedViewers(Vec<Principal>),
+}
+
+///
+/// EnvironmentVariable
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EnvironmentVariable {
+    pub name: String,
+    pub value: String,
 }
 
 ///
@@ -165,7 +176,7 @@ fn log_visibility_to_view(log_visibility: CdkLogVisibility) -> LogVisibilityView
     }
 }
 
-fn environment_variable_to_view(variable: EnvironmentVariable) -> EnvironmentVariableView {
+fn environment_variable_to_view(variable: CdkEnvironmentVariable) -> EnvironmentVariableView {
     EnvironmentVariableView {
         name: variable.name,
         value: variable.value,
@@ -223,7 +234,10 @@ fn settings_to_cdk(settings: &CanisterSettings) -> cdk::mgmt::CanisterSettings {
         log_visibility: settings.log_visibility.clone().map(log_visibility_to_cdk),
         wasm_memory_limit: settings.wasm_memory_limit.clone(),
         wasm_memory_threshold: settings.wasm_memory_threshold.clone(),
-        environment_variables: settings.environment_variables.clone(),
+        environment_variables: settings
+            .environment_variables
+            .clone()
+            .map(|vars| vars.into_iter().map(environment_variable_to_cdk).collect()),
     }
 }
 
@@ -232,6 +246,13 @@ fn log_visibility_to_cdk(setting: LogVisibility) -> cdk::mgmt::LogVisibility {
         LogVisibility::Controllers => cdk::mgmt::LogVisibility::Controllers,
         LogVisibility::Public => cdk::mgmt::LogVisibility::Public,
         LogVisibility::AllowedViewers(viewers) => cdk::mgmt::LogVisibility::AllowedViewers(viewers),
+    }
+}
+
+fn environment_variable_to_cdk(variable: EnvironmentVariable) -> cdk::mgmt::EnvironmentVariable {
+    cdk::mgmt::EnvironmentVariable {
+        name: variable.name,
+        value: variable.value,
     }
 }
 

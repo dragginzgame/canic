@@ -149,10 +149,14 @@ impl RetentionSummary {
     }
 }
 
-pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<RetentionSummary, Error> {
+pub fn apply_retention(
+    cutoff: Option<u64>,
+    max_entries: usize,
+    max_entry_bytes: u32,
+) -> Result<RetentionSummary, Error> {
     let before = with_log(StableLog::len);
 
-    if cfg.max_entries == 0 {
+    if max_entries == 0 {
         with_log_mut(|log| *log = create_log());
         return Ok(RetentionSummary {
             before,
@@ -166,14 +170,13 @@ pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<Retent
         return Ok(RetentionSummary::default());
     }
 
-    let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
     let mut retained = VecDeque::new();
     let mut eligible = 0u64;
 
     with_log(|log| {
         for entry in log.iter() {
-            if let Some(max_age) = cfg.max_age_secs
-                && now_secs.saturating_sub(entry.created_at) > max_age
+            if let Some(cutoff) = cutoff
+                && entry.created_at < cutoff
             {
                 continue;
             }
@@ -187,7 +190,7 @@ pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<Retent
     });
 
     let retained_len = retained.len() as u64;
-    let dropped_by_age = if cfg.max_age_secs.is_some() {
+    let dropped_by_age = if cutoff.is_some() {
         before.saturating_sub(eligible)
     } else {
         0
@@ -205,7 +208,7 @@ pub fn apply_retention_with_cfg(cfg: &LogConfig, now_secs: u64) -> Result<Retent
 
     with_log_mut(|log| *log = create_log());
     for entry in retained {
-        let entry = truncate_entry(entry, cfg.max_entry_bytes);
+        let entry = truncate_entry(entry, max_entry_bytes);
         append_raw(&entry)?;
     }
 

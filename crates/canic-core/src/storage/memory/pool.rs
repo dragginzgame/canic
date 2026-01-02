@@ -143,32 +143,6 @@ impl PoolStore {
         })
     }
 
-    /// Pop the oldest READY record.
-    pub(crate) fn pop_ready() -> Option<(Principal, PoolRecord)> {
-        POOL_STORE.with_borrow_mut(|map| {
-            let pid = map
-                .iter()
-                .filter(|e| e.value().state.status.is_ready())
-                .min_by_key(|e| e.value().header.created_at)
-                .map(|e| *e.key())?;
-
-            map.remove(&pid).map(|rec| (pid, rec))
-        })
-    }
-
-    /// Pop the oldest PENDING_RESET record.
-    pub(crate) fn pop_pending_reset() -> Option<(Principal, PoolRecord)> {
-        POOL_STORE.with_borrow_mut(|map| {
-            let pid = map
-                .iter()
-                .filter(|e| matches!(e.value().state.status, PoolStatus::PendingReset))
-                .min_by_key(|e| e.value().header.created_at)
-                .map(|e| *e.key())?;
-
-            map.remove(&pid).map(|rec| (pid, rec))
-        })
-    }
-
     pub(crate) fn remove(pid: &Principal) {
         let _ = POOL_STORE.with_borrow_mut(|map| map.remove(pid));
     }

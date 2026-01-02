@@ -16,13 +16,13 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
-    PlacementOps(#[from] placement::PlacementOpsError),
+    ShardingRegistryOps(#[from] placement::sharding::ShardingRegistryOpsError),
 
     #[error(transparent)]
-    RegistryOps(#[from] registry::RegistryOpsError),
+    SubnetRegistryOps(#[from] registry::subnet::SubnetRegistryOpsError),
 
     #[error(transparent)]
-    StateOps(#[from] state::StateOpsError),
+    AppStateOps(#[from] state::app::AppStateOpsError),
 }
 
 impl From<StorageOpsError> for Error {

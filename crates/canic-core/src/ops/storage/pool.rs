@@ -135,13 +135,13 @@ impl PoolOps {
     /// Pop the oldest READY entry (FIFO by `created_at`).
     #[must_use]
     pub(crate) fn pop_ready() -> Option<PoolEntrySnapshot> {
-        PoolStore::pop_ready().map(Into::into)
+        Self::pop_by_status(PoolStatusFilter::Ready)
     }
 
     /// Pop the oldest PENDING_RESET entry (FIFO by `created_at`).
     #[must_use]
     pub(crate) fn pop_pending_reset() -> Option<PoolEntrySnapshot> {
-        PoolStore::pop_pending_reset().map(Into::into)
+        Self::pop_by_status(PoolStatusFilter::PendingReset)
     }
 
     // ---------------------------------------------------------------
@@ -178,6 +178,13 @@ impl PoolOps {
             PoolStore::register(pid, cycles, model_status, role, None, None, now_secs());
         }
     }
+
+    fn pop_by_status(filter: PoolStatusFilter) -> Option<PoolEntrySnapshot> {
+        let snapshot = Self::snapshot();
+        let entry = select_oldest(snapshot, filter)?;
+        PoolStore::remove(&entry.pid);
+        Some(entry)
+    }
 }
 
 fn status_to_model(status: &PoolStatus) -> ModelPoolStatus {
@@ -198,4 +205,36 @@ impl From<ModelPoolStatus> for PoolStatus {
             ModelPoolStatus::Failed { reason } => Self::Failed { reason },
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum PoolStatusFilter {
+    Ready,
+    PendingReset,
+}
+
+fn select_oldest(snapshot: PoolSnapshot, filter: PoolStatusFilter) -> Option<PoolEntrySnapshot> {
+    let mut selected: Option<PoolEntrySnapshot> = None;
+
+    for entry in snapshot.entries {
+        let matches = match filter {
+            PoolStatusFilter::Ready => matches!(entry.status, PoolStatus::Ready),
+            PoolStatusFilter::PendingReset => matches!(entry.status, PoolStatus::PendingReset),
+        };
+
+        if !matches {
+            continue;
+        }
+
+        let replace = match &selected {
+            None => true,
+            Some(best) => entry.created_at < best.created_at,
+        };
+
+        if replace {
+            selected = Some(entry);
+        }
+    }
+
+    selected
 }

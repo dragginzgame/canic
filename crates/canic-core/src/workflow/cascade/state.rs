@@ -28,7 +28,7 @@ use crate::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
-            state::{app::AppStateOps, subnet::SubnetStateOps},
+            state::{app::AppStateOps, subnet},
         },
     },
     workflow::prelude::*,
@@ -161,8 +161,8 @@ fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
         AppStateOps::import(app.clone())?;
     }
 
-    if let Some(subnet) = &snapshot.subnet_state {
-        SubnetStateOps::import(subnet.clone());
+    if let Some(subnet_snapshot) = &snapshot.subnet_state {
+        subnet::import(subnet_snapshot.clone());
     }
 
     if let Some(dir) = &snapshot.app_directory {

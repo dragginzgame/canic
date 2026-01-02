@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     dto::state::AppCommand,
-    ops::{prelude::*, storage::state::StateOpsError},
+    ops::{prelude::*, storage::StorageOpsError},
     storage::memory::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
 use derive_more::Display;
@@ -64,7 +64,7 @@ pub enum AppStateOpsError {
 
 impl From<AppStateOpsError> for Error {
     fn from(err: AppStateOpsError) -> Self {
-        StateOpsError::from(err).into()
+        StorageOpsError::from(err).into()
     }
 }
 

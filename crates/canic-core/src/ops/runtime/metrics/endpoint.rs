@@ -1,5 +1,5 @@
 use crate::ops::runtime::metrics::access::AccessMetricKey;
-use crate::storage::metrics::{
+use crate::ops::runtime::metrics::store::{
     access::AccessMetrics as ModelAccessMetrics,
     endpoint::{
         EndpointAttemptCounts as ModelEndpointAttemptCounts,

@@ -2,6 +2,7 @@ pub mod access;
 pub mod endpoint;
 pub mod http;
 pub mod icc;
+pub mod store;
 pub mod system;
 pub mod timer;
 

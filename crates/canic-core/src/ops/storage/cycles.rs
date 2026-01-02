@@ -1,5 +1,7 @@
 use crate::{cdk::types::Cycles, storage::memory::cycles::CycleTracker};
 
+const CYCLE_TRACKER_RETENTION_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
+
 ///
 /// CycleTrackerSnapshot
 ///
@@ -23,7 +25,8 @@ impl CycleTrackerOps {
 
     #[must_use]
     pub fn purge(now: u64) -> usize {
-        CycleTracker::purge(now)
+        let cutoff = now.saturating_sub(CYCLE_TRACKER_RETENTION_SECS);
+        CycleTracker::purge_before(cutoff)
     }
 
     #[must_use]
