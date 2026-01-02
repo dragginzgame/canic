@@ -14,7 +14,6 @@
 
 use super::{StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot};
 use crate::{
-    Error,
     dto::cascade::{
         StateSnapshotView, TopologyDirectChildView, TopologyPathNodeView, TopologySnapshotView,
     },
@@ -61,15 +60,15 @@ impl From<StateSnapshot> for StateSnapshotView {
     }
 }
 
-pub fn state_snapshot_from_view(view: StateSnapshotView) -> Result<StateSnapshot, Error> {
-    Ok(StateSnapshot {
+pub fn state_snapshot_from_view(view: StateSnapshotView) -> StateSnapshot {
+    StateSnapshot {
         app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
         subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
         app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
         subnet_directory: view
             .subnet_directory
             .map(SubnetDirectoryMapper::view_to_snapshot),
-    })
+    }
 }
 
 //
@@ -115,8 +114,8 @@ impl From<TopologySnapshot> for TopologySnapshotView {
     }
 }
 
-pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> Result<TopologySnapshot, Error> {
-    Ok(TopologySnapshot {
+pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> TopologySnapshot {
+    TopologySnapshot {
         parents: view
             .parents
             .into_iter()
@@ -140,5 +139,5 @@ pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> Result<Topolog
                 (pid, mapped)
             })
             .collect(),
-    })
+    }
 }
