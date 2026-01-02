@@ -297,7 +297,7 @@ fn subnet_children_matches_registry_on_root() {
     let mut page: Page<CanisterSummaryView> = pic
         .query_call(
             root_id,
-            "canic_subnet_canister_children",
+            "canic_canister_children",
             (PageRequest {
                 limit: 100,
                 offset: 0,
@@ -369,7 +369,7 @@ fn worker_topology_cascades_through_parent() {
     let children_page: Page<CanisterSummaryView> = pic
         .query_call(
             scale_hub_pid,
-            "canic_subnet_canister_children",
+            "canic_canister_children",
             (PageRequest {
                 limit: 100,
                 offset: 0,

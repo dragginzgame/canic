@@ -71,7 +71,7 @@ fn canister_status_to_view(status: CanisterStatusResult) -> CanisterStatusView {
     }
 }
 
-fn status_type_to_view(status: CanisterStatusType) -> CanisterStatusTypeView {
+const fn status_type_to_view(status: CanisterStatusType) -> CanisterStatusTypeView {
     match status {
         CanisterStatusType::Running => CanisterStatusTypeView::Running,
         CanisterStatusType::Stopping => CanisterStatusTypeView::Stopping,

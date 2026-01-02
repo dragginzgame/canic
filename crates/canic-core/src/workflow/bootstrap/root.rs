@@ -68,8 +68,8 @@ pub fn root_init_env(identity: SubnetIdentity) -> Result<(), Error> {
         }
 
         SubnetIdentity::Manual(pid) => {
-            // Test/support only: explicit subnet override
-            (pid, SubnetRole::MANUAL, pid)
+            // Test/support only: explicit subnet override; treat as prime for config/layout.
+            (pid, SubnetRole::PRIME, self_pid)
         }
     };
 

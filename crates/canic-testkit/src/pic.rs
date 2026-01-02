@@ -150,9 +150,10 @@ impl Pic {
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
-            .map_err(|_| PublicError {
-                code: canic::core::ErrorCode::Internal,
-                message: "test error".to_string(),
+            .map_err(|err| {
+                PublicError::internal(format!(
+                    "pocket_ic update_call failed (canister={canister_id}, method={method}): {err}"
+                ))
             })?;
 
         decode_one(&result)
@@ -175,9 +176,10 @@ impl Pic {
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)
-            .map_err(|_| PublicError {
-                code: canic::core::ErrorCode::Internal,
-                message: "test error".to_string(),
+            .map_err(|err| {
+                PublicError::internal(format!(
+                    "pocket_ic query_call failed (canister={canister_id}, method={method}): {err}"
+                ))
             })?;
 
         decode_one(&result)

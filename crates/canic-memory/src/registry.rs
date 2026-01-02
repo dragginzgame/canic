@@ -79,6 +79,13 @@ impl MemoryRegistry {
         RESERVED_RANGES.with_borrow(|ranges| {
             for (existing_crate, existing_range) in ranges {
                 if ranges_overlap(*existing_range, range) {
+                    if existing_crate == crate_name
+                        && existing_range.start == start
+                        && existing_range.end == end
+                    {
+                        // Allow exact duplicate reservations for idempotent init.
+                        return Ok(());
+                    }
                     return Err(MemoryRegistryError::Overlap {
                         existing_crate: existing_crate.clone(),
                         existing_start: existing_range.start,
