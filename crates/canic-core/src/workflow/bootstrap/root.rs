@@ -1,7 +1,7 @@
 use crate::{
     Error,
     cdk::api::{canister_self, trap},
-    dto::subnet::SubnetIdentity,
+    dto::subnet::{SubnetContextParams, SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
     infra::ic::{Network, build_network},
     ops::{
@@ -26,11 +26,11 @@ use crate::{
 
 /// Bootstrap workflow for the root canister during init.
 pub async fn bootstrap_init_root_canister() -> Result<(), Error> {
-    // 1. Initialize canonical environment identity
-    root_init_env(ConfigOps::current_subnet()?)?;
+    // 1. Resolve runtime identity
+    let identity = resolve_root_subnet_identity().await?;
 
-    // 2. Refine / enrich runtime environment
-    root_set_subnet_id().await?;
+    // 2. Initialize canonical environment
+    root_init_env(identity)?;
 
     // 3. Bootstrap dependent subsystems
     root_import_pool_from_config().await;
@@ -53,7 +53,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// Initialize canonical environment state for the root canister.
 ///
 /// Must be called exactly once during the IC `init` hook.
-pub(crate) fn root_init_env(identity: SubnetIdentity) -> Result<(), Error> {
+pub fn root_init_env(identity: SubnetIdentity) -> Result<(), Error> {
     let self_pid = canister_self();
 
     let (subnet_pid, subnet_role, prime_root_pid) = match identity {
@@ -88,6 +88,30 @@ pub(crate) fn root_init_env(identity: SubnetIdentity) -> Result<(), Error> {
 /// ---------------------------------------------------------------------------
 /// Environment enrichment
 /// ---------------------------------------------------------------------------
+
+pub async fn resolve_root_subnet_identity() -> Result<SubnetIdentity, Error> {
+    // Attempt runtime discovery via registry
+    match try_get_current_subnet_pid().await {
+        Ok(Some(subnet_pid)) => {
+            // If subnet pid == self, this is the prime root
+            if subnet_pid == canister_self() {
+                Ok(SubnetIdentity::Prime)
+            } else {
+                // Standard subnet; prime root must already be known
+                let prime_root_pid = EnvOps::prime_root_pid()?;
+                let subnet_role = EnvOps::subnet_role()?; // or derive if needed
+
+                Ok(SubnetIdentity::Standard(SubnetContextParams {
+                    subnet_type: subnet_role,
+                    prime_root_pid,
+                }))
+            }
+        }
+
+        // Registry unavailable → test / local
+        Ok(None) | Err(_) => Ok(SubnetIdentity::Manual(canister_self())),
+    }
+}
 
 /// Resolve and persist the subnet identifier for the root canister.
 ///

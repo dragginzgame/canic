@@ -35,10 +35,10 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct StateSnapshot {
-    pub app_state: Option<AppStateSnapshot>,
-    pub subnet_state: Option<SubnetStateSnapshot>,
-    pub app_directory: Option<AppDirectorySnapshot>,
-    pub subnet_directory: Option<SubnetDirectorySnapshot>,
+    pub(crate) app_state: Option<AppStateSnapshot>,
+    pub(crate) subnet_state: Option<SubnetStateSnapshot>,
+    pub(crate) app_directory: Option<AppDirectorySnapshot>,
+    pub(crate) subnet_directory: Option<SubnetDirectorySnapshot>,
 }
 
 ///
@@ -60,6 +60,10 @@ impl StateSnapshotBuilder {
             snapshot: StateSnapshot::default(),
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Root-only
+    // ---------------------------------------------------------------------
 
     /// Construct a snapshot containing the full root state.
     #[must_use]
@@ -95,6 +99,34 @@ impl StateSnapshotBuilder {
         self
     }
 
+    // ---------------------------------------------------------------------
+    // Explicit snapshot attachment (preferred, explicit)
+    // ---------------------------------------------------------------------
+
+    #[must_use]
+    pub const fn with_app_state_snapshot(mut self, snapshot: AppStateSnapshot) -> Self {
+        self.snapshot.app_state = Some(snapshot);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_subnet_state_snapshot(mut self, snapshot: SubnetStateSnapshot) -> Self {
+        self.snapshot.subnet_state = Some(snapshot);
+        self
+    }
+
+    #[must_use]
+    pub fn with_app_directory_snapshot(mut self, snapshot: AppDirectorySnapshot) -> Self {
+        self.snapshot.app_directory = Some(snapshot);
+        self
+    }
+
+    #[must_use]
+    pub fn with_subnet_directory_snapshot(mut self, snapshot: SubnetDirectorySnapshot) -> Self {
+        self.snapshot.subnet_directory = Some(snapshot);
+        self
+    }
+
     #[must_use]
     pub fn build(self) -> StateSnapshot {
         self.snapshot
@@ -107,29 +139,31 @@ impl StateSnapshotBuilder {
 
 #[derive(Clone, Debug)]
 pub struct TopologySnapshot {
-    pub parents: Vec<TopologyPathNode>,
-    pub children_map: HashMap<Principal, Vec<TopologyDirectChild>>,
+    pub(crate) parents: Vec<TopologyPathNode>,
+    pub(crate) children_map: HashMap<Principal, Vec<TopologyDirectChild>>,
 }
 
 ///
 /// TopologyPathNode
 /// Internal representation of a node in the parent chain.
 ///
+
 #[derive(Clone, Debug)]
 pub struct TopologyPathNode {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
+    pub(crate) pid: Principal,
+    pub(crate) role: CanisterRole,
+    pub(crate) parent_pid: Option<Principal>,
 }
 
 ///
 /// TopologyDirectChild
 /// Internal representation of a direct child.
 ///
+
 #[derive(Clone, Debug)]
 pub struct TopologyDirectChild {
-    pub pid: Principal,
-    pub role: CanisterRole,
+    pub(crate) pid: Principal,
+    pub(crate) role: CanisterRole,
 }
 
 ///
@@ -195,7 +229,7 @@ impl TopologySnapshotBuilder {
 // -----------------------------------------------------------------------------
 
 #[must_use]
-pub(crate) const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
+pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
     snapshot.app_state.is_none()
         && snapshot.subnet_state.is_none()
         && snapshot.app_directory.is_none()
@@ -203,7 +237,7 @@ pub(crate) const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
 }
 
 #[must_use]
-pub(crate) fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
+pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
     const fn fmt(present: bool, code: &str) -> &str {
         if present { code } else { ".." }
     }

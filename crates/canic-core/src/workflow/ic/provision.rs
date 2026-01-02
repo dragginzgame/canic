@@ -25,11 +25,14 @@ use crate::{
         },
     },
     workflow::{
-        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+        cascade::snapshot::StateSnapshotBuilder,
+        directory::{
+            builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+            mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+        },
         ic::IcWorkflowError,
         pool::pool_import_canister,
         prelude::*,
-        snapshot::StateSnapshotBuilder,
     },
 };
 use thiserror::Error as ThisError;
@@ -63,10 +66,13 @@ pub(crate) fn build_nonroot_init_payload(
         parent_pid: Some(parent_pid),
     };
 
+    let app_directory = AppDirectoryMapper::snapshot_to_view(AppDirectoryOps::snapshot());
+    let subnet_directory = SubnetDirectoryMapper::snapshot_to_view(SubnetDirectoryOps::snapshot());
+
     Ok(CanisterInitPayload {
         env,
-        app_directory: AppDirectoryOps::export(),
-        subnet_directory: SubnetDirectoryOps::export_view(),
+        app_directory,
+        subnet_directory,
     })
 }
 
@@ -92,15 +98,17 @@ pub(crate) async fn rebuild_directories_from_registry(
     let mut builder = StateSnapshotBuilder::new();
 
     if include_app {
-        let view = RootAppDirectoryBuilder::build_from_registry();
-        AppDirectoryOps::import(view.clone());
-        builder = builder.with_app_directory_view(view);
+        let snapshot = RootAppDirectoryBuilder::build_from_registry();
+        AppDirectoryOps::import(snapshot.clone());
+
+        builder = builder.with_app_directory_snapshot(snapshot);
     }
 
     if include_subnet {
-        let view = RootSubnetDirectoryBuilder::build_from_registry();
-        SubnetDirectoryOps::import(view.clone());
-        builder = builder.with_subnet_directory_view(view);
+        let snapshot = RootSubnetDirectoryBuilder::build_from_registry();
+        SubnetDirectoryOps::import(snapshot.clone());
+
+        builder = builder.with_subnet_directory_snapshot(snapshot);
     }
 
     Ok(builder)
@@ -128,7 +136,7 @@ pub(crate) async fn create_and_install_canister(
     WasmOps::try_get(role)?;
 
     // Phase 1: allocation
-    let (pid, source) = allocate_canister_with_source(role).await?;
+    let (pid, source) = allocate_canister(role).await?;
 
     // Phase 2: installation
     if install_canister(pid, role, parent_pid, extra_arg)
@@ -206,14 +214,9 @@ pub(crate) async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), 
 // ===========================================================================
 //
 
-/// Allocate a canister ID and ensure it meets the initial cycle target.
 ///
-/// Reuses a canister from the pool if available; otherwise creates a new one.
-pub(crate) async fn allocate_canister(role: &CanisterRole) -> Result<Principal, Error> {
-    let (pid, _) = allocate_canister_with_source(role).await?;
-
-    Ok(pid)
-}
+/// AllocationSource
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AllocationSource {
@@ -221,9 +224,10 @@ enum AllocationSource {
     New,
 }
 
-async fn allocate_canister_with_source(
-    role: &CanisterRole,
-) -> Result<(Principal, AllocationSource), Error> {
+/// Allocate a canister ID and ensure it meets the initial cycle target.
+///
+/// Reuses a canister from the pool if available; otherwise creates a new one.
+async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, AllocationSource), Error> {
     // use ConfigOps for a clean, ops-layer config lookup
     let cfg = ConfigOps::current_subnet_canister(role)?;
     let target = cfg.initial_cycles;

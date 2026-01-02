@@ -24,6 +24,7 @@
 
 pub mod abi;
 pub mod canister;
+pub mod cascade;
 pub mod directory;
 pub mod env;
 pub mod error;
@@ -35,7 +36,6 @@ pub mod placement;
 pub mod pool;
 pub mod registry;
 pub mod rpc;
-pub mod snapshot;
 pub mod state;
 pub mod subnet;
 

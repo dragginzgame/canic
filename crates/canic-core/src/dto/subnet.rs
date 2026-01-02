@@ -3,6 +3,9 @@ use crate::dto::prelude::*;
 ///
 /// SubnetIdentity
 ///
+/// Represents the *runtime identity* of the subnet this canister is executing in.
+/// Must never be constructed from configuration alone.
+///
 
 #[derive(CandidType, Debug, Deserialize)]
 pub enum SubnetIdentity {

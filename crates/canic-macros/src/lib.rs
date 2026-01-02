@@ -4,7 +4,7 @@
 //! (`#[query]`, `#[update]`), routed through `canic::cdk::*`.
 //!
 //! Pipeline enforced by generated wrappers:
-//!   guard → auth → rule → dispatch
+//!   guard → auth → env → rule → dispatch
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -60,6 +60,7 @@ mod parse {
         pub app_guard: bool,
         pub user_guard: bool,
         pub auth: Option<AuthSpec>,
+        pub env: Vec<Expr>,
         pub rules: Vec<Expr>,
     }
 
@@ -81,6 +82,7 @@ mod parse {
         let mut app_guard = false;
         let mut user_guard = false;
         let mut auth = None::<AuthSpec>;
+        let mut env = Vec::<Expr>::new();
         let mut rules = Vec::<Expr>::new();
 
         for meta in metas {
@@ -154,6 +156,25 @@ mod parse {
                     rules.extend(parsed);
                 }
 
+                // env(...)
+                //
+                // Parse as Expr so you can do env(is_prime_subnet), env(is_root), etc.
+                Meta::List(list) if list.path.is_ident("env") => {
+                    let parsed = Punctuated::<Expr, Token![,]>::parse_terminated
+                        .parse2(list.tokens.clone())?
+                        .into_iter()
+                        .collect::<Vec<_>>();
+
+                    if parsed.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            list,
+                            "`env(...)` expects at least one expression",
+                        ));
+                    }
+
+                    env.extend(parsed);
+                }
+
                 // explicit CDK guard = ...
                 //
                 // We still forward it, but track that it exists so validation can ban combinations.
@@ -172,6 +193,7 @@ mod parse {
             app_guard,
             user_guard,
             auth,
+            env,
             rules,
         })
     }
@@ -181,6 +203,7 @@ mod parse {
             app_guard: false,
             user_guard: false,
             auth: None,
+            env: Vec::new(),
             rules: Vec::new(),
         }
     }
@@ -220,6 +243,7 @@ mod validate {
         pub forwarded: Vec<TokenStream2>,
         pub app_guard: bool,
         pub auth: Option<AuthSpec>,
+        pub env: Vec<Expr>,
         pub rules: Vec<Expr>,
     }
 
@@ -271,11 +295,19 @@ mod validate {
             ));
         }
 
+        if !parsed.env.is_empty() && !returns_result(sig) {
+            return Err(syn::Error::new_spanned(
+                &sig.output,
+                "`env(...)` requires `Result<_, From<canic::PublicError>>`",
+            ));
+        }
+
         Ok(ValidatedArgs {
             forwarded: parsed.forwarded,
             app_guard: parsed.app_guard,
             auth: parsed.auth,
             rules: parsed.rules,
+            env: parsed.env,
         })
     }
 
@@ -335,6 +367,7 @@ mod expand {
         let attempted = attempted(&call_ident);
         let guard = guard(kind, args.app_guard, &call_ident);
         let auth = auth(args.auth.as_ref(), &call_ident);
+        let env = env(&args.env, &call_ident);
         let rule = rule(&args.rules, &call_ident);
 
         let call_args = match extract_args(&orig_sig) {
@@ -353,6 +386,7 @@ mod expand {
                 #attempted
                 #guard
                 #auth
+                #env
                 #rule
                 #completion
             }
@@ -474,6 +508,27 @@ mod expand {
         );
 
         let checks = rules.iter().map(|expr| {
+            quote! {
+                if let Err(err) = #expr().await {
+                    #metric
+                    return Err(err.into());
+                }
+            }
+        });
+        quote!(#(#checks)*)
+    }
+
+    fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
+        if envs.is_empty() {
+            return quote!();
+        }
+
+        let metric = record_access_denied(
+            call,
+            quote!(::canic::core::dto::metrics::AccessMetricKind::Rule),
+        );
+
+        let checks = envs.iter().map(|expr| {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric

@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::{
         canister::{CanisterEntryView, CanisterSummaryView},
-        snapshot::{TopologyDirectChildView, TopologyPathNodeView},
+        cascade::{TopologyDirectChildView, TopologyPathNodeView},
     },
     storage::canister::{CanisterEntry, CanisterSummary},
 };

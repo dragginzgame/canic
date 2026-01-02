@@ -1,6 +1,6 @@
-use crate::{
-    dto::directory::{AppDirectoryView, SubnetDirectoryView},
-    dto::env::EnvView,
+use crate::dto::{
+    directory::{AppDirectoryView, SubnetDirectoryView},
+    env::EnvView,
 };
 use candid::CandidType;
 use serde::Deserialize;

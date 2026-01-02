@@ -38,7 +38,7 @@ impl AppStateMapper {
     }
 
     #[must_use]
-    pub fn view_to_snapshot(view: AppStateView) -> AppStateSnapshot {
+    pub const fn view_to_snapshot(view: AppStateView) -> AppStateSnapshot {
         AppStateSnapshot {
             mode: Some(Self::app_mode_from_view(view.mode)),
         }

@@ -9,7 +9,7 @@ use crate::{
 /// Internal, operational snapshot of subnet directory.
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubnetDirectorySnapshot {
     pub entries: Vec<(CanisterRole, Principal)>,
 }

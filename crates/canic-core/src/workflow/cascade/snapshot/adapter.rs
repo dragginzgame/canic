@@ -9,17 +9,17 @@
 //! - No assembly logic here
 //! - No ops calls
 //! - No persistence
-//! - This is the *only* place workflow touches DTO snapshot views
+//! - This is the *only* place workflow converts snapshot DTOs
 //!
 
+use super::{StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot};
 use crate::{
     Error,
-    dto::snapshot::{
+    dto::cascade::{
         StateSnapshotView, TopologyDirectChildView, TopologyPathNodeView, TopologySnapshotView,
     },
     workflow::{
         directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
-        snapshot::{StateSnapshot, TopologySnapshot},
         state::mapper::{AppStateMapper, SubnetStateMapper},
     },
 };
@@ -31,7 +31,7 @@ use crate::{
 
 impl From<&StateSnapshot> for StateSnapshotView {
     fn from(snapshot: &StateSnapshot) -> Self {
-        StateSnapshotView {
+        Self {
             app_state: snapshot
                 .app_state
                 .clone()
@@ -61,22 +61,15 @@ impl From<StateSnapshot> for StateSnapshotView {
     }
 }
 
-impl TryFrom<StateSnapshotView> for StateSnapshot {
-    type Error = Error;
-
-    fn try_from(view: StateSnapshotView) -> Result<Self, Error> {
-        Ok(StateSnapshot {
-            app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
-
-            subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
-
-            app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
-
-            subnet_directory: view
-                .subnet_directory
-                .map(SubnetDirectoryMapper::view_to_snapshot),
-        })
-    }
+pub fn state_snapshot_from_view(view: StateSnapshotView) -> Result<StateSnapshot, Error> {
+    Ok(StateSnapshot {
+        app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
+        subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
+        app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
+        subnet_directory: view
+            .subnet_directory
+            .map(SubnetDirectoryMapper::view_to_snapshot),
+    })
 }
 
 //
@@ -86,7 +79,7 @@ impl TryFrom<StateSnapshotView> for StateSnapshot {
 
 impl From<&TopologySnapshot> for TopologySnapshotView {
     fn from(snapshot: &TopologySnapshot) -> Self {
-        TopologySnapshotView {
+        Self {
             parents: snapshot
                 .parents
                 .iter()
@@ -120,4 +113,32 @@ impl From<TopologySnapshot> for TopologySnapshotView {
     fn from(snapshot: TopologySnapshot) -> Self {
         Self::from(&snapshot)
     }
+}
+
+pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> Result<TopologySnapshot, Error> {
+    Ok(TopologySnapshot {
+        parents: view
+            .parents
+            .into_iter()
+            .map(|p| TopologyPathNode {
+                pid: p.pid,
+                role: p.role,
+                parent_pid: p.parent_pid,
+            })
+            .collect(),
+        children_map: view
+            .children_map
+            .into_iter()
+            .map(|(pid, children)| {
+                let mapped = children
+                    .into_iter()
+                    .map(|child| TopologyDirectChild {
+                        pid: child.pid,
+                        role: child.role,
+                    })
+                    .collect();
+                (pid, mapped)
+            })
+            .collect(),
+    })
 }

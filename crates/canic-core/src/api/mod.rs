@@ -13,7 +13,6 @@ pub mod endpoints;
 pub mod error;
 pub mod ic;
 pub mod metrics;
-pub mod perf;
 pub mod placement;
 pub mod rpc;
 pub mod timer;

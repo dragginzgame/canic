@@ -95,7 +95,7 @@ mod tests {
                 assert_eq!(expected, Network::Ic);
                 assert_eq!(actual, Network::Local);
             }
-            _ => panic!("expected BuildNetworkMismatch"),
+            RuleAccessError::BuildNetworkUnknown => panic!("expected BuildNetworkMismatch"),
         }
     }
 
