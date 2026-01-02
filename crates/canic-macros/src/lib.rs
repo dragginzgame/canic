@@ -103,7 +103,7 @@ mod parse {
                         ));
                     }
 
-                    // For now, support only guard(app). You can widen this later.
+                    // Only guard(app) is supported.
                     for item in inner {
                         match item {
                             Meta::Path(p) if p.is_ident("app") => {

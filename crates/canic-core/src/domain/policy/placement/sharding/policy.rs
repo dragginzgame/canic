@@ -134,17 +134,6 @@ impl ShardingPolicy {
         Self::plan_internal(pool, tenant.as_ref(), None)
     }
 
-    /// Plan a reassignment for a tenant currently on `donor_pid`, excluding that shard.
-    /// Never creates or mutates registry state.
-    pub(crate) fn plan_reassign_from_shard(
-        pool: &str,
-        tenant: impl AsRef<str>,
-        donor_pid: Principal,
-    ) -> Result<ShardingPlan, Error> {
-        let tenant = tenant.as_ref();
-        Self::plan_internal(pool, tenant, Some(donor_pid))
-    }
-
     fn plan_internal(
         pool: &str,
         tenant: &str,

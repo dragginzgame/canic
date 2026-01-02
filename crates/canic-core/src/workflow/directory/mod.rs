@@ -21,7 +21,7 @@ pub struct AppDirectoryResolver;
 
 impl AppDirectoryResolver {
     #[must_use]
-    pub fn resolve_view() -> AppDirectorySnapshot {
+    pub fn resolve() -> AppDirectorySnapshot {
         if EnvOps::is_root() {
             RootAppDirectoryBuilder::build_from_registry()
         } else {
@@ -38,7 +38,7 @@ pub struct SubnetDirectoryResolver;
 
 impl SubnetDirectoryResolver {
     #[must_use]
-    pub fn resolve_view() -> SubnetDirectorySnapshot {
+    pub fn resolve() -> SubnetDirectorySnapshot {
         if EnvOps::is_root() {
             RootSubnetDirectoryBuilder::build_from_registry()
         } else {
