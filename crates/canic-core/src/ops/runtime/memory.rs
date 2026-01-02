@@ -28,12 +28,6 @@ impl From<MemoryOpsError> for Error {
 }
 
 ///
-/// MemoryOps
-///
-
-pub struct MemoryOps;
-
-///
 /// MemoryRangeSnapshot
 ///
 
@@ -90,6 +84,12 @@ impl MemoryRegistryInitSummary {
         Self { ranges, entries }
     }
 }
+
+///
+/// MemoryOps
+///
+
+pub struct MemoryOps;
 
 impl MemoryOps {
     pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, Error> {

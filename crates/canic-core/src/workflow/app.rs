@@ -23,7 +23,7 @@ pub(crate) async fn apply_command(cmd: AppCommand) -> Result<(), Error> {
     env::require_root()?;
     AppStateOps::command(cmd)?;
 
-    let snapshot = StateSnapshotBuilder::new().with_app_state().build();
+    let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();
     root_cascade_state(&snapshot).await?;
 
     Ok(())

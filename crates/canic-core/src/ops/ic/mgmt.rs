@@ -13,7 +13,7 @@ use crate::{
     ops::prelude::*,
     storage::metrics::system::{SystemMetricKind, SystemMetrics},
 };
-use candid::{CandidType, Principal, utils::ArgumentEncoder};
+use candid::{Principal, utils::ArgumentEncoder};
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -108,7 +108,9 @@ pub async fn install_code<T: ArgumentEncoder>(
 
 /// Upgrades a canister to the provided wasm.
 pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
-    install_code(CanisterInstallMode::Upgrade(None), canister_pid, wasm, ()).await?;
+    infra::ic::mgmt::upgrade_canister(canister_pid, wasm).await?;
+
+    SystemMetrics::increment(SystemMetricKind::UpgradeCode);
 
     #[allow(clippy::cast_precision_loss)]
     let bytes_kb = wasm.len() as f64 / 1_000.0;
@@ -156,22 +158,4 @@ pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
     SystemMetrics::increment(SystemMetricKind::UpdateSettings);
 
     Ok(())
-}
-
-//
-// ──────────────────────────────── GENERIC HELPERS ────────────────────────────
-//
-
-/// Calls a method on a canister and candid-decodes the response into `T`.
-pub async fn call_and_decode<T>(
-    pid: Principal,
-    method: &str,
-    arg: impl CandidType,
-) -> Result<T, Error>
-where
-    T: CandidType + for<'de> candid::Deserialize<'de>,
-{
-    let decoded = infra::ic::mgmt::call_and_decode(pid, method, arg).await?;
-
-    Ok(decoded)
 }

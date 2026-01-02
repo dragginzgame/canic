@@ -384,11 +384,14 @@ async fn cascade_all(
     }
 
     if let Some(role) = role_opt {
-        // Ensure newly created/adopted canisters inherit the current app state.
+        // Ensure newly created/adopted canisters inherit the current app
+        // and subnet states
         let snapshot = rebuild_directories_from_registry(Some(role))
             .await?
             .with_app_state()
+            .with_subnet_state()
             .build();
+
         root_cascade_state(&snapshot).await?;
         assert_directories_match_registry()?;
     }

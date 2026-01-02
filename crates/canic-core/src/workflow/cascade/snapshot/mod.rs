@@ -11,19 +11,21 @@ pub mod adapter;
 
 use crate::{
     Error,
+    access::env,
     ids::CanisterRole,
     ops::storage::{
-        directory::{
-            app::{AppDirectoryOps, AppDirectorySnapshot},
-            subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
-        },
+        directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
         registry::subnet::SubnetRegistryOps,
         state::{
             app::{AppStateOps, AppStateSnapshot},
             subnet::{SubnetStateOps, SubnetStateSnapshot},
         },
     },
-    workflow::{canister::mapper::CanisterMapper, children::mapper::ChildrenMapper},
+    workflow::{
+        canister::mapper::CanisterMapper,
+        children::mapper::ChildrenMapper,
+        directory::{AppDirectoryResolver, SubnetDirectoryResolver},
+    },
 };
 use candid::Principal;
 use std::collections::HashMap;
@@ -46,33 +48,20 @@ pub struct StateSnapshot {
 ///
 /// Assembles internal `StateSnapshot` values from authoritative state.
 /// DTO conversion happens via `From<StateSnapshot> for StateSnapshotView`.
+/// Root-only; construction enforces root context.
 ///
 
-#[derive(Default)]
 pub struct StateSnapshotBuilder {
     snapshot: StateSnapshot,
 }
 
 impl StateSnapshotBuilder {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, Error> {
+        env::require_root()?;
+
+        Ok(Self {
             snapshot: StateSnapshot::default(),
-        }
-    }
-
-    // ---------------------------------------------------------------------
-    // Root-only
-    // ---------------------------------------------------------------------
-
-    /// Construct a snapshot containing the full root state.
-    #[must_use]
-    pub fn root() -> Self {
-        Self::new()
-            .with_app_state()
-            .with_subnet_state()
-            .with_app_directory()
-            .with_subnet_directory()
+        })
     }
 
     #[must_use]
@@ -89,41 +78,13 @@ impl StateSnapshotBuilder {
 
     #[must_use]
     pub fn with_app_directory(mut self) -> Self {
-        self.snapshot.app_directory = Some(AppDirectoryOps::snapshot());
+        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve());
         self
     }
 
     #[must_use]
     pub fn with_subnet_directory(mut self) -> Self {
-        self.snapshot.subnet_directory = Some(SubnetDirectoryOps::snapshot());
-        self
-    }
-
-    // ---------------------------------------------------------------------
-    // Explicit snapshot attachment (preferred, explicit)
-    // ---------------------------------------------------------------------
-
-    #[must_use]
-    pub const fn with_app_state_snapshot(mut self, snapshot: AppStateSnapshot) -> Self {
-        self.snapshot.app_state = Some(snapshot);
-        self
-    }
-
-    #[must_use]
-    pub const fn with_subnet_state_snapshot(mut self, snapshot: SubnetStateSnapshot) -> Self {
-        self.snapshot.subnet_state = Some(snapshot);
-        self
-    }
-
-    #[must_use]
-    pub fn with_app_directory_snapshot(mut self, snapshot: AppDirectorySnapshot) -> Self {
-        self.snapshot.app_directory = Some(snapshot);
-        self
-    }
-
-    #[must_use]
-    pub fn with_subnet_directory_snapshot(mut self, snapshot: SubnetDirectorySnapshot) -> Self {
-        self.snapshot.subnet_directory = Some(snapshot);
+        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve());
         self
     }
 

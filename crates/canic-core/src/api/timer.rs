@@ -2,17 +2,18 @@ use crate::ops::runtime::timer::{TimerId, TimerOps};
 use std::{cell::RefCell, future::Future, thread::LocalKey, time::Duration};
 
 ///
+/// TimerApi
+/// Lifecycle timer api façade for macro-expanded entrypoints.
+///
+
+///
 /// TimerSlot
 ///
 
 pub type TimerSlot = LocalKey<RefCell<Option<TimerId>>>;
 
-/// Lifecycle timer façade for macro-expanded entrypoints.
-///
 /// Public, stable surface for macro-expanded code in downstream crates.
 /// Performs no logic; delegates to internal TimerOps.
-///
-/// Layering: macro → api → ops → infra
 pub fn set_lifecycle_timer(
     delay: Duration,
     label: impl Into<String>,

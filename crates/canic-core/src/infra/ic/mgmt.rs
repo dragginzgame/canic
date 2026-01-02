@@ -15,7 +15,7 @@ use crate::{
     },
     infra::{ic::IcInfraError, prelude::*},
 };
-use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
 ///
 /// MgmtInfraError
@@ -178,19 +178,4 @@ pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InfraError
     cdk::mgmt::update_settings(args).await?;
 
     Ok(())
-}
-
-//
-// ──────────────────────────────── GENERIC HELPERS ────────────────────────────
-//
-
-/// Calls a method on a canister and candid-decodes the response into `T`.
-pub async fn call_and_decode<T: CandidType + for<'de> candid::Deserialize<'de>>(
-    pid: Principal,
-    method: &str,
-    arg: impl CandidType,
-) -> Result<T, InfraError> {
-    let response = Call::unbounded_wait(pid, method).with_arg(arg).await?;
-
-    candid::decode_one(&response).map_err(InfraError::from)
 }
