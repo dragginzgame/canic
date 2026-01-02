@@ -3,8 +3,8 @@ use crate::{
         AccessMetricEntry, AccessMetricKind, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
         SystemMetricEntry, TimerMetricEntry,
     },
-    storage::metrics::{
-        access::{AccessMetricKey, AccessMetricKind as ModelAccessMetricKind},
+    ops::runtime::metrics::{
+        access::{AccessMetricKey, AccessMetricKind as OpsAccessMetricKind},
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
@@ -148,11 +148,11 @@ impl MetricsMapper {
             .collect()
     }
 
-    const fn access_metric_kind_to_view(kind: ModelAccessMetricKind) -> AccessMetricKind {
+    const fn access_metric_kind_to_view(kind: OpsAccessMetricKind) -> AccessMetricKind {
         match kind {
-            ModelAccessMetricKind::Auth => AccessMetricKind::Auth,
-            ModelAccessMetricKind::Guard => AccessMetricKind::Guard,
-            ModelAccessMetricKind::Rule => AccessMetricKind::Rule,
+            OpsAccessMetricKind::Auth => AccessMetricKind::Auth,
+            OpsAccessMetricKind::Guard => AccessMetricKind::Guard,
+            OpsAccessMetricKind::Rule => AccessMetricKind::Rule,
         }
     }
 

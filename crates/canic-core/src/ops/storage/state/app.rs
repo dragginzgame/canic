@@ -2,8 +2,9 @@ use crate::{
     Error, ThisError,
     dto::state::AppCommand,
     ops::{prelude::*, storage::state::StateOpsError},
-    storage::memory::state::app::{AppMode, AppState, AppStateData},
+    storage::memory::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
+use derive_more::Display;
 
 ///
 /// AppStateSnapshot
@@ -19,10 +20,17 @@ pub struct AppStateSnapshot {
     pub mode: Option<AppMode>,
 }
 
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
+pub enum AppMode {
+    Enabled,
+    Readonly,
+    Disabled,
+}
+
 impl From<AppStateData> for AppStateSnapshot {
     fn from(data: AppStateData) -> Self {
         Self {
-            mode: Some(data.mode),
+            mode: Some(AppMode::from_model(data.mode)),
         }
     }
 }
@@ -35,7 +43,9 @@ impl TryFrom<AppStateSnapshot> for AppStateData {
             return Err(AppStateOpsError::MissingField("mode"));
         };
 
-        Ok(Self { mode })
+        Ok(Self {
+            mode: AppMode::to_model(mode),
+        })
     }
 }
 
@@ -70,7 +80,7 @@ impl AppStateOps {
     // -------------------------------------------------------------
 
     pub fn command(cmd: AppCommand) -> Result<(), Error> {
-        let old_mode = AppState::get_mode();
+        let old_mode = AppMode::from_model(AppState::get_mode());
 
         let new_mode = match cmd {
             AppCommand::Start => AppMode::Enabled,
@@ -82,7 +92,7 @@ impl AppStateOps {
             return Err(AppStateOpsError::AlreadyInMode(old_mode).into());
         }
 
-        AppState::set_mode(new_mode);
+        AppState::set_mode(AppMode::to_model(new_mode));
 
         log!(Topic::App, Ok, "app: mode changed {old_mode} -> {new_mode}");
 
@@ -107,5 +117,23 @@ impl AppStateOps {
         AppState::import(data);
 
         Ok(())
+    }
+}
+
+impl AppMode {
+    const fn from_model(mode: ModelAppMode) -> Self {
+        match mode {
+            ModelAppMode::Enabled => Self::Enabled,
+            ModelAppMode::Readonly => Self::Readonly,
+            ModelAppMode::Disabled => Self::Disabled,
+        }
+    }
+
+    const fn to_model(mode: Self) -> ModelAppMode {
+        match mode {
+            Self::Enabled => ModelAppMode::Enabled,
+            Self::Readonly => ModelAppMode::Readonly,
+            Self::Disabled => ModelAppMode::Disabled,
+        }
     }
 }

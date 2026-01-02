@@ -3,7 +3,7 @@ use crate::{
         scaling::ScalingWorkerPlanEntry, sharding::policy::ShardingPlanState,
     },
     dto::placement::{ShardEntryView, ShardingPlanStateView, WorkerEntryView},
-    storage::memory::{scaling::WorkerEntry, sharding::ShardEntry},
+    ops::storage::placement::{scaling::WorkerEntry, sharding::ShardEntry},
 };
 
 pub struct PlacementMapper;

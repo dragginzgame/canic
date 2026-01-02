@@ -5,7 +5,7 @@ use crate::{
     ids::CanisterRole,
     ops::{config::ConfigOps, storage::registry::RegistryOpsError},
     storage::{
-        canister::{CanisterEntry, CanisterSummary},
+        canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
         memory::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
@@ -55,13 +55,17 @@ impl From<SubnetRegistryOpsError> for Error {
 
 #[derive(Clone, Debug)]
 pub struct SubnetRegistrySnapshot {
-    pub entries: Vec<(Principal, CanisterEntry)>,
+    pub entries: Vec<(Principal, CanisterEntrySnapshot)>,
 }
 
 impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
     fn from(data: SubnetRegistryData) -> Self {
         Self {
-            entries: data.entries,
+            entries: data
+                .entries
+                .into_iter()
+                .map(|(pid, entry)| (pid, entry.into()))
+                .collect(),
         }
     }
 }
@@ -69,7 +73,11 @@ impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
 impl From<SubnetRegistrySnapshot> for SubnetRegistryData {
     fn from(snapshot: SubnetRegistrySnapshot) -> Self {
         Self {
-            entries: snapshot.entries,
+            entries: snapshot
+                .entries
+                .into_iter()
+                .map(|(pid, entry)| (pid, entry.into()))
+                .collect(),
         }
     }
 }
@@ -86,7 +94,7 @@ impl SubnetRegistrySnapshot {
     pub(crate) fn parent_chain(
         &self,
         target: Principal,
-    ) -> Result<Vec<(Principal, CanisterSummary)>, Error> {
+    ) -> Result<Vec<(Principal, CanisterSummarySnapshot)>, Error> {
         let registry_len = self.entries.len();
         let mut index = HashMap::new();
 
@@ -94,7 +102,7 @@ impl SubnetRegistrySnapshot {
             index.insert(*pid, entry.clone());
         }
 
-        let mut chain: Vec<(Principal, CanisterSummary)> = Vec::new();
+        let mut chain: Vec<(Principal, CanisterSummarySnapshot)> = Vec::new();
         let mut seen: HashSet<Principal> = HashSet::new();
         let mut pid = target;
 
@@ -111,7 +119,7 @@ impl SubnetRegistrySnapshot {
                 return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
             }
 
-            let summary = CanisterSummary::from(entry);
+            let summary = CanisterSummarySnapshot::from(entry);
             let parent = entry.parent_pid;
 
             chain.push((pid, summary));
@@ -174,8 +182,8 @@ impl SubnetRegistryOps {
         Ok(())
     }
 
-    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntry> {
-        SubnetRegistry::remove(pid)
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntrySnapshot> {
+        SubnetRegistry::remove(pid).map(Into::into)
     }
 
     pub(crate) fn register_root(pid: Principal) {
@@ -192,8 +200,8 @@ impl SubnetRegistryOps {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn get(pid: Principal) -> Option<CanisterEntry> {
-        SubnetRegistry::get(pid)
+    pub(crate) fn get(pid: Principal) -> Option<CanisterEntrySnapshot> {
+        SubnetRegistry::get(pid).map(Into::into)
     }
 
     #[must_use]
@@ -208,14 +216,20 @@ impl SubnetRegistryOps {
 
     /// Direct children (one level).
     #[must_use]
-    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
+    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterSummarySnapshot)> {
         SubnetRegistry::children(pid)
+            .into_iter()
+            .map(|(pid, summary)| (pid, summary.into()))
+            .collect()
     }
 
     /// Full subtree rooted at `pid`.
     #[must_use]
-    pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummary)> {
+    pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummarySnapshot)> {
         SubnetRegistry::subtree(pid)
+            .into_iter()
+            .map(|(pid, summary)| (pid, summary.into()))
+            .collect()
     }
 
     // -------------------------------------------------------------
@@ -238,6 +252,60 @@ impl SubnetRegistryOps {
             .into_iter()
             .map(|(pid, entry)| (pid, entry.role))
             .collect()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CanisterEntrySnapshot {
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+    pub module_hash: Option<Vec<u8>>,
+    pub created_at: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanisterSummarySnapshot {
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+}
+
+impl From<ModelCanisterEntry> for CanisterEntrySnapshot {
+    fn from(entry: ModelCanisterEntry) -> Self {
+        Self {
+            role: entry.role,
+            parent_pid: entry.parent_pid,
+            module_hash: entry.module_hash,
+            created_at: entry.created_at,
+        }
+    }
+}
+
+impl From<CanisterEntrySnapshot> for ModelCanisterEntry {
+    fn from(entry: CanisterEntrySnapshot) -> Self {
+        Self {
+            role: entry.role,
+            parent_pid: entry.parent_pid,
+            module_hash: entry.module_hash,
+            created_at: entry.created_at,
+        }
+    }
+}
+
+impl From<ModelCanisterSummary> for CanisterSummarySnapshot {
+    fn from(summary: ModelCanisterSummary) -> Self {
+        Self {
+            role: summary.role,
+            parent_pid: summary.parent_pid,
+        }
+    }
+}
+
+impl From<&CanisterEntrySnapshot> for CanisterSummarySnapshot {
+    fn from(entry: &CanisterEntrySnapshot) -> Self {
+        Self {
+            role: entry.role.clone(),
+            parent_pid: entry.parent_pid,
+        }
     }
 }
 

@@ -4,9 +4,8 @@ use crate::{
         set_timer_interval as cdk_set_timer_interval,
     },
     ops::perf::PerfOps,
-    ops::runtime::metrics::timer::{record_timer_scheduled, record_timer_tick},
+    ops::runtime::metrics::timer::{TimerMode, record_timer_scheduled, record_timer_tick},
     perf::perf_counter,
-    storage::metrics::timer::TimerMode,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 

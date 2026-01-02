@@ -1,11 +1,19 @@
-use crate::storage::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics};
+use crate::storage::metrics::http::{
+    HttpMethodKind, HttpMetricKey as ModelHttpMetricKey, HttpMetrics,
+};
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct HttpMetricKey {
+    pub method: HttpMethod,
+    pub label: String,
+}
 
 #[derive(Clone, Debug)]
 pub struct HttpMetricsSnapshot {
     pub entries: Vec<(HttpMetricKey, u64)>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum HttpMethod {
     Get,
     Post,
@@ -14,7 +22,10 @@ pub enum HttpMethod {
 
 #[must_use]
 pub fn snapshot() -> HttpMetricsSnapshot {
-    let entries = HttpMetrics::export_raw().into_iter().collect();
+    let entries = HttpMetrics::export_raw()
+        .into_iter()
+        .map(|(key, count)| (key.into(), count))
+        .collect();
     HttpMetricsSnapshot { entries }
 }
 
@@ -51,5 +62,33 @@ const fn http_method_to_kind(method: HttpMethod) -> HttpMethodKind {
         HttpMethod::Get => HttpMethodKind::Get,
         HttpMethod::Post => HttpMethodKind::Post,
         HttpMethod::Head => HttpMethodKind::Head,
+    }
+}
+
+const fn http_method_from_kind(method: HttpMethodKind) -> HttpMethod {
+    match method {
+        HttpMethodKind::Get => HttpMethod::Get,
+        HttpMethodKind::Post => HttpMethod::Post,
+        HttpMethodKind::Head => HttpMethod::Head,
+    }
+}
+
+impl HttpMethod {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Head => "HEAD",
+        }
+    }
+}
+
+impl From<ModelHttpMetricKey> for HttpMetricKey {
+    fn from(key: ModelHttpMetricKey) -> Self {
+        Self {
+            method: http_method_from_kind(key.method),
+            label: key.label,
+        }
     }
 }
