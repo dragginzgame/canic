@@ -4,7 +4,7 @@ use crate::{
         PoolPolicyError,
         admissibility::{policy_can_enter_pool, policy_is_importable_on_local},
     },
-    infra::ic::{Network, build_network},
+    ops::config::network::{Network, build_network},
     ops::{ic::mgmt::canister_status, storage::registry::subnet::SubnetRegistryOps},
 };
 

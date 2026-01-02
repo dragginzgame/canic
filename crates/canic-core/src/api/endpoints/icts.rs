@@ -1,5 +1,6 @@
 use crate::{
-    cdk::{api::canister_self, mgmt::CanisterStatusResult},
+    cdk::api::canister_self,
+    dto::canister::{CanisterMetadataView, CanisterStatusView},
     workflow,
 };
 
@@ -19,15 +20,17 @@ pub fn icts_description() -> String {
 }
 
 #[must_use]
-pub fn icts_metadata() -> Vec<(String, String)> {
-    vec![
-        ("name".to_string(), icts_name()),
-        ("version".to_string(), icts_version()),
-        ("description".to_string(), icts_description()),
-    ]
+/// ICTS standard: return types are fixed by the spec.
+pub fn icts_metadata() -> CanisterMetadataView {
+    CanisterMetadataView {
+        name: icts_name(),
+        version: icts_version(),
+        description: icts_description(),
+    }
 }
 
-pub async fn icts_canister_status() -> Result<CanisterStatusResult, String> {
+/// ICTS standard: return types and string errors are fixed by the spec.
+pub async fn icts_canister_status() -> Result<CanisterStatusView, String> {
     workflow::canister::canister_status(canister_self())
         .await
         .map_err(|err| err.to_string())

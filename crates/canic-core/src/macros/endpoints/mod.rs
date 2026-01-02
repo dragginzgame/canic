@@ -6,6 +6,7 @@ pub mod root;
 #[macro_export]
 macro_rules! canic_endpoints {
     () => {
+        // NOTE: Avoid `$crate` in endpoint signatures (args/returns); Candid rejects it.
         //
         // IC API ENDPOINTS (IMPORTANT!!)
         // these are specific endpoints defined by the IC spec
@@ -221,6 +222,7 @@ macro_rules! canic_endpoints {
         // ICTS
         // extra endpoints for each canister as per rem.codes
         //
+        // NOTE: ICTS return types are fixed by a third-party standard; do not change them.
 
         #[canic_query]
         fn icts_name() -> String {
@@ -238,14 +240,14 @@ macro_rules! canic_endpoints {
         }
 
         #[canic_query]
-        fn icts_metadata() -> Vec<(String, String)> {
+        fn icts_metadata() -> ::canic::core::dto::canister::CanisterMetadataView {
             $crate::api::endpoints::icts::icts_metadata()
         }
 
         /// ICTS add-on endpoint: returns string errors by design.
         #[canic_update]
         async fn icts_canister_status()
-        -> Result<::canic::cdk::management_canister::CanisterStatusResult, String> {
+        -> Result<::canic::core::dto::canister::CanisterStatusView, String> {
             use $crate::cdk::api::msg_caller;
 
             static ICTS_CALLER: ::std::sync::LazyLock<::candid::Principal> =

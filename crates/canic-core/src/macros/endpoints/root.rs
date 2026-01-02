@@ -41,7 +41,7 @@ macro_rules! canic_endpoints_root {
         ))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
-        ) -> Result<::canic::cdk::mgmt::CanisterStatusResult, ::canic::PublicError> {
+        ) -> Result<::canic::core::dto::canister::CanisterStatusView, ::canic::PublicError> {
             $crate::api::endpoints::canic_canister_status(pid).await
         }
 

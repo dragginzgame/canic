@@ -52,7 +52,6 @@ pub mod prelude {
         ids::CanisterRole,
         log,
         log::Topic,
-        ops::OpsError,
     };
 }
 
@@ -69,7 +68,7 @@ pub enum OpsError {
     ConfigOps(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
-    HttpOps(#[from] ic::http::HttpOpsError),
+    IcOps(#[from] ic::IcOpsError),
 
     #[error(transparent)]
     RpcOps(#[from] rpc::RpcOpsError),

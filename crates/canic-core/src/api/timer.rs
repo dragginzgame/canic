@@ -1,5 +1,5 @@
 use crate::ops::runtime::timer::{TimerId, TimerOps};
-use std::{cell::RefCell, future::Future, thread::LocalKey, time::Duration};
+use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
 ///
 /// TimerApi
@@ -10,7 +10,12 @@ use std::{cell::RefCell, future::Future, thread::LocalKey, time::Duration};
 /// TimerSlot
 ///
 
-pub type TimerSlot = LocalKey<RefCell<Option<TimerId>>>;
+/// Opaque handle for scheduled timers (no direct access to TimerId).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApiTimerHandle(TimerId);
+
+/// Opaque timer slot handle for guarded scheduling.
+pub type TimerSlot = LocalKey<RefCell<Option<ApiTimerHandle>>>;
 
 /// Public, stable surface for macro-expanded code in downstream crates.
 /// Performs no logic; delegates to internal TimerOps.
@@ -18,8 +23,8 @@ pub fn set_lifecycle_timer(
     delay: Duration,
     label: impl Into<String>,
     task: impl Future<Output = ()> + 'static,
-) -> TimerId {
-    TimerOps::set(delay, label, task)
+) -> ApiTimerHandle {
+    ApiTimerHandle(TimerOps::set(delay, label, task))
 }
 
 /// Schedule a one-shot timer only if the slot is empty.
@@ -30,16 +35,24 @@ pub fn set_guarded(
     label: impl Into<String>,
     task: impl Future<Output = ()> + 'static,
 ) -> bool {
-    TimerOps::set_guarded(slot, delay, label, task)
+    slot.with_borrow_mut(|entry| {
+        if entry.is_some() {
+            return false;
+        }
+
+        let id = TimerOps::set(delay, label, task);
+        *entry = Some(ApiTimerHandle(id));
+        true
+    })
 }
 
 /// Schedule a repeating timer. Task produces a fresh Future on each tick.
-pub fn set_interval<F, Fut>(interval: Duration, label: impl Into<String>, task: F) -> TimerId
+pub fn set_interval<F, Fut>(interval: Duration, label: impl Into<String>, task: F) -> ApiTimerHandle
 where
     F: FnMut() -> Fut + 'static,
     Fut: Future<Output = ()> + 'static,
 {
-    TimerOps::set_interval(interval, label, task)
+    ApiTimerHandle(TimerOps::set_interval(interval, label, task))
 }
 
 /// Schedule a guarded init timer that installs a repeating interval timer.
@@ -58,18 +71,53 @@ where
     FTick: FnMut() -> TickFut + 'static,
     TickFut: Future<Output = ()> + 'static,
 {
-    TimerOps::set_guarded_interval(
-        slot,
-        init_delay,
-        init_label,
-        init_task,
-        interval,
-        interval_label,
-        tick_task,
-    )
+    let init_label = init_label.into();
+    let interval_label = interval_label.into();
+
+    slot.with_borrow_mut(|entry| {
+        if entry.is_some() {
+            return false;
+        }
+
+        let init_id_cell = Rc::new(RefCell::new(None));
+        let init_id_cell_task = Rc::clone(&init_id_cell);
+
+        let init_id = TimerOps::set(init_delay, init_label, async move {
+            init_task().await;
+
+            let init_id = init_id_cell_task.borrow();
+            let Some(init_id) = init_id.as_ref() else {
+                return;
+            };
+
+            let still_armed = slot.with_borrow(|slot_val| slot_val.as_ref() == Some(init_id));
+            if !still_armed {
+                return;
+            }
+
+            let interval_id = TimerOps::set_interval(interval, interval_label, tick_task);
+            let interval_handle = ApiTimerHandle(interval_id);
+
+            // Atomically replace the slot value and clear the previous timer id.
+            // This prevents orphaned timers if callers clear around the handover.
+            slot.with_borrow_mut(|slot_val| {
+                let old = slot_val.replace(interval_handle);
+                if let Some(old_id) = old
+                    && old_id != interval_handle
+                {
+                    TimerOps::clear(old_id.0);
+                }
+            });
+        });
+
+        let init_handle = ApiTimerHandle(init_id);
+        *init_id_cell.borrow_mut() = Some(init_handle);
+        *entry = Some(init_handle);
+        true
+    })
 }
 
 /// Optional cancellation.
-pub fn clear_lifecycle_timer(id: TimerId) {
-    TimerOps::clear(id);
+pub fn clear_lifecycle_timer(handle: ApiTimerHandle) {
+    TimerOps::clear(handle.0);
 }
