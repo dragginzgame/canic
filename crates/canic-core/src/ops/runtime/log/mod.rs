@@ -3,7 +3,9 @@ use crate::{
     cdk::utils::time::now_secs,
     log::Level,
     ops::config::ConfigOps,
-    storage::memory::log::{Log, LogEntry, RetentionSummary, apply_retention_with_cfg},
+    storage::memory::log::{
+        Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention_with_cfg,
+    },
 };
 
 ///
@@ -22,6 +24,15 @@ use crate::{
 /// - Therefore, no `Snapshot` DTO exists for logs
 ///
 pub struct LogOps;
+
+#[derive(Clone, Debug)]
+pub struct LogEntrySnapshot {
+    pub crate_name: String,
+    pub created_at: u64,
+    pub level: Level,
+    pub topic: Option<String>,
+    pub message: String,
+}
 
 impl LogOps {
     // ---------------------------------------------------------------------
@@ -71,7 +82,19 @@ impl LogOps {
     ///
     /// Intended for read-only querying and view adaptation.
     #[must_use]
-    pub fn snapshot() -> Vec<LogEntry> {
-        Log::snapshot()
+    pub fn snapshot() -> Vec<LogEntrySnapshot> {
+        Log::snapshot().into_iter().map(Into::into).collect()
+    }
+}
+
+impl From<ModelLogEntry> for LogEntrySnapshot {
+    fn from(entry: ModelLogEntry) -> Self {
+        Self {
+            crate_name: entry.crate_name,
+            created_at: entry.created_at,
+            level: entry.level,
+            topic: entry.topic,
+            message: entry.message,
+        }
     }
 }

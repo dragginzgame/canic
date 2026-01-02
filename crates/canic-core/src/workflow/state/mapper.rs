@@ -1,7 +1,9 @@
 use crate::{
     dto::state::{AppModeView, AppStateView, SubnetStateView},
-    ops::storage::state::{app::AppStateSnapshot, subnet::SubnetStateSnapshot},
-    storage::memory::state::app::AppMode,
+    ops::storage::state::{
+        app::{AppMode, AppStateSnapshot},
+        subnet::SubnetStateSnapshot,
+    },
 };
 
 ///

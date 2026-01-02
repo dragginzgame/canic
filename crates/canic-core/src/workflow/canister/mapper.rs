@@ -4,7 +4,7 @@ use crate::{
         canister::{CanisterEntryView, CanisterSummaryView},
         cascade::{TopologyDirectChildView, TopologyPathNodeView},
     },
-    storage::canister::{CanisterEntry, CanisterSummary},
+    ops::storage::registry::subnet::{CanisterEntrySnapshot, CanisterSummarySnapshot},
 };
 
 ///
@@ -15,7 +15,7 @@ pub struct CanisterMapper;
 
 impl CanisterMapper {
     #[must_use]
-    pub fn entry_to_view(e: &CanisterEntry) -> CanisterEntryView {
+    pub fn entry_to_view(e: &CanisterEntrySnapshot) -> CanisterEntryView {
         CanisterEntryView {
             role: e.role.clone(),
             parent_pid: e.parent_pid,
@@ -25,7 +25,7 @@ impl CanisterMapper {
     }
 
     #[must_use]
-    pub fn summary_to_view(s: &CanisterSummary) -> CanisterSummaryView {
+    pub fn summary_to_view(s: &CanisterSummarySnapshot) -> CanisterSummaryView {
         CanisterSummaryView {
             role: s.role.clone(),
             parent_pid: s.parent_pid,
@@ -35,7 +35,7 @@ impl CanisterMapper {
     #[must_use]
     pub fn summary_to_topology_node(
         pid: Principal,
-        summary: &CanisterSummary,
+        summary: &CanisterSummarySnapshot,
     ) -> TopologyPathNodeView {
         TopologyPathNodeView {
             pid,
@@ -47,7 +47,7 @@ impl CanisterMapper {
     #[must_use]
     pub fn summary_to_topology_child(
         pid: Principal,
-        summary: &CanisterSummary,
+        summary: &CanisterSummarySnapshot,
     ) -> TopologyDirectChildView {
         TopologyDirectChildView {
             pid,
@@ -59,8 +59,8 @@ impl CanisterMapper {
     pub fn summary_from_topology_child(
         node: &TopologyDirectChildView,
         parent_pid: Principal,
-    ) -> CanisterSummary {
-        CanisterSummary {
+    ) -> CanisterSummarySnapshot {
+        CanisterSummarySnapshot {
             role: node.role.clone(),
             parent_pid: Some(parent_pid),
         }

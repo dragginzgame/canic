@@ -3,7 +3,9 @@ use crate::{
     cdk::utils::time::now_secs,
     ids::CanisterRole,
     ops::prelude::*,
-    storage::memory::pool::{PoolData, PoolRecord, PoolRecordState, PoolStatus, PoolStore},
+    storage::memory::pool::{
+        PoolData, PoolRecord, PoolRecordState, PoolStatus as ModelPoolStatus, PoolStore,
+    },
 };
 
 ///
@@ -38,13 +40,20 @@ pub struct PoolEntrySnapshot {
     pub module_hash: Option<Vec<u8>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PoolStatus {
+    PendingReset,
+    Ready,
+    Failed { reason: String },
+}
+
 impl From<(Principal, PoolRecord)> for PoolEntrySnapshot {
     fn from((pid, record): (Principal, PoolRecord)) -> Self {
         Self {
             pid,
             created_at: record.header.created_at,
             cycles: record.state.cycles,
-            status: record.state.status,
+            status: record.state.status.into(),
             role: record.state.role,
             parent: record.state.parent,
             module_hash: record.state.module_hash,
@@ -74,7 +83,7 @@ impl PoolOps {
         PoolStore::register(
             pid,
             cycles,
-            PoolStatus::Ready,
+            ModelPoolStatus::Ready,
             role,
             parent,
             module_hash,
@@ -120,7 +129,7 @@ impl PoolOps {
     }
 
     pub fn has_pending_reset() -> bool {
-        PoolStore::has_status(PoolStatus::PendingReset)
+        PoolStore::has_status(ModelPoolStatus::PendingReset)
     }
 
     /// Pop the oldest READY entry (FIFO by `created_at`).
@@ -153,9 +162,10 @@ impl PoolOps {
         status: PoolStatus,
         role: Option<CanisterRole>,
     ) {
+        let model_status = status_to_model(&status);
         let updated = PoolStore::update_state_with(pid, |mut state: PoolRecordState| {
             state.cycles = cycles.clone();
-            state.status = status.clone();
+            state.status = model_status.clone();
 
             if role.is_some() {
                 state.role.clone_from(&role);
@@ -165,7 +175,27 @@ impl PoolOps {
         });
 
         if !updated {
-            PoolStore::register(pid, cycles, status, role, None, None, now_secs());
+            PoolStore::register(pid, cycles, model_status, role, None, None, now_secs());
+        }
+    }
+}
+
+fn status_to_model(status: &PoolStatus) -> ModelPoolStatus {
+    match status {
+        PoolStatus::PendingReset => ModelPoolStatus::PendingReset,
+        PoolStatus::Ready => ModelPoolStatus::Ready,
+        PoolStatus::Failed { reason } => ModelPoolStatus::Failed {
+            reason: reason.clone(),
+        },
+    }
+}
+
+impl From<ModelPoolStatus> for PoolStatus {
+    fn from(status: ModelPoolStatus) -> Self {
+        match status {
+            ModelPoolStatus::PendingReset => Self::PendingReset,
+            ModelPoolStatus::Ready => Self::Ready,
+            ModelPoolStatus::Failed { reason } => Self::Failed { reason },
         }
     }
 }

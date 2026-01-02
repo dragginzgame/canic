@@ -4,16 +4,29 @@ use crate::{
     ids::CanisterRole,
     ops::storage::placement::PlacementOpsError,
     storage::memory::sharding::{
-        ShardKey,
-        registry::{ShardingRegistry, ShardingRegistryData},
+        ShardEntry as ModelShardEntry, ShardKey,
+        registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
     },
 };
 
-///
-/// ShardEntry
-/// Domain data types re-exported for ops consumers.
-///
-pub use crate::storage::memory::sharding::ShardEntry;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShardEntry {
+    pub slot: u32,
+    pub capacity: u32,
+    pub count: u32,
+    pub pool: crate::cdk::types::BoundedString64,
+    pub canister_role: CanisterRole,
+    pub created_at: u64,
+}
+
+impl ShardEntry {
+    pub const UNASSIGNED_SLOT: u32 = u32::MAX;
+}
+
+#[derive(Clone, Debug)]
+pub struct ShardingRegistrySnapshot {
+    pub entries: Vec<(Principal, ShardEntry)>,
+}
 
 ///
 /// ShardingRegistryOps
@@ -82,7 +95,7 @@ impl ShardingRegistryOps {
             }
 
             let entry =
-                ShardEntry::try_new(pool, slot, canister_role.clone(), capacity, now_secs())
+                ModelShardEntry::try_new(pool, slot, canister_role.clone(), capacity, now_secs())
                     .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
@@ -94,7 +107,7 @@ impl ShardingRegistryOps {
     #[cfg(test)]
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<ShardEntry> {
-        ShardingRegistry::with(|core| core.get_entry(&pid))
+        ShardingRegistry::with(|core| core.get_entry(&pid).map(Into::into))
     }
 
     /// Returns the shard assigned to the given tenant (if any).
@@ -162,13 +175,38 @@ impl ShardingRegistryOps {
 
     /// Export all shard entries
     #[must_use]
-    pub fn export() -> ShardingRegistryData {
-        ShardingRegistry::export()
+    pub fn export() -> ShardingRegistrySnapshot {
+        ShardingRegistry::export().into()
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_test() {
         ShardingRegistry::clear();
+    }
+}
+
+impl From<ModelShardingRegistryData> for ShardingRegistrySnapshot {
+    fn from(data: ModelShardingRegistryData) -> Self {
+        Self {
+            entries: data
+                .entries
+                .into_iter()
+                .map(|(pid, entry)| (pid, entry.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<ModelShardEntry> for ShardEntry {
+    fn from(entry: ModelShardEntry) -> Self {
+        Self {
+            slot: entry.slot,
+            capacity: entry.capacity,
+            count: entry.count,
+            pool: entry.pool,
+            canister_role: entry.canister_role,
+            created_at: entry.created_at,
+        }
     }
 }
 

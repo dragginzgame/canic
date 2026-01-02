@@ -18,8 +18,10 @@ use crate::{
         LogVisibilityView, MemoryMetricsView, QueryStatsView,
     },
     infra,
-    ops::{prelude::*, runtime::metrics::system::record_system_metric},
-    storage::metrics::system::SystemMetricKind,
+    ops::{
+        prelude::*,
+        runtime::metrics::system::{SystemMetricKind, record_system_metric},
+    },
 };
 use candid::{Nat, Principal, utils::ArgumentEncoder};
 
