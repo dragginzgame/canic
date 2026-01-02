@@ -23,19 +23,20 @@
 
 pub mod access;
 pub mod api;
-pub mod config;
 pub mod dispatch;
 pub mod domain;
 pub mod dto;
 pub mod ids;
-pub(crate) mod infra;
 pub mod lifecycle;
 pub mod log;
 pub mod macros;
-pub(crate) mod ops;
 pub mod perf;
-pub(crate) mod storage;
 pub mod workflow;
+
+pub(crate) mod config;
+pub(crate) mod infra;
+pub(crate) mod ops;
+pub(crate) mod storage;
 
 pub use {
     ::canic_cdk as cdk,
@@ -96,4 +97,12 @@ pub(crate) enum Error {
 
     #[error(transparent)]
     Workflow(#[from] workflow::WorkflowError),
+}
+
+// init and validate config
+// called from here as config is pub(crate)
+pub fn init_config(toml: &str) -> Result<(), String> {
+    config::Config::init_from_toml(toml)
+        .map(|_| ())
+        .map_err(|err| err.to_string())
 }

@@ -188,17 +188,6 @@ pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleR
         }
     })
 }
-/// Ensure the caller matches the subnet directory entry recorded for `role`.
-/// Use for admin endpoints that expect specific subnet directory canisters.
-#[must_use]
-pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
-    Box::pin(async move {
-        match SubnetDirectoryOps::get(&role) {
-            Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthAccessError::NotSubnetDirectoryType(caller, role).into()),
-        }
-    })
-}
 
 /// Require that the caller is a direct child of the current canister.
 /// Protects child-only endpoints (e.g., sync) from sibling/root callers.
@@ -226,22 +215,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
     })
 }
 
-/// Require that the caller equals the configured root canister.
-/// Gate root-only operations (e.g., topology mutations).
-#[must_use]
-pub fn is_root(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        let root_pid = EnvOps::root_pid().map_err(to_access)?;
-
-        if caller == root_pid {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotRoot(caller).into())
-        }
-    })
-}
-
-/// Require that the caller is the root or a registered parent canister.
+/// Require that the caller is the configured parent canister.
 /// Use on child sync endpoints to enforce parent-only calls.
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
@@ -269,6 +243,35 @@ pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
     })
 }
 
+/// Require that the caller is registered as a canister on this subnet.
+///
+/// NOTE: Currently enforced only on the root canister.
+#[must_use]
+pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
+    Box::pin(async move {
+        if SubnetRegistryOps::is_registered(caller) {
+            Ok(())
+        } else {
+            Err(AuthAccessError::NotRegisteredToSubnet(caller).into())
+        }
+    })
+}
+
+/// Require that the caller equals the configured root canister.
+/// Gate root-only operations (e.g., topology mutations).
+#[must_use]
+pub fn is_root(caller: Principal) -> AuthRuleResult {
+    Box::pin(async move {
+        let root_pid = EnvOps::root_pid().map_err(to_access)?;
+
+        if caller == root_pid {
+            Ok(())
+        } else {
+            Err(AuthAccessError::NotRoot(caller).into())
+        }
+    })
+}
+
 /// Require that the caller is the currently executing canister.
 /// For self-calls only.
 #[must_use]
@@ -282,17 +285,14 @@ pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
     })
 }
 
-/// Require that the caller is registered as an canister on this
-/// subnet
-/// *** ONLY ON ROOT FOR NOW ***
-/// Ensures only registered canisters call root orchestration endpoints.
+/// Ensure the caller matches the subnet directory entry recorded for `role`.
+/// Use for admin endpoints that expect specific app directory canisters.
 #[must_use]
-pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
+pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
     Box::pin(async move {
-        if SubnetRegistryOps::is_registered(caller) {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotRegisteredToSubnet(caller).into())
+        match SubnetDirectoryOps::get(&role) {
+            Some(pid) if pid == caller => Ok(()),
+            _ => Err(AuthAccessError::NotSubnetDirectoryType(caller, role).into()),
         }
     })
 }
@@ -313,6 +313,8 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     })
 }
 
+/// to_access
+/// helper function
 fn to_access(err: Error) -> AccessError {
     AuthAccessError::DependencyUnavailable(err.to_string()).into()
 }

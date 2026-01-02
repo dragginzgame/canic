@@ -53,8 +53,7 @@ macro_rules! __canic_build_internal {
         };
 
         // Init Config
-        let $cfg = $crate::config::Config::init_from_toml(&$cfg_str)
-            .expect("Invalid Canic config");
+        let $cfg = $crate::init_config(&$cfg_str).expect("invalid canic config");
 
         // Run the extra body (per-canister or nothing)
         $body

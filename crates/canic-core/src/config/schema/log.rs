@@ -23,6 +23,7 @@ pub const MAX_LOG_ENTRIES: u64 = 100_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[allow(clippy::struct_field_names)]
 pub struct LogConfig {
     #[serde(default = "defaults::max_entries")]
     pub max_entries: u64,
