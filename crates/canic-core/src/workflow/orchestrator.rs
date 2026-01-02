@@ -1,12 +1,12 @@
 use crate::{
     Error, ThisError,
-    cdk::{api::canister_self, mgmt::CanisterInstallMode, types::Principal},
+    cdk::{api::canister_self, types::Principal},
     domain::policy::upgrade::plan_upgrade,
     ids::CanisterRole,
     log,
     log::Topic,
     ops::{
-        ic::mgmt::{canister_status, delete_canister, upgrade_canister},
+        ic::mgmt::{CanisterInstallMode, canister_status, delete_canister, upgrade_canister},
         runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},

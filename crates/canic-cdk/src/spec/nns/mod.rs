@@ -13,14 +13,6 @@ pub struct GetSubnetForCanisterRequest {
     pub principal: Principal,
 }
 
-impl GetSubnetForCanisterRequest {
-    pub fn new(pid: impl Into<Principal>) -> Self {
-        Self {
-            principal: pid.into(),
-        }
-    }
-}
-
 ///
 /// GetSubnetForCanisterResponse
 /// Minimal NNS response describing the assigned subnet for a canister.

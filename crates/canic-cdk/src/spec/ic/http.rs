@@ -34,41 +34,6 @@ pub struct HttpResponse {
     pub streaming_strategy: Option<StreamingStrategy>,
 }
 
-impl HttpResponse {
-    #[must_use]
-    pub fn error(status: HttpStatus, message: &str) -> Self {
-        Self {
-            status_code: status.code(),
-            headers: vec![("Content-Type".into(), "text/plain; charset=utf-8".into())],
-            body: message.as_bytes().to_vec(),
-            streaming_strategy: None,
-        }
-    }
-}
-
-///
-/// HttpStatus
-///
-
-pub enum HttpStatus {
-    Ok,
-    BadRequest,
-    NotFound,
-    InternalError,
-}
-
-impl HttpStatus {
-    #[must_use]
-    pub const fn code(&self) -> u16 {
-        match self {
-            Self::Ok => 200,
-            Self::BadRequest => 400,
-            Self::NotFound => 404,
-            Self::InternalError => 500,
-        }
-    }
-}
-
 ///
 /// StreamingCallbackToken
 ///

@@ -5,6 +5,7 @@
 //!
 //! It is intentionally crate-level infrastructure, not part of the
 //! domain layering (endpoints → ops → model).
+//! Instrumentation modules are layer-neutral and may be used anywhere.
 
 use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};

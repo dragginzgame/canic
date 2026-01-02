@@ -33,6 +33,7 @@ pub async fn get_exchange_rate(
     let response = Call::unbounded_wait(*EXCHANGE_RATE_CANISTER, "get_exchange_rate")
         .with_cycles(cycles)
         .with_arg(req)
+        .execute()
         .await
         .map_err(IcOpsError::from)?;
 

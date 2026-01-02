@@ -14,8 +14,9 @@
 //! - encode topology or lifecycle semantics
 
 use crate::{
-    Error, cdk::mgmt::CanisterInstallMode, dto::abi::v1::CanisterInitPayload,
-    ops::ic::mgmt::install_code,
+    Error,
+    dto::abi::v1::CanisterInitPayload,
+    ops::ic::mgmt::{CanisterInstallMode, install_code},
 };
 use candid::Principal;
 

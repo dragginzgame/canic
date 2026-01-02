@@ -8,6 +8,7 @@ use crate::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
     ops::{
+        self,
         ic::IcOpsError,
         runtime::metrics::{http::record_http_request, system::record_http_outcall},
     },
@@ -128,7 +129,15 @@ pub async fn get_raw_with_label(
 /// Record outbound HTTP metrics.
 fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
     record_http_outcall();
-    record_http_request(method, url, label);
+    record_http_request(metrics_method(method), url, label);
+}
+
+const fn metrics_method(method: HttpMethod) -> ops::runtime::metrics::http::HttpMethod {
+    match method {
+        HttpMethod::GET => ops::runtime::metrics::http::HttpMethod::Get,
+        HttpMethod::POST => ops::runtime::metrics::http::HttpMethod::Post,
+        HttpMethod::HEAD => ops::runtime::metrics::http::HttpMethod::Head,
+    }
 }
 
 // --- DTO Adapters --------------------------------------------------------

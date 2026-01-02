@@ -53,6 +53,7 @@ where
 {
     let call = Call::unbounded_wait(pid, method)
         .with_arg(arg)
+        .execute()
         .await
         .map_err(InfraError::from)?;
 
@@ -71,6 +72,7 @@ async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error>
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())
+        .execute()
         .await
         .map_err(InfraError::from)?;
 

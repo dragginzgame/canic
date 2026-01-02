@@ -133,9 +133,9 @@ impl TimerMetrics {
     }
 }
 
-//
-// TESTS
-//
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

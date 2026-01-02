@@ -12,10 +12,11 @@ use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duratio
 
 ///
 /// TimerId
-/// handy re-export
+/// Opaque ops-owned timer handle
 ///
 
-pub type TimerId = crate::cdk::timers::TimerId;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TimerId(crate::cdk::timers::TimerId);
 
 ///
 /// TimerOps
@@ -35,7 +36,7 @@ impl TimerOps {
 
         record_timer_scheduled(TimerMode::Once, delay, label.as_str());
 
-        cdk_set_timer(delay, async move {
+        let id = cdk_set_timer(delay, async move {
             record_timer_tick(TimerMode::Once, delay, label.as_str());
 
             let start = perf_counter();
@@ -43,7 +44,9 @@ impl TimerOps {
             let end = perf_counter();
 
             PerfOps::record(label.as_str(), end.saturating_sub(start));
-        })
+        });
+
+        TimerId(id)
     }
 
     /// Schedules a repeating timer.
@@ -60,7 +63,7 @@ impl TimerOps {
 
         let task = Rc::new(RefCell::new(task));
 
-        cdk_set_timer_interval(interval, move || {
+        let id = cdk_set_timer_interval(interval, move || {
             let label = Rc::clone(&label);
             let task = Rc::clone(&task);
 
@@ -74,12 +77,14 @@ impl TimerOps {
 
                 PerfOps::record(label.as_str(), end.saturating_sub(start));
             }
-        })
+        });
+
+        TimerId(id)
     }
 
     /// Clears a previously scheduled timer.
     pub fn clear(id: TimerId) {
-        cdk_clear_timer(id);
+        cdk_clear_timer(id.0);
     }
 
     /// Schedule a one-shot timer only if the slot is empty.

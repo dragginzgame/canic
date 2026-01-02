@@ -1,11 +1,15 @@
-use crate::{
-    cdk::mgmt::HttpMethod,
-    storage::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics},
-};
+use crate::storage::metrics::http::{HttpMethodKind, HttpMetricKey, HttpMetrics};
 
 #[derive(Clone, Debug)]
 pub struct HttpMetricsSnapshot {
     pub entries: Vec<(HttpMetricKey, u64)>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Head,
 }
 
 #[must_use]
@@ -44,8 +48,8 @@ pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
 
 const fn http_method_to_kind(method: HttpMethod) -> HttpMethodKind {
     match method {
-        HttpMethod::GET => HttpMethodKind::Get,
-        HttpMethod::POST => HttpMethodKind::Post,
-        HttpMethod::HEAD => HttpMethodKind::Head,
+        HttpMethod::Get => HttpMethodKind::Get,
+        HttpMethod::Post => HttpMethodKind::Post,
+        HttpMethod::Head => HttpMethodKind::Head,
     }
 }
