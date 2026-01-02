@@ -1,5 +1,5 @@
 //!
-//! ops::signature
+//! infra::ic::signature
 //!
 //! High-level wrapper around IC canister signatures.
 //!

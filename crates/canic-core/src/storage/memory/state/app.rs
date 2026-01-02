@@ -22,8 +22,7 @@ eager_static! {
 
 ///
 /// AppMode
-/// used for the query/update guards
-/// Eventually we'll have more granularity overall
+/// Application mode used by query/update guards.
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq, Serialize)]
@@ -115,7 +114,6 @@ mod tests {
 
         assert_eq!(AppState::export().mode, AppMode::Readonly);
 
-        // After export we can reuse
         let exported = AppState::export();
         assert_eq!(exported, data);
     }

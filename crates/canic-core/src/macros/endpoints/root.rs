@@ -3,8 +3,7 @@
 macro_rules! canic_endpoints_root {
     () => {
         // canic_app
-        // modify app-level state
-        // eventually this will cascade down from an orchestrator canister
+        // root-only app-level state mutation endpoint
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_app(
             cmd: ::canic::core::dto::state::AppCommand,
