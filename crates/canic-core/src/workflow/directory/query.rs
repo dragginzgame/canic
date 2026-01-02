@@ -16,11 +16,13 @@ use crate::{
 /// Views
 ///
 
+#[must_use]
 pub fn app_directory_view() -> AppDirectoryView {
     let snapshot = AppDirectoryOps::snapshot();
     AppDirectoryMapper::snapshot_to_view(snapshot)
 }
 
+#[must_use]
 pub fn subnet_directory_view() -> SubnetDirectoryView {
     let snapshot = SubnetDirectoryOps::snapshot();
     SubnetDirectoryMapper::snapshot_to_view(snapshot)

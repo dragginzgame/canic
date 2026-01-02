@@ -108,7 +108,7 @@ impl TryFrom<EnvSnapshot> for EnvData {
             return Err(EnvOpsError::MissingFields(missing.join(", ")));
         }
 
-        Ok(EnvData {
+        Ok(Self {
             prime_root_pid: snapshot.prime_root_pid,
             subnet_role: snapshot.subnet_role,
             subnet_pid: snapshot.subnet_pid,

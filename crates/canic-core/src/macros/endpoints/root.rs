@@ -98,14 +98,14 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_state(
-            snapshot: ::canic::core::dto::snapshot::StateSnapshotView,
+            snapshot: ::canic::core::dto::cascade::StateSnapshotView,
         ) -> Result<(), ::canic::PublicError> {
             $crate::api::endpoints::canic_sync_state(snapshot).await
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
-            snapshot: ::canic::core::dto::snapshot::TopologySnapshotView,
+            snapshot: ::canic::core::dto::cascade::TopologySnapshotView,
         ) -> Result<(), ::canic::PublicError> {
             $crate::api::endpoints::canic_sync_topology(snapshot).await
         }

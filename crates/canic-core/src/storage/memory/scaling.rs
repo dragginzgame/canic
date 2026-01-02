@@ -72,7 +72,6 @@ impl WorkerEntry {
     ///
     /// Callers must supply `created_at_secs`.
     /// This type does not assign timestamps.
-    #[expect(dead_code)]
     pub const fn new(
         pool: BoundedString64,
         canister_role: CanisterRole,

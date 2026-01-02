@@ -15,7 +15,6 @@ pub mod placement;
 pub mod pool;
 pub mod registry;
 pub mod rpc;
-pub mod snapshot;
 pub mod state;
 pub mod view;
 

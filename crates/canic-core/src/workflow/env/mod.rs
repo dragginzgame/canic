@@ -13,7 +13,7 @@ use crate::{
     workflow::bootstrap::BootstrapError,
 };
 
-pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), Error> {
+pub(crate) fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), Error> {
     let mut snapshot = EnvMapper::view_to_snapshot(env_view);
     snapshot.canister_role = Some(role.clone());
 

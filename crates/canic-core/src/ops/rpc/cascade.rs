@@ -1,7 +1,7 @@
 use crate::{
     Error,
     cdk::types::Principal,
-    dto::snapshot::{StateSnapshotView, TopologySnapshotView},
+    dto::cascade::{StateSnapshotView, TopologySnapshotView},
     ops::rpc::{call_rpc_result, methods},
 };
 

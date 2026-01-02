@@ -16,7 +16,8 @@ pub fn pool_entry_view(pid: Principal) -> Option<CanisterPoolEntryView> {
         .map(PoolMapper::entry_snapshot_to_view)
 }
 
-/// Return a view of the entire pool.
+/// Return a view of the entire pool
+#[must_use]
 pub fn pool_list_view() -> CanisterPoolView {
     let snapshot = PoolOps::snapshot();
     PoolMapper::snapshot_to_view(snapshot)

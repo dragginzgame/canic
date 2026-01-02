@@ -115,11 +115,6 @@ impl PoolOps {
     }
 
     #[must_use]
-    pub fn len() -> u64 {
-        PoolStore::len()
-    }
-
-    #[must_use]
     pub fn contains(pid: &Principal) -> bool {
         PoolStore::contains(pid)
     }

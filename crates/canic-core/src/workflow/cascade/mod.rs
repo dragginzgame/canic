@@ -3,6 +3,7 @@
 //! Pushes environment/topology/state changes from root to child canisters.
 //! This is orchestration logic (fanout), not storage and not placement strategy.
 
+pub(crate) mod snapshot;
 pub mod state;
 pub mod topology;
 

@@ -40,12 +40,11 @@ impl ChildrenMapper {
         let entries = snapshot
             .entries
             .iter()
-            .filter_map(|(pid, entry)| {
-                (entry.parent_pid == Some(parent)).then(|| ChildSnapshot {
-                    pid: *pid,
-                    role: entry.role.clone(),
-                    parent_pid: entry.parent_pid,
-                })
+            .filter(|&(_, entry)| entry.parent_pid == Some(parent))
+            .map(|(pid, entry)| ChildSnapshot {
+                pid: *pid,
+                role: entry.role.clone(),
+                parent_pid: entry.parent_pid,
             })
             .collect();
 

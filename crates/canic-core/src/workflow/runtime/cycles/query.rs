@@ -5,7 +5,7 @@ use crate::{
     workflow::view::paginate::paginate_vec,
 };
 
-pub(crate) fn cycle_tracker_page(page: PageRequest) -> Page<(u64, Cycles)> {
+pub fn cycle_tracker_page(page: PageRequest) -> Page<(u64, Cycles)> {
     let snapshot = CycleTrackerOps::snapshot();
     paginate_vec(snapshot.entries, page)
 }

@@ -8,7 +8,7 @@ use crate::{
 /// AppDirectorySnapshot
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppDirectorySnapshot {
     pub entries: Vec<(CanisterRole, Principal)>,
 }

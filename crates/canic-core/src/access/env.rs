@@ -38,7 +38,7 @@ pub async fn is_prime_subnet() -> Result<(), AccessError> {
 }
 
 /// Ensure the caller is the root canister.
-pub fn require_root() -> Result<(), Error> {
+pub(crate) fn require_root() -> Result<(), Error> {
     let root_pid = EnvOps::root_pid()?;
 
     if root_pid == canister_self() {
@@ -49,7 +49,7 @@ pub fn require_root() -> Result<(), Error> {
 }
 
 /// Ensure the caller is not the root canister.
-pub fn deny_root() -> Result<(), Error> {
+pub(crate) fn deny_root() -> Result<(), Error> {
     let root_pid = EnvOps::root_pid()?;
 
     if root_pid == canister_self() {
