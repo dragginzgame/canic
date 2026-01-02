@@ -252,6 +252,7 @@ dependencies = [
  "num-traits",
  "remain",
  "serde",
+ "serde_bytes",
  "serde_json",
  "sha2",
  "thiserror 2.0.17",

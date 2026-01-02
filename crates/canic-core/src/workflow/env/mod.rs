@@ -8,7 +8,7 @@ use crate::{
     cdk::types::Principal,
     dto::env::EnvView,
     ids::{CanisterRole, SubnetRole},
-    infra::ic::{Network, build_network},
+    ops::config::network::{Network, build_network},
     ops::runtime::env::{EnvOps, EnvSnapshot},
     workflow::bootstrap::BootstrapError,
 };

@@ -3,12 +3,11 @@ pub mod icts;
 use crate::{
     PublicError, api,
     cdk::{
-        mgmt::CanisterStatusResult,
         spec::icrc::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
         types::{Cycles, Principal},
     },
     dto::{
-        canister::CanisterSummaryView,
+        canister::{CanisterStatusView, CanisterSummaryView},
         cascade::{StateSnapshotView, TopologySnapshotView},
         env::EnvView,
         log::LogEntryView,
@@ -217,7 +216,7 @@ pub async fn canic_response(request: Request) -> Result<Response, PublicError> {
         .map_err(PublicError::from)
 }
 
-pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusResult, PublicError> {
+pub async fn canic_canister_status(pid: Principal) -> Result<CanisterStatusView, PublicError> {
     workflow::canister::canister_status(pid)
         .await
         .map_err(PublicError::from)

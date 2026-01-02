@@ -4,11 +4,9 @@ use crate::{
         set_timer_interval as cdk_set_timer_interval,
     },
     ops::perf::PerfOps,
+    ops::runtime::metrics::timer::{record_timer_scheduled, record_timer_tick},
     perf::perf_counter,
-    storage::metrics::{
-        system::{SystemMetricKind, SystemMetrics},
-        timer::{TimerMetrics, TimerMode},
-    },
+    storage::metrics::timer::TimerMode,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
@@ -35,11 +33,10 @@ impl TimerOps {
     ) -> TimerId {
         let label = label.into();
 
-        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::ensure(TimerMode::Once, delay, label.as_str());
+        record_timer_scheduled(TimerMode::Once, delay, label.as_str());
 
         cdk_set_timer(delay, async move {
-            TimerMetrics::increment(TimerMode::Once, delay, label.as_str());
+            record_timer_tick(TimerMode::Once, delay, label.as_str());
 
             let start = perf_counter();
             task.await;
@@ -59,8 +56,7 @@ impl TimerOps {
         // Avoid cloning the String every tick.
         let label = Rc::new(label.into());
 
-        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
-        TimerMetrics::ensure(TimerMode::Interval, interval, label.as_str());
+        record_timer_scheduled(TimerMode::Interval, interval, label.as_str());
 
         let task = Rc::new(RefCell::new(task));
 
@@ -69,7 +65,7 @@ impl TimerOps {
             let task = Rc::clone(&task);
 
             async move {
-                TimerMetrics::increment(TimerMode::Interval, interval, label.as_str());
+                record_timer_tick(TimerMode::Interval, interval, label.as_str());
 
                 let start = perf_counter();
                 let fut = { (task.borrow_mut())() };

@@ -1,9 +1,6 @@
 use crate::{
     cdk::{call::Call as IcCall, candid::Principal},
-    storage::metrics::{
-        icc::IccMetrics,
-        system::{SystemMetricKind, SystemMetrics},
-    },
+    ops::runtime::metrics::icc::record_icc_call,
 };
 
 ///
@@ -19,8 +16,7 @@ impl Call {
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> IcCall<'_, '_> {
         let canister_id: Principal = canister_id.into();
 
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
-        IccMetrics::increment(canister_id, method);
+        record_icc_call(canister_id, method);
 
         IcCall::bounded_wait(canister_id, method)
     }
@@ -30,8 +26,7 @@ impl Call {
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> IcCall<'_, '_> {
         let canister_id: Principal = canister_id.into();
 
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
-        IccMetrics::increment(canister_id, method);
+        record_icc_call(canister_id, method);
 
         IcCall::unbounded_wait(canister_id, method)
     }

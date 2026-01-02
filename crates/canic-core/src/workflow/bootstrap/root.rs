@@ -3,9 +3,9 @@ use crate::{
     cdk::api::{canister_self, trap},
     dto::subnet::{SubnetContextParams, SubnetIdentity},
     ids::{CanisterRole, SubnetRole},
-    infra::ic::{Network, build_network},
     ops::{
         config::ConfigOps,
+        config::network::{Network, build_network},
         runtime::env::{EnvOps, EnvSnapshot},
         storage::{
             directory::subnet::SubnetDirectoryOps, pool::PoolOps,

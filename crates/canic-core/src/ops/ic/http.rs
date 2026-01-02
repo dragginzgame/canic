@@ -1,11 +1,15 @@
 use crate::{
     Error, ThisError,
+    dto::http::{
+        HttpHeader as HttpHeaderDto, HttpMethod as HttpMethodDto,
+        HttpRequestArgs as HttpRequestArgsDto, HttpRequestResult as HttpRequestResultDto,
+    },
     infra::ic::http::{
         HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
     },
     ops::{
-        prelude::*,
-        runtime::metrics::{record_http_outcall, record_http_request},
+        ic::IcOpsError,
+        runtime::metrics::{http::record_http_request, system::record_http_outcall},
     },
 };
 use num_traits::ToPrimitive;
@@ -29,7 +33,7 @@ pub enum HttpOpsError {
 
 impl From<HttpOpsError> for Error {
     fn from(err: HttpOpsError) -> Self {
-        OpsError::from(err).into()
+        IcOpsError::from(err).into()
     }
 }
 
@@ -97,22 +101,24 @@ pub async fn get_with_label<T: DeserializeOwned>(
 //
 
 /// Perform a raw HTTP request with metrics, returning the IC response verbatim.
-pub async fn get_raw(args: HttpRequestArgs) -> Result<HttpRequestResult, Error> {
+pub async fn get_raw(args: HttpRequestArgsDto) -> Result<HttpRequestResultDto, Error> {
     get_raw_with_label(args, None).await
 }
 
 /// Same as `get_raw`, with an optional metrics label.
 pub async fn get_raw_with_label(
-    args: HttpRequestArgs,
+    args: HttpRequestArgsDto,
     label: Option<&str>,
-) -> Result<HttpRequestResult, Error> {
+) -> Result<HttpRequestResultDto, Error> {
+    let infra_args = request_args_from_dto(args);
+
     // Emit observability signals
-    record_metrics(args.method, &args.url, label);
+    record_metrics(infra_args.method, &infra_args.url, label);
 
     // Delegate to infra without additional interpretation
-    let res = http_request_raw(&args).await?;
+    let res = http_request_raw(&infra_args).await?;
 
-    Ok(res)
+    Ok(result_to_dto(res))
 }
 
 //
@@ -123,4 +129,48 @@ pub async fn get_raw_with_label(
 fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
     record_http_outcall();
     record_http_request(method, url, label);
+}
+
+// --- DTO Adapters --------------------------------------------------------
+
+fn request_args_from_dto(args: HttpRequestArgsDto) -> HttpRequestArgs {
+    HttpRequestArgs {
+        url: args.url,
+        max_response_bytes: args.max_response_bytes,
+        method: method_from_dto(args.method),
+        headers: args.headers.into_iter().map(header_from_dto).collect(),
+        body: args.body,
+        transform: None,
+        is_replicated: args.is_replicated,
+    }
+}
+
+fn result_to_dto(result: HttpRequestResult) -> HttpRequestResultDto {
+    HttpRequestResultDto {
+        status: result.status,
+        headers: result.headers.into_iter().map(header_to_dto).collect(),
+        body: result.body,
+    }
+}
+
+const fn method_from_dto(method: HttpMethodDto) -> HttpMethod {
+    match method {
+        HttpMethodDto::GET => HttpMethod::GET,
+        HttpMethodDto::POST => HttpMethod::POST,
+        HttpMethodDto::HEAD => HttpMethod::HEAD,
+    }
+}
+
+fn header_from_dto(header: HttpHeaderDto) -> HttpHeader {
+    HttpHeader {
+        name: header.name,
+        value: header.value,
+    }
+}
+
+fn header_to_dto(header: HttpHeader) -> HttpHeaderDto {
+    HttpHeaderDto {
+        name: header.name,
+        value: header.value,
+    }
 }

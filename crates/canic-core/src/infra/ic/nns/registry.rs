@@ -28,7 +28,6 @@ impl From<NnsRegistryInfraError> for InfraError {
 /// Query the NNS registry for the subnet of *this* canister.
 ///
 /// Infrastructure adapter:
-/// - wraps legacy NNS API
 /// - normalizes string errors
 /// - never leaks protocol details
 ///

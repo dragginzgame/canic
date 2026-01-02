@@ -1,6 +1,6 @@
 use crate::{
-    Error, cdk::api::canister_self, infra::ic::nns::registry::get_subnet_for_canister, log,
-    log::Topic,
+    Error, cdk::api::canister_self, log, log::Topic,
+    ops::ic::nns::registry::get_subnet_for_canister,
 };
 use candid::Principal;
 

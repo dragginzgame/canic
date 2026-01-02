@@ -28,6 +28,7 @@ pub mod cascade;
 pub mod directory;
 pub mod env;
 pub mod error;
+pub mod http;
 pub mod log;
 pub mod memory;
 pub mod metrics;

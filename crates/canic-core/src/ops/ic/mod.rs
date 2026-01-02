@@ -30,3 +30,43 @@
 pub mod call;
 pub mod http;
 pub mod mgmt;
+pub mod nns;
+pub mod signature;
+pub mod xrc;
+
+use crate::{
+    Error, ThisError,
+    cdk::{
+        call::{CallFailed, CandidDecodeFailed},
+        candid::Error as CandidError,
+    },
+    ops::OpsError,
+};
+
+///
+/// IccOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum IcOpsError {
+    #[error(transparent)]
+    HttpOps(#[from] http::HttpOpsError),
+
+    #[error(transparent)]
+    XrcOps(#[from] xrc::XrcOpsError),
+
+    #[error("ic call failed: {0}")]
+    CallFailed(#[from] CallFailed),
+
+    #[error("candid error: {0}")]
+    Candid(#[from] CandidError),
+
+    #[error("candid decode failed: {0}")]
+    CandidDecodeFailed(#[from] CandidDecodeFailed),
+}
+
+impl From<IcOpsError> for Error {
+    fn from(err: IcOpsError) -> Self {
+        OpsError::from(err).into()
+    }
+}
