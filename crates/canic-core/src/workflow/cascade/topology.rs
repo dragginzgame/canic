@@ -54,8 +54,7 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 pub(crate) async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
     env::deny_root()?;
 
-    let snapshot = topology_snapshot_from_view(view)?;
-
+    let snapshot = topology_snapshot_from_view(view);
     let self_pid = canister_self();
     let next = next_child_on_path(self_pid, &snapshot.parents)?;
 

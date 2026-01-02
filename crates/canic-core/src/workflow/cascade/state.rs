@@ -91,7 +91,7 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), E
 pub(crate) async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
     env::deny_root()?;
 
-    let snapshot = state_snapshot_from_view(view)?;
+    let snapshot = state_snapshot_from_view(view);
 
     if state_snapshot_is_empty(&snapshot) {
         log!(

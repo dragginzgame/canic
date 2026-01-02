@@ -11,6 +11,9 @@ pub enum EnvAccessError {
     #[error("this endpoint is only available on the prime subnet")]
     NotPrimeSubnet,
 
+    #[error("this endpoint is only available on prime root")]
+    NotPrimeRoot,
+
     #[error("operation must be called from the root canister")]
     NotRoot,
 
@@ -27,6 +30,15 @@ impl From<EnvAccessError> for Error {
 ///
 /// Guards
 ///
+
+#[allow(clippy::unused_async)]
+pub async fn is_prime_root() -> Result<(), AccessError> {
+    if EnvOps::is_prime_root() {
+        Ok(())
+    } else {
+        Err(EnvAccessError::NotPrimeRoot.into())
+    }
+}
 
 #[allow(clippy::unused_async)]
 pub async fn is_prime_subnet() -> Result<(), AccessError> {

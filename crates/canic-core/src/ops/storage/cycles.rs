@@ -1,13 +1,6 @@
 use crate::{cdk::types::Cycles, storage::memory::cycles::CycleTracker};
 
 ///
-/// CycleTrackerOps
-/// Stable storage wrapper for the cycle tracker.
-///
-
-pub struct CycleTrackerOps;
-
-///
 /// CycleTrackerSnapshot
 ///
 
@@ -16,6 +9,13 @@ pub struct CycleTrackerSnapshot {
     pub entries: Vec<(u64, Cycles)>,
     pub total: u64,
 }
+
+///
+/// CycleTrackerOps
+/// Stable storage wrapper for the cycle tracker.
+///
+
+pub struct CycleTrackerOps;
 
 impl CycleTrackerOps {
     #[must_use]
