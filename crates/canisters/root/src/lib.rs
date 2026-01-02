@@ -140,5 +140,4 @@ async fn stress_perf(rounds: u32) -> Result<u64, PublicError> {
     Ok(acc)
 }
 
-// end
 export_candid!();

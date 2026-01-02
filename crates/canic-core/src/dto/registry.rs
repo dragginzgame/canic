@@ -12,6 +12,6 @@ pub struct AppRegistryView(pub Vec<(Principal, Principal)>);
 ///
 
 /// Note: the tuple key duplicates `CanisterEntryView.role` so the entry view
-/// can stay reusable across contexts. This is intentional for now.
+/// can stay reusable across contexts.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct SubnetRegistryView(pub Vec<(CanisterRole, CanisterEntryView)>);

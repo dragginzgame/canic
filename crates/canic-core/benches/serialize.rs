@@ -9,7 +9,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 const fn bench_stub(_c: &mut Criterion) {
     // Intentionally empty.
-    // Future LLM / developer can replace with real benchmarks.
+    // Future contributors can replace with real benchmarks.
 }
 
 criterion_group!(benches, bench_stub);
