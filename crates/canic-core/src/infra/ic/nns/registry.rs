@@ -33,7 +33,7 @@ impl From<NnsRegistryInfraError> for InfraError {
 ///
 
 pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, InfraError> {
-    let request = GetSubnetForCanisterRequest::new(pid);
+    let request = GetSubnetForCanisterRequest { principal: pid };
 
     let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
         .with_arg(request)

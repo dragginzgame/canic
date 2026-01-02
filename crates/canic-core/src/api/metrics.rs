@@ -9,11 +9,11 @@ pub struct EndpointResultMetrics;
 
 impl EndpointResultMetrics {
     pub fn increment_ok(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call);
+        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call.endpoint.name);
     }
 
     pub fn increment_err(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call);
+        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call.endpoint.name);
     }
 }
 
@@ -25,11 +25,15 @@ pub struct EndpointAttemptMetrics;
 
 impl EndpointAttemptMetrics {
     pub fn increment_attempted(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_attempted(call);
+        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_attempted(
+            call.endpoint.name,
+        );
     }
 
     pub fn increment_completed(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_completed(call);
+        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_completed(
+            call.endpoint.name,
+        );
     }
 }
 
@@ -53,6 +57,6 @@ impl AccessMetrics {
                 crate::storage::metrics::access::AccessMetricKind::Rule
             }
         };
-        ops::runtime::metrics::access::AccessMetrics::increment(call, kind);
+        ops::runtime::metrics::access::AccessMetrics::increment(call.endpoint.name, kind);
     }
 }

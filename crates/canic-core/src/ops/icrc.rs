@@ -1,10 +1,7 @@
 use crate::{
-    cdk::spec::icrc::{
-        icrc10::Icrc10Standard,
-        icrc21::{ConsentMessageRequest, ConsentMessageResponse},
-    },
+    cdk::spec::icrc::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     dispatch::icrc21::Icrc21Dispatcher,
-    domain::icrc::icrc10::Icrc10Registry,
+    domain::icrc::icrc10::{Icrc10Registry, Icrc10Standard},
 };
 
 ///

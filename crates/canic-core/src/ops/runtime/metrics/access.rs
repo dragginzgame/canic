@@ -1,8 +1,5 @@
-use crate::{
-    api::EndpointCall,
-    storage::metrics::access::{
-        AccessMetricKey, AccessMetricKind, AccessMetrics as ModelAccessMetrics,
-    },
+use crate::storage::metrics::access::{
+    AccessMetricKey, AccessMetricKind, AccessMetrics as ModelAccessMetrics,
 };
 
 #[derive(Clone, Debug)]
@@ -13,8 +10,8 @@ pub struct AccessMetricsSnapshot {
 pub struct AccessMetrics;
 
 impl AccessMetrics {
-    pub fn increment(call: EndpointCall, kind: AccessMetricKind) {
-        ModelAccessMetrics::increment(call.endpoint.name, kind);
+    pub fn increment(endpoint: &str, kind: AccessMetricKind) {
+        ModelAccessMetrics::increment(endpoint, kind);
     }
 }
 

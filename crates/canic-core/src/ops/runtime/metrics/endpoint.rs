@@ -1,11 +1,8 @@
-use crate::{
-    api::EndpointCall,
-    storage::metrics::{
-        access::{AccessMetricKey, AccessMetrics as ModelAccessMetrics},
-        endpoint::{
-            EndpointAttemptCounts, EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
-            EndpointResultCounts, EndpointResultMetrics as ModelEndpointResultMetrics,
-        },
+use crate::storage::metrics::{
+    access::{AccessMetricKey, AccessMetrics as ModelAccessMetrics},
+    endpoint::{
+        EndpointAttemptCounts, EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
+        EndpointResultCounts, EndpointResultMetrics as ModelEndpointResultMetrics,
     },
 };
 
@@ -19,24 +16,24 @@ pub struct EndpointHealthSnapshot {
 pub struct EndpointAttemptMetrics;
 
 impl EndpointAttemptMetrics {
-    pub fn increment_attempted(call: EndpointCall) {
-        ModelEndpointAttemptMetrics::increment_attempted(call.endpoint.name);
+    pub fn increment_attempted(endpoint: &'static str) {
+        ModelEndpointAttemptMetrics::increment_attempted(endpoint);
     }
 
-    pub fn increment_completed(call: EndpointCall) {
-        ModelEndpointAttemptMetrics::increment_completed(call.endpoint.name);
+    pub fn increment_completed(endpoint: &'static str) {
+        ModelEndpointAttemptMetrics::increment_completed(endpoint);
     }
 }
 
 pub struct EndpointResultMetrics;
 
 impl EndpointResultMetrics {
-    pub fn increment_ok(call: EndpointCall) {
-        ModelEndpointResultMetrics::increment_ok(call.endpoint.name);
+    pub fn increment_ok(endpoint: &'static str) {
+        ModelEndpointResultMetrics::increment_ok(endpoint);
     }
 
-    pub fn increment_err(call: EndpointCall) {
-        ModelEndpointResultMetrics::increment_err(call.endpoint.name);
+    pub fn increment_err(endpoint: &'static str) {
+        ModelEndpointResultMetrics::increment_err(endpoint);
     }
 }
 

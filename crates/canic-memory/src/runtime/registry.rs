@@ -87,9 +87,9 @@ impl MemoryRegistryRuntime {
     }
 }
 
-//
-// TESTS
-//
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

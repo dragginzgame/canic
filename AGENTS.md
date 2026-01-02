@@ -123,6 +123,8 @@ model
 
 `dto` is used as a **transfer format** by endpoints, workflow, and ops.
 `model` and `policy` must not depend on `dto`.
+Instrumentation modules (`perf`/logging/tracing) are layer-neutral and may be
+used anywhere.
 
 ---
 

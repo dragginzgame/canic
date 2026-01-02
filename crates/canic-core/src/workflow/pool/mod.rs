@@ -8,14 +8,14 @@ pub mod scheduler;
 use crate::{
     Error,
     access::env,
-    cdk::{
-        mgmt::{CanisterSettings, UpdateSettingsArgs},
-        types::TC,
-    },
+    cdk::types::TC,
     domain::policy::{self, pool::PoolPolicyError},
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
-        ic::mgmt::{create_canister, get_cycles, uninstall_code, update_settings},
+        ic::mgmt::{
+            CanisterSettings, UpdateSettingsArgs, create_canister, get_cycles, uninstall_code,
+            update_settings,
+        },
         storage::{pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{pool::controllers::pool_controllers, pool::query::pool_entry_view, prelude::*},
@@ -35,6 +35,7 @@ pub(crate) async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
             controllers: Some(pool_controllers()?),
             ..Default::default()
         },
+        sender_canister_version: None,
     })
     .await?;
 

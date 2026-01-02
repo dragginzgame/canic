@@ -13,13 +13,6 @@ pub use errors::*;
 use crate::spec::prelude::*;
 
 ///
-/// ConsentResult
-/// added here so we can manage ? in error flow
-///
-
-pub type ConsentResult = Result<ConsentInfo, Icrc21Error>;
-
-///
 /// ConsentInfo
 ///
 
@@ -69,21 +62,6 @@ pub struct ConsentMessageRequest {
 pub enum ConsentMessageResponse {
     Ok(ConsentInfo),
     Err(Icrc21Error),
-}
-
-impl From<ConsentResult> for ConsentMessageResponse {
-    fn from(result: ConsentResult) -> Self {
-        match result {
-            Ok(info) => Self::Ok(info),
-            Err(err) => Self::Err(err),
-        }
-    }
-}
-
-impl From<Icrc21Error> for ConsentMessageResponse {
-    fn from(err: Icrc21Error) -> Self {
-        Self::Err(err)
-    }
 }
 
 ///

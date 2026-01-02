@@ -6,10 +6,10 @@
 use crate::{
     Error,
     cdk::{
+        self,
         mgmt::{
-            CanisterInstallMode, CanisterStatusResult, CanisterStatusType,
-            DefiniteCanisterSettings, EnvironmentVariable, LogVisibility, MemoryMetrics,
-            QueryStats, UpdateSettingsArgs,
+            CanisterStatusResult, CanisterStatusType, DefiniteCanisterSettings,
+            EnvironmentVariable, LogVisibility as CdkLogVisibility, MemoryMetrics, QueryStats,
         },
         types::Cycles,
     },
@@ -21,7 +21,70 @@ use crate::{
     ops::{prelude::*, runtime::metrics::system::record_system_metric},
     storage::metrics::system::SystemMetricKind,
 };
-use candid::{Principal, utils::ArgumentEncoder};
+use candid::{Nat, Principal, utils::ArgumentEncoder};
+
+///
+/// CanisterInstallMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[expect(dead_code)]
+pub enum CanisterInstallMode {
+    Install,
+    Reinstall,
+    Upgrade(Option<UpgradeFlags>),
+}
+
+///
+/// UpgradeFlags
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct UpgradeFlags {
+    pub skip_pre_upgrade: Option<bool>,
+}
+
+///
+/// LogVisibility
+/// If a type exists to represent a foreign contract or infra boundary,
+/// dead-code warnings on its variants are acceptable.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
+pub enum LogVisibility {
+    Controllers,
+    Public,
+    AllowedViewers(Vec<Principal>),
+}
+
+///
+/// CanisterSettings
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CanisterSettings {
+    pub controllers: Option<Vec<Principal>>,
+    pub compute_allocation: Option<Nat>,
+    pub memory_allocation: Option<Nat>,
+    pub freezing_threshold: Option<Nat>,
+    pub reserved_cycles_limit: Option<Nat>,
+    pub log_visibility: Option<LogVisibility>,
+    pub wasm_memory_limit: Option<Nat>,
+    pub wasm_memory_threshold: Option<Nat>,
+    pub environment_variables: Option<Vec<EnvironmentVariable>>,
+}
+
+///
+/// UpdateSettingsArgs
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpdateSettingsArgs {
+    pub canister_id: Principal,
+    pub settings: CanisterSettings,
+    pub sender_canister_version: Option<u64>,
+}
 
 //
 // ──────────────────────────────── CREATE CANISTER ────────────────────────────
@@ -44,16 +107,11 @@ pub async fn create_canister(
 //
 
 /// Internal ops entrypoint used by workflow and other ops helpers.
-pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusResult, Error> {
+pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusView, Error> {
     let status = infra::ic::mgmt::canister_status(canister_pid).await?;
 
     record_system_metric(SystemMetricKind::CanisterStatus);
 
-    Ok(status)
-}
-
-pub async fn canister_status_view(canister_pid: Principal) -> Result<CanisterStatusView, Error> {
-    let status = canister_status(canister_pid).await?;
     Ok(canister_status_to_view(status))
 }
 
@@ -97,11 +155,11 @@ fn settings_to_view(settings: DefiniteCanisterSettings) -> CanisterSettingsView 
     }
 }
 
-fn log_visibility_to_view(log_visibility: LogVisibility) -> LogVisibilityView {
+fn log_visibility_to_view(log_visibility: CdkLogVisibility) -> LogVisibilityView {
     match log_visibility {
-        LogVisibility::Controllers => LogVisibilityView::Controllers,
-        LogVisibility::Public => LogVisibilityView::Public,
-        LogVisibility::AllowedViewers(viewers) => LogVisibilityView::AllowedViewers(viewers),
+        CdkLogVisibility::Controllers => LogVisibilityView::Controllers,
+        CdkLogVisibility::Public => LogVisibilityView::Public,
+        CdkLogVisibility::AllowedViewers(viewers) => LogVisibilityView::AllowedViewers(viewers),
     }
 }
 
@@ -131,6 +189,54 @@ fn query_stats_to_view(stats: QueryStats) -> QueryStatsView {
         num_instructions_total: stats.num_instructions_total,
         request_payload_bytes_total: stats.request_payload_bytes_total,
         response_payload_bytes_total: stats.response_payload_bytes_total,
+    }
+}
+
+// --- Ops → CDK adapters -------------------------------------------------
+
+fn install_mode_to_cdk(mode: CanisterInstallMode) -> cdk::mgmt::CanisterInstallMode {
+    match mode {
+        CanisterInstallMode::Install => cdk::mgmt::CanisterInstallMode::Install,
+        CanisterInstallMode::Reinstall => cdk::mgmt::CanisterInstallMode::Reinstall,
+        CanisterInstallMode::Upgrade(flags) => {
+            cdk::mgmt::CanisterInstallMode::Upgrade(flags.map(upgrade_flags_to_cdk))
+        }
+    }
+}
+
+const fn upgrade_flags_to_cdk(flags: UpgradeFlags) -> cdk::mgmt::UpgradeFlags {
+    cdk::mgmt::UpgradeFlags {
+        skip_pre_upgrade: flags.skip_pre_upgrade,
+        wasm_memory_persistence: None,
+    }
+}
+
+fn settings_to_cdk(settings: &CanisterSettings) -> cdk::mgmt::CanisterSettings {
+    cdk::mgmt::CanisterSettings {
+        controllers: settings.controllers.clone(),
+        compute_allocation: settings.compute_allocation.clone(),
+        memory_allocation: settings.memory_allocation.clone(),
+        freezing_threshold: settings.freezing_threshold.clone(),
+        reserved_cycles_limit: settings.reserved_cycles_limit.clone(),
+        log_visibility: settings.log_visibility.clone().map(log_visibility_to_cdk),
+        wasm_memory_limit: settings.wasm_memory_limit.clone(),
+        wasm_memory_threshold: settings.wasm_memory_threshold.clone(),
+        environment_variables: settings.environment_variables.clone(),
+    }
+}
+
+fn log_visibility_to_cdk(setting: LogVisibility) -> cdk::mgmt::LogVisibility {
+    match setting {
+        LogVisibility::Controllers => cdk::mgmt::LogVisibility::Controllers,
+        LogVisibility::Public => cdk::mgmt::LogVisibility::Public,
+        LogVisibility::AllowedViewers(viewers) => cdk::mgmt::LogVisibility::AllowedViewers(viewers),
+    }
+}
+
+fn update_settings_to_cdk(args: &UpdateSettingsArgs) -> cdk::mgmt::UpdateSettingsArgs {
+    cdk::mgmt::UpdateSettingsArgs {
+        canister_id: args.canister_id,
+        settings: settings_to_cdk(&args.settings),
     }
 }
 
@@ -184,7 +290,8 @@ pub async fn install_code<T: ArgumentEncoder>(
     wasm: &[u8],
     args: T,
 ) -> Result<(), Error> {
-    infra::ic::mgmt::install_code(mode, canister_pid, wasm, args).await?;
+    let cdk_mode = install_mode_to_cdk(mode);
+    infra::ic::mgmt::install_code(cdk_mode, canister_pid, wasm, args).await?;
 
     let metric_kind = match mode {
         CanisterInstallMode::Install => SystemMetricKind::InstallCode,
@@ -243,7 +350,8 @@ pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
 
 /// Updates canister settings via the management canister and records metrics.
 pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
-    infra::ic::mgmt::update_settings(args).await?;
+    let cdk_args = update_settings_to_cdk(args);
+    infra::ic::mgmt::update_settings(&cdk_args).await?;
 
     record_system_metric(SystemMetricKind::UpdateSettings);
 

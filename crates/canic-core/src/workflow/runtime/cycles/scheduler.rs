@@ -1,6 +1,6 @@
 use crate::{
     access::env,
-    cdk::{futures::spawn, timers::TimerId, types::Cycles, utils::time::now_secs},
+    cdk::{futures::spawn, types::Cycles, utils::time::now_secs},
     log,
     log::Topic,
     ops::{
@@ -8,7 +8,10 @@ use crate::{
         config::ConfigOps,
         ic::mgmt::canister_cycle_balance,
         rpc::request::cycles_request,
-        runtime::{env::EnvOps, timer::TimerOps},
+        runtime::{
+            env::EnvOps,
+            timer::{TimerId, TimerOps},
+        },
         storage::cycles::CycleTrackerOps,
     },
 };
