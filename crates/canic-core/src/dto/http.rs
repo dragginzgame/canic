@@ -1,5 +1,4 @@
 use crate::dto::prelude::*;
-use candid::Nat;
 
 ///
 /// HttpRequestArgs

@@ -10,18 +10,9 @@ pub struct PlacementMapper;
 
 impl PlacementMapper {
     #[must_use]
-    pub fn worker_entry_from_view(view: WorkerEntryView) -> WorkerEntry {
-        WorkerEntry {
-            pool: view.pool,
-            canister_role: view.canister_role,
-            created_at_secs: view.created_at_secs,
-        }
-    }
-
-    #[must_use]
     pub fn worker_entry_to_view(entry: &WorkerEntry) -> WorkerEntryView {
         WorkerEntryView {
-            pool: entry.pool.clone(),
+            pool: entry.pool.to_string(),
             canister_role: entry.canister_role.clone(),
             created_at_secs: entry.created_at_secs,
         }
@@ -30,7 +21,7 @@ impl PlacementMapper {
     #[must_use]
     pub fn worker_plan_entry_to_view(entry: ScalingWorkerPlanEntry) -> WorkerEntryView {
         WorkerEntryView {
-            pool: entry.pool,
+            pool: entry.pool.to_string(),
             canister_role: entry.canister_role,
             created_at_secs: entry.created_at_secs,
         }
