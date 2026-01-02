@@ -209,6 +209,14 @@ macro_rules! canic_endpoints {
             $crate::api::endpoints::canic_sharding_registry()
         }
 
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
+        async fn canic_sharding_tenants(
+            pool: String,
+            shard_pid: ::canic::core::cdk::types::Principal,
+        ) -> Result<::canic::core::dto::placement::ShardingTenantsView, ::canic::PublicError> {
+            $crate::api::endpoints::canic_sharding_tenants(pool, shard_pid)
+        }
+
         //
         // ICTS
         // extra endpoints for each canister as per rem.codes

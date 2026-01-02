@@ -10,7 +10,6 @@
 //! - perform environment seeding or restoration
 //! - import directory snapshots
 
-pub mod cascade;
 pub mod nonroot;
 pub mod root;
 

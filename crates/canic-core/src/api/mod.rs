@@ -8,6 +8,7 @@
 
 pub mod access;
 pub mod app;
+pub mod children;
 pub mod config;
 pub mod endpoints;
 pub mod error;

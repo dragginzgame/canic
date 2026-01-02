@@ -68,12 +68,4 @@ impl SubnetDirectoryOps {
             .iter()
             .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
-
-    #[must_use]
-    pub fn contains(role: &CanisterRole) -> bool {
-        SubnetDirectory::export()
-            .entries
-            .iter()
-            .any(|(r, _)| r == role)
-    }
 }

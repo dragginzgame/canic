@@ -101,18 +101,6 @@ impl MemoryOps {
     }
 
     #[must_use]
-    pub fn snapshot_ranges() -> Vec<MemoryRangeSnapshot> {
-        MemoryRegistryRuntime::snapshot_ranges()
-            .into_iter()
-            .map(|(crate_name, range)| MemoryRangeSnapshot {
-                crate_name,
-                start: range.start,
-                end: range.end,
-            })
-            .collect()
-    }
-
-    #[must_use]
     pub fn snapshot_entries() -> Vec<MemoryRegistryEntrySnapshot> {
         MemoryRegistryRuntime::snapshot_entries()
             .into_iter()
@@ -122,14 +110,5 @@ impl MemoryOps {
                 label: entry.label,
             })
             .collect()
-    }
-
-    #[must_use]
-    pub fn get_entry(id: u8) -> Option<MemoryRegistryEntrySnapshot> {
-        MemoryRegistryRuntime::get(id).map(|entry| MemoryRegistryEntrySnapshot {
-            id,
-            crate_name: entry.crate_name,
-            label: entry.label,
-        })
     }
 }

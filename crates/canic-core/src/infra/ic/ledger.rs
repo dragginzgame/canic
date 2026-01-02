@@ -2,7 +2,9 @@
 //!
 //! This module groups ICRC-2 allowance and transfer-from calls behind a
 //! consistent Canic API surface.
+#![allow(dead_code)]
 
+/// TODO - don't let this stay dead for long
 use crate::{
     cdk::{
         api,

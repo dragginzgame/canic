@@ -1,5 +1,6 @@
 use crate::{
-    dto::placement::{ScalingRegistryView, ShardingRegistryView},
+    cdk::types::Principal,
+    dto::placement::{ScalingRegistryView, ShardingRegistryView, ShardingTenantsView},
     ops::storage::placement::{scaling::ScalingRegistryOps, sharding::ShardingRegistryOps},
     workflow::placement::mapper::PlacementMapper,
 };
@@ -26,4 +27,10 @@ pub(crate) fn sharding_registry_view() -> ShardingRegistryView {
         .collect();
 
     ShardingRegistryView(view)
+}
+
+pub(crate) fn sharding_tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
+    let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
+
+    ShardingTenantsView(tenants)
 }

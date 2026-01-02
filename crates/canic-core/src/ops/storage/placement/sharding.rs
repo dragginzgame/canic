@@ -160,56 +160,6 @@ impl ShardingRegistryOps {
         })
     }
 
-    /// Remove a tenant assignment, if present.
-    ///
-    /// Returns the shard principal that previously held the assignment.
-    pub fn unassign(pool: &str, tenant: &str) -> Result<Option<Principal>, Error> {
-        ShardingRegistry::with_mut(|core| {
-            let key =
-                ShardKey::try_new(pool, tenant).map_err(ShardingRegistryOpsError::InvalidKey)?;
-            let Some(shard) = core.remove_assignment(&key) else {
-                return Ok(None);
-            };
-
-            if let Some(mut entry) = core.get_entry(&shard) {
-                entry.count = entry.count.saturating_sub(1);
-                core.insert_entry(shard, entry);
-            }
-
-            Ok(Some(shard))
-        })
-    }
-
-    /// Update the logical slot index for a shard entry.
-    pub fn set_slot(pid: Principal, slot: u32) -> Result<(), Error> {
-        ShardingRegistry::with_mut(|core| {
-            let mut entry = core
-                .get_entry(&pid)
-                .ok_or(ShardingRegistryOpsError::ShardNotFound(pid))?;
-
-            if slot != ShardEntry::UNASSIGNED_SLOT {
-                for (other_pid, other_entry) in core.all_entries() {
-                    if other_pid != pid
-                        && other_entry.pool == entry.pool
-                        && other_entry.slot == slot
-                    {
-                        return Err(ShardingRegistryOpsError::SlotOccupied {
-                            pool: entry.pool.to_string(),
-                            slot,
-                            pid: other_pid,
-                        }
-                        .into());
-                    }
-                }
-            }
-
-            entry.slot = slot;
-            core.insert_entry(pid, entry);
-
-            Ok(())
-        })
-    }
-
     /// Export all shard entries
     #[must_use]
     pub fn export() -> ShardingRegistryData {
@@ -235,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_and_unassign_updates_count() {
+    fn assign_updates_count() {
         ShardingRegistryOps::clear_for_test();
         let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
@@ -244,12 +194,5 @@ mod tests {
         ShardingRegistryOps::assign("poolA", "tenant1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);
-
-        assert_eq!(
-            ShardingRegistryOps::unassign("poolA", "tenant1").unwrap(),
-            Some(shard_pid)
-        );
-        let count_final = ShardingRegistryOps::get(shard_pid).unwrap().count;
-        assert_eq!(count_final, 0);
     }
 }

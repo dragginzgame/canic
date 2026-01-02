@@ -45,11 +45,6 @@ impl CanisterChildrenOps {
     }
 
     #[must_use]
-    pub fn find_by_pid(pid: &Principal) -> Option<ChildSnapshot> {
-        Self::snapshot().entries.into_iter().find(|e| &e.pid == pid)
-    }
-
-    #[must_use]
     pub fn find_first_by_role(role: &CanisterRole) -> Option<ChildSnapshot> {
         Self::snapshot()
             .entries

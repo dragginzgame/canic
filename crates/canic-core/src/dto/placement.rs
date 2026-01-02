@@ -8,13 +8,6 @@ use crate::{cdk::types::BoundedString64, dto::prelude::*};
 pub struct ScalingRegistryView(pub Vec<(Principal, WorkerEntryView)>);
 
 ///
-/// ShardingRegistryView
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingRegistryView(pub Vec<(Principal, ShardEntryView)>);
-
-///
 /// WorkerEntryView
 ///
 
@@ -24,6 +17,20 @@ pub struct WorkerEntryView {
     pub canister_role: CanisterRole, // canister role
     pub created_at_secs: u64,        // timestamp
 }
+
+///
+/// ShardingRegistryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ShardingRegistryView(pub Vec<(Principal, ShardEntryView)>);
+
+///
+/// ShardingTenantsView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ShardingTenantsView(pub Vec<String>);
 
 ///
 /// ShardEntryView
