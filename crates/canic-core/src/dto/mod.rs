@@ -49,7 +49,7 @@ pub mod subnet;
 
 pub mod prelude {
     pub use crate::ids::{CanisterRole, SubnetRole};
-    pub use candid::{CandidType, Principal};
+    pub use candid::{CandidType, Nat, Principal};
     pub use derive_more::Display;
     pub use serde::{Deserialize, Serialize};
 }

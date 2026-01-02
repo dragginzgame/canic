@@ -1,4 +1,4 @@
-use crate::{cdk::types::BoundedString64, dto::prelude::*};
+use crate::dto::prelude::*;
 
 ///
 /// ScalingRegistryView
@@ -13,7 +13,7 @@ pub struct ScalingRegistryView(pub Vec<(Principal, WorkerEntryView)>);
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerEntryView {
-    pub pool: BoundedString64,       // which scale pool this belongs to
+    pub pool: String,                // which scale pool this belongs to
     pub canister_role: CanisterRole, // canister role
     pub created_at_secs: u64,        // timestamp
 }

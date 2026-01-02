@@ -1,5 +1,4 @@
 use crate::dto::prelude::*;
-use candid::Nat;
 
 ///
 /// CanisterEntryView
@@ -15,6 +14,7 @@ pub struct CanisterEntryView {
 
 ///
 /// CanisterSummaryView
+///
 /// Minimal view for children/subnet directories
 ///
 

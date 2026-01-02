@@ -12,8 +12,11 @@ use crate::{
     cdk::utils::time::now_secs,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     dto::rpc::CreateCanisterParent,
-    ops::{rpc::request::create_canister_request, storage::placement::scaling::ScalingRegistryOps},
-    workflow::placement::{PlacementError, mapper::PlacementMapper},
+    ops::{
+        rpc::request::create_canister_request,
+        storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
+    },
+    workflow::placement::PlacementError,
 };
 use candid::Principal;
 
@@ -66,9 +69,11 @@ impl ScalingWorkflow {
             .new_canister_pid;
 
         // 4. Register in memory
-        let entry = PlacementMapper::worker_entry_from_view(
-            PlacementMapper::worker_plan_entry_to_view(entry_plan),
-        );
+        let entry = WorkerEntry {
+            pool: entry_plan.pool,
+            canister_role: entry_plan.canister_role,
+            created_at_secs: entry_plan.created_at_secs,
+        };
         ScalingRegistryOps::upsert(pid, entry);
 
         Ok(pid)
