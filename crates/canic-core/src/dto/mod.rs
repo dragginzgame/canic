@@ -19,6 +19,9 @@
 //!   reduce complexity for consumers, not to mirror storage internals or
 //!   reintroduce lost semantics.
 //!
+//! - Avoid `HashMap` in DTOs. Keyed semantics and ordering are not preserved at
+//!   the boundary; use `Vec<(K, V)>` or explicit list types instead.
+//!
 //! In short: stable storage is authoritative; DTOs describe how data is
 //! transported, not what guarantees it provides.
 
@@ -49,5 +52,4 @@ pub mod prelude {
     pub use candid::{CandidType, Principal};
     pub use derive_more::Display;
     pub use serde::{Deserialize, Serialize};
-    pub use std::collections::HashMap;
 }

@@ -11,6 +11,8 @@
 use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::CanisterRole,
+    log,
+    log::Topic,
     ops::runtime::timer::TimerOps,
     workflow,
 };
@@ -50,9 +52,17 @@ pub fn init_nonroot_canister(
         Duration::ZERO,
         "canic:bootstrap:init_nonroot_canister",
         async move {
-            // Non-root bootstrap failures are handled internally and
-            // must not abort canister initialization.
-            workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister(args).await;
+            // Non-root bootstrap failures are logged but must not
+            // abort canister initialization.
+            if let Err(err) =
+                workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister(args).await
+            {
+                log!(
+                    Topic::Init,
+                    Error,
+                    "non-root bootstrap failed (init): {err}"
+                );
+            }
         },
     );
 }

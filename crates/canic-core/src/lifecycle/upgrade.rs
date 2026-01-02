@@ -16,6 +16,8 @@
 use crate::{
     cdk::api::trap,
     ids::CanisterRole,
+    log,
+    log::Topic,
     ops::runtime::{env::EnvOps, timer::TimerOps},
     workflow,
 };
@@ -59,7 +61,15 @@ pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",
         async {
-            workflow::bootstrap::nonroot::bootstrap_post_upgrade_nonroot_canister().await;
+            if let Err(err) =
+                workflow::bootstrap::nonroot::bootstrap_post_upgrade_nonroot_canister().await
+            {
+                log!(
+                    Topic::Init,
+                    Error,
+                    "non-root bootstrap failed (post-upgrade): {err}"
+                );
+            }
         },
     );
 }

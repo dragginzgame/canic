@@ -42,7 +42,7 @@ pub struct ShardEntryView {
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
-    pub pool: BoundedString64,
+    pub pool: String,
     pub canister_role: CanisterRole,
     pub created_at: u64,
 }
