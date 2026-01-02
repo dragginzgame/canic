@@ -1,4 +1,4 @@
-use crate::storage::metrics::access::{
+use crate::ops::runtime::metrics::store::access::{
     AccessMetricKey as ModelAccessMetricKey, AccessMetricKind as ModelAccessMetricKind,
     AccessMetrics as ModelAccessMetrics,
 };

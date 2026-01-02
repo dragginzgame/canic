@@ -20,9 +20,6 @@ eager_static! {
         )));
 }
 
-/// constants
-const STORAGE_RETAIN_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
-
 ///
 /// CycleTracker
 ///
@@ -42,10 +39,10 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles));
     }
 
-    /// Purge entries older than the retention window using the shared tracker.
+    /// Purge entries older than the provided cutoff timestamp.
     #[must_use]
-    pub(crate) fn purge(now: u64) -> usize {
-        CYCLE_TRACKER.with_borrow_mut(|t| t.purge_inner(now))
+    pub(crate) fn purge_before(cutoff: u64) -> usize {
+        CYCLE_TRACKER.with_borrow_mut(|t| t.purge_inner(cutoff))
     }
 
     #[must_use]
@@ -62,9 +59,8 @@ impl CycleTracker {
 
     // -------- INTERNAL MAP OPERATIONS -------- //
 
-    /// Remove entries older than the retention window.
-    fn purge_inner(&mut self, now: u64) -> usize {
-        let cutoff = now.saturating_sub(STORAGE_RETAIN_SECS);
+    /// Remove entries older than the provided cutoff timestamp.
+    fn purge_inner(&mut self, cutoff: u64) -> usize {
         let mut purged = 0;
 
         while let Some((first_ts, _)) = self.map.first_key_value() {

@@ -29,19 +29,11 @@ impl From<AppRegistrySnapshot> for AppRegistryData {
     }
 }
 
-///
-/// AppRegistryOps
-///
+// -------------------------------------------------------------
+// Snapshot
+// -------------------------------------------------------------
 
-pub struct AppRegistryOps;
-
-impl AppRegistryOps {
-    // -------------------------------------------------------------
-    // Snapshot
-    // -------------------------------------------------------------
-
-    #[must_use]
-    pub fn snapshot() -> AppRegistrySnapshot {
-        AppRegistry::export().into()
-    }
+#[must_use]
+pub fn snapshot() -> AppRegistrySnapshot {
+    AppRegistry::export().into()
 }

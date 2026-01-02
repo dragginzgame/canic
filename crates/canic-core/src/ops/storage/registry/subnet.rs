@@ -3,7 +3,7 @@ use crate::{
     cdk::{types::Principal, utils::time::now_secs},
     config::schema::CanisterCardinality,
     ids::CanisterRole,
-    ops::{config::ConfigOps, storage::registry::RegistryOpsError},
+    ops::{config::ConfigOps, storage::StorageOpsError},
     storage::{
         canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
         memory::registry::subnet::{SubnetRegistry, SubnetRegistryData},
@@ -44,7 +44,7 @@ pub enum SubnetRegistryOpsError {
 
 impl From<SubnetRegistryOpsError> for Error {
     fn from(err: SubnetRegistryOpsError) -> Self {
-        RegistryOpsError::from(err).into()
+        StorageOpsError::from(err).into()
     }
 }
 
