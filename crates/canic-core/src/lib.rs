@@ -23,20 +23,21 @@
 
 pub mod access;
 pub mod api;
+#[doc(hidden)]
 pub mod dispatch;
 pub mod domain;
 pub mod dto;
 pub mod ids;
-pub mod lifecycle;
 pub mod log;
 pub mod macros;
 pub mod perf;
-pub mod workflow;
 
 pub(crate) mod config;
 pub(crate) mod infra;
+pub(crate) mod lifecycle;
 pub(crate) mod ops;
 pub(crate) mod storage;
+pub(crate) mod workflow;
 
 pub use {
     ::canic_cdk as cdk,

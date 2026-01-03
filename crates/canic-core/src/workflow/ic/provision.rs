@@ -28,8 +28,10 @@ use crate::{
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
-        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-        directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+        directory::{
+            builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+            mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+        },
         ic::IcWorkflowError,
         pool::pool_import_canister,
         prelude::*,
@@ -53,7 +55,7 @@ impl From<ProvisionWorkflowError> for Error {
     }
 }
 
-pub(crate) fn build_nonroot_init_payload(
+pub fn build_nonroot_init_payload(
     role: &CanisterRole,
     parent_pid: Principal,
 ) -> Result<CanisterInitPayload, Error> {
@@ -86,7 +88,7 @@ pub(crate) fn build_nonroot_init_payload(
 /// import them directly, and return a builder containing the sections to sync.
 ///
 /// When `updated_role` is provided, only include the sections that list that role.
-pub(crate) async fn rebuild_directories_from_registry(
+pub async fn rebuild_directories_from_registry(
     updated_role: Option<&CanisterRole>,
 ) -> Result<StateSnapshotBuilder, Error> {
     let cfg = Config::get()?;
@@ -125,7 +127,7 @@ pub(crate) async fn rebuild_directories_from_registry(
 /// 2. Install WASM + bootstrap initial state
 /// 3. Register canister in SubnetRegistry
 /// 4. Cascade topology + sync directories
-pub(crate) async fn create_and_install_canister(
+pub async fn create_and_install_canister(
     role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
@@ -177,7 +179,7 @@ pub(crate) async fn create_and_install_canister(
 /// 2. Remove from SubnetRegistry
 /// 3. Cascade topology
 /// 4. Sync directories
-pub(crate) async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
+pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
     env::require_root()?;
 
     // Phase 0: uninstall code

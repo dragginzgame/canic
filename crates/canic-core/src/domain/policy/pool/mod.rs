@@ -1,6 +1,5 @@
 pub mod admissibility;
 pub mod authority;
-pub mod export;
 
 use crate::{Error, ThisError, domain::policy::PolicyError};
 use candid::Principal;
@@ -24,15 +23,9 @@ pub enum PoolPolicyError {
     #[error("pool entry blocked for {pid}: local non-importable: {details}")]
     NonImportableOnLocal { pid: Principal, details: String },
 
-    // Export
-    #[error("pool entry is not ready for export")]
-    NotReadyForExport,
-
-    #[error("pool entry is missing role metadata")]
-    MissingRole,
-
-    #[error("pool entry is missing module hash")]
-    MissingModuleHash,
+    // Recycling
+    #[error("pool entry blocked for {0}: canister not registered in subnet registry")]
+    NotRegisteredInSubnet(Principal),
 
     // Authority
     #[error("caller is not authorized to perform pool operation")]

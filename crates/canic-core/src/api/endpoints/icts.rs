@@ -1,7 +1,7 @@
 use crate::{
     cdk::api::canister_self,
     dto::canister::{CanisterMetadataView, CanisterStatusView},
-    workflow,
+    ops,
 };
 
 #[must_use]
@@ -19,8 +19,8 @@ pub fn icts_description() -> String {
     env!("CARGO_PKG_DESCRIPTION").to_string()
 }
 
-#[must_use]
 /// ICTS standard: return types are fixed by the spec.
+#[must_use]
 pub fn icts_metadata() -> CanisterMetadataView {
     CanisterMetadataView {
         name: icts_name(),
@@ -31,7 +31,7 @@ pub fn icts_metadata() -> CanisterMetadataView {
 
 /// ICTS standard: return types and string errors are fixed by the spec.
 pub async fn icts_canister_status() -> Result<CanisterStatusView, String> {
-    workflow::canister::canister_status(canister_self())
+    ops::ic::mgmt::canister_status(canister_self())
         .await
         .map_err(|err| err.to_string())
 }

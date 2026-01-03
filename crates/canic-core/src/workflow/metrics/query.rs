@@ -11,7 +11,7 @@ use crate::{
     workflow::{metrics::mapper::MetricsMapper, view::paginate::paginate_vec},
 };
 
-pub(crate) fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
+pub fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
     let snapshot = MetricsOps::system_snapshot();
     let mut entries = MetricsMapper::system_metrics_to_view(snapshot.entries);
 
@@ -20,7 +20,7 @@ pub(crate) fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
     entries
 }
 
-pub(crate) fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
+pub fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
     let snapshot = MetricsOps::icc_snapshot();
     let mut entries = MetricsMapper::icc_metrics_to_view(snapshot.entries);
 
@@ -34,7 +34,7 @@ pub(crate) fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
     paginate_vec(entries, page)
 }
 
-pub(crate) fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
+pub fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
     let snapshot = MetricsOps::http_snapshot();
     let mut entries = MetricsMapper::http_metrics_to_view(snapshot.entries);
 
@@ -43,7 +43,7 @@ pub(crate) fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
     paginate_vec(entries, page)
 }
 
-pub(crate) fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
+pub fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
     let snapshot = MetricsOps::timer_snapshot();
     let mut entries = MetricsMapper::timer_metrics_to_view(snapshot.entries);
 
@@ -57,7 +57,7 @@ pub(crate) fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
     paginate_vec(entries, page)
 }
 
-pub(crate) fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> {
+pub fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> {
     let snapshot = MetricsOps::access_snapshot();
     let mut entries = MetricsMapper::access_metrics_to_view(snapshot.entries);
 
@@ -70,12 +70,12 @@ pub(crate) fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> 
     paginate_vec(entries, page)
 }
 
-pub(crate) fn metrics_perf_page(page: PageRequest) -> Page<PerfEntry> {
+pub fn metrics_perf_page(page: PageRequest) -> Page<PerfEntry> {
     let snapshot = PerfOps::snapshot();
     paginate_vec(snapshot.entries, page)
 }
 
-pub(crate) fn metrics_endpoint_health_page(
+pub fn metrics_endpoint_health_page(
     page: PageRequest,
     exclude_endpoint: Option<&str>,
 ) -> Page<EndpointHealthView> {

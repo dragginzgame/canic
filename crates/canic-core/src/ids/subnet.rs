@@ -39,7 +39,7 @@ impl SubnetRole {
         &self.0
     }
 
-    /// Returns true if this type represents the built-in ROOT canister.
+    /// Returns true if this type represents the built-in PRIME subnet
     #[must_use]
     pub fn is_prime(&self) -> bool {
         self.0.as_ref() == PRIME_ROLE

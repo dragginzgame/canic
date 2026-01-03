@@ -21,7 +21,7 @@ use crate::{
 ///
 /// Policy decisions about *who* should control pool canisters
 /// are assumed to be encoded in configuration.
-pub(crate) fn pool_controllers() -> Result<Vec<Principal>, Error> {
+pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
     let mut controllers = ConfigOps::controllers()?;
 
     let root = canister_self();

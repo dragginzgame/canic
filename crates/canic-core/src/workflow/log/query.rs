@@ -9,7 +9,7 @@ use crate::{
 };
 
 // log_page
-pub(crate) fn log_page(
+pub fn log_page(
     crate_name: Option<String>,
     topic: Option<String>,
     min_level: Option<Level>,

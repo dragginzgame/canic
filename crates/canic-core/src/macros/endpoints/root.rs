@@ -60,12 +60,12 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         fn canic_app_registry() -> ::canic::core::dto::registry::AppRegistryView {
-            $crate::api::endpoints::canic_app_registry()
+            $crate::api::endpoints::canic_app_registry().expect("fix me")
         }
 
         #[canic_query]
         fn canic_subnet_registry() -> ::canic::core::dto::registry::SubnetRegistryView {
-            $crate::api::endpoints::canic_subnet_registry()
+            $crate::api::endpoints::canic_subnet_registry().expect("fix me")
         }
 
         //

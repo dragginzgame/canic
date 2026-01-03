@@ -1,16 +1,15 @@
 use crate::{
     Error, ThisError,
-    cdk::{api::canister_self, types::Principal},
+    cdk::types::Principal,
     domain::policy::upgrade::plan_upgrade,
     ids::CanisterRole,
     log,
     log::Topic,
     ops::{
-        ic::mgmt::{CanisterInstallMode, canister_status, delete_canister, upgrade_canister},
-        runtime::{canister::install_code_with_extra_arg, wasm::WasmOps},
+        ic::mgmt::{canister_status, upgrade_canister},
+        runtime::wasm::WasmOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-            pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
@@ -18,11 +17,7 @@ use crate::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-        ic::provision::{
-            build_nonroot_init_payload, create_and_install_canister,
-            rebuild_directories_from_registry,
-        },
-        pool::{pool_export_canister, pool_import_canister, pool_recycle_canister},
+        ic::provision::{create_and_install_canister, rebuild_directories_from_registry},
     },
 };
 
@@ -45,9 +40,6 @@ pub enum OrchestratorError {
         found: Option<Principal>,
     },
 
-    #[error("cannot delete {pid}: subtree is not empty ({size} nodes)")]
-    SubtreeNotEmpty { pid: Principal, size: usize },
-
     #[error("module hash mismatch for {0}")]
     ModuleHashMismatch(Principal),
 
@@ -56,18 +48,6 @@ pub enum OrchestratorError {
 
     #[error("subnet directory diverged from registry")]
     SubnetDirectoryDiverged,
-
-    #[error("canister {0} unexpectedly present in pool")]
-    InPool(Principal),
-
-    #[error("expected canister {0} to be in pool")]
-    NotInPool(Principal),
-
-    #[error("cannot perform init-based install for root canister {0}")]
-    RootInitNotSupported(Principal),
-
-    #[error("cannot build init payload for {0}: missing parent pid")]
-    MissingParentPid(Principal),
 }
 
 impl From<OrchestratorError> for Error {
@@ -82,25 +62,7 @@ pub enum LifecycleEvent {
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     },
-    Delete {
-        pid: Principal,
-    },
     Upgrade {
-        pid: Principal,
-    },
-    Reinstall {
-        pid: Principal,
-    },
-
-    /// Adopt a pool canister into topology under `parent`.
-    /// Pool export is a handoff; this event performs the attach + install.
-    AdoptPool {
-        pid: Principal,
-        parent: Principal,
-        extra_arg: Option<Vec<u8>>,
-    },
-
-    RecycleToPool {
         pid: Principal,
     },
 }
@@ -108,8 +70,6 @@ pub enum LifecycleEvent {
 #[derive(Default)]
 pub struct LifecycleResult {
     pub new_canister_pid: Option<Principal>,
-    pub cascaded_topology: bool,
-    pub cascaded_directories: bool,
 }
 
 impl LifecycleResult {
@@ -117,8 +77,6 @@ impl LifecycleResult {
     pub const fn created(pid: Principal) -> Self {
         Self {
             new_canister_pid: Some(pid),
-            cascaded_topology: true,
-            cascaded_directories: true,
         }
     }
 }
@@ -127,8 +85,6 @@ pub struct CanisterLifecycleOrchestrator;
 
 impl CanisterLifecycleOrchestrator {
     pub(crate) async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
-        let root_pid = canister_self();
-
         match event {
             // -----------------------------------------------------------------
             // CREATE
@@ -140,34 +96,9 @@ impl CanisterLifecycleOrchestrator {
             } => Self::apply_create(role, parent, extra_arg).await,
 
             // -----------------------------------------------------------------
-            // DELETE (leaf-only)
-            // -----------------------------------------------------------------
-            LifecycleEvent::Delete { pid } => Self::apply_delete(pid, root_pid).await,
-
-            // -----------------------------------------------------------------
             // UPGRADE
             // -----------------------------------------------------------------
             LifecycleEvent::Upgrade { pid } => Self::apply_upgrade(pid).await,
-
-            // -----------------------------------------------------------------
-            // REINSTALL
-            // -----------------------------------------------------------------
-            LifecycleEvent::Reinstall { pid } => Self::apply_reinstall(pid).await,
-
-            // -----------------------------------------------------------------
-            // ADOPT FROM POOL
-            // -----------------------------------------------------------------
-            LifecycleEvent::AdoptPool {
-                pid,
-                parent,
-                extra_arg,
-            } => Self::apply_adopt_pool(pid, parent, extra_arg).await,
-            // -----------------------------------------------------------------
-            // RECYCLE INTO POOL
-            // -----------------------------------------------------------------
-            LifecycleEvent::RecycleToPool { pid } => {
-                Self::apply_recycle_to_pool(pid, root_pid).await
-            }
         }
     }
 
@@ -181,29 +112,10 @@ impl CanisterLifecycleOrchestrator {
         let pid = create_and_install_canister(&role, parent, extra_arg).await?;
 
         assert_immediate_parent(pid, parent)?;
-        assert_not_in_pool(pid)?;
 
         cascade_all(Some(&role), Some(pid)).await?;
 
         Ok(LifecycleResult::created(pid))
-    }
-
-    async fn apply_delete(pid: Principal, root_pid: Principal) -> Result<LifecycleResult, Error> {
-        assert_no_children(pid)?;
-
-        // Snapshot BEFORE destructive delete.
-        let snap = snapshot_topology_required(pid)?;
-
-        delete_canister(pid).await?;
-
-        let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
-        cascade_all(Some(&snap.role), topology_target).await?;
-
-        Ok(LifecycleResult {
-            new_canister_pid: None,
-            cascaded_topology: topology_target.is_some(),
-            cascaded_directories: true,
-        })
     }
 
     async fn apply_upgrade(pid: Principal) -> Result<LifecycleResult, Error> {
@@ -219,7 +131,6 @@ impl CanisterLifecycleOrchestrator {
             assert_parent_exists(parent_pid)?;
             assert_immediate_parent(pid, parent_pid)?;
         }
-        assert_not_in_pool(pid)?;
 
         if !plan.should_upgrade {
             log!(
@@ -229,6 +140,7 @@ impl CanisterLifecycleOrchestrator {
             );
             SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
             assert_module_hash(pid, target_hash)?;
+
             return Ok(LifecycleResult::default());
         }
 
@@ -238,137 +150,6 @@ impl CanisterLifecycleOrchestrator {
 
         Ok(LifecycleResult::default())
     }
-
-    async fn apply_reinstall(pid: Principal) -> Result<LifecycleResult, Error> {
-        let entry =
-            SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
-
-        if entry.role == CanisterRole::ROOT {
-            return Err(OrchestratorError::RootInitNotSupported(pid).into());
-        }
-
-        let wasm = WasmOps::try_get(&entry.role)?;
-
-        let parent_pid = entry
-            .parent_pid
-            .ok_or(OrchestratorError::MissingParentPid(pid))?;
-        assert_parent_exists(parent_pid)?;
-        assert_immediate_parent(pid, parent_pid)?;
-        assert_not_in_pool(pid)?;
-
-        let payload = build_nonroot_init_payload(&entry.role, parent_pid)?;
-        install_code_with_extra_arg(
-            CanisterInstallMode::Reinstall,
-            pid,
-            wasm.bytes(),
-            payload,
-            None,
-        )
-        .await?;
-        SubnetRegistryOps::update_module_hash(pid, wasm.module_hash());
-        assert_module_hash(pid, wasm.module_hash())?;
-
-        Ok(LifecycleResult::default())
-    }
-
-    async fn apply_adopt_pool(
-        pid: Principal,
-        parent: Principal,
-        extra_arg: Option<Vec<u8>>,
-    ) -> Result<LifecycleResult, Error> {
-        // Must currently be in pool
-        assert_in_pool(pid)?;
-        assert_parent_exists(parent)?;
-
-        // Export metadata from pool (handoff)
-        let (role, stored_hash) = pool_export_canister(pid).await?;
-
-        // No longer in pool
-        assert_not_in_pool(pid)?;
-
-        if role == CanisterRole::ROOT {
-            try_return_to_pool(pid, "adopt_pool role=ROOT").await;
-            return Err(OrchestratorError::RootInitNotSupported(pid).into());
-        }
-
-        let wasm = WasmOps::try_get(&role)?;
-
-        // Validate module hash matches what pool expected (defensive)
-        if wasm.module_hash() != stored_hash {
-            try_return_to_pool(pid, "adopt_pool module hash mismatch").await;
-            return Err(OrchestratorError::ModuleHashMismatch(pid).into());
-        }
-
-        // Attach before install so init hooks can observe the registry; roll back on failure.
-        if let Err(err) = SubnetRegistryOps::register(pid, &role, parent, stored_hash) {
-            try_return_to_pool(pid, "adopt_pool register failed").await;
-            return Err(err);
-        }
-
-        let payload = build_nonroot_init_payload(&role, parent)?;
-        if let Err(err) = install_code_with_extra_arg(
-            CanisterInstallMode::Install,
-            pid,
-            wasm.bytes(),
-            payload,
-            extra_arg,
-        )
-        .await
-        {
-            let _ = SubnetRegistryOps::remove(&pid);
-            try_return_to_pool(pid, "adopt_pool install failed").await;
-            return Err(err);
-        }
-
-        // Postconditions
-        assert_immediate_parent(pid, parent)?;
-
-        // Targeted cascade on the newly adopted canister
-        cascade_all(Some(&role), Some(pid)).await?;
-
-        Ok(LifecycleResult {
-            new_canister_pid: None,
-            cascaded_topology: true,
-            cascaded_directories: true,
-        })
-    }
-
-    async fn apply_recycle_to_pool(
-        pid: Principal,
-        root_pid: Principal,
-    ) -> Result<LifecycleResult, Error> {
-        // Snapshot BEFORE destruction. If it wasn't in registry, that's a bug.
-        let snap = snapshot_topology_required(pid)?;
-
-        pool_recycle_canister(pid).await?;
-
-        let topology_target = snap.parent_pid.filter(|p| *p != root_pid);
-        cascade_all(Some(&snap.role), topology_target).await?;
-
-        Ok(LifecycleResult {
-            new_canister_pid: None,
-            cascaded_topology: topology_target.is_some(),
-            cascaded_directories: true,
-        })
-    }
-}
-
-//
-// Adjacency snapshotting: single source of parent/role for destructive operations.
-//
-
-struct CanisterAdjacency {
-    role: CanisterRole,
-    parent_pid: Option<Principal>,
-}
-
-fn snapshot_topology_required(pid: Principal) -> Result<CanisterAdjacency, OrchestratorError> {
-    let entry = SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
-
-    Ok(CanisterAdjacency {
-        role: entry.role,
-        parent_pid: entry.parent_pid,
-    })
 }
 
 //
@@ -408,17 +189,6 @@ fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorError> 
     Ok(())
 }
 
-fn assert_no_children(pid: Principal) -> Result<(), OrchestratorError> {
-    let subtree = SubnetRegistryOps::subtree(pid);
-    if subtree.len() > 1 {
-        return Err(OrchestratorError::SubtreeNotEmpty {
-            pid,
-            size: subtree.len(),
-        });
-    }
-    Ok(())
-}
-
 fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), OrchestratorError> {
     let entry = SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
     if entry.module_hash == Some(expected_hash) {
@@ -446,22 +216,6 @@ fn assert_directories_match_registry() -> Result<(), Error> {
     Ok(())
 }
 
-fn assert_not_in_pool(pid: Principal) -> Result<(), OrchestratorError> {
-    if PoolOps::contains(&pid) {
-        Err(OrchestratorError::InPool(pid))
-    } else {
-        Ok(())
-    }
-}
-
-fn assert_in_pool(pid: Principal) -> Result<(), OrchestratorError> {
-    if PoolOps::contains(&pid) {
-        Ok(())
-    } else {
-        Err(OrchestratorError::NotInPool(pid))
-    }
-}
-
 fn assert_immediate_parent(
     pid: Principal,
     expected_parent: Principal,
@@ -475,15 +229,5 @@ fn assert_immediate_parent(
             expected: expected_parent,
             found: other,
         }),
-    }
-}
-
-async fn try_return_to_pool(pid: Principal, context: &str) {
-    if let Err(err) = pool_import_canister(pid).await {
-        log!(
-            Topic::CanisterLifecycle,
-            Warn,
-            "failed to return {pid} to pool after {context}: {err}"
-        );
     }
 }

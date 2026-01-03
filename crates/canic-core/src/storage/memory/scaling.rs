@@ -67,22 +67,6 @@ pub struct WorkerEntry {
 
 impl WorkerEntry {
     pub const STORABLE_MAX_SIZE: u32 = 160;
-
-    /// Construct a WorkerEntry.
-    ///
-    /// Callers must supply `created_at_secs`.
-    /// This type does not assign timestamps.
-    pub const fn new(
-        pool: BoundedString64,
-        canister_role: CanisterRole,
-        created_at_secs: u64,
-    ) -> Self {
-        Self {
-            pool,
-            canister_role,
-            created_at_secs,
-        }
-    }
 }
 
 impl_storable_bounded!(WorkerEntry, WorkerEntry::STORABLE_MAX_SIZE, false);

@@ -27,7 +27,7 @@ use crate::{
 /// Allocates new shards when policy allows.
 ///
 
-pub(crate) struct ShardAllocator;
+pub struct ShardAllocator;
 
 impl ShardAllocator {
     /// Create a new shard in the given pool if policy allows.

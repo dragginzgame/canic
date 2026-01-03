@@ -32,6 +32,7 @@ pub enum Topic {
     CanisterPool,
     CanisterState,
     Cycles,
+    Icrc,
     Init,
     Memory,
     Perf,

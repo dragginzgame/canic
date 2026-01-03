@@ -1,7 +1,5 @@
 use crate::{
-    domain::policy::placement::{
-        scaling::ScalingWorkerPlanEntry, sharding::policy::ShardingPlanState,
-    },
+    domain::policy::placement::sharding::policy::ShardingPlanState,
     dto::placement::{ShardEntryView, ShardingPlanStateView, WorkerEntryView},
     ops::storage::placement::{scaling::WorkerEntry, sharding::ShardEntry},
 };
@@ -14,15 +12,6 @@ impl PlacementMapper {
         WorkerEntryView {
             pool: entry.pool.to_string(),
             canister_role: entry.canister_role.clone(),
-            created_at_secs: entry.created_at_secs,
-        }
-    }
-
-    #[must_use]
-    pub fn worker_plan_entry_to_view(entry: ScalingWorkerPlanEntry) -> WorkerEntryView {
-        WorkerEntryView {
-            pool: entry.pool.to_string(),
-            canister_role: entry.canister_role,
             created_at_secs: entry.created_at_secs,
         }
     }

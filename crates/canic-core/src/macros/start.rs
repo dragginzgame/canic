@@ -21,7 +21,7 @@ macro_rules! start {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
-            $crate::lifecycle::init::init_nonroot_canister($canister_role, payload, args.clone());
+            $crate::api::lifecycle::init_nonroot_canister($canister_role, payload, args.clone());
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::api::timer::set_lifecycle_timer(
@@ -40,7 +40,7 @@ macro_rules! start {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::lifecycle::upgrade::post_upgrade_nonroot_canister($canister_role);
+            $crate::api::lifecycle::post_upgrade_nonroot_canister($canister_role);
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::api::timer::set_lifecycle_timer(
@@ -79,7 +79,7 @@ macro_rules! start_root {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::lifecycle::init::init_root_canister(identity);
+            $crate::api::lifecycle::init_root_canister(identity);
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::api::timer::set_lifecycle_timer(
@@ -98,7 +98,7 @@ macro_rules! start_root {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::lifecycle::upgrade::post_upgrade_root_canister();
+            $crate::api::lifecycle::post_upgrade_root_canister();
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::api::timer::set_lifecycle_timer(

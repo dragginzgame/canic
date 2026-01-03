@@ -3,7 +3,7 @@
 //! Pushes environment/topology/state changes from root to child canisters.
 //! This is orchestration logic (fanout), not storage and not placement strategy.
 
-pub(crate) mod snapshot;
+pub mod snapshot;
 pub mod state;
 pub mod topology;
 
@@ -22,23 +22,11 @@ pub enum CascadeError {
     #[error("child rejected cascade: {0:?}")]
     ChildRejected(Principal),
 
-    #[error("canister not found")]
-    CanisterNotFound(Principal),
-
     #[error("invalid parent chain: empty")]
     InvalidParentChain,
 
     #[error("parent chain does not start with self ({0})")]
     ParentChainMissingSelf(Principal),
-
-    #[error("cycle detected in parent chain at {0}")]
-    ParentChainCycle(Principal),
-
-    #[error("parent chain length {0} exceeds registry size")]
-    ParentChainTooLong(usize),
-
-    #[error("parent chain did not terminate at root (stopped at {0})")]
-    ParentChainNotRootTerminated(Principal),
 
     #[error("next hop {0} not found in parent chain")]
     NextHopNotFound(Principal),
