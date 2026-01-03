@@ -11,9 +11,9 @@ use crate::{
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
-    storage::memory::{
+    storage::stable::{
         MemoryError,
-        id::log::{LOG_DATA_ID, LOG_INDEX_ID},
+        memory::log::{LOG_DATA_ID, LOG_INDEX_ID},
     },
     utils::case::{Case, Casing},
 };

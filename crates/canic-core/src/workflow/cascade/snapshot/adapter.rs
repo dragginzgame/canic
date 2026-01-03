@@ -15,7 +15,8 @@
 use super::{StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot};
 use crate::{
     dto::cascade::{
-        StateSnapshotView, TopologyDirectChildView, TopologyPathNodeView, TopologySnapshotView,
+        StateSnapshotView, TopologyChildrenView, TopologyDirectChildView, TopologyPathNodeView,
+        TopologySnapshotView,
     },
     workflow::{
         state::mapper::{AppStateMapper, SubnetStateMapper},
@@ -91,17 +92,15 @@ impl From<&TopologySnapshot> for TopologySnapshotView {
             children_map: snapshot
                 .children_map
                 .iter()
-                .map(|(pid, children)| {
-                    (
-                        *pid,
-                        children
-                            .iter()
-                            .map(|c| TopologyDirectChildView {
-                                pid: c.pid,
-                                role: c.role.clone(),
-                            })
-                            .collect(),
-                    )
+                .map(|(pid, children)| TopologyChildrenView {
+                    parent_pid: *pid,
+                    children: children
+                        .iter()
+                        .map(|c| TopologyDirectChildView {
+                            pid: c.pid,
+                            role: c.role.clone(),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -128,15 +127,16 @@ pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> TopologySnapsh
         children_map: view
             .children_map
             .into_iter()
-            .map(|(pid, children)| {
-                let mapped = children
+            .map(|entry| {
+                let mapped = entry
+                    .children
                     .into_iter()
                     .map(|child| TopologyDirectChild {
                         pid: child.pid,
                         role: child.role,
                     })
                     .collect();
-                (pid, mapped)
+                (entry.parent_pid, mapped)
             })
             .collect(),
     }

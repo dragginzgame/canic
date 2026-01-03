@@ -4,7 +4,7 @@
 use crate::{
     CRATE_NAME, Error, ThisError,
     ops::runtime::RuntimeOpsError,
-    storage::memory::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
+    storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
 use canic_memory::{
     registry::MemoryRegistryError,

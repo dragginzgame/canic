@@ -1,5 +1,5 @@
 use crate::{
-    cdk::types::Cycles,
+    dto::cycles::CycleTrackerEntryView,
     dto::page::{Page, PageRequest},
     workflow,
 };
@@ -9,6 +9,6 @@ use crate::{
 ///
 
 #[must_use]
-pub fn cycle_tracker(page: PageRequest) -> Page<(u64, Cycles)> {
+pub fn cycle_tracker(page: PageRequest) -> Page<CycleTrackerEntryView> {
     workflow::runtime::cycles::query::cycle_tracker_page(page)
 }

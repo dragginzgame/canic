@@ -38,7 +38,18 @@ pub struct StateSnapshotView {
 pub struct TopologySnapshotView {
     pub parents: Vec<TopologyPathNodeView>,
     /// Children keyed by their parent pid (at most one entry per parent).
-    pub children_map: Vec<(Principal, Vec<TopologyDirectChildView>)>,
+    pub children_map: Vec<TopologyChildrenView>,
+}
+
+///
+/// TopologyChildrenView
+/// Parent-keyed children list used in topology cascades.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct TopologyChildrenView {
+    pub parent_pid: Principal,
+    pub children: Vec<TopologyDirectChildView>,
 }
 
 ///

@@ -13,7 +13,7 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    storage::{canister::CanisterSummary, memory::id::children::CANISTER_CHILDREN_ID},
+    storage::{canister::CanisterSummary, stable::memory::children::CANISTER_CHILDREN_ID},
 };
 use candid::Principal;
 use std::cell::RefCell;

@@ -5,7 +5,7 @@ use crate::{
     cdk::{candid::CandidType, types::Principal},
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
     ids::CanisterRole,
-    ops::rpc,
+    ops,
 };
 
 ///
@@ -23,11 +23,11 @@ pub async fn create_canister_request<A>(
 where
     A: CandidType + Send + Sync,
 {
-    rpc::request::create_canister_request(canister_role, parent, extra).await
+    ops::rpc::request::create_canister_request(canister_role, parent, extra).await
 }
 
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
-    rpc::request::upgrade_canister_request(canister_pid).await
+    ops::rpc::request::upgrade_canister_request(canister_pid).await
 }

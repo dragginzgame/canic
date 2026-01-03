@@ -1,4 +1,4 @@
-use crate::{cdk::types::Cycles, storage::memory::cycles::CycleTracker};
+use crate::{cdk::types::Cycles, storage::stable::cycles::CycleTracker};
 
 const CYCLE_TRACKER_RETENTION_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 

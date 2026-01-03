@@ -6,7 +6,6 @@ pub mod command;
 pub mod env;
 pub mod ic;
 pub mod icrc;
-pub mod lifecycle;
 pub mod log;
 pub mod memory;
 pub mod metrics;

@@ -14,13 +14,14 @@
 //! - Data exported from stable registries is treated as a **snapshot** of state,
 //!   not a live or authoritative registry.
 //!
-//! - DTOs therefore prefer simple list representations (`Vec<T>` or
-//!   `Vec<(K, V)>`). More structured shapes are used only when they materially
+//! - DTOs therefore prefer simple list representations (`Vec<T>`). When keyed
+//!   data is needed, define small entry structs (`FooEntryView`) instead of
+//!   tuples or maps. More structured shapes are used only when they materially
 //!   reduce complexity for consumers, not to mirror storage internals or
 //!   reintroduce lost semantics.
 //!
 //! - Avoid `HashMap` in DTOs. Keyed semantics and ordering are not preserved at
-//!   the boundary; use `Vec<(K, V)>` or explicit list types instead.
+//!   the boundary; use `Vec<...EntryView>` or explicit list types instead.
 //!
 //! In short: stable storage is authoritative; DTOs describe how data is
 //! transported, not what guarantees it provides.
@@ -28,6 +29,7 @@
 pub mod abi;
 pub mod canister;
 pub mod cascade;
+pub mod cycles;
 pub mod env;
 pub mod error;
 pub mod http;

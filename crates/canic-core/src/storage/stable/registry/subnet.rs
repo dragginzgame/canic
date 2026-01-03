@@ -17,7 +17,7 @@ use crate::{
     ids::CanisterRole,
     storage::{
         canister::{CanisterEntry, CanisterSummary},
-        memory::id::registry::SUBNET_REGISTRY_ID,
+        stable::memory::registry::SUBNET_REGISTRY_ID,
     },
 };
 use candid::Principal;

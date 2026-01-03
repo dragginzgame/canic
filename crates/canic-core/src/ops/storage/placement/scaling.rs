@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::{BoundedString64, Principal},
     ids::CanisterRole,
-    storage::memory::scaling::{
+    storage::stable::scaling::{
         ScalingRegistry, ScalingRegistryData as ModelScalingRegistryData,
         WorkerEntry as ModelWorkerEntry,
     },

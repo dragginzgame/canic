@@ -18,10 +18,10 @@ pub const CANIC_MEMORY_MIN: u8 = 5;
 pub const CANIC_MEMORY_MAX: u8 = 30;
 
 ///
-/// CANIC Memory IDs (5-30)
+/// CANIC stable memory IDs (5-30)
 ///
 
-pub mod id {
+pub mod memory {
     pub mod children {
         pub const CANISTER_CHILDREN_ID: u8 = 5;
     }

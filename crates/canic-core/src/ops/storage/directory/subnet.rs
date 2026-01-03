@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     ids::CanisterRole,
-    storage::memory::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
+    storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
 };
 
 ///

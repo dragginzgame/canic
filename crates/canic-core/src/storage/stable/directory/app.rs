@@ -2,7 +2,7 @@ use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
     ids::CanisterRole,
-    storage::memory::id::directory::APP_DIRECTORY_ID,
+    storage::stable::memory::directory::APP_DIRECTORY_ID,
 };
 use candid::Principal;
 use std::cell::RefCell;

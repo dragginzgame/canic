@@ -3,11 +3,11 @@ use canic::{
     cdk::types::{Principal, TC},
     core::{
         dto::{
-            canister::{CanisterEntryView, CanisterSummaryView},
+            canister::CanisterSummaryView,
             env::EnvView,
             page::{Page, PageRequest},
             rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
-            topology::SubnetRegistryView,
+            topology::{DirectoryEntryView, SubnetRegistryEntryView, SubnetRegistryView},
         },
         ids::{CanisterRole, SubnetRole},
     },
@@ -68,7 +68,7 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     None
 }
 
-fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<(CanisterRole, CanisterEntryView)> {
+fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntryView> {
     let SubnetRegistryView(registry) = pic
         .query_call(root_id, "canic_subnet_registry", ())
         .expect("query registry");
@@ -77,7 +77,7 @@ fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<(CanisterRole, CanisterE
 }
 
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
-    let subnet_directory_page: Page<(CanisterRole, Principal)> = pic
+    let subnet_directory_page: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
@@ -88,11 +88,15 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
         )
         .expect("query subnet directory");
 
-    subnet_directory_page.entries.into_iter().collect()
+    subnet_directory_page
+        .entries
+        .into_iter()
+        .map(|entry| (entry.role, entry.pid))
+        .collect()
 }
 
-fn registry_has_role(registry: &[(CanisterRole, CanisterEntryView)], role: &CanisterRole) -> bool {
-    registry.iter().any(|(entry_role, _)| entry_role == role)
+fn registry_has_role(registry: &[SubnetRegistryEntryView], role: &CanisterRole) -> bool {
+    registry.iter().any(|entry| &entry.role == role)
 }
 
 fn root_response(pic: &Pic, root_id: Principal, request: Request) -> Response {
@@ -191,7 +195,7 @@ fn root_builds_hierarchy_and_exposes_env() {
     for (role, parent) in expected {
         let entry = registry
             .iter()
-            .find_map(|(entry_role, entry)| (entry_role == &role).then_some(entry))
+            .find_map(|entry| (entry.role == role).then_some(&entry.entry))
             .unwrap_or_else(|| panic!("missing {role} entry in registry"));
 
         assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");
@@ -249,7 +253,7 @@ fn directories_are_consistent_across_canisters() {
 
     let print_counts = true;
 
-    let root_app_dir: Page<(CanisterRole, Principal)> = pic
+    let root_app_dir: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
             "canic_app_directory",
@@ -259,7 +263,7 @@ fn directories_are_consistent_across_canisters() {
             },),
         )
         .expect("root app directory");
-    let root_subnet_dir: Page<(CanisterRole, Principal)> = pic
+    let root_subnet_dir: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
             "canic_subnet_directory",
@@ -279,7 +283,7 @@ fn directories_are_consistent_across_canisters() {
     }
 
     for (role, entry_pid) in subnet_directory.iter().filter(|(role, _)| !role.is_root()) {
-        let app_dir: Page<(CanisterRole, Principal)> = pic
+        let app_dir: Page<DirectoryEntryView> = pic
             .query_call(
                 *entry_pid,
                 "canic_app_directory",
@@ -289,7 +293,7 @@ fn directories_are_consistent_across_canisters() {
                 },),
             )
             .expect("child app directory");
-        let subnet_dir: Page<(CanisterRole, Principal)> = pic
+        let subnet_dir: Page<DirectoryEntryView> = pic
             .query_call(
                 *entry_pid,
                 "canic_subnet_directory",
@@ -329,10 +333,10 @@ fn subnet_children_matches_registry_on_root() {
 
     let mut expected_children: Vec<CanisterSummaryView> = registry
         .iter()
-        .filter(|(_, entry)| entry.parent_pid == Some(root_id))
-        .map(|(role, entry)| CanisterSummaryView {
-            role: role.clone(),
-            parent_pid: entry.parent_pid,
+        .filter(|entry| entry.entry.parent_pid == Some(root_id))
+        .map(|entry| CanisterSummaryView {
+            role: entry.role.clone(),
+            parent_pid: entry.entry.parent_pid,
         })
         .collect();
 

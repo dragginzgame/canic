@@ -7,9 +7,9 @@
 //! Business orchestration and policy live in `workflow`.
 
 pub mod canister;
-pub mod memory;
+pub mod stable;
 
-use crate::storage::memory::MemoryError;
+use crate::storage::stable::MemoryError;
 use thiserror::Error as ThisError;
 
 ///

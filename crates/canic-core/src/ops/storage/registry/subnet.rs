@@ -6,7 +6,7 @@ use crate::{
     ops::{config::ConfigOps, storage::StorageOpsError},
     storage::{
         canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
-        memory::registry::subnet::{SubnetRegistry, SubnetRegistryData},
+        stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
 use std::collections::{HashMap, HashSet};

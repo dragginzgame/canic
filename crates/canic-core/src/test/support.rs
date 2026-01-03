@@ -6,6 +6,7 @@ use crate::{
 use candid::Principal;
 
 pub fn init_sharding_test_config() {
+    // Minimal config + env snapshot for sharding policy tests.
     let toml = r#"
         [subnets.prime.canisters.manager]
         cardinality = "single"
@@ -24,6 +25,7 @@ pub fn init_sharding_test_config() {
 
     Config::init_from_toml(toml).expect("init sharding test config");
 
+    // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);
     let snapshot = EnvSnapshot {
         canister_role: Some(CanisterRole::from("manager")),

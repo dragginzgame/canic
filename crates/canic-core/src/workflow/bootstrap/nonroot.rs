@@ -1,5 +1,11 @@
-//! Non-root bootstrap workflows.
-
+//! Non-root bootstrap is intentionally minimal.
+//!
+//! Non-root canisters do not self-register, create topology,
+//! or restart background work autonomously.
+//! All lifecycle orchestration is driven by the root canister.
+//!
+//! This file exists to make that choice explicit and to provide
+//! a future extension point if non-root lifecycle behavior is added.
 use crate::{Error, log, log::Topic};
 
 ///

@@ -3,7 +3,7 @@ use crate::{
     cdk::{types::Principal, utils::time::now_secs},
     ids::CanisterRole,
     ops::storage::StorageOpsError,
-    storage::memory::sharding::{
+    storage::stable::sharding::{
         ShardEntry as ModelShardEntry, ShardKey,
         registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
     },

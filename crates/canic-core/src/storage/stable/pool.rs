@@ -6,7 +6,7 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_unbounded,
-    storage::memory::id::pool::CANISTER_POOL_ID,
+    storage::stable::memory::pool::CANISTER_POOL_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

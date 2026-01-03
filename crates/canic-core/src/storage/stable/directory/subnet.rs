@@ -5,7 +5,7 @@ use crate::{
     },
     eager_static, ic_memory,
     ids::CanisterRole,
-    storage::memory::id::directory::SUBNET_DIRECTORY_ID,
+    storage::stable::memory::directory::SUBNET_DIRECTORY_ID,
 };
 use std::cell::RefCell;
 

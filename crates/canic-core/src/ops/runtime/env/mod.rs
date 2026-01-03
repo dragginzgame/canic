@@ -3,7 +3,7 @@ use crate::{
     cdk::{api::canister_self, types::Principal},
     ids::{CanisterRole, SubnetRole},
     ops::runtime::RuntimeOpsError,
-    storage::memory::env::{Env, EnvData},
+    storage::stable::env::{Env, EnvData},
 };
 
 ///

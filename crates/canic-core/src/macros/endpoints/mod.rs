@@ -151,20 +151,14 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_app_directory(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<(
-            ::canic::core::ids::CanisterRole,
-            ::canic::core::cdk::types::Principal,
-        )> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::topology::DirectoryEntryView> {
             $crate::api::topology::app_directory(page)
         }
 
         #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<(
-            ::canic::core::ids::CanisterRole,
-            ::canic::core::cdk::types::Principal,
-        )> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::topology::DirectoryEntryView> {
             $crate::api::topology::subnet_directory(page)
         }
 
@@ -186,7 +180,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::cycles::CycleTrackerEntryView> {
             $crate::api::cycles::cycle_tracker(page)
         }
 

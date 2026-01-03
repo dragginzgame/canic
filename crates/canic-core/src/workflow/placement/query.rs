@@ -1,6 +1,9 @@
 use crate::{
     cdk::types::Principal,
-    dto::placement::{ScalingRegistryView, ShardingRegistryView, ShardingTenantsView},
+    dto::placement::{
+        ScalingRegistryEntryView, ScalingRegistryView, ShardingRegistryEntryView,
+        ShardingRegistryView, ShardingTenantsView,
+    },
     ops::storage::placement::{scaling::ScalingRegistryOps, sharding::ShardingRegistryOps},
     workflow::placement::mapper::PlacementMapper,
 };
@@ -11,7 +14,10 @@ pub fn scaling_registry_view() -> ScalingRegistryView {
     let view = data
         .entries
         .into_iter()
-        .map(|(pid, entry)| (pid, PlacementMapper::worker_entry_to_view(&entry)))
+        .map(|(pid, entry)| ScalingRegistryEntryView {
+            pid,
+            entry: PlacementMapper::worker_entry_to_view(&entry),
+        })
         .collect();
 
     ScalingRegistryView(view)
@@ -23,7 +29,10 @@ pub fn sharding_registry_view() -> ShardingRegistryView {
     let view = data
         .entries
         .into_iter()
-        .map(|(pid, entry)| (pid, PlacementMapper::shard_entry_to_view(&entry)))
+        .map(|(pid, entry)| ShardingRegistryEntryView {
+            pid,
+            entry: PlacementMapper::shard_entry_to_view(&entry),
+        })
         .collect();
 
     ShardingRegistryView(view)

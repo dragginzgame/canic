@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     ids::CanisterRole,
-    storage::memory::children::{CanisterChildren, CanisterChildrenData},
+    storage::stable::children::{CanisterChildren, CanisterChildrenData},
 };
 
 ///
