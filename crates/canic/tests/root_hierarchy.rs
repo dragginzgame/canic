@@ -7,6 +7,7 @@ use canic::{
             env::EnvView,
             page::{Page, PageRequest},
             registry::SubnetRegistryView,
+            rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
         },
         ids::{CanisterRole, SubnetRole},
     },
@@ -67,6 +68,59 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     None
 }
 
+fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<(CanisterRole, CanisterEntryView)> {
+    let SubnetRegistryView(registry) = pic
+        .query_call(root_id, "canic_subnet_registry", ())
+        .expect("query registry");
+
+    registry
+}
+
+fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
+    let subnet_directory_page: Page<(CanisterRole, Principal)> = pic
+        .query_call(
+            root_id,
+            "canic_subnet_directory",
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
+        )
+        .expect("query subnet directory");
+
+    subnet_directory_page.entries.into_iter().collect()
+}
+
+fn registry_has_role(registry: &[(CanisterRole, CanisterEntryView)], role: &CanisterRole) -> bool {
+    registry.iter().any(|(entry_role, _)| entry_role == role)
+}
+
+fn root_response(pic: &Pic, root_id: Principal, request: Request) -> Response {
+    let response: Result<Response, PublicError> = pic
+        .update_call_as(root_id, root_id, "canic_response", (request,))
+        .expect("canic_response transport");
+
+    response.expect("canic_response failed")
+}
+
+fn ensure_root_canister(pic: &Pic, root_id: Principal, role: CanisterRole) {
+    let registry = fetch_registry(pic, root_id);
+    if registry_has_role(&registry, &role) {
+        return;
+    }
+
+    let request = Request::CreateCanister(CreateCanisterRequest {
+        canister_role: role.clone(),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+    });
+
+    match root_response(pic, root_id, request) {
+        Response::CreateCanister(_) => {}
+        other => panic!("unexpected response for {role}: {other:?}"),
+    }
+}
+
 // -----------------------------------------------------------------------------
 // TESTS
 // -----------------------------------------------------------------------------
@@ -76,7 +130,6 @@ static SETUP: OnceLock<Setup> = OnceLock::new();
 struct Setup {
     pic: &'static Pic,
     root_id: Principal,
-    registry: Vec<(CanisterRole, CanisterEntryView)>,
     subnet_directory: HashMap<CanisterRole, Principal>,
 }
 
@@ -93,32 +146,26 @@ fn setup_root() -> &'static Setup {
         // Fund root so it can create children using its configured cycle targets.
         pic.add_cycles(root_id, 50 * TC);
 
-        // The root performs child installation via timers.
-        for _ in 0..100 {
-            pic.tick();
+        // NOTE: Tests explicitly create required canisters.
+        // Auto-create is async and must not be relied upon here.
+        let required = [
+            canister::APP,
+            canister::AUTH,
+            canister::SCALE_HUB,
+            canister::SHARD_HUB,
+        ];
+
+        for role in required {
+            ensure_root_canister(pic, root_id, role);
         }
 
-        let SubnetRegistryView(registry) = pic
-            .query_call(root_id, "canic_subnet_registry", ())
-            .expect("query registry");
+        pic.tick_n(5);
 
-        let subnet_directory_page: Page<(CanisterRole, Principal)> = pic
-            .query_call(
-                root_id,
-                "canic_subnet_directory",
-                (PageRequest {
-                    limit: 100,
-                    offset: 0,
-                },),
-            )
-            .expect("query subnet directory");
-
-        let subnet_directory = subnet_directory_page.entries.into_iter().collect();
+        let subnet_directory = fetch_subnet_directory(pic, root_id);
 
         Setup {
             pic,
             root_id,
-            registry,
             subnet_directory,
         }
     })
@@ -130,7 +177,7 @@ fn root_builds_hierarchy_and_exposes_env() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = &setup.registry;
+    let registry = fetch_registry(pic, root_id);
     let subnet_directory = &setup.subnet_directory;
 
     let expected = [
@@ -278,7 +325,7 @@ fn subnet_children_matches_registry_on_root() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = &setup.registry;
+    let registry = fetch_registry(pic, root_id);
 
     let mut expected_children: Vec<CanisterSummaryView> = registry
         .iter()
@@ -325,7 +372,7 @@ fn worker_topology_cascades_through_parent() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = &setup.registry;
+    let registry = fetch_registry(pic, root_id);
     let subnet_directory = &setup.subnet_directory;
 
     let scale_hub_pid = subnet_directory
@@ -346,9 +393,7 @@ fn worker_topology_cascades_through_parent() {
         .expect("create worker via scale_hub (app)");
 
     // Allow any async cascades to settle.
-    for _ in 0..10 {
-        pic.tick();
-    }
+    pic.tick_n(10);
 
     // Registry on root should show a new worker under scale_hub.
     let SubnetRegistryView(registry_after) = pic

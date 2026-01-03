@@ -160,6 +160,33 @@ impl Pic {
             .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
     }
 
+    /// Generic update call helper with an explicit caller principal.
+    pub fn update_call_as<T, A>(
+        &self,
+        canister_id: Principal,
+        caller: Principal,
+        method: &str,
+        args: A,
+    ) -> Result<T, PublicError>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
+        let bytes: Vec<u8> = encode_args(args)
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+        let result = self
+            .0
+            .update_call(canister_id, caller, method, bytes)
+            .map_err(|err| {
+                PublicError::internal(format!(
+                    "pocket_ic update_call failed (canister={canister_id}, method={method}): {err}"
+                ))
+            })?;
+
+        decode_one(&result)
+            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+    }
+
     /// Generic query call helper.
     pub fn query_call<T, A>(
         &self,
@@ -184,6 +211,39 @@ impl Pic {
 
         decode_one(&result)
             .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+    }
+
+    /// Generic query call helper with an explicit caller principal.
+    pub fn query_call_as<T, A>(
+        &self,
+        canister_id: Principal,
+        caller: Principal,
+        method: &str,
+        args: A,
+    ) -> Result<T, PublicError>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
+        let bytes: Vec<u8> = encode_args(args)
+            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+        let result = self
+            .0
+            .query_call(canister_id, caller, method, bytes)
+            .map_err(|err| {
+                PublicError::internal(format!(
+                    "pocket_ic query_call failed (canister={canister_id}, method={method}): {err}"
+                ))
+            })?;
+
+        decode_one(&result)
+            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+    }
+
+    pub fn tick_n(&self, times: usize) {
+        for _ in 0..times {
+            self.tick();
+        }
     }
 }
 

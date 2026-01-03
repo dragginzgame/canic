@@ -21,10 +21,7 @@ use crate::{
     },
 };
 use candid::Principal;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-};
+use std::cell::RefCell;
 
 eager_static! {
     static SUBNET_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
@@ -174,80 +171,6 @@ impl SubnetRegistry {
         })
     }
 
-    /// Returns the entire subtree rooted at `pid`:
-    /// the original canister (if found) plus all its descendants.
-    #[must_use]
-    pub(crate) fn subtree(root_pid: Principal) -> Vec<(Principal, CanisterSummary)> {
-        let entries = Self::export();
-
-        // Build parent -> children map
-        let mut children: HashMap<Principal, Vec<(Principal, CanisterEntry)>> = HashMap::new();
-        let mut root: Option<CanisterEntry> = None;
-
-        for (pid, entry) in entries.entries {
-            if pid == root_pid {
-                root = Some(entry.clone());
-            }
-
-            if let Some(parent) = entry.parent_pid {
-                children.entry(parent).or_default().push((pid, entry));
-            }
-        }
-
-        let Some(root_entry) = root else {
-            return vec![];
-        };
-
-        let mut result: Vec<(Principal, CanisterSummary)> =
-            vec![(root_pid, CanisterSummary::from(root_entry))];
-
-        let mut stack = vec![root_pid];
-        let mut visited: HashSet<Principal> = HashSet::new();
-        visited.insert(root_pid);
-
-        while let Some(current) = stack.pop() {
-            if let Some(kids) = children.get(&current) {
-                for (child_pid, child_entry) in kids {
-                    if visited.insert(*child_pid) {
-                        stack.push(*child_pid);
-                        result.push((*child_pid, CanisterSummary::from(child_entry.clone())));
-                    }
-                }
-            }
-        }
-
-        result
-    }
-
-    /// Return true if `entry_pid` is part of the subtree rooted at `root_pid`.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn is_in_subtree(
-        root_pid: Principal,
-        entry_pid: Principal,
-        all: &[(Principal, CanisterSummary)],
-    ) -> bool {
-        if entry_pid == root_pid {
-            return true;
-        }
-
-        // Build child -> parent map
-        let parent_map: HashMap<Principal, Principal> = all
-            .iter()
-            .filter_map(|(pid, summary)| summary.parent_pid.map(|parent| (*pid, parent)))
-            .collect();
-
-        let mut current = parent_map.get(&entry_pid).copied();
-        while let Some(pid) = current {
-            if pid == root_pid {
-                return true;
-            }
-            current = parent_map.get(&pid).copied();
-        }
-
-        false
-    }
-
     //
     // Export & test utils
     //
@@ -268,96 +191,99 @@ impl SubnetRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cdk::utils::time::now_secs, ids::CanisterRole};
+    use crate::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
-    fn sort_by_pid(entries: &mut [(Principal, CanisterSummary)]) {
-        entries.sort_by(|(a, _), (b, _)| a.as_slice().cmp(b.as_slice()));
+    fn clear() {
+        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
-    fn register_tree() {
-        // clear registry
-        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
+    fn seed_basic_tree() {
+        clear();
 
-        // root
         SubnetRegistry::register_root(p(1), 1);
-
-        // children of root
         SubnetRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![], 2);
         SubnetRegistry::register(p(3), &CanisterRole::new("beta"), p(1), vec![], 3);
-
-        // grandchildren under alpha
-        SubnetRegistry::register(p(4), &CanisterRole::new("alpha-a"), p(2), vec![], 4);
-        SubnetRegistry::register(p(5), &CanisterRole::new("alpha-b"), p(2), vec![], 5);
-
-        // great-grandchild under alpha-b
-        SubnetRegistry::register(p(6), &CanisterRole::new("alpha-b-i"), p(5), vec![], 6);
-
-        // child under beta
-        SubnetRegistry::register(p(7), &CanisterRole::new("beta-a"), p(3), vec![], 7);
     }
 
     #[test]
-    fn subtree_handles_unbalanced_tree() {
-        register_tree();
+    fn get_and_get_parent_work() {
+        seed_basic_tree();
 
-        let mut subtree = SubnetRegistry::subtree(p(2));
-        sort_by_pid(&mut subtree);
+        let entry = SubnetRegistry::get(p(2)).expect("alpha exists");
+        assert_eq!(entry.parent_pid, Some(p(1)));
 
-        let expected = vec![p(2), p(4), p(5), p(6)];
-        let actual: Vec<Principal> = subtree.into_iter().map(|(pid, _)| pid).collect();
+        let parent = SubnetRegistry::get_parent(p(2));
+        assert_eq!(parent, Some(p(1)));
 
-        assert_eq!(expected, actual);
+        assert_eq!(SubnetRegistry::get_parent(p(1)), None);
     }
 
     #[test]
-    fn is_in_subtree_uses_parent_chain_map() {
-        register_tree();
+    fn find_first_by_role_finds_matching_entry() {
+        seed_basic_tree();
 
-        let full_tree = SubnetRegistry::subtree(p(1));
+        let (pid, entry) = SubnetRegistry::find_first_by_role(&CanisterRole::new("beta"))
+            .expect("beta role exists");
 
-        assert!(SubnetRegistry::is_in_subtree(p(2), p(6), &full_tree));
-        assert!(!SubnetRegistry::is_in_subtree(p(2), p(7), &full_tree));
-        assert!(SubnetRegistry::is_in_subtree(p(1), p(7), &full_tree));
+        assert_eq!(pid, p(3));
+        assert_eq!(entry.role, CanisterRole::new("beta"));
     }
 
     #[test]
-    fn subtree_skips_cycles() {
-        // clear registry
-        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
+    fn children_returns_only_direct_children() {
+        seed_basic_tree();
 
-        let a = p(1);
-        let b = p(2);
+        let children = SubnetRegistry::children(p(1));
+        let pids: Vec<Principal> = children.into_iter().map(|(pid, _)| pid).collect();
 
-        SubnetRegistry::insert(
-            a,
-            CanisterEntry {
-                role: CanisterRole::new("alpha"),
-                parent_pid: Some(b),
-                module_hash: None,
-                created_at: now_secs(),
-            },
-        );
+        assert_eq!(pids.len(), 2);
+        assert!(pids.contains(&p(2)));
+        assert!(pids.contains(&p(3)));
+    }
 
-        SubnetRegistry::insert(
-            b,
-            CanisterEntry {
-                role: CanisterRole::new("beta"),
-                parent_pid: Some(a),
-                module_hash: None,
-                created_at: now_secs(),
-            },
-        );
+    #[test]
+    fn update_module_hash_mutates_existing_entry() {
+        seed_basic_tree();
 
-        let mut subtree = SubnetRegistry::subtree(a);
-        sort_by_pid(&mut subtree);
+        let updated = SubnetRegistry::update_module_hash(p(2), vec![1, 2, 3]);
+        assert!(updated);
 
-        let expected = vec![a, b];
-        let actual: Vec<Principal> = subtree.into_iter().map(|(pid, _)| pid).collect();
+        let entry = SubnetRegistry::get(p(2)).unwrap();
+        assert_eq!(entry.module_hash, Some(vec![1, 2, 3]));
+    }
 
-        assert_eq!(expected, actual);
+    #[test]
+    fn update_module_hash_returns_false_for_missing_entry() {
+        clear();
+
+        let updated = SubnetRegistry::update_module_hash(p(9), vec![1, 2, 3]);
+        assert!(!updated);
+    }
+
+    #[test]
+    fn remove_deletes_entry_and_returns_it() {
+        seed_basic_tree();
+
+        let removed = SubnetRegistry::remove(&p(2)).expect("entry removed");
+
+        assert_eq!(removed.parent_pid, Some(p(1)));
+        assert!(SubnetRegistry::get(p(2)).is_none());
+    }
+
+    #[test]
+    fn export_returns_all_entries() {
+        seed_basic_tree();
+
+        let exported = SubnetRegistry::export();
+        let pids: Vec<Principal> = exported.entries.into_iter().map(|(pid, _)| pid).collect();
+
+        assert_eq!(pids.len(), 3);
+        assert!(pids.contains(&p(1)));
+        assert!(pids.contains(&p(2)));
+        assert!(pids.contains(&p(3)));
     }
 }

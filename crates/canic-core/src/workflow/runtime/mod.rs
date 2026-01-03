@@ -13,7 +13,7 @@ use crate::{
     log::Topic,
     ops::{
         runtime::{
-            env::EnvOps,
+            env::{EnvOps, EnvSnapshot},
             memory::{MemoryOps, MemoryRegistryInitSummary},
         },
         storage::{
@@ -120,25 +120,23 @@ pub fn init_root_canister(identity: SubnetIdentity) {
 
     // --- Phase 2: Env registration ---
     let self_pid = canister_self();
-    EnvOps::set_canister_role(CanisterRole::ROOT);
-    EnvOps::set_root_pid(self_pid);
+    let (subnet_pid, subnet_role, prime_root_pid) = match identity {
+        SubnetIdentity::Prime => (self_pid, SubnetRole::PRIME, self_pid),
+        SubnetIdentity::Standard(params) => (self_pid, params.subnet_type, params.prime_root_pid),
+        SubnetIdentity::Manual(subnet_pid) => (subnet_pid, SubnetRole::PRIME, self_pid),
+    };
 
-    match identity {
-        SubnetIdentity::Prime => {
-            EnvOps::set_prime_root_pid(self_pid);
-            EnvOps::set_subnet_role(SubnetRole::PRIME);
-            EnvOps::set_subnet_pid(self_pid);
-        }
-        SubnetIdentity::Standard(params) => {
-            EnvOps::set_prime_root_pid(params.prime_root_pid);
-            EnvOps::set_subnet_role(params.subnet_type);
-            EnvOps::set_subnet_pid(self_pid);
-        }
-        SubnetIdentity::Manual(subnet_pid) => {
-            EnvOps::set_prime_root_pid(self_pid);
-            EnvOps::set_subnet_role(SubnetRole::PRIME);
-            EnvOps::set_subnet_pid(subnet_pid);
-        }
+    let snapshot = EnvSnapshot {
+        prime_root_pid: Some(prime_root_pid),
+        root_pid: Some(self_pid),
+        subnet_pid: Some(subnet_pid),
+        subnet_role: Some(subnet_role),
+        canister_role: Some(CanisterRole::ROOT),
+        parent_pid: Some(prime_root_pid),
+    };
+
+    if let Err(err) = EnvOps::import(snapshot) {
+        fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
     SubnetRegistryOps::register_root(self_pid);
