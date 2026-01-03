@@ -1,7 +1,7 @@
 use crate::{
-    dto::registry::{AppRegistryView, SubnetRegistryView},
+    dto::topology::{AppRegistryView, SubnetRegistryView},
     ops::storage::registry::{app, subnet::SubnetRegistryOps},
-    workflow::registry::mapper::{AppRegistryMapper, SubnetRegistryMapper},
+    workflow::topology::registry::mapper::{AppRegistryMapper, SubnetRegistryMapper},
 };
 
 pub fn app_registry_view() -> AppRegistryView {

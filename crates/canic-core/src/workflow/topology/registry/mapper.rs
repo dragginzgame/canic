@@ -1,5 +1,5 @@
 use crate::{
-    dto::registry::{AppRegistryView, SubnetRegistryView},
+    dto::topology::{AppRegistryView, SubnetRegistryView},
     ops::storage::registry::{app::AppRegistrySnapshot, subnet::SubnetRegistrySnapshot},
     workflow::canister::mapper::CanisterMapper,
 };

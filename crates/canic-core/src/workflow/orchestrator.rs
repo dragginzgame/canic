@@ -16,8 +16,8 @@ use crate::{
     workflow::{
         WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
-        directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
         ic::provision::{create_and_install_canister, rebuild_directories_from_registry},
+        topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     },
 };
 

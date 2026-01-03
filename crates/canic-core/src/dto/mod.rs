@@ -28,7 +28,6 @@
 pub mod abi;
 pub mod canister;
 pub mod cascade;
-pub mod directory;
 pub mod env;
 pub mod error;
 pub mod http;
@@ -38,10 +37,10 @@ pub mod metrics;
 pub mod page;
 pub mod placement;
 pub mod pool;
-pub mod registry;
 pub mod rpc;
 pub mod state;
 pub mod subnet;
+pub mod topology;
 
 ///
 /// PRELUDE

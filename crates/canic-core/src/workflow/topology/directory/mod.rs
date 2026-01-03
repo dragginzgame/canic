@@ -10,7 +10,7 @@ use crate::{
             subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
         },
     },
-    workflow::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+    workflow::topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
 };
 
 ///

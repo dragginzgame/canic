@@ -1,7 +1,7 @@
 use crate::dto::{
-    directory::{AppDirectoryView, SubnetDirectoryView},
     prelude::*,
     state::{AppStateView, SubnetStateView},
+    topology::{AppDirectoryView, SubnetDirectoryView},
 };
 
 ///

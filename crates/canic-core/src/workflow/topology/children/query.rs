@@ -11,7 +11,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::{children::mapper::ChildrenMapper, view::paginate::paginate_vec},
+    workflow::{topology::children::mapper::ChildrenMapper, view::paginate::paginate_vec},
 };
 
 pub fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {

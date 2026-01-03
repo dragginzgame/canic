@@ -1,5 +1,5 @@
 use crate::{
-    dto::directory::{AppDirectoryView, SubnetDirectoryView},
+    dto::topology::{AppDirectoryView, SubnetDirectoryView},
     ops::storage::directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
 };
 

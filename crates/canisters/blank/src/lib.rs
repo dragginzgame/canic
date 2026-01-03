@@ -8,7 +8,7 @@
 use canic::{
     PublicError,
     core::{
-        api::rpc::request::create_canister_request,
+        api::rpc::create_canister_request,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     },
     prelude::*,

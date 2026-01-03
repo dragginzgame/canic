@@ -9,7 +9,7 @@ use canic::{
     PublicError,
     core::{
         access::env::is_prime_subnet,
-        api::{rpc::request::create_canister_request, wasm::import_static_quiet},
+        api::{rpc::create_canister_request, wasm::import_static_quiet},
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     },
     prelude::*,

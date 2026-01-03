@@ -6,10 +6,10 @@ use canic::{
     core::{
         dto::{
             canister::CanisterEntryView,
-            registry::SubnetRegistryView,
             rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
             state::{AppCommand, AppModeView, AppStateView},
             subnet::SubnetIdentity,
+            topology::SubnetRegistryView,
         },
         ids::CanisterRole,
     },

@@ -2,9 +2,7 @@ pub mod app;
 pub mod bootstrap;
 pub mod canister;
 pub mod cascade;
-pub mod children;
 pub mod command;
-pub mod directory;
 pub mod env;
 pub mod ic;
 pub mod icrc;
@@ -15,10 +13,10 @@ pub mod metrics;
 pub mod orchestrator;
 pub mod placement;
 pub mod pool;
-pub mod registry;
 pub mod rpc;
 pub mod runtime;
 pub mod state;
+pub mod topology;
 pub mod view;
 
 ///

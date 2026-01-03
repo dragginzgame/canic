@@ -1,62 +1,47 @@
-use crate::{api::EndpointCall, ops};
+//! Metrics endpoint surface for macro-generated entrypoints.
 
-///
-/// EndpointResultMetrics
-/// Endpoint result metrics exposed to user code and macros
-///
+use crate::{
+    PublicError,
+    dto::{
+        metrics::{
+            AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
+            SystemMetricEntry, TimerMetricEntry,
+        },
+        page::{Page, PageRequest},
+    },
+    perf::PerfEntry,
+    workflow,
+};
 
-pub struct EndpointResultMetrics;
-
-impl EndpointResultMetrics {
-    pub fn increment_ok(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call.endpoint.name);
-    }
-
-    pub fn increment_err(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call.endpoint.name);
-    }
+pub fn canic_metrics_system() -> Result<Vec<SystemMetricEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_system_snapshot())
 }
 
-///
-/// EndpointAttemptMetrics
-///
-
-pub struct EndpointAttemptMetrics;
-
-impl EndpointAttemptMetrics {
-    pub fn increment_attempted(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_attempted(
-            call.endpoint.name,
-        );
-    }
-
-    pub fn increment_completed(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_completed(
-            call.endpoint.name,
-        );
-    }
+pub fn canic_metrics_icc(page: PageRequest) -> Result<Page<IccMetricEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_icc_page(page))
 }
 
-///
-/// AccessMetrics
-/// (access / denial metrics)
-///
+pub fn canic_metrics_http(page: PageRequest) -> Result<Page<HttpMetricEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_http_page(page))
+}
 
-pub struct AccessMetrics;
+pub fn canic_metrics_timer(page: PageRequest) -> Result<Page<TimerMetricEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_timer_page(page))
+}
 
-impl AccessMetrics {
-    pub fn increment(call: EndpointCall, kind: crate::dto::metrics::AccessMetricKind) {
-        let kind = match kind {
-            crate::dto::metrics::AccessMetricKind::Auth => {
-                ops::runtime::metrics::access::AccessMetricKind::Auth
-            }
-            crate::dto::metrics::AccessMetricKind::Guard => {
-                ops::runtime::metrics::access::AccessMetricKind::Guard
-            }
-            crate::dto::metrics::AccessMetricKind::Rule => {
-                ops::runtime::metrics::access::AccessMetricKind::Rule
-            }
-        };
-        ops::runtime::metrics::access::AccessMetrics::increment(call.endpoint.name, kind);
-    }
+pub fn canic_metrics_access(page: PageRequest) -> Result<Page<AccessMetricEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_access_page(page))
+}
+
+pub fn canic_metrics_perf(page: PageRequest) -> Result<Page<PerfEntry>, PublicError> {
+    Ok(workflow::metrics::query::metrics_perf_page(page))
+}
+
+pub fn canic_metrics_endpoint_health(
+    page: PageRequest,
+) -> Result<Page<EndpointHealthView>, PublicError> {
+    Ok(workflow::metrics::query::metrics_endpoint_health_page(
+        page,
+        Some("canic_metrics_endpoint_health"),
+    ))
 }
