@@ -4,6 +4,11 @@ use crate::{
     dto::error::{Error as PublicError, ErrorCode},
 };
 
+///
+/// Error
+/// (re-exported as PublicError)
+///
+
 impl Error {
     pub fn public(&self) -> PublicError {
         match self {

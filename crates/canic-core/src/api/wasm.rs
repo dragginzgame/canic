@@ -11,6 +11,7 @@ use crate::{ids::CanisterRole, ops::runtime::wasm::WasmOps};
 /// Layering:
 ///     user canister → api → ops → runtime state
 ///
+
 pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
     WasmOps::import_static(wasms);
 }

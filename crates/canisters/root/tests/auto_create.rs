@@ -5,8 +5,9 @@ use canic::{
     PublicError,
     core::{
         dto::{
+            canister::CanisterEntryView,
             registry::SubnetRegistryView,
-            rpc::CreateCanisterResponse,
+            rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
             state::{AppCommand, AppModeView, AppStateView},
             subnet::SubnetIdentity,
         },
@@ -41,15 +42,75 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     None
 }
 
+fn tick_n(pic: &PocketIc, times: usize) {
+    for _ in 0..times {
+        pic.tick();
+    }
+}
+
+fn fetch_registry(pic: &PocketIc, root_id: Principal) -> Vec<(CanisterRole, CanisterEntryView)> {
+    let res = pic
+        .query_call(
+            root_id,
+            Principal::anonymous(),
+            "canic_subnet_registry",
+            encode_one(()).expect("encode registry args"),
+        )
+        .expect("query registry");
+
+    let SubnetRegistryView(registry) =
+        Decode!(&res, SubnetRegistryView).expect("decode registry entries");
+
+    registry
+}
+
+fn registry_has_role(registry: &[(CanisterRole, CanisterEntryView)], role: &CanisterRole) -> bool {
+    registry.iter().any(|(entry_role, _)| entry_role == role)
+}
+
+fn root_response(pic: &PocketIc, root_id: Principal, request: Request) -> Response {
+    let res = pic
+        .update_call(
+            root_id,
+            root_id,
+            "canic_response",
+            encode_one(request).expect("encode canic_response args"),
+        )
+        .expect("call canic_response");
+
+    let response: Result<Response, PublicError> =
+        Decode!(&res, Result<Response, PublicError>).expect("decode canic_response result");
+
+    response.expect("canic_response failed")
+}
+
+fn ensure_root_canister(pic: &PocketIc, root_id: Principal, role: CanisterRole) {
+    let registry = fetch_registry(pic, root_id);
+    if registry_has_role(&registry, &role) {
+        return;
+    }
+
+    let request = Request::CreateCanister(CreateCanisterRequest {
+        canister_role: role.clone(),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+    });
+
+    match root_response(pic, root_id, request) {
+        Response::CreateCanister(_) => {}
+        other => panic!("unexpected response for {role}: {other:?}"),
+    }
+}
+
 ///
 /// TESTS
 ///
 
 #[test]
-fn root_auto_creates_expected_canisters() {
+fn root_registers_explicit_canisters() {
     let Some(root_wasm) = load_root_wasm() else {
         eprintln!(
-            "skipping root_auto_creates_expected_canisters — run `make test` to build canisters or set {ROOT_WASM_ENV}"
+            "skipping root_registers_explicit_canisters — run `make test` to build canisters or set {ROOT_WASM_ENV}"
         );
         return;
     };
@@ -65,23 +126,22 @@ fn root_auto_creates_expected_canisters() {
     // Install root WASM
     pic.install_canister(root_id, root_wasm, vec![], Some(Principal::anonymous()));
 
-    // Timers queue `canic_install`, so tick Pocket IC until it drains
-    for _ in 0..100 {
-        pic.tick();
+    // NOTE: Tests explicitly create required canisters.
+    // Auto-create is async and must not be relied upon here.
+    let required = [
+        canister::AUTH,
+        canister::BLANK,
+        canister::SCALE_HUB,
+        canister::SHARD_HUB,
+    ];
+
+    for role in required {
+        ensure_root_canister(&pic, root_id, role);
     }
 
-    // Query the subnet registry
-    let res = pic
-        .query_call(
-            root_id,
-            Principal::anonymous(),
-            "canic_subnet_registry",
-            encode_one(()).unwrap(),
-        )
-        .expect("query registry");
+    tick_n(&pic, 5);
 
-    let SubnetRegistryView(registry) =
-        Decode!(&res, SubnetRegistryView).expect("decode registry entries");
+    let registry = fetch_registry(&pic, root_id);
 
     let expected = [
         (CanisterRole::ROOT, None),
@@ -125,9 +185,7 @@ fn new_canister_inherits_app_state_after_enable() {
     pic.install_canister(root_id, root_wasm, init_args, Some(Principal::anonymous()));
 
     // Allow root bootstrap timers to complete.
-    for _ in 0..100 {
-        pic.tick();
-    }
+    tick_n(&pic, 5);
 
     // Enable the app state on root (cascades to existing children).
     let res = pic
@@ -145,22 +203,18 @@ fn new_canister_inherits_app_state_after_enable() {
     }
 
     // Create a new blank canister after app state is enabled.
-    let res = pic
-        .update_call(
-            root_id,
-            Principal::anonymous(),
-            "create_blank",
-            encode_one(()).unwrap(),
-        )
-        .expect("call create_blank");
-    let create_result: Result<CreateCanisterResponse, PublicError> =
-        Decode!(&res, Result<CreateCanisterResponse, PublicError>)
-            .expect("decode create_blank response");
-    let new_pid = create_result.expect("create_blank failed").new_canister_pid;
+    let request = Request::CreateCanister(CreateCanisterRequest {
+        canister_role: canister::BLANK,
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+    });
+    let response = root_response(&pic, root_id, request);
+    let new_pid = match response {
+        Response::CreateCanister(resp) => resp.new_canister_pid,
+        other => panic!("unexpected response for create_blank: {other:?}"),
+    };
 
-    for _ in 0..10 {
-        pic.tick();
-    }
+    tick_n(&pic, 10);
 
     // The newly created canister should inherit Enabled mode.
     let res = pic

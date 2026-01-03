@@ -325,9 +325,7 @@ const fn entry_has_capacity(entry: &ShardEntry) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
-        ids::CanisterRole,
-        ops::{runtime::env::EnvOps, storage::placement::sharding::ShardingRegistryOps},
+        config::Config, ids::CanisterRole, ops::storage::placement::sharding::ShardingRegistryOps,
     };
     use candid::Principal;
 
@@ -371,29 +369,39 @@ mod tests {
         use crate::{
             config::Config,
             ids::{CanisterRole, SubnetRole},
+            ops::runtime::env::{EnvOps, EnvSnapshot},
         };
 
         let toml = r#"
-            [subnets.prime.canisters.manager]
-            cardinality = "single"
-            initial_cycles = "5T"
+        [subnets.prime.canisters.manager]
+        cardinality = "single"
+        initial_cycles = "5T"
 
-            [subnets.prime.canisters.manager.sharding.pools.primary]
-            canister_role = "shard"
-            [subnets.prime.canisters.manager.sharding.pools.primary.policy]
-            capacity = 1
-            max_shards = 2
+        [subnets.prime.canisters.manager.sharding.pools.primary]
+        canister_role = "shard"
+        [subnets.prime.canisters.manager.sharding.pools.primary.policy]
+        capacity = 1
+        max_shards = 2
 
-            [subnets.prime.canisters.shard]
-            cardinality = "many"
-            initial_cycles = "5T"
-        "#;
+        [subnets.prime.canisters.shard]
+        cardinality = "many"
+        initial_cycles = "5T"
+    "#;
 
         Config::init_from_toml(toml).unwrap();
-        EnvOps::set_subnet_role(SubnetRole::PRIME);
-        EnvOps::set_canister_role(CanisterRole::from("manager"));
-    }
 
+        let root_pid = p(1);
+        let snapshot = EnvSnapshot {
+            canister_role: Some(CanisterRole::from("manager")),
+            subnet_role: Some(SubnetRole::PRIME),
+            root_pid: Some(root_pid),
+            prime_root_pid: Some(root_pid),
+            subnet_pid: Some(root_pid),
+            parent_pid: Some(root_pid),
+        };
+
+        EnvOps::import(snapshot).unwrap();
+    }
     #[test]
     fn plan_allows_creation_when_target_shard_full() {
         Config::reset_for_tests();

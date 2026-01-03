@@ -7,14 +7,18 @@ use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duratio
 ///
 
 ///
-/// TimerSlot
+/// ApiTimerHandle
+/// Opaque handle for scheduled timers (no direct access to TimerId).
 ///
 
-/// Opaque handle for scheduled timers (no direct access to TimerId).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApiTimerHandle(TimerId);
 
+///
+/// TimerSlot
 /// Opaque timer slot handle for guarded scheduling.
+///
+
 pub type TimerSlot = LocalKey<RefCell<Option<ApiTimerHandle>>>;
 
 /// Public, stable surface for macro-expanded code in downstream crates.

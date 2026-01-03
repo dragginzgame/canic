@@ -223,15 +223,6 @@ impl SubnetRegistryOps {
             .collect()
     }
 
-    /// Full subtree rooted at `pid`.
-    #[must_use]
-    pub(crate) fn subtree(pid: Principal) -> Vec<(Principal, CanisterSummarySnapshot)> {
-        SubnetRegistry::subtree(pid)
-            .into_iter()
-            .map(|(pid, summary)| (pid, summary.into()))
-            .collect()
-    }
-
     // -------------------------------------------------------------
     // Snapshot
     // -------------------------------------------------------------

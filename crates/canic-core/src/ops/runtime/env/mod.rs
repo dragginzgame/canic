@@ -12,14 +12,6 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum EnvOpsError {
-    /// Raised when a function requires root context, but was called from a child.
-    #[error("operation must be called from the root canister")]
-    NotRoot,
-
-    /// Raised when a function must not be called from root.
-    #[error("operation cannot be called from the root canister")]
-    IsRoot,
-
     #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
@@ -133,30 +125,6 @@ pub struct EnvOps;
 
 impl EnvOps {
     // ---------------------------------------------------------------------
-    // Initialization / import
-    // ---------------------------------------------------------------------
-
-    pub fn set_prime_root_pid(pid: Principal) {
-        Env::set_prime_root_pid(pid);
-    }
-
-    pub fn set_subnet_role(role: SubnetRole) {
-        Env::set_subnet_role(role);
-    }
-
-    pub fn set_subnet_pid(pid: Principal) {
-        Env::set_subnet_pid(pid);
-    }
-
-    pub fn set_root_pid(pid: Principal) {
-        Env::set_root_pid(pid);
-    }
-
-    pub fn set_canister_role(role: CanisterRole) {
-        Env::set_canister_role(role);
-    }
-
-    // ---------------------------------------------------------------------
     // Environment predicates
     // ---------------------------------------------------------------------
 
@@ -208,6 +176,18 @@ impl EnvOps {
 
     pub fn parent_pid() -> Result<Principal, Error> {
         Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
+    }
+
+    // ---------------------------------------------------------------------
+    // Setters
+    // ---------------------------------------------------------------------
+
+    /// Update the subnet PID after init.
+    ///
+    /// This value is resolved asynchronously from the IC and may
+    /// change after upgrade or during bootstrap.
+    pub fn set_subnet_pid(pid: Principal) {
+        Env::set_subnet_pid(pid);
     }
 
     // ---------------------------------------------------------------------
