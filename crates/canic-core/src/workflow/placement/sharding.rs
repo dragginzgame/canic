@@ -176,9 +176,7 @@ impl ShardingWorkflow {
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
-        ids::{CanisterRole, SubnetRole},
-        ops::storage::placement::sharding::ShardingRegistryOps,
+        config::Config, ids::CanisterRole, ops::storage::placement::sharding::ShardingRegistryOps,
     };
     use candid::Principal;
     use futures::executor::block_on;
@@ -188,37 +186,7 @@ mod tests {
     }
 
     fn init_config() {
-        use crate::ops::runtime::env::{EnvOps, EnvSnapshot};
-
-        let toml = r#"
-        [subnets.prime.canisters.manager]
-        cardinality = "single"
-        initial_cycles = "5T"
-
-        [subnets.prime.canisters.manager.sharding.pools.primary]
-        canister_role = "shard"
-        [subnets.prime.canisters.manager.sharding.pools.primary.policy]
-        capacity = 1
-        max_shards = 2
-
-        [subnets.prime.canisters.shard]
-        cardinality = "many"
-        initial_cycles = "5T"
-    "#;
-
-        Config::init_from_toml(toml).unwrap();
-
-        let root_pid = p(1);
-        let snapshot = EnvSnapshot {
-            canister_role: Some(CanisterRole::from("manager")),
-            subnet_role: Some(SubnetRole::PRIME),
-            root_pid: Some(root_pid),
-            prime_root_pid: Some(root_pid),
-            subnet_pid: Some(root_pid),
-            parent_pid: Some(root_pid),
-        };
-
-        EnvOps::import(snapshot).unwrap();
+        crate::test::support::init_sharding_test_config();
     }
 
     #[test]

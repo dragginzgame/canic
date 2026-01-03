@@ -31,6 +31,8 @@ pub mod ids;
 pub mod log;
 pub mod macros;
 pub mod perf;
+#[cfg(test)]
+pub mod test;
 
 pub(crate) mod config;
 pub(crate) mod infra;
