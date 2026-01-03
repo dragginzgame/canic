@@ -17,6 +17,7 @@ pub fn plan_create_worker(pool: &str) -> Result<bool, PublicError> {
     ScalingWorkflow::plan_create_worker(pool).map_err(PublicError::from)
 }
 
-pub fn canic_scaling_registry() -> Result<ScalingRegistryView, PublicError> {
-    Ok(query::scaling_registry_view())
+#[must_use]
+pub fn scaling_registry() -> ScalingRegistryView {
+    query::scaling_registry_view()
 }

@@ -1,8 +1,13 @@
 use crate::{
+    PublicError,
     cdk::api::canister_self,
     dto::canister::{CanisterMetadataView, CanisterStatusView},
     ops,
 };
+
+///
+/// ICTS API
+///
 
 #[must_use]
 pub fn icts_name() -> String {
@@ -19,7 +24,6 @@ pub fn icts_description() -> String {
     env!("CARGO_PKG_DESCRIPTION").to_string()
 }
 
-/// ICTS standard: return types are fixed by the spec.
 #[must_use]
 pub fn icts_metadata() -> CanisterMetadataView {
     CanisterMetadataView {
@@ -30,8 +34,8 @@ pub fn icts_metadata() -> CanisterMetadataView {
 }
 
 /// ICTS standard: return types and string errors are fixed by the spec.
-pub async fn icts_canister_status() -> Result<CanisterStatusView, String> {
+pub async fn icts_canister_status() -> Result<CanisterStatusView, PublicError> {
     ops::ic::mgmt::canister_status(canister_self())
         .await
-        .map_err(|err| err.to_string())
+        .map_err(PublicError::from)
 }

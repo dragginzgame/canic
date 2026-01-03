@@ -1,7 +1,7 @@
 use crate::{PublicError, ops::config::ConfigOps};
 
 ///
-/// Config Api
+/// Config API
 ///
 
 pub fn export_toml() -> Result<String, PublicError> {

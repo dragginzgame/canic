@@ -1,5 +1,10 @@
-use crate::{PublicError, dto::memory::MemoryRegistryView, workflow};
+use crate::{dto::memory::MemoryRegistryView, workflow};
 
-pub fn canic_memory_registry() -> Result<MemoryRegistryView, PublicError> {
-    Ok(workflow::memory::query::memory_registry_view())
+///
+/// Memory API
+///
+
+#[must_use]
+pub fn memory_registry() -> MemoryRegistryView {
+    workflow::memory::query::memory_registry_view()
 }

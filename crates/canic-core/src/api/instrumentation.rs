@@ -1,5 +1,3 @@
-//! Endpoint instrumentation helpers used by proc-macro-generated entrypoints.
-
 use crate::{api::EndpointCall, ops};
 
 ///
@@ -27,23 +25,6 @@ impl AccessMetrics {
 }
 
 ///
-/// EndpointResultMetrics
-/// Endpoint result metrics exposed to macro-expanded endpoints.
-///
-
-pub struct EndpointResultMetrics;
-
-impl EndpointResultMetrics {
-    pub fn increment_ok(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call.endpoint.name);
-    }
-
-    pub fn increment_err(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call.endpoint.name);
-    }
-}
-
-///
 /// EndpointAttemptMetrics
 ///
 
@@ -60,5 +41,22 @@ impl EndpointAttemptMetrics {
         ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_completed(
             call.endpoint.name,
         );
+    }
+}
+
+///
+/// EndpointResultMetrics
+/// Endpoint result metrics exposed to macro-expanded endpoints.
+///
+
+pub struct EndpointResultMetrics;
+
+impl EndpointResultMetrics {
+    pub fn increment_ok(call: EndpointCall) {
+        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call.endpoint.name);
+    }
+
+    pub fn increment_err(call: EndpointCall) {
+        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call.endpoint.name);
     }
 }

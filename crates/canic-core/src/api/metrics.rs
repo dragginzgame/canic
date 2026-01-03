@@ -1,7 +1,4 @@
-//! Metrics endpoint surface for macro-generated entrypoints.
-
 use crate::{
-    PublicError,
     dto::{
         metrics::{
             AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
@@ -13,35 +10,44 @@ use crate::{
     workflow,
 };
 
-pub fn canic_metrics_system() -> Result<Vec<SystemMetricEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_system_snapshot())
+///
+/// Metrics API
+///
+
+#[must_use]
+pub fn metrics_system() -> Vec<SystemMetricEntry> {
+    workflow::metrics::query::metrics_system_snapshot()
 }
 
-pub fn canic_metrics_icc(page: PageRequest) -> Result<Page<IccMetricEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_icc_page(page))
+#[must_use]
+pub fn metrics_icc(page: PageRequest) -> Page<IccMetricEntry> {
+    workflow::metrics::query::metrics_icc_page(page)
 }
 
-pub fn canic_metrics_http(page: PageRequest) -> Result<Page<HttpMetricEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_http_page(page))
+#[must_use]
+pub fn metrics_http(page: PageRequest) -> Page<HttpMetricEntry> {
+    workflow::metrics::query::metrics_http_page(page)
 }
 
-pub fn canic_metrics_timer(page: PageRequest) -> Result<Page<TimerMetricEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_timer_page(page))
+#[must_use]
+pub fn metrics_timer(page: PageRequest) -> Page<TimerMetricEntry> {
+    workflow::metrics::query::metrics_timer_page(page)
 }
 
-pub fn canic_metrics_access(page: PageRequest) -> Result<Page<AccessMetricEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_access_page(page))
+#[must_use]
+pub fn metrics_access(page: PageRequest) -> Page<AccessMetricEntry> {
+    workflow::metrics::query::metrics_access_page(page)
 }
 
-pub fn canic_metrics_perf(page: PageRequest) -> Result<Page<PerfEntry>, PublicError> {
-    Ok(workflow::metrics::query::metrics_perf_page(page))
+#[must_use]
+pub fn metrics_perf(page: PageRequest) -> Page<PerfEntry> {
+    workflow::metrics::query::metrics_perf_page(page)
 }
 
-pub fn canic_metrics_endpoint_health(
-    page: PageRequest,
-) -> Result<Page<EndpointHealthView>, PublicError> {
-    Ok(workflow::metrics::query::metrics_endpoint_health_page(
+#[must_use]
+pub fn metrics_endpoint_health(page: PageRequest) -> Page<EndpointHealthView> {
+    workflow::metrics::query::metrics_endpoint_health_page(
         page,
         Some("canic_metrics_endpoint_health"),
-    ))
+    )
 }
