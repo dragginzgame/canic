@@ -4,11 +4,16 @@ use crate::{
     workflow,
 };
 
-pub fn canic_pool_list() -> Result<CanisterPoolView, PublicError> {
-    Ok(workflow::pool::query::pool_list_view())
+///
+/// Pool API
+///
+
+#[must_use]
+pub fn pool_list() -> CanisterPoolView {
+    workflow::pool::query::pool_list_view()
 }
 
-pub async fn canic_pool_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {
+pub async fn pool_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {
     workflow::pool::admin::handle_admin(cmd)
         .await
         .map_err(PublicError::from)

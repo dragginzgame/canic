@@ -42,7 +42,7 @@ macro_rules! canic_endpoints_root {
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::core::dto::canister::CanisterStatusView, ::canic::PublicError> {
-            $crate::api::ic::mgmt::canister_status(pid).await
+            $crate::api::ic::canister_status(pid).await
         }
 
         //
@@ -60,12 +60,12 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         fn canic_app_registry() -> ::canic::core::dto::topology::AppRegistryView {
-            $crate::api::topology::canic_app_registry().expect("fix me")
+            $crate::api::topology::app_registry()
         }
 
         #[canic_query]
         fn canic_subnet_registry() -> ::canic::core::dto::topology::SubnetRegistryView {
-            $crate::api::topology::canic_subnet_registry().expect("fix me")
+            $crate::api::topology::subnet_registry()
         }
 
         //
@@ -73,16 +73,15 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        async fn canic_pool_list()
-        -> Result<::canic::core::dto::pool::CanisterPoolView, ::canic::PublicError> {
-            $crate::api::pool::canic_pool_list()
+        async fn canic_pool_list() -> ::canic::core::dto::pool::CanisterPoolView {
+            $crate::api::pool::pool_list()
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_pool_admin(
             cmd: ::canic::core::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::core::dto::pool::PoolAdminResponse, ::canic::PublicError> {
-            $crate::api::pool::canic_pool_admin(cmd).await
+            $crate::api::pool::pool_admin(cmd).await
         }
     };
 }
@@ -99,14 +98,14 @@ macro_rules! canic_endpoints_nonroot {
         async fn canic_sync_state(
             snapshot: ::canic::core::dto::cascade::StateSnapshotView,
         ) -> Result<(), ::canic::PublicError> {
-            $crate::api::cascade::canic_sync_state(snapshot).await
+            $crate::api::cascade::sync_state(snapshot).await
         }
 
         #[canic_update(auth_any(::canic::core::access::auth::is_parent))]
         async fn canic_sync_topology(
             snapshot: ::canic::core::dto::cascade::TopologySnapshotView,
         ) -> Result<(), ::canic::PublicError> {
-            $crate::api::cascade::canic_sync_topology(snapshot).await
+            $crate::api::cascade::sync_topology(snapshot).await
         }
     };
 }

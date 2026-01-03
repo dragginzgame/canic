@@ -5,6 +5,8 @@
 //! workflow or ops calls and map internal errors into `PublicError`.
 //!
 //! No orchestration or business logic should live here.
+//! Any wrapper callable from an endpoint must return a `Result` so errors
+//! are consistently mapped at the boundary.
 
 pub mod access;
 pub mod app;

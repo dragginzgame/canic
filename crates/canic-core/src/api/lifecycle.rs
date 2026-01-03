@@ -4,6 +4,10 @@ use crate::{
     lifecycle,
 };
 
+///
+/// Lifecycle API
+///
+
 pub fn init_root_canister(identity: SubnetIdentity) {
     lifecycle::init::init_root_canister(identity);
 }
