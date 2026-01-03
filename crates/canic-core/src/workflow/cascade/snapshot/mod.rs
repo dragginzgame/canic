@@ -23,8 +23,10 @@ use crate::{
     },
     workflow::{
         canister::mapper::CanisterMapper,
-        children::mapper::ChildrenMapper,
-        directory::{AppDirectoryResolver, SubnetDirectoryResolver},
+        topology::{
+            children::mapper::ChildrenMapper,
+            directory::{AppDirectoryResolver, SubnetDirectoryResolver},
+        },
     },
 };
 use candid::Principal;

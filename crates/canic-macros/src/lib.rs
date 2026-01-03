@@ -438,13 +438,13 @@ mod expand {
 
     fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
         quote! {
-            ::canic::core::api::metrics::AccessMetrics::increment(#call, #kind);
+            ::canic::core::api::instrumentation::AccessMetrics::increment(#call, #kind);
         }
     }
 
     fn attempted(call: &syn::Ident) -> TokenStream2 {
         quote! {
-            ::canic::core::api::metrics::EndpointAttemptMetrics::increment_attempted(#call);
+            ::canic::core::api::instrumentation::EndpointAttemptMetrics::increment_attempted(#call);
         }
     }
 
@@ -569,9 +569,9 @@ mod expand {
         let result_metrics = if returns_result {
             quote! {
                 if out.is_ok() {
-                    ::canic::core::api::metrics::EndpointResultMetrics::increment_ok(#call);
+                    ::canic::core::api::instrumentation::EndpointResultMetrics::increment_ok(#call);
                 } else {
-                    ::canic::core::api::metrics::EndpointResultMetrics::increment_err(#call);
+                    ::canic::core::api::instrumentation::EndpointResultMetrics::increment_err(#call);
                 }
             }
         } else {
@@ -581,7 +581,7 @@ mod expand {
         quote! {
             {
                 let out = #dispatch_call;
-                ::canic::core::api::metrics::EndpointAttemptMetrics::increment_completed(#call);
+                ::canic::core::api::instrumentation::EndpointAttemptMetrics::increment_completed(#call);
                 #result_metrics
                 out
             }

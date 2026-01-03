@@ -18,8 +18,8 @@ use crate::{
         StateSnapshotView, TopologyDirectChildView, TopologyPathNodeView, TopologySnapshotView,
     },
     workflow::{
-        directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
         state::mapper::{AppStateMapper, SubnetStateMapper},
+        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },
 };
 

@@ -4,9 +4,9 @@ use canic::{
     core::{
         dto::{
             abi::v1::CanisterInitPayload,
-            directory::{AppDirectoryView, SubnetDirectoryView},
             env::EnvView,
             subnet::SubnetIdentity,
+            topology::{AppDirectoryView, SubnetDirectoryView},
         },
         ids::{CanisterRole, SubnetRole},
     },

@@ -23,7 +23,7 @@ use crate::{
     },
     workflow::{
         self,
-        directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },
 };
 use canic_memory::runtime::init_eager_tls;

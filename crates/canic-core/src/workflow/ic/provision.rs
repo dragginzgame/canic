@@ -28,13 +28,13 @@ use crate::{
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
-        directory::{
-            builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-            mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
-        },
         ic::IcWorkflowError,
         pool::pool_import_canister,
         prelude::*,
+        topology::directory::{
+            builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+            mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+        },
     },
 };
 use thiserror::Error as ThisError;

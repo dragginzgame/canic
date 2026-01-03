@@ -1,4 +1,9 @@
-use crate::{PublicError, cdk::types::Principal, workflow::placement::scaling::ScalingWorkflow};
+use crate::{
+    PublicError,
+    cdk::types::Principal,
+    dto::placement::ScalingRegistryView,
+    workflow::placement::{query, scaling::ScalingWorkflow},
+};
 
 /// API wrapper that exposes worker creation by delegating to the scaling workflow.
 pub async fn create_worker(pool: &str) -> Result<Principal, PublicError> {
@@ -10,4 +15,8 @@ pub async fn create_worker(pool: &str) -> Result<Principal, PublicError> {
 /// API wrapper that exposes the scaling decision (dry-run) via the workflow.
 pub fn plan_create_worker(pool: &str) -> Result<bool, PublicError> {
     ScalingWorkflow::plan_create_worker(pool).map_err(PublicError::from)
+}
+
+pub fn canic_scaling_registry() -> Result<ScalingRegistryView, PublicError> {
+    Ok(query::scaling_registry_view())
 }

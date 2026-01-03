@@ -1,7 +1,9 @@
 use crate::{
     PublicError,
     cdk::{candid::CandidType, types::Principal},
-    dto::rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
+    dto::rpc::{
+        CreateCanisterParent, CreateCanisterResponse, Request, Response, UpgradeCanisterResponse,
+    },
     ids::CanisterRole,
     workflow,
 };
@@ -42,6 +44,12 @@ pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, PublicError> {
     workflow::rpc::request::upgrade_canister_request(canister_pid)
+        .await
+        .map_err(PublicError::from)
+}
+
+pub async fn response(request: Request) -> Result<Response, PublicError> {
+    workflow::rpc::request::handler::response(request)
         .await
         .map_err(PublicError::from)
 }

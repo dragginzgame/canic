@@ -24,14 +24,14 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-            $crate::api::endpoints::icrc10_supported_standards().expect("fix me")
+            $crate::api::icrc::icrc10_supported_standards().expect("fix me")
         }
 
         #[canic_query]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::core::cdk::spec::icrc::icrc21::ConsentMessageResponse {
-            $crate::api::endpoints::icrc21_canister_call_consent_message(req).expect("fix me")
+            $crate::api::icrc::icrc21_canister_call_consent_message(req).expect("fix me")
         }
 
         //
@@ -59,12 +59,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_memory_registry() -> ::canic::core::dto::memory::MemoryRegistryView {
-            $crate::api::endpoints::canic_memory_registry().expect("fix me")
+            $crate::api::memory::canic_memory_registry().expect("fix me")
         }
 
         #[canic_query]
         fn canic_env() -> ::canic::core::dto::env::EnvView {
-            $crate::api::endpoints::canic_env().expect("fix me")
+            $crate::api::env::canic_env().expect("fix me")
         }
 
         #[canic_query]
@@ -74,7 +74,7 @@ macro_rules! canic_endpoints {
             min_level: Option<::canic::core::log::Level>,
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::log::LogEntryView> {
-            $crate::api::endpoints::canic_log(crate_name, topic, min_level, page).expect("fix me")
+            $crate::api::log::canic_log(crate_name, topic, min_level, page).expect("fix me")
         }
 
         //
@@ -83,35 +83,35 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_metrics_system() -> Vec<::canic::core::dto::metrics::SystemMetricEntry> {
-            $crate::api::endpoints::canic_metrics_system().expect("fix me")
+            $crate::api::metrics::canic_metrics_system().expect("fix me")
         }
 
         #[canic_query]
         fn canic_metrics_icc(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::IccMetricEntry> {
-            $crate::api::endpoints::canic_metrics_icc(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_icc(page).expect("fix me")
         }
 
         #[canic_query]
         fn canic_metrics_http(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::HttpMetricEntry> {
-            $crate::api::endpoints::canic_metrics_http(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_http(page).expect("fix me")
         }
 
         #[canic_query]
         fn canic_metrics_timer(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::TimerMetricEntry> {
-            $crate::api::endpoints::canic_metrics_timer(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_timer(page).expect("fix me")
         }
 
         #[canic_query]
         fn canic_metrics_access(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::AccessMetricEntry> {
-            $crate::api::endpoints::canic_metrics_access(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_access(page).expect("fix me")
         }
 
         // metrics, but lives in the perf module
@@ -119,7 +119,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_perf(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::perf::PerfEntry> {
-            $crate::api::endpoints::canic_metrics_perf(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_perf(page).expect("fix me")
         }
 
         // derived_view
@@ -127,7 +127,7 @@ macro_rules! canic_endpoints {
         fn canic_metrics_endpoint_health(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::metrics::EndpointHealthView> {
-            $crate::api::endpoints::canic_metrics_endpoint_health(page).expect("fix me")
+            $crate::api::metrics::canic_metrics_endpoint_health(page).expect("fix me")
         }
 
         //
@@ -136,12 +136,12 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn canic_app_state() -> ::canic::core::dto::state::AppStateView {
-            $crate::api::endpoints::canic_app_state().expect("fix me")
+            $crate::api::state::canic_app_state().expect("fix me")
         }
 
         #[canic_query]
         fn canic_subnet_state() -> ::canic::core::dto::state::SubnetStateView {
-            $crate::api::endpoints::canic_subnet_state().expect("fix me")
+            $crate::api::state::canic_subnet_state().expect("fix me")
         }
 
         //
@@ -155,7 +155,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::api::endpoints::canic_app_directory(page).expect("fix me")
+            $crate::api::topology::canic_app_directory(page).expect("fix me")
         }
 
         #[canic_query]
@@ -165,7 +165,7 @@ macro_rules! canic_endpoints {
             ::canic::core::ids::CanisterRole,
             ::canic::core::cdk::types::Principal,
         )> {
-            $crate::api::endpoints::canic_subnet_directory(page).expect("fix me")
+            $crate::api::topology::canic_subnet_directory(page).expect("fix me")
         }
 
         //
@@ -176,7 +176,7 @@ macro_rules! canic_endpoints {
         fn canic_canister_children(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
-            $crate::api::endpoints::canic_canister_children(page).expect("fix me")
+            $crate::api::topology::canic_canister_children(page).expect("fix me")
         }
 
         //
@@ -187,7 +187,7 @@ macro_rules! canic_endpoints {
         fn canic_cycle_tracker(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<(u64, ::canic::core::cdk::types::Cycles)> {
-            $crate::api::endpoints::canic_cycle_tracker(page).expect("fix me")
+            $crate::api::cycles::canic_cycle_tracker(page).expect("fix me")
         }
 
         //
@@ -197,7 +197,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
         -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::PublicError> {
-            $crate::api::endpoints::canic_scaling_registry()
+            $crate::api::placement::scaling::canic_scaling_registry()
         }
 
         //
@@ -207,7 +207,7 @@ macro_rules! canic_endpoints {
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_sharding_registry()
         -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::PublicError> {
-            $crate::api::endpoints::canic_sharding_registry()
+            $crate::api::placement::sharding::canic_sharding_registry()
         }
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
@@ -215,7 +215,7 @@ macro_rules! canic_endpoints {
             pool: String,
             shard_pid: ::canic::core::cdk::types::Principal,
         ) -> Result<::canic::core::dto::placement::ShardingTenantsView, ::canic::PublicError> {
-            $crate::api::endpoints::canic_sharding_tenants(pool, shard_pid)
+            $crate::api::placement::sharding::canic_sharding_tenants(pool, shard_pid)
         }
 
         //
@@ -226,22 +226,22 @@ macro_rules! canic_endpoints {
 
         #[canic_query]
         fn icts_name() -> String {
-            $crate::api::endpoints::icts::icts_name()
+            $crate::api::icts::icts_name()
         }
 
         #[canic_query]
         fn icts_version() -> String {
-            $crate::api::endpoints::icts::icts_version()
+            $crate::api::icts::icts_version()
         }
 
         #[canic_query]
         fn icts_description() -> String {
-            $crate::api::endpoints::icts::icts_description()
+            $crate::api::icts::icts_description()
         }
 
         #[canic_query]
         fn icts_metadata() -> ::canic::core::dto::canister::CanisterMetadataView {
-            $crate::api::endpoints::icts::icts_metadata()
+            $crate::api::icts::icts_metadata()
         }
 
         /// ICTS add-on endpoint: returns string errors by design.
@@ -260,7 +260,7 @@ macro_rules! canic_endpoints {
                 return Err("unauthorized".to_string());
             }
 
-            $crate::api::endpoints::icts::icts_canister_status().await
+            $crate::api::icts::icts_canister_status().await
         }
     };
 }
