@@ -9,7 +9,7 @@ use crate::{
     Error,
     access::env,
     cdk::types::TC,
-    domain::policy::{self, pool::PoolPolicyError},
+    domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
         ic::mgmt::{
@@ -28,7 +28,7 @@ const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 // Reset
 // -----------------------------------------------------------------------------
 
-pub(crate) async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
+pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
@@ -73,7 +73,7 @@ fn require_pool_admin() -> Result<(), Error> {
 // Creation
 // -----------------------------------------------------------------------------
 
-pub(crate) async fn pool_create_canister() -> Result<Principal, Error> {
+pub async fn pool_create_canister() -> Result<Principal, Error> {
     require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
@@ -88,7 +88,7 @@ pub(crate) async fn pool_create_canister() -> Result<Principal, Error> {
 // Import
 // -----------------------------------------------------------------------------
 
-pub(crate) async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
+pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
     require_pool_admin()?;
     admissibility::check_can_enter_pool(pid).await?;
 
@@ -116,11 +116,11 @@ pub(crate) async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
 // Recycle
 // -----------------------------------------------------------------------------
 
-pub(crate) async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
+pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
     require_pool_admin()?;
 
     // Must exist in registry to be recycled
-    let entry = SubnetRegistryOps::get(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
+    let entry = SubnetRegistryOps::get(pid).ok_or(PoolPolicyError::NotRegisteredInSubnet(pid))?;
 
     let role = Some(entry.role.clone());
     let module_hash = entry.module_hash.clone();
@@ -141,9 +141,7 @@ pub(crate) async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
 // Bulk import
 // -----------------------------------------------------------------------------
 
-pub(crate) async fn pool_import_queued_canisters(
-    pids: Vec<Principal>,
-) -> Result<PoolBatchResult, Error> {
+pub async fn pool_import_queued_canisters(pids: Vec<Principal>) -> Result<PoolBatchResult, Error> {
     require_pool_admin()?;
 
     let total = pids.len() as u64;
@@ -191,23 +189,4 @@ pub(crate) async fn pool_import_queued_canisters(
     }
 
     Ok(result)
-}
-
-// -----------------------------------------------------------------------------
-// Export
-// -----------------------------------------------------------------------------
-
-pub(crate) async fn pool_export_canister(
-    pid: Principal,
-) -> Result<(crate::ids::CanisterRole, Vec<u8>), Error> {
-    require_pool_admin()?;
-
-    let entry = pool_entry_view(pid).ok_or(PoolPolicyError::NotReadyForExport)?;
-
-    let is_ready = matches!(entry.status, CanisterPoolStatusView::Ready);
-    let (role, hash) = policy::pool::export::can_export(is_ready, entry.role, entry.module_hash)?;
-
-    PoolOps::remove(&pid);
-
-    Ok((role, hash))
 }

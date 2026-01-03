@@ -24,7 +24,7 @@ use std::collections::HashMap;
 // ===========================================================================
 //
 
-pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
+pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
     env::require_root()?;
 
     let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
@@ -51,7 +51,7 @@ pub(crate) async fn root_cascade_topology_for_pid(target_pid: Principal) -> Resu
 // ===========================================================================
 //
 
-pub(crate) async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
+pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
     env::deny_root()?;
 
     let snapshot = topology_snapshot_from_view(view);

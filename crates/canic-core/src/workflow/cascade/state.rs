@@ -41,7 +41,7 @@ use crate::{
 /// Cascade a state snapshot from the root canister to its direct children.
 ///
 /// No-op if the snapshot is empty.
-pub(crate) async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
+pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
     env::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
@@ -95,7 +95,7 @@ pub(crate) async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), E
 /// Cascade a snapshot from a non-root canister:
 /// - apply it locally
 /// - forward it to direct children (from children cache)
-pub(crate) async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
+pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
     env::deny_root()?;
 
     let snapshot = state_snapshot_from_view(view);

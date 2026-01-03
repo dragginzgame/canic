@@ -13,6 +13,7 @@ pub mod config;
 pub mod endpoints;
 pub mod error;
 pub mod ic;
+pub mod lifecycle;
 pub mod metrics;
 pub mod placement;
 pub mod rpc;

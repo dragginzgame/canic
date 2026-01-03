@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Handle a root-bound orchestration request and produce a [`Response`].
-pub(crate) async fn response(req: Request) -> Result<Response, Error> {
+pub async fn response(req: Request) -> Result<Response, Error> {
     env::require_root()?;
 
     match req {

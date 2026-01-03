@@ -68,11 +68,6 @@ pub fn start() {
     );
 }
 
-/// Stop pool background scheduling.
-pub fn stop() {
-    let _ = TimerOps::clear_guarded(&TIMER);
-}
-
 /// Schedule a reset worker run.
 ///
 /// This is idempotent and guarded against concurrent execution.
@@ -177,19 +172,4 @@ fn has_pending_reset() -> bool {
 #[cfg(test)]
 thread_local! {
     static RESET_SCHEDULED: RefCell<bool> = const { RefCell::new(false) };
-}
-
-#[cfg(test)]
-pub fn mark_scheduled_for_test() {
-    RESET_SCHEDULED.with_borrow_mut(|flag| *flag = true);
-}
-
-#[cfg(test)]
-#[must_use]
-pub fn take_scheduled_for_test() -> bool {
-    RESET_SCHEDULED.with_borrow_mut(|flag| {
-        let value = *flag;
-        *flag = false;
-        value
-    })
 }

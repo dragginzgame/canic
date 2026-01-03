@@ -37,10 +37,10 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct StateSnapshot {
-    pub(crate) app_state: Option<AppStateSnapshot>,
-    pub(crate) subnet_state: Option<SubnetStateSnapshot>,
-    pub(crate) app_directory: Option<AppDirectorySnapshot>,
-    pub(crate) subnet_directory: Option<SubnetDirectorySnapshot>,
+    pub app_state: Option<AppStateSnapshot>,
+    pub subnet_state: Option<SubnetStateSnapshot>,
+    pub app_directory: Option<AppDirectorySnapshot>,
+    pub subnet_directory: Option<SubnetDirectorySnapshot>,
 }
 
 ///

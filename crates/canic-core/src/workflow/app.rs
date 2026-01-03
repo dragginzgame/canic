@@ -19,7 +19,7 @@ use crate::{
 /// Returns internal [`Error`]. Public error mapping is handled
 /// exclusively at the API boundary.
 ///
-pub(crate) async fn apply_command(cmd: AppCommand) -> Result<(), Error> {
+pub async fn apply_command(cmd: AppCommand) -> Result<(), Error> {
     env::require_root()?;
     AppStateOps::command(cmd)?;
 

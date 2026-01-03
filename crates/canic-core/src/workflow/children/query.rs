@@ -1,8 +1,7 @@
 use crate::{
     Error,
     access::env,
-    cdk::api::canister_self,
-    cdk::types::Principal,
+    cdk::{api::canister_self, types::Principal},
     dto::{
         canister::CanisterSummaryView,
         page::{Page, PageRequest},
@@ -15,7 +14,7 @@ use crate::{
     workflow::{children::mapper::ChildrenMapper, view::paginate::paginate_vec},
 };
 
-pub(crate) fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {
+pub fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {
     let views = if EnvOps::is_root() {
         // Root derives children from the registry (not the local cache).
         let snapshot = SubnetRegistryOps::snapshot();
@@ -31,7 +30,7 @@ pub(crate) fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryV
     paginate_vec(views, page)
 }
 
-pub(crate) fn child_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, Error> {
+pub fn child_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, Error> {
     env::deny_root()?;
 
     Ok(CanisterChildrenOps::find_first_by_role(&role).map(|child| child.pid))

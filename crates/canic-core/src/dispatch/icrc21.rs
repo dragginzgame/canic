@@ -1,5 +1,9 @@
-use crate::cdk::spec::icrc::icrc21::{
-    ConsentMessage, ConsentMessageRequest, ConsentMessageResponse, ErrorInfo,
+use crate::{
+    cdk::spec::icrc::icrc21::{
+        ConsentMessage, ConsentMessageRequest, ConsentMessageResponse, ErrorInfo,
+    },
+    log,
+    log::Topic,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -44,7 +48,14 @@ impl Icrc21Dispatcher {
         F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
     {
         ICRC_21_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(method.to_string(), Arc::new(handler));
+            let replaced = reg.insert(method.to_string(), Arc::new(handler));
+            if replaced.is_some() {
+                log!(
+                    Topic::Icrc,
+                    Warn,
+                    "icrc21 handler replaced for method={method}"
+                );
+            }
         });
     }
 

@@ -5,7 +5,7 @@ use crate::{
     workflow::placement::mapper::PlacementMapper,
 };
 
-pub(crate) fn scaling_registry_view() -> ScalingRegistryView {
+pub fn scaling_registry_view() -> ScalingRegistryView {
     let data = ScalingRegistryOps::export();
 
     let view = data
@@ -17,7 +17,7 @@ pub(crate) fn scaling_registry_view() -> ScalingRegistryView {
     ScalingRegistryView(view)
 }
 
-pub(crate) fn sharding_registry_view() -> ShardingRegistryView {
+pub fn sharding_registry_view() -> ShardingRegistryView {
     let data = ShardingRegistryOps::export();
 
     let view = data
@@ -29,7 +29,7 @@ pub(crate) fn sharding_registry_view() -> ShardingRegistryView {
     ShardingRegistryView(view)
 }
 
-pub(crate) fn sharding_tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
+pub fn sharding_tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
     let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
 
     ShardingTenantsView(tenants)

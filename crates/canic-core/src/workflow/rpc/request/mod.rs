@@ -15,7 +15,7 @@ use crate::{
 /// workflow instead of ops directly.
 ///
 
-pub(crate) async fn create_canister_request<A>(
+pub async fn create_canister_request<A>(
     canister_role: &CanisterRole,
     parent: CreateCanisterParent,
     extra: Option<A>,
@@ -26,7 +26,7 @@ where
     rpc::request::create_canister_request(canister_role, parent, extra).await
 }
 
-pub(crate) async fn upgrade_canister_request(
+pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
     rpc::request::upgrade_canister_request(canister_pid).await

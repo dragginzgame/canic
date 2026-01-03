@@ -21,7 +21,7 @@ use crate::{
 /// - Scheduling
 /// - Pool mechanics
 ///
-pub(crate) async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
+pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
     match cmd {
         PoolAdminCommand::CreateEmpty => {
             let pid = pool_create_canister().await?;

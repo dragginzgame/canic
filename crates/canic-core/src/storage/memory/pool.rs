@@ -44,13 +44,6 @@ pub enum PoolStatus {
     },
 }
 
-impl PoolStatus {
-    #[must_use]
-    pub const fn is_ready(&self) -> bool {
-        matches!(self, Self::Ready)
-    }
-}
-
 ///
 /// PoolRecord
 /// Composite entry stored in stable memory.

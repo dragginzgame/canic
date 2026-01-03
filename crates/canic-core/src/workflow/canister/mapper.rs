@@ -1,9 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::{
-        canister::{CanisterEntryView, CanisterSummaryView},
-        cascade::{TopologyDirectChildView, TopologyPathNodeView},
-    },
+    dto::{canister::CanisterEntryView, cascade::TopologyPathNodeView},
     ops::storage::registry::subnet::{CanisterEntrySnapshot, CanisterSummarySnapshot},
 };
 
@@ -25,14 +22,6 @@ impl CanisterMapper {
     }
 
     #[must_use]
-    pub fn summary_to_view(s: &CanisterSummarySnapshot) -> CanisterSummaryView {
-        CanisterSummaryView {
-            role: s.role.clone(),
-            parent_pid: s.parent_pid,
-        }
-    }
-
-    #[must_use]
     pub fn summary_to_topology_node(
         pid: Principal,
         summary: &CanisterSummarySnapshot,
@@ -41,28 +30,6 @@ impl CanisterMapper {
             pid,
             role: summary.role.clone(),
             parent_pid: summary.parent_pid,
-        }
-    }
-
-    #[must_use]
-    pub fn summary_to_topology_child(
-        pid: Principal,
-        summary: &CanisterSummarySnapshot,
-    ) -> TopologyDirectChildView {
-        TopologyDirectChildView {
-            pid,
-            role: summary.role.clone(),
-        }
-    }
-
-    #[must_use]
-    pub fn summary_from_topology_child(
-        node: &TopologyDirectChildView,
-        parent_pid: Principal,
-    ) -> CanisterSummarySnapshot {
-        CanisterSummarySnapshot {
-            role: node.role.clone(),
-            parent_pid: Some(parent_pid),
         }
     }
 }
