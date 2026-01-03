@@ -1,6 +1,12 @@
+pub mod cycles;
 pub mod directory;
+pub mod env;
+pub mod log;
 pub mod placement;
 pub mod pool;
+pub mod randomness;
+pub mod registry;
+pub mod topology;
 pub mod upgrade;
 
 use crate::{Error, ThisError, domain::DomainError};
@@ -12,7 +18,16 @@ use crate::{Error, ThisError, domain::DomainError};
 #[derive(Debug, ThisError)]
 pub enum PolicyError {
     #[error(transparent)]
+    EnvPolicy(#[from] env::EnvPolicyError),
+
+    #[error(transparent)]
     PoolPolicy(#[from] pool::PoolPolicyError),
+
+    #[error(transparent)]
+    RegistryPolicy(#[from] registry::RegistryPolicyError),
+
+    #[error(transparent)]
+    TopologyPolicy(#[from] topology::TopologyPolicyError),
 
     #[error(transparent)]
     ScalingPolicy(#[from] placement::scaling::ScalingPolicyError),

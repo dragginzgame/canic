@@ -12,6 +12,7 @@ use crate::{
     Error,
     access::env,
     config::Config,
+    domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
         config::ConfigOps,
@@ -22,14 +23,13 @@ use crate::{
         runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-            pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
         ic::IcWorkflowError,
-        pool::pool_import_canister,
+        pool::{pool_import_canister, pop_oldest_ready},
         prelude::*,
         topology::directory::{
             builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
@@ -233,7 +233,7 @@ async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, Allocation
     let target = cfg.initial_cycles;
 
     // Reuse from pool
-    if let Some(entry) = PoolOps::pop_ready() {
+    if let Some(entry) = pop_oldest_ready() {
         let pid = entry.pid;
         let mut current = get_cycles(pid).await?;
 
@@ -312,7 +312,10 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    SubnetRegistryOps::register(pid, role, parent_pid, module_hash.clone())?;
+    let registry_snapshot = SubnetRegistryOps::snapshot();
+    let canister_cfg = ConfigOps::current_subnet_canister(role)?;
+    policy::registry::RegistryPolicy::can_register_role(role, &registry_snapshot, &canister_cfg)?;
+    SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone())?;
 
     if let Err(err) = install_code_with_extra_arg(
         CanisterInstallMode::Install,

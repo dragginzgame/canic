@@ -1,7 +1,7 @@
 use crate::{
-    Error, ThisError,
+    Error,
     cdk::types::Principal,
-    domain::policy::upgrade::plan_upgrade,
+    domain::policy::{topology::TopologyPolicy, upgrade::plan_upgrade},
     ids::CanisterRole,
     log,
     log::Topic,
@@ -14,47 +14,10 @@ use crate::{
         },
     },
     workflow::{
-        WorkflowError,
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         ic::provision::{create_and_install_canister, rebuild_directories_from_registry},
-        topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     },
 };
-
-///
-/// OrchestratorError
-///
-
-#[derive(Debug, ThisError)]
-pub enum OrchestratorError {
-    #[error("parent {0} not found in registry")]
-    ParentNotFound(Principal),
-
-    #[error("registry entry missing for {0}")]
-    RegistryEntryMissing(Principal),
-
-    #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
-    ImmediateParentMismatch {
-        pid: Principal,
-        expected: Principal,
-        found: Option<Principal>,
-    },
-
-    #[error("module hash mismatch for {0}")]
-    ModuleHashMismatch(Principal),
-
-    #[error("app directory diverged from registry")]
-    AppDirectoryDiverged,
-
-    #[error("subnet directory diverged from registry")]
-    SubnetDirectoryDiverged,
-}
-
-impl From<OrchestratorError> for Error {
-    fn from(err: OrchestratorError) -> Self {
-        WorkflowError::from(err).into()
-    }
-}
 
 pub enum LifecycleEvent {
     Create {
@@ -107,11 +70,13 @@ impl CanisterLifecycleOrchestrator {
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<LifecycleResult, Error> {
-        assert_parent_exists(parent)?;
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+        TopologyPolicy::assert_parent_exists(&registry_snapshot, parent)?;
 
         let pid = create_and_install_canister(&role, parent, extra_arg).await?;
 
-        assert_immediate_parent(pid, parent)?;
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+        TopologyPolicy::assert_immediate_parent(&registry_snapshot, pid, parent)?;
 
         cascade_all(Some(&role), Some(pid)).await?;
 
@@ -119,8 +84,8 @@ impl CanisterLifecycleOrchestrator {
     }
 
     async fn apply_upgrade(pid: Principal) -> Result<LifecycleResult, Error> {
-        let entry =
-            SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+        let entry = TopologyPolicy::registry_entry(&registry_snapshot, pid)?;
 
         let wasm = WasmOps::try_get(&entry.role)?;
         let target_hash = wasm.module_hash();
@@ -128,8 +93,8 @@ impl CanisterLifecycleOrchestrator {
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
 
         if let Some(parent_pid) = entry.parent_pid {
-            assert_parent_exists(parent_pid)?;
-            assert_immediate_parent(pid, parent_pid)?;
+            TopologyPolicy::assert_parent_exists(&registry_snapshot, parent_pid)?;
+            TopologyPolicy::assert_immediate_parent(&registry_snapshot, pid, parent_pid)?;
         }
 
         if !plan.should_upgrade {
@@ -139,14 +104,16 @@ impl CanisterLifecycleOrchestrator {
                 "canister_upgrade: {pid} already running target module"
             );
             SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-            assert_module_hash(pid, target_hash)?;
+            let registry_snapshot = SubnetRegistryOps::snapshot();
+            TopologyPolicy::assert_module_hash(&registry_snapshot, pid, target_hash)?;
 
             return Ok(LifecycleResult::default());
         }
 
         upgrade_canister(pid, wasm.bytes()).await?;
         SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-        assert_module_hash(pid, target_hash)?;
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+        TopologyPolicy::assert_module_hash(&registry_snapshot, pid, target_hash)?;
 
         Ok(LifecycleResult::default())
     }
@@ -174,60 +141,15 @@ async fn cascade_all(
             .build();
 
         root_cascade_state(&snapshot).await?;
-        assert_directories_match_registry()?;
+        let registry_snapshot = SubnetRegistryOps::snapshot();
+        let app_snapshot = AppDirectoryOps::snapshot();
+        let subnet_snapshot = SubnetDirectoryOps::snapshot();
+        TopologyPolicy::assert_directories_match_registry(
+            &registry_snapshot,
+            &app_snapshot,
+            &subnet_snapshot,
+        )?;
     }
 
     Ok(())
-}
-
-//
-// Invariants
-//
-
-fn assert_parent_exists(parent_pid: Principal) -> Result<(), OrchestratorError> {
-    SubnetRegistryOps::get(parent_pid).ok_or(OrchestratorError::ParentNotFound(parent_pid))?;
-    Ok(())
-}
-
-fn assert_module_hash(pid: Principal, expected_hash: Vec<u8>) -> Result<(), OrchestratorError> {
-    let entry = SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
-    if entry.module_hash == Some(expected_hash) {
-        Ok(())
-    } else {
-        Err(OrchestratorError::ModuleHashMismatch(pid))
-    }
-}
-
-fn assert_directories_match_registry() -> Result<(), Error> {
-    let app_built = RootAppDirectoryBuilder::build_from_registry();
-    let app_snapshot = AppDirectoryOps::snapshot();
-
-    if app_built != app_snapshot {
-        return Err(OrchestratorError::AppDirectoryDiverged.into());
-    }
-
-    let subnet_built = RootSubnetDirectoryBuilder::build_from_registry();
-    let subnet_snapshot = SubnetDirectoryOps::snapshot();
-
-    if subnet_built != subnet_snapshot {
-        return Err(OrchestratorError::SubnetDirectoryDiverged.into());
-    }
-
-    Ok(())
-}
-
-fn assert_immediate_parent(
-    pid: Principal,
-    expected_parent: Principal,
-) -> Result<(), OrchestratorError> {
-    let entry = SubnetRegistryOps::get(pid).ok_or(OrchestratorError::RegistryEntryMissing(pid))?;
-
-    match entry.parent_pid {
-        Some(pp) if pp == expected_parent => Ok(()),
-        other => Err(OrchestratorError::ImmediateParentMismatch {
-            pid,
-            expected: expected_parent,
-            found: other,
-        }),
-    }
 }

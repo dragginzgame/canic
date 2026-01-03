@@ -1,12 +1,9 @@
 use crate::{
-    Error,
-    access::env,
-    cdk::{api::canister_self, types::Principal},
+    cdk::api::canister_self,
     dto::{
         canister::CanisterSummaryView,
         page::{Page, PageRequest},
     },
-    ids::CanisterRole,
     ops::{
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
@@ -28,10 +25,4 @@ pub fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {
 
     // 3. Paginate in workflow
     paginate_vec(views, page)
-}
-
-pub fn child_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, Error> {
-    env::deny_root()?;
-
-    Ok(CanisterChildrenOps::find_first_by_role(&role).map(|child| child.pid))
 }

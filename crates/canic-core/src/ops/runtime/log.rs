@@ -54,20 +54,19 @@ impl LogOps {
         let cfg = ConfigOps::log_config()?;
         let now = now_secs();
 
+        // This is a defensive size guard to protect runtime memory; workflow may also validate, but ops enforces the hard limit.
         Log::append(&cfg, now, crate_name, topic, level, message)
     }
 
-    /// Apply the configured log retention policy.
+    /// Apply log retention using explicit parameters.
     ///
     /// Returns a summary describing how many entries were removed.
-    pub fn apply_retention() -> Result<RetentionSummary, Error> {
-        let cfg = ConfigOps::log_config()?;
-        let now = now_secs();
-
-        let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
-        let cutoff = cfg.max_age_secs.map(|max_age| now.saturating_sub(max_age));
-
-        apply_retention(cutoff, max_entries, cfg.max_entry_bytes)
+    pub fn apply_retention(
+        cutoff: Option<u64>,
+        max_entries: usize,
+        max_entry_bytes: u32,
+    ) -> Result<RetentionSummary, Error> {
+        apply_retention(cutoff, max_entries, max_entry_bytes)
     }
 
     // ---------------------------------------------------------------------

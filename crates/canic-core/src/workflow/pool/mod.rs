@@ -16,7 +16,10 @@ use crate::{
             CanisterSettings, UpdateSettingsArgs, create_canister, get_cycles, uninstall_code,
             update_settings,
         },
-        storage::{pool::PoolOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     workflow::{pool::controllers::pool_controllers, pool::query::pool_entry_view, prelude::*},
 };
@@ -57,6 +60,57 @@ fn mark_ready(pid: Principal, cycles: Cycles) {
 
 fn mark_failed(pid: Principal, err: &Error) {
     PoolOps::mark_failed(pid, err);
+}
+
+// -----------------------------------------------------------------------------
+// Selection
+// -----------------------------------------------------------------------------
+
+pub fn pop_oldest_ready() -> Option<PoolEntrySnapshot> {
+    pop_oldest_by_status(PoolStatus::Ready)
+}
+
+pub fn pop_oldest_pending_reset() -> Option<PoolEntrySnapshot> {
+    pop_oldest_by_status(PoolStatus::PendingReset)
+}
+
+fn pop_oldest_by_status(status: PoolStatus) -> Option<PoolEntrySnapshot> {
+    let snapshot = PoolOps::snapshot();
+    let entry = select_oldest(snapshot, &status)?;
+    PoolOps::remove(&entry.pid);
+
+    Some(entry)
+}
+
+fn select_oldest(snapshot: PoolSnapshot, status: &PoolStatus) -> Option<PoolEntrySnapshot> {
+    let mut selected: Option<PoolEntrySnapshot> = None;
+
+    for entry in snapshot.entries {
+        let matches = match status {
+            PoolStatus::Ready => matches!(entry.status, PoolStatus::Ready),
+            PoolStatus::PendingReset => matches!(entry.status, PoolStatus::PendingReset),
+            PoolStatus::Failed { .. } => false,
+        };
+
+        if !matches {
+            continue;
+        }
+
+        let replace = match &selected {
+            None => true,
+            Some(best) => {
+                entry.created_at < best.created_at
+                    || (entry.created_at == best.created_at
+                        && entry.pid.as_slice() < best.pid.as_slice())
+            }
+        };
+
+        if replace {
+            selected = Some(entry);
+        }
+    }
+
+    selected
 }
 
 // -----------------------------------------------------------------------------
@@ -107,6 +161,7 @@ pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
                 "pool import failed for {pid}: {err}"
             );
             mark_failed(pid, &err);
+
             Err(err)
         }
     }

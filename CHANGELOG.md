@@ -9,9 +9,21 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 
 ---
 
-## [Unreleased]
+## [0.7.2] - 2026-01-03 - Workflow & Policy Audit
+### Changed
+- Renamed topology lookup API to `subnet_directory_pid_by_role` to make directory sourcing explicit.
+- Registry policy now consumes canister config from workflow to avoid policy → ops config access.
+- Subnet registry registration no longer enforces singleton roles; cardinality checks live in policy.
+- Pool selection now deterministically picks the oldest entry with a stable tie-breaker.
+- Cycle tracker retention cutoff is now computed in workflow/policy and passed into ops.
+- Log retention parameters are derived in workflow/policy and passed into ops.
+- Workflow scheduling cadence constants moved out of ops into workflow config.
+- Cycles auto-topup eligibility is now decided in policy and executed in workflow.
+- Randomness scheduling enablement is now decided in policy and executed in workflow.
+- Env fallback vs hard-error policy moved into domain policy and applied in workflow.
+- Topology invariant checks now live in domain policy and are invoked by workflow.
 
-## [0.7.1] - 2026-01-03
+## [0.7.1] - 2026-01-03 - Ops Audit
 ### Highlights
 - Major internal refactor to make layer boundaries explicit (api/endpoints/workflow/ops/domain) and reduce cross-layer coupling.
 - Endpoint wrappers are now grouped by feature domain, making the codebase easier to navigate and maintain.

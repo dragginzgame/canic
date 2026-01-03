@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 /// Enforces metrics, limits, and IC-safe defaults.
 ///
 
+///
+/// ApiHttpRequest
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ApiHttpRequest {
     pub url: String,
@@ -19,6 +23,10 @@ pub struct ApiHttpRequest {
     pub is_replicated: Option<bool>,
 }
 
+///
+/// ApiHttpResponse
+///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ApiHttpResponse {
     pub status: Nat,
@@ -26,6 +34,10 @@ pub struct ApiHttpResponse {
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
 }
+
+///
+/// ApiHttpMethod
+///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum ApiHttpMethod {
@@ -36,6 +48,10 @@ pub enum ApiHttpMethod {
     #[serde(rename = "head")]
     HEAD,
 }
+
+///
+/// ApiHttpHeader
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct ApiHttpHeader {

@@ -1,3 +1,9 @@
+//! Root bootstrap phase.
+//!
+//! This module defines the asynchronous bootstrap phase for the root canister.
+//! It runs after runtime initialization and is responsible for all
+//! cross-canister orchestration, topology creation, and reconciliation.
+
 use crate::{
     Error,
     cdk::api::{canister_self, trap},

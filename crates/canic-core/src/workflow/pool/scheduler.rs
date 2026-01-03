@@ -17,12 +17,15 @@ use crate::{
     Error,
     domain::policy::pool::PoolPolicyError,
     ops::{
-        OPS_POOL_CHECK_INTERVAL, OPS_POOL_INIT_DELAY,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
+    workflow::config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
     workflow::{
-        pool::{admissibility::check_can_enter_pool, mark_failed, mark_ready, reset_into_pool},
+        pool::{
+            admissibility::check_can_enter_pool, mark_failed, mark_ready, pop_oldest_pending_reset,
+            reset_into_pool,
+        },
         prelude::*,
     },
 };
@@ -55,12 +58,12 @@ thread_local! {
 pub fn start() {
     let _ = TimerOps::set_guarded_interval(
         &TIMER,
-        OPS_POOL_INIT_DELAY,
+        WORKFLOW_POOL_INIT_DELAY,
         "pool:init",
         || async {
             schedule();
         },
-        OPS_POOL_CHECK_INTERVAL,
+        WORKFLOW_POOL_CHECK_INTERVAL,
         "pool:interval",
         || async {
             schedule();
@@ -119,7 +122,7 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
     for _ in 0..limit {
-        let Some(entry) = PoolOps::pop_pending_reset() else {
+        let Some(entry) = pop_oldest_pending_reset() else {
             break;
         };
 

@@ -386,7 +386,9 @@ fn worker_topology_cascades_through_parent() {
 
     let worker_count_before = registry
         .iter()
-        .filter(|(role, entry)| role == &canister::SCALE && entry.parent_pid == Some(scale_hub_pid))
+        .filter(|entry| {
+            entry.role == canister::SCALE && entry.entry.parent_pid == Some(scale_hub_pid)
+        })
         .count();
 
     // Create a worker via the scale_hub canister.
@@ -405,7 +407,9 @@ fn worker_topology_cascades_through_parent() {
         .expect("registry after worker creation");
     let worker_count_after = registry_after
         .iter()
-        .filter(|(role, entry)| role == &canister::SCALE && entry.parent_pid == Some(scale_hub_pid))
+        .filter(|entry| {
+            entry.role == canister::SCALE && entry.entry.parent_pid == Some(scale_hub_pid)
+        })
         .count();
 
     assert_eq!(

@@ -3,6 +3,7 @@ pub mod bootstrap;
 pub mod canister;
 pub mod cascade;
 pub mod command;
+pub mod config;
 pub mod env;
 pub mod ic;
 pub mod icrc;
@@ -50,9 +51,6 @@ pub enum WorkflowError {
 
     #[error(transparent)]
     Ic(#[from] ic::IcWorkflowError),
-
-    #[error(transparent)]
-    Orchestrator(#[from] orchestrator::OrchestratorError),
 
     #[error(transparent)]
     Placement(#[from] placement::PlacementError),

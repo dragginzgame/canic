@@ -80,17 +80,6 @@ impl SubnetRegistry {
         Self::get(pid)?.parent_pid
     }
 
-    /// Finds the first canister with the given [`CanisterRole`].
-    #[must_use]
-    pub(crate) fn find_first_by_role(role: &CanisterRole) -> Option<(Principal, CanisterEntry)> {
-        Self::with_entries(|iter| {
-            iter.find_map(|e| {
-                let v = e.value();
-                (&v.role == role).then(|| (*e.key(), v))
-            })
-        })
-    }
-
     //
     // Registration
     //
@@ -220,17 +209,6 @@ mod tests {
         assert_eq!(parent, Some(p(1)));
 
         assert_eq!(SubnetRegistry::get_parent(p(1)), None);
-    }
-
-    #[test]
-    fn find_first_by_role_finds_matching_entry() {
-        seed_basic_tree();
-
-        let (pid, entry) = SubnetRegistry::find_first_by_role(&CanisterRole::new("beta"))
-            .expect("beta role exists");
-
-        assert_eq!(pid, p(3));
-        assert_eq!(entry.role, CanisterRole::new("beta"));
     }
 
     #[test]
