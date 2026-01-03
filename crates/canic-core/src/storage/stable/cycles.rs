@@ -4,7 +4,7 @@ use crate::{
         types::Cycles,
     },
     eager_static,
-    storage::memory::id::cycles::CYCLE_TRACKER_ID,
+    storage::stable::memory::cycles::CYCLE_TRACKER_ID,
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;

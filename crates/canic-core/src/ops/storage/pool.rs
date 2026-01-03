@@ -3,7 +3,7 @@ use crate::{
     cdk::utils::time::now_secs,
     ids::CanisterRole,
     ops::prelude::*,
-    storage::memory::pool::{
+    storage::stable::pool::{
         PoolData, PoolRecord, PoolRecordState, PoolStatus as ModelPoolStatus, PoolStore,
     },
 };

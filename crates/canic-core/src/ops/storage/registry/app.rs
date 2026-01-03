@@ -1,6 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    storage::memory::registry::app::{AppRegistry, AppRegistryData},
+    storage::stable::registry::app::{AppRegistry, AppRegistryData},
 };
 
 ///

@@ -3,7 +3,7 @@ use crate::{
     cdk::utils::time::now_secs,
     log::Level,
     ops::config::ConfigOps,
-    storage::memory::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
+    storage::stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
 };
 
 ///

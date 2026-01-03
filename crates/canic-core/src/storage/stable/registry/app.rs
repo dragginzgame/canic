@@ -1,7 +1,7 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, ic_memory,
-    storage::memory::id::registry::APP_REGISTRY_ID,
+    storage::stable::memory::registry::APP_REGISTRY_ID,
 };
 use candid::Principal;
 use std::cell::RefCell;

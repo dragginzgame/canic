@@ -1,11 +1,21 @@
 use crate::dto::prelude::*;
 
 ///
+/// ScalingRegistryEntryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ScalingRegistryEntryView {
+    pub pid: Principal,
+    pub entry: WorkerEntryView,
+}
+
+///
 /// ScalingRegistryView
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ScalingRegistryView(pub Vec<(Principal, WorkerEntryView)>);
+pub struct ScalingRegistryView(pub Vec<ScalingRegistryEntryView>);
 
 ///
 /// WorkerEntryView
@@ -19,11 +29,21 @@ pub struct WorkerEntryView {
 }
 
 ///
+/// ShardingRegistryEntryView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ShardingRegistryEntryView {
+    pub pid: Principal,
+    pub entry: ShardEntryView,
+}
+
+///
 /// ShardingRegistryView
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingRegistryView(pub Vec<(Principal, ShardEntryView)>);
+pub struct ShardingRegistryView(pub Vec<ShardingRegistryEntryView>);
 
 ///
 /// ShardingTenantsView

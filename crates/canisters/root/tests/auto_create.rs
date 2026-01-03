@@ -5,11 +5,10 @@ use canic::{
     PublicError,
     core::{
         dto::{
-            canister::CanisterEntryView,
             rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
             state::{AppCommand, AppModeView, AppStateView},
             subnet::SubnetIdentity,
-            topology::SubnetRegistryView,
+            topology::{SubnetRegistryEntryView, SubnetRegistryView},
         },
         ids::CanisterRole,
     },
@@ -48,7 +47,7 @@ fn tick_n(pic: &PocketIc, times: usize) {
     }
 }
 
-fn fetch_registry(pic: &PocketIc, root_id: Principal) -> Vec<(CanisterRole, CanisterEntryView)> {
+fn fetch_registry(pic: &PocketIc, root_id: Principal) -> Vec<SubnetRegistryEntryView> {
     let res = pic
         .query_call(
             root_id,
@@ -64,8 +63,8 @@ fn fetch_registry(pic: &PocketIc, root_id: Principal) -> Vec<(CanisterRole, Cani
     registry
 }
 
-fn registry_has_role(registry: &[(CanisterRole, CanisterEntryView)], role: &CanisterRole) -> bool {
-    registry.iter().any(|(entry_role, _)| entry_role == role)
+fn registry_has_role(registry: &[SubnetRegistryEntryView], role: &CanisterRole) -> bool {
+    registry.iter().any(|entry| &entry.role == role)
 }
 
 fn root_response(pic: &PocketIc, root_id: Principal, request: Request) -> Response {
@@ -154,7 +153,7 @@ fn root_registers_explicit_canisters() {
     for (role, parent) in expected {
         let entry = registry
             .iter()
-            .find_map(|(entry_role, entry)| (entry_role == &role).then_some(entry))
+            .find_map(|entry| (entry.role == role).then_some(&entry.entry))
             .unwrap_or_else(|| panic!("missing {role} entry"));
 
         assert_eq!(entry.parent_pid, parent, "unexpected parent for {role}");

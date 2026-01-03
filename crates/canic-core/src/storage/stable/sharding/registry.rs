@@ -1,6 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    storage::memory::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
+    storage::stable::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
 };
 use candid::Principal;
 

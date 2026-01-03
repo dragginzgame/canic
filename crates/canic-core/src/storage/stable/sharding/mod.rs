@@ -8,8 +8,8 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
-    storage::memory::{
-        id::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+    storage::stable::{
+        memory::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
         sharding::registry::ShardingRegistry,
     },
 };

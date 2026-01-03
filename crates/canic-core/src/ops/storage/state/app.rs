@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     dto::state::AppCommand,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::memory::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
+    storage::stable::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
 use derive_more::Display;
 

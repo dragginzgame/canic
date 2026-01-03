@@ -6,7 +6,7 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
-    storage::memory::id::scaling::SCALING_REGISTRY_ID,
+    storage::stable::memory::scaling::SCALING_REGISTRY_ID,
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};

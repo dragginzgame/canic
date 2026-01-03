@@ -1,4 +1,4 @@
-use crate::storage::memory::state::subnet::{SubnetState, SubnetStateData};
+use crate::storage::stable::state::subnet::{SubnetState, SubnetStateData};
 
 ///
 /// SubnetStateSnapshot

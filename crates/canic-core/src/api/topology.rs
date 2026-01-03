@@ -4,7 +4,7 @@ use crate::{
     dto::{
         canister::CanisterSummaryView,
         page::{Page, PageRequest},
-        topology::{AppRegistryView, SubnetRegistryView},
+        topology::{AppRegistryView, DirectoryEntryView, SubnetRegistryView},
     },
     ids::CanisterRole,
     workflow,
@@ -29,12 +29,12 @@ pub fn subnet_registry() -> SubnetRegistryView {
 ///
 
 #[must_use]
-pub fn app_directory(page: PageRequest) -> Page<(CanisterRole, Principal)> {
+pub fn app_directory(page: PageRequest) -> Page<DirectoryEntryView> {
     workflow::topology::directory::query::app_directory_page(page)
 }
 
 #[must_use]
-pub fn subnet_directory(page: PageRequest) -> Page<(CanisterRole, Principal)> {
+pub fn subnet_directory(page: PageRequest) -> Page<DirectoryEntryView> {
     workflow::topology::directory::query::subnet_directory_page(page)
 }
 

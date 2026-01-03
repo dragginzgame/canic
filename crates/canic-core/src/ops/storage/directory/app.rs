@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     ids::CanisterRole,
-    storage::memory::directory::app::{AppDirectory, AppDirectoryData},
+    storage::stable::directory::app::{AppDirectory, AppDirectoryData},
 };
 
 ///
