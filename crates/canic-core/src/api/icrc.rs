@@ -3,6 +3,10 @@ use crate::{
     workflow,
 };
 
+///
+/// ICRC API
+///
+
 #[must_use]
 pub fn icrc10_supported_standards() -> Vec<(String, String)> {
     workflow::icrc::query::icrc10_supported_standards()

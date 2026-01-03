@@ -47,9 +47,9 @@ pub fn canister_children(page: PageRequest) -> Page<CanisterSummaryView> {
     workflow::topology::children::query::canister_children_page(page)
 }
 
-/// Lookup the first direct child matching the role in the children cache.
+/// Lookup the subnet directory entry for the given role.
 ///
-/// Returns `None` when no matching child is cached.
-pub fn child_by_role(role: CanisterRole) -> Result<Option<Principal>, PublicError> {
-    workflow::topology::children::query::child_pid_by_role(role).map_err(PublicError::from)
+/// Returns `None` when the role is not present in the directory.
+pub fn subnet_directory_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, PublicError> {
+    Ok(workflow::topology::directory::query::subnet_directory_pid_by_role(role))
 }

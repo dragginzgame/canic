@@ -12,6 +12,27 @@ use crate::{
 use serde::de::DeserializeOwned;
 
 ///
+/// RpcOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum RpcOpsError {
+    #[error(transparent)]
+    RequestOps(#[from] request::RequestOpsError),
+
+    // NOTE: PublicError is a wire-level contract only.
+    // It is fully consumed and erased at the ops boundary.
+    #[error("rpc rejected: {0:?}")]
+    RemoteRejected(String),
+}
+
+impl From<RpcOpsError> for Error {
+    fn from(err: RpcOpsError) -> Self {
+        OpsError::from(err).into()
+    }
+}
+
+///
 /// Rpc
 /// Typed RPC command binding a request variant to its response payload.
 ///
@@ -21,25 +42,6 @@ pub trait Rpc {
 
     fn into_request(self) -> Request;
     fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError>;
-}
-
-///
-/// RpcOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum RpcOpsError {
-    #[error(transparent)]
-    RequestOps(#[from] request::RequestOpsError),
-
-    #[error("rpc rejected: {0:?}")]
-    RemoteRejected(PublicError),
-}
-
-impl From<RpcOpsError> for Error {
-    fn from(err: RpcOpsError) -> Self {
-        OpsError::from(err).into()
-    }
 }
 
 // call_rpc_result
@@ -63,7 +65,7 @@ where
         .map_err(InfraError::from)?;
 
     // PublicError is consumed HERE, in ops
-    res.map_err(|err| RpcOpsError::RemoteRejected(err).into())
+    res.map_err(|err| RpcOpsError::RemoteRejected(err.to_string()).into())
 }
 
 // execute_root_response_rpc
@@ -80,7 +82,7 @@ async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error>
     let response: Response = call_response
         .candid::<Result<Response, PublicError>>()
         .map_err(InfraError::from)?
-        .map_err(RpcOpsError::RemoteRejected)?;
+        .map_err(|err| RpcOpsError::RemoteRejected(err.to_string()))?;
 
     let response = R::try_from_response(response).map_err(RpcOpsError::from)?;
 

@@ -1,20 +1,11 @@
-use crate::{
-    Error, ThisError,
-    dto::http::{
-        HttpHeader as HttpHeaderDto, HttpMethod as HttpMethodDto,
-        HttpRequestArgs as HttpRequestArgsDto, HttpRequestResult as HttpRequestResultDto,
-    },
-    infra::ic::http::{
-        HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, http_request_raw,
-    },
-    ops::{
-        self,
-        ic::IcOpsError,
-        runtime::metrics::{http::record_http_request, system::record_http_outcall},
-    },
-};
+use crate::{Error, ThisError, dto, infra, ops};
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
+
+///
+/// Http
+/// Approved, observable HTTP helpers over the IC management API.
+///
 
 /// Maximum allowed response size for HTTP outcalls.
 pub const MAX_RESPONSE_BYTES: u64 = 200_000;
@@ -34,14 +25,9 @@ pub enum HttpOpsError {
 
 impl From<HttpOpsError> for Error {
     fn from(err: HttpOpsError) -> Self {
-        IcOpsError::from(err).into()
+        ops::ic::IcOpsError::from(err).into()
     }
 }
-
-///
-/// Http
-/// Approved, observable HTTP helpers over the IC management API.
-///
 
 //
 // High-level typed helpers
@@ -62,29 +48,29 @@ pub async fn get_with_label<T: DeserializeOwned>(
     label: Option<&str>,
 ) -> Result<T, Error> {
     // Emit observability signals
-    record_metrics(HttpMethod::GET, url, label);
+    record_metrics(infra::ic::http::HttpMethod::GET, url, label);
 
     // Convert header pairs into IC HTTP headers
-    let headers: Vec<HttpHeader> = headers
+    let headers: Vec<infra::ic::http::HttpHeader> = headers
         .as_ref()
         .iter()
-        .map(|(name, value)| HttpHeader {
+        .map(|(name, value)| infra::ic::http::HttpHeader {
             name: name.to_string(),
             value: value.to_string(),
         })
         .collect();
 
     // Build raw IC HTTP request arguments
-    let args = HttpRequestArgs {
+    let args = infra::ic::http::HttpRequestArgs {
         url: url.to_string(),
-        method: HttpMethod::GET,
+        method: infra::ic::http::HttpMethod::GET,
         headers,
         max_response_bytes: Some(MAX_RESPONSE_BYTES),
         ..Default::default()
     };
 
     // Perform raw HTTP outcall via infra
-    let res = http_request_raw(&args).await?;
+    let res = infra::ic::http::http_request_raw(&args).await?;
 
     // Validate HTTP status code
     let status: u32 = res.status.0.to_u32().unwrap_or(0);
@@ -102,48 +88,54 @@ pub async fn get_with_label<T: DeserializeOwned>(
 //
 
 /// Perform a raw HTTP request with metrics, returning the IC response verbatim.
-pub async fn get_raw(args: HttpRequestArgsDto) -> Result<HttpRequestResultDto, Error> {
+pub async fn get_raw(
+    args: dto::http::HttpRequestArgs,
+) -> Result<dto::http::HttpRequestResult, Error> {
     get_raw_with_label(args, None).await
 }
 
 /// Same as `get_raw`, with an optional metrics label.
 pub async fn get_raw_with_label(
-    args: HttpRequestArgsDto,
+    args: dto::http::HttpRequestArgs,
     label: Option<&str>,
-) -> Result<HttpRequestResultDto, Error> {
+) -> Result<dto::http::HttpRequestResult, Error> {
     let infra_args = request_args_from_dto(args);
 
     // Emit observability signals
     record_metrics(infra_args.method, &infra_args.url, label);
 
     // Delegate to infra without additional interpretation
-    let res = http_request_raw(&infra_args).await?;
+    let res = infra::ic::http::http_request_raw(&infra_args).await?;
 
     Ok(result_to_dto(res))
 }
 
 //
-// Internal Helpers
+// Internal helpers
 //
 
 /// Record outbound HTTP metrics.
-fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
-    record_http_outcall();
-    record_http_request(metrics_method(method), url, label);
+fn record_metrics(method: infra::ic::http::HttpMethod, url: &str, label: Option<&str>) {
+    ops::runtime::metrics::system::record_http_outcall();
+    ops::runtime::metrics::http::record_http_request(metrics_method(method), url, label);
 }
 
-const fn metrics_method(method: HttpMethod) -> ops::runtime::metrics::http::HttpMethod {
+const fn metrics_method(
+    method: infra::ic::http::HttpMethod,
+) -> ops::runtime::metrics::http::HttpMethod {
     match method {
-        HttpMethod::GET => ops::runtime::metrics::http::HttpMethod::Get,
-        HttpMethod::POST => ops::runtime::metrics::http::HttpMethod::Post,
-        HttpMethod::HEAD => ops::runtime::metrics::http::HttpMethod::Head,
+        infra::ic::http::HttpMethod::GET => ops::runtime::metrics::http::HttpMethod::Get,
+        infra::ic::http::HttpMethod::POST => ops::runtime::metrics::http::HttpMethod::Post,
+        infra::ic::http::HttpMethod::HEAD => ops::runtime::metrics::http::HttpMethod::Head,
     }
 }
 
-// --- DTO Adapters --------------------------------------------------------
+// -----------------------------------------------------------------------------
+// DTO adapters
+// -----------------------------------------------------------------------------
 
-fn request_args_from_dto(args: HttpRequestArgsDto) -> HttpRequestArgs {
-    HttpRequestArgs {
+fn request_args_from_dto(args: dto::http::HttpRequestArgs) -> infra::ic::http::HttpRequestArgs {
+    infra::ic::http::HttpRequestArgs {
         url: args.url,
         max_response_bytes: args.max_response_bytes,
         method: method_from_dto(args.method),
@@ -154,31 +146,31 @@ fn request_args_from_dto(args: HttpRequestArgsDto) -> HttpRequestArgs {
     }
 }
 
-fn result_to_dto(result: HttpRequestResult) -> HttpRequestResultDto {
-    HttpRequestResultDto {
+fn result_to_dto(result: infra::ic::http::HttpRequestResult) -> dto::http::HttpRequestResult {
+    dto::http::HttpRequestResult {
         status: result.status,
         headers: result.headers.into_iter().map(header_to_dto).collect(),
         body: result.body,
     }
 }
 
-const fn method_from_dto(method: HttpMethodDto) -> HttpMethod {
+const fn method_from_dto(method: dto::http::HttpMethod) -> infra::ic::http::HttpMethod {
     match method {
-        HttpMethodDto::GET => HttpMethod::GET,
-        HttpMethodDto::POST => HttpMethod::POST,
-        HttpMethodDto::HEAD => HttpMethod::HEAD,
+        dto::http::HttpMethod::GET => infra::ic::http::HttpMethod::GET,
+        dto::http::HttpMethod::POST => infra::ic::http::HttpMethod::POST,
+        dto::http::HttpMethod::HEAD => infra::ic::http::HttpMethod::HEAD,
     }
 }
 
-fn header_from_dto(header: HttpHeaderDto) -> HttpHeader {
-    HttpHeader {
+fn header_from_dto(header: dto::http::HttpHeader) -> infra::ic::http::HttpHeader {
+    infra::ic::http::HttpHeader {
         name: header.name,
         value: header.value,
     }
 }
 
-fn header_to_dto(header: HttpHeader) -> HttpHeaderDto {
-    HttpHeaderDto {
+fn header_to_dto(header: infra::ic::http::HttpHeader) -> dto::http::HttpHeader {
+    dto::http::HttpHeader {
         name: header.name,
         value: header.value,
     }

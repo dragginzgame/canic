@@ -19,8 +19,7 @@ use super::{
 };
 use crate::workflow::cascade::snapshot::adapter::state_snapshot_from_view;
 use crate::{
-    Error,
-    access::env,
+    Error, access,
     dto::cascade::StateSnapshotView,
     ops::{
         self,
@@ -42,7 +41,7 @@ use crate::{
 ///
 /// No-op if the snapshot is empty.
 pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
-    env::require_root()?;
+    access::env::require_root()?;
 
     if state_snapshot_is_empty(snapshot) {
         log!(
@@ -96,7 +95,7 @@ pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
 /// - apply it locally
 /// - forward it to direct children (from children cache)
 pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
-    env::deny_root()?;
+    access::env::deny_root()?;
 
     let snapshot = state_snapshot_from_view(view);
 
@@ -155,7 +154,7 @@ pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error>
 ///
 /// Only valid on non-root canisters.
 fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
-    env::deny_root()?;
+    access::env::deny_root()?;
 
     if let Some(app) = &snapshot.app_state {
         AppStateOps::import(app.clone())?;

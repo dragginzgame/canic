@@ -20,6 +20,7 @@ impl AccessMetrics {
                 ops::runtime::metrics::access::AccessMetricKind::Rule
             }
         };
+
         ops::runtime::metrics::access::AccessMetrics::increment(call.endpoint.name, kind);
     }
 }

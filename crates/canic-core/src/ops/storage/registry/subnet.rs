@@ -1,9 +1,8 @@
 use crate::{
     Error, ThisError,
     cdk::{types::Principal, utils::time::now_secs},
-    config::schema::CanisterCardinality,
     ids::CanisterRole,
-    ops::{config::ConfigOps, storage::StorageOpsError},
+    ops::storage::StorageOpsError,
     storage::{
         canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
@@ -23,8 +22,8 @@ pub enum SubnetRegistryOpsError {
     #[error("canister {0} already registered")]
     AlreadyRegistered(Principal),
 
-    #[error("role {role} already registered to {pid}")]
-    RoleAlreadyRegistered { role: CanisterRole, pid: Principal },
+    #[error("parent canister {0} not found in subnet registry")]
+    ParentNotFound(Principal),
 
     // ---------------------------------------------------------------------
     // Traversal / invariant errors
@@ -144,7 +143,7 @@ impl SubnetRegistrySnapshot {
 /// SubnetRegistryOps
 ///
 /// Semantic operations over the subnet registry.
-/// Enforces cardinality, parent-chain invariants, and traversal safety.
+/// Enforces structural invariants and traversal safety.
 ///
 /// Invariant: non-root workflows must not call SubnetRegistryOps directly.
 /// Non-root fanout should use the children cache populated by topology cascade.
@@ -157,7 +156,7 @@ impl SubnetRegistryOps {
     // Mutation
     // ---------------------------------------------------------------------
 
-    pub(crate) fn register(
+    pub(crate) fn register_unchecked(
         pid: Principal,
         role: &CanisterRole,
         parent_pid: Principal,
@@ -167,18 +166,13 @@ impl SubnetRegistryOps {
             return Err(SubnetRegistryOpsError::AlreadyRegistered(pid).into());
         }
 
-        if role_requires_singleton(role)?
-            && let Some((existing_pid, _)) = SubnetRegistry::find_first_by_role(role)
-        {
-            return Err(SubnetRegistryOpsError::RoleAlreadyRegistered {
-                role: role.clone(),
-                pid: existing_pid,
-            }
-            .into());
+        if SubnetRegistry::get(parent_pid).is_none() {
+            return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid).into());
         }
 
         let created_at = now_secs();
         SubnetRegistry::register(pid, role, parent_pid, module_hash, created_at);
+
         Ok(())
     }
 
@@ -298,13 +292,4 @@ impl From<&CanisterEntrySnapshot> for CanisterSummarySnapshot {
             parent_pid: entry.parent_pid,
         }
     }
-}
-
-// -------------------------------------------------------------------------
-// Helpers
-// -------------------------------------------------------------------------
-
-fn role_requires_singleton(role: &CanisterRole) -> Result<bool, Error> {
-    let cfg = ConfigOps::current_subnet_canister(role)?;
-    Ok(cfg.cardinality == CanisterCardinality::Single)
 }

@@ -7,8 +7,7 @@ use super::{
 };
 use crate::workflow::cascade::snapshot::adapter::topology_snapshot_from_view;
 use crate::{
-    Error,
-    access::env,
+    Error, access,
     dto::cascade::TopologySnapshotView,
     ops::{
         self,
@@ -25,7 +24,7 @@ use std::collections::HashMap;
 //
 
 pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
-    env::require_root()?;
+    access::env::require_root()?;
 
     let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
 
@@ -52,7 +51,7 @@ pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), 
 //
 
 pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
-    env::deny_root()?;
+    access::env::deny_root()?;
 
     let snapshot = topology_snapshot_from_view(view);
     let self_pid = canister_self();

@@ -1,13 +1,16 @@
 use crate::{
+    cdk::utils::time::now_secs,
+    domain::policy,
     log,
     log::Topic,
     ops::{
-        OPS_INIT_DELAY, OPS_LOG_RETENTION_INTERVAL,
+        config::ConfigOps,
         runtime::{
             log::LogOps,
             timer::{TimerId, TimerOps},
         },
     },
+    workflow::config::{WORKFLOW_INIT_DELAY, WORKFLOW_LOG_RETENTION_INTERVAL},
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -15,13 +18,13 @@ thread_local! {
     static RETENTION_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-const RETENTION_INTERVAL: Duration = OPS_LOG_RETENTION_INTERVAL;
+const RETENTION_INTERVAL: Duration = WORKFLOW_LOG_RETENTION_INTERVAL;
 
 /// Start periodic log retention sweeps.
 pub fn start() {
     let _ = TimerOps::set_guarded_interval(
         &RETENTION_TIMER,
-        OPS_INIT_DELAY,
+        WORKFLOW_INIT_DELAY,
         "log_retention:init",
         || async {
             let _ = retain();
@@ -43,7 +46,17 @@ pub fn stop() {
 /// Run a retention sweep immediately.
 #[must_use]
 pub fn retain() -> bool {
-    match LogOps::apply_retention() {
+    let cfg = match ConfigOps::log_config() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            log!(Topic::Memory, Warn, "log retention skipped: {err}");
+            return false;
+        }
+    };
+    let now = now_secs();
+    let params = policy::log::retention_params(&cfg, now);
+
+    match LogOps::apply_retention(params.cutoff, params.max_entries, params.max_entry_bytes) {
         Ok(summary) => {
             let dropped = summary.dropped_total();
             if dropped > 0 {

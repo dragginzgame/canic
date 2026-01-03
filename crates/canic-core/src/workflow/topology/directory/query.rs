@@ -1,8 +1,10 @@
 use crate::{
+    cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
         topology::DirectoryEntryView,
     },
+    ids::CanisterRole,
     ops::storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
     workflow::view::paginate::paginate_vec,
 };
@@ -19,6 +21,11 @@ pub fn app_directory_page(page: PageRequest) -> Page<DirectoryEntryView> {
 pub fn subnet_directory_page(page: PageRequest) -> Page<DirectoryEntryView> {
     let snapshot = SubnetDirectoryOps::snapshot();
     map_directory_page(paginate_vec(snapshot.entries, page))
+}
+
+#[must_use]
+pub fn subnet_directory_pid_by_role(role: CanisterRole) -> Option<Principal> {
+    SubnetDirectoryOps::get(&role)
 }
 
 fn map_directory_page(

@@ -3,6 +3,7 @@
 use crate::{
     Error,
     config::schema::{RandomnessConfig, RandomnessSource},
+    domain::policy,
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -32,22 +33,18 @@ pub fn start() {
             return;
         }
     };
-    if !cfg.enabled {
-        crate::log!(Topic::Init, Info, "randomness seeding disabled by config");
+    let Some(interval) = policy::randomness::schedule(&cfg) else {
+        if cfg.enabled {
+            crate::log!(
+                Topic::Init,
+                Warn,
+                "randomness reseed_interval_secs is 0; seeding disabled"
+            );
+        } else {
+            crate::log!(Topic::Init, Info, "randomness seeding disabled by config");
+        }
         return;
-    }
-
-    let interval_secs = cfg.reseed_interval_secs;
-    if interval_secs == 0 {
-        crate::log!(
-            Topic::Init,
-            Warn,
-            "randomness reseed_interval_secs is 0; seeding disabled"
-        );
-        return;
-    }
-
-    let interval = Duration::from_secs(interval_secs);
+    };
     let source = cfg.source;
 
     let _ = TimerOps::set_guarded_interval(

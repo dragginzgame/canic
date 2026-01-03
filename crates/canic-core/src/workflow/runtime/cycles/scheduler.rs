@@ -1,10 +1,10 @@
 use crate::{
     access::env,
     cdk::{futures::spawn, types::Cycles, utils::time::now_secs},
+    domain::policy,
     log,
     log::Topic,
     ops::{
-        OPS_CYCLE_TRACK_INTERVAL, OPS_INIT_DELAY,
         config::ConfigOps,
         ic::mgmt::canister_cycle_balance,
         rpc::request::cycles_request,
@@ -14,6 +14,7 @@ use crate::{
         },
         storage::cycles::CycleTrackerOps,
     },
+    workflow::config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -22,14 +23,14 @@ thread_local! {
     static TOPUP_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
 }
 
-const TRACKER_INTERVAL: Duration = OPS_CYCLE_TRACK_INTERVAL;
+const TRACKER_INTERVAL: Duration = WORKFLOW_CYCLE_TRACK_INTERVAL;
 
 /// Start recurring cycle tracking.
 /// Safe to call multiple times.
 pub fn start() {
     let _ = TimerOps::set_guarded_interval(
         &TIMER,
-        OPS_INIT_DELAY,
+        WORKFLOW_INIT_DELAY,
         "cycles:init",
         || async {
             track();
@@ -72,13 +73,9 @@ fn check_auto_topup(cycles: Cycles) {
             return;
         }
     };
-    let Some(topup) = canister_cfg.topup else {
+    let Some(plan) = policy::cycles::should_topup(cycles.to_u128(), &canister_cfg) else {
         return;
     };
-
-    if cycles >= topup.threshold {
-        return;
-    }
 
     let should_request = TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
         if *in_flight {
@@ -95,7 +92,7 @@ fn check_auto_topup(cycles: Cycles) {
 
     spawn(async move {
         let result = match env::deny_root() {
-            Ok(()) => cycles_request(topup.amount.to_u128()).await,
+            Ok(()) => cycles_request(plan.amount.to_u128()).await,
             Err(err) => Err(err),
         };
 
@@ -108,7 +105,7 @@ fn check_auto_topup(cycles: Cycles) {
                 Topic::Cycles,
                 Ok,
                 "requested {}, topped up by {}, now {}",
-                topup.amount,
+                plan.amount,
                 Cycles::from(res.cycles_transferred),
                 canister_cycle_balance()
             ),
@@ -121,7 +118,8 @@ fn check_auto_topup(cycles: Cycles) {
 #[must_use]
 pub fn purge() -> bool {
     let now = now_secs();
-    let purged = CycleTrackerOps::purge(now);
+    let cutoff = policy::cycles::retention_cutoff(now);
+    let purged = CycleTrackerOps::purge_before(cutoff);
 
     if purged > 0 {
         log!(

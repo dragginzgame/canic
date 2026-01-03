@@ -45,14 +45,6 @@ impl CanisterChildrenOps {
     }
 
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<ChildSnapshot> {
-        Self::snapshot()
-            .entries
-            .into_iter()
-            .find(|e| &e.role == role)
-    }
-
-    #[must_use]
     pub fn pids() -> Vec<Principal> {
         Self::snapshot()
             .entries
