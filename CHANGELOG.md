@@ -10,22 +10,30 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 ---
 
 ## [Unreleased]
+
+## [0.7.1] - 2026-01-03
+### Highlights
+- Major internal refactor to make layer boundaries explicit (api/endpoints/workflow/ops/domain) and reduce cross-layer coupling.
+- Endpoint wrappers are now grouped by feature domain, making the codebase easier to navigate and maintain.
+- Data crossing boundaries is consistently shaped as DTOs/views instead of leaking internal storage types.
+
 ### Added
-- Added workflow RPC client helper for create-canister requests and workflow planning helpers for scaling/sharding.
-- Added DTO types for memory registry endpoints.
+- Workflow RPC helper for create-canister requests and planning helpers for scaling/sharding.
+- DTO types for memory registry endpoints.
 
 ### Changed
-- Routed workflow IC network access through `ops::ic` to preserve layer boundaries.
-- Refactored directory builders to return view types and updated workflow directory sync to use view imports/exports.
-- Aligned core layering/lifecycle docs with AGENTS guidance.
-- Updated example canisters to call workflow helpers instead of policy/ops directly.
-- Switched canic-memory startup integration to `runtime::registry` and refreshed its README.
-- Moved upgrade decisioning into policy and made ops/infra upgrades purely mechanical.
-- Centralized non-root env defaulting in `EnvOps` instead of workflow runtime.
-- Split log control ops from log view ops (`LogOps` vs `LogViewOps`).
+- IC network calls now flow through `ops::ic` so side effects have a single, explicit home.
+- Directory builders return view types; workflow directory sync imports/exports those views.
+- Core layering/lifecycle docs aligned with AGENTS guidance.
+- Example canisters call workflow helpers instead of policy/ops directly.
+- canic-memory startup now goes through `runtime::registry` and README updated.
+- Upgrade decisioning moved into policy; ops/infra upgrades are purely mechanical.
+- Non-root env defaulting centralized in `EnvOps`.
+- Log control ops split from log view ops (`LogOps` vs `LogViewOps`).
+- API endpoint wrappers reorganized into domain modules; macro call sites updated.
 
 ### Fixed
-- Memory registry endpoint now returns a proper DTO view and maps registry entries without leaking internal types.
+- Memory registry endpoint returns a proper DTO view without leaking internal types.
 
 ## [v0.7.0] — 2025-12-30 - Architecture Consolidation & Runtime Discipline
 
