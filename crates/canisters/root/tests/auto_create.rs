@@ -11,6 +11,7 @@ use canic::{
             topology::{SubnetRegistryEntryView, SubnetRegistryView},
         },
         ids::CanisterRole,
+        protocol,
     },
 };
 use canic_internal::canister;
@@ -52,7 +53,7 @@ fn fetch_registry(pic: &PocketIc, root_id: Principal) -> Vec<SubnetRegistryEntry
         .query_call(
             root_id,
             Principal::anonymous(),
-            "canic_subnet_registry",
+            protocol::CANIC_SUBNET_REGISTRY,
             encode_one(()).expect("encode registry args"),
         )
         .expect("query registry");
@@ -72,7 +73,7 @@ fn root_response(pic: &PocketIc, root_id: Principal, request: Request) -> Respon
         .update_call(
             root_id,
             root_id,
-            "canic_response",
+            protocol::CANIC_RESPONSE,
             encode_one(request).expect("encode canic_response args"),
         )
         .expect("call canic_response");
@@ -190,7 +191,7 @@ fn new_canister_inherits_app_state_after_enable() {
         .update_call(
             root_id,
             Principal::anonymous(),
-            "canic_app",
+            protocol::CANIC_APP,
             encode_one(AppCommand::Start).unwrap(),
         )
         .expect("call canic_app");
@@ -219,7 +220,7 @@ fn new_canister_inherits_app_state_after_enable() {
         .query_call(
             new_pid,
             Principal::anonymous(),
-            "canic_app_state",
+            protocol::CANIC_APP_STATE,
             encode_one(()).unwrap(),
         )
         .expect("query canic_app_state");

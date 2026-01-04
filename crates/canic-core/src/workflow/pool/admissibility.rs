@@ -2,7 +2,7 @@ use crate::{
     domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
     infra::network::Network,
     ops::{
-        ic::mgmt::canister_status, runtime::network::NetworkOps,
+        ic::mgmt::MgmtOps, runtime::network::NetworkOps,
         storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::prelude::*,
@@ -22,7 +22,7 @@ async fn probe_importable_on_local(pid: Principal) -> Result<(), String> {
         return Ok(());
     }
 
-    match canister_status(pid).await {
+    match MgmtOps::canister_status(pid).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
     }

@@ -2,7 +2,7 @@ use crate::{
     Error,
     domain::policy::{topology::TopologyPolicy, upgrade::plan_upgrade},
     ops::{
-        ic::mgmt::{canister_status, upgrade_canister},
+        ic::mgmt::MgmtOps,
         runtime::wasm::WasmOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -66,7 +66,7 @@ impl LifecycleOrchestrator {
 
         let wasm = WasmOps::try_get(&entry.role)?;
         let target_hash = wasm.module_hash();
-        let status = canister_status(pid).await?;
+        let status = MgmtOps::canister_status(pid).await?;
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
 
         if let Some(parent_pid) = entry.parent_pid {
@@ -87,7 +87,7 @@ impl LifecycleOrchestrator {
             return Ok(LifecycleResult::default());
         }
 
-        upgrade_canister(pid, wasm.bytes()).await?;
+        MgmtOps::upgrade_canister(pid, wasm.bytes()).await?;
         SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
         let registry_snapshot = SubnetRegistryOps::snapshot();
         TopologyPolicy::assert_module_hash(&registry_snapshot, pid, target_hash)?;

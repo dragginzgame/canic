@@ -3,8 +3,8 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::mgmt::canister_cycle_balance,
-        rpc::request::cycles_request,
+        ic::mgmt::MgmtOps,
+        rpc::request::RequestOps,
         runtime::{
             env::EnvOps,
             timer::{TimerId, TimerOps},
@@ -52,7 +52,7 @@ pub fn stop() {
 
 pub fn track() {
     let ts = now_secs();
-    let cycles = canister_cycle_balance();
+    let cycles = MgmtOps::canister_cycle_balance();
 
     if !EnvOps::is_root() {
         evaluate_policies(cycles.clone());
@@ -91,7 +91,7 @@ fn check_auto_topup(cycles: Cycles) {
     }
 
     spawn(async move {
-        let result = cycles_request(plan.amount.to_u128()).await;
+        let result = RequestOps::request_cycles(plan.amount.to_u128()).await;
 
         TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
             *in_flight = false;
@@ -104,7 +104,7 @@ fn check_auto_topup(cycles: Cycles) {
                 "requested {}, topped up by {}, now {}",
                 plan.amount,
                 Cycles::from(res.cycles_transferred),
-                canister_cycle_balance()
+                MgmtOps::canister_cycle_balance()
             ),
             Err(e) => log!(Topic::Cycles, Error, "failed to request cycles: {e}"),
         }

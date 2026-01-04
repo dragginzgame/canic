@@ -1,22 +1,28 @@
 use crate::{
     Error,
     dto::cascade::{StateSnapshotView, TopologySnapshotView},
-    ops::{
-        prelude::*,
-        rpc::{call_rpc_result, methods},
-    },
+    ops::{prelude::*, rpc::RpcOps},
+    protocol,
 };
 
-pub async fn send_state_snapshot(
-    pid: Principal,
-    snapshot: &StateSnapshotView,
-) -> Result<(), Error> {
-    call_rpc_result::<()>(pid, methods::CANIC_SYNC_STATE, snapshot).await
-}
+///
+/// CascadeOps
+///
 
-pub async fn send_topology_snapshot(
-    pid: Principal,
-    snapshot: &TopologySnapshotView,
-) -> Result<(), Error> {
-    call_rpc_result::<()>(pid, methods::CANIC_SYNC_TOPOLOGY, snapshot).await
+pub struct CascadeOps;
+
+impl CascadeOps {
+    pub async fn send_state_snapshot(
+        pid: Principal,
+        snapshot: &StateSnapshotView,
+    ) -> Result<(), Error> {
+        RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_STATE, snapshot).await
+    }
+
+    pub async fn send_topology_snapshot(
+        pid: Principal,
+        snapshot: &TopologySnapshotView,
+    ) -> Result<(), Error> {
+        RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_TOPOLOGY, snapshot).await
+    }
 }

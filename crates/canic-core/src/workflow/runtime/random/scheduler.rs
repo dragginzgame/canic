@@ -6,7 +6,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::mgmt::raw_rand,
+        ic::mgmt::MgmtOps,
         runtime::timer::{TimerId, TimerOps},
     },
     workflow::prelude::*,
@@ -64,7 +64,7 @@ pub fn start() {
 
 async fn seed_once(source: RandomnessSource) {
     match source {
-        RandomnessSource::Ic => match raw_rand().await {
+        RandomnessSource::Ic => match MgmtOps::raw_rand().await {
             Ok(seed) => rand_utils::seed_from(seed),
             Err(err) => {
                 crate::log!(Topic::Init, Warn, "raw_rand reseed failed: {err}");

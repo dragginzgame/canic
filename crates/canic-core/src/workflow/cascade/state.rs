@@ -16,12 +16,12 @@ use crate::{
     Error, access,
     dto::cascade::StateSnapshotView,
     ops::{
-        self,
+        rpc::cascade::CascadeOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
-            state::{app::AppStateOps, subnet},
+            state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
     workflow::{
@@ -165,7 +165,7 @@ fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
     }
 
     if let Some(subnet_snapshot) = &snapshot.subnet_state {
-        subnet::import(subnet_snapshot.clone());
+        SubnetStateOps::import(subnet_snapshot.clone());
     }
 
     if let Some(dir) = &snapshot.app_directory {
@@ -189,7 +189,7 @@ fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
 async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), Error> {
     let view = StateSnapshotView::from(snapshot);
 
-    ops::rpc::cascade::send_state_snapshot(pid, &view)
+    CascadeOps::send_state_snapshot(pid, &view)
         .await
         .map_err(|_| CascadeError::ChildRejected(pid).into())
 }

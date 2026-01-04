@@ -7,7 +7,7 @@ use crate::{
     infra::InfraError,
     ops::{
         prelude::*,
-        rpc::{Rpc, RpcOpsError, execute_root_response_rpc},
+        rpc::{Rpc, RpcOps, RpcOpsError},
     },
 };
 use candid::encode_one;
@@ -45,38 +45,53 @@ impl From<RequestOpsError> for Error {
 }
 
 ///
-/// CreateCanister
+/// RequestOps
+/// Ops-level helpers for request/response RPCs.
 ///
 
-pub async fn create_canister_request<A>(
-    canister_role: &CanisterRole,
-    parent: CreateCanisterParent,
-    extra: Option<A>,
-) -> Result<CreateCanisterResponse, Error>
-where
-    A: CandidType + Send + Sync,
-{
-    let extra_arg = extra
-        .map(encode_one)
-        .transpose()
-        .map_err(InfraError::from)?;
+pub struct RequestOps;
 
-    execute_root_response_rpc(CreateCanisterRpc {
-        canister_role: canister_role.clone(),
-        parent,
-        extra_arg,
-    })
-    .await
+impl RequestOps {
+    pub async fn create_canister<A>(
+        canister_role: &CanisterRole,
+        parent: CreateCanisterParent,
+        extra: Option<A>,
+    ) -> Result<CreateCanisterResponse, Error>
+    where
+        A: CandidType + Send + Sync,
+    {
+        let extra_arg = extra
+            .map(encode_one)
+            .transpose()
+            .map_err(InfraError::from)?;
+
+        RpcOps::execute_root_response_rpc(CreateCanisterRpc {
+            canister_role: canister_role.clone(),
+            parent,
+            extra_arg,
+        })
+        .await
+    }
+
+    pub async fn upgrade_canister(
+        canister_pid: Principal,
+    ) -> Result<UpgradeCanisterResponse, Error> {
+        RpcOps::execute_root_response_rpc(UpgradeCanisterRpc { canister_pid }).await
+    }
+
+    pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, Error> {
+        RpcOps::execute_root_response_rpc(CyclesRpc { cycles }).await
+    }
 }
 
 ///
 /// CreateCanisterRpc
 ///
 
-pub struct CreateCanisterRpc {
-    pub canister_role: CanisterRole,
-    pub parent: CreateCanisterParent,
-    pub extra_arg: Option<Vec<u8>>,
+struct CreateCanisterRpc {
+    canister_role: CanisterRole,
+    parent: CreateCanisterParent,
+    extra_arg: Option<Vec<u8>>,
 }
 
 impl Rpc for CreateCanisterRpc {
@@ -96,17 +111,6 @@ impl Rpc for CreateCanisterRpc {
             _ => Err(RequestOpsError::InvalidResponseType),
         }
     }
-}
-
-///
-/// UpgradeCanister
-/// Ask root to upgrade a child canister to its latest registered WASM.
-///
-
-pub async fn upgrade_canister_request(
-    canister_pid: Principal,
-) -> Result<UpgradeCanisterResponse, Error> {
-    execute_root_response_rpc(UpgradeCanisterRpc { canister_pid }).await
 }
 
 ///
@@ -132,15 +136,6 @@ impl Rpc for UpgradeCanisterRpc {
             _ => Err(RequestOpsError::InvalidResponseType),
         }
     }
-}
-
-///
-/// Cycles
-/// Request a cycle transfer from root to the current canister.
-///
-
-pub async fn cycles_request(cycles: u128) -> Result<CyclesResponse, Error> {
-    execute_root_response_rpc(CyclesRpc { cycles }).await
 }
 
 ///

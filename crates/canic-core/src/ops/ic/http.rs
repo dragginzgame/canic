@@ -1,4 +1,14 @@
-use crate::{Error, ThisError, dto, infra, ops};
+use crate::{
+    Error, ThisError, dto, infra,
+    ops::{
+        self,
+        ic::IcOpsError,
+        runtime::metrics::{
+            http::HttpMetrics,
+            system::{SystemMetricKind, SystemMetrics},
+        },
+    },
+};
 use num_traits::ToPrimitive;
 use serde::de::DeserializeOwned;
 
@@ -25,7 +35,7 @@ pub enum HttpOpsError {
 
 impl From<HttpOpsError> for Error {
     fn from(err: HttpOpsError) -> Self {
-        ops::ic::IcOpsError::from(err).into()
+        Self::from(IcOpsError::from(err))
     }
 }
 
@@ -36,59 +46,48 @@ impl From<HttpOpsError> for Error {
 pub struct HttpOps;
 
 impl HttpOps {
+    // -------------------------------------------------------------------------
+    // High-level helpers
+    // -------------------------------------------------------------------------
+
     /// Perform an HTTP GET request and deserialize the JSON response.
-    pub async fn get<T: DeserializeOwned>(
-        url: &str,
-        headers: impl AsRef<[(&str, &str)]>,
-    ) -> Result<T, Error> {
+    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
         Self::get_with_label(url, headers, None).await
     }
 
     /// Same as `get`, with an optional metrics label.
     pub async fn get_with_label<T: DeserializeOwned>(
         url: &str,
-        headers: impl AsRef<[(&str, &str)]>,
+        headers: &[(&str, &str)],
         label: Option<&str>,
     ) -> Result<T, Error> {
-        // Emit observability signals
-        record_metrics(infra::ic::http::HttpMethod::GET, url, label);
-
-        // Convert header pairs into IC HTTP headers
-        let headers: Vec<infra::ic::http::HttpHeader> = headers
-            .as_ref()
-            .iter()
-            .map(|(name, value)| infra::ic::http::HttpHeader {
-                name: name.to_string(),
-                value: value.to_string(),
-            })
-            .collect();
-
-        // Build raw IC HTTP request arguments
         let args = infra::ic::http::HttpRequestArgs {
             url: url.to_string(),
             method: infra::ic::http::HttpMethod::GET,
-            headers,
+            headers: headers_from_pairs(headers),
             max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..Default::default()
         };
 
-        // Perform raw HTTP outcall via infra
-        let res = infra::ic::http::http_request_raw(&args).await?;
+        let res = Self::perform_request(args, label).await?;
 
-        // Validate HTTP status code
-        let status: u32 = res.status.0.to_u32().unwrap_or(0);
+        let status = res
+            .status
+            .0
+            .to_u32()
+            .ok_or_else(|| HttpOpsError::HttpDecode("invalid status code".into()))?;
+
         if !(200..300).contains(&status) {
             return Err(HttpOpsError::HttpStatus(status).into());
         }
 
-        // Deserialize response body
         serde_json::from_slice(&res.body)
             .map_err(|err| HttpOpsError::HttpDecode(err.to_string()).into())
     }
 
-    //
+    // -------------------------------------------------------------------------
     // Low-level escape hatches
-    //
+    // -------------------------------------------------------------------------
 
     /// Perform a raw HTTP request with metrics, returning the IC response verbatim.
     pub async fn get_raw(
@@ -103,26 +102,49 @@ impl HttpOps {
         label: Option<&str>,
     ) -> Result<dto::http::HttpRequestResult, Error> {
         let infra_args = request_args_from_dto(args);
-
-        // Emit observability signals
-        record_metrics(infra_args.method, &infra_args.url, label);
-
-        // Delegate to infra without additional interpretation
-        let res = infra::ic::http::http_request_raw(&infra_args).await?;
-
+        let res = Self::perform_request(infra_args, label).await?;
         Ok(result_to_dto(res))
+    }
+
+    // -------------------------------------------------------------------------
+    // Core execution
+    // -------------------------------------------------------------------------
+
+    /// Perform a raw IC HTTP outcall with mandatory metrics.
+    async fn perform_request(
+        args: infra::ic::http::HttpRequestArgs,
+        label: Option<&str>,
+    ) -> Result<infra::ic::http::HttpRequestResult, Error> {
+        Self::record_metrics(args.method, &args.url, label);
+        infra::ic::http::http_request_raw(&args)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Record outbound HTTP metrics.
+    fn record_metrics(method: infra::ic::http::HttpMethod, url: &str, label: Option<&str>) {
+        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        HttpMetrics::record_http_request(metrics_method(method), url, label);
     }
 }
 
-//
-// Internal helpers
-//
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
-/// Record outbound HTTP metrics.
-fn record_metrics(method: infra::ic::http::HttpMethod, url: &str, label: Option<&str>) {
-    ops::runtime::metrics::system::record_http_outcall();
-    ops::runtime::metrics::http::record_http_request(metrics_method(method), url, label);
+fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<infra::ic::http::HttpHeader> {
+    headers
+        .iter()
+        .map(|(name, value)| infra::ic::http::HttpHeader {
+            name: (*name).to_string(),
+            value: (*value).to_string(),
+        })
+        .collect()
 }
+
+// -----------------------------------------------------------------------------
+// Infra adapters
+// -----------------------------------------------------------------------------
 
 const fn metrics_method(
     method: infra::ic::http::HttpMethod,

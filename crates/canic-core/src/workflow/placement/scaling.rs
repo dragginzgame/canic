@@ -13,7 +13,7 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     dto::rpc::CreateCanisterParent,
     ops::{
-        rpc::request::create_canister_request,
+        rpc::request::RequestOps,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
     workflow::{placement::PlacementError, prelude::*},
@@ -63,9 +63,10 @@ impl ScalingWorkflow {
         let role = entry_plan.canister_role.clone();
 
         // 3. Create the canister
-        let pid = create_canister_request::<()>(&role, CreateCanisterParent::ThisCanister, None)
-            .await?
-            .new_canister_pid;
+        let pid =
+            RequestOps::create_canister::<()>(&role, CreateCanisterParent::ThisCanister, None)
+                .await?
+                .new_canister_pid;
 
         // 4. Register in memory
         let entry = WorkerEntry {
