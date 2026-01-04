@@ -9,6 +9,16 @@
 //!
 //! Ops must not construct DTO views or perform pagination.
 //! Projection and paging are owned by workflow/query.
+//!
+//! ## Naming and structure
+//!
+//! Ops APIs are exposed via lightweight `*Ops` structs with associated
+//! functions. This is a deliberate namespacing choice to keep imports stable
+//! and unambiguous in large modules where multiple `env`, `config`, or
+//! `storage` modules may coexist.
+//!
+//! The use of `*Ops` types does **not** imply ownership of state or additional
+//! abstraction; they are zero-cost namespaces over free functions.
 
 pub mod config;
 pub mod ic;
