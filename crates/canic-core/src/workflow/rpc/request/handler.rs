@@ -68,7 +68,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
 
     if let Err(err) = &result {
         log!(
-            Topic::CanisterLifecycle,
+            Topic::Rpc,
             Warn,
             "create_canister_response failed (caller={caller}, role={role}, parent={parent_desc}): {err}"
         );

@@ -29,19 +29,19 @@ pub fn start() {
     let cfg = match randomness_config() {
         Ok(cfg) => cfg,
         Err(err) => {
-            crate::log!(Topic::Init, Warn, "randomness config unavailable: {err}");
+            crate::log!(Topic::Config, Warn, "randomness config unavailable: {err}");
             return;
         }
     };
     let Some(interval) = policy::randomness::schedule(&cfg) else {
         if cfg.enabled {
             crate::log!(
-                Topic::Init,
+                Topic::Config,
                 Warn,
                 "randomness reseed_interval_secs is 0; seeding disabled"
             );
         } else {
-            crate::log!(Topic::Init, Info, "randomness seeding disabled by config");
+            crate::log!(Topic::Config, Info, "randomness seeding disabled by config");
         }
         return;
     };
