@@ -1,7 +1,6 @@
 use crate::{
-    Error, ThisError,
-    access::AccessError,
-    ops::config::network::{Network, build_network},
+    Error, ThisError, access::AccessError, infra::network::Network,
+    ops::runtime::network::NetworkOps,
 };
 
 ///
@@ -48,7 +47,7 @@ pub async fn build_network_local() -> Result<(), AccessError> {
 ///
 
 pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleAccessError> {
-    let actual = build_network();
+    let actual = NetworkOps::current_network();
 
     match actual {
         Some(actual) if actual == expected => Ok(()),

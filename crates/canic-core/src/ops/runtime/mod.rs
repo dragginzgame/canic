@@ -3,6 +3,7 @@ pub mod env;
 pub mod log;
 pub mod memory;
 pub mod metrics;
+pub mod network;
 pub mod timer;
 pub mod wasm;
 

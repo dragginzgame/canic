@@ -4,7 +4,7 @@ use crate::{
         page::{Page, PageRequest},
     },
     ops::{
-        runtime::env,
+        runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {
-    let views = if env::is_root() {
+    let views = if EnvOps::is_root() {
         // Root derives children from the registry (not the local cache).
         let snapshot = SubnetRegistryOps::snapshot();
         let children = ChildrenMapper::from_registry_snapshot(&snapshot, canister_self());

@@ -1,4 +1,5 @@
 pub mod ic;
+pub mod network;
 
 use crate::{
     ThisError,

@@ -7,12 +7,10 @@
 use crate::{
     Error,
     cdk::api::trap,
+    infra::network::Network,
     ops::{
-        config::{
-            ConfigOps,
-            network::{Network, build_network},
-        },
-        runtime::env,
+        config::ConfigOps,
+        runtime::{env::EnvOps, network::NetworkOps},
         storage::{
             directory::subnet::SubnetDirectoryOps, pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
@@ -54,11 +52,11 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// On local / test networks:
 /// - Falls back to `canister_self()` deterministically.
 pub async fn root_set_subnet_id() -> Result<(), Error> {
-    let network = build_network();
+    let network = NetworkOps::current_network();
 
     match try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
-            env::set_subnet_pid(subnet_pid);
+            EnvOps::set_subnet_pid(subnet_pid);
             return Ok(());
         }
 
@@ -81,7 +79,7 @@ pub async fn root_set_subnet_id() -> Result<(), Error> {
 
     // Fallback path for non-IC environments
     let fallback = canister_self();
-    env::set_subnet_pid(fallback);
+    EnvOps::set_subnet_pid(fallback);
 
     log!(
         Topic::Topology,
@@ -112,7 +110,7 @@ pub async fn root_import_pool_from_config() {
         }
     };
 
-    let import_list = match build_network() {
+    let import_list = match NetworkOps::current_network() {
         Some(Network::Local) => subnet_cfg.pool.import.local,
         Some(Network::Ic) => subnet_cfg.pool.import.ic,
         None => {

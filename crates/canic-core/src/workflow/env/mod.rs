@@ -7,9 +7,10 @@ use crate::{
     Error,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
-    ops::{
-        config::network::{Network, build_network},
-        runtime::env::{self, EnvSnapshot},
+    infra::network::Network,
+    ops::runtime::{
+        env::{EnvOps, EnvSnapshot},
+        network::NetworkOps,
     },
     workflow::{bootstrap::BootstrapError, prelude::*},
 };
@@ -18,7 +19,7 @@ pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), E
     let mut snapshot = EnvMapper::view_to_snapshot(env_view);
     snapshot.canister_role = Some(role);
 
-    let network = build_network().unwrap_or(Network::Local);
+    let network = NetworkOps::current_network().unwrap_or(Network::Local);
     let input = EnvInput {
         prime_root_pid: snapshot.prime_root_pid,
         subnet_role: snapshot.subnet_role,
@@ -34,7 +35,7 @@ pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), E
         }
     };
 
-    env::import(EnvSnapshot {
+    EnvOps::import(EnvSnapshot {
         prime_root_pid: Some(validated.prime_root_pid),
         subnet_role: Some(validated.subnet_role),
         subnet_pid: Some(validated.subnet_pid),

@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// AppCommand
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppCommand {
     Start,
     Readonly,

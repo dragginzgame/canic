@@ -4,7 +4,7 @@ pub mod query;
 
 use crate::{
     ops::{
-        runtime::env,
+        runtime::env::EnvOps,
         storage::directory::{
             app::{AppDirectoryOps, AppDirectorySnapshot},
             subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
@@ -22,7 +22,7 @@ pub struct AppDirectoryResolver;
 impl AppDirectoryResolver {
     #[must_use]
     pub fn resolve() -> AppDirectorySnapshot {
-        if env::is_root() {
+        if EnvOps::is_root() {
             RootAppDirectoryBuilder::build_from_registry()
         } else {
             AppDirectoryOps::snapshot()
@@ -39,7 +39,7 @@ pub struct SubnetDirectoryResolver;
 impl SubnetDirectoryResolver {
     #[must_use]
     pub fn resolve() -> SubnetDirectorySnapshot {
-        if env::is_root() {
+        if EnvOps::is_root() {
             RootSubnetDirectoryBuilder::build_from_registry()
         } else {
             SubnetDirectoryOps::snapshot()

@@ -2,7 +2,7 @@ use crate::{
     cdk::candid::Principal,
     config::Config,
     ids::{CanisterRole, SubnetRole},
-    ops::runtime::env::{self, EnvSnapshot},
+    ops::runtime::env::{EnvOps, EnvSnapshot},
 };
 
 pub fn init_sharding_test_config() {
@@ -36,5 +36,5 @@ pub fn init_sharding_test_config() {
         parent_pid: Some(root_pid),
     };
 
-    env::import(snapshot).expect("init sharding test env");
+    EnvOps::import(snapshot).expect("init sharding test env");
 }
