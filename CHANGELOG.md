@@ -5,7 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-Below is a polished, release-quality changelog entry suitable for **v0.7**. It is written to communicate architectural significance rather than individual commits, and to read credibly to both maintainers and advanced users.
+
+## [Unreleased]
+- Added new ckTokens to canic-cdk, such as ckUNI and ckWBTC
+- CI fixes to make sure that PocketIC doesn't run out of memory
 
 ---
 
