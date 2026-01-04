@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
-## [Unreleased]
+## [0.7.4] - 2026-01-04
 - Added new ckTokens to canic-cdk, such as ckUNI and ckWBTC
 - CI fixes to make sure that PocketIC doesn't run out of memory
 
