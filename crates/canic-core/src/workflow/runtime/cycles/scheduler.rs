@@ -1,5 +1,4 @@
 use crate::{
-    access::env,
     cdk::{futures::spawn, utils::time::now_secs},
     domain::policy,
     ops::{
@@ -7,7 +6,7 @@ use crate::{
         ic::mgmt::canister_cycle_balance,
         rpc::request::cycles_request,
         runtime::{
-            env as runtime_env,
+            env::EnvOps,
             timer::{TimerId, TimerOps},
         },
         storage::cycles::CycleTrackerOps,
@@ -55,7 +54,7 @@ pub fn track() {
     let ts = now_secs();
     let cycles = canister_cycle_balance();
 
-    if !runtime_env::is_root() {
+    if !EnvOps::is_root() {
         evaluate_policies(cycles.clone());
     }
 
@@ -92,10 +91,7 @@ fn check_auto_topup(cycles: Cycles) {
     }
 
     spawn(async move {
-        let result = match env::deny_root() {
-            Ok(()) => cycles_request(plan.amount.to_u128()).await,
-            Err(err) => Err(err),
-        };
+        let result = cycles_request(plan.amount.to_u128()).await;
 
         TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
             *in_flight = false;

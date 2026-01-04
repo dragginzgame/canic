@@ -18,7 +18,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::runtime::{env, timer::TimerOps},
+    ops::runtime::{env::EnvOps, timer::TimerOps},
     workflow,
 };
 use core::time::Duration;
@@ -28,7 +28,7 @@ use core::time::Duration;
 /// Root identity and subnet context are restored from stable state.
 pub fn post_upgrade_root_canister() {
     // Restore root environment context
-    if let Err(err) = env::restore_root() {
+    if let Err(err) = EnvOps::restore_root() {
         let msg = format!("env restore failed (root upgrade): {err}");
         trap(&msg);
     }
@@ -50,7 +50,7 @@ pub fn post_upgrade_root_canister() {
 /// only role context needs to be restored before delegating.
 pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
     // Restore role context (env data already persisted)
-    if let Err(err) = env::restore_role(role.clone()) {
+    if let Err(err) = EnvOps::restore_role(role.clone()) {
         let msg = format!("env restore failed (nonroot upgrade): {err}");
         trap(&msg);
     }

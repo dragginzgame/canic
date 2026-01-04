@@ -6,7 +6,9 @@ use crate::{
     Error, PublicError, ThisError,
     dto::rpc::{Request, Response},
     infra::InfraError,
-    ops::{OpsError, ic::call::Call, prelude::*, rpc::request::RequestOpsError, runtime::env},
+    ops::{
+        OpsError, ic::call::Call, prelude::*, rpc::request::RequestOpsError, runtime::env::EnvOps,
+    },
 };
 use serde::de::DeserializeOwned;
 
@@ -69,7 +71,7 @@ where
 
 // execute_root_response_rpc
 async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
-    let root_pid = env::root_pid()?;
+    let root_pid = EnvOps::root_pid()?;
 
     let call_response = Call::unbounded_wait(root_pid, methods::CANIC_RESPONSE)
         .with_arg(rpc.into_request())

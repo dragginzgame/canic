@@ -16,7 +16,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        runtime::env,
+        runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -222,7 +222,7 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = env::parent_pid().map_err(to_access)?;
+        let parent_pid = EnvOps::parent_pid().map_err(to_access)?;
 
         if parent_pid == caller {
             Ok(())
@@ -264,7 +264,7 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = env::root_pid().map_err(to_access)?;
+        let root_pid = EnvOps::root_pid().map_err(to_access)?;
 
         if caller == root_pid {
             Ok(())

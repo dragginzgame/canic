@@ -11,7 +11,7 @@ pub mod mgmt;
 pub mod nns;
 pub mod signature;
 
-use crate::infra::prelude::*;
+use crate::infra::{network::Network, prelude::*};
 
 ///
 /// IcInfraError
@@ -36,48 +36,6 @@ pub enum IcInfraError {
 }
 
 ///
-/// Network
-/// Identifies the environment the canister believes it runs in.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Network {
-    Ic,
-    Local,
-}
-
-impl Network {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Ic => "ic",
-            Self::Local => "local",
-        }
-    }
-}
-
-impl core::fmt::Display for Network {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-///
-/// build_network_from_dfx_network
-/// Pure helper for `build_network()`, exposed for testing and reuse.
-///
-
-#[must_use]
-pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Option<Network> {
-    match dfx_network {
-        Some("local") => Some(Network::Local),
-        Some("ic") => Some(Network::Ic),
-
-        _ => None,
-    }
-}
-
-///
 /// build_network
 /// Returns the network inferred at *build time* from `DFX_NETWORK`.
 /// This value is baked into the Wasm and does not reflect runtime state.
@@ -95,6 +53,21 @@ pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Opti
 #[must_use]
 pub fn build_network() -> Option<Network> {
     build_network_from_dfx_network(option_env!("DFX_NETWORK"))
+}
+
+///
+/// build_network_from_dfx_network
+/// Pure helper for `build_network()`, exposed for testing and reuse.
+///
+
+#[must_use]
+pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Option<Network> {
+    match dfx_network {
+        Some("local") => Some(Network::Local),
+        Some("ic") => Some(Network::Ic),
+
+        _ => None,
+    }
 }
 
 ///

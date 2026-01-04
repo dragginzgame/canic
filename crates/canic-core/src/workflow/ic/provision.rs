@@ -20,7 +20,7 @@ use crate::{
             CanisterInstallMode, create_canister, delete_canister, deposit_cycles, get_cycles,
             uninstall_code,
         },
-        runtime::{canister::install_code_with_extra_arg, env as runtime_env, wasm::WasmOps},
+        runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
@@ -60,10 +60,10 @@ pub fn build_nonroot_init_payload(
     parent_pid: Principal,
 ) -> Result<CanisterInitPayload, Error> {
     let env = EnvView {
-        prime_root_pid: Some(runtime_env::prime_root_pid()?),
-        subnet_role: Some(runtime_env::subnet_role()?),
-        subnet_pid: Some(runtime_env::subnet_pid()?),
-        root_pid: Some(runtime_env::root_pid()?),
+        prime_root_pid: Some(EnvOps::prime_root_pid()?),
+        subnet_role: Some(EnvOps::subnet_role()?),
+        subnet_pid: Some(EnvOps::subnet_pid()?),
+        root_pid: Some(EnvOps::root_pid()?),
         canister_role: Some(role.clone()),
         parent_pid: Some(parent_pid),
     };

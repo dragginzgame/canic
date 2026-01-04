@@ -9,7 +9,7 @@ use crate::{
     ids::SubnetRole,
     ops::{
         runtime::{
-            env::{self, EnvSnapshot},
+            env::{EnvOps, EnvSnapshot},
             memory::{MemoryOps, MemoryRegistryInitSummary},
         },
         storage::{
@@ -132,7 +132,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         parent_pid: Some(prime_root_pid),
     };
 
-    if let Err(err) = env::import(snapshot) {
+    if let Err(err) = EnvOps::import(snapshot) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
