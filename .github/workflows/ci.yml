@@ -72,7 +72,7 @@ jobs:
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
       - run: make fmt-check
       - run: make clippy
-      - run: cargo test --workspace --all-targets --verbose --locked
+      - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
       - name: Build examples (default)
         run: cargo build -p canic --examples --locked
       - name: Build examples (ic feature)
@@ -137,5 +137,5 @@ jobs:
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
       - run: make fmt-check
       - run: make clippy
-      - run: cargo test --workspace --all-targets --verbose --locked
+      - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
       - run: cargo build --release --workspace --locked

@@ -15,19 +15,19 @@ use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
 
-thread_local! {
-    static PIC: Pic = PicBuilder::new().with_application_subnet().build();
-}
-
 ///
-/// Access the singleton PocketIC wrapper.
+/// Create a fresh PocketIC universe.
 ///
-/// The global instance is created on first use and then reused.
+/// IMPORTANT:
+/// - Each call creates a new IC instance
+/// - This must NOT be cached or shared across tests
+/// - Required to avoid PocketIC wasm chunk store exhaustion
 ///
 #[must_use]
 pub fn pic() -> Pic {
     PicBuilder::new().with_application_subnet().build()
 }
+
 ///
 /// PicBuilder
 /// Thin wrapper around the PocketIC builder.
