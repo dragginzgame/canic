@@ -1,6 +1,6 @@
 use crate::{
     dto::state::{AppStateView, SubnetStateView},
-    ops::storage::state::{app::AppStateOps, subnet},
+    ops::storage::state::{app::AppStateOps, subnet::SubnetStateOps},
     workflow::state::mapper::{AppStateMapper, SubnetStateMapper},
 };
 
@@ -10,6 +10,6 @@ pub fn app_state_view() -> AppStateView {
 }
 
 pub fn subnet_state_view() -> SubnetStateView {
-    let snapshot = subnet::snapshot();
+    let snapshot = SubnetStateOps::snapshot();
     SubnetStateMapper::snapshot_to_view(snapshot)
 }

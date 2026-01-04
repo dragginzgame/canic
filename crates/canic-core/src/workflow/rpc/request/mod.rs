@@ -3,7 +3,7 @@ pub mod handler;
 use crate::{
     Error,
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
-    ops,
+    ops::rpc::request::RequestOps,
     workflow::prelude::*,
 };
 
@@ -22,11 +22,11 @@ pub async fn create_canister_request<A>(
 where
     A: CandidType + Send + Sync,
 {
-    ops::rpc::request::create_canister_request(canister_role, parent, extra).await
+    RequestOps::create_canister(canister_role, parent, extra).await
 }
 
 pub async fn upgrade_canister_request(
     canister_pid: Principal,
 ) -> Result<UpgradeCanisterResponse, Error> {
-    ops::rpc::request::upgrade_canister_request(canister_pid).await
+    RequestOps::upgrade_canister(canister_pid).await
 }

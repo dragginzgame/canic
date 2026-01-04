@@ -2,7 +2,7 @@ use crate::{
     PublicError,
     cdk::api::canister_self,
     dto::canister::{CanisterMetadataView, CanisterStatusView},
-    ops,
+    ops::ic::mgmt::MgmtOps,
 };
 
 ///
@@ -35,7 +35,7 @@ pub fn icts_metadata() -> CanisterMetadataView {
 
 /// ICTS standard: return types and string errors are fixed by the spec.
 pub async fn icts_canister_status() -> Result<CanisterStatusView, PublicError> {
-    ops::ic::mgmt::canister_status(canister_self())
+    MgmtOps::canister_status(canister_self())
         .await
         .map_err(PublicError::from)
 }

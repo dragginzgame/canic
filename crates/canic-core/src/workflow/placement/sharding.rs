@@ -12,9 +12,7 @@ use crate::{
         policy::{ShardingPlanState, ShardingPolicy},
     },
     dto::{placement::ShardingPlanStateView, rpc::CreateCanisterParent},
-    ops::{
-        rpc::request::create_canister_request, storage::placement::sharding::ShardingRegistryOps,
-    },
+    ops::{rpc::request::RequestOps, storage::placement::sharding::ShardingRegistryOps},
     workflow::{placement::mapper::PlacementMapper, prelude::*},
 };
 
@@ -42,7 +40,7 @@ impl ShardAllocator {
             .into());
         }
 
-        let response = create_canister_request::<Vec<u8>>(
+        let response = RequestOps::create_canister::<Vec<u8>>(
             canister_role,
             CreateCanisterParent::ThisCanister,
             extra_arg,

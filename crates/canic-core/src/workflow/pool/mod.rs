@@ -12,10 +12,7 @@ use crate::{
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
-        ic::mgmt::{
-            CanisterSettings, UpdateSettingsArgs, create_canister, get_cycles, uninstall_code,
-            update_settings,
-        },
+        ic::mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         storage::{
             pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
             registry::subnet::SubnetRegistryOps,
@@ -35,7 +32,7 @@ const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 // -----------------------------------------------------------------------------
 
 pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
-    update_settings(&UpdateSettingsArgs {
+    MgmtOps::update_settings(&UpdateSettingsArgs {
         canister_id: pid,
         settings: CanisterSettings {
             controllers: Some(pool_controllers()?),
@@ -45,8 +42,8 @@ pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
     })
     .await?;
 
-    uninstall_code(pid).await?;
-    get_cycles(pid).await
+    MgmtOps::uninstall_code(pid).await?;
+    MgmtOps::get_cycles(pid).await
 }
 
 // -----------------------------------------------------------------------------
@@ -134,7 +131,7 @@ pub async fn pool_create_canister() -> Result<Principal, Error> {
     require_pool_admin()?;
 
     let cycles = Cycles::new(POOL_CANISTER_CYCLES);
-    let pid = create_canister(pool_controllers()?, cycles.clone()).await?;
+    let pid = MgmtOps::create_canister(pool_controllers()?, cycles.clone()).await?;
 
     PoolOps::register_ready(pid, cycles, None, None, None);
 

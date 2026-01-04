@@ -16,11 +16,11 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
     ops::{
         config::ConfigOps,
-        ic::mgmt::{
-            CanisterInstallMode, create_canister, delete_canister, deposit_cycles, get_cycles,
-            uninstall_code,
+        ic::{
+            canister::CanisterOps,
+            mgmt::{CanisterInstallMode, MgmtOps},
         },
-        runtime::{canister::install_code_with_extra_arg, env::EnvOps, wasm::WasmOps},
+        runtime::{env::EnvOps, wasm::WasmOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
@@ -183,10 +183,10 @@ pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> 
     env::require_root()?;
 
     // Phase 0: uninstall code
-    uninstall_code(pid).await?;
+    MgmtOps::uninstall_code(pid).await?;
 
     // Phase 1: delete the canister
-    delete_canister(pid).await?;
+    MgmtOps::delete_canister(pid).await?;
 
     // Phase 2: remove registry record
     let removed_entry = SubnetRegistryOps::remove(&pid);
@@ -235,12 +235,12 @@ async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, Allocation
     // Reuse from pool
     if let Some(entry) = pop_oldest_ready() {
         let pid = entry.pid;
-        let mut current = get_cycles(pid).await?;
+        let mut current = MgmtOps::get_cycles(pid).await?;
 
         if current < target {
             let missing = target.to_u128().saturating_sub(current.to_u128());
             if missing > 0 {
-                deposit_cycles(pid, missing).await?;
+                MgmtOps::deposit_cycles(pid, missing).await?;
                 current = Cycles::new(current.to_u128() + missing);
 
                 log!(
@@ -279,7 +279,7 @@ async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<P
     let mut controllers = Config::get()?.controllers.clone();
     controllers.push(root); // root always controls
 
-    let pid = create_canister(controllers, cycles.clone()).await?;
+    let pid = MgmtOps::create_canister(controllers, cycles.clone()).await?;
 
     log!(
         Topic::CanisterLifecycle,
@@ -319,7 +319,7 @@ async fn install_canister(
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone())
         .map_err(Error::from)?;
 
-    if let Err(err) = install_code_with_extra_arg(
+    if let Err(err) = CanisterOps::install_code_with_extra_arg(
         CanisterInstallMode::Install,
         pid,
         wasm.bytes(),

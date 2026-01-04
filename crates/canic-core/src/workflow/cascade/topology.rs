@@ -4,7 +4,7 @@ use crate::{
     Error, access,
     dto::cascade::TopologySnapshotView,
     ops::{
-        self,
+        rpc::cascade::CascadeOps,
         storage::children::{CanisterChildrenOps, ChildSnapshot, ChildrenSnapshot},
     },
     workflow::{
@@ -100,7 +100,7 @@ pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), 
 async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshot) -> Result<(), Error> {
     let view = TopologySnapshotView::from(snapshot);
 
-    ops::rpc::cascade::send_topology_snapshot(*pid, &view)
+    CascadeOps::send_topology_snapshot(*pid, &view)
         .await
         .map_err(|_| CascadeError::ChildRejected(*pid).into())
 }

@@ -6,7 +6,7 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ops::{
-        ic::mgmt::deposit_cycles,
+        ic::mgmt::MgmtOps,
         rpc::request::RequestOpsError,
         storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
@@ -102,7 +102,7 @@ async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Respo
 async fn cycles_response(req: &CyclesRequest) -> Result<Response, Error> {
     env::require_root()?;
 
-    deposit_cycles(msg_caller(), req.cycles).await?;
+    MgmtOps::deposit_cycles(msg_caller(), req.cycles).await?;
 
     let cycles_transferred = req.cycles;
 

@@ -27,20 +27,28 @@ impl From<SubnetStateSnapshot> for SubnetStateData {
     }
 }
 
-// -------------------------------------------------------------
-// Snapshot
-// -------------------------------------------------------------
+///
+/// SubnetStateOps
+///
 
-#[must_use]
-pub fn snapshot() -> SubnetStateSnapshot {
-    SubnetState::export().into()
-}
+pub struct SubnetStateOps;
 
-// -------------------------------------------------------------
-// Import
-// -------------------------------------------------------------
+impl SubnetStateOps {
+    // -------------------------------------------------------------
+    // Snapshot
+    // -------------------------------------------------------------
 
-pub fn import(snapshot: SubnetStateSnapshot) {
-    let data: SubnetStateData = snapshot.into();
-    SubnetState::import(data);
+    #[must_use]
+    pub fn snapshot() -> SubnetStateSnapshot {
+        SubnetState::export().into()
+    }
+
+    // -------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------
+
+    pub fn import(snapshot: SubnetStateSnapshot) {
+        let data: SubnetStateData = snapshot.into();
+        SubnetState::import(data);
+    }
 }

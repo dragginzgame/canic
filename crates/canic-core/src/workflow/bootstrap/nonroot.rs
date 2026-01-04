@@ -51,6 +51,7 @@ use crate::{Error, workflow::prelude::*};
 pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), Error> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
+
     Ok(())
 }
 

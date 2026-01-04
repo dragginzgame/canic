@@ -31,6 +31,7 @@ pub mod ids;
 pub mod log;
 pub mod macros;
 pub mod perf;
+pub mod protocol;
 #[cfg(test)]
 pub mod test;
 

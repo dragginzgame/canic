@@ -7,7 +7,7 @@ use crate::{
         page::{Page, PageRequest},
     },
     perf::PerfEntry,
-    workflow,
+    protocol, workflow,
 };
 
 ///
@@ -48,6 +48,6 @@ pub fn metrics_perf(page: PageRequest) -> Page<PerfEntry> {
 pub fn metrics_endpoint_health(page: PageRequest) -> Page<EndpointHealthView> {
     workflow::metrics::query::metrics_endpoint_health_page(
         page,
-        Some("canic_metrics_endpoint_health"),
+        Some(protocol::CANIC_METRICS_ENDPOINT_HEALTH),
     )
 }

@@ -9,9 +9,15 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 
 ---
 
-## [Unreleased]
+## [0.7.3] - 2026-01-04 - Mostly Done
+### Added
+- Public API `api::ic::call` wrapper that routes through ops for metrics/logging and maps internal errors to `PublicError`.
+- Ops-level `ops::ic::call::CallOps` helper for typed IC calls with candid encode/decode handling.
+
 ### Changed
 - `SubnetIdentity::Manual` no longer requires a caller-provided subnet principal; runtime supplies a deterministic placeholder for test/support flows.
+- Made Ops:: structs consistent
+- flattened the ops/metrics/store structs so there's only one set of MetricsOps structs now
 - Preludes cleaned up to reduce redundant imports.
 
 ## [0.7.2] - 2026-01-03 - Workflow & Policy Audit

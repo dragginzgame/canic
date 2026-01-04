@@ -28,20 +28,14 @@
 //! This module intentionally contains no policy decisions and no workflow logic.
 
 pub mod call;
+pub mod canister;
 pub mod http;
 pub mod mgmt;
 pub mod nns;
 pub mod signature;
 pub mod xrc;
 
-use crate::{
-    Error, ThisError,
-    cdk::{
-        call::{CallFailed, CandidDecodeFailed},
-        candid::Error as CandidError,
-    },
-    ops::OpsError,
-};
+use crate::{Error, ThisError, ops::OpsError};
 
 ///
 /// IcOpsError
@@ -56,13 +50,7 @@ pub enum IcOpsError {
     XrcOps(#[from] xrc::XrcOpsError),
 
     #[error("ic call failed: {0}")]
-    CallFailed(#[from] CallFailed),
-
-    #[error("candid error: {0}")]
-    Candid(#[from] CandidError),
-
-    #[error("candid decode failed: {0}")]
-    CandidDecodeFailed(#[from] CandidDecodeFailed),
+    Call(#[from] call::CallOpsError),
 }
 
 impl From<IcOpsError> for Error {

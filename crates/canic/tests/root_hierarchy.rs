@@ -10,6 +10,7 @@ use canic::{
             topology::{DirectoryEntryView, SubnetRegistryEntryView, SubnetRegistryView},
         },
         ids::{CanisterRole, SubnetRole},
+        protocol,
     },
 };
 use canic_internal::canister;
@@ -70,7 +71,7 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
 fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntryView> {
     let SubnetRegistryView(registry) = pic
-        .query_call(root_id, "canic_subnet_registry", ())
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query registry");
 
     registry
@@ -80,7 +81,7 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
     let subnet_directory_page: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
-            "canic_subnet_directory",
+            protocol::CANIC_SUBNET_DIRECTORY,
             (PageRequest {
                 limit: 100,
                 offset: 0,
@@ -101,7 +102,7 @@ fn registry_has_role(registry: &[SubnetRegistryEntryView], role: &CanisterRole) 
 
 fn root_response(pic: &Pic, root_id: Principal, request: Request) -> Response {
     let response: Result<Response, PublicError> = pic
-        .update_call_as(root_id, root_id, "canic_response", (request,))
+        .update_call_as(root_id, root_id, protocol::CANIC_RESPONSE, (request,))
         .expect("canic_response transport");
 
     response.expect("canic_response failed")
@@ -215,7 +216,7 @@ fn root_builds_hierarchy_and_exposes_env() {
             .unwrap_or_else(|| panic!("missing {child_role} entry in subnet directory"));
 
         let env: EnvView = pic
-            .query_call(entry_pid, "canic_env", ())
+            .query_call(entry_pid, protocol::CANIC_ENV, ())
             .expect("query child env");
 
         assert_eq!(
@@ -256,7 +257,7 @@ fn directories_are_consistent_across_canisters() {
     let root_app_dir: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
-            "canic_app_directory",
+            protocol::CANIC_APP_DIRECTORY,
             (PageRequest {
                 limit: 100,
                 offset: 0,
@@ -266,7 +267,7 @@ fn directories_are_consistent_across_canisters() {
     let root_subnet_dir: Page<DirectoryEntryView> = pic
         .query_call(
             root_id,
-            "canic_subnet_directory",
+            protocol::CANIC_SUBNET_DIRECTORY,
             (PageRequest {
                 limit: 100,
                 offset: 0,
@@ -286,7 +287,7 @@ fn directories_are_consistent_across_canisters() {
         let app_dir: Page<DirectoryEntryView> = pic
             .query_call(
                 *entry_pid,
-                "canic_app_directory",
+                protocol::CANIC_APP_DIRECTORY,
                 (PageRequest {
                     limit: 100,
                     offset: 0,
@@ -296,7 +297,7 @@ fn directories_are_consistent_across_canisters() {
         let subnet_dir: Page<DirectoryEntryView> = pic
             .query_call(
                 *entry_pid,
-                "canic_subnet_directory",
+                protocol::CANIC_SUBNET_DIRECTORY,
                 (PageRequest {
                     limit: 100,
                     offset: 0,
@@ -348,7 +349,7 @@ fn subnet_children_matches_registry_on_root() {
     let mut page: Page<CanisterSummaryView> = pic
         .query_call(
             root_id,
-            "canic_canister_children",
+            protocol::CANIC_CANISTER_CHILDREN,
             (PageRequest {
                 limit: 100,
                 offset: 0,
@@ -403,7 +404,7 @@ fn worker_topology_cascades_through_parent() {
 
     // Registry on root should show a new worker under scale_hub.
     let SubnetRegistryView(registry_after) = pic
-        .query_call(root_id, "canic_subnet_registry", ())
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("registry after worker creation");
     let worker_count_after = registry_after
         .iter()
@@ -422,7 +423,7 @@ fn worker_topology_cascades_through_parent() {
     let children_page: Page<CanisterSummaryView> = pic
         .query_call(
             scale_hub_pid,
-            "canic_canister_children",
+            protocol::CANIC_CANISTER_CHILDREN,
             (PageRequest {
                 limit: 100,
                 offset: 0,
