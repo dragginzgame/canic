@@ -30,6 +30,29 @@ jobs:
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
         run: rustup target add wasm32-unknown-unknown
+      - name: Cache PocketIC server
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pocket-ic-server-11.0.0
+          key: pocket-ic-11.0.0-${{ runner.os }}
+      - name: Install PocketIC server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          VERSION="11.0.0"
+          DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
+          BIN="$DIR/pocket-ic"
+          mkdir -p "$DIR"
+
+          if [ ! -x "$BIN" ]; then
+            curl -L \
+              -o "$BIN.gz" \
+              "https://github.com/dfinity/pocketic/releases/download/$VERSION/pocket-ic-x86_64-linux.gz"
+            gunzip -f "$BIN.gz"
+            chmod +x "$BIN"
+          fi
+
+          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Build canister wasm artifacts
         shell: bash
         run: |
@@ -72,6 +95,29 @@ jobs:
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
         run: rustup target add wasm32-unknown-unknown
+      - name: Cache PocketIC server
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pocket-ic-server-11.0.0
+          key: pocket-ic-11.0.0-${{ runner.os }}
+      - name: Install PocketIC server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          VERSION="11.0.0"
+          DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
+          BIN="$DIR/pocket-ic"
+          mkdir -p "$DIR"
+
+          if [ ! -x "$BIN" ]; then
+            curl -L \
+              -o "$BIN.gz" \
+              "https://github.com/dfinity/pocketic/releases/download/$VERSION/pocket-ic-x86_64-linux.gz"
+            gunzip -f "$BIN.gz"
+            chmod +x "$BIN"
+          fi
+
+          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Build canister wasm artifacts
         shell: bash
         run: |
