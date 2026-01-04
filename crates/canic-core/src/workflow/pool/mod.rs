@@ -21,7 +21,10 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::{pool::controllers::pool_controllers, pool::query::pool_entry_view, prelude::*},
+    workflow::{
+        pool::{controllers::pool_controllers, query::pool_entry_view},
+        prelude::*,
+    },
 };
 
 /// Default cycles allocated to freshly created pool canisters.

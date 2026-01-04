@@ -177,8 +177,7 @@ fn new_canister_inherits_app_state_after_enable() {
     // Give it cycles to create children
     pic.add_cycles(root_id, 100_000_000_000_000);
 
-    let init_args = encode_one(SubnetIdentity::Manual(Principal::from_slice(&[0xAA; 29])))
-        .expect("encode root init args");
+    let init_args = encode_one(SubnetIdentity::Manual).expect("encode root init args");
 
     // Install root WASM
     pic.install_canister(root_id, root_wasm, init_args, Some(Principal::anonymous()));

@@ -9,6 +9,14 @@
 //! re-exports.
 
 // -----------------------------------------------------------------------------
+// Sub-crates
+// -----------------------------------------------------------------------------
+pub use canic_cdk as cdk;
+pub use canic_core as core;
+pub use canic_macros as macros;
+pub use canic_utils as utils;
+
+// -----------------------------------------------------------------------------
 // Re-exports
 // -----------------------------------------------------------------------------
 pub use canic_core::{PublicError, build, build_root, log, log::Level, start, start_root};
@@ -16,14 +24,6 @@ pub use canic_memory::{
     eager_init, eager_static, ic_memory, ic_memory_range, impl_storable_bounded,
     impl_storable_unbounded,
 };
-
-// -----------------------------------------------------------------------------
-// Sub-crates
-// -----------------------------------------------------------------------------
-pub use canic_cdk as cdk;
-pub use canic_core as core;
-pub use canic_macros as macros;
-pub use canic_utils as utils;
 
 // -----------------------------------------------------------------------------
 // Constants

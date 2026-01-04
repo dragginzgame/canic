@@ -6,8 +6,7 @@
 //!
 //! Used by [`ShardAllocator`] or [`ShardingPolicy`] when assigning tenants.
 
-use crate::utils::hash::hash_u64;
-use candid::Principal;
+use crate::{cdk::candid::Principal, utils::hash::hash_u64};
 
 ///
 /// HrwSelector

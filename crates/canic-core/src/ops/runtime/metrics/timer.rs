@@ -1,13 +1,23 @@
-use crate::ops::runtime::metrics::store::timer::{
-    TimerMetricKey as ModelTimerMetricKey, TimerMetrics, TimerMode as ModelTimerMode,
+use crate::ops::runtime::metrics::{
+    store::timer::{
+        TimerMetricKey as ModelTimerMetricKey, TimerMetrics, TimerMode as ModelTimerMode,
+    },
+    system::{SystemMetricKind, record_system_metric},
 };
-use crate::ops::runtime::metrics::system::{SystemMetricKind, record_system_metric};
 use std::time::Duration;
+
+///
+/// TimerMetricsSnapshot
+///
 
 #[derive(Clone, Debug)]
 pub struct TimerMetricsSnapshot {
     pub entries: Vec<(TimerMetricKey, u64)>,
 }
+
+///
+/// TimerMode
+///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TimerMode {
@@ -15,11 +25,25 @@ pub enum TimerMode {
     Once,
 }
 
+///
+/// TimerMetricKey
+///
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
     pub delay_ms: u64,
     pub label: String,
+}
+
+impl From<ModelTimerMetricKey> for TimerMetricKey {
+    fn from(key: ModelTimerMetricKey) -> Self {
+        Self {
+            mode: mode_from_model(key.mode),
+            delay_ms: key.delay_ms,
+            label: key.label,
+        }
+    }
 }
 
 #[must_use]
@@ -53,15 +77,5 @@ const fn mode_from_model(mode: ModelTimerMode) -> TimerMode {
     match mode {
         ModelTimerMode::Interval => TimerMode::Interval,
         ModelTimerMode::Once => TimerMode::Once,
-    }
-}
-
-impl From<ModelTimerMetricKey> for TimerMetricKey {
-    fn from(key: ModelTimerMetricKey) -> Self {
-        Self {
-            mode: mode_from_model(key.mode),
-            delay_ms: key.delay_ms,
-            label: key.label,
-        }
     }
 }

@@ -4,10 +4,9 @@ use crate::{
         Config, ConfigModel,
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
     },
-    ids::{CanisterRole, SubnetRole},
-    ops::{OpsError, runtime::env::EnvOps},
+    ids::SubnetRole,
+    ops::{OpsError, prelude::*, runtime::env},
 };
-use candid::Principal;
 use std::sync::Arc;
 
 pub mod network;
@@ -95,15 +94,15 @@ impl ConfigOps {
     ///
     /// Requires that environment initialization has completed.
     pub(crate) fn current_subnet() -> Result<SubnetConfig, Error> {
-        let subnet_role = EnvOps::subnet_role()?;
+        let subnet_role = env::subnet_role()?;
 
         Self::try_get_subnet(&subnet_role)
     }
 
     /// Fetch the configuration record for the *current* canister.
     pub(crate) fn current_canister() -> Result<CanisterConfig, Error> {
-        let subnet_role = EnvOps::subnet_role()?;
-        let canister_role = EnvOps::canister_role()?;
+        let subnet_role = env::subnet_role()?;
+        let canister_role = env::canister_role()?;
 
         Self::try_get_canister(&subnet_role, &canister_role)
     }
@@ -117,7 +116,7 @@ impl ConfigOps {
     pub(crate) fn current_subnet_canister(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, Error> {
-        let subnet_role = EnvOps::subnet_role()?;
+        let subnet_role = env::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)
     }

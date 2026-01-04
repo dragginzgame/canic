@@ -1,20 +1,21 @@
 use crate::{
     access::env,
-    cdk::{futures::spawn, types::Cycles, utils::time::now_secs},
+    cdk::{futures::spawn, utils::time::now_secs},
     domain::policy,
-    log,
-    log::Topic,
     ops::{
         config::ConfigOps,
         ic::mgmt::canister_cycle_balance,
         rpc::request::cycles_request,
         runtime::{
-            env::EnvOps,
+            env as runtime_env,
             timer::{TimerId, TimerOps},
         },
         storage::cycles::CycleTrackerOps,
     },
-    workflow::config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
+    workflow::{
+        config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
+        prelude::*,
+    },
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -54,7 +55,7 @@ pub fn track() {
     let ts = now_secs();
     let cycles = canister_cycle_balance();
 
-    if !EnvOps::is_root() {
+    if !runtime_env::is_root() {
         evaluate_policies(cycles.clone());
     }
 

@@ -1,5 +1,6 @@
 use crate::{
     cdk::{
+        candid::Principal,
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
         types::BoundedString64,
     },
@@ -8,7 +9,6 @@ use crate::{
     memory::impl_storable_bounded,
     storage::stable::memory::scaling::SCALING_REGISTRY_ID,
 };
-use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 

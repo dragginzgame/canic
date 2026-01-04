@@ -1,8 +1,7 @@
 pub mod admissibility;
 pub mod authority;
 
-use crate::{Error, ThisError, domain::policy::PolicyError};
-use candid::Principal;
+use crate::{Error, ThisError, cdk::candid::Principal, domain::policy::PolicyError};
 
 ///
 /// PoolPolicyError

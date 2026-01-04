@@ -1,5 +1,4 @@
-use crate::memory::impl_storable_bounded;
-use candid::CandidType;
+use crate::{cdk::candid::CandidType, memory::impl_storable_bounded};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, str::FromStr};

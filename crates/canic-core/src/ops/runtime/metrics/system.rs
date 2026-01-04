@@ -2,6 +2,10 @@ use crate::ops::runtime::metrics::store::system::{
     SystemMetricKind as ModelSystemMetricKind, SystemMetrics,
 };
 
+///
+/// SystemMetricKind
+///
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum SystemMetricKind {
@@ -19,6 +23,10 @@ pub enum SystemMetricKind {
     UpdateSettings,
     UpgradeCode,
 }
+
+///
+/// SystemMetricsSnapshot
+///
 
 #[derive(Clone, Debug)]
 pub struct SystemMetricsSnapshot {

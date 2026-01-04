@@ -44,7 +44,7 @@ use crate::{
 };
 
 ///
-/// IccOpsError
+/// IcOpsError
 ///
 
 #[derive(Debug, ThisError)]

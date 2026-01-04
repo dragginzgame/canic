@@ -14,8 +14,8 @@ pub enum SubnetIdentity {
     // this subnet is general-purpose subnet that syncs from Prime
     Standard(SubnetContextParams),
 
-    // explicitly provided subnet principal (test/support only)
-    Manual(Principal),
+    // do not attempt subnet discovery (test / support mode)
+    Manual,
 }
 
 ///

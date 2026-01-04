@@ -1,10 +1,6 @@
 use crate::{
     Error,
-    cdk::types::Principal,
     domain::policy::{topology::TopologyPolicy, upgrade::plan_upgrade},
-    ids::CanisterRole,
-    log,
-    log::Topic,
     ops::{
         ic::mgmt::{canister_status, upgrade_canister},
         runtime::wasm::WasmOps,
@@ -16,37 +12,18 @@ use crate::{
     workflow::{
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
         ic::provision::{create_and_install_canister, rebuild_directories_from_registry},
+        lifecycle::{LifecycleEvent, LifecycleResult},
+        prelude::*,
     },
 };
 
-pub enum LifecycleEvent {
-    Create {
-        role: CanisterRole,
-        parent: Principal,
-        extra_arg: Option<Vec<u8>>,
-    },
-    Upgrade {
-        pid: Principal,
-    },
-}
+///
+/// LifecycleOrchestrator
+///
 
-#[derive(Default)]
-pub struct LifecycleResult {
-    pub new_canister_pid: Option<Principal>,
-}
+pub struct LifecycleOrchestrator;
 
-impl LifecycleResult {
-    #[must_use]
-    pub const fn created(pid: Principal) -> Self {
-        Self {
-            new_canister_pid: Some(pid),
-        }
-    }
-}
-
-pub struct CanisterLifecycleOrchestrator;
-
-impl CanisterLifecycleOrchestrator {
+impl LifecycleOrchestrator {
     pub(crate) async fn apply(event: LifecycleEvent) -> Result<LifecycleResult, Error> {
         match event {
             // -----------------------------------------------------------------
@@ -148,7 +125,8 @@ async fn cascade_all(
             &registry_snapshot,
             &app_snapshot,
             &subnet_snapshot,
-        )?;
+        )
+        .map_err(Error::from)?;
     }
 
     Ok(())

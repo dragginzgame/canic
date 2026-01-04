@@ -16,9 +16,11 @@
 use crate::{
     Error,
     dto::abi::v1::CanisterInitPayload,
-    ops::ic::mgmt::{CanisterInstallMode, install_code},
+    ops::{
+        ic::mgmt::{CanisterInstallMode, install_code},
+        prelude::*,
+    },
 };
-use candid::Principal;
 
 /// Install or reinstall a *Canic-style* canister using the standard
 /// `(CanisterInitPayload, Option<Vec<u8>>)` argument convention.

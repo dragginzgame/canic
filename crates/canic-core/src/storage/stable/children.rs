@@ -11,18 +11,19 @@
 //! The contents are replaced wholesale on import.
 
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::{
+        candid::Principal,
+        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    },
     eager_static, ic_memory,
     storage::{canister::CanisterSummary, stable::memory::children::CANISTER_CHILDREN_ID},
 };
-use candid::Principal;
 use std::cell::RefCell;
 
-//
-// CANISTER_CHILDREN
-//
-
 eager_static! {
+    //
+    // CANISTER_CHILDREN
+    //
     static CANISTER_CHILDREN: RefCell<
         BTreeMap<Principal, CanisterSummary, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(

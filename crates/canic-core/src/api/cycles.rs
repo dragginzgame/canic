@@ -1,6 +1,8 @@
 use crate::{
-    dto::cycles::CycleTrackerEntryView,
-    dto::page::{Page, PageRequest},
+    dto::{
+        cycles::CycleTrackerEntryView,
+        page::{Page, PageRequest},
+    },
     workflow,
 };
 

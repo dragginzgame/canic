@@ -9,12 +9,11 @@ use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-//
-// ENV
-// All the environment variables a canister needs
-//
-
 eager_static! {
+    //
+    // ENV
+    // All the environment variables a canister needs
+    //
     static ENV: RefCell<Cell<EnvData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             ic_memory!(EnvData, ENV_ID),
@@ -57,21 +56,15 @@ impl_storable_bounded!(EnvData, 256, true);
 pub struct Env;
 
 impl Env {
-    // ---- Prime Root PID ----
-
     #[must_use]
     pub(crate) fn get_prime_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().prime_root_pid)
     }
 
-    // ---- Subnet Type ----
-
     #[must_use]
     pub(crate) fn get_subnet_role() -> Option<SubnetRole> {
         ENV.with_borrow(|cell| cell.get().subnet_role.clone())
     }
-
-    // ---- Subnet PID ----
 
     #[must_use]
     pub(crate) fn get_subnet_pid() -> Option<Principal> {
@@ -86,14 +79,10 @@ impl Env {
         });
     }
 
-    // ---- Root PID ----
-
     #[must_use]
     pub(crate) fn get_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().root_pid)
     }
-
-    // ---- Canister Type ----
 
     #[must_use]
     pub(crate) fn get_canister_role() -> Option<CanisterRole> {
@@ -108,8 +97,6 @@ impl Env {
             cell.set(data);
         });
     }
-
-    // ---- Parent PID ----
 
     #[must_use]
     pub(crate) fn get_parent_pid() -> Option<Principal> {

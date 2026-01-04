@@ -12,7 +12,6 @@ pub mod adapter;
 use crate::{
     Error,
     access::env,
-    ids::CanisterRole,
     ops::storage::{
         directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
         registry::subnet::SubnetRegistryOps,
@@ -23,13 +22,13 @@ use crate::{
     },
     workflow::{
         canister::mapper::CanisterMapper,
+        prelude::*,
         topology::{
             children::mapper::ChildrenMapper,
             directory::{AppDirectoryResolver, SubnetDirectoryResolver},
         },
     },
 };
-use candid::Principal;
 use std::collections::HashMap;
 
 ///

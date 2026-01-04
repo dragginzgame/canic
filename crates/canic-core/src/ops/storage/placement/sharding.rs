@@ -1,13 +1,16 @@
 use crate::{
     Error, ThisError,
-    cdk::{types::Principal, utils::time::now_secs},
-    ids::CanisterRole,
-    ops::storage::StorageOpsError,
+    cdk::utils::time::now_secs,
+    ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
         ShardEntry as ModelShardEntry, ShardKey,
         registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
     },
 };
+
+///
+/// ShardEntry
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShardEntry {
@@ -22,6 +25,10 @@ pub struct ShardEntry {
 impl ShardEntry {
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 }
+
+///
+/// ShardingRegistrySnapshor
+///
 
 #[derive(Clone, Debug)]
 pub struct ShardingRegistrySnapshot {

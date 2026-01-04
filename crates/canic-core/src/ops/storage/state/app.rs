@@ -20,6 +20,10 @@ pub struct AppStateSnapshot {
     pub mode: Option<AppMode>,
 }
 
+///
+/// AppMode
+///
+
 #[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
 pub enum AppMode {
     Enabled,

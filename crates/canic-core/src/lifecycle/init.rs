@@ -27,7 +27,7 @@ use crate::{
     ops::runtime::timer::TimerOps,
     workflow,
 };
-use core::time::Duration;
+use std::time::Duration;
 
 pub fn init_root_canister(identity: SubnetIdentity) {
     // Perform minimal synchronous runtime seeding during IC init.

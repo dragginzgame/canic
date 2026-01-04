@@ -1,5 +1,4 @@
-use crate::{Error, infra};
-use candid::Principal;
+use crate::{Error, infra, ops::prelude::*};
 
 /// Prepare a canister signature (update-only).
 pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {

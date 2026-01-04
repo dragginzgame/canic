@@ -1,11 +1,5 @@
 //! Topology synchronization helpers.
 
-use super::{
-    CascadeError,
-    snapshot::{TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder},
-    warn_if_large,
-};
-use crate::workflow::cascade::snapshot::adapter::topology_snapshot_from_view;
 use crate::{
     Error, access,
     dto::cascade::TopologySnapshotView,
@@ -13,7 +7,17 @@ use crate::{
         self,
         storage::children::{CanisterChildrenOps, ChildSnapshot, ChildrenSnapshot},
     },
-    workflow::prelude::*,
+    workflow::{
+        cascade::{
+            CascadeError,
+            snapshot::{
+                TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
+                adapter::topology_snapshot_from_view,
+            },
+            warn_if_large,
+        },
+        prelude::*,
+    },
 };
 use std::collections::HashMap;
 

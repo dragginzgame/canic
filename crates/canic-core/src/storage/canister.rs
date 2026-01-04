@@ -1,5 +1,4 @@
-use crate::{ids::CanisterRole, memory::impl_storable_bounded};
-use candid::Principal;
+use crate::{cdk::candid::Principal, ids::CanisterRole, memory::impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 

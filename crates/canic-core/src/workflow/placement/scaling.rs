@@ -16,9 +16,8 @@ use crate::{
         rpc::request::create_canister_request,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
-    workflow::placement::PlacementError,
+    workflow::{placement::PlacementError, prelude::*},
 };
-use candid::Principal;
 
 ///
 /// ScalingWorkflowError

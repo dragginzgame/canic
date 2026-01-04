@@ -7,6 +7,7 @@ use crate::{
     ThisError,
     cdk::{
         self,
+        candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder},
         mgmt::{
             CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
@@ -15,7 +16,6 @@ use crate::{
     },
     infra::{ic::IcInfraError, prelude::*},
 };
-use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
 ///
 /// MgmtInfraError

@@ -7,12 +7,11 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-//
-// SUBNET_STATE
-// EMPTY FOR NOW - if we ever want to store subnet-specific state it's here
-//
-
 eager_static! {
+    //
+    // SUBNET_STATE
+    // EMPTY FOR NOW - if we ever want to store subnet-specific state it's here
+    //
     static SUBNET_STATE: RefCell<Cell<SubnetStateData, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             ic_memory!(SubnetState, SUBNET_STATE_ID),
@@ -30,7 +29,7 @@ pub struct SubnetStateData {}
 impl_storable_bounded!(SubnetStateData, 32, true);
 
 ///
-/// SubnetState (public API)
+/// SubnetState
 ///
 
 pub struct SubnetState;

@@ -1,4 +1,3 @@
-use super::{Rpc, RpcOpsError};
 use crate::{
     Error, ThisError,
     dto::rpc::{
@@ -6,7 +5,10 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     infra::InfraError,
-    ops::{prelude::*, rpc::execute_root_response_rpc},
+    ops::{
+        prelude::*,
+        rpc::{Rpc, RpcOpsError, execute_root_response_rpc},
+    },
 };
 use candid::encode_one;
 

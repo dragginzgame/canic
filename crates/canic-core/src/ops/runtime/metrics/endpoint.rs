@@ -1,11 +1,13 @@
-use crate::ops::runtime::metrics::access::AccessMetricKey;
-use crate::ops::runtime::metrics::store::{
-    access::AccessMetrics as ModelAccessMetrics,
-    endpoint::{
-        EndpointAttemptCounts as ModelEndpointAttemptCounts,
-        EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
-        EndpointResultCounts as ModelEndpointResultCounts,
-        EndpointResultMetrics as ModelEndpointResultMetrics,
+use crate::ops::runtime::metrics::{
+    access::AccessMetricKey,
+    store::{
+        access::AccessMetrics as ModelAccessMetrics,
+        endpoint::{
+            EndpointAttemptCounts as ModelEndpointAttemptCounts,
+            EndpointAttemptMetrics as ModelEndpointAttemptMetrics,
+            EndpointResultCounts as ModelEndpointResultCounts,
+            EndpointResultMetrics as ModelEndpointResultMetrics,
+        },
     },
 };
 

@@ -12,7 +12,6 @@ use crate::{
             EnvironmentVariable as CdkEnvironmentVariable, LogVisibility as CdkLogVisibility,
             MemoryMetrics, QueryStats,
         },
-        types::Cycles,
     },
     dto::canister::{
         CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView, EnvironmentVariableView,
@@ -24,7 +23,7 @@ use crate::{
         runtime::metrics::system::{SystemMetricKind, record_system_metric},
     },
 };
-use candid::{Nat, Principal, utils::ArgumentEncoder};
+use candid::{Nat, utils::ArgumentEncoder};
 
 ///
 /// CanisterInstallMode

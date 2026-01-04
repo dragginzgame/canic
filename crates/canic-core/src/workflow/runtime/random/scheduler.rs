@@ -4,12 +4,12 @@ use crate::{
     Error,
     config::schema::{RandomnessConfig, RandomnessSource},
     domain::policy,
-    log::Topic,
     ops::{
         config::ConfigOps,
         ic::mgmt::raw_rand,
         runtime::timer::{TimerId, TimerOps},
     },
+    workflow::prelude::*,
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};

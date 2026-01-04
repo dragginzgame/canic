@@ -1,11 +1,10 @@
 use crate::{
-    cdk::types::Principal,
     dto::placement::{
         ScalingRegistryEntryView, ScalingRegistryView, ShardingRegistryEntryView,
         ShardingRegistryView, ShardingTenantsView,
     },
     ops::storage::placement::{scaling::ScalingRegistryOps, sharding::ShardingRegistryOps},
-    workflow::placement::mapper::PlacementMapper,
+    workflow::{placement::mapper::PlacementMapper, prelude::*},
 };
 
 pub fn scaling_registry_view() -> ScalingRegistryView {

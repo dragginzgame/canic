@@ -12,13 +12,15 @@
 //! - This is the *only* place workflow converts snapshot DTOs
 //!
 
-use super::{StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot};
 use crate::{
     dto::cascade::{
         StateSnapshotView, TopologyChildrenView, TopologyDirectChildView, TopologyPathNodeView,
         TopologySnapshotView,
     },
     workflow::{
+        cascade::snapshot::{
+            StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot,
+        },
         state::mapper::{AppStateMapper, SubnetStateMapper},
         topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },

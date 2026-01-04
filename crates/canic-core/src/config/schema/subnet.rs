@@ -1,9 +1,11 @@
 use crate::{
-    cdk::types::{Cycles, TC},
+    cdk::{
+        candid::Principal,
+        types::{Cycles, TC},
+    },
     config::schema::{ConfigSchemaError, NAME_MAX_BYTES, Validate},
     ids::CanisterRole,
 };
-use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

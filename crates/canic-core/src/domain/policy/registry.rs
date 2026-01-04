@@ -1,11 +1,11 @@
 use crate::{
     Error, ThisError,
+    cdk::candid::Principal,
     config::schema::{CanisterCardinality, CanisterConfig},
     domain::policy::PolicyError,
     ids::CanisterRole,
     ops::storage::registry::subnet::SubnetRegistrySnapshot,
 };
-use candid::Principal;
 
 ///
 /// RegistryPolicyError
@@ -31,11 +31,11 @@ impl From<RegistryPolicyError> for Error {
 pub struct RegistryPolicy;
 
 impl RegistryPolicy {
-    pub(crate) fn can_register_role(
+    pub fn can_register_role(
         role: &CanisterRole,
         snapshot: &SubnetRegistrySnapshot,
         canister_cfg: &CanisterConfig,
-    ) -> Result<(), Error> {
+    ) -> Result<(), RegistryPolicyError> {
         if canister_cfg.cardinality == CanisterCardinality::Single
             && let Some((pid, _)) = snapshot
                 .entries
@@ -45,8 +45,7 @@ impl RegistryPolicy {
             return Err(RegistryPolicyError::RoleAlreadyRegistered {
                 role: role.clone(),
                 pid: *pid,
-            }
-            .into());
+            });
         }
 
         Ok(())

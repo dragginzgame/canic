@@ -1,4 +1,5 @@
-use crate::{cdk::types::Cycles, storage::stable::cycles::CycleTracker};
+use crate::ops::prelude::*;
+use crate::storage::stable::cycles::CycleTracker;
 
 ///
 /// CycleTrackerSnapshot

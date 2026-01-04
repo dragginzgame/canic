@@ -1,8 +1,4 @@
-use crate::{
-    Error,
-    cdk::{api::canister_self, types::Principal},
-    ops::config::ConfigOps,
-};
+use crate::{Error, ops::config::ConfigOps, workflow::prelude::*};
 
 /// Return the controller set for pool canisters.
 ///

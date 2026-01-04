@@ -1,5 +1,5 @@
 use crate::{
-    cdk::types::Principal,
+    ops::prelude::*,
     storage::stable::registry::app::{AppRegistry, AppRegistryData},
 };
 

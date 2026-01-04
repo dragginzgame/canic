@@ -8,7 +8,7 @@ use canic::{
             subnet::SubnetIdentity,
             topology::{AppDirectoryView, SubnetDirectoryView},
         },
-        ids::{CanisterRole, SubnetRole},
+        ids::CanisterRole,
     },
 };
 use derive_more::{Deref, DerefMut};
@@ -261,36 +261,34 @@ impl Pic {
 /// - Root-provisioned installs will populate directories via cascade.
 ///
 fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
-    let args = if role.is_root() {
-        // Provide a deterministic subnet principal for PocketIC runs.
-        let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        encode_one(SubnetIdentity::Manual(subnet_pid))
+    if role.is_root() {
+        // Root canister in standalone / test mode.
+        // Manual means: do not attempt subnet discovery.
+        encode_one(SubnetIdentity::Manual)
             .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
     } else {
-        // Provide a minimal, deterministic env payload for standalone installs.
-        let root_pid = Principal::from_slice(&[0xBB; 29]);
-        let subnet_pid = Principal::from_slice(&[0xAA; 29]);
+        // Non-root standalone install.
+        // Provide only what is structurally known at install time.
         let env = EnvView {
-            prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetRole::PRIME),
-            subnet_pid: Some(subnet_pid),
-            root_pid: Some(root_pid),
+            prime_root_pid: None,
+            subnet_role: None,
+            subnet_pid: None,
+            root_pid: None,
             canister_role: Some(role),
-            parent_pid: Some(root_pid),
+            parent_pid: None,
         };
 
-        // Intentional: local standalone installs don't need directory views unless a test
-        // exercises directory-dependent auth/endpoints.
+        // Intentional: standalone installs do not require directories unless
+        // a test explicitly exercises directory-dependent behavior.
         let payload = CanisterInitPayload {
             env,
             app_directory: AppDirectoryView(Vec::new()),
             subnet_directory: SubnetDirectoryView(Vec::new()),
         };
+
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
             .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
-    }?;
-
-    Ok(args)
+    }
 }
 
 fn install_args_with_directories(
@@ -298,29 +296,29 @@ fn install_args_with_directories(
     app_directory: AppDirectoryView,
     subnet_directory: SubnetDirectoryView,
 ) -> Result<Vec<u8>, PublicError> {
-    let args = if role.is_root() {
-        let subnet_pid = Principal::from_slice(&[0xAA; 29]);
-        encode_one(SubnetIdentity::Manual(subnet_pid))
+    if role.is_root() {
+        // Root canister: runtime identity only.
+        // No fake principals. Runtime/bootstrap will resolve actual context.
+        encode_one(SubnetIdentity::Manual)
             .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
     } else {
-        let root_pid = Principal::from_slice(&[0xBB; 29]);
-        let subnet_pid = Principal::from_slice(&[0xAA; 29]);
+        // Non-root canister: pass structural context, not invented identities.
         let env = EnvView {
-            prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetRole::PRIME),
-            subnet_pid: Some(subnet_pid),
-            root_pid: Some(root_pid),
+            prime_root_pid: None,
+            subnet_role: None,
+            subnet_pid: None,
+            root_pid: None,
             canister_role: Some(role),
-            parent_pid: Some(root_pid),
+            parent_pid: None,
         };
+
         let payload = CanisterInitPayload {
             env,
             app_directory,
             subnet_directory,
         };
+
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
             .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
-    }?;
-
-    Ok(args)
+    }
 }
