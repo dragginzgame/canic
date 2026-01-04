@@ -14,25 +14,10 @@ use canic::{
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
-use std::sync::OnceLock;
 
-///
-/// PocketIC singleton
-///
-/// This crate models a *single* IC universe shared by all tests.
-/// We intentionally reuse one `PocketIc` instance to preserve determinism and
-/// to match the real IC's global, long-lived state.
-///
-/// Invariants:
-/// - Exactly one `PocketIc` instance exists for the entire test run.
-/// - All tests share the same universe (no resets between tests).
-/// - Tests are single-threaded and must not assume isolation.
-/// - Determinism is prioritized over per-test cleanliness.
-///
-/// The `OnceLock` is not about performance; it encodes these invariants so
-/// tests cannot accidentally spin up extra universes.
-///
-static PIC: OnceLock<Pic> = OnceLock::new();
+thread_local! {
+    static PIC: Pic = PicBuilder::new().with_application_subnet().build();
+}
 
 ///
 /// Access the singleton PocketIC wrapper.
@@ -40,10 +25,9 @@ static PIC: OnceLock<Pic> = OnceLock::new();
 /// The global instance is created on first use and then reused.
 ///
 #[must_use]
-pub fn pic() -> &'static Pic {
-    PIC.get_or_init(|| PicBuilder::new().with_application_subnet().build())
+pub fn pic() -> Pic {
+    PicBuilder::new().with_application_subnet().build()
 }
-
 ///
 /// PicBuilder
 /// Thin wrapper around the PocketIC builder.
