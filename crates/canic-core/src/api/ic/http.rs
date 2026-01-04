@@ -1,8 +1,8 @@
 use crate::{
     PublicError,
     cdk::candid::{CandidType, Nat},
-    dto::http as http_dto,
-    ops::ic::http as http_ops,
+    dto,
+    ops::ic::http::HttpOps,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -14,37 +14,37 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 ///
 
 ///
-/// ApiHttpRequest
+/// HttpRequest
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ApiHttpRequest {
+pub struct HttpRequest {
     pub url: String,
     pub max_response_bytes: Option<u64>,
-    pub method: ApiHttpMethod,
-    pub headers: Vec<ApiHttpHeader>,
+    pub method: HttpMethod,
+    pub headers: Vec<HttpHeader>,
     pub body: Option<Vec<u8>>,
     pub is_replicated: Option<bool>,
 }
 
 ///
-/// ApiHttpResponse
+/// HttpResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ApiHttpResponse {
+pub struct HttpResponse {
     pub status: Nat,
-    pub headers: Vec<ApiHttpHeader>,
+    pub headers: Vec<HttpHeader>,
     #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
 }
 
 ///
-/// ApiHttpMethod
+/// HttpMethod
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
-pub enum ApiHttpMethod {
+pub enum HttpMethod {
     #[serde(rename = "get")]
     GET,
     #[serde(rename = "post")]
@@ -54,11 +54,11 @@ pub enum ApiHttpMethod {
 }
 
 ///
-/// ApiHttpHeader
+/// HttpHeader
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ApiHttpHeader {
+pub struct HttpHeader {
     pub name: String,
     pub value: String,
 }
@@ -69,7 +69,7 @@ pub async fn get<T: DeserializeOwned>(
     url: &str,
     headers: &[(&str, &str)],
 ) -> Result<T, PublicError> {
-    http_ops::get(url, headers).await.map_err(PublicError::from)
+    HttpOps::get(url, headers).await.map_err(PublicError::from)
 }
 
 /// Same as `get`, with an explicit metrics label.
@@ -79,21 +79,21 @@ pub async fn get_with_label<T: DeserializeOwned>(
     headers: &[(&str, &str)],
     label: &str,
 ) -> Result<T, PublicError> {
-    http_ops::get_with_label(url, headers, Some(label))
+    HttpOps::get_with_label(url, headers, Some(label))
         .await
         .map_err(PublicError::from)
 }
 
 /// Perform a raw HTTP request with metrics, returning the response verbatim.
-pub async fn get_raw(args: ApiHttpRequest) -> Result<ApiHttpResponse, PublicError> {
-    http_ops::get_raw(args.into())
+pub async fn get_raw(args: HttpRequest) -> Result<HttpResponse, PublicError> {
+    HttpOps::get_raw(args.into())
         .await
-        .map(ApiHttpResponse::from)
+        .map(HttpResponse::from)
         .map_err(PublicError::from)
 }
 
-impl From<ApiHttpRequest> for http_dto::HttpRequestArgs {
-    fn from(req: ApiHttpRequest) -> Self {
+impl From<HttpRequest> for dto::http::HttpRequestArgs {
+    fn from(req: HttpRequest) -> Self {
         Self {
             url: req.url,
             max_response_bytes: req.max_response_bytes,
@@ -105,8 +105,8 @@ impl From<ApiHttpRequest> for http_dto::HttpRequestArgs {
     }
 }
 
-impl From<http_dto::HttpRequestResult> for ApiHttpResponse {
-    fn from(res: http_dto::HttpRequestResult) -> Self {
+impl From<dto::http::HttpRequestResult> for HttpResponse {
+    fn from(res: dto::http::HttpRequestResult) -> Self {
         Self {
             status: res.status,
             headers: res.headers.into_iter().map(Into::into).collect(),
@@ -115,18 +115,18 @@ impl From<http_dto::HttpRequestResult> for ApiHttpResponse {
     }
 }
 
-impl From<ApiHttpMethod> for http_dto::HttpMethod {
-    fn from(method: ApiHttpMethod) -> Self {
+impl From<HttpMethod> for dto::http::HttpMethod {
+    fn from(method: HttpMethod) -> Self {
         match method {
-            ApiHttpMethod::GET => Self::GET,
-            ApiHttpMethod::POST => Self::POST,
-            ApiHttpMethod::HEAD => Self::HEAD,
+            HttpMethod::GET => Self::GET,
+            HttpMethod::POST => Self::POST,
+            HttpMethod::HEAD => Self::HEAD,
         }
     }
 }
 
-impl From<ApiHttpHeader> for http_dto::HttpHeader {
-    fn from(header: ApiHttpHeader) -> Self {
+impl From<HttpHeader> for dto::http::HttpHeader {
+    fn from(header: HttpHeader) -> Self {
         Self {
             name: header.name,
             value: header.value,
@@ -134,8 +134,8 @@ impl From<ApiHttpHeader> for http_dto::HttpHeader {
     }
 }
 
-impl From<http_dto::HttpHeader> for ApiHttpHeader {
-    fn from(header: http_dto::HttpHeader) -> Self {
+impl From<dto::http::HttpHeader> for HttpHeader {
+    fn from(header: dto::http::HttpHeader) -> Self {
         Self {
             name: header.name,
             value: header.value,
