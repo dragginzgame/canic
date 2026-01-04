@@ -44,4 +44,28 @@ static_canisters! {
     // ckPEPE
     CKPEPE_LEDGER_CANISTER = "etik7-oiaaa-aaaar-qagia-cai";
     CKPEPE_INDEX_CANISTER = "eujml-dqaaa-aaaar-qagiq-cai";
+
+    // ckEURC
+    CKEURC_LEDGER_CANISTER = "pe5t5-diaaa-aaaar-qahwa-cai";
+    CKEURC_INDEX_CANISTER = "pd4vj-oqaaa-aaaar-qahwq-cai";
+
+    // ckXAUT
+    CKXAUT_LEDGER_CANISTER = "nza5v-qaaaa-aaaar-qahzq-cai";
+    CKXAUT_INDEX_CANISTER = "nmhmy-riaaa-aaaar-qah2a-cai";
+
+    // ckWSTETH
+    CKWSTETH_LEDGER_CANISTER = "j2tuh-yqaaa-aaaar-qahcq-cai";
+    CKWSTETH_INDEX_CANISTER = "jtq73-oyaaa-aaaar-qahda-cai";
+
+    // ckUNI
+    CKUNI_LEDGER_CANISTER = "ilzky-ayaaa-aaaar-qahha-cai";
+    CKUNI_INDEX_CANISTER = "imymm-naaaa-aaaar-qahhq-cai";
+
+    // ckSHIB
+    CKWSHIB_LEDGER_CANISTER = "fxffn-xiaaa-aaaar-qagoa-cai";
+    CKSHIB_INDEX_CANISTER = "fqedz-2qaaa-aaaar-qagoq-cai";
+
+    // ckWBTC
+    CKWBTC_LEDGER_CANISTER = "bptq2-faaaa-aaaar-qagxq-cai";
+    CKWBTC_INDEX_CANISTER = "dso6s-wiaaa-aaaar-qagya-cai";
 }
