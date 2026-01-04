@@ -1,8 +1,10 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::{
+        candid::Principal,
+        structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    },
     storage::stable::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
 };
-use candid::Principal;
 
 ///
 /// ShardingRegistryData

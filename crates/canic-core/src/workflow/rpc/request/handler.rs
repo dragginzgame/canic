@@ -11,7 +11,7 @@ use crate::{
         storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
-        orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
+        lifecycle::{LifecycleEvent, orchestrator::LifecycleOrchestrator},
         prelude::*,
     },
 };
@@ -55,7 +55,7 @@ async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Respons
             extra_arg: req.extra_arg.clone(),
         };
 
-        let lifecycle_result = CanisterLifecycleOrchestrator::apply(event).await?;
+        let lifecycle_result = LifecycleOrchestrator::apply(event).await?;
         let new_canister_pid = lifecycle_result
             .new_canister_pid
             .ok_or(RequestOpsError::MissingNewCanisterPid)?;
@@ -93,7 +93,7 @@ async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Respo
         pid: req.canister_pid,
     };
 
-    CanisterLifecycleOrchestrator::apply(event).await?;
+    LifecycleOrchestrator::apply(event).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
 }

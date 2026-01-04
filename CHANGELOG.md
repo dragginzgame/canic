@@ -9,6 +9,11 @@ Below is a polished, release-quality changelog entry suitable for **v0.7**. It i
 
 ---
 
+## [Unreleased]
+### Changed
+- `SubnetIdentity::Manual` no longer requires a caller-provided subnet principal; runtime supplies a deterministic placeholder for test/support flows.
+- Preludes cleaned up to reduce redundant imports.
+
 ## [0.7.2] - 2026-01-03 - Workflow & Policy Audit
 ### Changed
 - Renamed topology lookup API to `subnet_directory_pid_by_role` to make directory sourcing explicit.

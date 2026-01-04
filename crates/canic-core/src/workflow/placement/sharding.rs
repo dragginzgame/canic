@@ -5,7 +5,6 @@
 
 use crate::{
     Error,
-    cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::placement::sharding::{
         ShardingPolicyError,
@@ -13,13 +12,10 @@ use crate::{
         policy::{ShardingPlanState, ShardingPolicy},
     },
     dto::{placement::ShardingPlanStateView, rpc::CreateCanisterParent},
-    ids::CanisterRole,
-    log,
-    log::Topic,
     ops::{
         rpc::request::create_canister_request, storage::placement::sharding::ShardingRegistryOps,
     },
-    workflow::placement::mapper::PlacementMapper,
+    workflow::{placement::mapper::PlacementMapper, prelude::*},
 };
 
 ///

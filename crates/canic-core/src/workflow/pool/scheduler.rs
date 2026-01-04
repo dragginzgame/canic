@@ -20,8 +20,8 @@ use crate::{
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
-    workflow::config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
     workflow::{
+        config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
         pool::{
             admissibility::check_can_enter_pool, mark_failed, mark_ready, pop_oldest_pending_reset,
             reset_into_pool,

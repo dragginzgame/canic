@@ -1,6 +1,6 @@
-use crate::{dto::env::EnvView, ops::runtime::env::EnvOps, workflow::env::EnvMapper};
+use crate::{dto::env::EnvView, ops::runtime::env, workflow::env::EnvMapper};
 
 pub fn env_view() -> EnvView {
-    let snapshot = EnvOps::snapshot();
+    let snapshot = env::snapshot();
     EnvMapper::snapshot_to_view(snapshot)
 }

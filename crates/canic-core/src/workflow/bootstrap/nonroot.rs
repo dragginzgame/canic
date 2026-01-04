@@ -25,7 +25,7 @@
 //! It provides a well-defined extension point should non-root canisters
 //! later require asynchronous local bootstrap behavior.
 
-use crate::{Error, log, log::Topic};
+use crate::{Error, workflow::prelude::*};
 
 ///
 /// Bootstrap workflow for non-root canisters during init.

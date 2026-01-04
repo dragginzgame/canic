@@ -1,7 +1,9 @@
 //! Read-only projections for memory registry queries.
 
-use crate::workflow::memory::mapper::MemoryRegistryMapper;
-use crate::{dto::memory::MemoryRegistryView, ops::runtime::memory::MemoryOps};
+use crate::{
+    dto::memory::MemoryRegistryView, ops::runtime::memory::MemoryOps,
+    workflow::memory::mapper::MemoryRegistryMapper,
+};
 
 ///
 /// Views

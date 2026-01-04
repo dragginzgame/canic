@@ -1,6 +1,5 @@
 use crate::{
-    cdk::types::Principal,
-    ids::CanisterRole,
+    ops::prelude::*,
     storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
 };
 
@@ -50,7 +49,8 @@ impl SubnetDirectoryOps {
     // Import
     // -------------------------------------------------------------
 
-    pub(crate) fn import(snapshot: SubnetDirectorySnapshot) {
+    /// Import a snapshot into stable storage.
+    pub fn import(snapshot: SubnetDirectorySnapshot) {
         let data: SubnetDirectoryData = snapshot.into();
         SubnetDirectory::import(data);
     }

@@ -12,12 +12,6 @@
 //! - Persistence lives in ops
 //!
 
-use super::{
-    CascadeError,
-    snapshot::{StateSnapshot, state_snapshot_debug, state_snapshot_is_empty},
-    warn_if_large,
-};
-use crate::workflow::cascade::snapshot::adapter::state_snapshot_from_view;
 use crate::{
     Error, access,
     dto::cascade::StateSnapshotView,
@@ -30,7 +24,17 @@ use crate::{
             state::{app::AppStateOps, subnet},
         },
     },
-    workflow::prelude::*,
+    workflow::{
+        cascade::{
+            CascadeError,
+            snapshot::{
+                StateSnapshot, adapter::state_snapshot_from_view, state_snapshot_debug,
+                state_snapshot_is_empty,
+            },
+            warn_if_large,
+        },
+        prelude::*,
+    },
 };
 
 //

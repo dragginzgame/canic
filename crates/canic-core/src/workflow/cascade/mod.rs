@@ -7,8 +7,10 @@ pub mod snapshot;
 pub mod state;
 pub mod topology;
 
-use crate::{Error, ThisError, log, log::Topic, workflow::WorkflowError};
-use candid::Principal;
+use crate::{
+    Error, ThisError,
+    workflow::{WorkflowError, prelude::*},
+};
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 

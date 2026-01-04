@@ -2,15 +2,14 @@ pub mod app;
 pub mod bootstrap;
 pub mod canister;
 pub mod cascade;
-pub mod command;
 pub mod config;
 pub mod env;
 pub mod ic;
 pub mod icrc;
+pub mod lifecycle;
 pub mod log;
 pub mod memory;
 pub mod metrics;
-pub mod orchestrator;
 pub mod placement;
 pub mod pool;
 pub mod rpc;
@@ -27,6 +26,7 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             api::{canister_self, msg_caller},
+            candid::CandidType,
             types::{Cycles, Principal},
         },
         ids::CanisterRole,

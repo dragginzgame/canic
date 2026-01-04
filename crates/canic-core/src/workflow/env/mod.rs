@@ -7,10 +7,11 @@ use crate::{
     Error,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
-    ids::CanisterRole,
-    ops::config::network::{Network, build_network},
-    ops::runtime::env::{EnvOps, EnvSnapshot},
-    workflow::bootstrap::BootstrapError,
+    ops::{
+        config::network::{Network, build_network},
+        runtime::env::{self, EnvSnapshot},
+    },
+    workflow::{bootstrap::BootstrapError, prelude::*},
 };
 
 pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), Error> {
@@ -33,7 +34,7 @@ pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), E
         }
     };
 
-    EnvOps::import(EnvSnapshot {
+    env::import(EnvSnapshot {
         prime_root_pid: Some(validated.prime_root_pid),
         subnet_role: Some(validated.subnet_role),
         subnet_pid: Some(validated.subnet_pid),

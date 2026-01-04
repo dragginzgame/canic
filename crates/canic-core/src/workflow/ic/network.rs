@@ -1,8 +1,4 @@
-use crate::{
-    Error, cdk::api::canister_self, log, log::Topic,
-    ops::ic::nns::registry::get_subnet_for_canister,
-};
-use candid::Principal;
+use crate::{Error, ops::ic::nns::registry::get_subnet_for_canister, workflow::prelude::*};
 
 /// Queries the NNS registry for the subnet that this canister belongs to and records ICC metrics.
 pub async fn try_get_current_subnet_pid() -> Result<Option<Principal>, Error> {

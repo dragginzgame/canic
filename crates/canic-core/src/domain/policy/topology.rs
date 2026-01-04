@@ -139,19 +139,19 @@ impl TopologyPolicy {
         }
     }
 
-    pub(crate) fn assert_directories_match_registry(
+    pub fn assert_directories_match_registry(
         registry: &SubnetRegistrySnapshot,
         app_snapshot: &AppDirectorySnapshot,
         subnet_snapshot: &SubnetDirectorySnapshot,
-    ) -> Result<(), Error> {
+    ) -> Result<(), TopologyPolicyError> {
         let app_built = Self::app_directory_from_registry(registry);
         if app_built != *app_snapshot {
-            return Err(TopologyPolicyError::AppDirectoryDiverged.into());
+            return Err(TopologyPolicyError::AppDirectoryDiverged);
         }
 
         let subnet_built = Self::subnet_directory_from_registry(registry);
         if subnet_built != *subnet_snapshot {
-            return Err(TopologyPolicyError::SubnetDirectoryDiverged.into());
+            return Err(TopologyPolicyError::SubnetDirectoryDiverged);
         }
 
         Ok(())

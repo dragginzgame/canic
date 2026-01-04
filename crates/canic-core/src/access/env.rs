@@ -1,6 +1,4 @@
-use crate::{
-    Error, ThisError, access::AccessError, cdk::api::canister_self, ops::runtime::env::EnvOps,
-};
+use crate::{Error, ThisError, access::AccessError, cdk::api::canister_self, ops::runtime::env};
 
 ///
 /// EnvAccessError
@@ -33,7 +31,7 @@ impl From<EnvAccessError> for Error {
 
 #[allow(clippy::unused_async)]
 pub async fn is_prime_root() -> Result<(), AccessError> {
-    if EnvOps::is_prime_root() {
+    if env::is_prime_root() {
         Ok(())
     } else {
         Err(EnvAccessError::NotPrimeRoot.into())
@@ -42,7 +40,7 @@ pub async fn is_prime_root() -> Result<(), AccessError> {
 
 #[allow(clippy::unused_async)]
 pub async fn is_prime_subnet() -> Result<(), AccessError> {
-    if EnvOps::is_prime_subnet() {
+    if env::is_prime_subnet() {
         Ok(())
     } else {
         Err(EnvAccessError::NotPrimeSubnet.into())
@@ -51,7 +49,7 @@ pub async fn is_prime_subnet() -> Result<(), AccessError> {
 
 /// Ensure the caller is the root canister.
 pub(crate) fn require_root() -> Result<(), Error> {
-    let root_pid = EnvOps::root_pid()?;
+    let root_pid = env::root_pid()?;
 
     if root_pid == canister_self() {
         Ok(())
@@ -62,7 +60,7 @@ pub(crate) fn require_root() -> Result<(), Error> {
 
 /// Ensure the caller is not the root canister.
 pub(crate) fn deny_root() -> Result<(), Error> {
-    let root_pid = EnvOps::root_pid()?;
+    let root_pid = env::root_pid()?;
 
     if root_pid == canister_self() {
         Err(EnvAccessError::IsRoot.into())

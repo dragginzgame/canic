@@ -3,8 +3,10 @@ use crate::{
         clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
         set_timer_interval as cdk_set_timer_interval,
     },
-    ops::perf::PerfOps,
-    ops::runtime::metrics::timer::{TimerMode, record_timer_scheduled, record_timer_tick},
+    ops::{
+        perf::PerfOps,
+        runtime::metrics::timer::{TimerMode, record_timer_scheduled, record_timer_tick},
+    },
     perf::perf_counter,
 };
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};

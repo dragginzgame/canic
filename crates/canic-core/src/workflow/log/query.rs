@@ -8,16 +8,6 @@ use crate::{
     workflow::{log::mapper::LogMapper, view::paginate::paginate_vec},
 };
 
-// log_page
-pub fn log_page(
-    crate_name: Option<String>,
-    topic: Option<String>,
-    min_level: Option<Level>,
-    page: PageRequest,
-) -> Page<LogEntryView> {
-    LogQuery::page(crate_name, topic, min_level, page)
-}
-
 ///
 /// LogQuery
 /// Read-only log views and pagination helpers.
@@ -53,4 +43,14 @@ impl LogQuery {
 
         paginate_vec(views, request)
     }
+}
+
+// log_page
+pub fn log_page(
+    crate_name: Option<String>,
+    topic: Option<String>,
+    min_level: Option<Level>,
+    page: PageRequest,
+) -> Page<LogEntryView> {
+    LogQuery::page(crate_name, topic, min_level, page)
 }

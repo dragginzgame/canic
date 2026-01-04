@@ -4,6 +4,10 @@ use crate::{
     ops::storage::placement::{scaling::WorkerEntry, sharding::ShardEntry},
 };
 
+///
+/// PlacementMapper
+///
+
 pub struct PlacementMapper;
 
 impl PlacementMapper {

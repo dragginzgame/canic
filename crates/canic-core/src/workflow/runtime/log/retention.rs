@@ -1,8 +1,6 @@
 use crate::{
     cdk::utils::time::now_secs,
     domain::policy,
-    log,
-    log::Topic,
     ops::{
         config::ConfigOps,
         runtime::{
@@ -10,7 +8,10 @@ use crate::{
             timer::{TimerId, TimerOps},
         },
     },
-    workflow::config::{WORKFLOW_INIT_DELAY, WORKFLOW_LOG_RETENTION_INTERVAL},
+    workflow::{
+        config::{WORKFLOW_INIT_DELAY, WORKFLOW_LOG_RETENTION_INTERVAL},
+        prelude::*,
+    },
 };
 use std::{cell::RefCell, time::Duration};
 

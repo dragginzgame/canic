@@ -6,11 +6,13 @@
 
 use crate::{
     Error,
-    cdk::api::{canister_self, trap},
+    cdk::api::trap,
     ops::{
-        config::ConfigOps,
-        config::network::{Network, build_network},
-        runtime::env::EnvOps,
+        config::{
+            ConfigOps,
+            network::{Network, build_network},
+        },
+        runtime::env,
         storage::{
             directory::subnet::SubnetDirectoryOps, pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
@@ -18,7 +20,7 @@ use crate::{
     },
     workflow::{
         ic::network::try_get_current_subnet_pid,
-        orchestrator::{CanisterLifecycleOrchestrator, LifecycleEvent},
+        lifecycle::{LifecycleEvent, orchestrator::LifecycleOrchestrator},
         pool::{pool_import_canister, pool_import_queued_canisters},
         prelude::*,
     },
@@ -56,7 +58,7 @@ pub async fn root_set_subnet_id() -> Result<(), Error> {
 
     match try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
-            EnvOps::set_subnet_pid(subnet_pid);
+            env::set_subnet_pid(subnet_pid);
             return Ok(());
         }
 
@@ -79,7 +81,7 @@ pub async fn root_set_subnet_id() -> Result<(), Error> {
 
     // Fallback path for non-IC environments
     let fallback = canister_self();
-    EnvOps::set_subnet_pid(fallback);
+    env::set_subnet_pid(fallback);
 
     log!(
         Topic::Topology,
@@ -225,7 +227,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
             continue;
         }
 
-        CanisterLifecycleOrchestrator::apply(LifecycleEvent::Create {
+        LifecycleOrchestrator::apply(LifecycleEvent::Create {
             role: role.clone(),
             parent: canister_self(),
             extra_arg: None,

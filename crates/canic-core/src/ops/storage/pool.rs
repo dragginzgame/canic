@@ -1,7 +1,6 @@
 use crate::{
     Error,
     cdk::utils::time::now_secs,
-    ids::CanisterRole,
     ops::prelude::*,
     storage::stable::pool::{
         PoolData, PoolRecord, PoolRecordState, PoolStatus as ModelPoolStatus, PoolStore,

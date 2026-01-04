@@ -1,6 +1,6 @@
 use crate::{
-    cdk::types::{BoundedString64, Principal},
-    ids::CanisterRole,
+    cdk::types::BoundedString64,
+    ops::prelude::*,
     storage::stable::scaling::{
         ScalingRegistry, ScalingRegistryData as ModelScalingRegistryData,
         WorkerEntry as ModelWorkerEntry,
@@ -20,6 +20,10 @@ pub struct WorkerEntry {
     pub canister_role: CanisterRole,
     pub created_at_secs: u64,
 }
+
+///
+/// ScalingRegistrySnapshot
+///
 
 #[derive(Clone, Debug)]
 pub struct ScalingRegistrySnapshot {

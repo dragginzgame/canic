@@ -1,5 +1,9 @@
-use crate::{PublicError, dto::http as http_dto, ops::ic::http as http_ops};
-use candid::{CandidType, Nat};
+use crate::{
+    PublicError,
+    cdk::candid::{CandidType, Nat},
+    dto::http as http_dto,
+    ops::ic::http as http_ops,
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 ///

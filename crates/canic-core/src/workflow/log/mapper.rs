@@ -1,5 +1,9 @@
 use crate::{dto::log::LogEntryView, ops::runtime::log::LogEntrySnapshot};
 
+///
+/// LogMapper
+///
+
 pub struct LogMapper;
 
 impl LogMapper {

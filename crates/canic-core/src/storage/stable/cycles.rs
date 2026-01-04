@@ -9,11 +9,10 @@ use crate::{
 use canic_memory::ic_memory;
 use std::cell::RefCell;
 
-//
-// CYCLE_TRACKER
-//
-
 eager_static! {
+    //
+    // CYCLE_TRACKER
+    //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(BTreeMap::init(
             ic_memory!(CycleTracker, CYCLE_TRACKER_ID),

@@ -6,10 +6,10 @@ pub use subnet::*;
 
 use crate::{
     Error, ThisError,
+    cdk::candid::Principal,
     config::ConfigError,
     ids::{CanisterRole, SubnetRole},
 };
-use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

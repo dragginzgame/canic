@@ -1,9 +1,9 @@
 use crate::{
+    cdk::candid::Principal,
     config::Config,
     ids::{CanisterRole, SubnetRole},
-    ops::runtime::env::{EnvOps, EnvSnapshot},
+    ops::runtime::env::{self, EnvSnapshot},
 };
-use candid::Principal;
 
 pub fn init_sharding_test_config() {
     // Minimal config + env snapshot for sharding policy tests.
@@ -36,5 +36,5 @@ pub fn init_sharding_test_config() {
         parent_pid: Some(root_pid),
     };
 
-    EnvOps::import(snapshot).expect("init sharding test env");
+    env::import(snapshot).expect("init sharding test env");
 }

@@ -1,8 +1,7 @@
 use crate::{
-    cdk::types::Principal,
     dto::pool::{CanisterPoolEntryView, CanisterPoolView},
     ops::storage::pool::PoolOps,
-    workflow::pool::mapper::PoolMapper,
+    workflow::{pool::mapper::PoolMapper, prelude::*},
 };
 
 /// Return a view of a single pool entry (if present).

@@ -1,8 +1,10 @@
 use crate::{
     Error,
-    cdk::types::Principal,
     dto::cascade::{StateSnapshotView, TopologySnapshotView},
-    ops::rpc::{call_rpc_result, methods},
+    ops::{
+        prelude::*,
+        rpc::{call_rpc_result, methods},
+    },
 };
 
 pub async fn send_state_snapshot(

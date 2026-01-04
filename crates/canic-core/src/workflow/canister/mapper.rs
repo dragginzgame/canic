@@ -1,7 +1,7 @@
 use crate::{
-    cdk::types::Principal,
     dto::{canister::CanisterEntryView, cascade::TopologyPathNodeView},
     ops::storage::registry::subnet::{CanisterEntrySnapshot, CanisterSummarySnapshot},
+    workflow::prelude::*,
 };
 
 ///

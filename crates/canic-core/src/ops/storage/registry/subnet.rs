@@ -1,8 +1,7 @@
 use crate::{
     Error, ThisError,
-    cdk::{types::Principal, utils::time::now_secs},
-    ids::CanisterRole,
-    ops::storage::StorageOpsError,
+    cdk::utils::time::now_secs,
+    ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
@@ -156,18 +155,19 @@ impl SubnetRegistryOps {
     // Mutation
     // ---------------------------------------------------------------------
 
-    pub(crate) fn register_unchecked(
+    /// Register a canister without cardinality checks; policy must gate this call.
+    pub fn register_unchecked(
         pid: Principal,
         role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SubnetRegistryOpsError> {
         if SubnetRegistry::get(pid).is_some() {
-            return Err(SubnetRegistryOpsError::AlreadyRegistered(pid).into());
+            return Err(SubnetRegistryOpsError::AlreadyRegistered(pid));
         }
 
         if SubnetRegistry::get(parent_pid).is_none() {
-            return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid).into());
+            return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid));
         }
 
         let created_at = now_secs();
@@ -180,7 +180,8 @@ impl SubnetRegistryOps {
         SubnetRegistry::remove(pid).map(Into::into)
     }
 
-    pub(crate) fn register_root(pid: Principal) {
+    /// Register the root canister entry without policy gating.
+    pub fn register_root(pid: Principal) {
         let created_at = now_secs();
         SubnetRegistry::register_root(pid, created_at);
     }
