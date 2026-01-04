@@ -15,7 +15,7 @@ use canic::{
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};
-use std::{collections::HashMap, env, fs, io, path::PathBuf, sync::OnceLock};
+use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -130,50 +130,42 @@ fn ensure_root_canister(pic: &Pic, root_id: Principal, role: CanisterRole) {
 // TESTS
 // -----------------------------------------------------------------------------
 
-static SETUP: OnceLock<Setup> = OnceLock::new();
-
 struct Setup {
-    pic: &'static Pic,
+    pic: Pic,
     root_id: Principal,
     subnet_directory: HashMap<CanisterRole, Principal>,
 }
 
-fn setup_root() -> &'static Setup {
-    SETUP.get_or_init(|| {
-        let root_wasm = load_root_wasm().expect("load root wasm");
+fn setup_root() -> Setup {
+    let root_wasm = load_root_wasm().expect("load root wasm");
 
-        let pic = pic();
+    let pic = pic(); // now returns a *fresh* Pic
+    let root_id = pic
+        .create_and_install_canister(CanisterRole::ROOT, root_wasm)
+        .expect("install root canister");
 
-        let root_id = pic
-            .create_and_install_canister(CanisterRole::ROOT, root_wasm)
-            .expect("install root canister");
+    pic.add_cycles(root_id, 50 * TC);
 
-        // Fund root so it can create children using its configured cycle targets.
-        pic.add_cycles(root_id, 50 * TC);
+    let required = [
+        canister::APP,
+        canister::AUTH,
+        canister::SCALE_HUB,
+        canister::SHARD_HUB,
+    ];
 
-        // NOTE: Tests explicitly create required canisters.
-        // Auto-create is async and must not be relied upon here.
-        let required = [
-            canister::APP,
-            canister::AUTH,
-            canister::SCALE_HUB,
-            canister::SHARD_HUB,
-        ];
+    for role in required {
+        ensure_root_canister(&pic, root_id, role);
+    }
 
-        for role in required {
-            ensure_root_canister(pic, root_id, role);
-        }
+    pic.tick_n(5);
 
-        pic.tick_n(5);
+    let subnet_directory = fetch_subnet_directory(&pic, root_id);
 
-        let subnet_directory = fetch_subnet_directory(pic, root_id);
-
-        Setup {
-            pic,
-            root_id,
-            subnet_directory,
-        }
-    })
+    Setup {
+        pic,
+        root_id,
+        subnet_directory,
+    }
 }
 
 #[test]
@@ -182,7 +174,7 @@ fn root_builds_hierarchy_and_exposes_env() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = fetch_registry(pic, root_id);
+    let registry = fetch_registry(&pic, root_id);
     let subnet_directory = &setup.subnet_directory;
 
     let expected = [
@@ -330,7 +322,7 @@ fn subnet_children_matches_registry_on_root() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = fetch_registry(pic, root_id);
+    let registry = fetch_registry(&pic, root_id);
 
     let mut expected_children: Vec<CanisterSummaryView> = registry
         .iter()
@@ -377,7 +369,7 @@ fn worker_topology_cascades_through_parent() {
     let setup = setup_root();
     let pic = setup.pic;
     let root_id = setup.root_id;
-    let registry = fetch_registry(pic, root_id);
+    let registry = fetch_registry(&pic, root_id);
     let subnet_directory = &setup.subnet_directory;
 
     let scale_hub_pid = subnet_directory
