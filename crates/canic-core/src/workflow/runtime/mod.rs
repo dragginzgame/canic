@@ -8,6 +8,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
+        ic::signature::SignatureOps,
         runtime::{
             env::{EnvOps, EnvSnapshot},
             memory::{MemoryOps, MemoryRegistryInitSummary},
@@ -153,6 +154,7 @@ pub fn post_upgrade_root_canister() {
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
     log_memory_summary(&memory_summary);
+    SignatureOps::sync_certified_data();
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
@@ -202,6 +204,7 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
         canister_role
     );
     log_memory_summary(&memory_summary);
+    SignatureOps::sync_certified_data();
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 

@@ -36,4 +36,9 @@ impl SignatureOps {
     pub fn root_hash() -> Vec<u8> {
         infra::ic::signature::root_hash()
     }
+
+    /// Resynchronize certified_data with the current signature map.
+    pub fn sync_certified_data() {
+        infra::ic::signature::sync_certified_data();
+    }
 }

@@ -25,6 +25,12 @@ use std::cell::RefCell;
 thread_local! {
     /// Transient signature map, kept in heap memory only.
     /// Entries expire automatically after ~1 minute.
+    ///
+    /// NOTE:
+    /// This map is heap-resident and cleared on upgrade.
+    /// Any change to SIGNATURES must be reflected in certified_data,
+    /// and certified_data must be resynchronized after upgrade.
+    ///
     static SIGNATURES: RefCell<SignatureMap> = RefCell::new(SignatureMap::default());
 }
 
@@ -169,6 +175,24 @@ fn ensure_update_context() -> Result<(), InfraError> {
     }
 
     Err(SignatureOpsError::UpdateContextRequired.into())
+}
+
+///
+/// Synchronize IC certified data with the current in-memory signature map.
+///
+/// REQUIRED INVARIANT:
+/// The canister's certified_data must always equal the Merkle root
+/// of the current SignatureMap.
+///
+/// Since SIGNATURES is heap-resident and cleared on upgrade while
+/// certified_data persists, this function MUST be called from
+/// the canister's post_upgrade hook.
+///
+pub fn sync_certified_data() {
+    SIGNATURES.with_borrow(|sigs| {
+        let root = sigs.root_hash();
+        certified_data_set(hash_with_domain(LABEL_SIG, &root));
+    });
 }
 
 ///

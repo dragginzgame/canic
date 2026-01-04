@@ -5,12 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.5] - 2026-01-04
+### Fixed
+- Resync certified_data from the signature map during post-upgrade.
 
 ## [0.7.4] - 2026-01-04
 - Added new ckTokens to canic-cdk, such as ckUNI and ckWBTC
 - CI fixes to make sure that PocketIC doesn't run out of memory
-
----
 
 ## [0.7.3] - 2026-01-04 - Mostly Done
 ### Added
