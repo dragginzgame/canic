@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     cdk::candid::Principal,
     config::schema::{CanisterCardinality, CanisterConfig},
-    domain::policy::PolicyError,
+    domain::policy::topology::TopologyPolicyError,
     ids::CanisterRole,
     ops::storage::registry::subnet::SubnetRegistrySnapshot,
 };
@@ -20,7 +20,7 @@ pub enum RegistryPolicyError {
 
 impl From<RegistryPolicyError> for Error {
     fn from(err: RegistryPolicyError) -> Self {
-        PolicyError::from(err).into()
+        TopologyPolicyError::from(err).into()
     }
 }
 
@@ -36,7 +36,7 @@ impl RegistryPolicy {
         snapshot: &SubnetRegistrySnapshot,
         canister_cfg: &CanisterConfig,
     ) -> Result<(), RegistryPolicyError> {
-        if canister_cfg.cardinality == CanisterCardinality::Single
+        if canister_cfg.cardinality == CanisterCardinality::One
             && let Some((pid, _)) = snapshot
                 .entries
                 .iter()

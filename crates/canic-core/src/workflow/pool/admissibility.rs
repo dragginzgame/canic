@@ -1,6 +1,6 @@
 use crate::{
     domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
-    infra::network::Network,
+    infra::ic::network::Network,
     ops::{
         ic::mgmt::MgmtOps, runtime::network::NetworkOps,
         storage::registry::subnet::SubnetRegistryOps,

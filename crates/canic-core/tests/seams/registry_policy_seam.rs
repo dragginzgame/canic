@@ -1,7 +1,7 @@
 use canic_core::{
     cdk::types::Cycles,
     config::schema::{CanisterCardinality, CanisterConfig, RandomnessConfig},
-    domain::policy::registry::{RegistryPolicy, RegistryPolicyError},
+    domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
     ids::CanisterRole,
     ops::storage::registry::subnet::{
         CanisterEntrySnapshot, SubnetRegistryOps, SubnetRegistrySnapshot,

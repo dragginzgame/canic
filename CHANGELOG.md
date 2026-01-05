@@ -5,6 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.8] - 2026-01-04
+- Nested policy directory/registry under policy::topology to align module structure
+- Namespaced pool workflow helpers under PoolWorkflow
+- Exposed DFX_NETWORK via network() in api::ic::network
+- Namespaced metrics query helpers under MetricsQuery
+
 ## [0.7.7] - 2026-01-04
 - Split out api/topology and added in missing functions
 - Stopped the macros panicking if there was an error with the stable log

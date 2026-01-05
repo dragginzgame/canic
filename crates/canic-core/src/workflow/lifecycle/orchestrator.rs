@@ -111,13 +111,13 @@ async fn cascade_all(
     if let Some(role) = role_opt {
         // Ensure newly created/adopted canisters inherit the current app
         // and subnet states
-        let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))
-            .await?
+        let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
             .with_app_state()
             .with_subnet_state()
             .build();
 
         root_cascade_state(&snapshot).await?;
+
         let registry_snapshot = SubnetRegistryOps::snapshot();
         let app_snapshot = AppDirectoryOps::snapshot();
         let subnet_snapshot = SubnetDirectoryOps::snapshot();

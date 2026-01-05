@@ -11,83 +11,91 @@ use crate::{
     workflow::{metrics::mapper::MetricsMapper, view::paginate::paginate_vec},
 };
 
-pub fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
-    let snapshot = MetricsOps::system_snapshot();
-    let mut entries = MetricsMapper::system_metrics_to_view(snapshot.entries);
+///
+/// MetricsQuery
+///
 
-    entries.sort_by(|a, b| a.kind.cmp(&b.kind));
+pub struct MetricsQuery;
 
-    entries
-}
+impl MetricsQuery {
+    pub fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
+        let snapshot = MetricsOps::system_snapshot();
+        let mut entries = MetricsMapper::system_metrics_to_view(snapshot.entries);
 
-pub fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
-    let snapshot = MetricsOps::icc_snapshot();
-    let mut entries = MetricsMapper::icc_metrics_to_view(snapshot.entries);
+        entries.sort_by(|a, b| a.kind.cmp(&b.kind));
 
-    entries.sort_by(|a, b| {
-        a.target
-            .as_slice()
-            .cmp(b.target.as_slice())
-            .then_with(|| a.method.cmp(&b.method))
-    });
+        entries
+    }
 
-    paginate_vec(entries, page)
-}
+    pub fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
+        let snapshot = MetricsOps::icc_snapshot();
+        let mut entries = MetricsMapper::icc_metrics_to_view(snapshot.entries);
 
-pub fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
-    let snapshot = MetricsOps::http_snapshot();
-    let mut entries = MetricsMapper::http_metrics_to_view(snapshot.entries);
+        entries.sort_by(|a, b| {
+            a.target
+                .as_slice()
+                .cmp(b.target.as_slice())
+                .then_with(|| a.method.cmp(&b.method))
+        });
 
-    entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
+        paginate_vec(entries, page)
+    }
 
-    paginate_vec(entries, page)
-}
+    pub fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
+        let snapshot = MetricsOps::http_snapshot();
+        let mut entries = MetricsMapper::http_metrics_to_view(snapshot.entries);
 
-pub fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
-    let snapshot = MetricsOps::timer_snapshot();
-    let mut entries = MetricsMapper::timer_metrics_to_view(snapshot.entries);
+        entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
 
-    entries.sort_by(|a, b| {
-        a.mode
-            .cmp(&b.mode)
-            .then_with(|| a.delay_ms.cmp(&b.delay_ms))
-            .then_with(|| a.label.cmp(&b.label))
-    });
+        paginate_vec(entries, page)
+    }
 
-    paginate_vec(entries, page)
-}
+    pub fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
+        let snapshot = MetricsOps::timer_snapshot();
+        let mut entries = MetricsMapper::timer_metrics_to_view(snapshot.entries);
 
-pub fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> {
-    let snapshot = MetricsOps::access_snapshot();
-    let mut entries = MetricsMapper::access_metrics_to_view(snapshot.entries);
+        entries.sort_by(|a, b| {
+            a.mode
+                .cmp(&b.mode)
+                .then_with(|| a.delay_ms.cmp(&b.delay_ms))
+                .then_with(|| a.label.cmp(&b.label))
+        });
 
-    entries.sort_by(|a, b| {
-        a.endpoint
-            .cmp(&b.endpoint)
-            .then_with(|| a.kind.cmp(&b.kind))
-    });
+        paginate_vec(entries, page)
+    }
 
-    paginate_vec(entries, page)
-}
+    pub fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> {
+        let snapshot = MetricsOps::access_snapshot();
+        let mut entries = MetricsMapper::access_metrics_to_view(snapshot.entries);
 
-pub fn metrics_perf_page(page: PageRequest) -> Page<PerfEntry> {
-    let snapshot = PerfOps::snapshot();
-    paginate_vec(snapshot.entries, page)
-}
+        entries.sort_by(|a, b| {
+            a.endpoint
+                .cmp(&b.endpoint)
+                .then_with(|| a.kind.cmp(&b.kind))
+        });
 
-pub fn metrics_endpoint_health_page(
-    page: PageRequest,
-    exclude_endpoint: Option<&str>,
-) -> Page<EndpointHealthView> {
-    let snapshot = MetricsOps::endpoint_health_snapshot();
-    let mut entries = MetricsMapper::endpoint_health_to_view(
-        snapshot.attempts,
-        snapshot.results,
-        snapshot.access,
-        exclude_endpoint,
-    );
+        paginate_vec(entries, page)
+    }
 
-    entries.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+    pub fn metrics_perf_page(page: PageRequest) -> Page<PerfEntry> {
+        let snapshot = PerfOps::snapshot();
+        paginate_vec(snapshot.entries, page)
+    }
 
-    paginate_vec(entries, page)
+    pub fn metrics_endpoint_health_page(
+        page: PageRequest,
+        exclude_endpoint: Option<&str>,
+    ) -> Page<EndpointHealthView> {
+        let snapshot = MetricsOps::endpoint_health_snapshot();
+        let mut entries = MetricsMapper::endpoint_health_to_view(
+            snapshot.attempts,
+            snapshot.results,
+            snapshot.access,
+            exclude_endpoint,
+        );
+
+        entries.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+
+        paginate_vec(entries, page)
+    }
 }

@@ -4,7 +4,7 @@ use crate::{
 };
 
 ///
-/// Registry
+/// Registry API
 ///
 
 #[must_use]

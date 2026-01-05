@@ -7,7 +7,7 @@
 use crate::{
     Error,
     cdk::api::trap,
-    infra::network::Network,
+    infra::ic::network::Network,
     ops::{
         config::ConfigOps,
         runtime::{env::EnvOps, network::NetworkOps},
@@ -19,7 +19,7 @@ use crate::{
     workflow::{
         ic::network::try_get_current_subnet_pid,
         lifecycle::{LifecycleEvent, orchestrator::LifecycleOrchestrator},
-        pool::{pool_import_canister, pool_import_queued_canisters},
+        pool::PoolWorkflow,
         prelude::*,
     },
 };
@@ -155,7 +155,7 @@ pub async fn root_import_pool_from_config() {
     let mut queued_failed = 0_u64;
 
     for pid in initial {
-        match pool_import_canister(*pid).await {
+        match PoolWorkflow::pool_import_canister(*pid).await {
             Ok(()) => {
                 if PoolOps::contains(pid) {
                     imported += 1;
@@ -168,7 +168,7 @@ pub async fn root_import_pool_from_config() {
     }
 
     if !queued.is_empty() {
-        match pool_import_queued_canisters(queued.to_vec()).await {
+        match PoolWorkflow::pool_import_queued_canisters(queued.to_vec()).await {
             Ok(result) => {
                 queued_added = result.added;
                 queued_requeued = result.requeued;

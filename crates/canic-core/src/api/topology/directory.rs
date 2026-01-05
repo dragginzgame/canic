@@ -10,7 +10,7 @@ use crate::{
 };
 
 ///
-/// Directory
+/// Directory API
 ///
 
 #[must_use]

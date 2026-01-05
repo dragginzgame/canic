@@ -137,9 +137,9 @@ impl Validate for ConfigModel {
                 ))
             })?;
 
-            if canister_cfg.cardinality != CanisterCardinality::Single {
+            if canister_cfg.cardinality != CanisterCardinality::One {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_role}' must have cardinality = \"single\"",
+                    "app directory canister '{canister_role}' must have cardinality = \"one\"",
                 )));
             }
         }

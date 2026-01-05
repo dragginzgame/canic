@@ -16,7 +16,7 @@ fn topology_invariants_live_in_policy() {
         app_directory = ["alpha"]
 
         [subnets.prime.canisters.alpha]
-        cardinality = "single"
+        cardinality = "one"
     "#;
 
     canic_core::init_config(toml).expect("init config");
@@ -34,8 +34,12 @@ fn topology_invariants_live_in_policy() {
         )],
     };
 
-    let app_snapshot = AppDirectorySnapshot { entries: Vec::new() };
-    let subnet_snapshot = SubnetDirectorySnapshot { entries: Vec::new() };
+    let app_snapshot = AppDirectorySnapshot {
+        entries: Vec::new(),
+    };
+    let subnet_snapshot = SubnetDirectorySnapshot {
+        entries: Vec::new(),
+    };
 
     let err = TopologyPolicy::assert_directories_match_registry(
         &registry_snapshot,

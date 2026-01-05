@@ -2,7 +2,7 @@ use crate::{
     ThisError,
     cdk::types::Principal,
     ids::{CanisterRole, SubnetRole},
-    infra::network::Network,
+    infra::ic::network::Network,
 };
 
 ///
