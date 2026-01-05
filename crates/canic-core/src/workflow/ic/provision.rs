@@ -29,7 +29,7 @@ use crate::{
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
         ic::IcWorkflowError,
-        pool::{pool_import_canister, pop_oldest_ready},
+        pool::PoolWorkflow,
         prelude::*,
         topology::directory::{
             builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
@@ -96,7 +96,7 @@ impl ProvisionWorkflow {
     /// import them directly, and return a builder containing the sections to sync.
     ///
     /// When `updated_role` is provided, only include the sections that list that role.
-    pub async fn rebuild_directories_from_registry(
+    pub fn rebuild_directories_from_registry(
         updated_role: Option<&CanisterRole>,
     ) -> Result<StateSnapshotBuilder, Error> {
         let cfg = Config::get()?;
@@ -153,7 +153,7 @@ impl ProvisionWorkflow {
             .is_err()
         {
             if source == AllocationSource::Pool {
-                if let Err(recycle_err) = pool_import_canister(pid).await {
+                if let Err(recycle_err) = PoolWorkflow::pool_import_canister(pid).await {
                     log!(
                         Topic::CanisterPool,
                         Warn,
@@ -243,7 +243,7 @@ async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, Allocation
     let target = cfg.initial_cycles;
 
     // Reuse from pool
-    if let Some(entry) = pop_oldest_ready() {
+    if let Some(entry) = PoolWorkflow::pop_oldest_ready() {
         let pid = entry.pid;
         let mut current = MgmtOps::get_cycles(pid).await?;
 
@@ -324,8 +324,12 @@ async fn install_canister(
     // otherwise if the init() tries to create a canister via root, it will panic
     let registry_snapshot = SubnetRegistryOps::snapshot();
     let canister_cfg = ConfigOps::current_subnet_canister(role)?;
-    policy::registry::RegistryPolicy::can_register_role(role, &registry_snapshot, &canister_cfg)
-        .map_err(Error::from)?;
+    policy::topology::registry::RegistryPolicy::can_register_role(
+        role,
+        &registry_snapshot,
+        &canister_cfg,
+    )
+    .map_err(Error::from)?;
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone())
         .map_err(Error::from)?;
 

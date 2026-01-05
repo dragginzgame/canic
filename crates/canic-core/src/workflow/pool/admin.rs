@@ -3,10 +3,7 @@
 use crate::{
     Error,
     dto::pool::{PoolAdminCommand, PoolAdminResponse},
-    workflow::pool::{
-        pool_create_canister, pool_import_canister, pool_import_queued_canisters,
-        pool_recycle_canister,
-    },
+    workflow::pool::PoolWorkflow,
 };
 
 ///
@@ -24,22 +21,22 @@ use crate::{
 pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
     match cmd {
         PoolAdminCommand::CreateEmpty => {
-            let pid = pool_create_canister().await?;
+            let pid = PoolWorkflow::pool_create_canister().await?;
             Ok(PoolAdminResponse::Created { pid })
         }
 
         PoolAdminCommand::Recycle { pid } => {
-            pool_recycle_canister(pid).await?;
+            PoolWorkflow::pool_recycle_canister(pid).await?;
             Ok(PoolAdminResponse::Recycled)
         }
 
         PoolAdminCommand::ImportImmediate { pid } => {
-            pool_import_canister(pid).await?;
+            PoolWorkflow::pool_import_canister(pid).await?;
             Ok(PoolAdminResponse::Imported)
         }
 
         PoolAdminCommand::ImportQueued { pids } => {
-            let result = pool_import_queued_canisters(pids).await?;
+            let result = PoolWorkflow::pool_import_queued_canisters(pids).await?;
 
             Ok(PoolAdminResponse::QueuedImported { result })
         }

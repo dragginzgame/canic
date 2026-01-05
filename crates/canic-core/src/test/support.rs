@@ -9,7 +9,7 @@ pub fn init_sharding_test_config() {
     // Minimal config + env snapshot for sharding policy tests.
     let toml = r#"
         [subnets.prime.canisters.manager]
-        cardinality = "single"
+        cardinality = "one"
         initial_cycles = "5T"
 
         [subnets.prime.canisters.manager.sharding.pools.primary]

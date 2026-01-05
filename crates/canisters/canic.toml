@@ -32,15 +32,15 @@ pool.minimum_size = 3
 
 # --- Root ---
 [subnets.prime.canisters.root]
-cardinality = "single"
+cardinality = "one"
 
 # --- App ---
 [subnets.prime.canisters.app]
-cardinality = "single"
+cardinality = "one"
 
 # --- Auth ---
 [subnets.prime.canisters.auth]
-cardinality = "single"
+cardinality = "one"
 
 # --- Blank ---
 [subnets.prime.canisters.blank]
@@ -48,7 +48,7 @@ cardinality = "many"
 
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
-cardinality = "single"
+cardinality = "one"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -63,7 +63,7 @@ cardinality = "many"
 
 # --- Shard Hub ---
 [subnets.prime.canisters.shard_hub]
-cardinality = "single"
+cardinality = "one"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -81,7 +81,7 @@ topup.amount = "5T"
 
 # --- Test ---
 [subnets.prime.canisters.test]
-cardinality = "single"
+cardinality = "one"
 
 # ================================================================
 #  GENERAL SUBNET

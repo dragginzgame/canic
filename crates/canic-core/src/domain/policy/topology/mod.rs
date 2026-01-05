@@ -1,3 +1,6 @@
+pub mod directory;
+pub mod registry;
+
 use crate::{
     Error, ThisError,
     cdk::types::Principal,
@@ -37,6 +40,9 @@ pub enum TopologyPolicyError {
 
     #[error("subnet directory diverged from registry")]
     SubnetDirectoryDiverged,
+
+    #[error(transparent)]
+    RegistryPolicy(#[from] registry::RegistryPolicyError),
 }
 
 impl From<TopologyPolicyError> for Error {
@@ -112,7 +118,7 @@ impl TopologyPolicy {
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
         for (pid, entry) in &registry.entries {
-            if crate::domain::policy::directory::is_app_directory_role(&entry.role) {
+            if directory::is_app_directory_role(&entry.role) {
                 map.insert(entry.role.clone(), *pid);
             }
         }
@@ -129,7 +135,7 @@ impl TopologyPolicy {
         let mut map = BTreeMap::<CanisterRole, Principal>::new();
 
         for (pid, entry) in &registry.entries {
-            if crate::domain::policy::directory::is_subnet_directory_role(&entry.role) {
+            if directory::is_subnet_directory_role(&entry.role) {
                 map.insert(entry.role.clone(), *pid);
             }
         }

@@ -8,10 +8,11 @@ pub mod call;
 pub mod http;
 pub mod ledger;
 pub mod mgmt;
+pub mod network;
 pub mod nns;
 pub mod signature;
 
-use crate::infra::{network::Network, prelude::*};
+use crate::infra::{ic::network::Network, prelude::*};
 
 ///
 /// IcInfraError

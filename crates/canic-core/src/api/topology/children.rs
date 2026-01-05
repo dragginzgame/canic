@@ -7,7 +7,7 @@ use crate::{
 };
 
 ///
-/// Children
+/// Children API
 ///
 
 #[must_use]

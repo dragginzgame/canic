@@ -2,7 +2,7 @@ use canic_core::{
     cdk::types::Cycles,
     ops::storage::pool::PoolOps,
     storage::stable::pool::{PoolStatus, PoolStore},
-    workflow::pool::pop_oldest_ready,
+    workflow::pool::PoolWorkflow,
 };
 
 #[test]
@@ -45,7 +45,7 @@ fn pool_selection_uses_workflow_ordering() {
         9,
     );
 
-    let selected = pop_oldest_ready().expect("expected a ready entry");
+    let selected = PoolWorkflow::pop_oldest_ready().expect("expected a ready entry");
     assert_eq!(selected.pid, pid_a);
     assert!(!PoolOps::contains(&pid_a));
 }

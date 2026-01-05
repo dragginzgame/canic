@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError, access::AccessError, infra::network::Network,
+    Error, ThisError, access::AccessError, infra::ic::network::Network,
     ops::runtime::network::NetworkOps,
 };
 

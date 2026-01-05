@@ -1,4 +1,4 @@
-use crate::infra::{self, network::Network};
+use crate::infra::{self, ic::network::Network};
 
 ///
 /// NetworkOps

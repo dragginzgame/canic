@@ -7,7 +7,7 @@ use crate::{
     Error,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
-    infra::network::Network,
+    infra::ic::network::Network,
     ops::runtime::{
         env::{EnvOps, EnvSnapshot},
         network::NetworkOps,

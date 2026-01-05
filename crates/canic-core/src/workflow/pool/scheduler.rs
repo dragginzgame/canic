@@ -22,10 +22,7 @@ use crate::{
     },
     workflow::{
         config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
-        pool::{
-            admissibility::check_can_enter_pool, mark_failed, mark_ready, pop_oldest_pending_reset,
-            reset_into_pool,
-        },
+        pool::{PoolWorkflow, admissibility::check_can_enter_pool},
         prelude::*,
     },
 };
@@ -122,7 +119,7 @@ async fn run_worker(limit: usize) -> Result<(), Error> {
 
 async fn run_batch(limit: usize) -> Result<(), Error> {
     for _ in 0..limit {
-        let Some(entry) = pop_oldest_pending_reset() else {
+        let Some(entry) = PoolWorkflow::pop_oldest_pending_reset() else {
             break;
         };
 
@@ -148,9 +145,9 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
             }
         }
 
-        match reset_into_pool(pid).await {
+        match PoolWorkflow::reset_into_pool(pid).await {
             Ok(cycles) => {
-                mark_ready(pid, cycles);
+                PoolWorkflow::mark_ready(pid, cycles);
             }
             Err(err) => {
                 log!(
@@ -158,7 +155,7 @@ async fn run_batch(limit: usize) -> Result<(), Error> {
                     Warn,
                     "pool reset failed for {pid}: {err}"
                 );
-                mark_failed(pid, &err);
+                PoolWorkflow::mark_failed(pid, &err);
             }
         }
     }
