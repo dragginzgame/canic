@@ -46,7 +46,7 @@ pub async fn build_network_local() -> Result<(), AccessError> {
 /// Helpers
 ///
 
-pub(crate) fn check_build_network(expected: Network) -> Result<(), RuleAccessError> {
+pub fn check_build_network(expected: Network) -> Result<(), RuleAccessError> {
     let actual = NetworkOps::current_network();
 
     match actual {
