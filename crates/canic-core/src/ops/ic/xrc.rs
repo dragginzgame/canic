@@ -1,11 +1,10 @@
 use crate::{
     Error, ThisError,
-    cdk::{
-        env::nns::EXCHANGE_RATE_CANISTER,
-        spec::ic::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
-    },
+    cdk::{env::nns::EXCHANGE_RATE_CANISTER, spec::ic::xrc::GetExchangeRateResult},
     ops::ic::{IcOpsError, call::CallOps},
 };
+
+pub use crate::cdk::spec::ic::xrc::{ExchangeRate, GetExchangeRateRequest};
 
 ///
 /// XrcOpsError

@@ -21,10 +21,14 @@ macro_rules! start {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
-            $crate::api::lifecycle::init_nonroot_canister($canister_role, payload, args.clone());
+            $crate::api::lifecycle::LifecycleApi::init_nonroot_canister(
+                $canister_role,
+                payload,
+                args.clone(),
+            );
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            $crate::api::timer::set_lifecycle_timer(
+            $crate::api::timer::TimerApi::set_lifecycle_timer(
                 ::std::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -40,10 +44,10 @@ macro_rules! start {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::api::lifecycle::post_upgrade_nonroot_canister($canister_role);
+            $crate::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister($canister_role);
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            $crate::api::timer::set_lifecycle_timer(
+            $crate::api::timer::TimerApi::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -79,10 +83,10 @@ macro_rules! start_root {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::api::lifecycle::init_root_canister(identity);
+            $crate::api::lifecycle::LifecycleApi::init_root_canister(identity);
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            $crate::api::timer::set_lifecycle_timer(
+            $crate::api::timer::TimerApi::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {
@@ -98,10 +102,10 @@ macro_rules! start_root {
             $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::api::lifecycle::post_upgrade_root_canister();
+            $crate::api::lifecycle::LifecycleApi::post_upgrade_root_canister();
 
             // ---- userland lifecycle hooks (scheduled last) ----
-            $crate::api::timer::set_lifecycle_timer(
+            $crate::api::timer::TimerApi::set_lifecycle_timer(
                 ::core::time::Duration::ZERO,
                 "canic:user:init",
                 async move {

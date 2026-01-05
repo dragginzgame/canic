@@ -36,25 +36,7 @@ pub struct AppDirectoryOps;
 
 impl AppDirectoryOps {
     // -------------------------------------------------------------
-    // Snapshot
-    // -------------------------------------------------------------
-
-    #[must_use]
-    pub fn snapshot() -> AppDirectorySnapshot {
-        AppDirectory::export().into()
-    }
-
-    // -------------------------------------------------------------
-    // Import
-    // -------------------------------------------------------------
-
-    pub(crate) fn import(snapshot: AppDirectorySnapshot) {
-        let data: AppDirectoryData = snapshot.into();
-        AppDirectory::import(data);
-    }
-
-    // -------------------------------------------------------------
-    // Internal helpers (ops-only)
+    // Getters
     // -------------------------------------------------------------
 
     #[must_use]
@@ -71,5 +53,19 @@ impl AppDirectoryOps {
             .entries
             .iter()
             .any(|(r, pid)| r == role && *pid == caller)
+    }
+
+    // -------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn snapshot() -> AppDirectorySnapshot {
+        AppDirectory::export().into()
+    }
+
+    pub(crate) fn import(snapshot: AppDirectorySnapshot) {
+        let data: AppDirectoryData = snapshot.into();
+        AppDirectory::import(data);
     }
 }

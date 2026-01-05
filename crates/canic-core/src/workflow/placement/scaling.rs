@@ -9,10 +9,10 @@
 
 use crate::{
     Error, ThisError,
-    cdk::utils::time::now_secs,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     dto::rpc::CreateCanisterParent,
     ops::{
+        ic::runtime::now_secs,
         rpc::request::RequestOps,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },

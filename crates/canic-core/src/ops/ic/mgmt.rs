@@ -13,9 +13,12 @@ use crate::{
             MemoryMetrics, QueryStats,
         },
     },
-    dto::canister::{
-        CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView, EnvironmentVariableView,
-        LogVisibilityView, MemoryMetricsView, QueryStatsView,
+    dto::{
+        abi::v1::CanisterInitPayload,
+        canister::{
+            CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView,
+            EnvironmentVariableView, LogVisibilityView, MemoryMetricsView, QueryStatsView,
+        },
     },
     infra,
     ops::{
@@ -110,9 +113,15 @@ impl MgmtOps {
         controllers: Vec<Principal>,
         cycles: Cycles,
     ) -> Result<Principal, Error> {
+        let cycles_snapshot = cycles.clone();
         let pid = infra::ic::mgmt::create_canister(controllers, cycles).await?;
 
         SystemMetrics::increment(SystemMetricKind::CreateCanister);
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "canister_create: {pid} cycles={cycles_snapshot}"
+        );
 
         Ok(pid)
     }
@@ -156,6 +165,18 @@ impl MgmtOps {
     // ────────────────────────────── INSTALL / UNINSTALL ──────────────────────────
     //
 
+    /// Install or reinstall a *Canic-style* canister using the standard
+    /// `(CanisterInitPayload, Option<Vec<u8>>)` argument convention.
+    pub async fn install_canister_with_payload(
+        mode: CanisterInstallMode,
+        canister_pid: Principal,
+        wasm: &[u8],
+        payload: CanisterInitPayload,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<(), Error> {
+        Self::install_code(mode, canister_pid, wasm, (payload, extra_arg)).await
+    }
+
     /// Installs or upgrades a canister with the given wasm + args and records metrics.
     pub async fn install_code<T: ArgumentEncoder>(
         mode: CanisterInstallMode,
@@ -172,6 +193,14 @@ impl MgmtOps {
             CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
         };
         SystemMetrics::increment(metric_kind);
+
+        #[allow(clippy::cast_precision_loss)]
+        let bytes_kb = wasm.len() as f64 / 1_000.0;
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "install_code: {canister_pid} mode={mode:?} ({bytes_kb} KB)"
+        );
 
         Ok(())
     }

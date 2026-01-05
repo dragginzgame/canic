@@ -1,3 +1,4 @@
+use super::PoolWorkflow;
 use crate::{Error, ops::config::ConfigOps, workflow::prelude::*};
 
 /// Return the controller set for pool canisters.
@@ -17,13 +18,15 @@ use crate::{Error, ops::config::ConfigOps, workflow::prelude::*};
 ///
 /// Policy decisions about *who* should control pool canisters
 /// are assumed to be encoded in configuration.
-pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
-    let mut controllers = ConfigOps::controllers()?;
+impl PoolWorkflow {
+    pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
+        let mut controllers = ConfigOps::controllers()?;
 
-    let root = canister_self();
-    if !controllers.contains(&root) {
-        controllers.push(root);
+        let root = canister_self();
+        if !controllers.contains(&root) {
+            controllers.push(root);
+        }
+
+        Ok(controllers)
     }
-
-    Ok(controllers)
 }

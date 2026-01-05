@@ -7,10 +7,14 @@ use crate::{
 };
 
 ///
-/// Children API
+/// CanisterChildrenApi
 ///
 
-#[must_use]
-pub fn canister_children(page: PageRequest) -> Page<CanisterSummaryView> {
-    workflow::topology::children::query::canister_children_page(page)
+pub struct CanisterChildrenApi;
+
+impl CanisterChildrenApi {
+    #[must_use]
+    pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
+        workflow::topology::children::query::CanisterChildrenQuery::page(page)
+    }
 }

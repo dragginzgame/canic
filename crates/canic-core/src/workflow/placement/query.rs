@@ -7,38 +7,54 @@ use crate::{
     workflow::{placement::mapper::PlacementMapper, prelude::*},
 };
 
-pub fn scaling_registry_view() -> ScalingRegistryView {
-    let data = ScalingRegistryOps::export();
+///
+/// ScalingQuery
+///
 
-    let view = data
-        .entries
-        .into_iter()
-        .map(|(pid, entry)| ScalingRegistryEntryView {
-            pid,
-            entry: PlacementMapper::worker_entry_to_view(&entry),
-        })
-        .collect();
+pub struct ScalingQuery;
 
-    ScalingRegistryView(view)
+impl ScalingQuery {
+    pub fn registry_view() -> ScalingRegistryView {
+        let data = ScalingRegistryOps::export();
+
+        let view = data
+            .entries
+            .into_iter()
+            .map(|(pid, entry)| ScalingRegistryEntryView {
+                pid,
+                entry: PlacementMapper::worker_entry_to_view(&entry),
+            })
+            .collect();
+
+        ScalingRegistryView(view)
+    }
 }
 
-pub fn sharding_registry_view() -> ShardingRegistryView {
-    let data = ShardingRegistryOps::export();
+///
+/// ShardingQuery
+///
 
-    let view = data
-        .entries
-        .into_iter()
-        .map(|(pid, entry)| ShardingRegistryEntryView {
-            pid,
-            entry: PlacementMapper::shard_entry_to_view(&entry),
-        })
-        .collect();
+pub struct ShardingQuery;
 
-    ShardingRegistryView(view)
-}
+impl ShardingQuery {
+    pub fn registry_view() -> ShardingRegistryView {
+        let data = ShardingRegistryOps::export();
 
-pub fn sharding_tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
-    let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
+        let view = data
+            .entries
+            .into_iter()
+            .map(|(pid, entry)| ShardingRegistryEntryView {
+                pid,
+                entry: PlacementMapper::shard_entry_to_view(&entry),
+            })
+            .collect();
 
-    ShardingTenantsView(tenants)
+        ShardingRegistryView(view)
+    }
+
+    pub fn tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
+        let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
+
+        ShardingTenantsView(tenants)
+    }
 }

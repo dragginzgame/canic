@@ -1,13 +1,17 @@
 use crate::{PublicError, access::guard};
 
 ///
-/// Guard API
+/// GuardApi
 ///
 
-pub fn guard_app_query() -> Result<(), PublicError> {
-    guard::guard_app_query().map_err(PublicError::from)
-}
+pub struct GuardApi;
 
-pub fn guard_app_update() -> Result<(), PublicError> {
-    guard::guard_app_update().map_err(PublicError::from)
+impl GuardApi {
+    pub fn guard_app_query() -> Result<(), PublicError> {
+        guard::guard_app_query().map_err(PublicError::from)
+    }
+
+    pub fn guard_app_update() -> Result<(), PublicError> {
+        guard::guard_app_update().map_err(PublicError::from)
+    }
 }

@@ -4,19 +4,23 @@ use crate::{
         page::{Page, PageRequest},
     },
     log::Level,
-    workflow,
+    workflow::log::query::LogQuery,
 };
 
 ///
-/// Log API
+/// LogApi
 ///
 
-#[must_use]
-pub fn log(
-    crate_name: Option<String>,
-    topic: Option<String>,
-    min_level: Option<Level>,
-    page: PageRequest,
-) -> Page<LogEntryView> {
-    workflow::log::query::log_page(crate_name, topic, min_level, page)
+pub struct LogApi;
+
+impl LogApi {
+    #[must_use]
+    pub fn entries(
+        crate_name: Option<String>,
+        topic: Option<String>,
+        min_level: Option<Level>,
+        page: PageRequest,
+    ) -> Page<LogEntryView> {
+        LogQuery::page(crate_name, topic, min_level, page)
+    }
 }

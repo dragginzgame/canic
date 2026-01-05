@@ -5,25 +5,29 @@ use crate::{
 };
 
 ///
-/// Lifecycle API
+/// LifecycleApi
 ///
 
-pub fn init_root_canister(identity: SubnetIdentity) {
-    lifecycle::init::init_root_canister(identity);
-}
+pub struct LifecycleApi;
 
-pub fn post_upgrade_root_canister() {
-    lifecycle::upgrade::post_upgrade_root_canister();
-}
+impl LifecycleApi {
+    pub fn init_root_canister(identity: SubnetIdentity) {
+        lifecycle::init::init_root_canister(identity);
+    }
 
-pub fn init_nonroot_canister(
-    role: CanisterRole,
-    payload: CanisterInitPayload,
-    args: Option<Vec<u8>>,
-) {
-    lifecycle::init::init_nonroot_canister(role, payload, args);
-}
+    pub fn post_upgrade_root_canister() {
+        lifecycle::upgrade::post_upgrade_root_canister();
+    }
 
-pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
-    lifecycle::upgrade::post_upgrade_nonroot_canister(role);
+    pub fn init_nonroot_canister(
+        role: CanisterRole,
+        payload: CanisterInitPayload,
+        args: Option<Vec<u8>>,
+    ) {
+        lifecycle::init::init_nonroot_canister(role, payload, args);
+    }
+
+    pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
+        lifecycle::upgrade::post_upgrade_nonroot_canister(role);
+    }
 }

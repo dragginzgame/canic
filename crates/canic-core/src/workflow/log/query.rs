@@ -21,7 +21,7 @@ impl LogQuery {
         crate_name: Option<String>,
         topic: Option<String>,
         min_level: Option<Level>,
-        request: PageRequest,
+        page: PageRequest,
     ) -> Page<LogEntryView> {
         let mut entries = LogOps::snapshot();
 
@@ -41,16 +41,6 @@ impl LogQuery {
 
         let views: Vec<LogEntryView> = entries.iter().map(LogMapper::entry_to_view).collect();
 
-        paginate_vec(views, request)
+        paginate_vec(views, page)
     }
-}
-
-// log_page
-pub fn log_page(
-    crate_name: Option<String>,
-    topic: Option<String>,
-    min_level: Option<Level>,
-    page: PageRequest,
-) -> Page<LogEntryView> {
-    LogQuery::page(crate_name, topic, min_level, page)
 }

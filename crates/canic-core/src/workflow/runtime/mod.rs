@@ -4,14 +4,14 @@ pub mod random;
 
 use crate::{
     VERSION, access,
-    cdk::{api::trap, println},
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
+        ic::runtime::{println, trap},
         ic::signature::SignatureOps,
         runtime::{
             env::{EnvOps, EnvSnapshot},
-            memory::{MemoryOps, MemoryRegistryInitSummary},
+            memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
         },
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -20,6 +20,7 @@ use crate::{
     },
     workflow::{
         self,
+        env::EnvWorkflow,
         prelude::*,
         topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },
@@ -36,9 +37,9 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
-        workflow::runtime::cycles::scheduler::start();
-        workflow::runtime::log::retention::start();
-        workflow::runtime::random::scheduler::start();
+        workflow::runtime::cycles::CycleTrackerWorkflow::start();
+        workflow::runtime::log::LogRetentionWorkflow::start();
+        workflow::runtime::random::RandomWorkflow::start();
     }
 
     /// Start timers that should run only on root canisters.
@@ -49,7 +50,7 @@ impl RuntimeWorkflow {
         Self::start_all();
 
         // root-only services
-        workflow::pool::scheduler::start();
+        workflow::pool::scheduler::PoolSchedulerWorkflow::start();
     }
 }
 
@@ -61,12 +62,12 @@ impl RuntimeWorkflow {
 
 fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
     let msg = format!("canic init failed during {phase}: {err}");
-    println!("[canic] FATAL: {msg}");
+    println(&format!("[canic] FATAL: {msg}"));
     trap(&msg);
 }
 
 fn init_memory_or_trap(phase: &str) -> MemoryRegistryInitSummary {
-    match MemoryOps::init_registry() {
+    match MemoryRegistryOps::init_registry() {
         Ok(summary) => summary,
         Err(err) => fatal(phase, format!("memory init failed: {err}")),
     }
@@ -105,9 +106,9 @@ pub fn init_root_canister(identity: SubnetIdentity) {
     crate::log::set_ready();
 
     // log header
-    println!("");
-    println!("");
-    println!("");
+    println("");
+    println("");
+    println("");
     crate::log!(
         Topic::Init,
         Info,
@@ -175,7 +176,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
-    if let Err(err) = crate::workflow::env::init_env_from_view(payload.env, canister_role) {
+    if let Err(err) = EnvWorkflow::init_env_from_view(payload.env, canister_role) {
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 

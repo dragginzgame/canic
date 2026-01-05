@@ -83,7 +83,7 @@ impl AppStateOps {
     // Commands
     // -------------------------------------------------------------
 
-    pub fn command(cmd: AppCommand) -> Result<(), Error> {
+    pub fn execute_command(cmd: AppCommand) -> Result<(), Error> {
         let old_mode = AppMode::from_model(AppState::get_mode());
 
         let new_mode = match cmd {

@@ -11,43 +11,47 @@ use crate::{
 };
 
 ///
-/// Metrics API
+/// MetricsApi
 ///
 
-#[must_use]
-pub fn metrics_system() -> Vec<SystemMetricEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_system_snapshot()
-}
+pub struct MetricsApi;
 
-#[must_use]
-pub fn metrics_icc(page: PageRequest) -> Page<IccMetricEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_icc_page(page)
-}
+impl MetricsApi {
+    #[must_use]
+    pub fn system() -> Vec<SystemMetricEntry> {
+        workflow::metrics::query::MetricsQuery::system_snapshot()
+    }
 
-#[must_use]
-pub fn metrics_http(page: PageRequest) -> Page<HttpMetricEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_http_page(page)
-}
+    #[must_use]
+    pub fn icc(page: PageRequest) -> Page<IccMetricEntry> {
+        workflow::metrics::query::MetricsQuery::icc_page(page)
+    }
 
-#[must_use]
-pub fn metrics_timer(page: PageRequest) -> Page<TimerMetricEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_timer_page(page)
-}
+    #[must_use]
+    pub fn http(page: PageRequest) -> Page<HttpMetricEntry> {
+        workflow::metrics::query::MetricsQuery::http_page(page)
+    }
 
-#[must_use]
-pub fn metrics_access(page: PageRequest) -> Page<AccessMetricEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_access_page(page)
-}
+    #[must_use]
+    pub fn timer(page: PageRequest) -> Page<TimerMetricEntry> {
+        workflow::metrics::query::MetricsQuery::timer_page(page)
+    }
 
-#[must_use]
-pub fn metrics_perf(page: PageRequest) -> Page<PerfEntry> {
-    workflow::metrics::query::MetricsQuery::metrics_perf_page(page)
-}
+    #[must_use]
+    pub fn access(page: PageRequest) -> Page<AccessMetricEntry> {
+        workflow::metrics::query::MetricsQuery::access_page(page)
+    }
 
-#[must_use]
-pub fn metrics_endpoint_health(page: PageRequest) -> Page<EndpointHealthView> {
-    workflow::metrics::query::MetricsQuery::metrics_endpoint_health_page(
-        page,
-        Some(protocol::CANIC_METRICS_ENDPOINT_HEALTH),
-    )
+    #[must_use]
+    pub fn perf(page: PageRequest) -> Page<PerfEntry> {
+        workflow::metrics::query::MetricsQuery::perf_page(page)
+    }
+
+    #[must_use]
+    pub fn endpoint_health(page: PageRequest) -> Page<EndpointHealthView> {
+        workflow::metrics::query::MetricsQuery::endpoint_health_page(
+            page,
+            Some(protocol::CANIC_METRICS_ENDPOINT_HEALTH),
+        )
+    }
 }

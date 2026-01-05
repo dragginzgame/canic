@@ -1,16 +1,18 @@
-//! Read-only projections for memory registry queries.
-
 use crate::{
-    dto::memory::MemoryRegistryView, ops::runtime::memory::MemoryOps,
-    workflow::memory::mapper::MemoryRegistryMapper,
+    dto::memory::MemoryRegistryView, ops::runtime::memory::MemoryRegistryOps,
+    workflow::memory::mapper::MemoryMapper,
 };
 
 ///
-/// Views
+/// MemoryQuery
 ///
 
-#[must_use]
-pub fn memory_registry_view() -> MemoryRegistryView {
-    let entries = MemoryOps::snapshot_entries();
-    MemoryRegistryMapper::snapshot_entries_to_view(entries)
+pub struct MemoryQuery;
+
+impl MemoryQuery {
+    #[must_use]
+    pub fn registry_view() -> MemoryRegistryView {
+        let entries = MemoryRegistryOps::snapshot_entries();
+        MemoryMapper::snapshot_entries_to_view(entries)
+    }
 }

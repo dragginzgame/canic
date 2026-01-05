@@ -12,20 +12,28 @@ use crate::{
     },
 };
 
-pub fn canister_children_page(page: PageRequest) -> Page<CanisterSummaryView> {
-    let views = if EnvOps::is_root() {
-        // Root derives children from the registry (not the local cache).
-        let snapshot = SubnetRegistryOps::snapshot();
-        let children = ChildrenMapper::from_registry_snapshot(&snapshot, canister_self());
+///
+/// CanisterChildrenQuery
+///
 
-        ChildrenMapper::snapshot_to_views(children)
-    } else {
-        // Non-root uses the cached children populated by topology cascade.
-        let snapshot = CanisterChildrenOps::snapshot();
+pub struct CanisterChildrenQuery;
 
-        ChildrenMapper::snapshot_to_views(snapshot)
-    };
+impl CanisterChildrenQuery {
+    pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
+        let views = if EnvOps::is_root() {
+            // Root derives children from the registry (not the local cache).
+            let snapshot = SubnetRegistryOps::snapshot();
+            let children = ChildrenMapper::from_registry_snapshot(&snapshot, canister_self());
 
-    // 3. Paginate in workflow
-    paginate_vec(views, page)
+            ChildrenMapper::snapshot_to_views(children)
+        } else {
+            // Non-root uses the cached children populated by topology cascade.
+            let snapshot = CanisterChildrenOps::snapshot();
+
+            ChildrenMapper::snapshot_to_views(snapshot)
+        };
+
+        // 3. Paginate in workflow
+        paginate_vec(views, page)
+    }
 }

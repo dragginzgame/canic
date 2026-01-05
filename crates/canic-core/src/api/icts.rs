@@ -1,41 +1,45 @@
 use crate::{
     PublicError,
     cdk::api::canister_self,
-    dto::canister::{CanisterMetadataView, CanisterStatusView},
+    dto::{canister::CanisterStatusView, icts::CanisterMetadataView},
     ops::ic::mgmt::MgmtOps,
 };
 
 ///
-/// ICTS API
+/// IctsApi
 ///
 
-#[must_use]
-pub fn icts_name() -> String {
-    env!("CARGO_PKG_NAME").to_string()
-}
+pub struct IctsApi;
 
-#[must_use]
-pub fn icts_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
-
-#[must_use]
-pub fn icts_description() -> String {
-    env!("CARGO_PKG_DESCRIPTION").to_string()
-}
-
-#[must_use]
-pub fn icts_metadata() -> CanisterMetadataView {
-    CanisterMetadataView {
-        name: icts_name(),
-        version: icts_version(),
-        description: icts_description(),
+impl IctsApi {
+    #[must_use]
+    pub fn name() -> String {
+        env!("CARGO_PKG_NAME").to_string()
     }
-}
 
-/// ICTS standard: return types and string errors are fixed by the spec.
-pub async fn icts_canister_status() -> Result<CanisterStatusView, PublicError> {
-    MgmtOps::canister_status(canister_self())
-        .await
-        .map_err(PublicError::from)
+    #[must_use]
+    pub fn version() -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
+
+    #[must_use]
+    pub fn description() -> String {
+        env!("CARGO_PKG_DESCRIPTION").to_string()
+    }
+
+    #[must_use]
+    pub fn metadata() -> CanisterMetadataView {
+        CanisterMetadataView {
+            name: Self::name(),
+            version: Self::version(),
+            description: Self::description(),
+        }
+    }
+
+    /// ICTS standard: return types and string errors are fixed by the spec.
+    pub async fn canister_status() -> Result<CanisterStatusView, PublicError> {
+        MgmtOps::canister_status(canister_self())
+            .await
+            .map_err(PublicError::from)
+    }
 }

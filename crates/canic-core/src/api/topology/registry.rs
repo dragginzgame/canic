@@ -4,15 +4,27 @@ use crate::{
 };
 
 ///
-/// Registry API
+/// AppRegistryApi
 ///
 
-#[must_use]
-pub fn app_registry() -> AppRegistryView {
-    workflow::topology::registry::query::app_registry_view()
+pub struct AppRegistryApi;
+
+impl AppRegistryApi {
+    #[must_use]
+    pub fn view() -> AppRegistryView {
+        workflow::topology::registry::query::AppRegistryQuery::view()
+    }
 }
 
-#[must_use]
-pub fn subnet_registry() -> SubnetRegistryView {
-    workflow::topology::registry::query::subnet_registry_view()
+///
+/// SubnetRegistryApi
+///
+
+pub struct SubnetRegistryApi;
+
+impl SubnetRegistryApi {
+    #[must_use]
+    pub fn view() -> SubnetRegistryView {
+        workflow::topology::registry::query::SubnetRegistryQuery::view()
+    }
 }

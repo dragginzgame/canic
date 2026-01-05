@@ -3,14 +3,18 @@ use crate::{
         cycles::CycleTrackerEntryView,
         page::{Page, PageRequest},
     },
-    workflow,
+    workflow::runtime::cycles::query::CycleTrackerQuery,
 };
 
 ///
-/// Cycles API
+/// CycleTrackerApi
 ///
 
-#[must_use]
-pub fn cycle_tracker(page: PageRequest) -> Page<CycleTrackerEntryView> {
-    workflow::runtime::cycles::query::cycle_tracker_page(page)
+pub struct CycleTrackerApi;
+
+impl CycleTrackerApi {
+    #[must_use]
+    pub fn page(page: PageRequest) -> Page<CycleTrackerEntryView> {
+        CycleTrackerQuery::page(page)
+    }
 }
