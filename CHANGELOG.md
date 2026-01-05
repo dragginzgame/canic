@@ -5,10 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
 ## [0.7.10] - 2026-01-04
 - moved api instrumentation to access/
 - wrapped most Api, Ops and Workflow functions within a corresponding namespace struct
 - added create/install lifecycle logs in MgmtOps for symmetry
+- Routed workflow ambient IC calls through `ops::ic::runtime` (time, identity, spawn, trap).
+- Replaced query-only API wrappers with re-exported `*Query` types in `api/*`.
+- Endpoint macros call `api::*Query` directly, and sharding tenants query now accepts `String`.
 
 ## [0.7.9] - 2026-01-04
 - mirrored the authentication functions in access/ to api::access for public consumption

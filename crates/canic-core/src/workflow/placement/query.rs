@@ -37,6 +37,7 @@ impl ScalingQuery {
 pub struct ShardingQuery;
 
 impl ShardingQuery {
+    #[must_use]
     pub fn registry_view() -> ShardingRegistryView {
         let data = ShardingRegistryOps::export();
 
@@ -52,8 +53,9 @@ impl ShardingQuery {
         ShardingRegistryView(view)
     }
 
-    pub fn tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
-        let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
+    #[must_use]
+    pub fn tenants_view(pool: String, shard: Principal) -> ShardingTenantsView {
+        let tenants = ShardingRegistryOps::tenants_in_shard(&pool, shard);
 
         ShardingTenantsView(tenants)
     }

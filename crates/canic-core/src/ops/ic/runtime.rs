@@ -6,8 +6,10 @@
 use crate::cdk;
 use core::future::Future;
 
-pub use crate::cdk::candid::CandidType;
-pub use crate::cdk::types::{Cycles, Principal, TC};
+pub use crate::cdk::{
+    candid::CandidType,
+    types::{Cycles, Principal, TC},
+};
 
 /// Return the current canister principal.
 #[must_use]
@@ -31,24 +33,6 @@ pub fn time() -> u64 {
 #[must_use]
 pub fn now_secs() -> u64 {
     cdk::utils::time::now_secs()
-}
-
-/// Return the current UNIX epoch time in milliseconds.
-#[must_use]
-pub fn now_millis() -> u64 {
-    cdk::utils::time::now_millis()
-}
-
-/// Return the current UNIX epoch time in microseconds.
-#[must_use]
-pub fn now_micros() -> u64 {
-    cdk::utils::time::now_micros()
-}
-
-/// Return the current UNIX epoch time in nanoseconds.
-#[must_use]
-pub fn now_nanos() -> u64 {
-    cdk::utils::time::now_nanos()
 }
 
 /// Trap the canister with the provided message.

@@ -11,6 +11,7 @@ use crate::{
 pub struct Icrc10Query;
 
 impl Icrc10Query {
+    #[must_use]
     pub fn supported_standards() -> Vec<(String, String)> {
         Icrc10Registry::supported_standards()
     }
@@ -23,6 +24,7 @@ impl Icrc10Query {
 pub struct Icrc21Query;
 
 impl Icrc21Query {
+    #[must_use]
     pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
         Icrc21Dispatcher::consent_message(req)
     }
