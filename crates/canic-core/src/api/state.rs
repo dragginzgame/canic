@@ -1,18 +1,37 @@
 use crate::{
-    dto::state::{AppStateView, SubnetStateView},
+    PublicError,
+    dto::state::{AppCommand, AppStateView, SubnetStateView},
     workflow,
 };
 
 ///
-/// State API
+/// AppStateApi
 ///
 
-#[must_use]
-pub fn app_state() -> AppStateView {
-    workflow::state::query::app_state_view()
+pub struct AppStateApi;
+
+impl AppStateApi {
+    #[must_use]
+    pub fn view() -> AppStateView {
+        workflow::state::query::AppStateQuery::view()
+    }
+
+    pub async fn execute_command(cmd: AppCommand) -> Result<(), PublicError> {
+        workflow::state::AppStateWorkflow::execute_command(cmd)
+            .await
+            .map_err(PublicError::from)
+    }
 }
 
-#[must_use]
-pub fn subnet_state() -> SubnetStateView {
-    workflow::state::query::subnet_state_view()
+///
+/// SubnetState Api
+///
+
+pub struct SubnetStateApi;
+
+impl SubnetStateApi {
+    #[must_use]
+    pub fn view() -> SubnetStateView {
+        workflow::state::query::SubnetStateQuery::view()
+    }
 }

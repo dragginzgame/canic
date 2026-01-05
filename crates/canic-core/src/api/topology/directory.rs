@@ -1,38 +1,50 @@
 use crate::{
-    PublicError,
     cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
         topology::DirectoryEntryView,
     },
     ids::CanisterRole,
-    workflow,
+    workflow::topology::directory::query::{AppDirectoryQuery, SubnetDirectoryQuery},
 };
 
 ///
-/// Directory API
+/// AppDirectoryApi
 ///
 
-#[must_use]
-pub fn app_directory(page: PageRequest) -> Page<DirectoryEntryView> {
-    workflow::topology::directory::query::app_directory_page(page)
+pub struct AppDirectoryApi;
+
+impl AppDirectoryApi {
+    #[must_use]
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+        AppDirectoryQuery::page(page)
+    }
+
+    /// Lookup the app directory entry for the given role.
+    ///
+    /// Returns `None` when the role is not present in the directory.
+    #[must_use]
+    pub fn get(role: CanisterRole) -> Option<Principal> {
+        AppDirectoryQuery::get(role)
+    }
 }
 
-#[must_use]
-pub fn subnet_directory(page: PageRequest) -> Page<DirectoryEntryView> {
-    workflow::topology::directory::query::subnet_directory_page(page)
-}
-
-/// Lookup the app directory entry for the given role.
 ///
-/// Returns `None` when the role is not present in the directory.
-pub fn app_directory_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, PublicError> {
-    Ok(workflow::topology::directory::query::app_directory_pid_by_role(role))
-}
-
-/// Lookup the subnet directory entry for the given role.
+/// SubnetDirectoryApi
 ///
-/// Returns `None` when the role is not present in the directory.
-pub fn subnet_directory_pid_by_role(role: CanisterRole) -> Result<Option<Principal>, PublicError> {
-    Ok(workflow::topology::directory::query::subnet_directory_pid_by_role(role))
+
+pub struct SubnetDirectoryApi;
+
+impl SubnetDirectoryApi {
+    #[must_use]
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+        SubnetDirectoryQuery::page(page)
+    }
+
+    /// Lookup the subnet directory entry for the given role.
+    /// Returns `None` when the role is not present in the directory.
+    #[must_use]
+    pub fn get(role: CanisterRole) -> Option<Principal> {
+        SubnetDirectoryQuery::get(role)
+    }
 }

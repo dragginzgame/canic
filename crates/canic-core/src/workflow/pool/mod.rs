@@ -8,20 +8,17 @@ pub mod scheduler;
 use crate::{
     Error,
     access::env,
-    cdk::types::TC,
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
         ic::mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+        ic::runtime::TC,
         storage::{
             pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::{
-        pool::{controllers::pool_controllers, query::pool_entry_view},
-        prelude::*,
-    },
+    workflow::{pool::query::pool_entry_view, pool::scheduler::PoolSchedulerWorkflow, prelude::*},
 };
 
 /// Default cycles allocated to freshly created pool canisters.
@@ -42,7 +39,7 @@ impl PoolWorkflow {
         MgmtOps::update_settings(&UpdateSettingsArgs {
             canister_id: pid,
             settings: CanisterSettings {
-                controllers: Some(pool_controllers()?),
+                controllers: Some(Self::pool_controllers()?),
                 ..Default::default()
             },
             sender_canister_version: None,
@@ -138,7 +135,7 @@ impl PoolWorkflow {
         Self::require_pool_admin()?;
 
         let cycles = Cycles::new(POOL_CANISTER_CYCLES);
-        let pid = MgmtOps::create_canister(pool_controllers()?, cycles.clone()).await?;
+        let pid = MgmtOps::create_canister(Self::pool_controllers()?, cycles.clone()).await?;
 
         PoolOps::register_ready(pid, cycles, None, None, None);
 
@@ -250,7 +247,7 @@ impl PoolWorkflow {
         };
 
         if result.added > 0 || result.requeued > 0 {
-            scheduler::schedule();
+            PoolSchedulerWorkflow::schedule();
         }
 
         Ok(result)

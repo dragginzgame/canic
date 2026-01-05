@@ -4,12 +4,12 @@ use crate::{
 };
 
 ///
-/// MemoryRegistryMapper
+/// MemoryMapper
 ///
 
-pub struct MemoryRegistryMapper;
+pub struct MemoryMapper;
 
-impl MemoryRegistryMapper {
+impl MemoryMapper {
     #[must_use]
     pub fn entry_snapshot_to_view(entry: MemoryRegistryEntrySnapshot) -> MemoryRegistryEntryView {
         MemoryRegistryEntryView {

@@ -134,6 +134,7 @@ impl EnvOps {
         let Some(root_pid) = Env::get_root_pid() else {
             return false;
         };
+
         prime_root == root_pid
     }
 

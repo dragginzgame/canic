@@ -9,7 +9,7 @@ use canic::{
     PublicError,
     core::{
         access::env::is_prime_subnet,
-        api::{rpc::create_canister_request, wasm::import_static_quiet},
+        api::{rpc::RpcApi, wasm::WasmApi},
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     },
     prelude::*,
@@ -25,7 +25,7 @@ canic::start_root!();
 
 canic::eager_init!({
     // Populate the in-memory WASM registry for provisioning before bootstrap.
-    import_static_quiet(WASMS);
+    WasmApi::import_static_quiet(WASMS);
 });
 
 async fn canic_setup() {}
@@ -93,7 +93,12 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
 /// Controller-only helper for local Canic testing.
 #[canic_update(guard(app), auth_any(is_controller), env(is_prime_subnet))]
 async fn create_blank() -> Result<CreateCanisterResponse, PublicError> {
-    create_canister_request::<()>(&canister::BLANK, CreateCanisterParent::ThisCanister, None).await
+    RpcApi::create_canister_request::<()>(
+        &canister::BLANK,
+        CreateCanisterParent::ThisCanister,
+        None,
+    )
+    .await
 }
 
 /// stress_perf

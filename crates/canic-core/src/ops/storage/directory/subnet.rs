@@ -37,6 +37,20 @@ pub struct SubnetDirectoryOps;
 
 impl SubnetDirectoryOps {
     // -------------------------------------------------------------
+    // Getters
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub fn get(role: &CanisterRole) -> Option<Principal> {
+        // This is still an ops-level convenience, but it stays snapshot/data-based
+        // and does not leak DTOs.
+        SubnetDirectory::export()
+            .entries
+            .iter()
+            .find_map(|(r, pid)| (r == role).then_some(*pid))
+    }
+
+    // -------------------------------------------------------------
     // Snapshot
     // -------------------------------------------------------------
 
@@ -53,19 +67,5 @@ impl SubnetDirectoryOps {
     pub fn import(snapshot: SubnetDirectorySnapshot) {
         let data: SubnetDirectoryData = snapshot.into();
         SubnetDirectory::import(data);
-    }
-
-    // -------------------------------------------------------------
-    // Internal helpers (ops-only)
-    // -------------------------------------------------------------
-
-    #[must_use]
-    pub fn get(role: &CanisterRole) -> Option<Principal> {
-        // This is still an ops-level convenience, but it stays snapshot/data-based
-        // and does not leak DTOs.
-        SubnetDirectory::export()
-            .entries
-            .iter()
-            .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
 }

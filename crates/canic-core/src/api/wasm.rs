@@ -1,5 +1,8 @@
 use crate::{ids::CanisterRole, ops::runtime::wasm::WasmOps};
 
+///
+/// WasmApi
+///
 /// Runtime WASM registration API.
 ///
 /// Public, user-callable helpers for registering embedded WASM modules
@@ -12,11 +15,15 @@ use crate::{ids::CanisterRole, ops::runtime::wasm::WasmOps};
 ///     user canister → api → ops → runtime state
 ///
 
-pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
-    WasmOps::import_static(wasms);
-}
+pub struct WasmApi;
 
-/// Quiet variant without logging.
-pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
-    WasmOps::import_static_quiet(wasms);
+impl WasmApi {
+    pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
+        WasmOps::import_static(wasms);
+    }
+
+    /// Quiet variant without logging.
+    pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
+        WasmOps::import_static_quiet(wasms);
+    }
 }

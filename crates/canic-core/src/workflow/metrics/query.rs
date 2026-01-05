@@ -18,7 +18,7 @@ use crate::{
 pub struct MetricsQuery;
 
 impl MetricsQuery {
-    pub fn metrics_system_snapshot() -> Vec<SystemMetricEntry> {
+    pub fn system_snapshot() -> Vec<SystemMetricEntry> {
         let snapshot = MetricsOps::system_snapshot();
         let mut entries = MetricsMapper::system_metrics_to_view(snapshot.entries);
 
@@ -27,7 +27,7 @@ impl MetricsQuery {
         entries
     }
 
-    pub fn metrics_icc_page(page: PageRequest) -> Page<IccMetricEntry> {
+    pub fn icc_page(page: PageRequest) -> Page<IccMetricEntry> {
         let snapshot = MetricsOps::icc_snapshot();
         let mut entries = MetricsMapper::icc_metrics_to_view(snapshot.entries);
 
@@ -41,7 +41,7 @@ impl MetricsQuery {
         paginate_vec(entries, page)
     }
 
-    pub fn metrics_http_page(page: PageRequest) -> Page<HttpMetricEntry> {
+    pub fn http_page(page: PageRequest) -> Page<HttpMetricEntry> {
         let snapshot = MetricsOps::http_snapshot();
         let mut entries = MetricsMapper::http_metrics_to_view(snapshot.entries);
 
@@ -50,7 +50,7 @@ impl MetricsQuery {
         paginate_vec(entries, page)
     }
 
-    pub fn metrics_timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
+    pub fn timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
         let snapshot = MetricsOps::timer_snapshot();
         let mut entries = MetricsMapper::timer_metrics_to_view(snapshot.entries);
 
@@ -64,7 +64,7 @@ impl MetricsQuery {
         paginate_vec(entries, page)
     }
 
-    pub fn metrics_access_page(page: PageRequest) -> Page<AccessMetricEntry> {
+    pub fn access_page(page: PageRequest) -> Page<AccessMetricEntry> {
         let snapshot = MetricsOps::access_snapshot();
         let mut entries = MetricsMapper::access_metrics_to_view(snapshot.entries);
 
@@ -77,12 +77,12 @@ impl MetricsQuery {
         paginate_vec(entries, page)
     }
 
-    pub fn metrics_perf_page(page: PageRequest) -> Page<PerfEntry> {
+    pub fn perf_page(page: PageRequest) -> Page<PerfEntry> {
         let snapshot = PerfOps::snapshot();
         paginate_vec(snapshot.entries, page)
     }
 
-    pub fn metrics_endpoint_health_page(
+    pub fn endpoint_health_page(
         page: PageRequest,
         exclude_endpoint: Option<&str>,
     ) -> Page<EndpointHealthView> {

@@ -1,12 +1,11 @@
-pub mod app;
 pub mod bootstrap;
 pub mod canister;
+pub mod canister_lifecycle;
 pub mod cascade;
 pub mod config;
 pub mod env;
 pub mod ic;
 pub mod icrc;
-pub mod lifecycle;
 pub mod log;
 pub mod memory;
 pub mod metrics;
@@ -24,14 +23,10 @@ pub mod view;
 
 pub mod prelude {
     pub use crate::{
-        cdk::{
-            api::{canister_self, msg_caller},
-            candid::CandidType,
-            types::{Cycles, Principal},
-        },
         ids::CanisterRole,
         log,
         log::Topic,
+        ops::ic::runtime::{CandidType, Cycles, Principal, canister_self, msg_caller},
     };
 }
 

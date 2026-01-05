@@ -8,32 +8,42 @@ use crate::{
 };
 
 ///
-/// Pagination
+/// AppDirectoryQuery
 ///
 
-pub fn app_directory_page(page: PageRequest) -> Page<DirectoryEntryView> {
-    let snapshot = AppDirectoryOps::snapshot();
-    map_directory_page(paginate_vec(snapshot.entries, page))
+pub struct AppDirectoryQuery;
+
+impl AppDirectoryQuery {
+    #[must_use]
+    pub fn get(role: CanisterRole) -> Option<Principal> {
+        AppDirectoryOps::get(&role)
+    }
+
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+        let snapshot = AppDirectoryOps::snapshot();
+        map_directory_page(paginate_vec(snapshot.entries, page))
+    }
 }
 
-pub fn subnet_directory_page(page: PageRequest) -> Page<DirectoryEntryView> {
-    let snapshot = SubnetDirectoryOps::snapshot();
-    map_directory_page(paginate_vec(snapshot.entries, page))
+///
+/// SubnetDirectoryQuery
+///
+
+pub struct SubnetDirectoryQuery;
+
+impl SubnetDirectoryQuery {
+    #[must_use]
+    pub fn get(role: CanisterRole) -> Option<Principal> {
+        SubnetDirectoryOps::get(&role)
+    }
+
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+        let snapshot = SubnetDirectoryOps::snapshot();
+        map_directory_page(paginate_vec(snapshot.entries, page))
+    }
 }
 
-#[must_use]
-pub fn app_directory_pid_by_role(role: CanisterRole) -> Option<Principal> {
-    AppDirectoryOps::get(&role)
-}
-
-#[must_use]
-pub fn subnet_directory_pid_by_role(role: CanisterRole) -> Option<Principal> {
-    SubnetDirectoryOps::get(&role)
-}
-
-fn map_directory_page(
-    page: Page<(crate::ids::CanisterRole, crate::cdk::types::Principal)>,
-) -> Page<DirectoryEntryView> {
+fn map_directory_page(page: Page<(CanisterRole, Principal)>) -> Page<DirectoryEntryView> {
     let entries = page
         .entries
         .into_iter()

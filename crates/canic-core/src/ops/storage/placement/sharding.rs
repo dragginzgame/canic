@@ -27,7 +27,7 @@ impl ShardEntry {
 }
 
 ///
-/// ShardingRegistrySnapshor
+/// ShardingRegistrySnapshot
 ///
 
 #[derive(Clone, Debug)]

@@ -1,9 +1,9 @@
 //! Pool admin command handling.
 
+use super::PoolWorkflow;
 use crate::{
     Error,
     dto::pool::{PoolAdminCommand, PoolAdminResponse},
-    workflow::pool::PoolWorkflow,
 };
 
 ///
@@ -18,27 +18,29 @@ use crate::{
 /// - Scheduling
 /// - Pool mechanics
 ///
-pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
-    match cmd {
-        PoolAdminCommand::CreateEmpty => {
-            let pid = PoolWorkflow::pool_create_canister().await?;
-            Ok(PoolAdminResponse::Created { pid })
-        }
+impl PoolWorkflow {
+    pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
+        match cmd {
+            PoolAdminCommand::CreateEmpty => {
+                let pid = Self::pool_create_canister().await?;
+                Ok(PoolAdminResponse::Created { pid })
+            }
 
-        PoolAdminCommand::Recycle { pid } => {
-            PoolWorkflow::pool_recycle_canister(pid).await?;
-            Ok(PoolAdminResponse::Recycled)
-        }
+            PoolAdminCommand::Recycle { pid } => {
+                Self::pool_recycle_canister(pid).await?;
+                Ok(PoolAdminResponse::Recycled)
+            }
 
-        PoolAdminCommand::ImportImmediate { pid } => {
-            PoolWorkflow::pool_import_canister(pid).await?;
-            Ok(PoolAdminResponse::Imported)
-        }
+            PoolAdminCommand::ImportImmediate { pid } => {
+                Self::pool_import_canister(pid).await?;
+                Ok(PoolAdminResponse::Imported)
+            }
 
-        PoolAdminCommand::ImportQueued { pids } => {
-            let result = PoolWorkflow::pool_import_queued_canisters(pids).await?;
+            PoolAdminCommand::ImportQueued { pids } => {
+                let result = Self::pool_import_queued_canisters(pids).await?;
 
-            Ok(PoolAdminResponse::QueuedImported { result })
+                Ok(PoolAdminResponse::QueuedImported { result })
+            }
         }
     }
 }

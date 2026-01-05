@@ -5,11 +5,11 @@ use crate::{
         CreateCanisterParent, CreateCanisterResponse, Request, Response, UpgradeCanisterResponse,
     },
     ids::CanisterRole,
-    workflow,
+    workflow::rpc::request::{RpcRequestWorkflow, handler::RootResponseWorkflow},
 };
 
 ///
-/// RPC API helpers.
+/// RpcApi
 ///
 /// Public, user-callable wrappers for Canic’s internal RPC workflows.
 ///
@@ -27,29 +27,33 @@ use crate::{
 /// happens exclusively at this API boundary.
 ///
 
-pub async fn create_canister_request<A>(
-    canister_role: &CanisterRole,
-    parent: CreateCanisterParent,
-    extra: Option<A>,
-) -> Result<CreateCanisterResponse, PublicError>
-where
-    A: CandidType + Send + Sync,
-{
-    workflow::rpc::request::create_canister_request(canister_role, parent, extra)
-        .await
-        .map_err(PublicError::from)
-}
+pub struct RpcApi;
 
-pub async fn upgrade_canister_request(
-    canister_pid: Principal,
-) -> Result<UpgradeCanisterResponse, PublicError> {
-    workflow::rpc::request::upgrade_canister_request(canister_pid)
-        .await
-        .map_err(PublicError::from)
-}
+impl RpcApi {
+    pub async fn create_canister_request<A>(
+        canister_role: &CanisterRole,
+        parent: CreateCanisterParent,
+        extra: Option<A>,
+    ) -> Result<CreateCanisterResponse, PublicError>
+    where
+        A: CandidType + Send + Sync,
+    {
+        RpcRequestWorkflow::create_canister_request(canister_role, parent, extra)
+            .await
+            .map_err(PublicError::from)
+    }
 
-pub async fn response(request: Request) -> Result<Response, PublicError> {
-    workflow::rpc::request::handler::response(request)
-        .await
-        .map_err(PublicError::from)
+    pub async fn upgrade_canister_request(
+        canister_pid: Principal,
+    ) -> Result<UpgradeCanisterResponse, PublicError> {
+        RpcRequestWorkflow::upgrade_canister_request(canister_pid)
+            .await
+            .map_err(PublicError::from)
+    }
+
+    pub async fn response(request: Request) -> Result<Response, PublicError> {
+        RootResponseWorkflow::response(request)
+            .await
+            .map_err(PublicError::from)
+    }
 }

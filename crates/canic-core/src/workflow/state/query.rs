@@ -4,12 +4,30 @@ use crate::{
     workflow::state::mapper::{AppStateMapper, SubnetStateMapper},
 };
 
-pub fn app_state_view() -> AppStateView {
-    let snapshot = AppStateOps::snapshot();
-    AppStateMapper::snapshot_to_view(snapshot)
+///
+/// AppStateQuery
+///
+
+pub struct AppStateQuery;
+
+impl AppStateQuery {
+    pub fn view() -> AppStateView {
+        let snapshot = AppStateOps::snapshot();
+
+        AppStateMapper::snapshot_to_view(snapshot)
+    }
 }
 
-pub fn subnet_state_view() -> SubnetStateView {
-    let snapshot = SubnetStateOps::snapshot();
-    SubnetStateMapper::snapshot_to_view(snapshot)
+///
+/// SubnetStateQuery
+///
+
+pub struct SubnetStateQuery;
+
+impl SubnetStateQuery {
+    pub fn view() -> SubnetStateView {
+        let snapshot = SubnetStateOps::snapshot();
+
+        SubnetStateMapper::snapshot_to_view(snapshot)
+    }
 }

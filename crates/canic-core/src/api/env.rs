@@ -1,10 +1,14 @@
 use crate::{dto::env::EnvView, workflow};
 
 ///
-/// Env API
+/// EnvApi
 ///
 
-#[must_use]
-pub fn env() -> EnvView {
-    workflow::env::query::env_view()
+pub struct EnvApi;
+
+impl EnvApi {
+    #[must_use]
+    pub fn view() -> EnvView {
+        workflow::env::query::EnvQuery::view()
+    }
 }

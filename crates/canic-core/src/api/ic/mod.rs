@@ -1,13 +1,12 @@
 pub mod http;
+pub mod mgmt;
 pub mod network;
 pub mod signature;
 
 use crate::{
     Error, PublicError,
     cdk::{candid::CandidType, types::Principal},
-    dto::canister::CanisterStatusView,
-    log::Topic,
-    ops::ic::{call::CallOps, mgmt::MgmtOps},
+    ops::ic::call::CallOps,
 };
 use serde::de::DeserializeOwned;
 
@@ -55,25 +54,13 @@ impl CallBuilder {
 
         let response = call
             .try_with_arg(arg)
-            .map_err(|e| map_internal_error(Error::from(e)))?
+            .map_err(|e| PublicError::from(Error::from(e)))?
             .execute()
             .await
-            .map_err(|e| map_internal_error(Error::from(e)))?;
+            .map_err(|e| PublicError::from(Error::from(e)))?;
 
         response
             .candid::<R>()
-            .map_err(|e| map_internal_error(Error::from(e)))
+            .map_err(|e| PublicError::from(Error::from(e)))
     }
-}
-
-pub async fn canister_status(pid: Principal) -> Result<CanisterStatusView, PublicError> {
-    MgmtOps::canister_status(pid)
-        .await
-        .map_err(map_internal_error)
-}
-
-fn map_internal_error(err: Error) -> PublicError {
-    // Log the internal error for operators, but return a stable PublicError contract.
-    crate::log!(Topic::Rpc, Error, "api.ic failed: {err:?}");
-    PublicError::from(err)
 }

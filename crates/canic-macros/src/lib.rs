@@ -403,6 +403,7 @@ mod expand {
         let syn::Type::Path(ty) = &**ty else {
             return false;
         };
+
         ty.path
             .segments
             .last()
@@ -438,13 +439,13 @@ mod expand {
 
     fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
         quote! {
-            ::canic::core::api::instrumentation::AccessMetrics::increment(#call, #kind);
+            ::canic::core::access::metrics::AccessMetrics::increment(#call, #kind);
         }
     }
 
     fn attempted(call: &syn::Ident) -> TokenStream2 {
         quote! {
-            ::canic::core::api::instrumentation::EndpointAttemptMetrics::increment_attempted(#call);
+            ::canic::core::access::metrics::EndpointAttemptMetrics::increment_attempted(#call);
         }
     }
 
@@ -460,15 +461,15 @@ mod expand {
 
         match kind {
             EndpointKind::Query => quote! {
-                if let Err(err) = ::canic::core::api::access::guard::guard_app_query() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_query() {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             },
             EndpointKind::Update => quote! {
-                if let Err(err) = ::canic::core::api::access::guard::guard_app_update() {
+                if let Err(err) = ::canic::core::access::guard::guard_app_update() {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             },
         }
@@ -484,13 +485,13 @@ mod expand {
             Some(AuthSpec::Any(rules)) => quote! {
                 if let Err(err) = ::canic::core::auth_require_any!(#(#rules),*) {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             },
             Some(AuthSpec::All(rules)) => quote! {
                 if let Err(err) = ::canic::core::auth_require_all!(#(#rules),*) {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             },
             None => quote!(),
@@ -511,10 +512,11 @@ mod expand {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             }
         });
+
         quote!(#(#checks)*)
     }
 
@@ -532,7 +534,7 @@ mod expand {
             quote! {
                 if let Err(err) = #expr().await {
                     #metric
-                    return Err(err.into());
+                    return Err(::canic::core::PublicError::from(err));
                 }
             }
         });
@@ -569,9 +571,9 @@ mod expand {
         let result_metrics = if returns_result {
             quote! {
                 if out.is_ok() {
-                    ::canic::core::api::instrumentation::EndpointResultMetrics::increment_ok(#call);
+                    ::canic::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
                 } else {
-                    ::canic::core::api::instrumentation::EndpointResultMetrics::increment_err(#call);
+                    ::canic::core::access::metrics::EndpointResultMetrics::increment_err(#call);
                 }
             }
         } else {
@@ -581,7 +583,7 @@ mod expand {
         quote! {
             {
                 let out = #dispatch_call;
-                ::canic::core::api::instrumentation::EndpointAttemptMetrics::increment_completed(#call);
+                ::canic::core::access::metrics::EndpointAttemptMetrics::increment_completed(#call);
                 #result_metrics
                 out
             }

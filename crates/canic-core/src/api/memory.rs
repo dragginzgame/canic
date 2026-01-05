@@ -1,10 +1,14 @@
 use crate::{dto::memory::MemoryRegistryView, workflow};
 
 ///
-/// Memory API
+/// MemoryApi
 ///
 
-#[must_use]
-pub fn memory_registry() -> MemoryRegistryView {
-    workflow::memory::query::memory_registry_view()
+pub struct MemoryApi;
+
+impl MemoryApi {
+    #[must_use]
+    pub fn registry_view() -> MemoryRegistryView {
+        workflow::memory::query::MemoryQuery::registry_view()
+    }
 }

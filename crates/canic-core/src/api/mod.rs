@@ -9,7 +9,6 @@
 //! are consistently mapped at the boundary.
 
 pub mod access;
-pub mod app;
 pub mod cascade;
 pub mod config;
 pub mod cycles;
@@ -18,7 +17,6 @@ pub mod error;
 pub mod ic;
 pub mod icrc;
 pub mod icts;
-pub mod instrumentation;
 pub mod lifecycle;
 pub mod log;
 pub mod memory;

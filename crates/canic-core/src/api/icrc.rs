@@ -1,18 +1,30 @@
 use crate::{
     cdk::spec::icrc::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
-    workflow,
+    workflow::icrc::query::{Icrc10Query, Icrc21Query},
 };
 
 ///
-/// ICRC API
+/// Icrc10Api
 ///
 
-#[must_use]
-pub fn icrc10_supported_standards() -> Vec<(String, String)> {
-    workflow::icrc::query::icrc10_supported_standards()
+pub struct Icrc10Api;
+
+impl Icrc10Api {
+    #[must_use]
+    pub fn supported_standards() -> Vec<(String, String)> {
+        Icrc10Query::supported_standards()
+    }
 }
 
-#[must_use]
-pub fn icrc21_canister_call_consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
-    workflow::icrc::query::icrc21_consent_message(req)
+///
+/// Icrc21Api
+///
+
+pub struct Icrc21Api;
+
+impl Icrc21Api {
+    #[must_use]
+    pub fn canister_call_consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
+        Icrc21Query::consent_message(req)
+    }
 }

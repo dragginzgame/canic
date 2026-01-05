@@ -5,8 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.10] - 2026-01-04
+- moved api instrumentation to access/
+- wrapped most Api, Ops and Workflow functions within a corresponding namespace struct
+- added create/install lifecycle logs in MgmtOps for symmetry
+
 ## [0.7.9] - 2026-01-04
 - mirrored the authentication functions in access/ to api::access for public consumption
+- macro access checks now return PublicError at the endpoint boundary
 
 ## [0.7.8] - 2026-01-04
 - Nested policy directory/registry under policy::topology to align module structure

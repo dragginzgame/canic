@@ -36,10 +36,7 @@ readme = "README.md"
 
 [workspace.dependencies]
 
-# third-party crates
 base32 = "0.5"
-
-# canic crates
 candid = { version = "0.10", default-features = false }
 canic = { version = "0.7.9", path = "crates/canic" }
 canic-cdk = { version = "0.7.9", path = "crates/canic-cdk" }

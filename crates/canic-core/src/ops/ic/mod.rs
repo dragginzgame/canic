@@ -28,10 +28,11 @@
 //! This module intentionally contains no policy decisions and no workflow logic.
 
 pub mod call;
-pub mod canister;
 pub mod http;
+pub mod icrc;
 pub mod mgmt;
 pub mod nns;
+pub mod runtime;
 pub mod signature;
 pub mod xrc;
 

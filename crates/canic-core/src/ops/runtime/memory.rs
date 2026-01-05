@@ -12,18 +12,19 @@ use canic_memory::{
 };
 
 ///
-/// MemoryOpsError
+/// MemoryRegistryOpsError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum MemoryOpsError {
+pub enum MemoryRegistryOpsError {
+    // this error comes from the canic-memory crate
     #[error(transparent)]
     Registry(#[from] MemoryRegistryError),
 }
 
-impl From<MemoryOpsError> for Error {
-    fn from(err: MemoryOpsError) -> Self {
-        RuntimeOpsError::MemoryOps(err).into()
+impl From<MemoryRegistryOpsError> for Error {
+    fn from(err: MemoryRegistryOpsError) -> Self {
+        RuntimeOpsError::MemoryRegistryOps(err).into()
     }
 }
 
@@ -86,16 +87,16 @@ impl MemoryRegistryInitSummary {
 }
 
 ///
-/// MemoryOps
+/// MemoryRegistryOps
 ///
 
-pub struct MemoryOps;
+pub struct MemoryRegistryOps;
 
-impl MemoryOps {
+impl MemoryRegistryOps {
     pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, Error> {
         let summary =
             MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
-                .map_err(MemoryOpsError::from)?;
+                .map_err(MemoryRegistryOpsError::from)?;
 
         Ok(MemoryRegistryInitSummary::from_raw(summary))
     }

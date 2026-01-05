@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 
-use canic::{core::api::ic::signature, prelude::*};
+use canic::{core::api::ic::signature::SignatureApi, prelude::*};
 use canic_internal::canister::AUTH;
 
 //
@@ -20,15 +20,15 @@ async fn canic_upgrade() {}
 #[canic_update]
 fn authenticate_caller() -> Vec<u8> {
     // step 1: prepare the signature
-    signature::prepare(b"domain", b"user-auth", b"hello").unwrap();
+    SignatureApi::prepare(b"domain", b"user-auth", b"hello").unwrap();
 
     // returning root_hash is optional — just for debugging
-    signature::root_hash()
+    SignatureApi::root_hash()
 }
 
 #[canic_query]
 fn get_auth_signature() -> Option<Vec<u8>> {
-    signature::get(b"domain", b"user-auth", b"hello")
+    SignatureApi::get(b"domain", b"user-auth", b"hello")
 }
 
 export_candid!();

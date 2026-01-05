@@ -4,12 +4,30 @@ use crate::{
     workflow::topology::registry::mapper::{AppRegistryMapper, SubnetRegistryMapper},
 };
 
-pub fn app_registry_view() -> AppRegistryView {
-    let snapshot = AppRegistryOps::snapshot();
-    AppRegistryMapper::snapshot_to_view(snapshot)
+///
+/// AppRegistryQuery
+///
+
+pub struct AppRegistryQuery;
+
+impl AppRegistryQuery {
+    pub fn view() -> AppRegistryView {
+        let snapshot = AppRegistryOps::snapshot();
+
+        AppRegistryMapper::snapshot_to_view(snapshot)
+    }
 }
 
-pub fn subnet_registry_view() -> SubnetRegistryView {
-    let snapshot = SubnetRegistryOps::snapshot();
-    SubnetRegistryMapper::snapshot_to_view(snapshot)
+///
+/// SubnetRegistryQuery
+///
+
+pub struct SubnetRegistryQuery;
+
+impl SubnetRegistryQuery {
+    pub fn view() -> SubnetRegistryView {
+        let snapshot = SubnetRegistryOps::snapshot();
+
+        SubnetRegistryMapper::snapshot_to_view(snapshot)
+    }
 }

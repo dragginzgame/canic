@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod env;
 pub mod guard;
+pub mod metrics;
 pub mod rule;
 
 use crate::ThisError;

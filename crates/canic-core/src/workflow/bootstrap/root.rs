@@ -6,10 +6,10 @@
 
 use crate::{
     Error,
-    cdk::api::trap,
     infra::ic::network::Network,
     ops::{
         config::ConfigOps,
+        ic::runtime::trap,
         runtime::{env::EnvOps, network::NetworkOps},
         storage::{
             directory::subnet::SubnetDirectoryOps, pool::PoolOps,
@@ -17,8 +17,8 @@ use crate::{
         },
     },
     workflow::{
-        ic::network::try_get_current_subnet_pid,
-        lifecycle::{LifecycleEvent, orchestrator::LifecycleOrchestrator},
+        canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
+        ic::IcWorkflow,
         pool::PoolWorkflow,
         prelude::*,
     },
@@ -54,7 +54,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 pub async fn root_set_subnet_id() -> Result<(), Error> {
     let network = NetworkOps::current_network();
 
-    match try_get_current_subnet_pid().await {
+    match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
             return Ok(());
@@ -225,7 +225,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
             continue;
         }
 
-        LifecycleOrchestrator::apply(LifecycleEvent::Create {
+        CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
             role: role.clone(),
             parent: canister_self(),
             extra_arg: None,
