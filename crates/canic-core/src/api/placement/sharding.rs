@@ -1,9 +1,10 @@
 use crate::{
-    PublicError,
-    cdk::types::Principal,
-    dto::placement::{ShardingPlanStateView, ShardingRegistryView, ShardingTenantsView},
-    workflow::placement::{query::ShardingQuery, sharding::ShardingWorkflow},
+    PublicError, cdk::types::Principal, dto::placement::ShardingPlanStateView,
+    workflow::placement::sharding::ShardingWorkflow,
 };
+
+// Workflow Query Re-export
+pub use crate::workflow::placement::query::ShardingQuery;
 
 ///
 /// ShardingApi
@@ -26,15 +27,5 @@ impl ShardingApi {
         tenant: impl AsRef<str>,
     ) -> Result<ShardingPlanStateView, PublicError> {
         ShardingWorkflow::plan_assign_to_pool(pool, tenant).map_err(PublicError::from)
-    }
-
-    #[must_use]
-    pub fn registry_view() -> ShardingRegistryView {
-        ShardingQuery::registry_view()
-    }
-
-    #[must_use]
-    pub fn sharding_tenants(pool: String, shard_pid: Principal) -> ShardingTenantsView {
-        ShardingQuery::tenants_view(&pool, shard_pid)
     }
 }

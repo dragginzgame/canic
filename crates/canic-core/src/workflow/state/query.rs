@@ -11,6 +11,7 @@ use crate::{
 pub struct AppStateQuery;
 
 impl AppStateQuery {
+    #[must_use]
     pub fn view() -> AppStateView {
         let snapshot = AppStateOps::snapshot();
 
@@ -25,6 +26,7 @@ impl AppStateQuery {
 pub struct SubnetStateQuery;
 
 impl SubnetStateQuery {
+    #[must_use]
     pub fn view() -> SubnetStateView {
         let snapshot = SubnetStateOps::snapshot();
 

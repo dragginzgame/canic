@@ -14,6 +14,7 @@ use crate::{
 pub struct CycleTrackerQuery;
 
 impl CycleTrackerQuery {
+    #[must_use]
     pub fn page(page: PageRequest) -> Page<CycleTrackerEntryView> {
         let snapshot = CycleTrackerOps::snapshot();
         let page = paginate_vec(snapshot.entries, page);
