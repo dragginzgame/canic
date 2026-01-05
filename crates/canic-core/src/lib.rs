@@ -21,7 +21,7 @@
 // Phase 0: path coherence re-exports (no behavior change)
 // -----------------------------------------------------------------------------
 
-pub mod access;
+pub mod access; // todo - potentially could be pub(crate) but custom errors would have to change
 pub mod api;
 #[doc(hidden)]
 pub mod dispatch;
