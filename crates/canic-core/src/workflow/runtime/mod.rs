@@ -27,13 +27,13 @@ use crate::{
 use canic_memory::runtime::init_eager_tls;
 
 ///
-/// Runtime
+/// RuntimeWorkflow
 /// Coordinates periodic background services (timers) for Canic canisters.
 ///
 
-pub struct Runtime;
+pub struct RuntimeWorkflow;
 
-impl Runtime {
+impl RuntimeWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
         workflow::runtime::cycles::scheduler::start();
@@ -140,7 +140,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
     SubnetRegistryOps::register_root(self_pid);
 
     // --- Phase 3: Service startup ---
-    Runtime::start_all_root();
+    RuntimeWorkflow::start_all_root();
 }
 
 ///
@@ -159,7 +159,7 @@ pub fn post_upgrade_root_canister() {
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
-    Runtime::start_all_root();
+    RuntimeWorkflow::start_all_root();
 }
 
 ///
@@ -185,7 +185,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     ));
 
     // --- Phase 3: Service startup ---
-    Runtime::start_all();
+    RuntimeWorkflow::start_all();
 }
 
 ///
@@ -209,5 +209,5 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
-    Runtime::start_all();
+    RuntimeWorkflow::start_all();
 }

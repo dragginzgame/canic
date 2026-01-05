@@ -11,7 +11,7 @@ use crate::{
     },
     workflow::{
         cascade::{state::root_cascade_state, topology::root_cascade_topology_for_pid},
-        ic::provision::{create_and_install_canister, rebuild_directories_from_registry},
+        ic::provision::ProvisionWorkflow,
         lifecycle::{LifecycleEvent, LifecycleResult},
         prelude::*,
     },
@@ -50,7 +50,7 @@ impl LifecycleOrchestrator {
         let registry_snapshot = SubnetRegistryOps::snapshot();
         TopologyPolicy::assert_parent_exists(&registry_snapshot, parent)?;
 
-        let pid = create_and_install_canister(&role, parent, extra_arg).await?;
+        let pid = ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await?;
 
         let registry_snapshot = SubnetRegistryOps::snapshot();
         TopologyPolicy::assert_immediate_parent(&registry_snapshot, pid, parent)?;
@@ -111,7 +111,7 @@ async fn cascade_all(
     if let Some(role) = role_opt {
         // Ensure newly created/adopted canisters inherit the current app
         // and subnet states
-        let snapshot = rebuild_directories_from_registry(Some(role))
+        let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))
             .await?
             .with_app_state()
             .with_subnet_state()

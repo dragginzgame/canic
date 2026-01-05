@@ -158,6 +158,7 @@ pub fn apply_retention(
 
     if max_entries == 0 {
         with_log_mut(|log| *log = create_log());
+
         return Ok(RetentionSummary {
             before,
             retained: 0,
@@ -228,8 +229,8 @@ pub fn apply_retention(
 
 const TRUNCATION_SUFFIX: &str = "...[truncated]";
 
-fn append_raw(entry: &LogEntry) -> Result<u64, MemoryError> {
-    with_log(|log| log.append(entry)).map_err(map_write_error)
+fn append_raw(entry: &LogEntry) -> Result<u64, Error> {
+    with_log(|log| log.append(entry)).map_err(|e| Error::from(map_write_error(e)))
 }
 
 const fn map_write_error(err: WriteError) -> MemoryError {

@@ -22,6 +22,11 @@ pub fn subnet_directory_page(page: PageRequest) -> Page<DirectoryEntryView> {
 }
 
 #[must_use]
+pub fn app_directory_pid_by_role(role: CanisterRole) -> Option<Principal> {
+    AppDirectoryOps::get(&role)
+}
+
+#[must_use]
 pub fn subnet_directory_pid_by_role(role: CanisterRole) -> Option<Principal> {
     SubnetDirectoryOps::get(&role)
 }
