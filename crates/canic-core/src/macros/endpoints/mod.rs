@@ -152,14 +152,14 @@ macro_rules! canic_endpoints {
         fn canic_app_directory(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::topology::DirectoryEntryView> {
-            $crate::api::topology::app_directory(page)
+            $crate::api::topology::directory::app_directory(page)
         }
 
         #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::topology::DirectoryEntryView> {
-            $crate::api::topology::subnet_directory(page)
+            $crate::api::topology::directory::subnet_directory(page)
         }
 
         //
@@ -170,7 +170,7 @@ macro_rules! canic_endpoints {
         fn canic_canister_children(
             page: ::canic::core::dto::page::PageRequest,
         ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
-            $crate::api::topology::canister_children(page)
+            $crate::api::topology::children::canister_children(page)
         }
 
         //

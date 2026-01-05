@@ -5,6 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.7] - 2026-01-04
+- Split out api/topology and added in missing functions
+- Stopped the macros panicking if there was an error with the stable log
+- Moved free functions into the ProvisionWorkflow struct
+
 ## [0.7.6] - 2026-01-04
 ### Fixed
 - Resync certified_data from the signature map during post-upgrade.

@@ -60,12 +60,12 @@ macro_rules! canic_endpoints_root {
 
         #[canic_query]
         fn canic_app_registry() -> ::canic::core::dto::topology::AppRegistryView {
-            $crate::api::topology::app_registry()
+            $crate::api::topology::registry::app_registry()
         }
 
         #[canic_query]
         fn canic_subnet_registry() -> ::canic::core::dto::topology::SubnetRegistryView {
-            $crate::api::topology::subnet_registry()
+            $crate::api::topology::registry::subnet_registry()
         }
 
         //

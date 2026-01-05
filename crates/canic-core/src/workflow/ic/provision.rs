@@ -55,157 +55,167 @@ impl From<ProvisionWorkflowError> for Error {
     }
 }
 
-pub fn build_nonroot_init_payload(
-    role: &CanisterRole,
-    parent_pid: Principal,
-) -> Result<CanisterInitPayload, Error> {
-    let env = EnvView {
-        prime_root_pid: Some(EnvOps::prime_root_pid()?),
-        subnet_role: Some(EnvOps::subnet_role()?),
-        subnet_pid: Some(EnvOps::subnet_pid()?),
-        root_pid: Some(EnvOps::root_pid()?),
-        canister_role: Some(role.clone()),
-        parent_pid: Some(parent_pid),
-    };
-
-    let app_directory = AppDirectoryMapper::snapshot_to_view(AppDirectoryOps::snapshot());
-    let subnet_directory = SubnetDirectoryMapper::snapshot_to_view(SubnetDirectoryOps::snapshot());
-
-    Ok(CanisterInitPayload {
-        env,
-        app_directory,
-        subnet_directory,
-    })
-}
-
-//
-// ===========================================================================
-// DIRECTORY SYNC
-// ===========================================================================
-//
-
-/// Rebuild AppDirectory and SubnetDirectory from the registry,
-/// import them directly, and return a builder containing the sections to sync.
 ///
-/// When `updated_role` is provided, only include the sections that list that role.
-pub async fn rebuild_directories_from_registry(
-    updated_role: Option<&CanisterRole>,
-) -> Result<StateSnapshotBuilder, Error> {
-    let cfg = Config::get()?;
-    let subnet_cfg = ConfigOps::current_subnet()?;
+/// ProvisionWorkflow
+///
 
-    let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
-    let include_subnet = updated_role.is_none_or(|role| subnet_cfg.subnet_directory.contains(role));
+pub struct ProvisionWorkflow;
 
-    let mut builder = StateSnapshotBuilder::new()?;
+impl ProvisionWorkflow {
+    pub fn build_nonroot_init_payload(
+        role: &CanisterRole,
+        parent_pid: Principal,
+    ) -> Result<CanisterInitPayload, Error> {
+        let env = EnvView {
+            prime_root_pid: Some(EnvOps::prime_root_pid()?),
+            subnet_role: Some(EnvOps::subnet_role()?),
+            subnet_pid: Some(EnvOps::subnet_pid()?),
+            root_pid: Some(EnvOps::root_pid()?),
+            canister_role: Some(role.clone()),
+            parent_pid: Some(parent_pid),
+        };
 
-    if include_app {
-        let app_snapshot = RootAppDirectoryBuilder::build_from_registry();
-        AppDirectoryOps::import(app_snapshot);
-        builder = builder.with_app_directory();
+        let app_directory = AppDirectoryMapper::snapshot_to_view(AppDirectoryOps::snapshot());
+        let subnet_directory =
+            SubnetDirectoryMapper::snapshot_to_view(SubnetDirectoryOps::snapshot());
+
+        Ok(CanisterInitPayload {
+            env,
+            app_directory,
+            subnet_directory,
+        })
     }
 
-    if include_subnet {
-        let subnet_snapshot = RootSubnetDirectoryBuilder::build_from_registry();
-        SubnetDirectoryOps::import(subnet_snapshot);
-        builder = builder.with_subnet_directory();
-    }
+    //
+    // ===========================================================================
+    // DIRECTORY SYNC
+    // ===========================================================================
+    //
 
-    Ok(builder)
-}
+    /// Rebuild AppDirectory and SubnetDirectory from the registry,
+    /// import them directly, and return a builder containing the sections to sync.
+    ///
+    /// When `updated_role` is provided, only include the sections that list that role.
+    pub async fn rebuild_directories_from_registry(
+        updated_role: Option<&CanisterRole>,
+    ) -> Result<StateSnapshotBuilder, Error> {
+        let cfg = Config::get()?;
+        let subnet_cfg = ConfigOps::current_subnet()?;
 
-//
-// ===========================================================================
-// HIGH-LEVEL FLOW
-// ===========================================================================
-//
+        let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
+        let include_subnet =
+            updated_role.is_none_or(|role| subnet_cfg.subnet_directory.contains(role));
 
-/// Create and install a new canister of the requested type beneath `parent`.
-///
-/// PHASES:
-/// 1. Allocate a canister ID and cycles (preferring the pool)
-/// 2. Install WASM + bootstrap initial state
-/// 3. Register canister in SubnetRegistry
-/// 4. Cascade topology + sync directories
-pub async fn create_and_install_canister(
-    role: &CanisterRole,
-    parent_pid: Principal,
-    extra_arg: Option<Vec<u8>>,
-) -> Result<Principal, Error> {
-    // must have WASM module registered
-    WasmOps::try_get(role)?;
+        let mut builder = StateSnapshotBuilder::new()?;
 
-    // Phase 1: allocation
-    let (pid, source) = allocate_canister(role).await?;
-
-    // Phase 2: installation
-    if install_canister(pid, role, parent_pid, extra_arg)
-        .await
-        .is_err()
-    {
-        if source == AllocationSource::Pool {
-            if let Err(recycle_err) = pool_import_canister(pid).await {
-                log!(
-                    Topic::CanisterPool,
-                    Warn,
-                    "failed to recycle pool canister after install failure: {pid} ({recycle_err})"
-                );
-            }
-        } else if let Err(delete_err) = uninstall_and_delete_canister(pid).await {
-            log!(
-                Topic::CanisterLifecycle,
-                Warn,
-                "failed to delete canister after install failure: {pid} ({delete_err})"
-            );
+        if include_app {
+            let app_snapshot = RootAppDirectoryBuilder::build_from_registry();
+            AppDirectoryOps::import(app_snapshot);
+            builder = builder.with_app_directory();
         }
 
-        return Err(ProvisionWorkflowError::InstallFailed { pid }.into());
+        if include_subnet {
+            let subnet_snapshot = RootSubnetDirectoryBuilder::build_from_registry();
+            SubnetDirectoryOps::import(subnet_snapshot);
+            builder = builder.with_subnet_directory();
+        }
+
+        Ok(builder)
     }
 
-    Ok(pid)
-}
+    //
+    // ===========================================================================
+    // HIGH-LEVEL FLOW
+    // ===========================================================================
+    //
 
-//
-// ===========================================================================
-// DELETION
-// ===========================================================================
-//
+    /// Create and install a new canister of the requested type beneath `parent`.
+    ///
+    /// PHASES:
+    /// 1. Allocate a canister ID and cycles (preferring the pool)
+    /// 2. Install WASM + bootstrap initial state
+    /// 3. Register canister in SubnetRegistry
+    /// 4. Cascade topology + sync directories
+    pub async fn create_and_install_canister(
+        role: &CanisterRole,
+        parent_pid: Principal,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<Principal, Error> {
+        // must have WASM module registered
+        WasmOps::try_get(role)?;
 
-/// Delete an existing canister.
-///
-/// PHASES:
-/// 0. Uninstall code
-/// 1. Delete via management canister
-/// 2. Remove from SubnetRegistry
-/// 3. Cascade topology
-/// 4. Sync directories
-pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
-    env::require_root()?;
+        // Phase 1: allocation
+        let (pid, source) = allocate_canister(role).await?;
 
-    // Phase 0: uninstall code
-    MgmtOps::uninstall_code(pid).await?;
+        // Phase 2: installation
+        if install_canister(pid, role, parent_pid, extra_arg)
+            .await
+            .is_err()
+        {
+            if source == AllocationSource::Pool {
+                if let Err(recycle_err) = pool_import_canister(pid).await {
+                    log!(
+                        Topic::CanisterPool,
+                        Warn,
+                        "failed to recycle pool canister after install failure: {pid} ({recycle_err})"
+                    );
+                }
+            } else if let Err(delete_err) = Self::uninstall_and_delete_canister(pid).await {
+                log!(
+                    Topic::CanisterLifecycle,
+                    Warn,
+                    "failed to delete canister after install failure: {pid} ({delete_err})"
+                );
+            }
 
-    // Phase 1: delete the canister
-    MgmtOps::delete_canister(pid).await?;
+            return Err(ProvisionWorkflowError::InstallFailed { pid }.into());
+        }
 
-    // Phase 2: remove registry record
-    let removed_entry = SubnetRegistryOps::remove(&pid);
-    match &removed_entry {
-        Some(c) => log!(
-            Topic::CanisterLifecycle,
-            Ok,
-            "🗑️ delete_canister: {} ({})",
-            pid,
-            c.role
-        ),
-        None => log!(
-            Topic::CanisterLifecycle,
-            Warn,
-            "🗑️ delete_canister: {pid} not in registry"
-        ),
+        Ok(pid)
     }
 
-    Ok(())
+    //
+    // ===========================================================================
+    // DELETION
+    // ===========================================================================
+    //
+
+    /// Delete an existing canister.
+    ///
+    /// PHASES:
+    /// 0. Uninstall code
+    /// 1. Delete via management canister
+    /// 2. Remove from SubnetRegistry
+    /// 3. Cascade topology
+    /// 4. Sync directories
+    pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
+        env::require_root()?;
+
+        // Phase 0: uninstall code
+        MgmtOps::uninstall_code(pid).await?;
+
+        // Phase 1: delete the canister
+        MgmtOps::delete_canister(pid).await?;
+
+        // Phase 2: remove registry record
+        let removed_entry = SubnetRegistryOps::remove(&pid);
+        match &removed_entry {
+            Some(c) => log!(
+                Topic::CanisterLifecycle,
+                Ok,
+                "🗑️ delete_canister: {} ({})",
+                pid,
+                c.role
+            ),
+            None => log!(
+                Topic::CanisterLifecycle,
+                Warn,
+                "🗑️ delete_canister: {pid} not in registry"
+            ),
+        }
+
+        Ok(())
+    }
 }
 
 //
@@ -307,7 +317,7 @@ async fn install_canister(
     // Fetch and register WASM
     let wasm = WasmOps::try_get(role)?;
 
-    let payload = build_nonroot_init_payload(role, parent_pid)?;
+    let payload = ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid)?;
     let module_hash = wasm.module_hash();
 
     // Register before install so init hooks can observe the registry; roll back on failure.

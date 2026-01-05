@@ -83,7 +83,7 @@ macro_rules! log {
 
             // append entry
             let crate_name = env!("CARGO_PKG_NAME");
-            let _ = $crate::log::__append_runtime_log(crate_name, topic_opt, level, &message);
+            $crate::log::__append_runtime_log(crate_name, topic_opt, level, &message);
 
             let ty_raw = $crate::log::__canister_role_string().unwrap_or_else(|| "...".to_string());
 
@@ -114,20 +114,20 @@ macro_rules! log {
 
 ///
 /// Helpers
+/// (should remain public)
 ///
 
-#[doc(hidden)]
-pub(crate) fn __append_runtime_log(
-    crate_name: &str,
-    topic: Option<&str>,
-    level: Level,
-    message: &str,
-) -> Result<u64, crate::Error> {
-    LogOps::append_runtime_log(crate_name, topic, level, message)
+pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level, message: &str) {
+    if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message) {
+        {
+            #[cfg(debug_assertions)]
+            crate::cdk::println!("log append failed: {err}");
+        }
+    }
 }
 
 #[doc(hidden)]
 #[must_use]
-pub(crate) fn __canister_role_string() -> Option<String> {
+pub fn __canister_role_string() -> Option<String> {
     Env::get_canister_role().map(|role| role.to_string())
 }

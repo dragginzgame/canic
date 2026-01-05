@@ -58,6 +58,14 @@ impl AppDirectoryOps {
     // -------------------------------------------------------------
 
     #[must_use]
+    pub fn get(role: &CanisterRole) -> Option<Principal> {
+        AppDirectory::export()
+            .entries
+            .iter()
+            .find_map(|(r, pid)| (r == role).then_some(*pid))
+    }
+
+    #[must_use]
     pub fn matches(role: &CanisterRole, caller: Principal) -> bool {
         AppDirectory::export()
             .entries
