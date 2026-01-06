@@ -55,6 +55,32 @@ macro_rules! canic_endpoints_root {
         }
 
         //
+        // BOOTSTRAP
+        //
+
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
+        async fn canic_root_create_canisters() -> Result<(), ::canic::PublicError> {
+            $crate::api::bootstrap::RootBootstrapApi::create_canisters().await
+        }
+
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
+        async fn canic_root_import_pool_from_config() -> Result<(), ::canic::PublicError> {
+            $crate::api::bootstrap::RootBootstrapApi::import_pool_from_config().await
+        }
+
+        #[canic_update(auth_any(::canic::core::access::auth::is_controller))]
+        async fn canic_root_rebuild_directories_from_registry() -> Result<(), ::canic::PublicError>
+        {
+            $crate::api::bootstrap::RootBootstrapApi::rebuild_directories_from_registry()
+        }
+
+        #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
+        async fn canic_root_validate_state()
+        -> Result<::canic::core::dto::validation::ValidationReport, PublicError> {
+            Ok($crate::api::bootstrap::RootBootstrapApi::validate_state())
+        }
+
+        //
         // REGISTRIES
         //
 

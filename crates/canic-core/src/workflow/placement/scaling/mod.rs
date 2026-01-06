@@ -7,6 +7,9 @@
 //!
 //! All async and IC interactions live here.
 
+pub mod mapper;
+pub mod query;
+
 use crate::{
     Error, ThisError,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
@@ -16,11 +19,12 @@ use crate::{
         rpc::request::RequestOps,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
-    workflow::{placement::PlacementError, prelude::*},
+    workflow::{placement::PlacementWorkflowError, prelude::*},
 };
 
 ///
 /// ScalingWorkflowError
+///
 /// Errors raised during scaling execution
 ///
 
@@ -32,7 +36,7 @@ pub enum ScalingWorkflowError {
 
 impl From<ScalingWorkflowError> for Error {
     fn from(err: ScalingWorkflowError) -> Self {
-        PlacementError::Scaling(err).into()
+        PlacementWorkflowError::Scaling(err).into()
     }
 }
 

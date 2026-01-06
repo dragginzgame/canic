@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.11] - 2026-01-05
+- Refactored sharding placement into a pure, deterministic policy operating on explicit state snapshots, with all configuration registry access, and side effects moved into query/workflow layers.
+- Updated root hierarchy tests to use explicit root install helpers and improved bootstrap reliability.
 
 ## [0.7.10] - 2026-01-04
 - moved api instrumentation to access/

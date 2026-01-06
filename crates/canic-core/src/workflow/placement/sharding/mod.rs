@@ -1,20 +1,57 @@
 //! Async orchestration layer for sharding.
 //!
-//! Handles tenant assignment, shard creation, and draining.
-//! Depends on [`policy`] for validation and [`registry`] for state.
+//! Responsibilities:
+//! - assemble sharding state (config + registry + metrics)
+//! - delegate decisions to policy
+//! - execute side effects (canister creation, registry mutation)
+//!
+//! This layer contains NO policy logic.
+
+pub mod mapper;
+pub mod query;
 
 use crate::{
-    Error,
+    Error, ThisError,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::placement::sharding::{
-        ShardingPolicyError,
-        metrics::pool_metrics,
-        policy::{ShardingPlanState, ShardingPolicy},
+        CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
     },
-    dto::{placement::ShardingPlanStateView, rpc::CreateCanisterParent},
-    ops::{rpc::request::RequestOps, storage::placement::sharding::ShardingRegistryOps},
-    workflow::{placement::mapper::PlacementMapper, prelude::*},
+    dto::{placement::sharding::ShardingPlanStateView, rpc::CreateCanisterParent},
+    ops::{
+        config::ConfigOps,
+        rpc::request::RequestOps,
+        storage::placement::sharding::{ShardingRegistryOps, ShardingRegistryOpsError},
+    },
+    workflow::{
+        placement::{PlacementWorkflowError, sharding::mapper::ShardingMapper},
+        prelude::*,
+    },
 };
+
+///
+/// ShardingWorkflowError
+///
+
+#[derive(Debug, ThisError)]
+pub enum ShardingWorkflowError {
+    /// Policy rejected the operation (expected outcome).
+    #[error(transparent)]
+    Policy(#[from] ShardingPolicyError),
+
+    /// Registry mutation failed (storage invariant violation).
+    #[error(transparent)]
+    Registry(#[from] ShardingRegistryOpsError),
+
+    /// Policy returned an internally inconsistent plan.
+    #[error("invariant violation: {0}")]
+    Invariant(&'static str),
+}
+
+impl From<ShardingWorkflowError> for Error {
+    fn from(err: ShardingWorkflowError) -> Self {
+        PlacementWorkflowError::Sharding(err).into()
+    }
+}
 
 ///
 /// ShardAllocator
@@ -24,31 +61,27 @@ use crate::{
 pub struct ShardAllocator;
 
 impl ShardAllocator {
-    /// Create a new shard in the given pool if policy allows.
-    pub async fn allocate(
+    /// Create and register a new shard.
+    ///
+    /// Assumes policy has already approved creation.
+    async fn allocate(
         pool: &str,
         slot: u32,
         canister_role: &CanisterRole,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
-        let metrics = pool_metrics(pool);
-        if !ShardingPolicy::can_create(&metrics, policy) {
-            return Err(ShardingPolicyError::ShardCreationBlocked(format!(
-                "shard cap reached for pool {pool}"
-            ))
-            .into());
-        }
-
         let response = RequestOps::create_canister::<Vec<u8>>(
             canister_role,
             CreateCanisterParent::ThisCanister,
             extra_arg,
         )
         .await?;
+
         let pid = response.new_canister_pid;
 
         ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity)?;
+
         log!(
             Topic::Sharding,
             Ok,
@@ -83,7 +116,7 @@ impl ShardingWorkflow {
         .await
     }
 
-    /// Assign a tenant according to pool policy and HRW selection.
+    /// Assign a tenant according to policy and HRW selection.
     pub(crate) async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
@@ -91,14 +124,42 @@ impl ShardingWorkflow {
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, Error> {
-        // Step 1: Determine plan via HRW-based policy
-        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
+        // ---------------------------------------------------------------------
+        // Assemble state
+        // ---------------------------------------------------------------------
+
+        let registry = ShardingRegistryOps::export();
+
+        let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
+            pool,
+            &registry.entries,
+        );
+
+        let assignments = ShardingRegistryOps::assignments_for_pool(pool);
+
+        let state = ShardingState {
+            pool,
+            config: ShardPool {
+                canister_role: canister_role.clone(),
+                policy: policy.clone(),
+            },
+            metrics: &metrics,
+            entries: &registry.entries,
+            assignments: &assignments,
+        };
+
+        // ---------------------------------------------------------------------
+        // Policy decision
+        // ---------------------------------------------------------------------
+
+        let plan = ShardingPolicy::plan_assign(&state, tenant, None);
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
                 let slot = plan
                     .target_slot
                     .or_else(|| ShardingRegistryOps::slot_for_shard(pool, pid));
+
                 log!(
                     Topic::Sharding,
                     Info,
@@ -110,9 +171,11 @@ impl ShardingWorkflow {
 
             ShardingPlanState::UseExisting { pid } => {
                 ShardingRegistryOps::assign(pool, tenant, pid)?;
+
                 let slot = plan
                     .target_slot
                     .or_else(|| ShardingRegistryOps::slot_for_shard(pool, pid));
+
                 log!(
                     Topic::Sharding,
                     Info,
@@ -123,14 +186,17 @@ impl ShardingWorkflow {
             }
 
             ShardingPlanState::CreateAllowed => {
-                let slot = plan.target_slot.ok_or_else(|| {
-                    ShardingPolicyError::ShardCreationBlocked(
-                        "missing target slot in allocation plan".into(),
+                let slot = plan.target_slot.ok_or({
+                    ShardingWorkflowError::Invariant(
+                        "sharding policy allowed creation but returned no slot",
                     )
                 })?;
+
                 let pid =
                     ShardAllocator::allocate(pool, slot, canister_role, &policy, extra_arg).await?;
+
                 ShardingRegistryOps::assign(pool, tenant, pid)?;
+
                 log!(
                     Topic::Sharding,
                     Ok,
@@ -140,9 +206,7 @@ impl ShardingWorkflow {
                 Ok(pid)
             }
 
-            ShardingPlanState::CreateBlocked { reason } => {
-                Err(ShardingPolicyError::ShardCreationBlocked(reason.to_string()).into())
-            }
+            ShardingPlanState::CreateBlocked { reason } => Err(Self::blocked(reason, pool, tenant)),
         }
     }
 
@@ -151,14 +215,55 @@ impl ShardingWorkflow {
         pool: &str,
         tenant: impl AsRef<str>,
     ) -> Result<ShardingPlanStateView, Error> {
-        let plan = ShardingPolicy::plan_assign_to_pool(pool, tenant)?;
+        let registry = ShardingRegistryOps::export();
 
-        Ok(PlacementMapper::sharding_plan_state_to_view(plan.state))
+        let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
+            pool,
+            &registry.entries,
+        );
+
+        let assignments = ShardingRegistryOps::assignments_for_pool(pool);
+
+        let pool_cfg = Self::get_shard_pool_cfg(pool)?;
+
+        let state = ShardingState {
+            pool,
+            config: pool_cfg,
+            metrics: &metrics,
+            entries: &registry.entries,
+            assignments: &assignments,
+        };
+
+        let plan = ShardingPolicy::plan_assign(&state, tenant.as_ref(), None);
+
+        Ok(ShardingMapper::sharding_plan_state_to_view(plan.state))
     }
 
-    /// Internal: fetch shard pool config for the current canister.
+    /// Convert a policy block reason into an error.
+    fn blocked(reason: CreateBlockedReason, pool: &str, tenant: &str) -> Error {
+        let msg = match reason {
+            CreateBlockedReason::PoolAtCapacity => format!("shard pool '{pool}' is at capacity"),
+            CreateBlockedReason::NoFreeSlots => format!("no free shard slots in pool '{pool}'"),
+            CreateBlockedReason::PolicyViolation(msg) => msg,
+        };
+
+        ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked(format!(
+            "tenant '{tenant}' assignment blocked: {msg}"
+        )))
+        .into()
+    }
+
+    /// Fetch shard pool configuration for the current canister.
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
-        ShardingPolicy::get_pool_config(pool)
+        let cfg = ConfigOps::current_canister()?;
+        let sharding = cfg.sharding.ok_or(ShardingPolicyError::ShardingDisabled)?;
+
+        sharding
+            .pools
+            .get(pool)
+            .cloned()
+            .ok_or_else(|| ShardingPolicyError::PoolNotFound(pool.to_string()))
+            .map_err(Error::from)
     }
 }
 
@@ -170,9 +275,9 @@ impl ShardingWorkflow {
 mod tests {
     use super::*;
     use crate::{
-        config::Config, ids::CanisterRole, ops::storage::placement::sharding::ShardingRegistryOps,
+        cdk::candid::Principal, config::Config, ids::CanisterRole,
+        ops::storage::placement::sharding::ShardingRegistryOps,
     };
-    use candid::Principal;
     use futures::executor::block_on;
 
     fn p(id: u8) -> Principal {

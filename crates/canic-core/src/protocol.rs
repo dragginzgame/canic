@@ -9,6 +9,11 @@ pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_RESPONSE: &str = "canic_response";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
+pub const CANIC_ROOT_CREATE_CANISTERS: &str = "canic_root_create_canisters";
+pub const CANIC_ROOT_IMPORT_POOL_FROM_CONFIG: &str = "canic_root_import_pool_from_config";
+pub const CANIC_ROOT_REBUILD_DIRECTORIES_FROM_REGISTRY: &str =
+    "canic_root_rebuild_directories_from_registry";
+pub const CANIC_ROOT_VALIDATE_STATE: &str = "canic_root_validate_state";
 pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";

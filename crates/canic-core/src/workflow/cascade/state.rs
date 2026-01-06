@@ -23,7 +23,7 @@ use crate::{
     },
     workflow::{
         cascade::{
-            CascadeError,
+            CascadeWorkflowError,
             snapshot::{
                 StateSnapshot, adapter::state_snapshot_from_view, state_snapshot_debug,
                 state_snapshot_is_empty,
@@ -188,6 +188,6 @@ impl StateCascadeWorkflow {
 
         CascadeOps::send_state_snapshot(pid, &view)
             .await
-            .map_err(|_| CascadeError::ChildRejected(pid).into())
+            .map_err(|_| CascadeWorkflowError::ChildRejected(pid).into())
     }
 }

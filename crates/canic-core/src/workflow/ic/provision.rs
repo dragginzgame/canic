@@ -96,8 +96,9 @@ impl ProvisionWorkflow {
     pub fn rebuild_directories_from_registry(
         updated_role: Option<&CanisterRole>,
     ) -> Result<StateSnapshotBuilder, Error> {
-        let cfg = Config::get()?;
+        let cfg = ConfigOps::get()?;
         let subnet_cfg = ConfigOps::current_subnet()?;
+        let registry = SubnetRegistryOps::snapshot();
 
         let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
         let include_subnet =
@@ -106,13 +107,16 @@ impl ProvisionWorkflow {
         let mut builder = StateSnapshotBuilder::new()?;
 
         if include_app {
-            let app_snapshot = RootAppDirectoryBuilder::build_from_registry();
+            let app_snapshot = RootAppDirectoryBuilder::build(&registry, &cfg.app_directory);
+
             AppDirectoryOps::import(app_snapshot);
             builder = builder.with_app_directory();
         }
 
         if include_subnet {
-            let subnet_snapshot = RootSubnetDirectoryBuilder::build_from_registry();
+            let subnet_snapshot =
+                RootSubnetDirectoryBuilder::build(&registry, &subnet_cfg.subnet_directory);
+
             SubnetDirectoryOps::import(subnet_snapshot);
             builder = builder.with_subnet_directory();
         }

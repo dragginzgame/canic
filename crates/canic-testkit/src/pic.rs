@@ -1,6 +1,7 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     PublicError,
+    cdk::types::TC,
     core::{
         dto::{
             abi::v1::CanisterInitPayload,
@@ -14,6 +15,8 @@ use canic::{
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
+
+const INSTALL_CYCLES: u128 = 500 * TC;
 
 ///
 /// Create a fresh PocketIC universe.
@@ -79,6 +82,16 @@ impl PicBuilder {
 pub struct Pic(PocketIc);
 
 impl Pic {
+    /// Install a root canister with the default root init arguments.
+    pub fn create_and_install_root_canister(
+        &self,
+        wasm: Vec<u8>,
+    ) -> Result<Principal, PublicError> {
+        let init_bytes = install_root_args()?;
+
+        Ok(self.create_funded_and_install(wasm, init_bytes))
+    }
+
     /// Install a canister with the given type and wasm bytes.
     ///
     /// Install failures are treated as fatal in tests.
@@ -87,15 +100,9 @@ impl Pic {
         role: CanisterRole,
         wasm: Vec<u8>,
     ) -> Result<Principal, PublicError> {
-        // Create and fund the canister.
-        let canister_id = self.create_canister();
-        self.add_cycles(canister_id, 1_000_000_000_000);
-
-        // Install with deterministic init arguments.
         let init_bytes = install_args(role)?;
-        self.0.install_canister(canister_id, wasm, init_bytes, None);
 
-        Ok(canister_id)
+        Ok(self.create_funded_and_install(wasm, init_bytes))
     }
 
     /// Install a canister with a custom directory snapshot (local-only helper).
@@ -109,13 +116,17 @@ impl Pic {
         app_directory: AppDirectoryView,
         subnet_directory: SubnetDirectoryView,
     ) -> Result<Principal, PublicError> {
-        let canister_id = self.create_canister();
-        self.add_cycles(canister_id, 1_000_000_000_000);
-
         let init_bytes = install_args_with_directories(role, app_directory, subnet_directory)?;
+
+        Ok(self.create_funded_and_install(wasm, init_bytes))
+    }
+
+    fn create_funded_and_install(&self, wasm: Vec<u8>, init_bytes: Vec<u8>) -> Principal {
+        let canister_id = self.create_canister();
+        self.add_cycles(canister_id, INSTALL_CYCLES);
         self.0.install_canister(canister_id, wasm, init_bytes, None);
 
-        Ok(canister_id)
+        canister_id
     }
 
     /// Generic update call helper (serializes args + decodes result).
@@ -246,10 +257,7 @@ impl Pic {
 ///
 fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
     if role.is_root() {
-        // Root canister in standalone / test mode.
-        // Manual means: do not attempt subnet discovery.
-        encode_one(SubnetIdentity::Manual)
-            .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
+        install_root_args()
     } else {
         // Non-root standalone install.
         // Provide only what is structurally known at install time.
@@ -273,6 +281,11 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
             .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
     }
+}
+
+fn install_root_args() -> Result<Vec<u8>, PublicError> {
+    encode_one(SubnetIdentity::Manual)
+        .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
 }
 
 fn install_args_with_directories(

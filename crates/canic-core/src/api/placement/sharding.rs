@@ -1,10 +1,10 @@
 use crate::{
-    PublicError, cdk::types::Principal, dto::placement::ShardingPlanStateView,
+    PublicError, cdk::types::Principal, dto::placement::sharding::ShardingPlanStateView,
     workflow::placement::sharding::ShardingWorkflow,
 };
 
 // Workflow Query Re-export
-pub use crate::workflow::placement::query::ShardingQuery;
+pub use crate::workflow::placement::sharding::query::ShardingQuery;
 
 ///
 /// ShardingApi

@@ -1,8 +1,8 @@
 use crate::{
     PublicError,
     cdk::types::Principal,
-    dto::placement::ScalingRegistryView,
-    workflow::placement::{query::ScalingQuery, scaling::ScalingWorkflow},
+    dto::placement::scaling::ScalingRegistryView,
+    workflow::placement::scaling::{ScalingWorkflow, query::ScalingQuery},
 };
 
 ///

@@ -14,7 +14,6 @@ use crate::{
 pub struct ShardingRegistryData {
     pub entries: Vec<(Principal, ShardEntry)>,
 }
-
 ///
 /// ShardingRegistry
 ///
@@ -91,7 +90,11 @@ impl ShardingRegistry {
         })
     }
 
-    /// Exports all shard entries (for inspection or snapshot purposes).
+    /// Exports all shard entries (structural data only).
+    ///
+    /// NOTE:
+    /// - Assignments are intentionally excluded.
+    /// - Tenant → shard mappings are unbounded and must be queried explicitly.
     #[must_use]
     pub(crate) fn export() -> ShardingRegistryData {
         ShardingRegistryData {

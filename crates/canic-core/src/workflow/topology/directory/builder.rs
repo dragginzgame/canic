@@ -1,10 +1,11 @@
 use crate::{
-    domain::policy::topology::TopologyPolicy,
+    ids::CanisterRole,
     ops::storage::{
         directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
-        registry::subnet::SubnetRegistryOps,
+        registry::subnet::SubnetRegistrySnapshot,
     },
 };
+use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// RootAppDirectoryBuilder
@@ -14,11 +15,23 @@ pub struct RootAppDirectoryBuilder;
 
 impl RootAppDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> AppDirectorySnapshot {
-        let registry = SubnetRegistryOps::snapshot();
-        TopologyPolicy::app_directory_from_registry(&registry)
+    pub fn build(
+        registry: &SubnetRegistrySnapshot,
+        app_roles: &BTreeSet<CanisterRole>,
+    ) -> AppDirectorySnapshot {
+        let entries = registry
+            .entries
+            .iter()
+            .filter(|(_, entry)| app_roles.contains(&entry.role))
+            .map(|(pid, entry)| (entry.role.clone(), *pid))
+            .collect::<BTreeMap<_, _>>();
+
+        AppDirectorySnapshot {
+            entries: entries.into_iter().collect(),
+        }
     }
 }
+
 ///
 /// RootSubnetDirectoryBuilder
 ///
@@ -27,8 +40,19 @@ pub struct RootSubnetDirectoryBuilder;
 
 impl RootSubnetDirectoryBuilder {
     #[must_use]
-    pub fn build_from_registry() -> SubnetDirectorySnapshot {
-        let registry = SubnetRegistryOps::snapshot();
-        TopologyPolicy::subnet_directory_from_registry(&registry)
+    pub fn build(
+        registry: &SubnetRegistrySnapshot,
+        subnet_roles: &BTreeSet<CanisterRole>,
+    ) -> SubnetDirectorySnapshot {
+        let entries = registry
+            .entries
+            .iter()
+            .filter(|(_, entry)| subnet_roles.contains(&entry.role))
+            .map(|(pid, entry)| (entry.role.clone(), *pid))
+            .collect::<BTreeMap<_, _>>();
+
+        SubnetDirectorySnapshot {
+            entries: entries.into_iter().collect(),
+        }
     }
 }

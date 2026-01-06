@@ -42,11 +42,11 @@ pub enum WorkflowError {
     Bootstrap(#[from] bootstrap::BootstrapError),
 
     #[error(transparent)]
-    Cascade(#[from] cascade::CascadeError),
+    Cascade(#[from] cascade::CascadeWorkflowError),
 
     #[error(transparent)]
     Ic(#[from] ic::IcWorkflowError),
 
     #[error(transparent)]
-    Placement(#[from] placement::PlacementError),
+    Placement(#[from] placement::PlacementWorkflowError),
 }
