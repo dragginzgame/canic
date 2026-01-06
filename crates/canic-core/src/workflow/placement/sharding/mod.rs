@@ -19,6 +19,7 @@ use crate::{
     dto::{placement::sharding::ShardingPlanStateView, rpc::CreateCanisterParent},
     ops::{
         config::ConfigOps,
+        ic::runtime::now_secs,
         rpc::request::RequestOps,
         storage::placement::sharding::{ShardingRegistryOps, ShardingRegistryOpsError},
     },
@@ -80,7 +81,8 @@ impl ShardAllocator {
 
         let pid = response.new_canister_pid;
 
-        ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity)?;
+        let created_at = now_secs();
+        ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity, created_at)?;
 
         log!(
             Topic::Sharding,
@@ -292,8 +294,9 @@ mod tests {
 
         let shard = p(1);
         let role = CanisterRole::from("shard");
+        let created_at = 0;
 
-        ShardingRegistryOps::create(shard, "primary", 0, &role, 1).unwrap();
+        ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
         ShardingRegistryOps::assign("primary", "tenant-a", shard).unwrap();
 
         let pid = block_on(ShardingWorkflow::assign_to_pool("primary", "tenant-a")).unwrap();
@@ -309,8 +312,9 @@ mod tests {
 
         let shard = p(1);
         let role = CanisterRole::from("shard");
+        let created_at = 0;
 
-        ShardingRegistryOps::create(shard, "primary", 0, &role, 2).unwrap();
+        ShardingRegistryOps::create(shard, "primary", 0, &role, 2, created_at).unwrap();
 
         let pid = block_on(ShardingWorkflow::assign_to_pool("primary", "tenant-x")).unwrap();
 
@@ -331,9 +335,10 @@ mod tests {
 
         let shard_a = p(1);
         let shard_b = p(2);
+        let created_at = 0;
 
-        ShardingRegistryOps::create(shard_a, "primary", 0, &role, 1).unwrap();
-        ShardingRegistryOps::create(shard_b, "primary", 1, &role, 1).unwrap();
+        ShardingRegistryOps::create(shard_a, "primary", 0, &role, 1, created_at).unwrap();
+        ShardingRegistryOps::create(shard_b, "primary", 1, &role, 1, created_at).unwrap();
 
         ShardingRegistryOps::assign("primary", "a", shard_a).unwrap();
         ShardingRegistryOps::assign("primary", "b", shard_b).unwrap();

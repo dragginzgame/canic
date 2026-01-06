@@ -1,16 +1,16 @@
-//! Policy layer for scaling worker pools.
-//!
-//! Scaling builds on top of the scaling registry and configuration entries
-//! under `[canisters.<type>.scaling]`. This module is PURE policy:
+//! This module is PURE policy:
 //! - reads config
-//! - reads registry
+//! - evaluates observed state
 //! - computes decisions
 //!
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    Error, ThisError, cdk::types::BoundedString64, config::schema::ScalePool,
-    domain::policy::PolicyError, ids::CanisterRole, ops::config::ConfigOps,
+    Error, ThisError,
+    cdk::types::BoundedString64,
+    config::schema::{ScalePool, ScalingConfig},
+    domain::policy::PolicyError,
+    ids::CanisterRole,
 };
 
 ///
@@ -62,8 +62,12 @@ pub struct ScalingPolicy;
 
 impl ScalingPolicy {
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn plan_create_worker(pool: &str, worker_count: u32) -> Result<ScalingPlan, Error> {
-        let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
+    pub(crate) fn plan_create_worker(
+        pool: &str,
+        worker_count: u32,
+        scaling: Option<ScalingConfig>,
+    ) -> Result<ScalingPlan, Error> {
+        let pool_cfg = Self::get_scaling_pool_cfg(pool, scaling)?;
         let policy = pool_cfg.policy;
 
         // Max bound check
@@ -105,8 +109,11 @@ impl ScalingPolicy {
         })
     }
 
-    fn get_scaling_pool_cfg(pool: &str) -> Result<ScalePool, Error> {
-        let Some(scaling) = ConfigOps::current_scaling_config()? else {
+    fn get_scaling_pool_cfg(
+        pool: &str,
+        scaling: Option<ScalingConfig>,
+    ) -> Result<ScalePool, Error> {
+        let Some(scaling) = scaling else {
             return Err(ScalingPolicyError::ScalingDisabled.into());
         };
 

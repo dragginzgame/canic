@@ -2,7 +2,6 @@ pub use crate::storage::stable::sharding::ShardKey;
 
 use crate::{
     Error, ThisError,
-    cdk::utils::time::now_secs,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
         ShardEntry as ModelShardEntry,
@@ -91,6 +90,7 @@ impl ShardingRegistryOps {
         slot: u32,
         canister_role: &CanisterRole,
         capacity: u32,
+        created_at: u64,
     ) -> Result<(), Error> {
         ShardingRegistry::with_mut(|core| {
             if slot != ShardEntry::UNASSIGNED_SLOT {
@@ -110,7 +110,7 @@ impl ShardingRegistryOps {
             }
 
             let entry =
-                ModelShardEntry::try_new(pool, slot, canister_role.clone(), capacity, now_secs())
+                ModelShardEntry::try_new(pool, slot, canister_role.clone(), capacity, created_at)
                     .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
@@ -255,8 +255,9 @@ mod tests {
         ShardingRegistryOps::clear_for_test();
         let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
+        let created_at = 0;
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, created_at).unwrap();
         ShardingRegistryOps::assign("poolA", "tenant1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);

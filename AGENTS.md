@@ -219,10 +219,9 @@ Ops **may** perform **single-step platform side effects** when acting as the
 
 Constraints:
 
-* ops must remain **single-step**
+* ops must remain single-step and must not perform multi-step orchestration
 * ops must not encode **business meaning**
-* ops must not perform **multi-step orchestration**
-* ops must not loop, retry, or branch on policy
+* ops must not loop in a way that encodes retries, orchestration, or time-dependent behavior.
 * ops must not decide *whether* an action should occur
 
 Ops must not:
@@ -248,10 +247,12 @@ Policy:
 * answers “can we?” / “should we?”
 * policy decides, but never acts and never serializes.
 
+Policy must not directly observe runtime state or call storage/registry ops.
+
 Allowed:
 
 * reading config
-* reading state via ops
+* evaluating observed state passed in as parameters
 * deterministic computation
 
 Forbidden:
@@ -406,6 +407,7 @@ Macros must:
 * remain thin
 * contain no async logic
 * schedule async hooks using timers (`Duration::ZERO`)
+* must not call policy or ops directly.
 
 ---
 

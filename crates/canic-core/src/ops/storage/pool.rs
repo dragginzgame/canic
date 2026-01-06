@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    cdk::utils::time::now_secs,
     ops::prelude::*,
     storage::stable::pool::{
         PoolData, PoolRecord, PoolRecordState, PoolStatus as ModelPoolStatus, PoolStore,
@@ -78,6 +77,7 @@ impl PoolOps {
         role: Option<CanisterRole>,
         parent: Option<Principal>,
         module_hash: Option<Vec<u8>>,
+        created_at: u64,
     ) {
         PoolStore::register(
             pid,
@@ -86,7 +86,7 @@ impl PoolOps {
             role,
             parent,
             module_hash,
-            now_secs(),
+            created_at,
         );
     }
 
@@ -94,15 +94,21 @@ impl PoolOps {
     // State transitions
     // ---------------------------------------------------------------
 
-    pub fn mark_pending_reset(pid: Principal) {
-        Self::register_or_update_state(pid, Cycles::default(), PoolStatus::PendingReset, None);
+    pub fn mark_pending_reset(pid: Principal, created_at: u64) {
+        Self::register_or_update_state(
+            pid,
+            Cycles::default(),
+            PoolStatus::PendingReset,
+            None,
+            created_at,
+        );
     }
 
-    pub fn mark_ready(pid: Principal, cycles: Cycles) {
-        Self::register_or_update_state(pid, cycles, PoolStatus::Ready, None);
+    pub fn mark_ready(pid: Principal, cycles: Cycles, created_at: u64) {
+        Self::register_or_update_state(pid, cycles, PoolStatus::Ready, None, created_at);
     }
 
-    pub fn mark_failed(pid: Principal, err: &Error) {
+    pub fn mark_failed(pid: Principal, err: &Error, created_at: u64) {
         Self::register_or_update_state(
             pid,
             Cycles::default(),
@@ -110,6 +116,7 @@ impl PoolOps {
                 reason: err.to_string(),
             },
             None,
+            created_at,
         );
     }
 
@@ -148,6 +155,7 @@ impl PoolOps {
         cycles: Cycles,
         status: PoolStatus,
         role: Option<CanisterRole>,
+        created_at: u64,
     ) {
         let model_status = status_to_model(&status);
         let updated = PoolStore::update_state_with(pid, |mut state: PoolRecordState| {
@@ -162,7 +170,7 @@ impl PoolOps {
         });
 
         if !updated {
-            PoolStore::register(pid, cycles, model_status, role, None, None, now_secs());
+            PoolStore::register(pid, cycles, model_status, role, None, None, created_at);
         }
     }
 }

@@ -17,6 +17,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::mgmt::{CanisterInstallMode, MgmtOps},
+        ic::runtime::now_secs,
         runtime::{env::EnvOps, wasm::WasmOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -331,7 +332,8 @@ async fn install_canister(
         &canister_cfg,
     )
     .map_err(Error::from)?;
-    SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone())
+    let created_at = now_secs();
+    SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)
         .map_err(Error::from)?;
 
     if let Err(err) = MgmtOps::install_canister_with_payload(

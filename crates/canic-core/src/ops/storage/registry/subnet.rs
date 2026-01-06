@@ -1,6 +1,5 @@
 use crate::{
     Error, ThisError,
-    cdk::utils::time::now_secs,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
@@ -161,6 +160,7 @@ impl SubnetRegistryOps {
         role: &CanisterRole,
         parent_pid: Principal,
         module_hash: Vec<u8>,
+        created_at: u64,
     ) -> Result<(), SubnetRegistryOpsError> {
         if SubnetRegistry::get(pid).is_some() {
             return Err(SubnetRegistryOpsError::AlreadyRegistered(pid));
@@ -170,7 +170,6 @@ impl SubnetRegistryOps {
             return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid));
         }
 
-        let created_at = now_secs();
         SubnetRegistry::register(pid, role, parent_pid, module_hash, created_at);
 
         Ok(())
@@ -181,8 +180,7 @@ impl SubnetRegistryOps {
     }
 
     /// Register the root canister entry without policy gating.
-    pub fn register_root(pid: Principal) {
-        let created_at = now_secs();
+    pub fn register_root(pid: Principal, created_at: u64) {
         SubnetRegistry::register_root(pid, created_at);
     }
 
