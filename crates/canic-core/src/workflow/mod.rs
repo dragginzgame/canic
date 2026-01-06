@@ -49,4 +49,7 @@ pub enum WorkflowError {
 
     #[error(transparent)]
     Placement(#[from] placement::PlacementWorkflowError),
+
+    #[error(transparent)]
+    Topology(#[from] topology::TopologyWorkflowError),
 }

@@ -241,15 +241,11 @@ impl ShardingWorkflow {
 
     /// Convert a policy block reason into an error.
     fn blocked(reason: CreateBlockedReason, pool: &str, tenant: &str) -> Error {
-        let msg = match reason {
-            CreateBlockedReason::PoolAtCapacity => format!("shard pool '{pool}' is at capacity"),
-            CreateBlockedReason::NoFreeSlots => format!("no free shard slots in pool '{pool}'"),
-            CreateBlockedReason::PolicyViolation(msg) => msg,
-        };
-
-        ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked(format!(
-            "tenant '{tenant}' assignment blocked: {msg}"
-        )))
+        ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
+            reason,
+            tenant: tenant.to_string(),
+            pool: pool.to_string(),
+        })
         .into()
     }
 
@@ -344,10 +340,24 @@ mod tests {
 
         let err = block_on(ShardingWorkflow::assign_to_pool("primary", "c")).unwrap_err();
 
-        let msg = err.to_string();
+        let reason = match err {
+            crate::Error::Workflow(crate::workflow::WorkflowError::Placement(
+                crate::workflow::placement::PlacementWorkflowError::Sharding(
+                    ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
+                        reason,
+                        ..
+                    }),
+                ),
+            )) => reason,
+            other => panic!("unexpected error: {other:?}"),
+        };
+
         assert!(
-            msg.contains("no free slots") || msg.contains("shard cap reached"),
-            "unexpected error: {msg}"
+            matches!(
+                reason,
+                CreateBlockedReason::NoFreeSlots | CreateBlockedReason::PoolAtCapacity
+            ),
+            "unexpected block reason: {reason:?}"
         );
     }
 }

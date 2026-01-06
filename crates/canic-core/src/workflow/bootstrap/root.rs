@@ -26,26 +26,10 @@ use crate::{
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::PoolWorkflow,
         prelude::*,
+        topology::guard::TopologyGuard,
     },
 };
-use std::{cell::Cell, collections::BTreeMap};
-
-///
-/// BootstrapPhase
-///
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum BootstrapPhase {
-    NotStarted,
-    Running,
-    Completed,
-}
-
-thread_local! {
-    static BOOTSTRAP_PHASE: Cell<BootstrapPhase> = const {
-        Cell::new(BootstrapPhase::NotStarted)
-    };
-}
+use std::collections::BTreeMap;
 
 ///
 /// RootBootstrapSnapshot
@@ -53,19 +37,16 @@ thread_local! {
 
 struct RootBootstrapSnapshot {
     subnet_cfg: SubnetConfig,
-    registry_snapshot: SubnetRegistrySnapshot,
     network: Option<Network>,
 }
 
 impl RootBootstrapSnapshot {
     fn load() -> Result<Self, Error> {
         let subnet_cfg = ConfigOps::current_subnet()?;
-        let registry_snapshot = SubnetRegistryOps::snapshot();
         let network = NetworkOps::current_network();
 
         Ok(Self {
             subnet_cfg,
-            registry_snapshot,
             network,
         })
     }
@@ -75,67 +56,55 @@ impl RootBootstrapSnapshot {
 /// Root bootstrap entrypoints
 /// ---------------------------------------------------------------------------
 
-/// Bootstrap workflow for the root canister during init.
 pub async fn bootstrap_init_root_canister() {
-    // --- re-entrancy guard ---
-    let should_run = BOOTSTRAP_PHASE.with(|phase| match phase.get() {
-        BootstrapPhase::NotStarted => {
-            phase.set(BootstrapPhase::Running);
-            true
+    let _guard = match TopologyGuard::try_enter() {
+        Ok(g) => g,
+        Err(err) => {
+            log!(Topic::Init, Info, "bootstrap (root:init) skipped: {err}");
+            return;
         }
-        BootstrapPhase::Running => {
-            log!(
-                Topic::Init,
-                Info,
-                "bootstrap (root:init) already running, skipping re-entry"
-            );
-            false
-        }
-        BootstrapPhase::Completed => {
-            log!(
-                Topic::Init,
-                Info,
-                "bootstrap (root:init) already completed, skipping"
-            );
-            false
-        }
-    });
+    };
 
-    if !should_run {
-        return;
-    }
-
-    // --- bootstrap body ---
-    log!(Topic::Init, Info, "bootstrap (root:init) start");
-    log!(
-        Topic::Init,
-        Info,
-        "bootstrap (root:init) import pool from config"
-    );
+    // ---------------- Phase 1: Registry ----------------
+    log!(Topic::Init, Info, "bootstrap phase: REGISTRY");
 
     root_import_pool_from_config().await;
 
-    log!(
-        Topic::Init,
-        Info,
-        "bootstrap (root:init) ensure required canisters"
-    );
-
     if let Err(err) = root_create_canisters().await {
+        log!(Topic::Init, Error, "registry phase failed: {err}");
+        return;
+    }
+
+    // ---------------- Phase 2: Materialize ----------------
+    log!(Topic::Init, Info, "bootstrap phase: MATERIALIZE");
+
+    if let Err(err) = root_rebuild_directories_from_registry() {
         log!(
             Topic::Init,
             Error,
-            "bootstrap (root:init) failed to create canisters: {err}"
+            "directory materialization failed: {err}"
         );
+        return;
     }
 
-    log!(Topic::Init, Info, "bootstrap (root:init) complete");
+    // ---------------- Phase 3: Validate ----------------
+    log!(Topic::Init, Info, "bootstrap phase: VALIDATE");
 
-    // --- mark completed ---
-    BOOTSTRAP_PHASE.with(|phase| {
-        phase.set(BootstrapPhase::Completed);
-    });
+    let report = root_validate_state();
+    if !report.ok {
+        log!(
+            Topic::Init,
+            Error,
+            "bootstrap validation failed:\n{:#?}",
+            report.issues
+        );
+        return;
+    }
+
+    // ---------------- Phase 4: Completed ----------------
+    log!(Topic::Init, Info, "bootstrap complete");
 }
+
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
     // Environment already exists; only enrich + reconcile
@@ -229,6 +198,13 @@ pub async fn root_import_pool_from_config() {
 /// Ensure all statically configured canisters for this subnet exist.
 pub async fn root_create_canisters() -> Result<(), Error> {
     let snapshot = RootBootstrapSnapshot::load()?;
+
+    log!(
+        Topic::Init,
+        Info,
+        "auto_create roles: {:?}",
+        snapshot.subnet_cfg.auto_create
+    );
 
     ensure_required_canisters(&snapshot).await
 }
@@ -363,33 +339,24 @@ async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
 
 async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(), Error> {
     for role in &snapshot.subnet_cfg.auto_create {
-        // Registry is the sole source of truth
-        if let Some(pid) = snapshot
-            .registry_snapshot
-            .entries
-            .iter()
-            .find_map(|(pid, entry)| (entry.role == *role).then_some(*pid))
-        {
+        // ALWAYS re-check live registry
+        if SubnetRegistryOps::has_role(role) {
             log!(
                 Topic::Init,
                 Info,
-                "auto_create: {role} already registered in registry as {pid}, skipping"
+                "auto_create: {role} already present in registry, skipping"
             );
             continue;
         }
 
-        // Create missing canister
+        log!(Topic::Init, Info, "auto_create: creating {role}");
+
         CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
             role: role.clone(),
             parent: canister_self(),
             extra_arg: None,
         })
         .await?;
-    }
-
-    // Emit topology summary
-    for (pid, role) in SubnetRegistryOps::export_roles() {
-        log!(Topic::Init, Info, "🥫 {} ({})", role, pid);
     }
 
     Ok(())
