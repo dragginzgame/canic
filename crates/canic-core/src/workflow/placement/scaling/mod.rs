@@ -49,12 +49,15 @@ pub struct ScalingWorkflow;
 impl ScalingWorkflow {
     /// Create a new worker canister in the given pool, if policy allows.
     pub(crate) async fn create_worker(pool: &str) -> Result<Principal, Error> {
+        // 0. Observe state (workflow responsibility)
+        let worker_count = ScalingRegistryOps::count_by_pool(pool);
+
         // 1. Evaluate policy
         let ScalingPlan {
             should_spawn,
             reason,
             worker_entry,
-        } = ScalingPolicy::plan_create_worker(pool, now_secs())?;
+        } = ScalingPolicy::plan_create_worker(pool, worker_count)?;
 
         if !should_spawn {
             return Err(ScalingWorkflowError::PlanRejected(reason))?;
@@ -76,7 +79,7 @@ impl ScalingWorkflow {
         let entry = WorkerEntry {
             pool: entry_plan.pool,
             canister_role: entry_plan.canister_role,
-            created_at_secs: entry_plan.created_at_secs,
+            created_at_secs: now_secs(),
         };
         ScalingRegistryOps::upsert(pid, entry);
 
@@ -85,7 +88,10 @@ impl ScalingWorkflow {
 
     /// Plan whether a worker should be created according to policy.
     pub(crate) fn plan_create_worker(pool: &str) -> Result<bool, Error> {
-        let plan = ScalingPolicy::plan_create_worker(pool, now_secs())?;
+        // 0. Observe state (workflow responsibility)
+        let worker_count = ScalingRegistryOps::count_by_pool(pool);
+
+        let plan = ScalingPolicy::plan_create_worker(pool, worker_count)?;
 
         Ok(plan.should_spawn)
     }
