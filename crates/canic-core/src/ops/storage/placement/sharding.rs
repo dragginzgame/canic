@@ -24,6 +24,8 @@ pub struct ShardEntry {
 }
 
 impl ShardEntry {
+    /// Sentinel value indicating a shard is not yet assigned a fixed slot.
+    /// Must never collide with a real slot index.
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 }
 
@@ -55,9 +57,6 @@ pub struct ShardingRegistryOps;
 
 #[derive(Debug, ThisError)]
 pub enum ShardingRegistryOpsError {
-    #[error("shard not found: {0}")]
-    ShardNotFound(Principal),
-
     #[error("invalid sharding key: {0}")]
     InvalidKey(String),
 
@@ -68,12 +67,18 @@ pub enum ShardingRegistryOpsError {
         actual: String,
     },
 
+    #[error("shard not found: {0}")]
+    ShardNotFound(Principal),
+
     #[error("slot {slot} in pool '{pool}' already assigned to shard {pid}")]
     SlotOccupied {
         pool: String,
         slot: u32,
         pid: Principal,
     },
+
+    #[error("tenant '{tenant}' is not assigned to any shard in pool '{pool}'")]
+    TenantNotAssigned { pool: String, tenant: String },
 }
 
 impl From<ShardingRegistryOpsError> for Error {
@@ -92,6 +97,8 @@ impl ShardingRegistryOps {
         capacity: u32,
         created_at: u64,
     ) -> Result<(), Error> {
+        // NOTE: Slot uniqueness is enforced by linear scan.
+        // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
             if slot != ShardEntry::UNASSIGNED_SLOT {
                 for (other_pid, other_entry) in core.all_entries() {
@@ -129,6 +136,16 @@ impl ShardingRegistryOps {
     #[must_use]
     pub fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
         ShardingRegistry::tenant_shard(pool, tenant)
+    }
+
+    pub fn tenant_shard_required(pool: &str, tenant: &str) -> Result<Principal, Error> {
+        Self::tenant_shard(pool, tenant).ok_or_else(|| {
+            ShardingRegistryOpsError::TenantNotAssigned {
+                pool: pool.to_string(),
+                tenant: tenant.to_string(),
+            }
+            .into()
+        })
     }
 
     /// Lookup the slot index for a given shard principal.
