@@ -7,7 +7,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
-        ic::runtime::{println, trap},
+        ic::runtime::{now_secs, println, trap},
         ic::signature::SignatureOps,
         runtime::{
             env::{EnvOps, EnvSnapshot},
@@ -138,7 +138,8 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
-    SubnetRegistryOps::register_root(self_pid);
+    let created_at = now_secs();
+    SubnetRegistryOps::register_root(self_pid, created_at);
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all_root();

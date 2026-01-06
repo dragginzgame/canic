@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    cdk::utils::time::now_secs,
     log::Level,
     ops::config::ConfigOps,
     storage::stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
@@ -46,16 +45,16 @@ impl LogOps {
         topic: Option<&str>,
         level: Level,
         message: &str,
+        created_at: u64,
     ) -> Result<u64, Error> {
         if !crate::log::is_ready() {
             return Ok(0);
         }
 
         let cfg = ConfigOps::log_config()?;
-        let now = now_secs();
 
         // This is a defensive size guard to protect runtime memory; workflow may also validate, but ops enforces the hard limit.
-        Log::append(&cfg, now, crate_name, topic, level, message)
+        Log::append(&cfg, created_at, crate_name, topic, level, message)
     }
 
     /// Apply log retention using explicit parameters.

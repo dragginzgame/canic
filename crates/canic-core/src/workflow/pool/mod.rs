@@ -12,7 +12,7 @@ use crate::{
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
         ic::mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
-        ic::runtime::TC,
+        ic::runtime::{TC, now_secs},
         storage::{
             pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
             registry::subnet::SubnetRegistryOps,
@@ -55,15 +55,18 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     fn mark_pending_reset(pid: Principal) {
-        PoolOps::mark_pending_reset(pid);
+        let created_at = now_secs();
+        PoolOps::mark_pending_reset(pid, created_at);
     }
 
     fn mark_ready(pid: Principal, cycles: Cycles) {
-        PoolOps::mark_ready(pid, cycles);
+        let created_at = now_secs();
+        PoolOps::mark_ready(pid, cycles, created_at);
     }
 
     fn mark_failed(pid: Principal, err: &Error) {
-        PoolOps::mark_failed(pid, err);
+        let created_at = now_secs();
+        PoolOps::mark_failed(pid, err, created_at);
     }
 
     // -------------------------------------------------------------------------
@@ -137,7 +140,8 @@ impl PoolWorkflow {
         let cycles = Cycles::new(POOL_CANISTER_CYCLES);
         let pid = MgmtOps::create_canister(Self::pool_controllers()?, cycles.clone()).await?;
 
-        PoolOps::register_ready(pid, cycles, None, None, None);
+        let created_at = now_secs();
+        PoolOps::register_ready(pid, cycles, None, None, None, created_at);
 
         Ok(pid)
     }
@@ -192,7 +196,8 @@ impl PoolWorkflow {
         let _ = SubnetRegistryOps::remove(&pid);
 
         // Register back into pool, preserving metadata
-        PoolOps::register_ready(pid, cycles, role, None, module_hash);
+        let created_at = now_secs();
+        PoolOps::register_ready(pid, cycles, role, None, module_hash, created_at);
 
         Ok(())
     }

@@ -40,7 +40,7 @@
 
 * Low-level, reusable **platform primitives**
 * Raw interfaces to the Internet Computer and system facilities
-* Zero domain knowledge
+* Infra types must not reference domain enums or identifiers.
 
 Infra exists to answer: *“How do we talk to the platform?”*
 
@@ -77,7 +77,7 @@ Infra exists to answer: *“How do we talk to the platform?”*
 
 * Application-level access to model state
 * Command and query façades
-* Deterministic state mutation
+* Deterministic state mutation (no async, no retries, no timing dependence)
 * Adaptation from domain → DTO
 
 This includes `ops/storage/*` and `ops/adapter/*`.
@@ -109,13 +109,13 @@ This includes `ops/storage/*` and `ops/adapter/*`.
 ### Purpose
 
 * Pure decision-making and rule evaluation
-* System-level invariants
+* System-level rules and constraints
 * Placement, scaling, sharding, eligibility logic
 
 ### Allowed
 
 * Reading config (directly or via ops)
-* Reading state via ops (read-only, snapshot-style)
+* Evaluating observed state passed in by workflows
 * Deterministic computations
 * “Can we?” / “Should we?” decisions
 

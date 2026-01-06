@@ -15,6 +15,7 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     dto::rpc::CreateCanisterParent,
     ops::{
+        config::ConfigOps,
         ic::runtime::now_secs,
         rpc::request::RequestOps,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
@@ -51,13 +52,14 @@ impl ScalingWorkflow {
     pub(crate) async fn create_worker(pool: &str) -> Result<Principal, Error> {
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
+        let scaling = ConfigOps::current_scaling_config()?;
 
         // 1. Evaluate policy
         let ScalingPlan {
             should_spawn,
             reason,
             worker_entry,
-        } = ScalingPolicy::plan_create_worker(pool, worker_count)?;
+        } = ScalingPolicy::plan_create_worker(pool, worker_count, scaling)?;
 
         if !should_spawn {
             return Err(ScalingWorkflowError::PlanRejected(reason))?;
@@ -91,7 +93,8 @@ impl ScalingWorkflow {
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
 
-        let plan = ScalingPolicy::plan_create_worker(pool, worker_count)?;
+        let scaling = ConfigOps::current_scaling_config()?;
+        let plan = ScalingPolicy::plan_create_worker(pool, worker_count, scaling)?;
 
         Ok(plan.should_spawn)
     }

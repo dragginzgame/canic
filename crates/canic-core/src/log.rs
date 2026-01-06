@@ -1,4 +1,7 @@
-use crate::{ops::runtime::log::LogOps, storage::stable::env::Env};
+use crate::{
+    ops::{ic::runtime::now_secs, runtime::log::LogOps},
+    storage::stable::env::Env,
+};
 use candid::CandidType;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
@@ -118,7 +121,8 @@ macro_rules! log {
 ///
 
 pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level, message: &str) {
-    if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message) {
+    let created_at = now_secs();
+    if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
         {
             #[cfg(debug_assertions)]
             crate::cdk::println!("log append failed: {err}");
