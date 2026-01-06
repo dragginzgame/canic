@@ -224,6 +224,7 @@ dependencies = [
  "ic-canister-sig-creation",
  "ic-cdk",
  "ic-cdk-timers",
+ "ic-certified-map",
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
  "icrc-ledger-types",
@@ -1208,6 +1209,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffb40d73f9f8273dc6569a68859003bbd467c9dc6d53c6fd7d174742f857209d"
 dependencies = [
  "hex",
+ "serde",
+ "serde_bytes",
+ "sha2",
+]
+
+[[package]]
+name = "ic-certified-map"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d0eda0fb997cce8b2661d456eec1e5eca8617a0947602c9e0d13fef062a24dc"
+dependencies = [
+ "candid",
  "serde",
  "serde_bytes",
  "sha2",
