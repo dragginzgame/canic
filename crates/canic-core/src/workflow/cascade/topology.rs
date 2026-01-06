@@ -12,7 +12,7 @@ use crate::{
     },
     workflow::{
         cascade::{
-            CascadeError,
+            CascadeWorkflowError,
             snapshot::{
                 TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
                 adapter::topology_snapshot_from_view,
@@ -101,7 +101,7 @@ impl TopologyCascadeWorkflow {
 
         CascadeOps::send_topology_snapshot(*pid, &view)
             .await
-            .map_err(|_| CascadeError::ChildRejected(*pid).into())
+            .map_err(|_| CascadeWorkflowError::ChildRejected(*pid).into())
     }
 
     fn next_child_on_path(
@@ -109,11 +109,11 @@ impl TopologyCascadeWorkflow {
         parents: &[TopologyPathNode],
     ) -> Result<Option<Principal>, Error> {
         let Some(first) = parents.first() else {
-            return Err(CascadeError::InvalidParentChain.into());
+            return Err(CascadeWorkflowError::InvalidParentChain.into());
         };
 
         if first.pid != self_pid {
-            return Err(CascadeError::ParentChainMissingSelf(self_pid).into());
+            return Err(CascadeWorkflowError::ParentChainMissingSelf(self_pid).into());
         }
 
         Ok(parents.get(1).map(|p| p.pid))
@@ -136,7 +136,7 @@ impl TopologyCascadeWorkflow {
         }
 
         if sliced_parents.is_empty() {
-            return Err(CascadeError::NextHopNotFound(next_pid).into());
+            return Err(CascadeWorkflowError::NextHopNotFound(next_pid).into());
         }
 
         let mut sliced_children_map = HashMap::new();

@@ -15,12 +15,12 @@ use crate::{
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 
 ///
-/// CascadeError
+/// CascadeWorkflowError
 /// Errors raised during synchronization
 ///
 
 #[derive(Debug, ThisError)]
-pub enum CascadeError {
+pub enum CascadeWorkflowError {
     #[error("child rejected cascade: {0:?}")]
     ChildRejected(Principal),
 
@@ -34,8 +34,8 @@ pub enum CascadeError {
     NextHopNotFound(Principal),
 }
 
-impl From<CascadeError> for Error {
-    fn from(err: CascadeError) -> Self {
+impl From<CascadeWorkflowError> for Error {
+    fn from(err: CascadeWorkflowError) -> Self {
         WorkflowError::from(err).into()
     }
 }

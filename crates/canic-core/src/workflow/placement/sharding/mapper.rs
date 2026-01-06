@@ -1,32 +1,23 @@
 use crate::{
-    domain::policy::placement::sharding::policy::ShardingPlanState,
-    dto::placement::{ShardEntryView, ShardingPlanStateView, WorkerEntryView},
-    ops::storage::placement::{scaling::WorkerEntry, sharding::ShardEntry},
+    domain::policy::placement::sharding::ShardingPlanState,
+    dto::placement::sharding::{ShardEntryView, ShardingPlanStateView},
+    ops::storage::placement::sharding::ShardEntry,
 };
 
 ///
-/// PlacementMapper
+/// ShardingMapper
 ///
 
-pub struct PlacementMapper;
+pub struct ShardingMapper;
 
-impl PlacementMapper {
-    #[must_use]
-    pub fn worker_entry_to_view(entry: &WorkerEntry) -> WorkerEntryView {
-        WorkerEntryView {
-            pool: entry.pool.to_string(),
-            canister_role: entry.canister_role.clone(),
-            created_at_secs: entry.created_at_secs,
-        }
-    }
-
+impl ShardingMapper {
     #[must_use]
     pub fn shard_entry_to_view(entry: &ShardEntry) -> ShardEntryView {
         ShardEntryView {
             slot: entry.slot,
             capacity: entry.capacity,
             count: entry.count,
-            pool: entry.pool.to_string(),
+            pool: entry.pool.clone(),
             canister_role: entry.canister_role.clone(),
             created_at: entry.created_at,
         }

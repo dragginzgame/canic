@@ -1,9 +1,11 @@
+pub use crate::storage::stable::sharding::ShardKey;
+
 use crate::{
     Error, ThisError,
     cdk::utils::time::now_secs,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
-        ShardEntry as ModelShardEntry, ShardKey,
+        ShardEntry as ModelShardEntry,
         registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
     },
 };
@@ -17,7 +19,7 @@ pub struct ShardEntry {
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
-    pub pool: crate::cdk::types::BoundedString64,
+    pub pool: String,
     pub canister_role: CanisterRole,
     pub created_at: u64,
 }
@@ -26,8 +28,14 @@ impl ShardEntry {
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 }
 
-///
 /// ShardingRegistrySnapshot
+///
+/// Structural snapshot of shard entries only.
+///
+/// NOTE:
+/// - This snapshot intentionally excludes tenant → shard assignments.
+/// - Assignments are unbounded and must be accessed via targeted queries.
+/// - Do NOT add assignments to this snapshot.
 ///
 
 #[derive(Clone, Debug)]
@@ -180,6 +188,19 @@ impl ShardingRegistryOps {
         })
     }
 
+    /// NOTE:
+    /// Returns canonical assignment keys. Callers should not stringify unless required
+    /// at an API or DTO boundary.
+    #[must_use]
+    pub fn assignments_for_pool(pool: &str) -> Vec<(ShardKey, Principal)> {
+        ShardingRegistry::with(|core| {
+            core.all_assignments()
+                .into_iter()
+                .filter(|(k, _)| k.pool.as_ref() == pool)
+                .collect()
+        })
+    }
+
     /// Export all shard entries
     #[must_use]
     pub fn export() -> ShardingRegistrySnapshot {
@@ -210,7 +231,7 @@ impl From<ModelShardEntry> for ShardEntry {
             slot: entry.slot,
             capacity: entry.capacity,
             count: entry.count,
-            pool: entry.pool,
+            pool: entry.pool.to_string(),
             canister_role: entry.canister_role,
             created_at: entry.created_at,
         }

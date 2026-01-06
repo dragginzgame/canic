@@ -9,6 +9,7 @@
 //! are consistently mapped at the boundary.
 
 pub mod access;
+pub mod bootstrap;
 pub mod cascade;
 pub mod config;
 pub mod error;

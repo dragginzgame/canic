@@ -1,4 +1,3 @@
-pub mod directory;
 pub mod registry;
 
 use crate::{
@@ -6,12 +5,9 @@ use crate::{
     cdk::types::Principal,
     domain::policy::PolicyError,
     ids::CanisterRole,
-    ops::storage::{
-        directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
-        registry::subnet::{CanisterEntrySnapshot, SubnetRegistrySnapshot},
-    },
+    ops::storage::registry::subnet::{CanisterEntrySnapshot, SubnetRegistrySnapshot},
 };
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 ///
 /// TopologyPolicyError
@@ -19,11 +15,15 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, ThisError)]
 pub enum TopologyPolicyError {
-    #[error("parent {0} not found in registry")]
-    ParentNotFound(Principal),
+    #[error("directory entry role mismatch for pid {pid}: expected {expected}, got {found}")]
+    DirectoryRoleMismatch {
+        pid: Principal,
+        expected: CanisterRole,
+        found: CanisterRole,
+    },
 
-    #[error("registry entry missing for {0}")]
-    RegistryEntryMissing(Principal),
+    #[error("directory role {0} appears more than once")]
+    DuplicateDirectoryRole(CanisterRole),
 
     #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
     ImmediateParentMismatch {
@@ -35,11 +35,11 @@ pub enum TopologyPolicyError {
     #[error("module hash mismatch for {0}")]
     ModuleHashMismatch(Principal),
 
-    #[error("app directory diverged from registry")]
-    AppDirectoryDiverged,
+    #[error("parent {0} not found in registry")]
+    ParentNotFound(Principal),
 
-    #[error("subnet directory diverged from registry")]
-    SubnetDirectoryDiverged,
+    #[error("registry entry missing for {0}")]
+    RegistryEntryMissing(Principal),
 
     #[error(transparent)]
     RegistryPolicy(#[from] registry::RegistryPolicyError),
@@ -61,13 +61,13 @@ impl TopologyPolicy {
     pub(crate) fn registry_entry(
         registry: &SubnetRegistrySnapshot,
         pid: Principal,
-    ) -> Result<CanisterEntrySnapshot, Error> {
+    ) -> Result<CanisterEntrySnapshot, TopologyPolicyError> {
         registry
             .entries
             .iter()
             .find(|(entry_pid, _)| *entry_pid == pid)
             .map(|(_, entry)| entry.clone())
-            .ok_or_else(|| TopologyPolicyError::RegistryEntryMissing(pid).into())
+            .ok_or(TopologyPolicyError::RegistryEntryMissing(pid))
     }
 
     pub(crate) fn assert_parent_exists(
@@ -113,51 +113,26 @@ impl TopologyPolicy {
         }
     }
 
-    #[must_use]
-    pub fn app_directory_from_registry(registry: &SubnetRegistrySnapshot) -> AppDirectorySnapshot {
-        let mut map = BTreeMap::<CanisterRole, Principal>::new();
-
-        for (pid, entry) in &registry.entries {
-            if directory::is_app_directory_role(&entry.role) {
-                map.insert(entry.role.clone(), *pid);
-            }
-        }
-
-        AppDirectorySnapshot {
-            entries: map.into_iter().collect(),
-        }
-    }
-
-    #[must_use]
-    pub fn subnet_directory_from_registry(
+    pub fn assert_directory_consistent_with_registry(
         registry: &SubnetRegistrySnapshot,
-    ) -> SubnetDirectorySnapshot {
-        let mut map = BTreeMap::<CanisterRole, Principal>::new();
-
-        for (pid, entry) in &registry.entries {
-            if directory::is_subnet_directory_role(&entry.role) {
-                map.insert(entry.role.clone(), *pid);
-            }
-        }
-
-        SubnetDirectorySnapshot {
-            entries: map.into_iter().collect(),
-        }
-    }
-
-    pub fn assert_directories_match_registry(
-        registry: &SubnetRegistrySnapshot,
-        app_snapshot: &AppDirectorySnapshot,
-        subnet_snapshot: &SubnetDirectorySnapshot,
+        entries: &[(CanisterRole, Principal)],
     ) -> Result<(), TopologyPolicyError> {
-        let app_built = Self::app_directory_from_registry(registry);
-        if app_built != *app_snapshot {
-            return Err(TopologyPolicyError::AppDirectoryDiverged);
-        }
+        let mut seen_roles = BTreeSet::new();
 
-        let subnet_built = Self::subnet_directory_from_registry(registry);
-        if subnet_built != *subnet_snapshot {
-            return Err(TopologyPolicyError::SubnetDirectoryDiverged);
+        for (role, pid) in entries {
+            let entry = Self::registry_entry(registry, *pid)?;
+
+            if entry.role != *role {
+                return Err(TopologyPolicyError::DirectoryRoleMismatch {
+                    pid: *pid,
+                    expected: entry.role,
+                    found: role.clone(),
+                });
+            }
+
+            if seen_roles.insert(role) {
+                return Err(TopologyPolicyError::DuplicateDirectoryRole(role.clone()));
+            }
         }
 
         Ok(())

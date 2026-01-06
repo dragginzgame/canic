@@ -1,22 +1,23 @@
-pub mod mapper;
-pub mod query;
 pub mod scaling;
 pub mod sharding;
 
 use crate::{Error, ThisError, workflow::WorkflowError};
 
 ///
-/// PlacementError
+/// PlacementWorkflowError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum PlacementError {
-    #[error("parent {0} not found in registry")]
-    Scaling(scaling::ScalingWorkflowError),
+pub enum PlacementWorkflowError {
+    #[error(transparent)]
+    Scaling(#[from] scaling::ScalingWorkflowError),
+
+    #[error(transparent)]
+    Sharding(#[from] sharding::ShardingWorkflowError),
 }
 
-impl From<PlacementError> for Error {
-    fn from(err: PlacementError) -> Self {
+impl From<PlacementWorkflowError> for Error {
+    fn from(err: PlacementWorkflowError) -> Self {
         WorkflowError::Placement(err).into()
     }
 }

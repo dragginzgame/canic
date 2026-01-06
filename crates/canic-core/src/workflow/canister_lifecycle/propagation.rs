@@ -46,10 +46,15 @@ impl PropagationWorkflow {
         let app_snapshot = AppDirectoryOps::snapshot();
         let subnet_snapshot = SubnetDirectoryOps::snapshot();
 
-        TopologyPolicy::assert_directories_match_registry(
+        TopologyPolicy::assert_directory_consistent_with_registry(
             &registry_snapshot,
-            &app_snapshot,
-            &subnet_snapshot,
+            &app_snapshot.entries,
+        )
+        .map_err(Error::from)?;
+
+        TopologyPolicy::assert_directory_consistent_with_registry(
+            &registry_snapshot,
+            &subnet_snapshot.entries,
         )
         .map_err(Error::from)?;
 

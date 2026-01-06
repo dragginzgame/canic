@@ -193,7 +193,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::core::dto::placement::ScalingRegistryView, ::canic::PublicError> {
+        -> Result<::canic::core::dto::placement::scaling::ScalingRegistryView, ::canic::PublicError>
+        {
             Ok($crate::api::placement::scaling::ScalingApi::registry_view())
         }
 
@@ -202,8 +203,10 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
-        async fn canic_sharding_registry()
-        -> Result<::canic::core::dto::placement::ShardingRegistryView, ::canic::PublicError> {
+        async fn canic_sharding_registry() -> Result<
+            ::canic::core::dto::placement::sharding::ShardingRegistryView,
+            ::canic::PublicError,
+        > {
             Ok($crate::api::placement::sharding::ShardingQuery::registry_view())
         }
 
@@ -211,8 +214,11 @@ macro_rules! canic_endpoints {
         async fn canic_sharding_tenants(
             pool: String,
             shard_pid: ::canic::core::cdk::types::Principal,
-        ) -> Result<::canic::core::dto::placement::ShardingTenantsView, ::canic::PublicError> {
-            Ok($crate::api::placement::sharding::ShardingQuery::tenants_view(pool, shard_pid))
+        ) -> Result<
+            ::canic::core::dto::placement::sharding::ShardingTenantsView,
+            ::canic::PublicError,
+        > {
+            Ok($crate::api::placement::sharding::ShardingQuery::tenants_view(&pool, shard_pid))
         }
 
         //
