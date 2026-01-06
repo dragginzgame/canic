@@ -204,6 +204,15 @@ impl SubnetRegistryOps {
         SubnetRegistry::get(pid).is_some()
     }
 
+    /// Returns true if any canister with the given role exists in the registry.
+    #[must_use]
+    pub fn has_role(role: &CanisterRole) -> bool {
+        SubnetRegistry::export()
+            .entries
+            .iter()
+            .any(|(_, entry)| &entry.role == role)
+    }
+
     #[must_use]
     pub fn get_parent(pid: Principal) -> Option<Principal> {
         SubnetRegistry::get_parent(pid)
@@ -225,19 +234,6 @@ impl SubnetRegistryOps {
     #[must_use]
     pub fn snapshot() -> SubnetRegistrySnapshot {
         SubnetRegistry::export().into()
-    }
-
-    // -------------------------------------------------------------
-    // Narrow projections (ops-safe)
-    // -------------------------------------------------------------
-
-    #[must_use]
-    pub(crate) fn export_roles() -> Vec<(Principal, CanisterRole)> {
-        SubnetRegistry::export()
-            .entries
-            .into_iter()
-            .map(|(pid, entry)| (pid, entry.role))
-            .collect()
     }
 }
 

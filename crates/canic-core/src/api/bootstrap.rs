@@ -1,4 +1,7 @@
-use crate::{PublicError, dto::validation::ValidationReport, workflow};
+use crate::{
+    PublicError, dto::validation::ValidationReport, workflow,
+    workflow::topology::guard::TopologyGuard,
+};
 
 ///
 /// RootBootstrapApi
@@ -8,6 +11,8 @@ pub struct RootBootstrapApi;
 
 impl RootBootstrapApi {
     pub async fn create_canisters() -> Result<(), PublicError> {
+        let _guard = TopologyGuard::try_enter()?;
+
         workflow::bootstrap::root::root_create_canisters()
             .await
             .map_err(PublicError::from)
@@ -20,6 +25,8 @@ impl RootBootstrapApi {
     }
 
     pub fn rebuild_directories_from_registry() -> Result<(), PublicError> {
+        let _guard = TopologyGuard::try_enter()?;
+
         workflow::bootstrap::root::root_rebuild_directories_from_registry()
             .map_err(PublicError::from)
     }

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.7.11] - 2026-01-05
 - Refactored sharding placement into a pure, deterministic policy operating on explicit state snapshots, with all configuration registry access, and side effects moved into query/workflow layers.
 - Updated root hierarchy tests to use explicit root install helpers and improved bootstrap reliability.
+- Added a global Topology re-entrancy guard just in case (Pocket IC does things a little differently, which is good for
+exposing problems you didn't know existing)
 
 ## [0.7.10] - 2026-01-04
 - moved api instrumentation to access/

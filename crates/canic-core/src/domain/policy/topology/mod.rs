@@ -130,7 +130,7 @@ impl TopologyPolicy {
                 });
             }
 
-            if seen_roles.insert(role) {
+            if !seen_roles.insert(role) {
                 return Err(TopologyPolicyError::DuplicateDirectoryRole(role.clone()));
             }
         }

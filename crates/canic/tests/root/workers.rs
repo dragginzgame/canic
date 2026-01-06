@@ -6,7 +6,7 @@ use canic::{
         protocol,
     },
 };
-use canic_internal::canister::SCALE_HUB;
+use canic_internal::canister::SCALE;
 use canic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
@@ -30,7 +30,7 @@ pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> us
     registry
         .iter()
         .filter(|entry: &&SubnetRegistryEntryView| {
-            entry.role == SCALE_HUB && entry.entry.parent_pid == Some(parent_pid)
+            entry.role == SCALE && entry.entry.parent_pid == Some(parent_pid)
         })
         .count()
 }

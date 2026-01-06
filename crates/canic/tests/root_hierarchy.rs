@@ -56,7 +56,11 @@ fn subnet_children_matches_registry_on_root() {
 fn worker_topology_cascades_through_parent() {
     let setup = setup_root();
 
-    let scale_hub_pid = setup.subnet_directory[&canister::SCALE_HUB];
+    let scale_hub_pid = setup
+        .subnet_directory
+        .get(&canister::SCALE_HUB)
+        .copied()
+        .expect("scale_hub must exist in subnet directory");
 
     let before = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
 

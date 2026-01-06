@@ -29,8 +29,14 @@ pub enum ShardingPolicyError {
     #[error("shard pool not found: {0}")]
     PoolNotFound(String),
 
-    #[error("shard creation blocked: {0}")]
-    ShardCreationBlocked(String),
+    #[error(
+        "shard creation blocked: tenant '{tenant}' assignment blocked: {reason} in pool '{pool}'"
+    )]
+    ShardCreationBlocked {
+        reason: CreateBlockedReason,
+        tenant: String,
+        pool: String,
+    },
 
     #[error("sharding disabled")]
     ShardingDisabled,

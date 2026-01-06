@@ -4,13 +4,14 @@ use canic::{
         PublicError,
         dto::{
             page::{Page, PageRequest},
-            topology::DirectoryEntryView,
+            topology::{DirectoryEntryView, SubnetRegistryEntryView},
             validation::ValidationReport,
         },
         ids::CanisterRole,
         protocol,
     },
 };
+use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
@@ -19,6 +20,7 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
+const BOOTSTRAP_TICK_LIMIT: usize = 120;
 
 ///
 /// RootSetup
@@ -41,8 +43,7 @@ pub fn setup_root() -> RootSetup {
         .create_and_install_root_canister(root_wasm)
         .expect("install root canister");
 
-    // Allow async bootstrap / cascades to settle.
-    pic.tick_n(10);
+    wait_for_bootstrap(&pic, root_id);
 
     validate_root_state(&pic, root_id);
 
@@ -53,6 +54,35 @@ pub fn setup_root() -> RootSetup {
         root_id,
         subnet_directory,
     }
+}
+
+fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
+    let expected_roles = [
+        CanisterRole::ROOT,
+        canister::APP,
+        canister::AUTH,
+        canister::SCALE_HUB,
+        canister::SHARD_HUB,
+        canister::TEST,
+    ];
+
+    for _ in 0..BOOTSTRAP_TICK_LIMIT {
+        pic.tick();
+
+        let registry = fetch_registry(pic, root_id);
+        if expected_roles
+            .iter()
+            .all(|role| registry.iter().any(|entry| &entry.role == role))
+        {
+            return;
+        }
+    }
+
+    let registry = fetch_registry(pic, root_id);
+    let roles: Vec<CanisterRole> = registry.into_iter().map(|entry| entry.role).collect();
+    panic!(
+        "root bootstrap did not create required canisters after {BOOTSTRAP_TICK_LIMIT} ticks; registry roles: {roles:?}"
+    );
 }
 
 /// Load the compiled root canister wasm.
@@ -90,6 +120,11 @@ fn validate_root_state(pic: &Pic, root_id: Principal) {
         "root state invalid after bootstrap:\n{:#?}",
         report.issues
     );
+}
+
+fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntryView> {
+    pic.query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query registry")
 }
 
 /// Fetch the subnet directory from root as a role → principal map.
