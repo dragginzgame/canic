@@ -12,7 +12,10 @@
 //!
 
 use crate::{
-    cdk::api::{certified_data_set, in_replicated_execution},
+    cdk::{
+        api::{certified_data_set, in_replicated_execution},
+        certified_map::HashTree,
+    },
     infra::{ic::IcInfraError, prelude::*},
 };
 use ic_canister_sig_creation::{
@@ -20,7 +23,7 @@ use ic_canister_sig_creation::{
     signature_map::{CanisterSigInputs, LABEL_SIG, SignatureMap},
 };
 use ic_signature_verification::verify_canister_sig;
-use std::cell::RefCell;
+use std::{borrow::Cow, cell::RefCell};
 
 thread_local! {
     /// Transient signature map, kept in heap memory only.
@@ -190,8 +193,12 @@ fn ensure_update_context() -> Result<(), InfraError> {
 ///
 pub fn sync_certified_data() {
     SIGNATURES.with_borrow(|sigs| {
-        let root = sigs.root_hash();
-        certified_data_set(hash_with_domain(LABEL_SIG, &root));
+        let tree = HashTree::Labeled(
+            LABEL_SIG,
+            Box::new(HashTree::Leaf(Cow::Owned(sigs.root_hash().to_vec()))),
+        );
+
+        certified_data_set(tree.reconstruct());
     });
 }
 
