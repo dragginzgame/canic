@@ -9,12 +9,8 @@
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    Error, ThisError,
-    cdk::types::BoundedString64,
-    config::schema::ScalePool,
-    domain::policy::PolicyError,
-    ids::CanisterRole,
-    ops::{config::ConfigOps, storage::placement::scaling::ScalingRegistryOps},
+    Error, ThisError, cdk::types::BoundedString64, config::schema::ScalePool,
+    domain::policy::PolicyError, ids::CanisterRole, ops::config::ConfigOps,
 };
 
 ///
@@ -45,7 +41,6 @@ impl From<ScalingPolicyError> for Error {
 pub struct ScalingWorkerPlanEntry {
     pub pool: BoundedString64,
     pub canister_role: CanisterRole,
-    pub created_at_secs: u64,
 }
 
 ///
@@ -67,13 +62,9 @@ pub struct ScalingPolicy;
 
 impl ScalingPolicy {
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn plan_create_worker(
-        pool: &str,
-        created_at_secs: u64,
-    ) -> Result<ScalingPlan, Error> {
+    pub(crate) fn plan_create_worker(pool: &str, worker_count: u32) -> Result<ScalingPlan, Error> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool)?;
         let policy = pool_cfg.policy;
-        let worker_count = ScalingRegistryOps::count_by_pool(pool);
 
         // Max bound check
         if policy.max_workers > 0 && worker_count >= policy.max_workers {
@@ -92,7 +83,6 @@ impl ScalingPolicy {
             let entry = ScalingWorkerPlanEntry {
                 pool: BoundedString64::new(pool),
                 canister_role: pool_cfg.canister_role,
-                created_at_secs,
             };
 
             return Ok(ScalingPlan {
