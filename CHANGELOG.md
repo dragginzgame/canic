@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - split the Ic ledger code over api, workflow, ops and infra
 - re-wrapped the ic Call type via CallOps, adding metrics
 - moved IC management status view adapters into workflow; ops now return internal mgmt status types
+- routed eager TLS init through MemoryRegistryOps in workflow runtime
+- generally a full day of refactoring but not much of it is interesting enough to mention
 
 ## [0.7.12] - 2026-01-05
 - updated the signature code to use the HashTree from ic-certified-map.  Basically none of us know how it works so this
