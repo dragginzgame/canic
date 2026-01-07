@@ -60,147 +60,155 @@ impl From<SignatureInfraError> for InfraError {
 }
 
 ///
-/// Prepares a canister signature for a given message and seed.
+/// SignatureInfra
 ///
-/// This updates the canister's `certified_data` to include the
-/// new root hash so that the IC subnet will certify it.
-///
-/// - `seed` should uniquely identify the logical key context.
-/// - `message` is the data being signed.
-/// - must be called from an update context
-///
-pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InfraError> {
-    ensure_update_context()?;
 
-    let sig_inputs = CanisterSigInputs {
-        domain,
-        seed,
-        message,
-    };
+pub struct SignatureInfra;
 
-    SIGNATURES.with_borrow_mut(|sigs| {
-        sigs.add_signature(&sig_inputs);
-    });
+impl SignatureInfra {
+    ///
+    /// Prepares a canister signature for a given message and seed.
+    ///
+    /// This updates the canister's `certified_data` to include the
+    /// new root hash so that the IC subnet will certify it.
+    ///
+    /// - `seed` should uniquely identify the logical key context.
+    /// - `message` is the data being signed.
+    /// - must be called from an update context
+    ///
+    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InfraError> {
+        Self::ensure_update_context()?;
 
-    // Commit new certified root
-    SIGNATURES.with_borrow(|sigs| {
-        certified_data_set(hash_with_domain(LABEL_SIG, &sigs.root_hash()));
-    });
+        let sig_inputs = CanisterSigInputs {
+            domain,
+            seed,
+            message,
+        };
 
-    Ok(())
-}
+        SIGNATURES.with_borrow_mut(|sigs| {
+            sigs.add_signature(&sig_inputs);
+        });
 
-///
-/// Retrieves a prepared canister signature as CBOR-encoded bytes.
-///
-/// Returns `None` if the signature has expired or was never prepared.
-///
-/// This is intended for use in query calls.
-///
-#[must_use]
-pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
-    let sig_inputs = CanisterSigInputs {
-        domain,
-        seed,
-        message,
-    };
+        // Commit new certified root
+        SIGNATURES.with_borrow(|sigs| {
+            certified_data_set(hash_with_domain(LABEL_SIG, &sigs.root_hash()));
+        });
 
-    SIGNATURES.with_borrow(|sigs| sigs.get_signature_as_cbor(&sig_inputs, None).ok())
-}
-
-///
-/// High-level convenience helper that combines [`prepare`] and [`get`]
-/// in one call. Suitable for simple use-cases where you don’t split update/query.
-///
-pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, InfraError> {
-    prepare(domain, seed, message)?;
-
-    Ok(get(domain, seed, message))
-}
-
-///
-/// Verify a user token that was issued by the auth canister.
-/// Callers must pass the domain separator and seed that were used during signing.
-///
-/// - `domain`:    the domain separator used during signing
-/// - `seed`:      the seed that derived the signing public key
-/// - `message`: the CBOR-encoded message Token
-/// - `signature`:  the CBOR canister signature returned by auth
-/// - `issuer_pid`: the Principal of the auth canister (the one that signed)
-///
-pub fn verify(
-    domain: &[u8],
-    seed: &[u8],
-    message: &[u8],
-    signature_cbor: &[u8],
-    issuer_pid: Principal,
-) -> Result<(), InfraError> {
-    // 1️⃣ Parse CBOR
-    parse_canister_sig_cbor(signature_cbor)
-        .map_err(|reason| SignatureInfraError::CannotParseSignature { reason })?;
-
-    // 2️⃣ Verify the IC canister signature cryptographically
-    let public_key = CanisterSigPublicKey::new(issuer_pid, seed.to_vec()).to_der();
-    let domain_prefixed_message = domain_prefixed_message(domain, message);
-    verify_canister_sig(
-        &domain_prefixed_message,
-        signature_cbor,
-        &public_key,
-        &IC_ROOT_PUBLIC_KEY,
-    )
-    .map_err(|reason| SignatureInfraError::InvalidSignature { reason })?;
-
-    Ok(())
-}
-
-///
-/// Returns the canister’s current signature root hash.
-/// Useful for debugging or introspection.
-///
-#[must_use]
-pub fn root_hash() -> Vec<u8> {
-    SIGNATURES.with_borrow(|sigs| sigs.root_hash().to_vec())
-}
-
-#[allow(clippy::cast_possible_truncation)]
-fn domain_prefixed_message(domain: &[u8], message: &[u8]) -> Vec<u8> {
-    // Mirror the preimage hashed by `hash_with_domain`.
-    let mut buf = Vec::with_capacity(1 + domain.len() + message.len());
-    buf.push(domain.len() as u8);
-    buf.extend_from_slice(domain);
-    buf.extend_from_slice(message);
-
-    buf
-}
-
-fn ensure_update_context() -> Result<(), InfraError> {
-    if in_replicated_execution() {
-        return Ok(());
+        Ok(())
     }
 
-    Err(SignatureInfraError::UpdateContextRequired.into())
-}
+    ///
+    /// Retrieves a prepared canister signature as CBOR-encoded bytes.
+    ///
+    /// Returns `None` if the signature has expired or was never prepared.
+    ///
+    /// This is intended for use in query calls.
+    ///
+    #[must_use]
+    pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
+        let sig_inputs = CanisterSigInputs {
+            domain,
+            seed,
+            message,
+        };
 
-///
-/// Synchronize IC certified data with the current in-memory signature map.
-///
-/// REQUIRED INVARIANT:
-/// The canister's certified_data must always equal the Merkle root
-/// of the current SignatureMap.
-///
-/// Since SIGNATURES is heap-resident and cleared on upgrade while
-/// certified_data persists, this function MUST be called from
-/// the canister's post_upgrade hook.
-///
-pub fn sync_certified_data() {
-    SIGNATURES.with_borrow(|sigs| {
-        let tree = HashTree::Labeled(
-            LABEL_SIG,
-            Box::new(HashTree::Leaf(Cow::Owned(sigs.root_hash().to_vec()))),
-        );
+        SIGNATURES.with_borrow(|sigs| sigs.get_signature_as_cbor(&sig_inputs, None).ok())
+    }
 
-        certified_data_set(tree.reconstruct());
-    });
+    ///
+    /// High-level convenience helper that combines [`prepare`] and [`get`]
+    /// in one call. Suitable for simple use-cases where you don’t split update/query.
+    ///
+    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, InfraError> {
+        Self::prepare(domain, seed, message)?;
+
+        Ok(Self::get(domain, seed, message))
+    }
+
+    ///
+    /// Verify a user token that was issued by the auth canister.
+    /// Callers must pass the domain separator and seed that were used during signing.
+    ///
+    /// - `domain`:    the domain separator used during signing
+    /// - `seed`:      the seed that derived the signing public key
+    /// - `message`: the CBOR-encoded message Token
+    /// - `signature`:  the CBOR canister signature returned by auth
+    /// - `issuer_pid`: the Principal of the auth canister (the one that signed)
+    ///
+    pub fn verify(
+        domain: &[u8],
+        seed: &[u8],
+        message: &[u8],
+        signature_cbor: &[u8],
+        issuer_pid: Principal,
+    ) -> Result<(), InfraError> {
+        // 1️⃣ Parse CBOR
+        parse_canister_sig_cbor(signature_cbor)
+            .map_err(|reason| SignatureInfraError::CannotParseSignature { reason })?;
+
+        // 2️⃣ Verify the IC canister signature cryptographically
+        let public_key = CanisterSigPublicKey::new(issuer_pid, seed.to_vec()).to_der();
+        let domain_prefixed_message = Self::domain_prefixed_message(domain, message);
+        verify_canister_sig(
+            &domain_prefixed_message,
+            signature_cbor,
+            &public_key,
+            &IC_ROOT_PUBLIC_KEY,
+        )
+        .map_err(|reason| SignatureInfraError::InvalidSignature { reason })?;
+
+        Ok(())
+    }
+
+    ///
+    /// Returns the canister’s current signature root hash.
+    /// Useful for debugging or introspection.
+    ///
+    #[must_use]
+    pub fn root_hash() -> Vec<u8> {
+        SIGNATURES.with_borrow(|sigs| sigs.root_hash().to_vec())
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn domain_prefixed_message(domain: &[u8], message: &[u8]) -> Vec<u8> {
+        // Mirror the preimage hashed by `hash_with_domain`.
+        let mut buf = Vec::with_capacity(1 + domain.len() + message.len());
+        buf.push(domain.len() as u8);
+        buf.extend_from_slice(domain);
+        buf.extend_from_slice(message);
+
+        buf
+    }
+
+    fn ensure_update_context() -> Result<(), InfraError> {
+        if in_replicated_execution() {
+            return Ok(());
+        }
+
+        Err(SignatureInfraError::UpdateContextRequired.into())
+    }
+
+    ///
+    /// Synchronize IC certified data with the current in-memory signature map.
+    ///
+    /// REQUIRED INVARIANT:
+    /// The canister's certified_data must always equal the Merkle root
+    /// of the current SignatureMap.
+    ///
+    /// Since SIGNATURES is heap-resident and cleared on upgrade while
+    /// certified_data persists, this function MUST be called from
+    /// the canister's post_upgrade hook.
+    ///
+    pub fn sync_certified_data() {
+        SIGNATURES.with_borrow(|sigs| {
+            let tree = HashTree::Labeled(
+                LABEL_SIG,
+                Box::new(HashTree::Leaf(Cow::Owned(sigs.root_hash().to_vec()))),
+            );
+
+            certified_data_set(tree.reconstruct());
+        });
+    }
 }
 
 ///
@@ -223,7 +231,7 @@ mod tests {
         let domain = b"domain";
         let message = b"payload";
 
-        let preimage = domain_prefixed_message(domain, message);
+        let preimage = SignatureInfra::domain_prefixed_message(domain, message);
 
         let mut hasher = Sha256::new();
         hasher.update(&preimage);
@@ -235,7 +243,7 @@ mod tests {
     #[test]
     fn verify_handles_short_principal_without_panicking() {
         let issuer_pid = Principal::from_text(TEST_SIGNING_CANISTER_ID).unwrap();
-        let err = verify(
+        let err = SignatureInfra::verify(
             TEST_DOMAIN,
             TEST_SEED,
             b"payload",
