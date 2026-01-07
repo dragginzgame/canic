@@ -24,7 +24,6 @@ use crate::{
         topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },
 };
-use canic_memory::runtime::init_eager_tls;
 
 ///
 /// RuntimeWorkflow
@@ -100,7 +99,7 @@ fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
 
 pub fn init_root_canister(identity: SubnetIdentity) {
     // --- Phase 1: Init base systems ---
-    init_eager_tls();
+    MemoryRegistryOps::init_eager_tls();
     let memory_summary = init_memory_or_trap("init_root_canister");
     crate::log::set_ready();
 
@@ -150,7 +149,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
 
 pub fn post_upgrade_root_canister() {
     // --- Phase 1: Init base systems ---
-    init_eager_tls();
+    MemoryRegistryOps::init_eager_tls();
     let memory_summary = init_memory_or_trap("post_upgrade_root_canister");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
@@ -169,7 +168,7 @@ pub fn post_upgrade_root_canister() {
 
 pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitPayload) {
     // --- Phase 1: Init base systems ---
-    init_eager_tls();
+    MemoryRegistryOps::init_eager_tls();
     let memory_summary = init_memory_or_trap("init_nonroot_canister");
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
@@ -195,7 +194,7 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
 
 pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
     // --- Phase 1: Init base systems ---
-    init_eager_tls();
+    MemoryRegistryOps::init_eager_tls();
     let memory_summary = init_memory_or_trap("post_upgrade_nonroot_canister");
     crate::log::set_ready();
     crate::log!(

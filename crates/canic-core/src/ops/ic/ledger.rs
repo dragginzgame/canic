@@ -7,7 +7,7 @@
 use crate::{
     Error, ThisError,
     cdk::spec::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
-    infra,
+    infra::{InfraError, ic::ledger::LedgerInfra},
     ops::{ic::IcOpsError, prelude::*},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 pub enum LedgerOpsError {
     /// Any infra failure (IC call failed, candid errors, ledger rejection mapped in infra, etc.)
     #[error(transparent)]
-    Infra(#[from] infra::InfraError),
+    Infra(#[from] InfraError),
 }
 
 impl From<LedgerOpsError> for Error {
@@ -41,7 +41,7 @@ impl LedgerOps {
         payer: Account,
         spender: Account,
     ) -> Result<Allowance, Error> {
-        let allowance = infra::ic::ledger::icrc2_allowance(ledger_id, payer, spender)
+        let allowance = LedgerInfra::icrc2_allowance(ledger_id, payer, spender)
             .await
             .map_err(LedgerOpsError::from)?;
 
@@ -71,7 +71,7 @@ impl LedgerOps {
             created_at_time: Some(crate::cdk::api::time()),
         };
 
-        let result: TransferFromResult = infra::ic::ledger::icrc2_transfer_from(ledger_id, args)
+        let result: TransferFromResult = LedgerInfra::icrc2_transfer_from(ledger_id, args)
             .await
             .map_err(LedgerOpsError::from)?;
 
@@ -84,9 +84,9 @@ impl LedgerOps {
             TransferFromResult::Err(_) => {
                 unreachable!()
                 /*
-                Err(LedgerOpsError::Infra(infra::InfraError::from(
-                infra::ic::ledger::LedgerInfraError::TransferFromRejected {
-                    symbol: infra::ic::ledger::ledger_meta(ledger_id).symbol,
+                Err(LedgerOpsError::Infra(InfraError::from(
+                LedgerInfraError::TransferFromRejected {
+                    symbol: LedgerInfra::ledger_meta(ledger_id).symbol,
                     // We can't recover the error here without matching; infra should not return Err(...)
                     // if it wants ops to handle it. Prefer keeping infra mapping.
                     error: unreachable!(
