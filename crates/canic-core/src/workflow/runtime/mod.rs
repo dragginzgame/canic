@@ -7,8 +7,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
-        ic::runtime::{now_secs, println, trap},
-        ic::signature::SignatureOps,
+        ic::{now_secs, println, signature::SignatureOps, trap},
         runtime::{
             env::{EnvOps, EnvSnapshot},
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},

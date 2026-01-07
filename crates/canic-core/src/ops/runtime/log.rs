@@ -1,7 +1,9 @@
 use crate::{
-    Error,
+    Error, ThisError,
     log::Level,
     ops::config::ConfigOps,
+    ops::runtime::RuntimeOpsError,
+    storage::StorageError,
     storage::stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
 };
 
@@ -21,6 +23,22 @@ use crate::{
 /// - Therefore, no `Snapshot` DTO exists for logs
 ///
 pub struct LogOps;
+
+///
+/// LogOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum LogOpsError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+impl From<LogOpsError> for Error {
+    fn from(err: LogOpsError) -> Self {
+        RuntimeOpsError::LogOps(err).into()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct LogEntrySnapshot {
@@ -54,7 +72,10 @@ impl LogOps {
         let cfg = ConfigOps::log_config()?;
 
         // This is a defensive size guard to protect runtime memory; workflow may also validate, but ops enforces the hard limit.
-        Log::append(&cfg, created_at, crate_name, topic, level, message)
+        let id = Log::append(&cfg, created_at, crate_name, topic, level, message)
+            .map_err(LogOpsError::from)?;
+
+        Ok(id)
     }
 
     /// Apply log retention using explicit parameters.
@@ -65,7 +86,10 @@ impl LogOps {
         max_entries: usize,
         max_entry_bytes: u32,
     ) -> Result<RetentionSummary, Error> {
-        apply_retention(cutoff, max_entries, max_entry_bytes)
+        let summary =
+            apply_retention(cutoff, max_entries, max_entry_bytes).map_err(LogOpsError::from)?;
+
+        Ok(summary)
     }
 
     // ---------------------------------------------------------------------

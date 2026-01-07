@@ -49,6 +49,17 @@ pub mod metrics {
 }
 
 ///
+/// Prelude
+///
+
+pub mod prelude {
+    pub use crate::{
+        PublicError,
+        cdk::types::{Account, Principal},
+    };
+}
+
+///
 /// EndpointCall
 ///
 

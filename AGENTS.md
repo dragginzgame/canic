@@ -317,6 +317,21 @@ Rule:
 
 ---
 
+### Infra Error Semantics
+
+All fallible infra APIs must return `Result<_, InfraError>`; sub-error types
+are internal and must not appear in public signatures.
+
+Infra errors are purely structural:
+
+* wrap source errors losslessly (no stringification or collapsing)
+* represent mechanical failures only (IC calls, candid encode/decode, mgmt invariants, env access)
+* maintain a single, consistent path for IC call failures via `InfraError`
+
+Conversions into `InfraError` must be direct wrappers only.
+
+---
+
 ## 📤 Canonical Data, Views, and DTOs
 
 Type aliases do not constitute boundaries.

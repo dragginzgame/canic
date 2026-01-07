@@ -11,8 +11,11 @@ use crate::{
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
     ops::{
-        ic::mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
-        ic::runtime::{TC, now_secs},
+        ic::{
+            TC,
+            mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+            now_secs,
+        },
         storage::{
             pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
             registry::subnet::SubnetRegistryOps,

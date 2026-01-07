@@ -16,7 +16,7 @@ use crate::{
     dto::rpc::CreateCanisterParent,
     ops::{
         config::ConfigOps,
-        ic::runtime::now_secs,
+        ic::now_secs,
         rpc::request::RequestOps,
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },

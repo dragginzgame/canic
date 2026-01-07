@@ -23,10 +23,14 @@ pub mod view;
 
 pub mod prelude {
     pub use crate::{
+        cdk::{
+            candid::CandidType,
+            types::{Account, Principal},
+        },
         ids::CanisterRole,
         log,
         log::Topic,
-        ops::ic::runtime::{CandidType, Cycles, Principal, canister_self, msg_caller},
+        ops::ic::{Cycles, canister_self, msg_caller},
     };
 }
 
@@ -49,6 +53,9 @@ pub enum WorkflowError {
 
     #[error(transparent)]
     Placement(#[from] placement::PlacementWorkflowError),
+
+    #[error(transparent)]
+    Rpc(#[from] rpc::RpcWorkflowError),
 
     #[error(transparent)]
     Topology(#[from] topology::TopologyWorkflowError),

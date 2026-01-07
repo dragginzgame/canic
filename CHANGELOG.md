@@ -5,10 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.13] - 2026-01-06
+- lots of work on bubbling up errors.  InfraErrors treated differently.  Standardised all errors under ops/
+- split the Ic ledger code over api, workflow, ops and infra
+- re-wrapped the ic Call type via CallOps, adding metrics
+
 ## [0.7.12] - 2026-01-05
 - updated the signature code to use the HashTree from ic-certified-map.  Basically none of us know how it works so this
 is just trial and error.
 - added require_tenant_shard to ShardingApi
+- normalized infra IC call wrapper + error flow, and made infra signature/NNS errors lossless
 
 ## [0.7.11] - 2026-01-05
 - Refactored sharding placement into a pure, deterministic policy operating on explicit state snapshots, with all configuration registry access, and side effects moved into query/workflow layers.

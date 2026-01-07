@@ -5,10 +5,9 @@ use crate::{
     Error,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
-    infra::ic::network::Network,
-    ops::runtime::{
-        env::{EnvOps, EnvSnapshot},
-        network::NetworkOps,
+    ops::{
+        ic::network::{BuildNetwork, NetworkOps},
+        runtime::env::{EnvOps, EnvSnapshot},
     },
     workflow::{bootstrap::BootstrapError, env::mapper::EnvMapper, prelude::*},
 };
@@ -24,7 +23,7 @@ impl EnvWorkflow {
         let mut snapshot = EnvMapper::view_to_snapshot(env_view);
         snapshot.canister_role = Some(role);
 
-        let network = NetworkOps::current_network().unwrap_or(Network::Local);
+        let network = NetworkOps::build_network().unwrap_or(BuildNetwork::Local);
         let input = EnvInput {
             prime_root_pid: snapshot.prime_root_pid,
             subnet_role: snapshot.subnet_role,

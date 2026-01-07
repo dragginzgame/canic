@@ -8,13 +8,10 @@ use crate::{
     Error,
     config::schema::SubnetConfig,
     dto::validation::{ValidationIssue, ValidationReport},
-    infra::ic::network::Network,
     ops::{
         config::ConfigOps,
-        runtime::{
-            env::{EnvOps, EnvSnapshot},
-            network::NetworkOps,
-        },
+        ic::network::{BuildNetwork, NetworkOps},
+        runtime::env::{EnvOps, EnvSnapshot},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
@@ -37,13 +34,13 @@ use std::collections::BTreeMap;
 
 struct RootBootstrapSnapshot {
     subnet_cfg: SubnetConfig,
-    network: Option<Network>,
+    network: Option<BuildNetwork>,
 }
 
 impl RootBootstrapSnapshot {
     fn load() -> Result<Self, Error> {
         let subnet_cfg = ConfigOps::current_subnet()?;
-        let network = NetworkOps::current_network();
+        let network = NetworkOps::build_network();
 
         Ok(Self {
             subnet_cfg,
@@ -132,7 +129,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// On local / test networks:
 /// - Falls back to `canister_self()` deterministically.
 pub async fn root_set_subnet_id() {
-    let network = NetworkOps::current_network();
+    let network = NetworkOps::build_network();
 
     match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
@@ -141,7 +138,7 @@ pub async fn root_set_subnet_id() {
         }
 
         Ok(None) => {
-            if network == Some(Network::Ic) {
+            if network == Some(BuildNetwork::Ic) {
                 let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
                 log!(Topic::Topology, Error, "{msg}");
                 return;
@@ -149,7 +146,7 @@ pub async fn root_set_subnet_id() {
         }
 
         Err(err) => {
-            if network == Some(Network::Ic) {
+            if network == Some(BuildNetwork::Ic) {
                 let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
                 log!(Topic::Topology, Error, "{msg}");
                 return;
@@ -218,8 +215,8 @@ pub fn root_rebuild_directories_from_registry() -> Result<(), Error> {
 #[expect(clippy::too_many_lines)]
 async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
     let import_list = match snapshot.network {
-        Some(Network::Local) => snapshot.subnet_cfg.pool.import.local.clone(),
-        Some(Network::Ic) => snapshot.subnet_cfg.pool.import.ic.clone(),
+        Some(BuildNetwork::Local) => snapshot.subnet_cfg.pool.import.local.clone(),
+        Some(BuildNetwork::Ic) => snapshot.subnet_cfg.pool.import.ic.clone(),
         None => {
             log!(
                 Topic::CanisterPool,

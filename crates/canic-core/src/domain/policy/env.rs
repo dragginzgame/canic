@@ -2,7 +2,7 @@ use crate::{
     ThisError,
     cdk::types::Principal,
     ids::{CanisterRole, SubnetRole},
-    infra::ic::network::Network,
+    infra::ic::network::BuildNetwork,
 };
 
 ///
@@ -44,7 +44,7 @@ pub enum EnvPolicyError {
 }
 
 pub fn validate_or_default(
-    network: Network,
+    network: BuildNetwork,
     raw_env: EnvInput,
 ) -> Result<ValidatedEnv, EnvPolicyError> {
     let mut missing = Vec::new();
@@ -78,7 +78,7 @@ pub fn validate_or_default(
         });
     }
 
-    if network == Network::Ic {
+    if network == BuildNetwork::Ic {
         return Err(EnvPolicyError::MissingEnvFields(missing.join(", ")));
     }
 

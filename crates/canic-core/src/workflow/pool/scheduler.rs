@@ -17,7 +17,7 @@ use crate::{
     Error,
     domain::policy::pool::PoolPolicyError,
     ops::{
-        ic::runtime::now_secs,
+        ic::now_secs,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },

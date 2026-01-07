@@ -1,4 +1,6 @@
-pub use crate::infra::ic::network::Network;
+pub use crate::ops::ic::network::BuildNetwork;
+
+use crate::ops::ic::network::NetworkOps;
 
 ///
 /// NetworkApi
@@ -8,7 +10,7 @@ pub struct NetworkApi;
 
 impl NetworkApi {
     #[must_use]
-    pub fn network() -> Option<Network> {
-        crate::infra::ic::build_network()
+    pub fn build_network() -> Option<BuildNetwork> {
+        NetworkOps::build_network()
     }
 }

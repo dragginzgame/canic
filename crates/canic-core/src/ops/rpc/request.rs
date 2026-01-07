@@ -19,23 +19,11 @@ use candid::encode_one;
 
 #[derive(Debug, ThisError)]
 pub enum RequestOpsError {
-    #[error("canister role {0} not found")]
-    CanisterRoleNotFound(CanisterRole),
-
-    #[error("child canister {0} not found")]
-    ChildNotFound(Principal),
+    #[error(transparent)]
+    Infra(#[from] InfraError),
 
     #[error("invalid response type")]
     InvalidResponseType,
-
-    #[error("create_canister: missing new pid")]
-    MissingNewCanisterPid,
-
-    #[error("canister {0} is not a child of caller {1}")]
-    NotChildOfCaller(Principal, Principal),
-
-    #[error("canister {0}'s parent was not found")]
-    ParentNotFound(Principal),
 }
 
 impl From<RequestOpsError> for Error {
@@ -63,7 +51,8 @@ impl RequestOps {
         let extra_arg = extra
             .map(encode_one)
             .transpose()
-            .map_err(InfraError::from)?;
+            .map_err(InfraError::from)
+            .map_err(RequestOpsError::from)?;
 
         RpcOps::execute_root_response_rpc(CreateCanisterRpc {
             canister_role: canister_role.clone(),
@@ -105,10 +94,10 @@ impl Rpc for CreateCanisterRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
         match resp {
             Response::CreateCanister(r) => Ok(r),
-            _ => Err(RequestOpsError::InvalidResponseType),
+            _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
 }
@@ -130,10 +119,10 @@ impl Rpc for UpgradeCanisterRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
         match resp {
             Response::UpgradeCanister(r) => Ok(r),
-            _ => Err(RequestOpsError::InvalidResponseType),
+            _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
 }
@@ -155,10 +144,10 @@ impl Rpc for CyclesRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
         match resp {
             Response::Cycles(r) => Ok(r),
-            _ => Err(RequestOpsError::InvalidResponseType),
+            _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
 }
