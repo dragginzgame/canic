@@ -1,4 +1,4 @@
-use crate::{PublicError, dto, ops::ic::http::HttpOps};
+use crate::{PublicError, dto, ops::ic::http::HttpOps, workflow::http::HttpWorkflow};
 use serde::de::DeserializeOwned;
 
 ///
@@ -36,6 +36,6 @@ impl HttpApi {
     pub async fn get_raw(
         args: dto::http::HttpRequestArgs,
     ) -> Result<dto::http::HttpRequestResult, PublicError> {
-        HttpOps::get_raw(args).await.map_err(PublicError::from)
+        HttpWorkflow::get_raw(args).await.map_err(PublicError::from)
     }
 }

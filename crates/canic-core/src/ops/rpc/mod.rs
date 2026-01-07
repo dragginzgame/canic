@@ -1,8 +1,8 @@
 pub mod request;
 
+use crate::ops::rpc::request::{Request, Response};
 use crate::{
     Error, PublicError, ThisError,
-    dto::rpc::{Request, Response},
     ops::{
         OpsError,
         ic::call::{CallOps, CallResult},
