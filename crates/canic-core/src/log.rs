@@ -1,5 +1,5 @@
 use crate::{
-    ops::{ic::now_secs, runtime::log::LogOps},
+    ops::{ic::IcOps, runtime::log::LogOps},
     storage::stable::env::Env,
 };
 use candid::CandidType;
@@ -121,7 +121,8 @@ macro_rules! log {
 ///
 
 pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level, message: &str) {
-    let created_at = now_secs();
+    let created_at = IcOps::now_secs();
+
     if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
         {
             #[cfg(debug_assertions)]

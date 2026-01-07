@@ -14,6 +14,7 @@ use crate::{
     dto::cascade::StateSnapshotView,
     ops::{
         cascade::CascadeOps,
+        ic::IcOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -25,7 +26,7 @@ use crate::{
         cascade::{
             CascadeWorkflowError,
             snapshot::{
-                StateSnapshot, adapter::state_snapshot_from_view, state_snapshot_debug,
+                StateSnapshot, adapter::StateSnapshotAdapter, state_snapshot_debug,
                 state_snapshot_is_empty,
             },
             warn_if_large,
@@ -38,7 +39,6 @@ use crate::{
 /// StateCascadeWorkflow
 /// Orchestrates state snapshot propagation and local application.
 ///
-
 pub struct StateCascadeWorkflow;
 
 impl StateCascadeWorkflow {
@@ -66,7 +66,7 @@ impl StateCascadeWorkflow {
             state_snapshot_debug(snapshot)
         );
 
-        let root_pid = canister_self();
+        let root_pid = IcOps::canister_self();
         let children = SubnetRegistryOps::children(root_pid);
         warn_if_large("root state cascade", children.len());
 
@@ -102,7 +102,7 @@ impl StateCascadeWorkflow {
     pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
         access::env::deny_root()?;
 
-        let snapshot = state_snapshot_from_view(view);
+        let snapshot = StateSnapshotAdapter::from_view(view);
 
         if state_snapshot_is_empty(&snapshot) {
             log!(
@@ -184,7 +184,7 @@ impl StateCascadeWorkflow {
     ///
     /// Converts internal snapshot → DTO exactly once.
     async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), Error> {
-        let view = StateSnapshotView::from(snapshot);
+        let view = StateSnapshotAdapter::to_view(snapshot);
 
         CascadeOps::send_state_snapshot(pid, &view)
             .await

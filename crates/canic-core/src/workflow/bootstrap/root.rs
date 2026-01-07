@@ -10,7 +10,10 @@ use crate::{
     dto::validation::{ValidationIssue, ValidationReport},
     ops::{
         config::ConfigOps,
-        ic::network::{BuildNetwork, NetworkOps},
+        ic::{
+            IcOps,
+            network::{BuildNetwork, NetworkOps},
+        },
         runtime::env::{EnvOps, EnvSnapshot},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -155,7 +158,7 @@ pub async fn root_set_subnet_id() {
     }
 
     // Fallback path for non-IC environments
-    let fallback = canister_self();
+    let fallback = IcOps::canister_self();
     EnvOps::set_subnet_pid(fallback);
 
     log!(
@@ -350,7 +353,7 @@ async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(
 
         CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
             role: role.clone(),
-            parent: canister_self(),
+            parent: IcOps::canister_self(),
             extra_arg: None,
         })
         .await?;

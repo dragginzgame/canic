@@ -15,7 +15,7 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     ops::{
         config::ConfigOps,
-        ic::now_secs,
+        ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
@@ -80,7 +80,7 @@ impl ScalingWorkflow {
         let entry = WorkerEntry {
             pool: entry_plan.pool,
             canister_role: entry_plan.canister_role,
-            created_at_secs: now_secs(),
+            created_at_secs: IcOps::now_secs(),
         };
         ScalingRegistryOps::upsert(pid, entry);
 

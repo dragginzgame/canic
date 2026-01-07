@@ -133,6 +133,7 @@ pub struct TopologyDirectChild {
 ///
 /// Workflow helper for assembling topology snapshots.
 ///
+
 pub struct TopologySnapshotBuilder {
     snapshot: TopologySnapshot,
 }

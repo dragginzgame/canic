@@ -1,5 +1,9 @@
 use super::PoolWorkflow;
-use crate::{Error, ops::config::ConfigOps, workflow::prelude::*};
+use crate::{
+    Error,
+    ops::{config::ConfigOps, ic::IcOps},
+    workflow::prelude::*,
+};
 
 /// Return the controller set for pool canisters.
 ///
@@ -22,7 +26,7 @@ impl PoolWorkflow {
     pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
         let mut controllers = ConfigOps::controllers()?;
 
-        let root = canister_self();
+        let root = IcOps::canister_self();
         if !controllers.contains(&root) {
             controllers.push(root);
         }

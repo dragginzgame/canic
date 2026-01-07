@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     infra::ic::ledger::{LedgerInfra, LedgerMeta},
-    ops::ic::ledger::LedgerOps,
+    ops::ic::{IcOps, ledger::LedgerOps},
     workflow::{ic::IcWorkflowError, prelude::*},
 };
 
@@ -95,7 +95,7 @@ impl LedgerRules {
         }
 
         if let Some(expires_at_nanos) = allowance.expires_at {
-            let now_nanos = crate::ops::ic::now_nanos();
+            let now_nanos = IcOps::now_nanos();
 
             if expires_at_nanos <= now_nanos {
                 return Err(LedgerWorkflowError::AllowanceExpired {

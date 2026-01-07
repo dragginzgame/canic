@@ -4,12 +4,11 @@ use crate::{
         page::{Page, PageRequest},
     },
     ops::{
+        ic::IcOps,
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::{
-        prelude::*, topology::children::mapper::ChildrenMapper, view::paginate::paginate_vec,
-    },
+    workflow::{topology::children::mapper::ChildrenMapper, view::paginate::paginate_vec},
 };
 
 ///
@@ -23,7 +22,8 @@ impl CanisterChildrenQuery {
         let views = if EnvOps::is_root() {
             // Root derives children from the registry (not the local cache).
             let snapshot = SubnetRegistryOps::snapshot();
-            let children = ChildrenMapper::from_registry_snapshot(&snapshot, canister_self());
+            let children =
+                ChildrenMapper::from_registry_snapshot(&snapshot, IcOps::canister_self());
 
             ChildrenMapper::snapshot_to_views(children)
         } else {
