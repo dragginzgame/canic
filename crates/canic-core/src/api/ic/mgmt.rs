@@ -1,5 +1,6 @@
 use crate::{
-    PublicError, cdk::types::Principal, dto::canister::CanisterStatusView, ops::ic::mgmt::MgmtOps,
+    PublicError, cdk::types::Principal, dto::canister::CanisterStatusView,
+    workflow::ic::mgmt::MgmtWorkflow,
 };
 
 ///
@@ -10,7 +11,7 @@ pub struct MgmtApi;
 
 impl MgmtApi {
     pub async fn canister_status(pid: Principal) -> Result<CanisterStatusView, PublicError> {
-        MgmtOps::canister_status(pid)
+        MgmtWorkflow::canister_status_view(pid)
             .await
             .map_err(PublicError::from)
     }
