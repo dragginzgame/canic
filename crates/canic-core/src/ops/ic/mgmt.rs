@@ -20,7 +20,7 @@ use crate::{
             EnvironmentVariableView, LogVisibilityView, MemoryMetricsView, QueryStatsView,
         },
     },
-    infra,
+    infra::ic::mgmt::MgmtInfra,
     ops::{
         ic::IcOpsError,
         prelude::*,
@@ -115,7 +115,7 @@ impl MgmtOps {
         cycles: Cycles,
     ) -> Result<Principal, Error> {
         let cycles_snapshot = cycles.clone();
-        let pid = infra::ic::mgmt::create_canister(controllers, cycles)
+        let pid = MgmtInfra::create_canister(controllers, cycles)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -131,7 +131,7 @@ impl MgmtOps {
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
     pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusView, Error> {
-        let status = infra::ic::mgmt::canister_status(canister_pid)
+        let status = MgmtInfra::canister_status(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -147,12 +147,12 @@ impl MgmtOps {
     /// Returns the local canister's cycle balance (cheap).
     #[must_use]
     pub fn canister_cycle_balance() -> Cycles {
-        infra::ic::mgmt::canister_cycle_balance()
+        MgmtInfra::canister_cycle_balance()
     }
 
     /// Deposits cycles into a canister and records metrics.
     pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
-        infra::ic::mgmt::deposit_cycles(canister_pid, cycles)
+        MgmtInfra::deposit_cycles(canister_pid, cycles)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -163,7 +163,7 @@ impl MgmtOps {
 
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
-        let cycles = infra::ic::mgmt::get_cycles(canister_pid)
+        let cycles = MgmtInfra::get_cycles(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -194,7 +194,7 @@ impl MgmtOps {
         args: T,
     ) -> Result<(), Error> {
         let cdk_mode = install_mode_to_cdk(mode);
-        infra::ic::mgmt::install_code(cdk_mode, canister_pid, wasm, args)
+        MgmtInfra::install_code(cdk_mode, canister_pid, wasm, args)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -218,7 +218,7 @@ impl MgmtOps {
 
     /// Upgrades a canister to the provided wasm.
     pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
-        infra::ic::mgmt::upgrade_canister(canister_pid, wasm)
+        MgmtInfra::upgrade_canister(canister_pid, wasm)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -237,7 +237,7 @@ impl MgmtOps {
 
     /// Uninstalls code from a canister and records metrics.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
-        infra::ic::mgmt::uninstall_code(canister_pid)
+        MgmtInfra::uninstall_code(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -254,7 +254,7 @@ impl MgmtOps {
 
     /// Deletes a canister (code + controllers) via the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
-        infra::ic::mgmt::delete_canister(canister_pid)
+        MgmtInfra::delete_canister(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -269,9 +269,7 @@ impl MgmtOps {
 
     /// Query the management canister for raw randomness and record metrics.
     pub async fn raw_rand() -> Result<[u8; 32], Error> {
-        let seed = infra::ic::mgmt::raw_rand()
-            .await
-            .map_err(IcOpsError::from)?;
+        let seed = MgmtInfra::raw_rand().await.map_err(IcOpsError::from)?;
 
         SystemMetrics::increment(SystemMetricKind::RawRand);
 
@@ -285,7 +283,7 @@ impl MgmtOps {
     /// Updates canister settings via the management canister and records metrics.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
         let cdk_args = update_settings_to_cdk(args);
-        infra::ic::mgmt::update_settings(&cdk_args)
+        MgmtInfra::update_settings(&cdk_args)
             .await
             .map_err(IcOpsError::from)?;
 
