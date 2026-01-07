@@ -10,10 +10,12 @@ use crate::{
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
-    storage::StorageError,
-    storage::stable::{
-        MemoryError,
-        memory::log::{LOG_DATA_ID, LOG_INDEX_ID},
+    storage::{
+        prelude::*,
+        stable::{
+            StableMemoryError,
+            memory::log::{LOG_DATA_ID, LOG_INDEX_ID},
+        },
     },
     utils::case::{Case, Casing},
 };
@@ -233,12 +235,12 @@ fn append_raw(entry: &LogEntry) -> Result<u64, StorageError> {
     with_log(|log| log.append(entry)).map_err(|e| StorageError::from(map_write_error(e)))
 }
 
-const fn map_write_error(err: WriteError) -> MemoryError {
+const fn map_write_error(err: WriteError) -> StableMemoryError {
     match err {
         WriteError::GrowFailed {
             current_size,
             delta,
-        } => MemoryError::LogWriteFailed {
+        } => StableMemoryError::LogWriteFailed {
             current_size,
             delta,
         },

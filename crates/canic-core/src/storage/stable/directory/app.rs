@@ -1,11 +1,6 @@
 use crate::{
-    cdk::{
-        candid::Principal,
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    },
-    eager_static, ic_memory,
-    ids::CanisterRole,
-    storage::stable::memory::directory::APP_DIRECTORY_ID,
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    storage::{prelude::*, stable::memory::directory::APP_DIRECTORY_ID},
 };
 use std::cell::RefCell;
 

@@ -1,12 +1,8 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, ic_memory,
-    ids::{CanisterRole, SubnetRole},
-    memory::impl_storable_bounded,
-    storage::stable::memory::env::ENV_ID,
+    storage::{prelude::*, stable::memory::env::ENV_ID},
 };
-use candid::Principal;
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 eager_static! {

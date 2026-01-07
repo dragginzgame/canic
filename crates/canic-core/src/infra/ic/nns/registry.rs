@@ -25,31 +25,36 @@ impl From<NnsRegistryInfraError> for InfraError {
 }
 
 ///
-/// Query the NNS registry for the subnet of *this* canister.
-///
-/// Infrastructure adapter:
-/// - normalizes string errors
-/// - never leaks protocol details
+/// NnsRegistryInfra
 ///
 
-pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, InfraError> {
-    let request = GetSubnetForCanisterRequest { principal: pid };
+pub struct NnsRegistryInfra;
 
-    let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-        .try_with_arg(request)?
-        .execute()
-        .await?
-        .candid::<GetSubnetForCanisterResponse>()?;
+impl NnsRegistryInfra {
+    /// Query the NNS registry for the subnet of *this* canister.
+    ///
+    /// Infrastructure adapter:
+    /// - normalizes string errors
+    /// - never leaks protocol details
+    pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, InfraError> {
+        let request = GetSubnetForCanisterRequest { principal: pid };
 
-    match result {
-        Ok(payload) => Ok(payload.subnet_id),
-        Err(msg) => {
-            log!(
-                Topic::Topology,
-                Warn,
-                "NNS registry rejected get_subnet_for_canister: {msg}"
-            );
-            Err(NnsRegistryInfraError::Rejected { reason: msg }.into())
+        let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
+            .try_with_arg(request)?
+            .execute()
+            .await?
+            .candid::<GetSubnetForCanisterResponse>()?;
+
+        match result {
+            Ok(payload) => Ok(payload.subnet_id),
+            Err(msg) => {
+                log!(
+                    Topic::Topology,
+                    Warn,
+                    "NNS registry rejected get_subnet_for_canister: {msg}"
+                );
+                Err(NnsRegistryInfraError::Rejected { reason: msg }.into())
+            }
         }
     }
 }

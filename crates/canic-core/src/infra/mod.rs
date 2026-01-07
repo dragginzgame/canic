@@ -1,13 +1,5 @@
 pub mod ic;
 
-use crate::{
-    ThisError,
-    cdk::{
-        call::{CallFailed, CandidDecodeFailed, Error as CallError},
-        candid::Error as CandidError,
-    },
-};
-
 ///
 /// Prelude
 ///
@@ -21,6 +13,14 @@ pub mod prelude {
         log::Topic,
     };
 }
+
+use crate::{
+    ThisError,
+    cdk::{
+        call::{CallFailed, CandidDecodeFailed, Error as CallError},
+        candid::Error as CandidError,
+    },
+};
 
 ///
 /// InfraError

@@ -68,21 +68,20 @@ pub mod memory {
     }
 }
 
-use crate::{Error, storage::StorageError};
-use thiserror::Error as ThisError;
+use crate::{Error, storage::prelude::*};
 
 ///
-/// MemoryError
+/// StableMemoryError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum MemoryError {
+pub enum StableMemoryError {
     #[error("log write failed: current_size={current_size}, delta={delta}")]
     LogWriteFailed { current_size: u64, delta: u64 },
 }
 
-impl From<MemoryError> for Error {
-    fn from(err: MemoryError) -> Self {
-        StorageError::Memory(err).into()
+impl From<StableMemoryError> for Error {
+    fn from(err: StableMemoryError) -> Self {
+        StorageError::StableMemory(err).into()
     }
 }
