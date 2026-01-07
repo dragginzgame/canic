@@ -22,14 +22,19 @@ impl From<HttpInfraError> for InfraError {
 }
 
 ///
-/// Raw IC HTTP request passthrough.
-/// No metrics, no validation, no interpretation.
+/// HttpInfra
 ///
 
-pub async fn http_request_raw(args: &HttpRequestArgs) -> Result<HttpRequestResult, InfraError> {
-    let result = crate::cdk::mgmt::http_request(args)
-        .await
-        .map_err(HttpInfraError::from)?;
+pub struct HttpInfra;
 
-    Ok(result)
+impl HttpInfra {
+    /// Raw IC HTTP request passthrough.
+    /// No metrics, no validation, no interpretation.
+    pub async fn http_request_raw(args: &HttpRequestArgs) -> Result<HttpRequestResult, InfraError> {
+        let result = crate::cdk::mgmt::http_request(args)
+            .await
+            .map_err(HttpInfraError::from)?;
+
+        Ok(result)
+    }
 }

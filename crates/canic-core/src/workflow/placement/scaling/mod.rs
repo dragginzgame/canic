@@ -13,11 +13,10 @@ pub mod query;
 use crate::{
     Error, ThisError,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
-    dto::rpc::CreateCanisterParent,
     ops::{
         config::ConfigOps,
         ic::now_secs,
-        rpc::request::RequestOps,
+        rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
     workflow::{placement::PlacementWorkflowError, prelude::*},

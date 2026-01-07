@@ -16,9 +16,11 @@ use crate::{
     domain::policy::placement::sharding::{
         CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
     },
-    dto::{placement::sharding::ShardingPlanStateView, rpc::CreateCanisterParent},
+    dto::placement::sharding::ShardingPlanStateView,
     ops::{
-        config::ConfigOps, ic::now_secs, rpc::request::RequestOps,
+        config::ConfigOps,
+        ic::now_secs,
+        rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::sharding::ShardingRegistryOps,
     },
     workflow::{

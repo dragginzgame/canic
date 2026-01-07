@@ -4,6 +4,7 @@ pub mod canister_lifecycle;
 pub mod cascade;
 pub mod config;
 pub mod env;
+pub mod http;
 pub mod ic;
 pub mod icrc;
 pub mod log;

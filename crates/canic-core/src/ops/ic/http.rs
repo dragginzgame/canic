@@ -1,7 +1,10 @@
 use crate::{
-    Error, ThisError, dto, infra,
+    Error, ThisError,
+    infra::{
+        InfraError,
+        ic::http::{HttpHeader, HttpInfra, HttpMethod, HttpRequestArgs, HttpRequestResult},
+    },
     ops::{
-        self,
         ic::IcOpsError,
         runtime::metrics::{
             http::HttpMetrics,
@@ -30,7 +33,7 @@ pub enum HttpOpsError {
     HttpStatus(u32),
 
     #[error(transparent)]
-    Infra(#[from] infra::InfraError),
+    Infra(#[from] InfraError),
 
     #[error(transparent)]
     HttpDecode(#[from] serde_json::Error),
@@ -64,9 +67,9 @@ impl HttpOps {
         headers: &[(&str, &str)],
         label: Option<&str>,
     ) -> Result<T, Error> {
-        let args = infra::ic::http::HttpRequestArgs {
+        let args = HttpRequestArgs {
             url: url.to_string(),
-            method: infra::ic::http::HttpMethod::GET,
+            method: HttpMethod::GET,
             headers: headers_from_pairs(headers),
             max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..Default::default()
@@ -86,21 +89,12 @@ impl HttpOps {
     // Low-level escape hatches
     // -------------------------------------------------------------------------
 
-    /// Perform a raw HTTP request with metrics, returning the IC response verbatim.
-    pub async fn get_raw(
-        args: dto::http::HttpRequestArgs,
-    ) -> Result<dto::http::HttpRequestResult, Error> {
-        Self::get_raw_with_label(args, None).await
-    }
-
     /// Same as `get_raw`, with an optional metrics label.
     pub async fn get_raw_with_label(
-        args: dto::http::HttpRequestArgs,
+        args: HttpRequestArgs,
         label: Option<&str>,
-    ) -> Result<dto::http::HttpRequestResult, Error> {
-        let infra_args = request_args_from_dto(args);
-        let res = Self::perform_request(infra_args, label).await?;
-        Ok(result_to_dto(res))
+    ) -> Result<HttpRequestResult, Error> {
+        Self::perform_request(args, label).await
     }
 
     // -------------------------------------------------------------------------
@@ -109,11 +103,11 @@ impl HttpOps {
 
     /// Perform a raw IC HTTP outcall with mandatory metrics.
     async fn perform_request(
-        args: infra::ic::http::HttpRequestArgs,
+        args: HttpRequestArgs,
         label: Option<&str>,
-    ) -> Result<infra::ic::http::HttpRequestResult, Error> {
+    ) -> Result<HttpRequestResult, Error> {
         Self::record_metrics(args.method, &args.url, label);
-        let res = infra::ic::http::http_request_raw(&args)
+        let res = HttpInfra::http_request_raw(&args)
             .await
             .map_err(HttpOpsError::from)?;
 
@@ -121,82 +115,22 @@ impl HttpOps {
     }
 
     /// Record outbound HTTP metrics.
-    fn record_metrics(method: infra::ic::http::HttpMethod, url: &str, label: Option<&str>) {
+    fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        HttpMetrics::record_http_request(metrics_method(method), url, label);
+        HttpMetrics::record_http_request(method.into(), url, label);
     }
 }
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
+///
+/// helpers
+///
 
-fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<infra::ic::http::HttpHeader> {
+fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<HttpHeader> {
     headers
         .iter()
-        .map(|(name, value)| infra::ic::http::HttpHeader {
+        .map(|(name, value)| HttpHeader {
             name: (*name).to_string(),
             value: (*value).to_string(),
         })
         .collect()
-}
-
-// -----------------------------------------------------------------------------
-// Infra adapters
-// -----------------------------------------------------------------------------
-
-const fn metrics_method(
-    method: infra::ic::http::HttpMethod,
-) -> ops::runtime::metrics::http::HttpMethod {
-    match method {
-        infra::ic::http::HttpMethod::GET => ops::runtime::metrics::http::HttpMethod::Get,
-        infra::ic::http::HttpMethod::POST => ops::runtime::metrics::http::HttpMethod::Post,
-        infra::ic::http::HttpMethod::HEAD => ops::runtime::metrics::http::HttpMethod::Head,
-    }
-}
-
-// -----------------------------------------------------------------------------
-// DTO adapters
-// -----------------------------------------------------------------------------
-
-fn request_args_from_dto(args: dto::http::HttpRequestArgs) -> infra::ic::http::HttpRequestArgs {
-    infra::ic::http::HttpRequestArgs {
-        url: args.url,
-        max_response_bytes: args.max_response_bytes,
-        method: method_from_dto(args.method),
-        headers: args.headers.into_iter().map(header_from_dto).collect(),
-        body: args.body,
-        transform: None,
-        is_replicated: args.is_replicated,
-    }
-}
-
-fn result_to_dto(result: infra::ic::http::HttpRequestResult) -> dto::http::HttpRequestResult {
-    dto::http::HttpRequestResult {
-        status: result.status,
-        headers: result.headers.into_iter().map(header_to_dto).collect(),
-        body: result.body,
-    }
-}
-
-const fn method_from_dto(method: dto::http::HttpMethod) -> infra::ic::http::HttpMethod {
-    match method {
-        dto::http::HttpMethod::GET => infra::ic::http::HttpMethod::GET,
-        dto::http::HttpMethod::POST => infra::ic::http::HttpMethod::POST,
-        dto::http::HttpMethod::HEAD => infra::ic::http::HttpMethod::HEAD,
-    }
-}
-
-fn header_from_dto(header: dto::http::HttpHeader) -> infra::ic::http::HttpHeader {
-    infra::ic::http::HttpHeader {
-        name: header.name,
-        value: header.value,
-    }
-}
-
-fn header_to_dto(header: infra::ic::http::HttpHeader) -> dto::http::HttpHeader {
-    dto::http::HttpHeader {
-        name: header.name,
-        value: header.value,
-    }
 }

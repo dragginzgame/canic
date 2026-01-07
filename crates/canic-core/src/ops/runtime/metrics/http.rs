@@ -1,3 +1,4 @@
+use crate::infra::ic::http::HttpMethod as InfraHttpMethod;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -41,6 +42,16 @@ impl HttpMethod {
             Self::Get => "GET",
             Self::Post => "POST",
             Self::Head => "HEAD",
+        }
+    }
+}
+
+impl From<InfraHttpMethod> for HttpMethod {
+    fn from(method: crate::infra::ic::http::HttpMethod) -> Self {
+        match method {
+            InfraHttpMethod::GET => Self::Get,
+            InfraHttpMethod::POST => Self::Post,
+            InfraHttpMethod::HEAD => Self::Head,
         }
     }
 }

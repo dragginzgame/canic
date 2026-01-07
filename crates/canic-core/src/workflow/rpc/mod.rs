@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod request;
 
 use crate::{Error, ThisError, cdk::types::Principal, ids::CanisterRole, workflow::WorkflowError};
