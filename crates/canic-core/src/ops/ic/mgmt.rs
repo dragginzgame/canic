@@ -8,18 +8,13 @@ use crate::{
     cdk::{
         self,
         mgmt::{
-            CanisterStatusResult, CanisterStatusType, DefiniteCanisterSettings,
-            EnvironmentVariable as CdkEnvironmentVariable, LogVisibility as CdkLogVisibility,
-            MemoryMetrics, QueryStats,
+            CanisterStatusResult, CanisterStatusType as CdkCanisterStatusType,
+            DefiniteCanisterSettings, EnvironmentVariable as CdkEnvironmentVariable,
+            LogVisibility as CdkLogVisibility, MemoryMetrics as CdkMemoryMetrics,
+            QueryStats as CdkQueryStats,
         },
     },
-    dto::{
-        abi::v1::CanisterInitPayload,
-        canister::{
-            CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView,
-            EnvironmentVariableView, LogVisibilityView, MemoryMetricsView, QueryStatsView,
-        },
-    },
+    dto::abi::v1::CanisterInitPayload,
     infra::ic::mgmt::MgmtInfra,
     ops::{
         ic::IcOpsError,
@@ -103,6 +98,79 @@ pub struct UpdateSettingsArgs {
 }
 
 ///
+/// CanisterStatus
+///
+
+#[derive(Clone, Debug)]
+pub struct CanisterStatus {
+    pub status: CanisterStatusType,
+    pub settings: CanisterSettingsSnapshot,
+    pub module_hash: Option<Vec<u8>>,
+    pub memory_size: Nat,
+    pub memory_metrics: MemoryMetricsSnapshot,
+    pub cycles: Nat,
+    pub reserved_cycles: Nat,
+    pub idle_cycles_burned_per_day: Nat,
+    pub query_stats: QueryStatsSnapshot,
+}
+
+///
+/// CanisterStatusType
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanisterStatusType {
+    Running,
+    Stopping,
+    Stopped,
+}
+
+///
+/// CanisterSettingsSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct CanisterSettingsSnapshot {
+    pub controllers: Vec<Principal>,
+    pub compute_allocation: Nat,
+    pub memory_allocation: Nat,
+    pub freezing_threshold: Nat,
+    pub reserved_cycles_limit: Nat,
+    pub log_visibility: LogVisibility,
+    pub wasm_memory_limit: Nat,
+    pub wasm_memory_threshold: Nat,
+    pub environment_variables: Vec<EnvironmentVariable>,
+}
+
+///
+/// MemoryMetricsSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct MemoryMetricsSnapshot {
+    pub wasm_memory_size: Nat,
+    pub stable_memory_size: Nat,
+    pub global_memory_size: Nat,
+    pub wasm_binary_size: Nat,
+    pub custom_sections_size: Nat,
+    pub canister_history_size: Nat,
+    pub wasm_chunk_store_size: Nat,
+    pub snapshots_size: Nat,
+}
+
+///
+/// QueryStatsSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct QueryStatsSnapshot {
+    pub num_calls_total: Nat,
+    pub num_instructions_total: Nat,
+    pub request_payload_bytes_total: Nat,
+    pub response_payload_bytes_total: Nat,
+}
+
+///
 /// MgmtOps
 ///
 
@@ -130,14 +198,14 @@ impl MgmtOps {
     }
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
-    pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatusView, Error> {
+    pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, Error> {
         let status = MgmtInfra::canister_status(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
 
         SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
-        Ok(canister_status_to_view(status))
+        Ok(canister_status_from_infra(status))
     }
 
     //
@@ -294,66 +362,66 @@ impl MgmtOps {
 }
 
 ///
-/// View Adapters
+/// Infra Adapters
 ///
 
-fn canister_status_to_view(status: CanisterStatusResult) -> CanisterStatusView {
-    CanisterStatusView {
-        status: status_type_to_view(status.status),
-        settings: settings_to_view(status.settings),
+fn canister_status_from_infra(status: CanisterStatusResult) -> CanisterStatus {
+    CanisterStatus {
+        status: status_type_from_infra(status.status),
+        settings: settings_from_infra(status.settings),
         module_hash: status.module_hash,
         memory_size: status.memory_size,
-        memory_metrics: memory_metrics_to_view(status.memory_metrics),
+        memory_metrics: memory_metrics_from_infra(status.memory_metrics),
         cycles: status.cycles,
         reserved_cycles: status.reserved_cycles,
         idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
-        query_stats: query_stats_to_view(status.query_stats),
+        query_stats: query_stats_from_infra(status.query_stats),
     }
 }
 
-const fn status_type_to_view(status: CanisterStatusType) -> CanisterStatusTypeView {
+const fn status_type_from_infra(status: CdkCanisterStatusType) -> CanisterStatusType {
     match status {
-        CanisterStatusType::Running => CanisterStatusTypeView::Running,
-        CanisterStatusType::Stopping => CanisterStatusTypeView::Stopping,
-        CanisterStatusType::Stopped => CanisterStatusTypeView::Stopped,
+        CdkCanisterStatusType::Running => CanisterStatusType::Running,
+        CdkCanisterStatusType::Stopping => CanisterStatusType::Stopping,
+        CdkCanisterStatusType::Stopped => CanisterStatusType::Stopped,
     }
 }
 
-fn settings_to_view(settings: DefiniteCanisterSettings) -> CanisterSettingsView {
-    CanisterSettingsView {
+fn settings_from_infra(settings: DefiniteCanisterSettings) -> CanisterSettingsSnapshot {
+    CanisterSettingsSnapshot {
         controllers: settings.controllers,
         compute_allocation: settings.compute_allocation,
         memory_allocation: settings.memory_allocation,
         freezing_threshold: settings.freezing_threshold,
         reserved_cycles_limit: settings.reserved_cycles_limit,
-        log_visibility: log_visibility_to_view(settings.log_visibility),
+        log_visibility: log_visibility_from_infra(settings.log_visibility),
         wasm_memory_limit: settings.wasm_memory_limit,
         wasm_memory_threshold: settings.wasm_memory_threshold,
         environment_variables: settings
             .environment_variables
             .into_iter()
-            .map(environment_variable_to_view)
+            .map(environment_variable_from_infra)
             .collect(),
     }
 }
 
-fn log_visibility_to_view(log_visibility: CdkLogVisibility) -> LogVisibilityView {
+fn log_visibility_from_infra(log_visibility: CdkLogVisibility) -> LogVisibility {
     match log_visibility {
-        CdkLogVisibility::Controllers => LogVisibilityView::Controllers,
-        CdkLogVisibility::Public => LogVisibilityView::Public,
-        CdkLogVisibility::AllowedViewers(viewers) => LogVisibilityView::AllowedViewers(viewers),
+        CdkLogVisibility::Controllers => LogVisibility::Controllers,
+        CdkLogVisibility::Public => LogVisibility::Public,
+        CdkLogVisibility::AllowedViewers(viewers) => LogVisibility::AllowedViewers(viewers),
     }
 }
 
-fn environment_variable_to_view(variable: CdkEnvironmentVariable) -> EnvironmentVariableView {
-    EnvironmentVariableView {
+fn environment_variable_from_infra(variable: CdkEnvironmentVariable) -> EnvironmentVariable {
+    EnvironmentVariable {
         name: variable.name,
         value: variable.value,
     }
 }
 
-fn memory_metrics_to_view(metrics: MemoryMetrics) -> MemoryMetricsView {
-    MemoryMetricsView {
+fn memory_metrics_from_infra(metrics: CdkMemoryMetrics) -> MemoryMetricsSnapshot {
+    MemoryMetricsSnapshot {
         wasm_memory_size: metrics.wasm_memory_size,
         stable_memory_size: metrics.stable_memory_size,
         global_memory_size: metrics.global_memory_size,
@@ -365,8 +433,8 @@ fn memory_metrics_to_view(metrics: MemoryMetrics) -> MemoryMetricsView {
     }
 }
 
-fn query_stats_to_view(stats: QueryStats) -> QueryStatsView {
-    QueryStatsView {
+fn query_stats_from_infra(stats: CdkQueryStats) -> QueryStatsSnapshot {
+    QueryStatsSnapshot {
         num_calls_total: stats.num_calls_total,
         num_instructions_total: stats.num_instructions_total,
         request_payload_bytes_total: stats.request_payload_bytes_total,

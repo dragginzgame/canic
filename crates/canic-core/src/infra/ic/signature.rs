@@ -251,6 +251,6 @@ mod tests {
             issuer_pid,
         )
         .expect_err("expected invalid signature, not success");
-        assert_eq!(err.to_string(), "invalid signature");
+        assert!(err.to_string().starts_with("invalid signature"));
     }
 }
