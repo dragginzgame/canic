@@ -11,12 +11,10 @@
 //! The contents are replaced wholesale on import.
 
 use crate::{
-    cdk::{
-        candid::Principal,
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    storage::{
+        canister::CanisterSummary, prelude::*, stable::memory::children::CANISTER_CHILDREN_ID,
     },
-    eager_static, ic_memory,
-    storage::{canister::CanisterSummary, stable::memory::children::CANISTER_CHILDREN_ID},
 };
 use std::cell::RefCell;
 

@@ -1,6 +1,4 @@
-use crate::{cdk::candid::Principal, ids::CanisterRole, memory::impl_storable_bounded};
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use crate::storage::prelude::*;
 
 ///
 /// CanisterEntry

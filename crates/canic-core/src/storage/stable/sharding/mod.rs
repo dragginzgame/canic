@@ -3,17 +3,16 @@ pub mod registry;
 use crate::{
     cdk::{
         structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
-        types::{BoundedString64, BoundedString128, Principal},
+        types::{BoundedString64, BoundedString128},
     },
-    eager_static, ic_memory,
-    ids::CanisterRole,
-    memory::impl_storable_bounded,
-    storage::stable::{
-        memory::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-        sharding::registry::ShardingRegistry,
+    storage::{
+        prelude::*,
+        stable::{
+            memory::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+            sharding::registry::ShardingRegistry,
+        },
     },
 };
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 //

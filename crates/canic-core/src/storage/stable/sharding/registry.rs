@@ -1,9 +1,9 @@
 use crate::{
-    cdk::{
-        candid::Principal,
-        structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    storage::{
+        prelude::*,
+        stable::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
     },
-    storage::stable::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
 };
 
 ///
