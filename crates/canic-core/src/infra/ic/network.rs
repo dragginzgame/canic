@@ -51,22 +51,24 @@ impl NetworkInfra {
 
     #[must_use]
     pub fn build_network() -> Option<BuildNetwork> {
-        build_network_from_dfx_network(option_env!("DFX_NETWORK"))
+        Self::build_network_from_dfx_network(option_env!("DFX_NETWORK"))
     }
-}
 
-///
-/// build_network_from_dfx_network
-/// Pure helper for `build_network()`, exposed for testing and reuse.
-///
+    ///
+    /// build_network_from_dfx_network
+    /// Pure helper for `build_network()`
+    ///
 
-#[must_use]
-pub fn build_network_from_dfx_network(dfx_network: Option<&'static str>) -> Option<BuildNetwork> {
-    match dfx_network {
-        Some("local") => Some(BuildNetwork::Local),
-        Some("ic") => Some(BuildNetwork::Ic),
+    #[must_use]
+    pub fn build_network_from_dfx_network(
+        dfx_network: Option<&'static str>,
+    ) -> Option<BuildNetwork> {
+        match dfx_network {
+            Some("local") => Some(BuildNetwork::Local),
+            Some("ic") => Some(BuildNetwork::Ic),
 
-        _ => None,
+            _ => None,
+        }
     }
 }
 
@@ -81,7 +83,7 @@ mod tests {
     #[test]
     fn build_network_from_dfx_network_parses_ic() {
         assert_eq!(
-            build_network_from_dfx_network(Some("ic")),
+            NetworkInfra::build_network_from_dfx_network(Some("ic")),
             Some(BuildNetwork::Ic)
         );
     }
@@ -89,18 +91,21 @@ mod tests {
     #[test]
     fn build_network_from_dfx_network_parses_local() {
         assert_eq!(
-            build_network_from_dfx_network(Some("local")),
+            NetworkInfra::build_network_from_dfx_network(Some("local")),
             Some(BuildNetwork::Local)
         );
     }
 
     #[test]
     fn build_network_from_dfx_network_rejects_unknown() {
-        assert_eq!(build_network_from_dfx_network(Some("nope")), None);
+        assert_eq!(
+            NetworkInfra::build_network_from_dfx_network(Some("nope")),
+            None
+        );
     }
 
     #[test]
     fn build_network_from_dfx_network_handles_missing() {
-        assert_eq!(build_network_from_dfx_network(None), None);
+        assert_eq!(NetworkInfra::build_network_from_dfx_network(None), None);
     }
 }

@@ -26,14 +26,16 @@ use crate::{
     },
 };
 
-//
-// -----------------------------------------------------------------------------
-// StateSnapshot ↔ StateSnapshotView
-// -----------------------------------------------------------------------------
+///
+/// StateSnapshotAdapter
+///
 
-impl From<&StateSnapshot> for StateSnapshotView {
-    fn from(snapshot: &StateSnapshot) -> Self {
-        Self {
+pub struct StateSnapshotAdapter;
+
+impl StateSnapshotAdapter {
+    #[must_use]
+    pub fn to_view(snapshot: &StateSnapshot) -> StateSnapshotView {
+        StateSnapshotView {
             app_state: snapshot
                 .app_state
                 .clone()
@@ -55,33 +57,30 @@ impl From<&StateSnapshot> for StateSnapshotView {
                 .map(SubnetDirectoryMapper::snapshot_to_view),
         }
     }
-}
 
-impl From<StateSnapshot> for StateSnapshotView {
-    fn from(snapshot: StateSnapshot) -> Self {
-        Self::from(&snapshot)
+    #[must_use]
+    pub fn from_view(view: StateSnapshotView) -> StateSnapshot {
+        StateSnapshot {
+            app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
+            subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
+            app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
+            subnet_directory: view
+                .subnet_directory
+                .map(SubnetDirectoryMapper::view_to_snapshot),
+        }
     }
 }
 
-pub fn state_snapshot_from_view(view: StateSnapshotView) -> StateSnapshot {
-    StateSnapshot {
-        app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
-        subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
-        app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
-        subnet_directory: view
-            .subnet_directory
-            .map(SubnetDirectoryMapper::view_to_snapshot),
-    }
-}
+///
+/// TopologySnapshotAdapter
+///
 
-//
-// -----------------------------------------------------------------------------
-// TopologySnapshot ↔ TopologySnapshotView
-// -----------------------------------------------------------------------------
+pub struct TopologySnapshotAdapter;
 
-impl From<&TopologySnapshot> for TopologySnapshotView {
-    fn from(snapshot: &TopologySnapshot) -> Self {
-        Self {
+impl TopologySnapshotAdapter {
+    #[must_use]
+    pub fn to_view(snapshot: &TopologySnapshot) -> TopologySnapshotView {
+        TopologySnapshotView {
             parents: snapshot
                 .parents
                 .iter()
@@ -91,6 +90,7 @@ impl From<&TopologySnapshot> for TopologySnapshotView {
                     parent_pid: p.parent_pid,
                 })
                 .collect(),
+
             children_map: snapshot
                 .children_map
                 .iter()
@@ -107,39 +107,35 @@ impl From<&TopologySnapshot> for TopologySnapshotView {
                 .collect(),
         }
     }
-}
 
-impl From<TopologySnapshot> for TopologySnapshotView {
-    fn from(snapshot: TopologySnapshot) -> Self {
-        Self::from(&snapshot)
-    }
-}
+    #[must_use]
+    pub fn from_view(view: TopologySnapshotView) -> TopologySnapshot {
+        TopologySnapshot {
+            parents: view
+                .parents
+                .into_iter()
+                .map(|p| TopologyPathNode {
+                    pid: p.pid,
+                    role: p.role,
+                    parent_pid: p.parent_pid,
+                })
+                .collect(),
 
-pub fn topology_snapshot_from_view(view: TopologySnapshotView) -> TopologySnapshot {
-    TopologySnapshot {
-        parents: view
-            .parents
-            .into_iter()
-            .map(|p| TopologyPathNode {
-                pid: p.pid,
-                role: p.role,
-                parent_pid: p.parent_pid,
-            })
-            .collect(),
-        children_map: view
-            .children_map
-            .into_iter()
-            .map(|entry| {
-                let mapped = entry
-                    .children
-                    .into_iter()
-                    .map(|child| TopologyDirectChild {
-                        pid: child.pid,
-                        role: child.role,
-                    })
-                    .collect();
-                (entry.parent_pid, mapped)
-            })
-            .collect(),
+            children_map: view
+                .children_map
+                .into_iter()
+                .map(|entry| {
+                    let mapped = entry
+                        .children
+                        .into_iter()
+                        .map(|child| TopologyDirectChild {
+                            pid: child.pid,
+                            role: child.role,
+                        })
+                        .collect();
+                    (entry.parent_pid, mapped)
+                })
+                .collect(),
+        }
     }
 }

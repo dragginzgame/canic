@@ -2,7 +2,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::now_secs,
+        ic::IcOps,
         runtime::{
             log::LogOps,
             timer::{TimerId, TimerOps},
@@ -61,7 +61,7 @@ impl LogRetentionWorkflow {
                 return false;
             }
         };
-        let now = now_secs();
+        let now = IcOps::now_secs();
         let params = policy::log::retention_params(&cfg, now);
 
         match LogOps::apply_retention(params.cutoff, params.max_entries, params.max_entry_bytes) {

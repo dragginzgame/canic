@@ -4,7 +4,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::{mgmt::MgmtOps, now_secs, spawn},
+        ic::{IcOps, mgmt::MgmtOps},
         rpc::request::RequestOps,
         runtime::{
             env::EnvOps,
@@ -59,7 +59,7 @@ impl CycleTrackerWorkflow {
     }
 
     pub fn track() {
-        let ts = now_secs();
+        let ts = IcOps::now_secs();
         let cycles = MgmtOps::canister_cycle_balance();
 
         if !EnvOps::is_root() {
@@ -98,7 +98,7 @@ impl CycleTrackerWorkflow {
             return;
         }
 
-        spawn(async move {
+        IcOps::spawn(async move {
             let result = RequestOps::request_cycles(plan.amount.to_u128()).await;
 
             TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
@@ -122,7 +122,7 @@ impl CycleTrackerWorkflow {
     /// Purge old entries based on the retention window.
     #[must_use]
     pub fn purge() -> bool {
-        let now = now_secs();
+        let now = IcOps::now_secs();
         let cutoff = policy::cycles::retention_cutoff(now);
         let purged = CycleTrackerOps::purge_before(cutoff);
 

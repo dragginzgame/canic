@@ -17,8 +17,8 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{
+            IcOps,
             mgmt::{CanisterInstallMode, MgmtOps},
-            now_secs,
         },
         runtime::{env::EnvOps, wasm::WasmOps},
         storage::{
@@ -289,7 +289,7 @@ async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, Allocation
 
 /// Create a fresh canister on the IC with the configured controllers.
 async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<Principal, Error> {
-    let root = canister_self();
+    let root = IcOps::canister_self();
     let mut controllers = Config::get()?.controllers.clone();
     controllers.push(root); // root always controls
 
@@ -334,7 +334,8 @@ async fn install_canister(
         &canister_cfg,
     )
     .map_err(Error::from)?;
-    let created_at = now_secs();
+
+    let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;
 
     if let Err(err) = MgmtOps::install_canister_with_payload(

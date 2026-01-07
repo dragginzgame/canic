@@ -6,7 +6,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::{mgmt::MgmtOps, now_nanos},
+        ic::{IcOps, mgmt::MgmtOps},
         runtime::timer::{TimerId, TimerOps},
     },
     workflow::prelude::*,
@@ -86,8 +86,8 @@ impl RandomWorkflow {
     }
 
     fn seed_from_time() {
-        let now = now_nanos();
-        let canister_id = canister_self();
+        let now = IcOps::now_nanos();
+        let canister_id = IcOps::canister_self();
 
         let mut hasher = Sha256::new();
         hasher.update(now.to_be_bytes());

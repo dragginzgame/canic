@@ -70,7 +70,7 @@ impl HttpOps {
         let args = HttpRequestArgs {
             url: url.to_string(),
             method: HttpMethod::GET,
-            headers: headers_from_pairs(headers),
+            headers: Self::headers_from_pairs(headers),
             max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..Default::default()
         };
@@ -119,18 +119,18 @@ impl HttpOps {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
         HttpMetrics::record_http_request(method.into(), url, label);
     }
-}
 
-///
-/// helpers
-///
+    ///
+    /// helpers
+    ///
 
-fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<HttpHeader> {
-    headers
-        .iter()
-        .map(|(name, value)| HttpHeader {
-            name: (*name).to_string(),
-            value: (*value).to_string(),
-        })
-        .collect()
+    fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<HttpHeader> {
+        headers
+            .iter()
+            .map(|(name, value)| HttpHeader {
+                name: (*name).to_string(),
+                value: (*value).to_string(),
+            })
+            .collect()
+    }
 }

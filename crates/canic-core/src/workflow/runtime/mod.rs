@@ -7,7 +7,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
-        ic::{now_secs, println, signature::SignatureOps, trap},
+        ic::{IcOps, signature::SignatureOps},
         runtime::{
             env::{EnvOps, EnvSnapshot},
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
@@ -60,8 +60,8 @@ impl RuntimeWorkflow {
 
 fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
     let msg = format!("canic init failed during {phase}: {err}");
-    println(&format!("[canic] FATAL: {msg}"));
-    trap(&msg);
+    IcOps::println(&format!("[canic] FATAL: {msg}"));
+    IcOps::trap(&msg);
 }
 
 fn init_memory_or_trap(phase: &str) -> MemoryRegistryInitSummary {
@@ -104,9 +104,9 @@ pub fn init_root_canister(identity: SubnetIdentity) {
     crate::log::set_ready();
 
     // log header
-    println("");
-    println("");
-    println("");
+    IcOps::println("");
+    IcOps::println("");
+    IcOps::println("");
     crate::log!(
         Topic::Init,
         Info,
@@ -116,11 +116,11 @@ pub fn init_root_canister(identity: SubnetIdentity) {
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Env registration ---
-    let self_pid = canister_self();
+    let self_pid = IcOps::canister_self();
     let (subnet_pid, subnet_role, prime_root_pid) = match identity {
         SubnetIdentity::Prime => (self_pid, SubnetRole::PRIME, self_pid),
         SubnetIdentity::Standard(params) => (self_pid, params.subnet_type, params.prime_root_pid),
-        SubnetIdentity::Manual => (canister_self(), SubnetRole::PRIME, self_pid),
+        SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid),
     };
 
     let snapshot = EnvSnapshot {
@@ -136,7 +136,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
-    let created_at = now_secs();
+    let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root(self_pid, created_at);
 
     // --- Phase 3: Service startup ---

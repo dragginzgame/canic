@@ -6,7 +6,7 @@ use crate::{
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ops::{
-        ic::mgmt::MgmtOps,
+        ic::{IcOps, mgmt::MgmtOps},
         storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
@@ -38,7 +38,7 @@ impl RootResponseWorkflow {
     async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
         env::require_root()?;
 
-        let caller = msg_caller();
+        let caller = IcOps::msg_caller();
         let role = req.canister_role.clone();
         let parent_desc = format!("{:?}", &req.parent);
 
@@ -46,7 +46,7 @@ impl RootResponseWorkflow {
             // Look up parent
             let parent_pid = match &req.parent {
                 CreateCanisterParent::Canister(pid) => *pid,
-                CreateCanisterParent::Root => canister_self(),
+                CreateCanisterParent::Root => IcOps::canister_self(),
                 CreateCanisterParent::ThisCanister => caller,
 
                 CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(caller)
@@ -88,7 +88,7 @@ impl RootResponseWorkflow {
     async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
         env::require_root()?;
 
-        let caller = msg_caller();
+        let caller = IcOps::msg_caller();
         let registry_entry = SubnetRegistryOps::get(req.canister_pid)
             .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
 
@@ -109,7 +109,7 @@ impl RootResponseWorkflow {
     async fn cycles_response(req: &CyclesRequest) -> Result<Response, Error> {
         env::require_root()?;
 
-        MgmtOps::deposit_cycles(msg_caller(), req.cycles).await?;
+        MgmtOps::deposit_cycles(IcOps::msg_caller(), req.cycles).await?;
 
         let cycles_transferred = req.cycles;
 

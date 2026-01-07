@@ -5,8 +5,8 @@ pub mod mgmt;
 pub mod network;
 pub mod signature;
 
-// re-exports
-pub use crate::ops::ic::{now_micros, now_millis, now_nanos, now_secs};
+// fine to use externally
+pub use crate::ops::ic::IcOps;
 
 use crate::{api::prelude::*, cdk::candid::CandidType, ops::ic::call::CallOps};
 use serde::de::DeserializeOwned;

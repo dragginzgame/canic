@@ -17,7 +17,7 @@ use crate::{
     Error,
     domain::policy::pool::PoolPolicyError,
     ops::{
-        ic::now_secs,
+        ic::IcOps,
         runtime::timer::{TimerId, TimerOps},
         storage::pool::PoolOps,
     },
@@ -143,13 +143,13 @@ impl PoolSchedulerWorkflow {
 
                 Err(PoolPolicyError::NonImportableOnLocal { .. }) => {
                     // Not admissible yet → requeue
-                    let created_at = now_secs();
+                    let created_at = IcOps::now_secs();
                     PoolOps::mark_pending_reset(pid, created_at);
                     continue;
                 }
 
                 Err(_) => {
-                    let created_at = now_secs();
+                    let created_at = IcOps::now_secs();
                     PoolOps::mark_pending_reset(pid, created_at);
                     continue;
                 }

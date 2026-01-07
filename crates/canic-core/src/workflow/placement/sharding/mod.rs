@@ -19,7 +19,7 @@ use crate::{
     dto::placement::sharding::ShardingPlanStateView,
     ops::{
         config::ConfigOps,
-        ic::now_secs,
+        ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::sharding::ShardingRegistryOps,
     },
@@ -77,7 +77,7 @@ impl ShardAllocator {
 
         let pid = response.new_canister_pid;
 
-        let created_at = now_secs();
+        let created_at = IcOps::now_secs();
         ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity, created_at)?;
 
         log!(

@@ -31,7 +31,7 @@ pub mod prelude {
         ids::CanisterRole,
         log,
         log::Topic,
-        ops::ic::{Cycles, canister_self, msg_caller},
+        ops::ic::Cycles,
     };
 }
 

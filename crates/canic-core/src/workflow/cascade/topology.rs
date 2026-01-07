@@ -1,3 +1,4 @@
+//!
 //! Topology cascade workflow.
 //!
 //! Coordinates propagation of topology snapshots from root to leaves.
@@ -8,6 +9,7 @@ use crate::{
     dto::cascade::TopologySnapshotView,
     ops::{
         cascade::CascadeOps,
+        ic::IcOps,
         storage::children::{CanisterChildrenOps, ChildSnapshot, ChildrenSnapshot},
     },
     workflow::{
@@ -15,7 +17,7 @@ use crate::{
             CascadeWorkflowError,
             snapshot::{
                 TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
-                adapter::topology_snapshot_from_view,
+                adapter::TopologySnapshotAdapter,
             },
             warn_if_large,
         },
@@ -28,7 +30,6 @@ use std::collections::HashMap;
 /// TopologyCascadeWorkflow
 /// Orchestrates topology snapshot propagation across the canister tree.
 ///
-
 pub struct TopologyCascadeWorkflow;
 
 impl TopologyCascadeWorkflow {
@@ -40,7 +41,7 @@ impl TopologyCascadeWorkflow {
 
         let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
 
-        let root_pid = canister_self();
+        let root_pid = IcOps::canister_self();
         let Some(first_child) = Self::next_child_on_path(root_pid, &snapshot.parents)? else {
             log!(
                 Topic::Sync,
@@ -60,8 +61,9 @@ impl TopologyCascadeWorkflow {
     pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
         access::env::deny_root()?;
 
-        let snapshot = topology_snapshot_from_view(view);
-        let self_pid = canister_self();
+        let snapshot = TopologySnapshotAdapter::from_view(view);
+
+        let self_pid = IcOps::canister_self();
         let next = Self::next_child_on_path(self_pid, &snapshot.parents)?;
 
         let children = snapshot
@@ -97,7 +99,7 @@ impl TopologyCascadeWorkflow {
     // ───────────────────────── Internal helpers ──────────────────────
 
     async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshot) -> Result<(), Error> {
-        let view = TopologySnapshotView::from(snapshot);
+        let view = TopologySnapshotAdapter::to_view(snapshot);
 
         CascadeOps::send_topology_snapshot(*pid, &view)
             .await
