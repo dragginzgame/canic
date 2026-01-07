@@ -1,6 +1,11 @@
 use crate::{
-    Error, ThisError, infra,
-    infra::ic::call::Call as CallInfra,
+    Error, ThisError,
+    infra::{
+        InfraError,
+        ic::call::{
+            Call as InfraCall, CallBuilder as InfraCallBuilder, CallResult as InfraCallResult,
+        },
+    },
     ops::{ic::IcOpsError, prelude::*, runtime::metrics::icc::IccMetrics},
 };
 use serde::de::DeserializeOwned;
@@ -11,7 +16,7 @@ use serde::de::DeserializeOwned;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]
-pub struct CallError(#[from] infra::InfraError);
+pub struct CallError(#[from] InfraError);
 
 impl From<CallError> for Error {
     fn from(err: CallError) -> Self {
@@ -40,7 +45,7 @@ impl CallOps {
         IccMetrics::record_call(canister_id, method);
 
         CallBuilder {
-            inner: CallInfra::bounded_wait(canister_id, method),
+            inner: InfraCall::bounded_wait(canister_id, method),
         }
     }
 
@@ -51,7 +56,7 @@ impl CallOps {
         IccMetrics::record_call(canister_id, method);
 
         CallBuilder {
-            inner: CallInfra::unbounded_wait(canister_id, method),
+            inner: InfraCall::unbounded_wait(canister_id, method),
         }
     }
 }
@@ -61,7 +66,7 @@ impl CallOps {
 ///
 
 pub struct CallBuilder {
-    inner: infra::ic::call::CallBuilder,
+    inner: InfraCallBuilder,
 }
 
 impl CallBuilder {
@@ -89,7 +94,7 @@ impl CallBuilder {
 ///
 
 pub struct CallResult {
-    inner: infra::ic::call::CallResult,
+    inner: InfraCallResult,
 }
 
 impl CallResult {
