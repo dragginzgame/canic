@@ -28,23 +28,31 @@ impl Display for BuildNetwork {
 }
 
 ///
-/// build_network
-/// Returns the network inferred at *build time* from `DFX_NETWORK`.
-/// This value is baked into the Wasm and does not reflect runtime state.
-///
-/// ChatGPT 5.2 Final, Precise Verdict
-///
-/// ✅ Yes, this works exactly as you say
-/// ✅ It is valid IC/Wasm code
-/// ❌ It is not runtime detection
-/// ⚠️ The danger is semantic, not technical
-/// ✅ Safe if treated as a build-time constant
-/// ❌ Dangerous if treated as authoritative runtime truth
+/// NetworkInfra
 ///
 
-#[must_use]
-pub fn build_network() -> Option<BuildNetwork> {
-    build_network_from_dfx_network(option_env!("DFX_NETWORK"))
+pub struct NetworkInfra;
+
+impl NetworkInfra {
+    ///
+    /// build_network
+    /// Returns the network inferred at *build time* from `DFX_NETWORK`.
+    /// This value is baked into the Wasm and does not reflect runtime state.
+    ///
+    /// ChatGPT 5.2 Final, Precise Verdict
+    ///
+    /// ✅ Yes, this works exactly as you say
+    /// ✅ It is valid IC/Wasm code
+    /// ❌ It is not runtime detection
+    /// ⚠️ The danger is semantic, not technical
+    /// ✅ Safe if treated as a build-time constant
+    /// ❌ Dangerous if treated as authoritative runtime truth
+    ///
+
+    #[must_use]
+    pub fn build_network() -> Option<BuildNetwork> {
+        build_network_from_dfx_network(option_env!("DFX_NETWORK"))
+    }
 }
 
 ///
