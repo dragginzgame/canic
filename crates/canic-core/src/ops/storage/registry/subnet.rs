@@ -161,13 +161,13 @@ impl SubnetRegistryOps {
         parent_pid: Principal,
         module_hash: Vec<u8>,
         created_at: u64,
-    ) -> Result<(), SubnetRegistryOpsError> {
+    ) -> Result<(), Error> {
         if SubnetRegistry::get(pid).is_some() {
-            return Err(SubnetRegistryOpsError::AlreadyRegistered(pid));
+            return Err(SubnetRegistryOpsError::AlreadyRegistered(pid).into());
         }
 
         if SubnetRegistry::get(parent_pid).is_none() {
-            return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid));
+            return Err(SubnetRegistryOpsError::ParentNotFound(parent_pid).into());
         }
 
         SubnetRegistry::register(pid, role, parent_pid, module_hash, created_at);

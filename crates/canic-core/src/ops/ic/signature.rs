@@ -1,4 +1,7 @@
-use crate::{Error, infra, ops::prelude::*};
+use crate::{
+    Error, infra,
+    ops::{ic::IcOpsError, prelude::*},
+};
 
 ///
 /// SignatureOps
@@ -9,7 +12,8 @@ pub struct SignatureOps;
 impl SignatureOps {
     /// Prepare a canister signature (update-only).
     pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
-        infra::ic::signature::prepare(domain, seed, message).map_err(Error::from)
+        infra::ic::signature::prepare(domain, seed, message).map_err(IcOpsError::from)?;
+        Ok(())
     }
 
     #[must_use]
@@ -18,7 +22,10 @@ impl SignatureOps {
     }
 
     pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
-        infra::ic::signature::sign(domain, seed, message).map_err(Error::from)
+        let signature =
+            infra::ic::signature::sign(domain, seed, message).map_err(IcOpsError::from)?;
+
+        Ok(signature)
     }
 
     pub fn verify(
@@ -29,7 +36,9 @@ impl SignatureOps {
         issuer_pid: Principal,
     ) -> Result<(), Error> {
         infra::ic::signature::verify(domain, seed, message, signature_cbor, issuer_pid)
-            .map_err(Error::from)
+            .map_err(IcOpsError::from)?;
+
+        Ok(())
     }
 
     #[must_use]

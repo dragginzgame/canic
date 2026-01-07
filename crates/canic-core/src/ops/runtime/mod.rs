@@ -2,7 +2,6 @@ pub mod env;
 pub mod log;
 pub mod memory;
 pub mod metrics;
-pub mod network;
 pub mod timer;
 pub mod wasm;
 
@@ -16,6 +15,9 @@ use crate::{Error, ThisError, ops::OpsError};
 pub enum RuntimeOpsError {
     #[error(transparent)]
     EnvOps(#[from] env::EnvOpsError),
+
+    #[error(transparent)]
+    LogOps(#[from] log::LogOpsError),
 
     #[error(transparent)]
     MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),

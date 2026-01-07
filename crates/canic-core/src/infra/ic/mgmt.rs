@@ -7,7 +7,7 @@ use crate::{
     ThisError,
     cdk::{
         self,
-        candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder},
+        candid::{Principal, encode_args, utils::ArgumentEncoder},
         mgmt::{
             CanisterInstallMode, CanisterSettings, CanisterStatusArgs, CanisterStatusResult,
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
@@ -105,9 +105,11 @@ pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InfraError> {
 
 /// Query the management canister for raw randomness.
 pub async fn raw_rand() -> Result<[u8; 32], InfraError> {
-    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand").await?;
+    let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand")
+        .execute()
+        .await?;
 
-    let bytes: Vec<u8> = decode_one(&response)?;
+    let bytes: Vec<u8> = response.candid()?;
     let len = bytes.len();
 
     let seed: [u8; 32] = bytes

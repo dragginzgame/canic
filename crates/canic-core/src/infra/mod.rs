@@ -30,16 +30,38 @@ pub mod prelude {
 pub enum InfraError {
     #[error(transparent)]
     IcInfra(#[from] ic::IcInfraError),
+}
 
-    #[error(transparent)]
-    Call(#[from] CallError),
+impl From<CallFailed> for InfraError {
+    fn from(err: CallFailed) -> Self {
+        ic::IcInfraError::from(err).into()
+    }
+}
 
-    #[error(transparent)]
-    CallFailed(#[from] CallFailed),
+impl From<CandidDecodeFailed> for InfraError {
+    fn from(err: CandidDecodeFailed) -> Self {
+        ic::IcInfraError::from(err).into()
+    }
+}
 
-    #[error(transparent)]
-    Candid(#[from] CandidError),
+impl From<CandidError> for InfraError {
+    fn from(err: CandidError) -> Self {
+        ic::IcInfraError::from(err).into()
+    }
+}
 
-    #[error(transparent)]
-    CandidDecode(#[from] CandidDecodeFailed),
+/// Normalize call-layer errors back into IC mechanical failures.
+///
+/// This conversion must remain lossless and mechanical only.
+impl From<CallError> for InfraError {
+    fn from(err: CallError) -> Self {
+        match err {
+            CallError::CandidDecodeFailed(err) => Self::from(err),
+            CallError::InsufficientLiquidCycleBalance(err) => {
+                Self::from(CallFailed::InsufficientLiquidCycleBalance(err))
+            }
+            CallError::CallPerformFailed(err) => Self::from(CallFailed::CallPerformFailed(err)),
+            CallError::CallRejected(err) => Self::from(CallFailed::CallRejected(err)),
+        }
+    }
 }

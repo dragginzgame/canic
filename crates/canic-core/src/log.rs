@@ -1,5 +1,5 @@
 use crate::{
-    ops::{ic::runtime::now_secs, runtime::log::LogOps},
+    ops::{ic::now_secs, runtime::log::LogOps},
     storage::stable::env::Env,
 };
 use candid::CandidType;

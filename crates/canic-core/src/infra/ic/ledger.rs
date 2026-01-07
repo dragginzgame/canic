@@ -1,42 +1,43 @@
-//! ICRC ledger helpers (IC edge).
+//! ICRC ledger helpers (infra / IC edge).
 //!
-//! This module groups ICRC-2 allowance and transfer-from calls behind a
-//! consistent Canic API surface.
+//! This module provides **raw, mechanical access** to ICRC-2 ledger calls.
+//! It performs no policy checks, no validation, and no orchestration.
+//!
+//! Responsibilities:
+//! - Construct IC arguments
+//! - Execute ledger calls
+//! - Decode responses
+//! - Surface lossless, mechanical failures
+//!
+//! Non-responsibilities:
+//! - Allowance sufficiency checks
+//! - Expiry validation
+//! - Business or access rules
+//! - Metrics or logging
+
 #![allow(dead_code)]
 
-/// TODO - don't let this stay dead for long
 use crate::{
     cdk::{
-        api,
         env::ck::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},
         spec::icrc::icrc2::{
             Allowance, AllowanceArgs, TransferFromArgs, TransferFromError, TransferFromResult,
         },
     },
-    infra::{ic::IcInfraError, prelude::*},
+    infra::{
+        ic::{IcInfraError, call::Call},
+        prelude::*,
+    },
 };
 
 ///
 /// LedgerInfraError
+/// Mechanical failures returned by ICRC ledger calls.
 ///
 
 #[derive(Debug, ThisError)]
 pub enum LedgerInfraError {
-    #[error("insufficient {symbol} allowance: has {allowance}, needs {required}")]
-    InsufficientAllowance {
-        symbol: &'static str,
-        allowance: u64,
-        required: u64,
-    },
-
-    #[error("{symbol} allowance expired at {expires_at_nanos} (now {now_nanos})")]
-    AllowanceExpired {
-        symbol: &'static str,
-        expires_at_nanos: u64,
-        now_nanos: u64,
-    },
-
-    #[error("{symbol} icrc2_transfer_from failed: {error:?}")]
+    #[error("{symbol} icrc2_transfer_from rejected: {error:?}")]
     TransferFromRejected {
         symbol: &'static str,
         error: TransferFromError,
@@ -45,13 +46,13 @@ pub enum LedgerInfraError {
 
 impl From<LedgerInfraError> for InfraError {
     fn from(err: LedgerInfraError) -> Self {
-        IcInfraError::from(err).into()
+        IcInfraError::LedgerInfra(err).into()
     }
 }
 
 ///
 /// LedgerMeta
-/// Minimal metadata for known ledgers used in error messages and unit conversion.
+/// Best-effort static metadata for known ledgers.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,11 +62,8 @@ pub struct LedgerMeta {
     pub is_known: bool,
 }
 
-///
 /// ledger_meta
-/// Returns best-effort metadata for a ledger.
-///
-
+/// Returns best-effort metadata for a ledger canister.
 #[must_use]
 pub fn ledger_meta(ledger_id: Principal) -> LedgerMeta {
     if ledger_id == *CKUSDC_LEDGER_CANISTER {
@@ -91,11 +89,8 @@ pub fn ledger_meta(ledger_id: Principal) -> LedgerMeta {
     }
 }
 
-///
 /// icrc2_allowance
-/// Calls `icrc2_allowance` on a ledger.
-///
-
+/// Calls `icrc2_allowance` on the given ledger and returns the raw allowance.
 pub async fn icrc2_allowance(
     ledger_id: Principal,
     account: Account,
@@ -104,93 +99,30 @@ pub async fn icrc2_allowance(
     let args = AllowanceArgs { account, spender };
 
     let allowance: Allowance = Call::unbounded_wait(ledger_id, "icrc2_allowance")
-        .with_arg(args)
+        .try_with_arg(args)?
+        .execute()
         .await?
         .candid()?;
 
     Ok(allowance)
 }
 
-///
-/// validate_allowance
-/// Ensures a payer has approved at least `required_amount` for the spender.
-///
-
-pub async fn validate_allowance(
-    ledger_id: Principal,
-    payer: Principal,
-    spender: Account,
-    required_amount: u64,
-) -> Result<(), InfraError> {
-    let meta = ledger_meta(ledger_id);
-
-    let payer_account = Account {
-        owner: payer,
-        subaccount: None,
-    };
-
-    let allowance = icrc2_allowance(ledger_id, payer_account, spender).await?;
-
-    if allowance.allowance < required_amount {
-        return Err(LedgerInfraError::InsufficientAllowance {
-            symbol: meta.symbol,
-            allowance: allowance.allowance,
-            required: required_amount,
-        }
-        .into());
-    }
-
-    if let Some(expires_at_nanos) = allowance.expires_at {
-        let now_nanos = api::time();
-        if expires_at_nanos <= now_nanos {
-            return Err(LedgerInfraError::AllowanceExpired {
-                symbol: meta.symbol,
-                expires_at_nanos,
-                now_nanos,
-            }
-            .into());
-        }
-    }
-
-    Ok(())
-}
-
-///
 /// icrc2_transfer_from
-/// Executes an ICRC-2 `transfer_from` and returns the block index on success.
-///
-
+/// Executes `icrc2_transfer_from` and returns the raw result.
 pub async fn icrc2_transfer_from(
     ledger_id: Principal,
-    from: Principal,
-    to: Account,
-    amount: u64,
-    memo: Option<Vec<u8>>,
-) -> Result<u64, InfraError> {
-    let meta = ledger_meta(ledger_id);
-
-    let from_account = Account {
-        owner: from,
-        subaccount: None,
-    };
-
-    let args = TransferFromArgs {
-        from: from_account,
-        to,
-        amount,
-        memo,
-        created_at_time: Some(api::time()),
-    };
-
+    args: TransferFromArgs,
+) -> Result<TransferFromResult, InfraError> {
     let result: TransferFromResult = Call::unbounded_wait(ledger_id, "icrc2_transfer_from")
-        .with_arg(args)
+        .try_with_arg(args)?
+        .execute()
         .await?
         .candid()?;
 
     match result {
-        TransferFromResult::Ok(block_index) => Ok(block_index),
+        TransferFromResult::Ok(_) => Ok(result),
         TransferFromResult::Err(err) => Err(LedgerInfraError::TransferFromRejected {
-            symbol: meta.symbol,
+            symbol: ledger_meta(ledger_id).symbol,
             error: err,
         }
         .into()),

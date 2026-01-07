@@ -4,8 +4,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::mgmt::MgmtOps,
-        ic::runtime::{now_secs, spawn},
+        ic::{mgmt::MgmtOps, now_secs, spawn},
         rpc::request::RequestOps,
         runtime::{
             env::EnvOps,

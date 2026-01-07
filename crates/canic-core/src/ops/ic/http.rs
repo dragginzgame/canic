@@ -9,7 +9,7 @@ use crate::{
         },
     },
 };
-use num_traits::ToPrimitive;
+use num_traits::cast::ToPrimitive;
 use serde::de::DeserializeOwned;
 
 ///
@@ -29,8 +29,11 @@ pub enum HttpOpsError {
     #[error("http error status: {0}")]
     HttpStatus(u32),
 
-    #[error("http decode failed: {0}")]
-    HttpDecode(String),
+    #[error(transparent)]
+    Infra(#[from] infra::InfraError),
+
+    #[error(transparent)]
+    HttpDecode(#[from] serde_json::Error),
 }
 
 impl From<HttpOpsError> for Error {
@@ -70,19 +73,13 @@ impl HttpOps {
         };
 
         let res = Self::perform_request(args, label).await?;
-
-        let status = res
-            .status
-            .0
-            .to_u32()
-            .ok_or_else(|| HttpOpsError::HttpDecode("invalid status code".into()))?;
+        let status = res.status.0.to_u32().unwrap_or(u32::MAX);
 
         if !(200..300).contains(&status) {
             return Err(HttpOpsError::HttpStatus(status).into());
         }
 
-        serde_json::from_slice(&res.body)
-            .map_err(|err| HttpOpsError::HttpDecode(err.to_string()).into())
+        serde_json::from_slice(&res.body).map_err(|err| HttpOpsError::HttpDecode(err).into())
     }
 
     // -------------------------------------------------------------------------
@@ -116,9 +113,11 @@ impl HttpOps {
         label: Option<&str>,
     ) -> Result<infra::ic::http::HttpRequestResult, Error> {
         Self::record_metrics(args.method, &args.url, label);
-        infra::ic::http::http_request_raw(&args)
+        let res = infra::ic::http::http_request_raw(&args)
             .await
-            .map_err(Error::from)
+            .map_err(HttpOpsError::from)?;
+
+        Ok(res)
     }
 
     /// Record outbound HTTP metrics.

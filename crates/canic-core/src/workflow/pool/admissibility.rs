@@ -1,8 +1,10 @@
 use crate::{
     domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
-    infra::ic::network::Network,
     ops::{
-        ic::mgmt::MgmtOps, runtime::network::NetworkOps,
+        ic::{
+            mgmt::MgmtOps,
+            network::{BuildNetwork, NetworkOps},
+        },
         storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::prelude::*,
@@ -10,7 +12,7 @@ use crate::{
 
 #[inline]
 fn is_local_build() -> bool {
-    NetworkOps::current_network() == Some(Network::Local)
+    NetworkOps::build_network() == Some(BuildNetwork::Local)
 }
 
 /// Returns Ok(()) iff the canister is routable in the current local replica.

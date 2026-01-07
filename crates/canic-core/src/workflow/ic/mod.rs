@@ -1,3 +1,4 @@
+pub mod ledger;
 pub mod provision;
 pub mod xrc;
 
@@ -13,6 +14,9 @@ use crate::{
 
 #[derive(Debug, ThisError)]
 pub enum IcWorkflowError {
+    #[error(transparent)]
+    LedgerWorkflow(#[from] ledger::LedgerWorkflowError),
+
     #[error(transparent)]
     ProvisionWorkflow(#[from] provision::ProvisionWorkflowError),
 }

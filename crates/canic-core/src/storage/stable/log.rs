@@ -1,7 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    Error,
     cdk::structures::{
         DefaultMemoryImpl,
         log::{Log as StableLogImpl, WriteError},
@@ -11,6 +10,7 @@ use crate::{
     eager_static, ic_memory,
     log::Level,
     memory::impl_storable_unbounded,
+    storage::StorageError,
     storage::stable::{
         MemoryError,
         memory::log::{LOG_DATA_ID, LOG_INDEX_ID},
@@ -94,7 +94,7 @@ impl Log {
         topic: Option<T>,
         level: Level,
         message: M,
-    ) -> Result<u64, Error>
+    ) -> Result<u64, StorageError>
     where
         T: ToString,
         M: AsRef<str>,
@@ -153,7 +153,7 @@ pub fn apply_retention(
     cutoff: Option<u64>,
     max_entries: usize,
     max_entry_bytes: u32,
-) -> Result<RetentionSummary, Error> {
+) -> Result<RetentionSummary, StorageError> {
     let before = with_log(StableLog::len);
 
     if max_entries == 0 {
@@ -229,8 +229,8 @@ pub fn apply_retention(
 
 const TRUNCATION_SUFFIX: &str = "...[truncated]";
 
-fn append_raw(entry: &LogEntry) -> Result<u64, Error> {
-    with_log(|log| log.append(entry)).map_err(|e| Error::from(map_write_error(e)))
+fn append_raw(entry: &LogEntry) -> Result<u64, StorageError> {
+    with_log(|log| log.append(entry)).map_err(|e| StorageError::from(map_write_error(e)))
 }
 
 const fn map_write_error(err: WriteError) -> MemoryError {

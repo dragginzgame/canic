@@ -18,10 +18,8 @@ use crate::{
     },
     dto::{placement::sharding::ShardingPlanStateView, rpc::CreateCanisterParent},
     ops::{
-        config::ConfigOps,
-        ic::runtime::now_secs,
-        rpc::request::RequestOps,
-        storage::placement::sharding::{ShardingRegistryOps, ShardingRegistryOpsError},
+        config::ConfigOps, ic::now_secs, rpc::request::RequestOps,
+        storage::placement::sharding::ShardingRegistryOps,
     },
     workflow::{
         placement::{PlacementWorkflowError, sharding::mapper::ShardingMapper},
@@ -38,10 +36,6 @@ pub enum ShardingWorkflowError {
     /// Policy rejected the operation (expected outcome).
     #[error(transparent)]
     Policy(#[from] ShardingPolicyError),
-
-    /// Registry mutation failed (storage invariant violation).
-    #[error(transparent)]
-    Registry(#[from] ShardingRegistryOpsError),
 
     /// Policy returned an internally inconsistent plan.
     #[error("invariant violation: {0}")]

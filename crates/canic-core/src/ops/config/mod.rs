@@ -1,7 +1,7 @@
 use crate::{
     Error, ThisError,
     config::{
-        Config, ConfigModel,
+        Config, ConfigError, ConfigModel,
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
     },
     ids::SubnetRole,
@@ -15,6 +15,9 @@ use std::sync::Arc;
 
 #[derive(Debug, ThisError)]
 pub enum ConfigOpsError {
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+
     #[error("subnet {0} not found in configuration")]
     SubnetNotFound(String),
 
@@ -44,7 +47,9 @@ pub struct ConfigOps;
 impl ConfigOps {
     /// Export the full current configuration as TOML.
     pub fn export_toml() -> Result<String, Error> {
-        Config::to_toml()
+        let toml = Config::to_toml()?;
+
+        Ok(toml)
     }
 
     // ---------------------------------------------------------------------
@@ -77,7 +82,9 @@ impl ConfigOps {
     // ---------------------------------------------------------------------
 
     pub(crate) fn get() -> Result<Arc<ConfigModel>, Error> {
-        Config::get()
+        let cfg = Config::get()?;
+
+        Ok(cfg)
     }
 
     pub(crate) fn controllers() -> Result<Vec<Principal>, Error> {

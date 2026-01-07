@@ -36,7 +36,7 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             candid::CandidType,
-            types::{Cycles, Principal},
+            types::{Account, Cycles, Principal},
         },
         ids::CanisterRole,
         log,
@@ -49,7 +49,9 @@ use crate::ThisError;
 
 ///
 /// OpsError
-/// Error envelope shared across operations submodules
+///
+/// Ops public APIs return Result<_, Error>.
+/// Ops-scoped error enums are implementation details used to preserve structure and ownership.
 ///
 
 #[derive(Debug, ThisError)]

@@ -38,23 +38,23 @@ thread_local! {
 }
 
 ///
-/// SignatureOpsError
+/// SignatureInfraError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum SignatureOpsError {
-    #[error("cannot parse signature")]
-    CannotParseSignature,
+pub enum SignatureInfraError {
+    #[error("cannot parse signature: {reason}")]
+    CannotParseSignature { reason: String },
 
-    #[error("invalid signature")]
-    InvalidSignature,
+    #[error("invalid signature: {reason}")]
+    InvalidSignature { reason: String },
 
     #[error("signature preparation must be called from an update context")]
     UpdateContextRequired,
 }
 
-impl From<SignatureOpsError> for InfraError {
-    fn from(err: SignatureOpsError) -> Self {
+impl From<SignatureInfraError> for InfraError {
+    fn from(err: SignatureInfraError) -> Self {
         IcInfraError::from(err).into()
     }
 }
@@ -136,7 +136,8 @@ pub fn verify(
     issuer_pid: Principal,
 ) -> Result<(), InfraError> {
     // 1️⃣ Parse CBOR
-    parse_canister_sig_cbor(signature_cbor).map_err(|_| SignatureOpsError::CannotParseSignature)?;
+    parse_canister_sig_cbor(signature_cbor)
+        .map_err(|reason| SignatureInfraError::CannotParseSignature { reason })?;
 
     // 2️⃣ Verify the IC canister signature cryptographically
     let public_key = CanisterSigPublicKey::new(issuer_pid, seed.to_vec()).to_der();
@@ -147,7 +148,7 @@ pub fn verify(
         &public_key,
         &IC_ROOT_PUBLIC_KEY,
     )
-    .map_err(|_| SignatureOpsError::InvalidSignature)?;
+    .map_err(|reason| SignatureInfraError::InvalidSignature { reason })?;
 
     Ok(())
 }
@@ -177,7 +178,7 @@ fn ensure_update_context() -> Result<(), InfraError> {
         return Ok(());
     }
 
-    Err(SignatureOpsError::UpdateContextRequired.into())
+    Err(SignatureInfraError::UpdateContextRequired.into())
 }
 
 ///

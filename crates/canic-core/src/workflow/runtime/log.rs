@@ -2,7 +2,7 @@ use crate::{
     domain::policy,
     ops::{
         config::ConfigOps,
-        ic::runtime::now_secs,
+        ic::now_secs,
         runtime::{
             log::LogOps,
             timer::{TimerId, TimerOps},

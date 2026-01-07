@@ -42,7 +42,7 @@ impl XrcOps {
             .execute()
             .await?;
 
-        let res: GetExchangeRateResult = response.candid().map_err(IcOpsError::from)?;
+        let res: GetExchangeRateResult = response.candid()?;
 
         match res {
             GetExchangeRateResult::Ok(rate) => Ok(rate),

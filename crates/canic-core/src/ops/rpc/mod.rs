@@ -26,7 +26,7 @@ pub enum RpcOpsError {
     // PublicError is a wire-level contract only.
     // It is erased at the ops boundary.
     #[error("rpc rejected: {0}")]
-    RemoteRejected(String),
+    RemoteRejected(PublicError),
 }
 
 impl From<RpcOpsError> for Error {
@@ -44,7 +44,7 @@ pub trait Rpc {
     type Response: CandidType + DeserializeOwned;
 
     fn into_request(self) -> Request;
-    fn try_from_response(resp: Response) -> Result<Self::Response, RequestOpsError>;
+    fn try_from_response(resp: Response) -> Result<Self::Response, Error>;
 }
 
 ///
@@ -73,9 +73,11 @@ impl RpcOps {
             .execute()
             .await?;
 
-        let res: Result<T, PublicError> = call.candid::<Result<T, PublicError>>()?;
+        let call_res: Result<T, PublicError> = call.candid::<Result<T, PublicError>>()?;
 
-        res.map_err(|err| RpcOpsError::RemoteRejected(err.to_string()).into())
+        let res = call_res.map_err(RpcOpsError::RemoteRejected)?;
+
+        Ok(res)
     }
 
     ///
@@ -91,11 +93,11 @@ impl RpcOps {
             .execute()
             .await?;
 
-        let response: Response = call
+        let call_res: Response = call
             .candid::<Result<Response, PublicError>>()?
-            .map_err(|err| RpcOpsError::RemoteRejected(err.to_string()))?;
+            .map_err(RpcOpsError::RemoteRejected)?;
 
-        let response = R::try_from_response(response).map_err(RpcOpsError::from)?;
+        let response = R::try_from_response(call_res)?;
 
         Ok(response)
     }

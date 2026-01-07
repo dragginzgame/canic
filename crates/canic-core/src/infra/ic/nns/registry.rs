@@ -14,8 +14,8 @@ use crate::{
 #[derive(Debug, ThisError)]
 pub enum NnsRegistryInfraError {
     /// The registry explicitly rejected the request
-    #[error("NNS registry rejected the request")]
-    Rejected,
+    #[error("NNS registry rejected the request: {reason}")]
+    Rejected { reason: String },
 }
 
 impl From<NnsRegistryInfraError> for InfraError {
@@ -36,7 +36,8 @@ pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>
     let request = GetSubnetForCanisterRequest { principal: pid };
 
     let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-        .with_arg(request)
+        .try_with_arg(request)?
+        .execute()
         .await?
         .candid::<GetSubnetForCanisterResponse>()?;
 
@@ -48,7 +49,7 @@ pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>
                 Warn,
                 "NNS registry rejected get_subnet_for_canister: {msg}"
             );
-            Err(NnsRegistryInfraError::Rejected.into())
+            Err(NnsRegistryInfraError::Rejected { reason: msg }.into())
         }
     }
 }

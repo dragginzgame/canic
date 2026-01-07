@@ -1,42 +1,49 @@
-//! Ops-level façade for Internet Computer primitives.
+//! Ops layer: approved execution surface and coordination boundary.
 //!
-//! This module defines the **approved IC surface area** for the rest of the system.
-//! It deliberately sits between higher layers (workflow, endpoints, macros) and
-//! the low-level IC infrastructure implementations in `infra::ic`.
+//! The `ops` layer defines the **sanctioned capabilities** that higher layers
+//! (workflow, API, macros) are allowed to use. It sits between application logic
+//! and low-level infrastructure, providing a stable execution façade.
 //!
-//! Design intent:
-//! - `infra::ic` owns **raw, minimal IC bindings**
-//!   (management canister calls, signatures, timers, randomness, etc.).
-//! - `ops::ic` owns the **public contract** exposed to application code.
+//! Responsibilities:
+//! - Expose approved primitives and subsystems (IC access, runtime context,
+//!   metrics, logging, registries).
+//! - Add cross-cutting concerns such as metrics, logging, and normalization.
+//! - Aggregate infra errors into ops-scoped error types.
 //!
-//! As a result, most items here are **re-exports** rather than reimplementations.
-//! This is intentional:
-//! - It prevents higher layers from depending on `infra` directly.
-//! - It allows `infra` to be refactored or replaced without touching call sites.
-//! - It centralizes IC usage under a single, stable import path.
+//! Non-responsibilities:
+//! - No business policy or workflow orchestration.
+//! - No domain decisions or lifecycle management.
 //!
-//! Wrapping vs pass-through:
-//! - Items are **wrapped** here when ops-level concerns apply
-//!   (metrics, logging, perf tracking, lifecycle conventions).
-//! - Items are **passed through** unchanged when the raw IC API is already
-//!   the desired abstraction and no additional policy or orchestration is needed.
+//! Infra interaction:
+//! - `infra` owns **raw mechanical implementations** (IC calls, encoding,
+//!   decoding, management canister interactions).
+//! - `ops` may either wrap infra or call the CDK directly when the CDK API
+//!   already represents the desired primitive (e.g. ambient runtime context).
 //!
-//! In other words:
-//! - `infra::ic` answers “how does the IC work?”
-//! - `ops::ic` answers “what IC functionality is allowed to be used?”
-//!
-//! This module intentionally contains no policy decisions and no workflow logic.
+//! Naming conventions:
+//! - Plain nouns (e.g. `Call`, `Runtime`, `Env`) represent approved execution
+//!   primitives.
+//! - `*Ops` types represent orchestration or aggregation roles (typically error
+//!   or coordination objects), not primitives themselves.
 
 pub mod call;
 pub mod http;
 pub mod icrc;
+pub mod ledger;
 pub mod mgmt;
+pub mod network;
 pub mod nns;
-pub mod runtime;
 pub mod signature;
 pub mod xrc;
 
-use crate::{Error, ThisError, ops::OpsError};
+pub use cdk::types::{Cycles, TC};
+
+use crate::{
+    Error, ThisError,
+    cdk::{self, types::Principal},
+    infra,
+    ops::OpsError,
+};
 
 ///
 /// IcOpsError
@@ -45,17 +52,81 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum IcOpsError {
     #[error(transparent)]
+    Infra(#[from] infra::InfraError),
+
+    #[error(transparent)]
+    CallOps(#[from] call::CallError),
+
+    #[error(transparent)]
     HttpOps(#[from] http::HttpOpsError),
 
     #[error(transparent)]
-    XrcOps(#[from] xrc::XrcOpsError),
+    LedgerOps(#[from] ledger::LedgerOpsError),
 
-    #[error("ic call failed: {0}")]
-    Call(#[from] call::CallOpsError),
+    #[error(transparent)]
+    XrcOps(#[from] xrc::XrcOpsError),
 }
 
 impl From<IcOpsError> for Error {
     fn from(err: IcOpsError) -> Self {
         OpsError::from(err).into()
     }
+}
+
+///
+/// Ambient IC execution primitives
+///
+
+/// Return the current canister principal.
+#[must_use]
+pub fn canister_self() -> Principal {
+    cdk::api::canister_self()
+}
+
+/// Return the current caller principal.
+#[must_use]
+pub fn msg_caller() -> Principal {
+    cdk::api::msg_caller()
+}
+
+/// Return the current UNIX epoch time in seconds.
+#[must_use]
+pub fn now_secs() -> u64 {
+    cdk::utils::time::now_secs()
+}
+
+/// Return the current UNIX epoch time in milliseconds.
+#[must_use]
+pub fn now_millis() -> u64 {
+    cdk::utils::time::now_millis()
+}
+
+/// Return the current UNIX epoch time in microseconds.
+#[must_use]
+pub fn now_micros() -> u64 {
+    cdk::utils::time::now_micros()
+}
+
+/// Return the current UNIX epoch time in nanoseconds.
+#[must_use]
+pub fn now_nanos() -> u64 {
+    cdk::utils::time::now_nanos()
+}
+
+/// Trap the canister with the provided message.
+pub fn trap(message: &str) -> ! {
+    cdk::api::trap(message)
+}
+
+/// Print a line to the IC debug output.
+pub fn println(message: &str) {
+    cdk::println!("{message}");
+}
+
+/// Spawn a task on the IC runtime.
+pub fn spawn<F>(future: F)
+where
+    F: Future<Output = ()> + 'static,
+{
+    cdk::futures::spawn(future);
 }

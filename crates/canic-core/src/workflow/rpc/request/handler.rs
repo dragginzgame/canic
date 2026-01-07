@@ -7,12 +7,12 @@ use crate::{
     },
     ops::{
         ic::mgmt::MgmtOps,
-        rpc::request::RequestOpsError,
         storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         prelude::*,
+        rpc::RpcWorkflowError,
     },
 };
 
@@ -50,10 +50,10 @@ impl RootResponseWorkflow {
                 CreateCanisterParent::ThisCanister => caller,
 
                 CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(caller)
-                    .ok_or(RequestOpsError::ParentNotFound(caller))?,
+                    .ok_or(RpcWorkflowError::ParentNotFound(caller))?,
 
                 CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
-                    .ok_or_else(|| RequestOpsError::CanisterRoleNotFound(role.clone()))?,
+                    .ok_or_else(|| RpcWorkflowError::CanisterRoleNotFound(role.clone()))?,
             };
 
             let event = CanisterLifecycleEvent::Create {
@@ -65,7 +65,7 @@ impl RootResponseWorkflow {
             let lifecycle_result = CanisterLifecycleWorkflow::apply(event).await?;
             let new_canister_pid = lifecycle_result
                 .new_canister_pid
-                .ok_or(RequestOpsError::MissingNewCanisterPid)?;
+                .ok_or(RpcWorkflowError::MissingNewCanisterPid)?;
 
             Ok(Response::CreateCanister(CreateCanisterResponse {
                 new_canister_pid,
@@ -90,10 +90,10 @@ impl RootResponseWorkflow {
 
         let caller = msg_caller();
         let registry_entry = SubnetRegistryOps::get(req.canister_pid)
-            .ok_or(RequestOpsError::ChildNotFound(req.canister_pid))?;
+            .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
 
         if registry_entry.parent_pid != Some(caller) {
-            return Err(RequestOpsError::NotChildOfCaller(req.canister_pid, caller).into());
+            return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, caller).into());
         }
 
         let event = CanisterLifecycleEvent::Upgrade {
