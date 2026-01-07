@@ -1,5 +1,5 @@
 //! Runtime memory registry primitives.
-//! Exposes init/snapshot helpers without logging or DTO construction.
+//! Owns TLS setup for memory registry initialization.
 
 use crate::{
     CRATE_NAME, Error, ThisError,
@@ -8,7 +8,10 @@ use crate::{
 };
 use canic_memory::{
     registry::MemoryRegistryError,
-    runtime::registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
+    runtime::{
+        init_eager_tls,
+        registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
+    },
 };
 
 ///
@@ -93,6 +96,10 @@ impl MemoryRegistryInitSummary {
 pub struct MemoryRegistryOps;
 
 impl MemoryRegistryOps {
+    pub fn init_eager_tls() {
+        init_eager_tls();
+    }
+
     pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, Error> {
         let summary =
             MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))

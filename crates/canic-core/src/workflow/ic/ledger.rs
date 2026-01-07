@@ -1,6 +1,6 @@
 use crate::{
     Error, ThisError,
-    infra::ic::ledger::LedgerMeta,
+    infra::ic::ledger::{LedgerInfra, LedgerMeta},
     ops::ic::ledger::LedgerOps,
     workflow::{ic::IcWorkflowError, prelude::*},
 };
@@ -66,7 +66,7 @@ impl LedgerRules {
     /// Return best-effort metadata for a ledger canister.
     #[must_use]
     pub fn ledger_meta(ledger_id: Principal) -> LedgerMeta {
-        crate::infra::ic::ledger::ledger_meta(ledger_id)
+        LedgerInfra::ledger_meta(ledger_id)
     }
 
     /// Validate that `payer` has approved at least `required_amount` for `spender`.
