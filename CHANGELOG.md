@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.16] - 2026-01-08
+- added with_args, try_with_args to call api workflow
+
 ## [0.7.15] - 2026-01-08
 - refactored the endpoint wrappers - now they convert from canic::PublicError into the downstream
 return error type specified by the developer

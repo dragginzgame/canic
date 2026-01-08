@@ -1,4 +1,8 @@
-use crate::{api::prelude::*, cdk::candid::CandidType, workflow::ic::call::CallWorkflow};
+use crate::{
+    api::prelude::*,
+    cdk::candid::CandidType,
+    workflow::ic::call::{CallBuilder as WorkflowCallBuilder, CallWorkflow},
+};
 use serde::de::DeserializeOwned;
 
 ///
@@ -30,12 +34,31 @@ impl Call {
 ///
 
 pub struct CallBuilder {
-    inner: crate::workflow::ic::call::CallBuilder,
+    inner: WorkflowCallBuilder,
 }
 
 impl CallBuilder {
+    #[must_use]
+    pub fn with_args<A>(self, args: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_args(args),
+        }
+    }
+
     pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, PublicError> {
         let inner = self.inner.try_with_arg(arg).map_err(PublicError::from)?;
+
+        Ok(Self { inner })
+    }
+
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, PublicError>
+    where
+        A: CandidType,
+    {
+        let inner = self.inner.try_with_args(args).map_err(PublicError::from)?;
 
         Ok(Self { inner })
     }

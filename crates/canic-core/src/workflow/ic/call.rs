@@ -1,4 +1,8 @@
-use crate::{Error, ops::ic::call::CallOps, workflow::prelude::*};
+use crate::{
+    Error,
+    ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps},
+    workflow::prelude::*,
+};
 use serde::de::DeserializeOwned;
 
 ///
@@ -28,12 +32,31 @@ impl CallWorkflow {
 ///
 
 pub struct CallBuilder {
-    inner: crate::ops::ic::call::CallBuilder,
+    inner: OpsCallBuilder,
 }
 
 impl CallBuilder {
+    #[must_use]
+    pub fn with_args<A>(self, args: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_args(args),
+        }
+    }
+
     pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, Error> {
         let inner = self.inner.try_with_arg(arg)?;
+
+        Ok(Self { inner })
+    }
+
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
+    where
+        A: CandidType,
+    {
+        let inner = self.inner.try_with_args(args)?;
 
         Ok(Self { inner })
     }
