@@ -1,17 +1,19 @@
 use crate::{
     cdk::{
         call::{Call as IcCall, Response as IcResponse},
-        candid::CandidType,
+        candid::{
+            CandidType,
+            utils::{ArgumentDecoder, ArgumentEncoder},
+        },
         types::Principal,
     },
     infra::InfraError,
 };
-use candid::encode_one;
+use candid::{encode_args, encode_one};
 use serde::de::DeserializeOwned;
 
 ///
 /// Call
-/// Raw IC call builder with no metrics or policy.
 ///
 
 pub struct Call;
@@ -19,29 +21,12 @@ pub struct Call;
 impl Call {
     #[must_use]
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
-        let canister_id: Principal = canister_id.into();
-
-        CallBuilder {
-            wait: WaitMode::Bounded,
-            canister_id,
-            method: method.to_string(),
-            cycles: 0,
-            args: None,
-        }
+        CallBuilder::new(WaitMode::Bounded, canister_id.into(), method)
     }
 
-    /// Create a call builder that will be awaited without cycle limits.
     #[must_use]
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
-        let canister_id: Principal = canister_id.into();
-
-        CallBuilder {
-            wait: WaitMode::Unbounded,
-            canister_id,
-            method: method.to_string(),
-            cycles: 0,
-            args: None,
-        }
+        CallBuilder::new(WaitMode::Unbounded, canister_id.into(), method)
     }
 }
 
@@ -54,31 +39,56 @@ pub struct CallBuilder {
     canister_id: Principal,
     method: String,
     cycles: u128,
-    args: Option<Vec<u8>>,
+    args: Vec<u8>, // always present; defaults to ()
 }
 
 impl CallBuilder {
+    fn new(wait: WaitMode, canister_id: Principal, method: &str) -> Self {
+        // Spec: default args = candid empty tuple ()
+        let args = encode_args(()).expect("failed to encode default candid args ()");
+
+        Self {
+            wait,
+            canister_id,
+            method: method.to_string(),
+            cycles: 0,
+            args,
+        }
+    }
+
+    // Infallible convenience (panic on encoding failure, same as your current pattern)
+    #[must_use]
+    pub fn with_arg<A>(self, arg: A) -> Self
+    where
+        A: CandidType,
+    {
+        self.try_with_arg(arg).expect("failed to encode call arg")
+    }
+
     #[must_use]
     pub fn with_args<A>(self, args: A) -> Self
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
         self.try_with_args(args)
             .expect("failed to encode call args")
     }
 
-    pub fn try_with_arg<A: CandidType>(mut self, arg: A) -> Result<Self, InfraError> {
-        let bytes = encode_one(arg).map_err(InfraError::from)?;
-        self.args = Some(bytes);
-
-        Ok(self)
-    }
-
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, InfraError>
+    pub fn try_with_arg<A>(mut self, arg: A) -> Result<Self, InfraError>
     where
         A: CandidType,
     {
-        self.try_with_arg(args)
+        self.args = encode_one(arg).map_err(InfraError::from)?;
+        Ok(self)
+    }
+
+    // Critical: multi-arg encoding
+    pub fn try_with_args<A>(mut self, args: A) -> Result<Self, InfraError>
+    where
+        A: ArgumentEncoder,
+    {
+        self.args = encode_args(args).map_err(InfraError::from)?;
+        Ok(self)
     }
 
     #[must_use]
@@ -94,12 +104,9 @@ impl CallBuilder {
         };
 
         call = call.with_cycles(self.cycles);
-        if let Some(ref args) = self.args {
-            call = call.with_raw_args(args);
-        }
+        call = call.with_raw_args(&self.args);
 
         let response = call.await.map_err(InfraError::from)?;
-
         Ok(CallResult { inner: response })
     }
 }
@@ -124,5 +131,13 @@ impl CallResult {
         R: CandidType + DeserializeOwned,
     {
         self.inner.candid().map_err(InfraError::from)
+    }
+
+    // Optional: parity with IC Response::candid_tuple
+    pub fn candid_tuple<R>(&self) -> Result<R, InfraError>
+    where
+        R: for<'de> ArgumentDecoder<'de>,
+    {
+        self.inner.candid_tuple().map_err(InfraError::from)
     }
 }

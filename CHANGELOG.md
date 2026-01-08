@@ -5,8 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.7.17] - 2026-01-08
+## [0.7.18] - 2026-01-08
 - added with_args, try_with_args to call api workflow
+- complete refactor of the IC Call wrapping, on four different layers, fun
 - bug fixes over multiple versions
 
 ## [0.7.15] - 2026-01-08

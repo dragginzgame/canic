@@ -8,6 +8,10 @@ use crate::{
     },
     ops::{ic::IcOpsError, prelude::*, runtime::metrics::icc::IccMetrics},
 };
+use candid::{
+    CandidType,
+    utils::{ArgumentDecoder, ArgumentEncoder},
+};
 use serde::de::DeserializeOwned;
 
 ///
@@ -49,7 +53,6 @@ impl CallOps {
         }
     }
 
-    /// Create a call builder that will be awaited without cycle limits.
     #[must_use]
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
         let canister_id: Principal = canister_id.into();
@@ -60,7 +63,6 @@ impl CallOps {
         }
     }
 }
-
 ///
 /// CallBuilder (ops)
 ///
@@ -70,28 +72,41 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    // single-arg convenience
+    #[must_use]
+    pub fn with_arg<A>(self, arg: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_arg(arg),
+        }
+    }
+
+    // multi-arg convenience (IMPORTANT FIX)
     #[must_use]
     pub fn with_args<A>(self, args: A) -> Self
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
         Self {
             inner: self.inner.with_args(args),
         }
     }
 
-    pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, Error> {
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
+    where
+        A: CandidType,
+    {
         let inner = self.inner.try_with_arg(arg).map_err(CallError::from)?;
-
         Ok(Self { inner })
     }
 
     pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
         let inner = self.inner.try_with_args(args).map_err(CallError::from)?;
-
         Ok(Self { inner })
     }
 
@@ -103,7 +118,6 @@ impl CallBuilder {
 
     pub async fn execute(self) -> Result<CallResult, Error> {
         let inner = self.inner.execute().await.map_err(CallError::from)?;
-
         Ok(CallResult { inner })
     }
 }
@@ -121,8 +135,19 @@ impl CallResult {
     where
         R: CandidType + DeserializeOwned,
     {
-        let res = self.inner.candid().map_err(CallError::from)?;
+        self.inner
+            .candid()
+            .map_err(CallError::from)
+            .map_err(Error::from)
+    }
 
-        Ok(res)
+    pub fn candid_tuple<R>(&self) -> Result<R, Error>
+    where
+        R: for<'de> ArgumentDecoder<'de>,
+    {
+        self.inner
+            .candid_tuple()
+            .map_err(CallError::from)
+            .map_err(Error::from)
     }
 }
