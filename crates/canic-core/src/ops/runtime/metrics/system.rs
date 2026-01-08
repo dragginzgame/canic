@@ -1,29 +1,8 @@
+use crate::ids::SystemMetricKind;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
     static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());
-}
-
-///
-/// SystemMetricKind
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum SystemMetricKind {
-    CanisterCall,
-    CanisterStatus,
-    CreateCanister,
-    DeleteCanister,
-    DepositCycles,
-    HttpOutcall,
-    InstallCode,
-    RawRand,
-    ReinstallCode,
-    TimerScheduled,
-    UninstallCode,
-    UpdateSettings,
-    UpgradeCode,
 }
 
 ///

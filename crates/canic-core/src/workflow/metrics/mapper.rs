@@ -3,12 +3,12 @@ use crate::{
         AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry, SystemMetricEntry,
         TimerMetricEntry,
     },
+    ids::SystemMetricKind,
     ops::runtime::metrics::{
         access::AccessMetricKey,
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
-        system::SystemMetricKind,
         timer::{TimerMetricKey, TimerMode},
     },
 };

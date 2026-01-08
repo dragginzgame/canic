@@ -1,15 +1,13 @@
 use crate::{
     Error, ThisError,
+    ids::SystemMetricKind,
     infra::{
         InfraError,
         ic::http::{HttpHeader, HttpInfra, HttpMethod, HttpRequestArgs, HttpRequestResult},
     },
     ops::{
         ic::IcOpsError,
-        runtime::metrics::{
-            http::HttpMetrics,
-            system::{SystemMetricKind, SystemMetrics},
-        },
+        runtime::metrics::{http::HttpMetrics, system::SystemMetrics},
     },
 };
 use num_traits::cast::ToPrimitive;

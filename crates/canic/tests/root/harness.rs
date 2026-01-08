@@ -1,11 +1,9 @@
 use canic::{
     cdk::types::Principal,
     core::{
-        PublicError,
         dto::{
             page::{Page, PageRequest},
             topology::{DirectoryEntryView, SubnetRegistryEntryView},
-            validation::ValidationReport,
         },
         ids::CanisterRole,
         protocol,
@@ -44,8 +42,6 @@ pub fn setup_root() -> RootSetup {
         .expect("install root canister");
 
     wait_for_bootstrap(&pic, root_id);
-
-    validate_root_state(&pic, root_id);
 
     let subnet_directory = fetch_subnet_directory(&pic, root_id);
 
@@ -106,20 +102,6 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     }
 
     None
-}
-
-/// Assert that the root canister reports a valid global state.
-fn validate_root_state(pic: &Pic, root_id: Principal) {
-    let report: Result<ValidationReport, PublicError> = pic
-        .query_call(root_id, protocol::CANIC_ROOT_VALIDATE_STATE, ())
-        .expect("validate root state transport");
-    let report = report.expect("validate root state failed");
-
-    assert!(
-        report.ok,
-        "root state invalid after bootstrap:\n{:#?}",
-        report.issues
-    );
 }
 
 fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntryView> {

@@ -83,8 +83,8 @@ impl From<String> for CanisterRole {
 }
 
 impl From<CanisterRole> for String {
-    fn from(ct: CanisterRole) -> Self {
-        ct.into_string()
+    fn from(role: CanisterRole) -> Self {
+        role.into_string()
     }
 }
 

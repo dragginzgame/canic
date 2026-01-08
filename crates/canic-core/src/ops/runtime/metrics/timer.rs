@@ -1,4 +1,4 @@
-use crate::ops::runtime::metrics::system::{SystemMetricKind, SystemMetrics};
+use crate::{ids::SystemMetricKind, ops::runtime::metrics::system::SystemMetrics};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
 thread_local! {

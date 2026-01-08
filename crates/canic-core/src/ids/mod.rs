@@ -9,14 +9,14 @@
 //! - Policy decisions
 //! - Storage-backed types
 
-mod access;
 mod canister;
 mod endpoint;
+mod metrics;
 mod network;
 mod subnet;
 
-pub use access::AccessMetricKind;
 pub use canister::CanisterRole;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
+pub use metrics::{AccessMetricKind, SystemMetricKind};
 pub use network::BuildNetwork;
 pub use subnet::SubnetRole;

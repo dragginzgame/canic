@@ -14,12 +14,9 @@ use crate::{
             QueryStats as CdkQueryStats,
         },
     },
+    ids::SystemMetricKind,
     infra::ic::mgmt::MgmtInfra,
-    ops::{
-        ic::IcOpsError,
-        prelude::*,
-        runtime::metrics::system::{SystemMetricKind, SystemMetrics},
-    },
+    ops::{ic::IcOpsError, prelude::*, runtime::metrics::system::SystemMetrics},
 };
 use candid::{Nat, utils::ArgumentEncoder};
 
