@@ -70,8 +70,27 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    #[must_use]
+    pub fn with_args<A>(self, args: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_args(args),
+        }
+    }
+
     pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, Error> {
         let inner = self.inner.try_with_arg(arg).map_err(CallError::from)?;
+
+        Ok(Self { inner })
+    }
+
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
+    where
+        A: CandidType,
+    {
+        let inner = self.inner.try_with_args(args).map_err(CallError::from)?;
 
         Ok(Self { inner })
     }

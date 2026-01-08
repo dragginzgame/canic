@@ -58,11 +58,27 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    #[must_use]
+    pub fn with_args<A>(self, args: A) -> Self
+    where
+        A: CandidType,
+    {
+        self.try_with_args(args)
+            .expect("failed to encode call args")
+    }
+
     pub fn try_with_arg<A: CandidType>(mut self, arg: A) -> Result<Self, InfraError> {
         let bytes = encode_one(arg).map_err(InfraError::from)?;
         self.args = Some(bytes);
 
         Ok(self)
+    }
+
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, InfraError>
+    where
+        A: CandidType,
+    {
+        self.try_with_arg(args)
     }
 
     #[must_use]
