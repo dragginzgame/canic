@@ -1,12 +1,16 @@
 use crate::{
     dto::{
-        canister::CanisterSummaryView,
+        canister::{CanisterChildView, CanisterSummaryView},
         page::{Page, PageRequest},
     },
+    ids::CanisterRole,
     ops::{
         ic::IcOps,
         runtime::env::EnvOps,
-        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            children::{CanisterChildrenOps, ChildrenSnapshot},
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     workflow::{topology::children::mapper::ChildrenMapper, view::paginate::paginate_vec},
 };
@@ -19,21 +23,29 @@ pub struct CanisterChildrenQuery;
 
 impl CanisterChildrenQuery {
     pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
-        let views = if EnvOps::is_root() {
-            // Root derives children from the registry (not the local cache).
-            let snapshot = SubnetRegistryOps::snapshot();
-            let children =
-                ChildrenMapper::from_registry_snapshot(&snapshot, IcOps::canister_self());
-
-            ChildrenMapper::snapshot_to_views(children)
-        } else {
-            // Non-root uses the cached children populated by topology cascade.
-            let snapshot = CanisterChildrenOps::snapshot();
-
-            ChildrenMapper::snapshot_to_views(snapshot)
-        };
+        let views = ChildrenMapper::snapshot_to_views(Self::snapshot());
 
         // 3. Paginate in workflow
         paginate_vec(views, page)
+    }
+
+    #[must_use]
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterChildView> {
+        Self::snapshot()
+            .entries
+            .into_iter()
+            .find(|entry| &entry.role == role)
+            .map(ChildrenMapper::child_snapshot_to_child_view)
+    }
+
+    fn snapshot() -> ChildrenSnapshot {
+        if EnvOps::is_root() {
+            // Root derives children from the registry (not the local cache).
+            let snapshot = SubnetRegistryOps::snapshot();
+            ChildrenMapper::from_registry_snapshot(&snapshot, IcOps::canister_self())
+        } else {
+            // Non-root uses the cached children populated by topology cascade.
+            CanisterChildrenOps::snapshot()
+        }
     }
 }

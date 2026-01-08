@@ -25,6 +25,17 @@ pub struct CanisterSummaryView {
 }
 
 ///
+/// CanisterChildView
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterChildView {
+    pub pid: Principal,
+    pub role: CanisterRole,
+    pub parent_pid: Option<Principal>,
+}
+
+///
 /// CanisterStatusView
 ///
 

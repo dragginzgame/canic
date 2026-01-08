@@ -1,9 +1,10 @@
 use crate::{
     dto::{
-        canister::CanisterSummaryView,
+        canister::{CanisterChildView, CanisterSummaryView},
         page::{Page, PageRequest},
     },
-    workflow,
+    ids::CanisterRole,
+    workflow::topology::children::query::CanisterChildrenQuery,
 };
 
 ///
@@ -15,6 +16,11 @@ pub struct CanisterChildrenApi;
 impl CanisterChildrenApi {
     #[must_use]
     pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
-        workflow::topology::children::query::CanisterChildrenQuery::page(page)
+        CanisterChildrenQuery::page(page)
+    }
+
+    #[must_use]
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterChildView> {
+        CanisterChildrenQuery::find_first_by_role(role)
     }
 }

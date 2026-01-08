@@ -1,5 +1,5 @@
 use crate::{
-    dto::canister::CanisterSummaryView,
+    dto::canister::{CanisterChildView, CanisterSummaryView},
     ops::storage::{
         children::{ChildSnapshot, ChildrenSnapshot},
         registry::subnet::SubnetRegistrySnapshot,
@@ -17,6 +17,15 @@ impl ChildrenMapper {
     #[must_use]
     pub fn child_snapshot_to_view(child: ChildSnapshot) -> CanisterSummaryView {
         CanisterSummaryView {
+            role: child.role,
+            parent_pid: child.parent_pid,
+        }
+    }
+
+    #[must_use]
+    pub fn child_snapshot_to_child_view(child: ChildSnapshot) -> CanisterChildView {
+        CanisterChildView {
+            pid: child.pid,
             role: child.role,
             parent_pid: child.parent_pid,
         }
