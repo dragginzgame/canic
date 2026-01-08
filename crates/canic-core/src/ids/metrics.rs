@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 #[remain::sorted]
 pub enum AccessMetricKind {
     Auth,
+    Env,
     Guard,
     Rule,
 }
