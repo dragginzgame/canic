@@ -6,7 +6,7 @@
 
 use crate::{
     Error, ThisError,
-    cdk::spec::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
+    cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
     infra::{InfraError, ic::ledger::LedgerInfra},
     ops::{ic::IcOpsError, prelude::*},
 };

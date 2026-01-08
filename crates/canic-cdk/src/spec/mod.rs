@@ -4,10 +4,9 @@
 //! can import clean wrappers with consistent naming.
 //!
 
-pub mod ic;
-pub mod icrc;
-pub mod nns;
-pub mod sns;
+pub mod governance;
+pub mod standards;
+pub mod system;
 
 /// Shared imports for spec modules so type definitions stay concise.
 pub mod prelude {
@@ -15,6 +14,6 @@ pub mod prelude {
         candid::{CandidType, Principal},
         types::{Account, Int, Nat, Subaccount},
     };
-    pub use serde::Deserialize;
+    pub use serde::{Deserialize, Serialize};
     pub use serde_bytes::ByteBuf;
 }
