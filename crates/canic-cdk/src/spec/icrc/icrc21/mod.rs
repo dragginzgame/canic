@@ -13,6 +13,13 @@ pub use errors::*;
 use crate::spec::prelude::*;
 
 ///
+/// ConsentResult
+/// (type alias)
+///
+
+pub type ConsentResult = Result<ConsentInfo, Icrc21Error>;
+
+///
 /// ConsentInfo
 ///
 
@@ -62,6 +69,15 @@ pub struct ConsentMessageRequest {
 pub enum ConsentMessageResponse {
     Ok(ConsentInfo),
     Err(Icrc21Error),
+}
+
+impl From<ConsentResult> for ConsentMessageResponse {
+    fn from(res: ConsentResult) -> Self {
+        match res {
+            Ok(info) => Self::Ok(info),
+            Err(err) => Self::Err(err),
+        }
+    }
 }
 
 ///
