@@ -1,8 +1,11 @@
 use crate::{
     api::prelude::*,
     cdk::candid::CandidType,
-    workflow::ic::call::{CallBuilder as WorkflowCallBuilder, CallWorkflow},
+    workflow::ic::call::{
+        CallBuilder as WorkflowCallBuilder, CallResult as WorkflowCallResult, CallWorkflow,
+    },
 };
+use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use serde::de::DeserializeOwned;
 
 ///
@@ -38,30 +41,47 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    // ---------- arguments ----------
+
+    #[must_use]
+    pub fn with_arg<A>(self, arg: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_arg(arg),
+        }
+    }
+
     #[must_use]
     pub fn with_args<A>(self, args: A) -> Self
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
         Self {
             inner: self.inner.with_args(args),
         }
     }
 
-    pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, PublicError> {
-        let inner = self.inner.try_with_arg(arg).map_err(PublicError::from)?;
-
-        Ok(Self { inner })
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, PublicError>
+    where
+        A: CandidType,
+    {
+        Ok(Self {
+            inner: self.inner.try_with_arg(arg).map_err(PublicError::from)?,
+        })
     }
 
     pub fn try_with_args<A>(self, args: A) -> Result<Self, PublicError>
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
-        let inner = self.inner.try_with_args(args).map_err(PublicError::from)?;
-
-        Ok(Self { inner })
+        Ok(Self {
+            inner: self.inner.try_with_args(args).map_err(PublicError::from)?,
+        })
     }
+
+    // ---------- cycles ----------
 
     #[must_use]
     pub fn with_cycles(self, cycles: u128) -> Self {
@@ -70,10 +90,12 @@ impl CallBuilder {
         }
     }
 
-    pub async fn execute(self) -> Result<CallResult, PublicError> {
-        let inner = self.inner.execute().await.map_err(PublicError::from)?;
+    // ---------- execution ----------
 
-        Ok(CallResult { inner })
+    pub async fn execute(self) -> Result<CallResult, PublicError> {
+        Ok(CallResult {
+            inner: self.inner.execute().await.map_err(PublicError::from)?,
+        })
     }
 }
 
@@ -84,15 +106,21 @@ impl CallBuilder {
 ///
 
 pub struct CallResult {
-    inner: crate::workflow::ic::call::CallResult,
+    inner: WorkflowCallResult,
 }
 
 impl CallResult {
-    /// Decode the candid response.
     pub fn candid<R>(&self) -> Result<R, PublicError>
     where
         R: CandidType + DeserializeOwned,
     {
         self.inner.candid().map_err(PublicError::from)
+    }
+
+    pub fn candid_tuple<R>(&self) -> Result<R, PublicError>
+    where
+        R: for<'de> ArgumentDecoder<'de>,
+    {
+        self.inner.candid_tuple().map_err(PublicError::from)
     }
 }

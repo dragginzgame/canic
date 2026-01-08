@@ -1,8 +1,9 @@
 use crate::{
     Error,
-    ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps},
+    ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
     workflow::prelude::*,
 };
+use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use serde::de::DeserializeOwned;
 
 ///
@@ -36,30 +37,47 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    // ---------- arguments ----------
+
+    #[must_use]
+    pub fn with_arg<A>(self, arg: A) -> Self
+    where
+        A: CandidType,
+    {
+        Self {
+            inner: self.inner.with_arg(arg),
+        }
+    }
+
     #[must_use]
     pub fn with_args<A>(self, args: A) -> Self
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
         Self {
             inner: self.inner.with_args(args),
         }
     }
 
-    pub fn try_with_arg<A: CandidType>(self, arg: A) -> Result<Self, Error> {
-        let inner = self.inner.try_with_arg(arg)?;
-
-        Ok(Self { inner })
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
+    where
+        A: CandidType,
+    {
+        Ok(Self {
+            inner: self.inner.try_with_arg(arg)?,
+        })
     }
 
     pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
     where
-        A: CandidType,
+        A: ArgumentEncoder,
     {
-        let inner = self.inner.try_with_args(args)?;
-
-        Ok(Self { inner })
+        Ok(Self {
+            inner: self.inner.try_with_args(args)?,
+        })
     }
+
+    // ---------- cycles ----------
 
     #[must_use]
     pub fn with_cycles(self, cycles: u128) -> Self {
@@ -68,10 +86,12 @@ impl CallBuilder {
         }
     }
 
-    pub async fn execute(self) -> Result<CallResult, Error> {
-        let inner = self.inner.execute().await?;
+    // ---------- execution ----------
 
-        Ok(CallResult { inner })
+    pub async fn execute(self) -> Result<CallResult, Error> {
+        Ok(CallResult {
+            inner: self.inner.execute().await?,
+        })
     }
 }
 
@@ -80,7 +100,7 @@ impl CallBuilder {
 ///
 
 pub struct CallResult {
-    inner: crate::ops::ic::call::CallResult,
+    inner: OpsCallResult,
 }
 
 impl CallResult {
@@ -89,5 +109,12 @@ impl CallResult {
         R: CandidType + DeserializeOwned,
     {
         self.inner.candid()
+    }
+
+    pub fn candid_tuple<R>(&self) -> Result<R, Error>
+    where
+        R: for<'de> ArgumentDecoder<'de>,
+    {
+        self.inner.candid_tuple()
     }
 }
