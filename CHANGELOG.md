@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - mapped app state commands in workflow before invoking ops
 - routed API wrappers through workflow for signature, network, config, wasm, timer, and IC call/http helpers
 - moved BuildNetwork into ids:: as it's not really a good fit for the ops/workflow layers
-- moved EndpointId/Call and AccessMetricKind into ids::
+- moved EndpointId/Call, SystemMetricKind and AccessMetricKind into ids::
 
 ## [0.7.13] - 2026-01-07
 - lots of work on bubbling up errors.  InfraErrors treated differently.  Standardised all errors under ops/

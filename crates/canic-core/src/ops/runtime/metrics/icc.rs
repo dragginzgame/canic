@@ -1,6 +1,6 @@
-use crate::ops::{
-    prelude::*,
-    runtime::metrics::system::{SystemMetricKind, SystemMetrics},
+use crate::{
+    ids::SystemMetricKind,
+    ops::{prelude::*, runtime::metrics::system::SystemMetrics},
 };
 use std::{cell::RefCell, collections::HashMap};
 

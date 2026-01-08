@@ -102,7 +102,7 @@ pub async fn bootstrap_init_root_canister() {
     }
 
     // ---------------- Phase 4: Completed ----------------
-    log!(Topic::Init, Info, "bootstrap complete");
+    log!(Topic::Init, Info, "bootstrap phase: COMPLETED");
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
