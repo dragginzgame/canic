@@ -50,10 +50,11 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            export_candid, init,
+            export_candid,
         },
         core::{
             access::auth::{is_child, is_controller, is_parent, is_root},
+            api::ic::call::Call,
             auth_require_all, auth_require_any,
             ids::CanisterRole,
             log, perf, timer, timer_interval,
