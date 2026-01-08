@@ -1,4 +1,7 @@
-use crate::{api::EndpointCall, ops};
+use crate::{
+    ids::{AccessMetricKind, EndpointCall},
+    ops,
+};
 
 ///
 /// AccessMetrics
@@ -8,19 +11,7 @@ use crate::{api::EndpointCall, ops};
 pub struct AccessMetrics;
 
 impl AccessMetrics {
-    pub fn increment(call: EndpointCall, kind: crate::dto::metrics::AccessMetricKind) {
-        let kind = match kind {
-            crate::dto::metrics::AccessMetricKind::Auth => {
-                ops::runtime::metrics::access::AccessMetricKind::Auth
-            }
-            crate::dto::metrics::AccessMetricKind::Guard => {
-                ops::runtime::metrics::access::AccessMetricKind::Guard
-            }
-            crate::dto::metrics::AccessMetricKind::Rule => {
-                ops::runtime::metrics::access::AccessMetricKind::Rule
-            }
-        };
-
+    pub fn increment(call: EndpointCall, kind: AccessMetricKind) {
         ops::runtime::metrics::access::AccessMetrics::increment(call.endpoint.name, kind);
     }
 }

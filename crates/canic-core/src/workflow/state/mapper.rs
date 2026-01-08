@@ -1,10 +1,27 @@
 use crate::{
-    dto::state::{AppModeView, AppStateView, SubnetStateView},
+    dto::state::{AppCommand, AppModeView, AppStateView, SubnetStateView},
     ops::storage::state::{
-        app::{AppMode, AppStateSnapshot},
+        app::{AppMode, AppStateCommand, AppStateSnapshot},
         subnet::SubnetStateSnapshot,
     },
 };
+
+///
+/// AppCommandMapper
+///
+
+pub struct AppCommandMapper;
+
+impl AppCommandMapper {
+    #[must_use]
+    pub const fn from_dto(cmd: AppCommand) -> AppStateCommand {
+        match cmd {
+            AppCommand::Start => AppStateCommand::Start,
+            AppCommand::Readonly => AppStateCommand::Readonly,
+            AppCommand::Stop => AppStateCommand::Stop,
+        }
+    }
+}
 
 ///
 /// AppStateMapper

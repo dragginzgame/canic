@@ -25,8 +25,18 @@ pub mod topology;
 pub mod wasm;
 
 ///
-/// Query Wrappers
-/// (these modules have nothing else other than safe, public Query APIs)
+/// Workflow Query Re-exports
+///
+/// Only queries that satisfy ALL of the following may be re-exported directly:
+///
+/// - Read-only
+/// - No orchestration or side effects
+/// - No policy or invariant enforcement
+/// - No internal `Error` in public signatures
+/// - Return DTOs or primitives only
+///
+/// Queries that can fail with internal errors or enforce invariants
+/// MUST be wrapped in an API façade instead.
 ///
 
 pub mod cycles {
@@ -57,41 +67,4 @@ pub mod prelude {
         PublicError,
         cdk::types::{Account, Principal},
     };
-}
-
-///
-/// EndpointCall
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EndpointCall {
-    pub endpoint: EndpointId,
-    pub kind: EndpointCallKind,
-}
-
-///
-/// EndpointId
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EndpointId {
-    pub name: &'static str,
-}
-
-impl EndpointId {
-    #[must_use]
-    pub const fn new(name: &'static str) -> Self {
-        Self { name }
-    }
-}
-
-///
-/// EndpointCallKind
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum EndpointCallKind {
-    Query,
-    QueryComposite,
-    Update,
 }

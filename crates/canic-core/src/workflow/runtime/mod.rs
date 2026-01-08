@@ -1,6 +1,8 @@
 pub mod cycles;
 pub mod log;
 pub mod random;
+pub mod timer;
+pub mod wasm;
 
 use crate::{
     VERSION, access,

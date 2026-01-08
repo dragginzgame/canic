@@ -1,6 +1,5 @@
 use crate::{
     Error, ThisError,
-    dto::state::AppCommand,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
@@ -18,6 +17,17 @@ use derive_more::Display;
 #[derive(Clone, Debug, Default)]
 pub struct AppStateSnapshot {
     pub mode: Option<AppMode>,
+}
+
+///
+/// AppStateCommand
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppStateCommand {
+    Start,
+    Readonly,
+    Stop,
 }
 
 ///
@@ -83,13 +93,13 @@ impl AppStateOps {
     // Commands
     // -------------------------------------------------------------
 
-    pub fn execute_command(cmd: AppCommand) -> Result<(), Error> {
+    pub fn execute_command(cmd: AppStateCommand) -> Result<(), Error> {
         let old_mode = AppMode::from_model(AppState::get_mode());
 
         let new_mode = match cmd {
-            AppCommand::Start => AppMode::Enabled,
-            AppCommand::Readonly => AppMode::Readonly,
-            AppCommand::Stop => AppMode::Disabled,
+            AppStateCommand::Start => AppMode::Enabled,
+            AppStateCommand::Readonly => AppMode::Readonly,
+            AppStateCommand::Stop => AppMode::Disabled,
         };
 
         if old_mode == new_mode {

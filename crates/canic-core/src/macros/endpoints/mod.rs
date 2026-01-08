@@ -207,7 +207,7 @@ macro_rules! canic_endpoints {
             ::canic::core::dto::placement::sharding::ShardingRegistryView,
             ::canic::PublicError,
         > {
-            Ok($crate::api::placement::sharding::ShardingQuery::registry_view())
+            Ok($crate::api::placement::sharding::ShardingApi::registry_view())
         }
 
         #[canic_query(auth_any(::canic::core::access::auth::is_controller))]
@@ -218,7 +218,9 @@ macro_rules! canic_endpoints {
             ::canic::core::dto::placement::sharding::ShardingTenantsView,
             ::canic::PublicError,
         > {
-            Ok($crate::api::placement::sharding::ShardingQuery::tenants_view(&pool, shard_pid))
+            Ok($crate::api::placement::sharding::ShardingApi::tenants_view(
+                &pool, shard_pid,
+            ))
         }
 
         //

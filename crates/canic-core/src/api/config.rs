@@ -1,4 +1,4 @@
-use crate::{PublicError, ops::config::ConfigOps};
+use crate::{PublicError, workflow::config::ConfigWorkflow};
 
 ///
 /// ConfigApi
@@ -8,6 +8,6 @@ pub struct ConfigApi;
 
 impl ConfigApi {
     pub fn export_toml() -> Result<String, PublicError> {
-        ConfigOps::export_toml().map_err(PublicError::from)
+        ConfigWorkflow::export_toml().map_err(PublicError::from)
     }
 }

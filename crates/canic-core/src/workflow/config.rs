@@ -1,3 +1,4 @@
+use crate::{Error, ops::config::ConfigOps};
 use std::time::Duration;
 
 ///
@@ -18,3 +19,15 @@ pub const WORKFLOW_POOL_INIT_DELAY: Duration = Duration::from_secs(30);
 
 /// Pool check cadence (30 minutes).
 pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+///
+/// ConfigWorkflow
+///
+
+pub struct ConfigWorkflow;
+
+impl ConfigWorkflow {
+    pub fn export_toml() -> Result<String, Error> {
+        ConfigOps::export_toml()
+    }
+}

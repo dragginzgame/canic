@@ -1,4 +1,4 @@
-use crate::{ids::CanisterRole, ops::runtime::wasm::WasmOps};
+use crate::{ids::CanisterRole, workflow::runtime::wasm::WasmWorkflow};
 
 ///
 /// WasmApi
@@ -19,11 +19,11 @@ pub struct WasmApi;
 
 impl WasmApi {
     pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
-        WasmOps::import_static(wasms);
+        WasmWorkflow::import_static(wasms);
     }
 
     /// Quiet variant without logging.
     pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
-        WasmOps::import_static_quiet(wasms);
+        WasmWorkflow::import_static_quiet(wasms);
     }
 }

@@ -6,15 +6,13 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, mgmt::MgmtOps},
         rpc::request::RequestOps,
-        runtime::{
-            env::EnvOps,
-            timer::{TimerId, TimerOps},
-        },
+        runtime::{env::EnvOps, timer::TimerId},
         storage::cycles::CycleTrackerOps,
     },
     workflow::{
         config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
         prelude::*,
+        runtime::timer::TimerWorkflow,
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -36,7 +34,7 @@ impl CycleTrackerWorkflow {
     /// Start recurring cycle tracking.
     /// Safe to call multiple times.
     pub fn start() {
-        let _ = TimerOps::set_guarded_interval(
+        let _ = TimerWorkflow::set_guarded_interval(
             &TIMER,
             WORKFLOW_INIT_DELAY,
             "cycles:init",
@@ -55,7 +53,7 @@ impl CycleTrackerWorkflow {
     /// Stop recurring cycle tracking.
     #[expect(dead_code)]
     pub fn stop() {
-        let _ = TimerOps::clear_guarded(&TIMER);
+        let _ = TimerWorkflow::clear_guarded(&TIMER);
     }
 
     pub fn track() {

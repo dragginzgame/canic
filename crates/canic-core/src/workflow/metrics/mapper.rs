@@ -1,10 +1,10 @@
 use crate::{
     dto::metrics::{
-        AccessMetricEntry, AccessMetricKind, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
-        SystemMetricEntry, TimerMetricEntry,
+        AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry, SystemMetricEntry,
+        TimerMetricEntry,
     },
     ops::runtime::metrics::{
-        access::{AccessMetricKey, AccessMetricKind as OpsAccessMetricKind},
+        access::AccessMetricKey,
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
@@ -80,7 +80,7 @@ impl MetricsMapper {
         raw.into_iter()
             .map(|(key, count)| AccessMetricEntry {
                 endpoint: key.endpoint,
-                kind: Self::access_metric_kind_to_view(key.kind),
+                kind: key.kind,
                 count,
             })
             .collect()
@@ -146,14 +146,6 @@ impl MetricsMapper {
                 }
             })
             .collect()
-    }
-
-    const fn access_metric_kind_to_view(kind: OpsAccessMetricKind) -> AccessMetricKind {
-        match kind {
-            OpsAccessMetricKind::Auth => AccessMetricKind::Auth,
-            OpsAccessMetricKind::Guard => AccessMetricKind::Guard,
-            OpsAccessMetricKind::Rule => AccessMetricKind::Rule,
-        }
     }
 
     fn kind_to_string(kind: SystemMetricKind) -> String {

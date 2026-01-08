@@ -425,13 +425,13 @@ mod expand {
         orig_name: &syn::Ident,
     ) -> TokenStream2 {
         let call_kind = match kind {
-            EndpointKind::Query => quote!(::canic::core::api::EndpointCallKind::Query),
-            EndpointKind::Update => quote!(::canic::core::api::EndpointCallKind::Update),
+            EndpointKind::Query => quote!(::canic::core::ids::EndpointCallKind::Query),
+            EndpointKind::Update => quote!(::canic::core::ids::EndpointCallKind::Update),
         };
 
         quote! {
-            let #call_ident = ::canic::core::api::EndpointCall {
-                endpoint: ::canic::core::api::EndpointId::new(stringify!(#orig_name)),
+            let #call_ident = ::canic::core::ids::EndpointCall {
+                endpoint: ::canic::core::ids::EndpointId::new(stringify!(#orig_name)),
                 kind: #call_kind,
             };
         }
@@ -454,10 +454,8 @@ mod expand {
             return quote!();
         }
 
-        let metric = record_access_denied(
-            call,
-            quote!(::canic::core::dto::metrics::AccessMetricKind::Guard),
-        );
+        let metric =
+            record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Guard));
 
         match kind {
             EndpointKind::Query => quote! {
@@ -476,10 +474,7 @@ mod expand {
     }
 
     fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
-        let metric = record_access_denied(
-            call,
-            quote!(::canic::core::dto::metrics::AccessMetricKind::Auth),
-        );
+        let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Auth));
 
         match auth {
             Some(AuthSpec::Any(rules)) => quote! {
@@ -503,10 +498,7 @@ mod expand {
             return quote!();
         }
 
-        let metric = record_access_denied(
-            call,
-            quote!(::canic::core::dto::metrics::AccessMetricKind::Rule),
-        );
+        let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Rule));
 
         let checks = rules.iter().map(|expr| {
             quote! {
@@ -525,10 +517,7 @@ mod expand {
             return quote!();
         }
 
-        let metric = record_access_denied(
-            call,
-            quote!(::canic::core::dto::metrics::AccessMetricKind::Rule),
-        );
+        let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Rule));
 
         let checks = envs.iter().map(|expr| {
             quote! {

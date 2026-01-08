@@ -7,9 +7,9 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, mgmt::MgmtOps},
-        runtime::timer::{TimerId, TimerOps},
+        runtime::timer::TimerId,
     },
-    workflow::prelude::*,
+    workflow::{prelude::*, runtime::timer::TimerWorkflow},
 };
 use canic_utils::rand as rand_utils;
 use sha2::{Digest, Sha256};
@@ -54,7 +54,7 @@ impl RandomWorkflow {
         };
         let source = cfg.source;
 
-        let _ = TimerOps::set_guarded_interval(
+        let _ = TimerWorkflow::set_guarded_interval(
             &SEED_TIMER,
             Duration::ZERO,
             "random:seed:init",

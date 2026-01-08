@@ -7,11 +7,11 @@
 //! domain layering (endpoints → ops → model).
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
+use crate::ids::{EndpointCall, EndpointId};
 use canic_cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::api::{EndpointCall, EndpointId};
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
     #[cfg(not(test))]

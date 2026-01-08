@@ -3,14 +3,12 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::IcOps,
-        runtime::{
-            log::LogOps,
-            timer::{TimerId, TimerOps},
-        },
+        runtime::{log::LogOps, timer::TimerId},
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_LOG_RETENTION_INTERVAL},
         prelude::*,
+        runtime::timer::TimerWorkflow,
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -30,7 +28,7 @@ pub struct LogRetentionWorkflow;
 impl LogRetentionWorkflow {
     /// Start periodic log retention sweeps.
     pub fn start() {
-        let _ = TimerOps::set_guarded_interval(
+        let _ = TimerWorkflow::set_guarded_interval(
             &RETENTION_TIMER,
             WORKFLOW_INIT_DELAY,
             "log_retention:init",
@@ -48,7 +46,7 @@ impl LogRetentionWorkflow {
     /// Stop periodic retention sweeps.
     #[expect(dead_code)]
     pub fn stop() {
-        let _ = TimerOps::clear_guarded(&RETENTION_TIMER);
+        let _ = TimerWorkflow::clear_guarded(&RETENTION_TIMER);
     }
 
     /// Run a retention sweep immediately.
