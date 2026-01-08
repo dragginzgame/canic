@@ -2,7 +2,7 @@ use crate::{
     ThisError,
     cdk::{
         env::nns::NNS_REGISTRY_CANISTER,
-        spec::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
+        spec::governance::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
     },
     infra::{ic::nns::NnsInfraError, prelude::*},
 };

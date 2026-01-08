@@ -20,7 +20,7 @@
 use crate::{
     cdk::{
         env::ck::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},
-        spec::icrc::icrc2::{
+        spec::standards::icrc::icrc2::{
             Allowance, AllowanceArgs, TransferFromArgs, TransferFromError, TransferFromResult,
         },
     },

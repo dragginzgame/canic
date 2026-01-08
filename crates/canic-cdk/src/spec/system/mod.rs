@@ -4,4 +4,3 @@
 
 pub mod cycles;
 pub mod http;
-pub mod xrc;
