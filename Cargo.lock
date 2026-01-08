@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -262,14 +262,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "canic",
 ]
 
 [[package]]
 name = "canic-macros"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -278,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "canic-memory"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "convert_case",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "candid",
  "canic",
@@ -1583,9 +1583,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.179"
+version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5a2d376baa530d1238d133232d15e239abad80d05838b4b59354e5268af431f"
+checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "libm"
