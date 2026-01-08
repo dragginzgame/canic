@@ -1,8 +1,7 @@
 use crate::{
     ThisError,
     cdk::types::Principal,
-    ids::{CanisterRole, SubnetRole},
-    infra::ic::network::BuildNetwork,
+    ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
 
 ///

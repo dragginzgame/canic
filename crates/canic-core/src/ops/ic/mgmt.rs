@@ -14,7 +14,6 @@ use crate::{
             QueryStats as CdkQueryStats,
         },
     },
-    dto::abi::v1::CanisterInitPayload,
     infra::ic::mgmt::MgmtInfra,
     ops::{
         ic::IcOpsError,
@@ -243,12 +242,12 @@ impl MgmtOps {
     //
 
     /// Install or reinstall a *Canic-style* canister using the standard
-    /// `(CanisterInitPayload, Option<Vec<u8>>)` argument convention.
-    pub async fn install_canister_with_payload(
+    /// `(payload, Option<Vec<u8>>)` argument convention.
+    pub async fn install_canister_with_payload<P: CandidType>(
         mode: CanisterInstallMode,
         canister_pid: Principal,
         wasm: &[u8],
-        payload: CanisterInitPayload,
+        payload: P,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<(), Error> {
         Self::install_code(mode, canister_pid, wasm, (payload, extra_arg)).await

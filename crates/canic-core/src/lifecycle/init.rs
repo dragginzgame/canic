@@ -24,8 +24,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::runtime::timer::TimerOps,
-    workflow,
+    workflow::{self, runtime::timer::TimerWorkflow},
 };
 use std::time::Duration;
 
@@ -34,7 +33,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
     workflow::runtime::init_root_canister(identity);
 
     // Schedule async bootstrap immediately after init returns.
-    TimerOps::set(
+    TimerWorkflow::set(
         Duration::ZERO,
         "canic:bootstrap:init_root_canister",
         async {
@@ -54,7 +53,7 @@ pub fn init_nonroot_canister(
     // Schedule async bootstrap immediately after init returns.
     // Duration::ZERO ensures execution on the next tick without
     // blocking the init hook.
-    TimerOps::set(
+    TimerWorkflow::set(
         Duration::ZERO,
         "canic:bootstrap:init_nonroot_canister",
         async move {

@@ -1,4 +1,4 @@
-pub use crate::infra::ic::network::{BuildNetwork, NetworkInfra};
+pub use crate::{ids::BuildNetwork, infra::ic::network::NetworkInfra};
 
 ///
 /// NetworkOps

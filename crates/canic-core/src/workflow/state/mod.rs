@@ -30,6 +30,7 @@ impl AppStateWorkflow {
     /// exclusively at the API boundary.
     pub async fn execute_command(cmd: AppCommand) -> Result<(), Error> {
         env::require_root()?;
+        let cmd = mapper::AppCommandMapper::from_dto(cmd);
         AppStateOps::execute_command(cmd)?;
 
         let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();

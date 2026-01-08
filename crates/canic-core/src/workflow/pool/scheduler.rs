@@ -16,15 +16,12 @@
 use crate::{
     Error,
     domain::policy::pool::PoolPolicyError,
-    ops::{
-        ic::IcOps,
-        runtime::timer::{TimerId, TimerOps},
-        storage::pool::PoolOps,
-    },
+    ops::{ic::IcOps, runtime::timer::TimerId, storage::pool::PoolOps},
     workflow::{
         config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
         pool::{PoolWorkflow, admissibility::check_can_enter_pool},
         prelude::*,
+        runtime::timer::TimerWorkflow,
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -61,7 +58,7 @@ impl PoolSchedulerWorkflow {
     ///
     /// Safe to call multiple times.
     pub fn start() {
-        let _ = TimerOps::set_guarded_interval(
+        let _ = TimerWorkflow::set_guarded_interval(
             &TIMER,
             WORKFLOW_POOL_INIT_DELAY,
             "pool:init",
@@ -80,7 +77,7 @@ impl PoolSchedulerWorkflow {
     ///
     /// This is idempotent and guarded against concurrent execution.
     pub fn schedule() {
-        let _ = TimerOps::set_guarded(&RESET_TIMER, Duration::ZERO, "pool:pending", async {
+        let _ = TimerWorkflow::set_guarded(&RESET_TIMER, Duration::ZERO, "pool:pending", async {
             RESET_TIMER.with_borrow_mut(|slot| *slot = None);
             let _ = Self::run_worker(POOL_RESET_BATCH_SIZE).await;
         });

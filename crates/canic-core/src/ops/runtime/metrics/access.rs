@@ -1,4 +1,4 @@
-use crate::ops::prelude::*;
+use crate::{ids::AccessMetricKind, ops::prelude::*};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -12,19 +12,6 @@ thread_local! {
 #[derive(Clone, Debug)]
 pub struct AccessMetricsSnapshot {
     pub entries: Vec<(AccessMetricKey, u64)>,
-}
-
-///
-/// AccessMetricKind
-/// Enumerates the access-control stage that rejected the call.
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[remain::sorted]
-pub enum AccessMetricKind {
-    Auth,
-    Guard,
-    Rule,
 }
 
 ///

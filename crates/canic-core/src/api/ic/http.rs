@@ -1,4 +1,4 @@
-use crate::{PublicError, dto, ops::ic::http::HttpOps, workflow::http::HttpWorkflow};
+use crate::{PublicError, dto, workflow::http::HttpWorkflow};
 use serde::de::DeserializeOwned;
 
 ///
@@ -17,7 +17,9 @@ impl HttpApi {
         url: &str,
         headers: &[(&str, &str)],
     ) -> Result<T, PublicError> {
-        HttpOps::get(url, headers).await.map_err(PublicError::from)
+        HttpWorkflow::get(url, headers)
+            .await
+            .map_err(PublicError::from)
     }
 
     /// Same as `get`, with an explicit metrics label.
@@ -27,7 +29,7 @@ impl HttpApi {
         headers: &[(&str, &str)],
         label: &str,
     ) -> Result<T, PublicError> {
-        HttpOps::get_with_label(url, headers, Some(label))
+        HttpWorkflow::get_with_label(url, headers, label)
             .await
             .map_err(PublicError::from)
     }

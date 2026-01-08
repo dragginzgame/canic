@@ -5,7 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.7.13] - 2026-01-06
+## [Unreleased]
+- removed DTO usage from ops by introducing ops-local command types and generic cascade/install payloads
+- mapped app state commands in workflow before invoking ops
+- routed API wrappers through workflow for signature, network, config, wasm, timer, and IC call/http helpers
+- moved BuildNetwork into ids:: as it's not really a good fit for the ops/workflow layers
+- moved EndpointId/Call and AccessMetricKind into ids::
+
+## [0.7.13] - 2026-01-07
 - lots of work on bubbling up errors.  InfraErrors treated differently.  Standardised all errors under ops/
 - split the Ic ledger code over api, workflow, ops and infra
 - re-wrapped the ic Call type via CallOps, adding metrics
@@ -13,7 +20,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - routed eager TLS init through MemoryRegistryOps in workflow runtime
 - generally a full day of refactoring but not much of it is interesting enough to mention
 
-## [0.7.12] - 2026-01-05
+## [0.7.12] - 2026-01-06
 - updated the signature code to use the HashTree from ic-certified-map.  Basically none of us know how it works so this
 is just trial and error.
 - added require_tenant_shard to ShardingApi

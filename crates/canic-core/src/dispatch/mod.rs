@@ -25,7 +25,7 @@
 
 pub mod icrc21;
 
-use crate::{api::EndpointCall, perf};
+use crate::{ids::EndpointCall, perf};
 use std::future::Future;
 
 /// Dispatch a synchronous query endpoint.

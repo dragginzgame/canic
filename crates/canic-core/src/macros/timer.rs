@@ -1,6 +1,6 @@
 //! Perf-instrumented timer helpers that auto-label with module + function name.
 //!
-//! These macros wrap [`TimerOps`](crate::ops::ic::timer::TimerOps) so callers can
+//! These macros wrap [`TimerApi`] so callers can
 //! schedule work without manually threading labels. Labels are constructed
 //! as `module_path!()::function_name`.
 

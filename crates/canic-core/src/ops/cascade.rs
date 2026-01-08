@@ -1,6 +1,5 @@
 use crate::{
     Error,
-    dto::cascade::{StateSnapshotView, TopologySnapshotView},
     ops::{prelude::*, rpc::RpcOps},
     protocol,
 };
@@ -12,16 +11,16 @@ use crate::{
 pub struct CascadeOps;
 
 impl CascadeOps {
-    pub async fn send_state_snapshot(
+    pub async fn send_state_snapshot<S: CandidType>(
         pid: Principal,
-        snapshot: &StateSnapshotView,
+        snapshot: S,
     ) -> Result<(), Error> {
         RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_STATE, snapshot).await
     }
 
-    pub async fn send_topology_snapshot(
+    pub async fn send_topology_snapshot<S: CandidType>(
         pid: Principal,
-        snapshot: &TopologySnapshotView,
+        snapshot: S,
     ) -> Result<(), Error> {
         RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_TOPOLOGY, snapshot).await
     }

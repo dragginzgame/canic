@@ -1,4 +1,4 @@
-use crate::ops::runtime::timer::{TimerId, TimerOps};
+use crate::workflow::runtime::timer::{TimerId, TimerWorkflow};
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
 ///
@@ -31,7 +31,7 @@ impl TimerApi {
         label: impl Into<String>,
         task: impl Future<Output = ()> + 'static,
     ) -> TimerHandle {
-        TimerHandle(TimerOps::set(delay, label, task))
+        TimerHandle(TimerWorkflow::set(delay, label, task))
     }
 
     /// Schedule a one-shot timer only if the slot is empty.
@@ -47,7 +47,7 @@ impl TimerApi {
                 return false;
             }
 
-            let id = TimerOps::set(delay, label, task);
+            let id = TimerWorkflow::set(delay, label, task);
             *entry = Some(TimerHandle(id));
             true
         })
@@ -63,7 +63,7 @@ impl TimerApi {
         F: FnMut() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        TimerHandle(TimerOps::set_interval(interval, label, task))
+        TimerHandle(TimerWorkflow::set_interval(interval, label, task))
     }
 
     /// Schedule a guarded init timer that installs a repeating interval timer.
@@ -93,7 +93,7 @@ impl TimerApi {
             let init_id_cell = Rc::new(RefCell::new(None));
             let init_id_cell_task = Rc::clone(&init_id_cell);
 
-            let init_id = TimerOps::set(init_delay, init_label, async move {
+            let init_id = TimerWorkflow::set(init_delay, init_label, async move {
                 init_task().await;
 
                 let init_id = init_id_cell_task.borrow();
@@ -106,7 +106,7 @@ impl TimerApi {
                     return;
                 }
 
-                let interval_id = TimerOps::set_interval(interval, interval_label, tick_task);
+                let interval_id = TimerWorkflow::set_interval(interval, interval_label, tick_task);
                 let interval_handle = TimerHandle(interval_id);
 
                 // Atomically replace the slot value and clear the previous timer id.
@@ -116,7 +116,7 @@ impl TimerApi {
                     if let Some(old_id) = old
                         && old_id != interval_handle
                     {
-                        TimerOps::clear(old_id.0);
+                        TimerWorkflow::clear(old_id.0);
                     }
                 });
             });
@@ -131,6 +131,6 @@ impl TimerApi {
 
     /// Optional cancellation.
     pub fn clear_lifecycle_timer(handle: TimerHandle) {
-        TimerOps::clear(handle.0);
+        TimerWorkflow::clear(handle.0);
     }
 }

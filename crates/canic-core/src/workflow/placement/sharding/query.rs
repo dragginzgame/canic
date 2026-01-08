@@ -1,4 +1,5 @@
 use crate::{
+    Error,
     dto::placement::sharding::{
         ShardingRegistryEntryView, ShardingRegistryView, ShardingTenantsView,
     },
@@ -18,6 +19,11 @@ impl ShardingQuery {
     #[must_use]
     pub fn lookup_tenant(pool: &str, tenant: &str) -> Option<Principal> {
         ShardingRegistryOps::tenant_shard(pool, tenant)
+    }
+
+    /// Return the shard assigned to a tenant in a pool, or an error if unassigned.
+    pub fn require_tenant_shard(pool: &str, tenant: &str) -> Result<Principal, Error> {
+        ShardingRegistryOps::tenant_shard_required(pool, tenant)
     }
 
     /// Return a view of the full sharding registry.

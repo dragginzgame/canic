@@ -1,13 +1,22 @@
+//! Layer-neutral identifiers and boundary-safe primitives.
 //!
-//! Shared type wrappers and aliases used across the ops and endpoint layers.
+//! This module contains:
+//! - Pure identifiers (IDs, enums, newtypes)
+//! - Boundary-safe wrappers used across ops, workflow, and API
 //!
-//! These helpers centralize candid-friendly structs plus bounded/principal
-//! utilities so consumers can `use canic::ids::*` without reaching into
-//! submodules.
-//!
+//! It must not contain:
+//! - Business logic
+//! - Policy decisions
+//! - Storage-backed types
 
+mod access;
 mod canister;
+mod endpoint;
+mod network;
 mod subnet;
 
-pub use canister::*;
-pub use subnet::*;
+pub use access::AccessMetricKind;
+pub use canister::CanisterRole;
+pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
+pub use network::BuildNetwork;
+pub use subnet::SubnetRole;
