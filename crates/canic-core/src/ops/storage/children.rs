@@ -1,26 +1,22 @@
-use crate::ops::prelude::*;
-use crate::storage::stable::children::{CanisterChildren, CanisterChildrenData};
-
-///
-/// ChildSnapshot
-/// Internal, operational snapshot of a child canister.
-///
-
-pub struct ChildSnapshot {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-}
+use crate::{
+    ops::prelude::*,
+    storage::{
+        canister::CanisterRecord,
+        stable::children::{CanisterChildren, CanisterChildrenData},
+    },
+};
 
 ///
 /// ChildrenSnapshot
-/// Internal snapshot of direct children.
-/// Projection of cached children; canonical derivation is
-/// `SubnetRegistry::children` / `SubnetRegistryOps::children`.
+/// Internal snapshot of direct child canisters.
 ///
-
+/// This is a cached projection populated via topology cascade.
+/// Canonical derivation lives in `SubnetRegistry::children` /
+/// `SubnetRegistryOps::children`.
+///
+#[derive(Clone, Debug)]
 pub struct ChildrenSnapshot {
-    pub entries: Vec<ChildSnapshot>,
+    pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
 ///
@@ -28,17 +24,17 @@ pub struct ChildrenSnapshot {
 ///
 /// Invariant: the children cache is updated only via topology cascade
 /// (workflow::cascade::topology::nonroot_cascade_topology).
-
+///
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {
     // -------------------------------------------------------------
-    // Lookup helpers (internal)
+    // Lookup helpers
     // -------------------------------------------------------------
 
     #[must_use]
     pub fn contains_pid(pid: &Principal) -> bool {
-        Self::snapshot().entries.iter().any(|e| &e.pid == pid)
+        Self::snapshot().entries.iter().any(|(p, _)| p == pid)
     }
 
     #[must_use]
@@ -46,46 +42,25 @@ impl CanisterChildrenOps {
         Self::snapshot()
             .entries
             .into_iter()
-            .map(|e| e.pid)
+            .map(|(pid, _)| pid)
             .collect()
     }
 
     // -------------------------------------------------------------
-    // Import / Snapshot
+    // Snapshot / Import
     // -------------------------------------------------------------
 
     #[must_use]
     pub fn snapshot() -> ChildrenSnapshot {
         let data = CanisterChildren::export();
-
         ChildrenSnapshot {
-            entries: data
-                .entries
-                .into_iter()
-                .map(|(pid, summary)| ChildSnapshot {
-                    pid,
-                    role: summary.role,
-                    parent_pid: summary.parent_pid,
-                })
-                .collect(),
+            entries: data.entries,
         }
     }
 
     pub(crate) fn import(snapshot: ChildrenSnapshot) {
-        let entries = snapshot
-            .entries
-            .into_iter()
-            .map(|e| {
-                (
-                    e.pid,
-                    crate::storage::canister::CanisterSummary {
-                        role: e.role,
-                        parent_pid: e.parent_pid,
-                    },
-                )
-            })
-            .collect();
-
-        CanisterChildren::import(CanisterChildrenData { entries });
+        CanisterChildren::import(CanisterChildrenData {
+            entries: snapshot.entries,
+        });
     }
 }

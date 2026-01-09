@@ -1,6 +1,6 @@
 use crate::{
     dto::{
-        canister::{CanisterChildView, CanisterSummaryView},
+        canister::CanisterRecordView,
         page::{Page, PageRequest},
     },
     ids::CanisterRole,
@@ -15,12 +15,12 @@ pub struct CanisterChildrenApi;
 
 impl CanisterChildrenApi {
     #[must_use]
-    pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
+    pub fn page(page: PageRequest) -> Page<CanisterRecordView> {
         CanisterChildrenQuery::page(page)
     }
 
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterChildView> {
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterRecordView> {
         CanisterChildrenQuery::find_first_by_role(role)
     }
 }

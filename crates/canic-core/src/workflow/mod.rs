@@ -1,5 +1,4 @@
 pub mod bootstrap;
-pub mod canister;
 pub mod canister_lifecycle;
 pub mod cascade;
 pub mod config;

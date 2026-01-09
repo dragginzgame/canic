@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.22] - 2026-01-09
+- Unified canister modeling by removing summary/snapshot abstractions and standardizing all internal topology, registry, and children workflows on a single authoritative CanisterRecord, simplifying data flow and eliminating lossy projections.
+
 ## [0.7.21] - 2026-01-08
 - added with_args, try_with_args to call api workflow
 - complete refactor of the IC Call wrapping, on four different layers, fun

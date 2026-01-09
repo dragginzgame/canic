@@ -1,6 +1,7 @@
 use crate::{
+    cdk::types::Principal,
     dto::{
-        canister::{CanisterChildView, CanisterSummaryView},
+        canister::CanisterRecordView,
         page::{Page, PageRequest},
     },
     ids::CanisterRole,
@@ -8,11 +9,10 @@ use crate::{
         ic::IcOps,
         runtime::env::EnvOps,
         storage::{
-            children::{CanisterChildrenOps, ChildrenSnapshot},
-            registry::subnet::SubnetRegistryOps,
+            CanisterRecord, children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::{topology::children::mapper::ChildrenMapper, view::paginate::paginate_vec},
+    workflow::view::paginate::paginate_vec,
 };
 
 ///
@@ -22,30 +22,44 @@ use crate::{
 pub struct CanisterChildrenQuery;
 
 impl CanisterChildrenQuery {
-    pub fn page(page: PageRequest) -> Page<CanisterSummaryView> {
-        let views = ChildrenMapper::snapshot_to_views(Self::snapshot());
+    pub fn page(page: PageRequest) -> Page<CanisterRecordView> {
+        let records = Self::records();
 
-        // 3. Paginate in workflow
+        let views: Vec<CanisterRecordView> = records
+            .into_iter()
+            .map(|(pid, record)| CanisterRecordView {
+                pid,
+                role: record.role,
+                parent_pid: record.parent_pid,
+                module_hash: record.module_hash,
+                created_at: record.created_at,
+            })
+            .collect();
+
         paginate_vec(views, page)
     }
 
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterChildView> {
-        Self::snapshot()
-            .entries
+    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterRecordView> {
+        Self::records()
             .into_iter()
-            .find(|entry| &entry.role == role)
-            .map(ChildrenMapper::child_snapshot_to_child_view)
+            .find(|(_, record)| &record.role == role)
+            .map(|(pid, record)| CanisterRecordView {
+                pid,
+                role: record.role,
+                parent_pid: record.parent_pid,
+                module_hash: record.module_hash,
+                created_at: record.created_at,
+            })
     }
 
-    fn snapshot() -> ChildrenSnapshot {
+    fn records() -> Vec<(Principal, CanisterRecord)> {
         if EnvOps::is_root() {
-            // Root derives children from the registry (not the local cache).
-            let snapshot = SubnetRegistryOps::snapshot();
-            ChildrenMapper::from_registry_snapshot(&snapshot, IcOps::canister_self())
+            // Root derives children from the registry.
+            SubnetRegistryOps::children(IcOps::canister_self())
         } else {
-            // Non-root uses the cached children populated by topology cascade.
-            CanisterChildrenOps::snapshot()
+            // Non-root uses cached children from topology cascade.
+            CanisterChildrenOps::snapshot().entries
         }
     }
 }

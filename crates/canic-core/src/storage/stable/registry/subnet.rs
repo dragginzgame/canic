@@ -8,8 +8,10 @@
 //! - The root canister has no parent.
 //! - Parent relationships may form arbitrary DAGs; cycles are tolerated
 //!   and handled defensively during traversal.
-//! - This module does not enforce role uniqueness or root singularity;
-//!   callers are responsible for maintaining those invariants.
+//!
+//! Non-invariants (caller responsibility):
+//! - Role uniqueness
+//! - Root singularity
 
 use crate::{
     cdk::{
@@ -18,61 +20,39 @@ use crate::{
     },
     eager_static, ic_memory,
     ids::CanisterRole,
-    storage::{
-        canister::{CanisterEntry, CanisterSummary},
-        stable::memory::registry::SUBNET_REGISTRY_ID,
-    },
+    storage::{canister::CanisterRecord, stable::memory::registry::SUBNET_REGISTRY_ID},
 };
 use std::cell::RefCell;
 
 eager_static! {
-    static SUBNET_REGISTRY: RefCell<BTreeMap<Principal, CanisterEntry, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(SubnetRegistry, SUBNET_REGISTRY_ID)));
+    static SUBNET_REGISTRY: RefCell<
+        BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(BTreeMap::init(
+        ic_memory!(SubnetRegistry, SUBNET_REGISTRY_ID)
+    ));
 }
 
 ///
-/// SubnetRegistryData
+/// Snapshot of registry contents (for export / tests)
 ///
-
 #[derive(Clone, Debug)]
 pub struct SubnetRegistryData {
-    pub entries: Vec<(Principal, CanisterEntry)>,
+    pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
 ///
 /// SubnetRegistry
 ///
-
 pub struct SubnetRegistry;
 
 impl SubnetRegistry {
     //
-    // Internal helper
-    //
-
-    fn with_entries<F, R>(f: F) -> R
-    where
-        F: FnOnce(
-            &mut ic_stable_structures::btreemap::Iter<
-                Principal,
-                CanisterEntry,
-                VirtualMemory<DefaultMemoryImpl>,
-            >,
-        ) -> R,
-    {
-        SUBNET_REGISTRY.with_borrow(|map| {
-            let mut iter = map.iter();
-            f(&mut iter)
-        })
-    }
-
-    //
     // Core accessors
     //
 
-    /// Returns a canister entry for the given [`Principal`], if present.
+    /// Returns the record for the given canister, if present.
     #[must_use]
-    pub(crate) fn get(pid: Principal) -> Option<CanisterEntry> {
+    pub(crate) fn get(pid: Principal) -> Option<CanisterRecord> {
         SUBNET_REGISTRY.with_borrow(|map| map.get(&pid))
     }
 
@@ -86,7 +66,7 @@ impl SubnetRegistry {
     // Registration
     //
 
-    /// Registers a new non-root canister with its parent and module hash.
+    /// Registers a new non-root canister.
     pub(crate) fn register(
         pid: Principal,
         role: &CanisterRole,
@@ -94,52 +74,55 @@ impl SubnetRegistry {
         module_hash: Vec<u8>,
         created_at: u64,
     ) {
-        let entry = CanisterEntry {
+        let record = CanisterRecord {
             role: role.clone(),
             parent_pid: Some(parent_pid),
             module_hash: Some(module_hash),
             created_at,
         };
 
-        Self::insert(pid, entry);
+        Self::insert(pid, record);
     }
 
-    /// Register the root canister itself (no parent, no module hash).
+    /// Registers the root canister.
     pub(crate) fn register_root(pid: Principal, created_at: u64) {
-        let entry = CanisterEntry {
+        let record = CanisterRecord {
             role: CanisterRole::ROOT,
             parent_pid: None,
             module_hash: None,
             created_at,
         };
 
-        Self::insert(pid, entry);
+        Self::insert(pid, record);
     }
 
-    /// Inserts a fully formed entry into the registry.
-    fn insert(pid: Principal, entry: CanisterEntry) {
+    fn insert(pid: Principal, record: CanisterRecord) {
         SUBNET_REGISTRY.with_borrow_mut(|reg| {
-            reg.insert(pid, entry);
+            reg.insert(pid, record);
         });
     }
 
-    /// Update the recorded module hash for a canister, returning whether it existed.
+    //
+    // Mutation
+    //
+
+    /// Updates the recorded module hash.
+    /// Returns `true` if the canister existed.
     #[must_use]
     pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
-        SUBNET_REGISTRY.with_borrow_mut(|reg| {
-            if let Some(mut entry) = reg.get(&pid) {
-                entry.module_hash = Some(module_hash);
-                reg.insert(pid, entry);
+        SUBNET_REGISTRY.with_borrow_mut(|reg| match reg.get(&pid) {
+            Some(mut record) => {
+                record.module_hash = Some(module_hash);
+                reg.insert(pid, record);
                 true
-            } else {
-                false
             }
+            None => false,
         })
     }
 
-    /// Removes a canister entry by principal.
+    /// Removes a canister entry.
     #[must_use]
-    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntry> {
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterRecord> {
         SUBNET_REGISTRY.with_borrow_mut(|map| map.remove(pid))
     }
 
@@ -147,31 +130,35 @@ impl SubnetRegistry {
     // Hierarchical queries
     //
 
-    /// Returns all direct children of a given parent canister (`pid`).
-    ///
-    /// This only traverses **one level down**.
+    /// Returns all **direct** children of `parent`.
     #[must_use]
-    pub(crate) fn children(parent: Principal) -> Vec<(Principal, CanisterSummary)> {
-        Self::with_entries(|iter| {
-            iter.filter_map(|e| {
-                let pid = *e.key();
-                let entry = e.value();
-                (entry.parent_pid == Some(parent)).then(|| (pid, CanisterSummary::from(entry)))
-            })
-            .collect()
+    pub(crate) fn children(parent: Principal) -> Vec<(Principal, CanisterRecord)> {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            map.iter()
+                .filter_map(|e| {
+                    let pid = *e.key();
+                    let record = e.value();
+
+                    if record.parent_pid == Some(parent) {
+                        Some((pid, record))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
         })
     }
 
     //
-    // Export & test utils
+    // Export
     //
 
-    /// Returns all canister entries as a vector.
+    /// Returns a snapshot of all registry entries.
     #[must_use]
     pub(crate) fn export() -> SubnetRegistryData {
-        SubnetRegistryData {
-            entries: Self::with_entries(|iter| iter.map(|e| (*e.key(), e.value())).collect()),
-        }
+        SUBNET_REGISTRY.with_borrow(|map| SubnetRegistryData {
+            entries: map.iter().map(|e| (*e.key(), e.value())).collect(),
+        })
     }
 }
 
@@ -188,12 +175,12 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn clear() {
+    fn clear_registry() {
         SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
     }
 
-    fn seed_basic_tree() {
-        clear();
+    fn seed_simple_tree() {
+        clear_registry();
 
         SubnetRegistry::register_root(p(1), 1);
         SubnetRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![], 2);
@@ -202,10 +189,10 @@ mod tests {
 
     #[test]
     fn get_and_get_parent_work() {
-        seed_basic_tree();
+        seed_simple_tree();
 
-        let entry = SubnetRegistry::get(p(2)).expect("alpha exists");
-        assert_eq!(entry.parent_pid, Some(p(1)));
+        let record = SubnetRegistry::get(p(2)).expect("alpha exists");
+        assert_eq!(record.parent_pid, Some(p(1)));
 
         let parent = SubnetRegistry::get_parent(p(2));
         assert_eq!(parent, Some(p(1)));
@@ -215,7 +202,7 @@ mod tests {
 
     #[test]
     fn children_returns_only_direct_children() {
-        seed_basic_tree();
+        seed_simple_tree();
 
         let children = SubnetRegistry::children(p(1));
         let pids: Vec<Principal> = children.into_iter().map(|(pid, _)| pid).collect();
@@ -226,19 +213,27 @@ mod tests {
     }
 
     #[test]
+    fn children_of_leaf_is_empty() {
+        seed_simple_tree();
+
+        let children = SubnetRegistry::children(p(2));
+        assert!(children.is_empty());
+    }
+
+    #[test]
     fn update_module_hash_mutates_existing_entry() {
-        seed_basic_tree();
+        seed_simple_tree();
 
         let updated = SubnetRegistry::update_module_hash(p(2), vec![1, 2, 3]);
         assert!(updated);
 
-        let entry = SubnetRegistry::get(p(2)).unwrap();
-        assert_eq!(entry.module_hash, Some(vec![1, 2, 3]));
+        let record = SubnetRegistry::get(p(2)).unwrap();
+        assert_eq!(record.module_hash, Some(vec![1, 2, 3]));
     }
 
     #[test]
     fn update_module_hash_returns_false_for_missing_entry() {
-        clear();
+        clear_registry();
 
         let updated = SubnetRegistry::update_module_hash(p(9), vec![1, 2, 3]);
         assert!(!updated);
@@ -246,7 +241,7 @@ mod tests {
 
     #[test]
     fn remove_deletes_entry_and_returns_it() {
-        seed_basic_tree();
+        seed_simple_tree();
 
         let removed = SubnetRegistry::remove(&p(2)).expect("entry removed");
 
@@ -256,7 +251,7 @@ mod tests {
 
     #[test]
     fn export_returns_all_entries() {
-        seed_basic_tree();
+        seed_simple_tree();
 
         let exported = SubnetRegistry::export();
         let pids: Vec<Principal> = exported.entries.into_iter().map(|(pid, _)| pid).collect();
