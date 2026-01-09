@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.23] - 2026-01-09
+- Guarded root bootstrap so it fails fast if the embedded WASM registry is uninitialized, preventing auto-create from running before WASMs are loaded.
+
 ## [0.7.22] - 2026-01-09
 - Unified canister modeling by removing summary/snapshot abstractions and standardizing all internal topology, registry, and children workflows on a single authoritative CanisterRecord, simplifying data flow and eliminating lossy projections.
 

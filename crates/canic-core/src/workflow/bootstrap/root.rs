@@ -15,6 +15,7 @@ use crate::{
             network::{BuildNetwork, NetworkOps},
         },
         runtime::env::{EnvOps, EnvSnapshot},
+        runtime::wasm::WasmOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
@@ -57,6 +58,11 @@ impl RootBootstrapSnapshot {
 /// ---------------------------------------------------------------------------
 
 pub async fn bootstrap_init_root_canister() {
+    if let Err(err) = WasmOps::require_initialized() {
+        log!(Topic::Init, Error, "bootstrap (root:init) aborted: {err}");
+        return;
+    }
+
     let _guard = match TopologyGuard::try_enter() {
         Ok(g) => g,
         Err(err) => {
@@ -107,6 +113,15 @@ pub async fn bootstrap_init_root_canister() {
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
+    if let Err(err) = WasmOps::require_initialized() {
+        log!(
+            Topic::Init,
+            Error,
+            "bootstrap (root:upgrade) aborted: {err}"
+        );
+        return;
+    }
+
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
     log!(

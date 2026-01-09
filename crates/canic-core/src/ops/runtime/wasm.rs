@@ -25,6 +25,9 @@ thread_local! {
 pub enum WasmOpsError {
     #[error("wasm '{0}' not found")]
     WasmNotFound(CanisterRole),
+
+    #[error("wasm registry not initialized before root bootstrap")]
+    RegistryUninitialized,
 }
 
 impl From<WasmOpsError> for Error {
@@ -41,6 +44,21 @@ impl From<WasmOpsError> for Error {
 pub struct WasmOps;
 
 impl WasmOps {
+    /// Returns true if the WASM registry has been populated.
+    #[must_use]
+    pub fn is_initialized() -> bool {
+        WASM_REGISTRY.with_borrow(|reg| !reg.is_empty())
+    }
+
+    /// Ensures embedded WASMs were registered before root bootstrap.
+    pub fn require_initialized() -> Result<(), Error> {
+        if Self::is_initialized() {
+            Ok(())
+        } else {
+            Err(WasmOpsError::RegistryUninitialized.into())
+        }
+    }
+
     /// Fetch a WASM module for the given canister role, if registered.
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<WasmModule> {
@@ -72,16 +90,6 @@ impl WasmOps {
                 role,
                 size as f64 / 1000.0
             );
-        }
-    }
-
-    /// Import a static slice of (role, wasm bytes) without logging.
-    pub fn import_static_quiet(wasms: &'static [(CanisterRole, &[u8])]) {
-        for (role, bytes) in wasms {
-            let wasm = WasmModule::new(bytes);
-            WASM_REGISTRY.with_borrow_mut(|reg| {
-                reg.insert(role.clone(), wasm);
-            });
         }
     }
 
