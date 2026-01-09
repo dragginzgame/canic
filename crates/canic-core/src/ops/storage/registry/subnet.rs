@@ -2,7 +2,7 @@ use crate::{
     Error, ThisError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
-        canister::{CanisterEntry as ModelCanisterEntry, CanisterSummary as ModelCanisterSummary},
+        canister::CanisterRecord,
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
@@ -14,18 +14,9 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, ThisError)]
 pub enum SubnetRegistryOpsError {
-    // ---------------------------------------------------------------------
-    // Registration errors
-    // ---------------------------------------------------------------------
     #[error("canister {0} already registered")]
     AlreadyRegistered(Principal),
 
-    #[error("parent canister {0} not found in subnet registry")]
-    ParentNotFound(Principal),
-
-    // ---------------------------------------------------------------------
-    // Traversal / invariant errors
-    // ---------------------------------------------------------------------
     #[error("canister {0} not found in subnet registry")]
     CanisterNotFound(Principal),
 
@@ -37,6 +28,9 @@ pub enum SubnetRegistryOpsError {
 
     #[error("parent chain did not terminate at root (last pid: {0})")]
     ParentChainNotRootTerminated(Principal),
+
+    #[error("parent canister {0} not found in subnet registry")]
+    ParentNotFound(Principal),
 }
 
 impl From<SubnetRegistryOpsError> for Error {
@@ -47,22 +41,18 @@ impl From<SubnetRegistryOpsError> for Error {
 
 ///
 /// SubnetRegistrySnapshot
-/// Internal, operational snapshot of the subnet registry.
+/// Operational snapshot of the subnet registry.
 ///
 
 #[derive(Clone, Debug)]
 pub struct SubnetRegistrySnapshot {
-    pub entries: Vec<(Principal, CanisterEntrySnapshot)>,
+    pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
 impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
     fn from(data: SubnetRegistryData) -> Self {
         Self {
-            entries: data
-                .entries
-                .into_iter()
-                .map(|(pid, entry)| (pid, entry.into()))
-                .collect(),
+            entries: data.entries,
         }
     }
 }
@@ -70,37 +60,24 @@ impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
 impl From<SubnetRegistrySnapshot> for SubnetRegistryData {
     fn from(snapshot: SubnetRegistrySnapshot) -> Self {
         Self {
-            entries: snapshot
-                .entries
-                .into_iter()
-                .map(|(pid, entry)| (pid, entry.into()))
-                .collect(),
+            entries: snapshot.entries,
         }
     }
 }
 
 impl SubnetRegistrySnapshot {
-    /// Return the canonical parent chain for a canister, using this snapshot.
+    /// Return the canonical parent chain for a canister.
     ///
     /// Returned order: root → … → target
-    ///
-    /// Invariants enforced:
-    /// - no cycles
-    /// - bounded by registry size
-    /// - terminates at ROOT
     pub(crate) fn parent_chain(
         &self,
         target: Principal,
-    ) -> Result<Vec<(Principal, CanisterSummarySnapshot)>, Error> {
+    ) -> Result<Vec<(Principal, CanisterRecord)>, Error> {
         let registry_len = self.entries.len();
-        let mut index = HashMap::new();
+        let index: HashMap<Principal, CanisterRecord> = self.entries.iter().cloned().collect();
 
-        for (pid, entry) in &self.entries {
-            index.insert(*pid, entry.clone());
-        }
-
-        let mut chain: Vec<(Principal, CanisterSummarySnapshot)> = Vec::new();
-        let mut seen: HashSet<Principal> = HashSet::new();
+        let mut chain = Vec::new();
+        let mut seen = HashSet::new();
         let mut pid = target;
 
         loop {
@@ -108,7 +85,7 @@ impl SubnetRegistrySnapshot {
                 return Err(SubnetRegistryOpsError::ParentChainCycle(pid).into());
             }
 
-            let entry = index
+            let record = index
                 .get(&pid)
                 .ok_or(SubnetRegistryOpsError::CanisterNotFound(pid))?;
 
@@ -116,35 +93,26 @@ impl SubnetRegistrySnapshot {
                 return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
             }
 
-            let summary = CanisterSummarySnapshot::from(entry);
-            let parent = entry.parent_pid;
+            chain.push((pid, record.clone()));
 
-            chain.push((pid, summary));
-
-            if let Some(parent_pid) = parent {
+            if let Some(parent_pid) = record.parent_pid {
                 pid = parent_pid;
             } else {
-                if entry.role != CanisterRole::ROOT {
+                if record.role != CanisterRole::ROOT {
                     return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
                 }
+
                 break;
             }
         }
 
         chain.reverse();
-
         Ok(chain)
     }
 }
 
 ///
 /// SubnetRegistryOps
-///
-/// Semantic operations over the subnet registry.
-/// Enforces structural invariants and traversal safety.
-///
-/// Invariant: non-root workflows must not call SubnetRegistryOps directly.
-/// Non-root fanout should use the children cache populated by topology cascade.
 ///
 
 pub struct SubnetRegistryOps;
@@ -154,7 +122,6 @@ impl SubnetRegistryOps {
     // Mutation
     // ---------------------------------------------------------------------
 
-    /// Register a canister without cardinality checks; policy must gate this call.
     pub fn register_unchecked(
         pid: Principal,
         role: &CanisterRole,
@@ -171,15 +138,9 @@ impl SubnetRegistryOps {
         }
 
         SubnetRegistry::register(pid, role, parent_pid, module_hash, created_at);
-
         Ok(())
     }
 
-    pub(crate) fn remove(pid: &Principal) -> Option<CanisterEntrySnapshot> {
-        SubnetRegistry::remove(pid).map(Into::into)
-    }
-
-    /// Register the root canister entry without policy gating.
     pub fn register_root(pid: Principal, created_at: u64) {
         SubnetRegistry::register_root(pid, created_at);
     }
@@ -188,13 +149,17 @@ impl SubnetRegistryOps {
         SubnetRegistry::update_module_hash(pid, module_hash)
     }
 
+    pub(crate) fn remove(pid: &Principal) -> Option<CanisterRecord> {
+        SubnetRegistry::remove(pid)
+    }
+
     // ---------------------------------------------------------------------
-    // Queries (canonical data)
+    // Queries
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn get(pid: Principal) -> Option<CanisterEntrySnapshot> {
-        SubnetRegistry::get(pid).map(Into::into)
+    pub(crate) fn get(pid: Principal) -> Option<CanisterRecord> {
+        SubnetRegistry::get(pid)
     }
 
     #[must_use]
@@ -202,13 +167,12 @@ impl SubnetRegistryOps {
         SubnetRegistry::get(pid).is_some()
     }
 
-    /// Returns true if any canister with the given role exists in the registry.
     #[must_use]
     pub fn has_role(role: &CanisterRole) -> bool {
         SubnetRegistry::export()
             .entries
             .iter()
-            .any(|(_, entry)| &entry.role == role)
+            .any(|(_, record)| &record.role == role)
     }
 
     #[must_use]
@@ -218,73 +182,16 @@ impl SubnetRegistryOps {
 
     /// Direct children (one level).
     #[must_use]
-    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterSummarySnapshot)> {
+    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterRecord)> {
         SubnetRegistry::children(pid)
-            .into_iter()
-            .map(|(pid, summary)| (pid, summary.into()))
-            .collect()
     }
 
-    // -------------------------------------------------------------
+    // ---------------------------------------------------------------------
     // Snapshot
-    // -------------------------------------------------------------
+    // ---------------------------------------------------------------------
 
     #[must_use]
     pub fn snapshot() -> SubnetRegistrySnapshot {
         SubnetRegistry::export().into()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct CanisterEntrySnapshot {
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-    pub module_hash: Option<Vec<u8>>,
-    pub created_at: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CanisterSummarySnapshot {
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-}
-
-impl From<ModelCanisterEntry> for CanisterEntrySnapshot {
-    fn from(entry: ModelCanisterEntry) -> Self {
-        Self {
-            role: entry.role,
-            parent_pid: entry.parent_pid,
-            module_hash: entry.module_hash,
-            created_at: entry.created_at,
-        }
-    }
-}
-
-impl From<CanisterEntrySnapshot> for ModelCanisterEntry {
-    fn from(entry: CanisterEntrySnapshot) -> Self {
-        Self {
-            role: entry.role,
-            parent_pid: entry.parent_pid,
-            module_hash: entry.module_hash,
-            created_at: entry.created_at,
-        }
-    }
-}
-
-impl From<ModelCanisterSummary> for CanisterSummarySnapshot {
-    fn from(summary: ModelCanisterSummary) -> Self {
-        Self {
-            role: summary.role,
-            parent_pid: summary.parent_pid,
-        }
-    }
-}
-
-impl From<&CanisterEntrySnapshot> for CanisterSummarySnapshot {
-    fn from(entry: &CanisterEntrySnapshot) -> Self {
-        Self {
-            role: entry.role.clone(),
-            parent_pid: entry.parent_pid,
-        }
     }
 }

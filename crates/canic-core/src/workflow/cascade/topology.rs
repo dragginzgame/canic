@@ -10,8 +10,9 @@ use crate::{
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
-        storage::children::{CanisterChildrenOps, ChildSnapshot, ChildrenSnapshot},
+        storage::children::{CanisterChildrenOps, ChildrenSnapshot},
     },
+    storage::canister::CanisterRecord,
     workflow::{
         cascade::{
             CascadeWorkflowError,
@@ -74,13 +75,20 @@ impl TopologyCascadeWorkflow {
 
         warn_if_large("nonroot fanout", children.len());
 
+        // Build children cache snapshot using unified CanisterRecord
         let children_snapshot = ChildrenSnapshot {
             entries: children
                 .into_iter()
-                .map(|child| ChildSnapshot {
-                    pid: child.pid,
-                    role: child.role,
-                    parent_pid: Some(self_pid),
+                .map(|child| {
+                    (
+                        child.pid,
+                        CanisterRecord {
+                            role: child.role,
+                            parent_pid: Some(self_pid),
+                            module_hash: None,
+                            created_at: 0,
+                        },
+                    )
                 })
                 .collect(),
         };

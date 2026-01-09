@@ -1,9 +1,9 @@
 use crate::{
+    dto::canister::CanisterRecordView,
     dto::topology::{
         AppRegistryEntryView, AppRegistryView, SubnetRegistryEntryView, SubnetRegistryView,
     },
     ops::storage::registry::{app::AppRegistrySnapshot, subnet::SubnetRegistrySnapshot},
-    workflow::canister::mapper::CanisterMapper,
 };
 
 ///
@@ -40,10 +40,20 @@ impl SubnetRegistryMapper {
         let entries = snapshot
             .entries
             .into_iter()
-            .map(|(_, entry)| {
-                let role = entry.role.clone();
-                let view = CanisterMapper::entry_to_view(&entry);
-                SubnetRegistryEntryView { role, entry: view }
+            .map(|(pid, record)| {
+                let record_view = CanisterRecordView {
+                    pid,
+                    role: record.role.clone(),
+                    parent_pid: record.parent_pid,
+                    module_hash: record.module_hash,
+                    created_at: record.created_at,
+                };
+
+                SubnetRegistryEntryView {
+                    pid,
+                    role: record_view.role.clone(),
+                    record: record_view,
+                }
             })
             .collect();
 

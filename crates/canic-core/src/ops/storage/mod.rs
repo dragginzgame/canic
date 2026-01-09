@@ -6,6 +6,9 @@ pub mod pool;
 pub mod registry;
 pub mod state;
 
+// re-export from storage
+pub use crate::storage::canister::CanisterRecord;
+
 use crate::{Error, ThisError, ops::OpsError};
 
 ///

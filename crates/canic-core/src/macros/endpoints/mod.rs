@@ -172,7 +172,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_canister_children(
             page: ::canic::core::dto::page::PageRequest,
-        ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterSummaryView> {
+        ) -> ::canic::core::dto::page::Page<::canic::core::dto::canister::CanisterRecordView> {
             $crate::api::topology::children::CanisterChildrenApi::page(page)
         }
 

@@ -1,11 +1,8 @@
 pub mod registry;
 
 use crate::{
-    Error, ThisError,
-    cdk::types::Principal,
-    domain::policy::PolicyError,
-    ids::CanisterRole,
-    ops::storage::registry::subnet::{CanisterEntrySnapshot, SubnetRegistrySnapshot},
+    Error, ThisError, cdk::types::Principal, domain::policy::PolicyError, ids::CanisterRole,
+    ops::storage::registry::subnet::SubnetRegistrySnapshot, storage::canister::CanisterRecord,
 };
 use std::collections::BTreeSet;
 
@@ -58,17 +55,25 @@ impl From<TopologyPolicyError> for Error {
 pub struct TopologyPolicy;
 
 impl TopologyPolicy {
-    pub(crate) fn registry_entry(
-        registry: &SubnetRegistrySnapshot,
+    // -------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------
+
+    fn registry_record(
+        registry: &'_ SubnetRegistrySnapshot,
         pid: Principal,
-    ) -> Result<CanisterEntrySnapshot, TopologyPolicyError> {
+    ) -> Result<&'_ CanisterRecord, TopologyPolicyError> {
         registry
             .entries
             .iter()
             .find(|(entry_pid, _)| *entry_pid == pid)
-            .map(|(_, entry)| entry.clone())
+            .map(|(_, record)| record)
             .ok_or(TopologyPolicyError::RegistryEntryMissing(pid))
     }
+
+    // -------------------------------------------------------------
+    // Assertions
+    // -------------------------------------------------------------
 
     pub(crate) fn assert_parent_exists(
         registry: &SubnetRegistrySnapshot,
@@ -84,11 +89,11 @@ impl TopologyPolicy {
     pub(crate) fn assert_module_hash(
         registry: &SubnetRegistrySnapshot,
         pid: Principal,
-        expected_hash: Vec<u8>,
+        expected_hash: &[u8],
     ) -> Result<(), Error> {
-        let entry = Self::registry_entry(registry, pid)?;
+        let record = Self::registry_record(registry, pid)?;
 
-        if entry.module_hash == Some(expected_hash) {
+        if record.module_hash.as_deref() == Some(expected_hash) {
             Ok(())
         } else {
             Err(TopologyPolicyError::ModuleHashMismatch(pid).into())
@@ -100,9 +105,9 @@ impl TopologyPolicy {
         pid: Principal,
         expected_parent: Principal,
     ) -> Result<(), Error> {
-        let entry = Self::registry_entry(registry, pid)?;
+        let record = Self::registry_record(registry, pid)?;
 
-        match entry.parent_pid {
+        match record.parent_pid {
             Some(pp) if pp == expected_parent => Ok(()),
             other => Err(TopologyPolicyError::ImmediateParentMismatch {
                 pid,
@@ -120,17 +125,17 @@ impl TopologyPolicy {
         let mut seen_roles = BTreeSet::new();
 
         for (role, pid) in entries {
-            let entry = Self::registry_entry(registry, *pid)?;
+            let record = Self::registry_record(registry, *pid)?;
 
-            if entry.role != *role {
+            if record.role != *role {
                 return Err(TopologyPolicyError::DirectoryRoleMismatch {
                     pid: *pid,
-                    expected: entry.role,
+                    expected: record.role.clone(),
                     found: role.clone(),
                 });
             }
 
-            if !seen_roles.insert(role) {
+            if !seen_roles.insert(role.clone()) {
                 return Err(TopologyPolicyError::DuplicateDirectoryRole(role.clone()));
             }
         }

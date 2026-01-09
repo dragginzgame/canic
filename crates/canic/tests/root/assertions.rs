@@ -2,7 +2,7 @@ use canic::{
     cdk::types::Principal,
     core::{
         dto::{
-            canister::CanisterSummaryView,
+            canister::CanisterRecordView,
             env::EnvView,
             page::{Page, PageRequest},
             topology::{DirectoryEntryView, SubnetRegistryEntryView},
@@ -31,7 +31,7 @@ pub fn assert_registry_parents(
             .unwrap_or_else(|| panic!("missing {role} entry in registry"));
 
         assert_eq!(
-            entry.entry.parent_pid, *expected_parent,
+            entry.record.parent_pid, *expected_parent,
             "unexpected parent for {role}"
         );
     }
@@ -137,16 +137,21 @@ pub fn assert_directories_consistent(
 
 /// Assert that the CANIC_CANISTER_CHILDREN endpoint matches the registry.
 pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
+    // 1. Query authoritative registry
     let registry: Vec<SubnetRegistryEntryView> = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query registry");
 
-    let mut expected: Vec<CanisterSummaryView> = registry
+    // 2. Build expected children from registry (topology-only)
+    let mut expected: Vec<CanisterRecordView> = registry
         .iter()
-        .filter(|entry| entry.entry.parent_pid == Some(root_id))
-        .map(|entry| CanisterSummaryView {
+        .filter(|entry| entry.record.parent_pid == Some(root_id))
+        .map(|entry| CanisterRecordView {
+            pid: entry.pid,
             role: entry.role.clone(),
-            parent_pid: entry.entry.parent_pid,
+            parent_pid: entry.record.parent_pid,
+            module_hash: None, // ignored for topology comparison
+            created_at: 0,     // ignored for topology comparison
         })
         .collect();
 
@@ -155,7 +160,8 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
         "registry should contain root children"
     );
 
-    let mut page: Page<CanisterSummaryView> = pic
+    // 3. Query children endpoint
+    let mut page: Page<CanisterRecordView> = pic
         .query_call(
             root_id,
             protocol::CANIC_CANISTER_CHILDREN,
@@ -166,10 +172,19 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
         )
         .expect("query canister children");
 
+    // 4. Normalize actual entries (ignore lifecycle metadata)
+    for entry in &mut page.entries {
+        entry.module_hash = None;
+        entry.created_at = 0;
+    }
+
+    // 5. Normalize ordering (endpoint order is not significant)
     expected.sort_by(|a, b| a.role.cmp(&b.role));
     page.entries.sort_by(|a, b| a.role.cmp(&b.role));
 
+    // 6. Assert invariants
     assert_eq!(page.total, expected.len() as u64, "reported total mismatch");
+
     assert_eq!(
         page.entries, expected,
         "child list from endpoint must match registry"

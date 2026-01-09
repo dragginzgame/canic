@@ -13,7 +13,7 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     storage::{
-        canister::CanisterSummary, prelude::*, stable::memory::children::CANISTER_CHILDREN_ID,
+        canister::CanisterRecord, prelude::*, stable::memory::children::CANISTER_CHILDREN_ID,
     },
 };
 use std::cell::RefCell;
@@ -23,7 +23,7 @@ eager_static! {
     // CANISTER_CHILDREN
     //
     static CANISTER_CHILDREN: RefCell<
-        BTreeMap<Principal, CanisterSummary, VirtualMemory<DefaultMemoryImpl>>
+        BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         BTreeMap::init(ic_memory!(CanisterChildren, CANISTER_CHILDREN_ID)),
     );
@@ -35,7 +35,7 @@ eager_static! {
 
 #[derive(Clone, Debug)]
 pub struct CanisterChildrenData {
-    pub entries: Vec<(Principal, CanisterSummary)>,
+    pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
 ///

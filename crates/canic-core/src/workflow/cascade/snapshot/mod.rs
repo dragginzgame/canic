@@ -21,12 +21,8 @@ use crate::{
         },
     },
     workflow::{
-        canister::mapper::CanisterMapper,
         prelude::*,
-        topology::{
-            children::mapper::ChildrenMapper,
-            directory::{AppDirectoryResolver, SubnetDirectoryResolver},
-        },
+        topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
     },
 };
 use std::collections::HashMap;
@@ -142,31 +138,33 @@ impl TopologySnapshotBuilder {
     pub(crate) fn for_target(target_pid: Principal) -> Result<Self, Error> {
         let registry_snapshot = SubnetRegistryOps::snapshot();
 
+        // Build parent chain (root → target)
         let parents: Vec<TopologyPathNode> = registry_snapshot
             .parent_chain(target_pid)?
             .into_iter()
-            .map(|(pid, summary)| {
-                let node = CanisterMapper::summary_to_topology_node(pid, &summary);
-                TopologyPathNode {
-                    pid: node.pid,
-                    role: node.role,
-                    parent_pid: node.parent_pid,
-                }
+            .map(|(pid, record)| TopologyPathNode {
+                pid,
+                role: record.role.clone(),
+                parent_pid: record.parent_pid,
             })
             .collect();
 
-        let mut children_map = HashMap::new();
+        // Build direct-children map for each parent in the chain
+        let mut children_map: HashMap<Principal, Vec<TopologyDirectChild>> = HashMap::new();
 
         for parent in &parents {
-            let child_snapshot =
-                ChildrenMapper::from_registry_snapshot(&registry_snapshot, parent.pid);
-
-            let children: Vec<TopologyDirectChild> = child_snapshot
+            let children: Vec<TopologyDirectChild> = registry_snapshot
                 .entries
-                .into_iter()
-                .map(|child| TopologyDirectChild {
-                    pid: child.pid,
-                    role: child.role,
+                .iter()
+                .filter_map(|(pid, record)| {
+                    if record.parent_pid == Some(parent.pid) {
+                        Some(TopologyDirectChild {
+                            pid: *pid,
+                            role: record.role.clone(),
+                        })
+                    } else {
+                        None
+                    }
                 })
                 .collect();
 
