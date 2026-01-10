@@ -99,8 +99,19 @@ impl ConfigModel {
     #[must_use]
     pub fn test_default() -> Self {
         let mut cfg = Self::default();
-        cfg.subnets
-            .insert(SubnetRole::PRIME, SubnetConfig::default());
+        let mut prime = SubnetConfig::default();
+        prime.canisters.insert(
+            CanisterRole::ROOT,
+            CanisterConfig {
+                kind: CanisterKind::Root,
+                initial_cycles: crate::cdk::types::Cycles::new(0),
+                topup: None,
+                randomness: RandomnessConfig::default(),
+                scaling: None,
+                sharding: None,
+            },
+        );
+        cfg.subnets.insert(SubnetRole::PRIME, prime);
         cfg
     }
 
@@ -128,6 +139,17 @@ impl Validate for ConfigModel {
             .get(&prime)
             .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
 
+        // Validate that prime root is explicitly defined and marked as root.
+        let root_role = CanisterRole::ROOT;
+        let root_cfg = prime_subnet.canisters.get(&root_role).ok_or_else(|| {
+            ConfigSchemaError::ValidationError("root canister not defined in prime subnet".into())
+        })?;
+        if root_cfg.kind != CanisterKind::Root {
+            return Err(ConfigSchemaError::ValidationError(
+                "root canister must have kind = \"root\"".into(),
+            ));
+        }
+
         // Validate that every app_directory entry exists in prime.canisters
         for canister_role in &self.app_directory {
             validate_canister_role_len(canister_role, "app directory canister")?;
@@ -137,11 +159,27 @@ impl Validate for ConfigModel {
                 ))
             })?;
 
-            if canister_cfg.cardinality != CanisterCardinality::One {
+            if canister_cfg.kind != CanisterKind::Node {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_role}' must have cardinality = \"one\"",
+                    "app directory canister '{canister_role}' must have kind = \"node\"",
                 )));
             }
+        }
+
+        let mut root_roles = Vec::new();
+        for (subnet_role, subnet) in &self.subnets {
+            for (canister_role, canister_cfg) in &subnet.canisters {
+                if canister_cfg.kind == CanisterKind::Root {
+                    root_roles.push(format!("{subnet_role}:{canister_role}"));
+                }
+            }
+        }
+
+        if root_roles.len() > 1 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "root kind must be unique globally (found {})",
+                root_roles.join(", "),
+            )));
         }
 
         // child validation
@@ -196,4 +234,50 @@ pub struct Standards {
 
     #[serde(default)]
     pub icrc103: bool,
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cdk::types::Cycles;
+    use std::collections::BTreeMap;
+
+    fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
+        CanisterConfig {
+            kind,
+            initial_cycles: Cycles::new(0),
+            topup: None,
+            randomness: RandomnessConfig::default(),
+            scaling: None,
+            sharding: None,
+        }
+    }
+
+    #[test]
+    fn root_canister_must_exist_in_prime_subnet() {
+        let mut cfg = ConfigModel::default();
+        cfg.subnets
+            .insert(SubnetRole::PRIME, SubnetConfig::default());
+
+        cfg.validate()
+            .expect_err("expected missing root canister to fail validation");
+    }
+
+    #[test]
+    fn root_canister_must_be_kind_root() {
+        let mut cfg = ConfigModel::test_default();
+        let mut canisters = BTreeMap::new();
+        canisters.insert(CanisterRole::ROOT, base_canister_config(CanisterKind::Node));
+        cfg.subnets
+            .get_mut(&SubnetRole::PRIME)
+            .expect("prime subnet")
+            .canisters = canisters;
+
+        cfg.validate()
+            .expect_err("expected non-root kind for root canister to fail");
+    }
 }

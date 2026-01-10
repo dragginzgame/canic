@@ -13,6 +13,8 @@ use crate::{
 /// This is a cached projection populated via topology cascade.
 /// Canonical derivation lives in `SubnetRegistry::children` /
 /// `SubnetRegistryOps::children`.
+/// Note: for non-root canisters, cached entries may have empty
+/// `module_hash` / `created_at` fields; canonical data lives in the registry.
 ///
 #[derive(Clone, Debug)]
 pub struct ChildrenSnapshot {

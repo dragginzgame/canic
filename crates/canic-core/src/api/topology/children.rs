@@ -20,7 +20,12 @@ impl CanisterChildrenApi {
     }
 
     #[must_use]
-    pub fn find_first_by_role(role: &CanisterRole) -> Option<CanisterRecordView> {
-        CanisterChildrenQuery::find_first_by_role(role)
+    pub fn get_node_child(role: &CanisterRole) -> Option<CanisterRecordView> {
+        CanisterChildrenQuery::get_node_child(role)
+    }
+
+    #[must_use]
+    pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterRecordView> {
+        CanisterChildrenQuery::list_children_by_role(role)
     }
 }

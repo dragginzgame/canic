@@ -8,8 +8,12 @@ use crate::{
 pub fn init_sharding_test_config() {
     // Minimal config + env snapshot for sharding policy tests.
     let toml = r#"
+        [subnets.prime.canisters.root]
+        kind = "root"
+        initial_cycles = "5T"
+
         [subnets.prime.canisters.manager]
-        cardinality = "one"
+        kind = "node"
         initial_cycles = "5T"
 
         [subnets.prime.canisters.manager.sharding.pools.primary]
@@ -19,8 +23,9 @@ pub fn init_sharding_test_config() {
         max_shards = 2
 
         [subnets.prime.canisters.shard]
-        cardinality = "many"
+        kind = "shard"
         initial_cycles = "5T"
+        [subnets.prime.canisters.shard.sharding]
     "#;
 
     Config::init_from_toml(toml).expect("init sharding test config");

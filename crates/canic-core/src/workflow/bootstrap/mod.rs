@@ -8,7 +8,7 @@
 //! - handle IC lifecycle hooks directly
 //! - depend on init payload presence
 //! - perform environment seeding or restoration
-//! - import directory snapshots
+//! - import directory snapshots outside explicit bootstrap rebuilds
 
 pub mod nonroot;
 pub mod root;

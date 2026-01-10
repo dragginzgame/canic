@@ -1,8 +1,11 @@
 pub mod registry;
 
 use crate::{
-    Error, ThisError, cdk::types::Principal, domain::policy::PolicyError, ids::CanisterRole,
-    ops::storage::registry::subnet::SubnetRegistrySnapshot, storage::canister::CanisterRecord,
+    Error, ThisError,
+    cdk::types::Principal,
+    domain::policy::PolicyError,
+    ids::CanisterRole,
+    ops::storage::{CanisterRecord, registry::subnet::SubnetRegistrySnapshot},
 };
 use std::collections::BTreeSet;
 

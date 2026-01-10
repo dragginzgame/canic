@@ -18,6 +18,13 @@ pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
 pub const CANIC_SYNC_TOPOLOGY: &str = "canic_sync_topology";
 
+// IC API endpoints.
+pub const IC_CYCLES_ACCEPT: &str = "ic_cycles_accept";
+
+// ICRC endpoints.
+pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
+pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
+
 // Shared endpoints.
 pub const CANIC_CANISTER_CYCLE_BALANCE: &str = "canic_canister_cycle_balance";
 pub const CANIC_CANISTER_VERSION: &str = "canic_canister_version";
@@ -41,3 +48,10 @@ pub const CANIC_CYCLE_TRACKER: &str = "canic_cycle_tracker";
 pub const CANIC_SCALING_REGISTRY: &str = "canic_scaling_registry";
 pub const CANIC_SHARDING_REGISTRY: &str = "canic_sharding_registry";
 pub const CANIC_SHARDING_TENANTS: &str = "canic_sharding_tenants";
+
+// ICTS endpoints.
+pub const ICTS_NAME: &str = "icts_name";
+pub const ICTS_VERSION: &str = "icts_version";
+pub const ICTS_DESCRIPTION: &str = "icts_description";
+pub const ICTS_METADATA: &str = "icts_metadata";
+pub const ICTS_CANISTER_STATUS: &str = "icts_canister_status";

@@ -216,7 +216,7 @@ DTOs are **never mutated** and never enforce invariants.
 | Writes stable registry           | ops           |
 | Wraps IC management calls        | infra         |
 | Adds metrics to IC calls         | ops           |
-| Enforces singleton cardinality   | policy        |
+| Enforces singleton uniqueness    | policy        |
 | Chooses a shard                  | policy        |
 | Validates eligibility            | policy        |
 | Creates a canister               | workflow      |

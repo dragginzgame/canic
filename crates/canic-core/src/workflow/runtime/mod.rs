@@ -181,10 +181,22 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 
-    AppDirectoryOps::import(AppDirectoryMapper::view_to_snapshot(payload.app_directory));
-    SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_snapshot(
+    if let Err(err) =
+        AppDirectoryOps::import(AppDirectoryMapper::view_to_snapshot(payload.app_directory))
+    {
+        fatal(
+            "init_nonroot_canister",
+            format!("app directory import failed: {err}"),
+        );
+    }
+    if let Err(err) = SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_snapshot(
         payload.subnet_directory,
-    ));
+    )) {
+        fatal(
+            "init_nonroot_canister",
+            format!("subnet directory import failed: {err}"),
+        );
+    }
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all();
