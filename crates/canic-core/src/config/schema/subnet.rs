@@ -184,11 +184,6 @@ impl CanisterConfig {
                 }
             }
             CanisterKind::Shard => {
-                if self.sharding.is_none() {
-                    return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{role}' kind = \"shard\" requires sharding config",
-                    )));
-                }
                 if self.scaling.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
                         "canister '{role}' kind = \"shard\" cannot define scaling",
@@ -708,5 +703,61 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid randomness interval to fail");
+    }
+
+    #[test]
+    fn shard_kind_allows_missing_sharding_config() {
+        let mut canisters = BTreeMap::new();
+        canisters.insert(
+            CanisterRole::from("shard"),
+            base_canister_config(CanisterKind::Shard),
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect("expected shard config without sharding to validate");
+    }
+
+    #[test]
+    fn explicit_canister_role_is_rejected() {
+        toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.app]
+role = "app"
+kind = "node"
+"#,
+        )
+        .expect_err("expected explicit role to fail validation");
+    }
+
+    #[test]
+    fn explicit_canister_type_is_rejected() {
+        toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.app]
+kind = "node"
+type = "node"
+"#,
+        )
+        .expect_err("expected explicit type to fail validation");
+    }
+
+    #[test]
+    fn explicit_sharding_role_is_rejected() {
+        toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.manager]
+kind = "node"
+
+[canisters.manager.sharding]
+role = "shard"
+"#,
+        )
+        .expect_err("expected explicit sharding role to fail validation");
     }
 }

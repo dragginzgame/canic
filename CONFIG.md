@@ -35,7 +35,7 @@ Optional list of controller principals appended to every provisioned canister.
 
 ### `app_directory = ["role_a", "role_b", ...]`
 
-Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "singleton"`.
+Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "node"`.
 
 ### `[subnets.<name>.pool]`
 
@@ -80,20 +80,22 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 ### `[subnets.<name>]`
 
 - `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap (must exist in `canisters`).
-- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `kind = "singleton"`.
+- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `kind = "node"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
 ### `[subnets.<name>.canisters.<role>]`
 
-Each child table configures a logical canister role within the subnet.
+Each child table configures a logical canister role within the subnet. The role is derived
+from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `type`, or
+`sharding.role` fields.
 
-- `kind = "root" | "singleton" | "worker" | "shard"` – required; declares how this role attaches in the topology.
+- `kind = "root" | "node" | "worker" | "shard"` – required; declares how this role attaches in the topology.
   - `root` cannot define scaling/sharding.
   - `root` must be unique across all subnets.
   - `subnets.prime.canisters.root` must exist and set `kind = "root"`.
-  - `singleton` may define scaling or sharding pools for hub-style roles.
+  - `node` may define scaling or sharding pools for hub-style roles.
   - `worker` requires `scaling` and cannot define `sharding`.
-  - `shard` requires `sharding` and cannot define `scaling`.
+  - `shard` does not require `sharding` and cannot define `scaling`.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (set both fields if enabling top-ups).
 - `topup.amount = "5T"` – cycles to request when topping up (set both fields if enabling top-ups).
@@ -174,13 +176,13 @@ pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "node"
 
 [subnets.prime.canisters.auth]
-kind = "singleton"
+kind = "node"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "node"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -193,7 +195,7 @@ kind = "worker"
 [subnets.prime.canisters.scale.scaling]
 
 [subnets.prime.canisters.shard_hub]
-kind = "singleton"
+kind = "node"
 topup.threshold = "10T"
 topup.amount = "5T"
 
