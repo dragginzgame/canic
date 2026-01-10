@@ -308,6 +308,7 @@ dependencies = [
  "derive_more",
  "hex",
  "rand_chacha 0.9.0",
+ "thiserror 2.0.17",
  "xxhash-rust",
 ]
 
@@ -1345,9 +1346,9 @@ dependencies = [
 
 [[package]]
 name = "ic_principal"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1762deb6f7c8d8c2bdee4b6c5a47b60195b74e9b5280faa5ba29692f8e17429c"
+checksum = "8b2b6c5941dfd659e77b262342fa58ad49489367ad026255cda8c43682d0c534"
 dependencies = [
  "crc32fast",
  "data-encoding",
@@ -2844,9 +2845,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.10+spec-1.1.0"
+version = "0.9.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0825052159284a1a8b4d6c0c86cbc801f2da5afd2b225fa548c72f2e74002f48"
+checksum = "f3afc9a848309fe1aaffaed6e1546a7a14de1f935dc9d89d32afd9a44bab7c46"
 dependencies = [
  "indexmap",
  "serde_core",

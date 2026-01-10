@@ -1,16 +1,15 @@
 use canic_core::{
     cdk::types::Cycles,
-    config::schema::{CanisterCardinality, CanisterConfig, RandomnessConfig},
+    config::schema::{CanisterConfig, CanisterKind, RandomnessConfig},
     domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
     ids::CanisterRole,
-    ops::storage::registry::subnet::{
-        CanisterEntrySnapshot, SubnetRegistryOps, SubnetRegistrySnapshot,
-    },
+    ops::storage::registry::subnet::{SubnetRegistryOps, SubnetRegistrySnapshot},
+    ops::storage::CanisterRecord,
 };
 
 fn single_canister_config() -> CanisterConfig {
     CanisterConfig {
-        cardinality: CanisterCardinality::Single,
+        kind: CanisterKind::Root,
         initial_cycles: Cycles::new(0),
         topup: None,
         randomness: RandomnessConfig::default(),
@@ -20,7 +19,7 @@ fn single_canister_config() -> CanisterConfig {
 }
 
 #[test]
-fn registry_cardinality_policy_blocks_but_ops_allows() {
+fn registry_kind_policy_blocks_but_ops_allows() {
     let _guard = crate::lock();
 
     let role = CanisterRole::new("seam_registry_singleton");
@@ -30,7 +29,7 @@ fn registry_cardinality_policy_blocks_but_ops_allows() {
     let snapshot = SubnetRegistrySnapshot {
         entries: vec![(
             existing_pid,
-            CanisterEntrySnapshot {
+            CanisterRecord {
                 role: role.clone(),
                 parent_pid: Some(root_pid),
                 module_hash: None,
@@ -39,8 +38,13 @@ fn registry_cardinality_policy_blocks_but_ops_allows() {
         )],
     };
 
-    let err = RegistryPolicy::can_register_role(&role, &snapshot, &single_canister_config())
-        .expect_err("policy should reject duplicate singleton role");
+    let err = RegistryPolicy::can_register_role(
+        &role,
+        root_pid,
+        &snapshot,
+        &single_canister_config(),
+    )
+    .expect_err("policy should reject duplicate singleton role");
     match err {
         RegistryPolicyError::RoleAlreadyRegistered { role: err_role, pid } => {
             assert_eq!(err_role, role);
@@ -48,11 +52,12 @@ fn registry_cardinality_policy_blocks_but_ops_allows() {
         }
     }
 
-    SubnetRegistryOps::register_root(root_pid);
-    SubnetRegistryOps::register_unchecked(existing_pid, &role, root_pid, vec![])
+    let created_at = 1;
+    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_unchecked(existing_pid, &role, root_pid, vec![], created_at)
         .expect("register first canister");
     let duplicate_pid = crate::p(3);
-    SubnetRegistryOps::register_unchecked(duplicate_pid, &role, root_pid, vec![])
+    SubnetRegistryOps::register_unchecked(duplicate_pid, &role, root_pid, vec![], created_at)
         .expect("ops should allow duplicate role when policy is bypassed");
 
     let duplicates = SubnetRegistryOps::snapshot()

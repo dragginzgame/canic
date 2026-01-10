@@ -19,6 +19,9 @@ use crate::{Error, ThisError, ops::OpsError};
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
+    DirectoryOps(#[from] directory::DirectoryOpsError),
+
+    #[error(transparent)]
     ShardingRegistryOps(#[from] placement::sharding::ShardingRegistryOpsError),
 
     #[error(transparent)]

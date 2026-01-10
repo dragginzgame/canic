@@ -2,9 +2,10 @@ use canic_core::{
     domain::policy::topology::{TopologyPolicy, TopologyPolicyError},
     ids::CanisterRole,
     ops::storage::{
+        CanisterRecord,
         directory::app::AppDirectorySnapshot,
         directory::subnet::SubnetDirectorySnapshot,
-        registry::subnet::{CanisterEntrySnapshot, SubnetRegistrySnapshot},
+        registry::subnet::SubnetRegistrySnapshot,
     },
 };
 
@@ -16,7 +17,7 @@ fn topology_invariants_live_in_policy() {
         app_directory = ["alpha"]
 
         [subnets.prime.canisters.alpha]
-        cardinality = "one"
+        kind = "singleton"
     "#;
 
     canic_core::init_config(toml).expect("init config");
@@ -25,7 +26,7 @@ fn topology_invariants_live_in_policy() {
     let registry_snapshot = SubnetRegistrySnapshot {
         entries: vec![(
             crate::p(30),
-            CanisterEntrySnapshot {
+            CanisterRecord {
                 role: role.clone(),
                 parent_pid: None,
                 module_hash: None,

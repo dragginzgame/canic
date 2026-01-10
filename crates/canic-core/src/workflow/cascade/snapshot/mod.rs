@@ -44,7 +44,7 @@ pub struct StateSnapshot {
 /// StateSnapshotBuilder
 ///
 /// Assembles internal `StateSnapshot` values from authoritative state.
-/// DTO conversion happens via `From<StateSnapshot> for StateSnapshotView`.
+/// DTO conversion happens via `StateSnapshotAdapter`.
 /// Root-only; construction enforces root context.
 ///
 
@@ -73,16 +73,14 @@ impl StateSnapshotBuilder {
         self
     }
 
-    #[must_use]
-    pub fn with_app_directory(mut self) -> Self {
-        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve());
-        self
+    pub fn with_app_directory(mut self) -> Result<Self, Error> {
+        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve()?);
+        Ok(self)
     }
 
-    #[must_use]
-    pub fn with_subnet_directory(mut self) -> Self {
-        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve());
-        self
+    pub fn with_subnet_directory(mut self) -> Result<Self, Error> {
+        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve()?);
+        Ok(self)
     }
 
     #[must_use]

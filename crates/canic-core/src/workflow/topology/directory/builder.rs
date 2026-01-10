@@ -1,6 +1,8 @@
 use crate::{
+    Error,
     ids::CanisterRole,
     ops::storage::{
+        directory::DirectoryOpsError,
         directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
         registry::subnet::SubnetRegistrySnapshot,
     },
@@ -14,21 +16,29 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct RootAppDirectoryBuilder;
 
 impl RootAppDirectoryBuilder {
-    #[must_use]
     pub fn build(
         registry: &SubnetRegistrySnapshot,
         app_roles: &BTreeSet<CanisterRole>,
-    ) -> AppDirectorySnapshot {
-        let entries = registry
+    ) -> Result<AppDirectorySnapshot, Error> {
+        let mut entries = BTreeMap::new();
+
+        for (pid, entry) in registry
             .entries
             .iter()
             .filter(|(_, entry)| app_roles.contains(&entry.role))
-            .map(|(pid, entry)| (entry.role.clone(), *pid))
-            .collect::<BTreeMap<_, _>>();
-
-        AppDirectorySnapshot {
-            entries: entries.into_iter().collect(),
+        {
+            if entries.insert(entry.role.clone(), *pid).is_some() {
+                return Err(DirectoryOpsError::DuplicateRole {
+                    directory: "app",
+                    role: entry.role.clone(),
+                }
+                .into());
+            }
         }
+
+        Ok(AppDirectorySnapshot {
+            entries: entries.into_iter().collect(),
+        })
     }
 }
 
@@ -39,20 +49,28 @@ impl RootAppDirectoryBuilder {
 pub struct RootSubnetDirectoryBuilder;
 
 impl RootSubnetDirectoryBuilder {
-    #[must_use]
     pub fn build(
         registry: &SubnetRegistrySnapshot,
         subnet_roles: &BTreeSet<CanisterRole>,
-    ) -> SubnetDirectorySnapshot {
-        let entries = registry
+    ) -> Result<SubnetDirectorySnapshot, Error> {
+        let mut entries = BTreeMap::new();
+
+        for (pid, entry) in registry
             .entries
             .iter()
             .filter(|(_, entry)| subnet_roles.contains(&entry.role))
-            .map(|(pid, entry)| (entry.role.clone(), *pid))
-            .collect::<BTreeMap<_, _>>();
-
-        SubnetDirectorySnapshot {
-            entries: entries.into_iter().collect(),
+        {
+            if entries.insert(entry.role.clone(), *pid).is_some() {
+                return Err(DirectoryOpsError::DuplicateRole {
+                    directory: "subnet",
+                    role: entry.role.clone(),
+                }
+                .into());
+            }
         }
+
+        Ok(SubnetDirectorySnapshot {
+            entries: entries.into_iter().collect(),
+        })
     }
 }

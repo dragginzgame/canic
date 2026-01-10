@@ -5,6 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.25]
+- Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
+- Directory rebuilds/imports now reject duplicate roles for app/subnet directories.
+
+## [0.7.24] - 2026-01-09
+- Cleaned up stale documentation and layering inconsistencies across storage, ops, and workflow modules.
+
 ## [0.7.23] - 2026-01-09
 - Guarded root bootstrap so it fails fast if the embedded WASM registry is uninitialized, preventing auto-create from running before WASMs are loaded.
 
@@ -97,7 +104,7 @@ exposing problems you didn't know existing)
 ### Changed
 - Renamed topology lookup API to `subnet_directory_pid_by_role` to make directory sourcing explicit.
 - Registry policy now consumes canister config from workflow to avoid policy → ops config access.
-- Subnet registry registration no longer enforces singleton roles; cardinality checks live in policy.
+- Subnet registry registration no longer enforces singleton roles; kind checks live in policy.
 - Pool selection now deterministically picks the oldest entry with a stable tie-breaker.
 - Cycle tracker retention cutoff is now computed in workflow/policy and passed into ops.
 - Log retention parameters are derived in workflow/policy and passed into ops.
@@ -179,8 +186,8 @@ v0.7 dramatically reduces architectural entropy. It makes the system easier to r
 
 ## [0.6.20] - 2025-12-26
 ### Added
-- Added required `cardinality = "single" | "many"` to subnet canister configs, with validation that
-  directory roles must be singleton (`cardinality = "single"`).
+- Added required `kind = "root" | "singleton" | "worker" | "shard"` to subnet canister configs, with
+  validation that directory roles must be `kind = "singleton"`.
 - Added typed endpoint identity (`EndpointCall`, `EndpointId`, `EndpointCallKind`) derived by macros and propagated through dispatch
   and metrics (endpoint labels are no longer user-supplied).
 - Added `log.max_entries` validation (<= 100,000) to prevent unbounded log retention.

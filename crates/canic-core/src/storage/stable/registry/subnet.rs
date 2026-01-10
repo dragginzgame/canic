@@ -6,8 +6,8 @@
 //! Invariants:
 //! - Each canister has at most one parent.
 //! - The root canister has no parent.
-//! - Parent relationships may form arbitrary DAGs; cycles are tolerated
-//!   and handled defensively during traversal.
+//! - Parent relationships may form an arbitrary graph; cycles may exist
+//!   but are rejected or handled defensively during traversal.
 //!
 //! Non-invariants (caller responsibility):
 //! - Role uniqueness

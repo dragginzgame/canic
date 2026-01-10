@@ -57,111 +57,44 @@ impl SubnetConfig {
 
 impl Validate for SubnetConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        // --- 1. Validate directory entries ---
-        for canister_role in &self.subnet_directory {
-            validate_role_len(canister_role, "subnet directory canister")?;
-            let canister_cfg = self.canisters.get(canister_role).ok_or_else(|| {
+        // auto_create must reference defined canisters
+        for role in &self.auto_create {
+            validate_role_len(role, "auto-create canister")?;
+            if !self.canisters.contains_key(role) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "auto-create canister '{role}' is not defined in subnet",
+                )));
+            }
+        }
+
+        // subnet_directory must reference node canisters
+        for role in &self.subnet_directory {
+            validate_role_len(role, "subnet directory canister")?;
+            let cfg = self.canisters.get(role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{canister_role}' is not defined in subnet",
+                    "subnet directory canister '{role}' is not defined in subnet",
                 ))
             })?;
 
-            if canister_cfg.cardinality != CanisterCardinality::One {
+            if cfg.kind != CanisterKind::Node {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{canister_role}' must have cardinality = \"one\"",
+                    "subnet directory canister '{role}' must have kind = \"node\"",
                 )));
             }
         }
 
-        // --- 2. Validate auto-create entries ---
-        for canister_role in &self.auto_create {
-            validate_role_len(canister_role, "auto-create canister")?;
-            if !self.canisters.contains_key(canister_role) {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "auto-create canister '{canister_role}' is not defined in subnet",
-                )));
-            }
-        }
+        for (role, cfg) in &self.canisters {
+            validate_role_len(role, "canister")?;
 
-        // --- 3. Validate canister configurations ---
-        for (parent_role, cfg) in &self.canisters {
-            validate_role_len(parent_role, "canister")?;
             if cfg.randomness.enabled && cfg.randomness.reseed_interval_secs == 0 {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{parent_role}' randomness reseed_interval_secs must be > 0",
+                    "canister '{role}' randomness reseed_interval_secs must be > 0",
                 )));
             }
 
-            // Sharding pools
-            if let Some(sharding) = &cfg.sharding {
-                for (pool_name, pool) in &sharding.pools {
-                    if pool_name.len() > NAME_MAX_BYTES {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' sharding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
-                        )));
-                    }
-
-                    if pool.canister_role.as_ref().len() > NAME_MAX_BYTES {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' sharding pool '{pool_name}' canister role '{role}' exceeds {NAME_MAX_BYTES} bytes",
-                            role = pool.canister_role
-                        )));
-                    }
-
-                    if !self.canisters.contains_key(&pool.canister_role) {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' sharding pool '{pool_name}' references unknown canister role '{role}'",
-                            role = pool.canister_role
-                        )));
-                    }
-
-                    if pool.policy.capacity == 0 {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' sharding pool '{pool_name}' has zero capacity; must be > 0",
-                        )));
-                    }
-
-                    if pool.policy.max_shards == 0 {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' sharding pool '{pool_name}' has max_shards of 0; must be > 0",
-                        )));
-                    }
-                }
-            }
-
-            // Scaling pools
-            if let Some(scaling) = &cfg.scaling {
-                for (pool_name, pool) in &scaling.pools {
-                    if pool_name.len() > NAME_MAX_BYTES {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' scaling pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
-                        )));
-                    }
-
-                    if pool.canister_role.as_ref().len() > NAME_MAX_BYTES {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' scaling pool '{pool_name}' canister role '{role}' exceeds {NAME_MAX_BYTES} bytes",
-                            role = pool.canister_role
-                        )));
-                    }
-
-                    if !self.canisters.contains_key(&pool.canister_role) {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' scaling pool '{pool_name}' references unknown canister role '{role}'",
-                            role = pool.canister_role
-                        )));
-                    }
-
-                    if pool.policy.max_workers != 0
-                        && pool.policy.max_workers < pool.policy.min_workers
-                    {
-                        return Err(ConfigSchemaError::ValidationError(format!(
-                            "canister '{parent_role}' scaling pool '{pool_name}' has max_workers < min_workers (min {}, max {})",
-                            pool.policy.min_workers, pool.policy.max_workers
-                        )));
-                    }
-                }
-            }
+            cfg.validate_kind(role)?;
+            cfg.validate_scaling(role, &self.canisters)?;
+            cfg.validate_sharding(role, &self.canisters)?;
         }
 
         Ok(())
@@ -189,6 +122,7 @@ pub struct PoolImport {
 /// CanisterPool
 /// defaults to a minimum size of 0
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterPool {
@@ -204,8 +138,8 @@ pub struct CanisterPool {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterConfig {
-    /// Required cardinality for this canister role.
-    pub cardinality: CanisterCardinality,
+    /// Kind and placement semantics for this canister role.
+    pub kind: CanisterKind,
 
     #[serde(
         default = "defaults::initial_cycles",
@@ -226,16 +160,127 @@ pub struct CanisterConfig {
     pub sharding: Option<ShardingConfig>,
 }
 
+impl CanisterConfig {
+    fn validate_kind(&self, role: &CanisterRole) -> Result<(), ConfigSchemaError> {
+        match self.kind {
+            CanisterKind::Root => {
+                if self.scaling.is_some() || self.sharding.is_some() {
+                    return Err(ConfigSchemaError::ValidationError(format!(
+                        "canister '{role}' kind = \"root\" cannot define scaling or sharding",
+                    )));
+                }
+            }
+            CanisterKind::Node => {}
+            CanisterKind::Worker => {
+                if self.scaling.is_none() {
+                    return Err(ConfigSchemaError::ValidationError(format!(
+                        "canister '{role}' kind = \"worker\" requires scaling config",
+                    )));
+                }
+                if self.sharding.is_some() {
+                    return Err(ConfigSchemaError::ValidationError(format!(
+                        "canister '{role}' kind = \"worker\" cannot define sharding",
+                    )));
+                }
+            }
+            CanisterKind::Shard => {
+                if self.sharding.is_none() {
+                    return Err(ConfigSchemaError::ValidationError(format!(
+                        "canister '{role}' kind = \"shard\" requires sharding config",
+                    )));
+                }
+                if self.scaling.is_some() {
+                    return Err(ConfigSchemaError::ValidationError(format!(
+                        "canister '{role}' kind = \"shard\" cannot define scaling",
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_sharding(
+        &self,
+        role: &CanisterRole,
+        all_roles: &BTreeMap<CanisterRole, Self>,
+    ) -> Result<(), ConfigSchemaError> {
+        let Some(sharding) = &self.sharding else {
+            return Ok(());
+        };
+
+        for (pool_name, pool) in &sharding.pools {
+            if pool_name.len() > NAME_MAX_BYTES {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' sharding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                )));
+            }
+
+            if !all_roles.contains_key(&pool.canister_role) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' sharding pool '{pool_name}' references unknown canister role '{}'",
+                    pool.canister_role
+                )));
+            }
+
+            if pool.policy.capacity == 0 || pool.policy.max_shards == 0 {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' sharding pool '{pool_name}' must have positive capacity and max_shards",
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_scaling(
+        &self,
+        role: &CanisterRole,
+        all_roles: &BTreeMap<CanisterRole, Self>,
+    ) -> Result<(), ConfigSchemaError> {
+        let Some(scaling) = &self.scaling else {
+            return Ok(());
+        };
+
+        for (pool_name, pool) in &scaling.pools {
+            if pool_name.len() > NAME_MAX_BYTES {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' scaling pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                )));
+            }
+
+            if !all_roles.contains_key(&pool.canister_role) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' scaling pool '{pool_name}' references unknown canister role '{}'",
+                    pool.canister_role
+                )));
+            }
+
+            if pool.policy.max_workers != 0 && pool.policy.max_workers < pool.policy.min_workers {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' scaling pool '{pool_name}' has max_workers < min_workers",
+                )));
+            }
+        }
+
+        Ok(())
+    }
+}
+
 ///
-/// CanisterCardinality
-/// Indicates whether a canister role may have one or many instances.
+/// CanisterKind
+/// Kind semantics for canister roles within the topology.
+///
+/// Do not encode parent relationships here; this is role-level intent only.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CanisterCardinality {
-    One,
-    Many,
+#[serde(rename_all = "snake_case")]
+pub enum CanisterKind {
+    Root,
+    Node,
+    Worker,
+    Shard,
 }
 
 ///
@@ -408,9 +453,9 @@ mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
 
-    fn base_canister_config(cardinality: CanisterCardinality) -> CanisterConfig {
+    fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         CanisterConfig {
-            cardinality,
+            kind,
             initial_cycles: defaults::initial_cycles(),
             topup: None,
             randomness: RandomnessConfig::default(),
@@ -468,7 +513,7 @@ mod tests {
 
         let manager_cfg = CanisterConfig {
             sharding: Some(sharding),
-            ..base_canister_config(CanisterCardinality::One)
+            ..base_canister_config(CanisterKind::Shard)
         };
 
         canisters.insert(managing_role, manager_cfg);
@@ -504,7 +549,7 @@ mod tests {
             managing_role,
             CanisterConfig {
                 sharding: Some(sharding),
-                ..base_canister_config(CanisterCardinality::One)
+                ..base_canister_config(CanisterKind::Shard)
             },
         );
 
@@ -524,7 +569,7 @@ mod tests {
         let mut canisters = BTreeMap::new();
         canisters.insert(
             CanisterRole::from(long_role),
-            base_canister_config(CanisterCardinality::One),
+            base_canister_config(CanisterKind::Node),
         );
 
         let subnet = SubnetConfig {
@@ -555,7 +600,7 @@ mod tests {
             managing_role,
             CanisterConfig {
                 sharding: Some(sharding),
-                ..base_canister_config(CanisterCardinality::One)
+                ..base_canister_config(CanisterKind::Shard)
             },
         );
 
@@ -586,12 +631,12 @@ mod tests {
 
         canisters.insert(
             CanisterRole::from("worker"),
-            base_canister_config(CanisterCardinality::One),
+            base_canister_config(CanisterKind::Node),
         );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..base_canister_config(CanisterCardinality::One)
+            ..base_canister_config(CanisterKind::Worker)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -620,12 +665,12 @@ mod tests {
 
         canisters.insert(
             CanisterRole::from("worker"),
-            base_canister_config(CanisterCardinality::One),
+            base_canister_config(CanisterKind::Node),
         );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..base_canister_config(CanisterCardinality::One)
+            ..base_canister_config(CanisterKind::Worker)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -650,7 +695,7 @@ mod tests {
                 reseed_interval_secs: 0,
                 ..Default::default()
             },
-            ..base_canister_config(CanisterCardinality::One)
+            ..base_canister_config(CanisterKind::Node)
         };
 
         canisters.insert(CanisterRole::from("app"), cfg);

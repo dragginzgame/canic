@@ -1,17 +1,20 @@
 //!
-//! Thread-local PRNG seeded externally (raw_rand recommended).
+//! Canister-local deterministic PRNG seeded externally (e.g. via `raw_rand`).
 //!
 //! The IC executes canister code single-threaded, so `RefCell` provides
-//! sufficient interior mutability without locking or poisoning semantics.
+//! sufficient interior mutability without locking.
 //!
-//! Use update calls for randomness so the PRNG state advances, and seed in
-//! init + post_upgrade via timers.
+//! The RNG must be explicitly seeded before use (typically during init or
+//! post-upgrade) and is intended for update calls where state advancement
+//! is permitted.
 //!
+
 use rand_chacha::{
     ChaCha20Rng,
     rand_core::{RngCore, SeedableRng},
 };
 use std::cell::RefCell;
+use thiserror::Error as ThisError;
 
 thread_local! {
     static RNG: RefCell<Option<ChaCha20Rng>> = const { RefCell::new(None) };
@@ -26,15 +29,10 @@ thread_local! {
 /// Errors raised when randomness is unavailable.
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum RngError {
-    RngNotInitialized(String),
-}
-
-impl RngError {
-    fn not_initialized() -> Self {
-        Self::RngNotInitialized("Randomness is not initialized. Please try again later".to_string())
-    }
+    #[error("Randomness is not initialized. Please try again later")]
+    NotInitialized,
 }
 
 // -----------------------------------------------------------------------------
@@ -57,7 +55,7 @@ pub fn is_seeded() -> bool {
 fn with_rng<T>(f: impl FnOnce(&mut ChaCha20Rng) -> T) -> Result<T, RngError> {
     RNG.with_borrow_mut(|rng| match rng.as_mut() {
         Some(rand) => Ok(f(rand)),
-        None => Err(RngError::not_initialized()),
+        None => Err(RngError::NotInitialized),
     })
 }
 
@@ -166,10 +164,7 @@ mod tests {
             *rng = None;
         });
 
-        assert!(matches!(
-            random_bytes(8),
-            Err(RngError::RngNotInitialized(_))
-        ));
+        assert!(matches!(random_bytes(8), Err(RngError::NotInitialized)));
     }
 
     #[test]

@@ -16,15 +16,17 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     let pid_a = crate::p(11);
     let pid_b = crate::p(12);
 
-    SubnetRegistryOps::register_root(root_pid);
-    SubnetRegistryOps::register_unchecked(pid_a, &role, root_pid, vec![])
+    let created_at = 1;
+    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_unchecked(pid_a, &role, root_pid, vec![], created_at)
         .expect("register first canister");
-    SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![])
+    SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
     SubnetDirectoryOps::import(SubnetDirectorySnapshot {
         entries: vec![(role.clone(), pid_b)],
-    });
+    })
+    .expect("import subnet directory");
 
     let resolved = subnet_directory_pid_by_role(role.clone()).expect("directory role missing");
     assert_eq!(resolved, pid_b);

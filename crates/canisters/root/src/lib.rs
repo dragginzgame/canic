@@ -23,8 +23,11 @@ use std::collections::HashMap;
 
 canic::start_root!();
 
+// Populate the in-memory WASM registry during eager initialization.
+//
+// This runs before any Canic workflows (including bootstrap) on both
+// init and post-upgrade, ensuring provisioning invariants are satisfied.
 canic::eager_init!({
-    // Populate the in-memory WASM registry for provisioning before bootstrap.
     WasmApi::import_static(WASMS);
 });
 

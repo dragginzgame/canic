@@ -35,7 +35,7 @@ Optional list of controller principals appended to every provisioned canister.
 
 ### `app_directory = ["role_a", "role_b", ...]`
 
-Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `cardinality = "single"`.
+Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "singleton"`.
 
 ### `[subnets.<name>.pool]`
 
@@ -80,14 +80,20 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 ### `[subnets.<name>]`
 
 - `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap (must exist in `canisters`).
-- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `cardinality = "single"`.
+- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `kind = "singleton"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
 ### `[subnets.<name>.canisters.<role>]`
 
 Each child table configures a logical canister role within the subnet.
 
-- `cardinality = "single" | "many"` – required; controls whether multiple canisters may share this role in the registry.
+- `kind = "root" | "singleton" | "worker" | "shard"` – required; declares how this role attaches in the topology.
+  - `root` cannot define scaling/sharding.
+  - `root` must be unique across all subnets.
+  - `subnets.prime.canisters.root` must exist and set `kind = "root"`.
+  - `singleton` may define scaling or sharding pools for hub-style roles.
+  - `worker` requires `scaling` and cannot define `sharding`.
+  - `shard` requires `sharding` and cannot define `scaling`.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (set both fields if enabling top-ups).
 - `topup.amount = "5T"` – cycles to request when topping up (set both fields if enabling top-ups).
@@ -168,13 +174,13 @@ pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
 
 [subnets.prime.canisters.app]
-cardinality = "single"
+kind = "singleton"
 
 [subnets.prime.canisters.auth]
-cardinality = "single"
+kind = "singleton"
 
 [subnets.prime.canisters.scale_hub]
-cardinality = "single"
+kind = "singleton"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -183,10 +189,11 @@ canister_role = "scale"
 policy.min_workers = 2
 
 [subnets.prime.canisters.scale]
-cardinality = "many"
+kind = "worker"
+[subnets.prime.canisters.scale.scaling]
 
 [subnets.prime.canisters.shard_hub]
-cardinality = "single"
+kind = "singleton"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -196,13 +203,15 @@ policy.capacity = 100
 policy.max_shards = 8
 
 [subnets.prime.canisters.shard]
-cardinality = "many"
+kind = "shard"
+[subnets.prime.canisters.shard.sharding]
 
 [subnets.general]
 
 [subnets.general.canisters.blank]
-cardinality = "many"
+kind = "worker"
 initial_cycles = "3T"
+[subnets.general.canisters.blank.scaling]
 ```
 
 This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters.
