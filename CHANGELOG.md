@@ -5,11 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 2026-01-10
-- Roles are now derived from canister keys; explicit `role`, `type`, or `sharding.role` fields fail validation.
-- Shard canister configs no longer require a `sharding` block.
-
-## [0.7.24] - 2026-01-10
+## [0.7.25] - 2026-01-10
 - Cleaned up stale documentation and layering inconsistencies across storage, ops, and workflow modules.
 - Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
 - Directory rebuilds/imports now reject duplicate roles for app/subnet directories.
