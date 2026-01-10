@@ -5,12 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.7.25]
-- Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
-- Directory rebuilds/imports now reject duplicate roles for app/subnet directories.
 
 ## [0.7.24] - 2026-01-09
 - Cleaned up stale documentation and layering inconsistencies across storage, ops, and workflow modules.
+- Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
+- Directory rebuilds/imports now reject duplicate roles for app/subnet directories.
 
 ## [0.7.23] - 2026-01-09
 - Guarded root bootstrap so it fails fast if the embedded WASM registry is uninitialized, preventing auto-create from running before WASMs are loaded.
