@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.7.25] - 2026-01-10
+## [0.7.26] - 2026-01-10
 - Cleaned up stale documentation and layering inconsistencies across storage, ops, and workflow modules.
 - Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
 - Directory rebuilds/imports now reject duplicate roles for app/subnet directories.
