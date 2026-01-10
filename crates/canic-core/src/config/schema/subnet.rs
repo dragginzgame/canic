@@ -6,6 +6,7 @@ use crate::{
     config::schema::{ConfigSchemaError, NAME_MAX_BYTES, Validate},
     ids::CanisterRole,
 };
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -161,32 +162,25 @@ pub struct CanisterConfig {
 }
 
 impl CanisterConfig {
-    fn validate_kind(&self, role: &CanisterRole) -> Result<(), ConfigSchemaError> {
+    fn validate_kind(&self, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {
         match self.kind {
             CanisterKind::Root => {
                 if self.scaling.is_some() || self.sharding.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{role}' kind = \"root\" cannot define scaling or sharding",
+                        "canister '{canister}' kind = \"root\" cannot define scaling or sharding",
                     )));
                 }
             }
-            CanisterKind::Node => {}
-            CanisterKind::Worker => {
-                if self.scaling.is_none() {
-                    return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{role}' kind = \"worker\" requires scaling config",
-                    )));
-                }
-                if self.sharding.is_some() {
-                    return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{role}' kind = \"worker\" cannot define sharding",
-                    )));
-                }
+
+            CanisterKind::Node => {
+                // Nodes are the only canisters allowed to define scaling and/or sharding
             }
-            CanisterKind::Shard => {
-                if self.scaling.is_some() {
+
+            CanisterKind::Worker | CanisterKind::Shard => {
+                if self.scaling.is_some() || self.sharding.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{role}' kind = \"shard\" cannot define scaling",
+                        "canister '{canister}' kind = \"{}\" cannot define scaling or sharding",
+                        self.kind,
                     )));
                 }
             }
@@ -214,6 +208,14 @@ impl CanisterConfig {
             if !all_roles.contains_key(&pool.canister_role) {
                 return Err(ConfigSchemaError::ValidationError(format!(
                     "canister '{role}' sharding pool '{pool_name}' references unknown canister role '{}'",
+                    pool.canister_role
+                )));
+            }
+
+            let target = &all_roles[&pool.canister_role];
+            if target.kind != CanisterKind::Shard {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' sharding pool '{pool_name}' references canister '{}' which is not kind = \"shard\"",
                     pool.canister_role
                 )));
             }
@@ -251,6 +253,14 @@ impl CanisterConfig {
                 )));
             }
 
+            let target = &all_roles[&pool.canister_role];
+            if target.kind != CanisterKind::Worker {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' scaling pool '{pool_name}' references canister '{}' which is not kind = \"worker\"",
+                    pool.canister_role
+                )));
+            }
+
             if pool.policy.max_workers != 0 && pool.policy.max_workers < pool.policy.min_workers {
                 return Err(ConfigSchemaError::ValidationError(format!(
                     "canister '{role}' scaling pool '{pool_name}' has max_workers < min_workers",
@@ -269,7 +279,7 @@ impl CanisterConfig {
 /// Do not encode parent relationships here; this is role-level intent only.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterKind {
     Root,
