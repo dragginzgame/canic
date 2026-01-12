@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.7.27] - 2026-01-12
+## [0.7.28] - 2026-01-12
 - Moved public macro entrypoints (build/start/timer/perf/auth and endpoint bundles) into the `canic` facade crate.
 
 ## [0.7.26] - 2026-01-10
