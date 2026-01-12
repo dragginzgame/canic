@@ -11,7 +11,7 @@ categories = { workspace = true }
 publish = false
 
 [dependencies]
-canic = { workspace = true }
+canic-core = { workspace = true }
 
 [lints]
 workspace = true

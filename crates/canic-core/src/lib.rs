@@ -13,7 +13,7 @@
 //! - `policy/` owns deterministic decision rules.
 //! - `ops/` provides mechanical, reusable side-effecting operations.
 //! - `model/` owns storage (stable memory) and in-process registries/caches.
-//! - `macros/` provides public macro entrypoints and endpoint bundles.
+//! - macro entrypoints live in the `canic` facade crate.
 //!
 //! The default flow is: endpoints → workflow → policy → ops → model.
 
@@ -29,7 +29,6 @@ pub mod domain;
 pub mod dto;
 pub mod ids;
 pub mod log;
-pub mod macros;
 pub mod perf;
 pub mod protocol;
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use canic::core::ids::CanisterRole;
+use canic_core::ids::CanisterRole;
 
 ///
 /// CANISTER ROLES

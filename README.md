@@ -52,7 +52,7 @@ For canister signatures, use the ops façade (`ops::ic::signature::prepare`/`get
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
 * `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
-* `crates/canic-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
+* `crates/canic-dsl/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable‑structures glue).
 * `crates/canisters/` – reference canisters that exercise the library end to end:
 

@@ -144,13 +144,13 @@ fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
 
     match auth {
         Some(AuthSpec::Any(rules)) => quote! {
-            if let Err(err) = ::canic::core::auth_require_any!(#(#rules),*) {
+            if let Err(err) = ::canic::auth_require_any!(#(#rules),*) {
                 #metric
                 return Err(::canic::core::PublicError::from(err).into());
             }
         },
         Some(AuthSpec::All(rules)) => quote! {
-            if let Err(err) = ::canic::core::auth_require_all!(#(#rules),*) {
+            if let Err(err) = ::canic::auth_require_all!(#(#rules),*) {
                 #metric
                 return Err(::canic::core::PublicError::from(err).into());
             }
