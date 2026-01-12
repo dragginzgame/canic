@@ -5,6 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.7.27] - 2026-01-12
+- Moved public macro entrypoints (build/start/timer/perf/auth and endpoint bundles) into the `canic` facade crate.
+
 ## [0.7.26] - 2026-01-10
 - Cleaned up stale documentation and layering inconsistencies across storage, ops, and workflow modules.
 - Enforced root canister presence in prime subnet config, requiring `subnets.prime.canisters.root` to be `kind = "root"`.
@@ -290,9 +293,9 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 ## [0.6.6]
 - added back build_network() that reads in option_env!(DFX_NETWORK), and added access policies
 - refactored testkit::pic so it uses a static variable for all tests (we were running out of chunks)
-- canic-macros weren't passing through clippy lints
+- canic-dsl weren't passing through clippy lints
 - moved icrc out of ic in ops/ for consistency
-- changed canic-macros so that custom error types can be used as long as they have From<canic::Error>
+- changed canic-dsl so that custom error types can be used as long as they have From<canic::Error>
 - made the Call wrapper accept any kind of principal (icydb works)
 - set up http_get so it's a namespace struct Http, and also used in the prelude.
 - added get_raw and get_raw_with_label to Http
@@ -301,7 +304,7 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 
 ### Changed
 - Major internal refactor: removed the old `ops/` and `model/` interface layer; wrappers were removed or split between crates.
-- `canic-macros` endpoints now support three levels of endpoint security and automatically apply `perf_scope`.
+- `canic-dsl` endpoints now support three levels of endpoint security and automatically apply `perf_scope`.
 - Reserve subsystem refactor: move reserve orchestration into `ops::reserve` + `ops::service` and consolidate state access via `ops::storage`.
 
 ### Added
@@ -313,7 +316,7 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 ## [0.5.22] - 2025-12-13
 ### Added
 - CI now builds all canister `.wasm` artifacts (and deterministic `.wasm.gz` via `gzip -n`) into `.dfx/local/canisters/...` before running `fmt`, `clippy`, and tests.
-- New `canic-macros` crate with `#[canic_query]` / `#[canic_update]` proc-macro attributes.
+- New `canic-dsl` crate with `#[canic_query]` / `#[canic_update]` proc-macro attributes.
 - Centralized endpoint dispatch wrappers (sync + async query/update) to unify perf instrumentation and future endpoint hooks.
 
 ### Changed

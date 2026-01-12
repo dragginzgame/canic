@@ -1,9 +1,9 @@
 //! Authorization helpers for canister-to-canister and user calls.
 //!
 //! Compose rule futures and enforce them with [`require_all`] or
-//! [`require_any`]. For ergonomics, prefer the macros [`auth_require_all!`]
-//! and [`auth_require_any!`], which accept async closures or functions that
-//! return [`AuthRuleResult`].
+//! [`require_any`]. For ergonomics, prefer the facade macros
+//! `canic::auth_require_all!` and `canic::auth_require_any!`, which accept
+//! async closures or functions that return [`AuthRuleResult`].
 
 use crate::{
     Error, ThisError,
@@ -146,32 +146,6 @@ pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
     );
 
     Err(err)
-}
-
-/// Enforce that every supplied rule future succeeds for the current caller.
-///
-/// This is a convenience wrapper around [`require_all`], allowing guard
-/// checks to stay in expression position within async endpoints.
-#[macro_export]
-macro_rules! auth_require_all {
-    ($($f:expr),* $(,)?) => {{
-        $crate::access::auth::require_all(vec![
-            $( Box::new(move |caller| Box::pin($f(caller))) ),*
-        ]).await
-    }};
-}
-
-/// Enforce that at least one supplied rule future succeeds for the current
-/// caller.
-///
-/// See [`auth_require_all!`] for details on accepted rule shapes.
-#[macro_export]
-macro_rules! auth_require_any {
-    ($($f:expr),* $(,)?) => {{
-        $crate::access::auth::require_any(vec![
-            $( Box::new(move |caller| Box::pin($f(caller))) ),*
-        ]).await
-    }};
 }
 
 // -----------------------------------------------------------------------------

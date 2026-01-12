@@ -1,12 +1,12 @@
 [package]
-name = "canic-macros"
+name = "canic-dsl"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
-documentation = "https://docs.rs/canic-macros"
+documentation = "https://docs.rs/canic-dsl"
 homepage = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }

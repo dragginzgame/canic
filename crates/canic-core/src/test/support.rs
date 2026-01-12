@@ -25,7 +25,6 @@ pub fn init_sharding_test_config() {
         [subnets.prime.canisters.shard]
         kind = "shard"
         initial_cycles = "5T"
-        [subnets.prime.canisters.shard.sharding]
     "#;
 
     Config::init_from_toml(toml).expect("init sharding test config");

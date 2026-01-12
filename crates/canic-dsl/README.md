@@ -1,4 +1,4 @@
-# canic-macros
+# canic-dsl
 
 Proc macros for defining Internet Computer endpoints in Canic canisters.
 
@@ -7,7 +7,7 @@ around the IC CDK `#[query]` / `#[update]` attributes and route through Canic’
 pipeline (guard → auth → env → rule → dispatch).
 
 ```rust
-use canic::macros::{canic_query, canic_update};
+use canic_dsl::{canic_query, canic_update};
 use canic::prelude::*;
 
 #[canic_query]

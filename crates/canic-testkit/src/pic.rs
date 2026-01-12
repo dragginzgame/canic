@@ -1,16 +1,14 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
-use canic::{
+use canic::core::{
     PublicError,
     cdk::types::TC,
-    core::{
-        dto::{
-            abi::v1::CanisterInitPayload,
-            env::EnvView,
-            subnet::SubnetIdentity,
-            topology::{AppDirectoryView, SubnetDirectoryView},
-        },
-        ids::CanisterRole,
+    dto::{
+        abi::v1::CanisterInitPayload,
+        env::EnvView,
+        subnet::SubnetIdentity,
+        topology::{AppDirectoryView, SubnetDirectoryView},
     },
+    ids::CanisterRole,
 };
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
