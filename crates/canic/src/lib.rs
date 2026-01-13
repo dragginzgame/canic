@@ -63,22 +63,23 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 pub mod prelude {
-    pub use crate::api::{
-        access::{
-            auth::{
-                auth_require_all, auth_require_any, caller_is_child, caller_is_controller,
-                caller_is_parent, caller_is_root,
+    pub use crate::{
+        api::{
+            access::{
+                auth::{
+                    auth_require_all, auth_require_any, caller_is_child, caller_is_controller,
+                    caller_is_parent, caller_is_root,
+                },
+                env::{self_is_prime_root, self_is_prime_subnet, self_is_root},
             },
-            env::{self_is_prime_root, self_is_prime_subnet, self_is_root},
+            call::Call,
+            canister::CanisterRole,
+            ops::{log, perf},
+            timer::{timer, timer_interval},
         },
-        call::Call,
-        canister::CanisterRole,
-        ops::{log, perf},
-        timer::{timer, timer_interval},
+        cdk::{candid::CandidType, export_candid},
     };
 
-    pub use crate::cdk::candid::CandidType;
-    pub use crate::cdk::export_candid;
     pub use canic_dsl::{canic_query, canic_update};
 }
 
