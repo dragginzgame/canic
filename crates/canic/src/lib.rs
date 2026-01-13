@@ -72,7 +72,11 @@ pub mod prelude {
             ops::{log, perf},
             timer::{timer, timer_interval},
         },
-        cdk::{candid::CandidType, export_candid},
+        cdk::{
+            api::{canister_self, msg_caller},
+            candid::CandidType,
+            export_candid,
+        },
     };
 
     pub use canic_dsl::access::{auth::*, env::*, guard::*};
@@ -116,6 +120,10 @@ pub mod api {
     pub mod canister {
         pub use crate::__internal::core::ids::CanisterRole;
 
+        pub mod children {
+            pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
+        }
+
         pub mod directory {
             pub use crate::__internal::core::api::topology::directory::{
                 AppDirectoryApi, SubnetDirectoryApi,
@@ -141,6 +149,13 @@ pub mod api {
     /// Observability and operational helpers
     pub mod ops {
         pub use crate::__internal::core::{log, perf};
+    }
+
+    /// Protocol (protocol runtime services)
+    pub mod protocol {
+        pub mod icrc21 {
+            pub use crate::__internal::core::dispatch::icrc21::Icrc21Dispatcher;
+        }
     }
 
     /// Timers and scheduling helpers
