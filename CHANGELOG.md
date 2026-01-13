@@ -5,7 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.8.0] - Public API Consolidation & Error Model Hardening
+## [0.8.1] - 2026-01-13
+- HttpApi is now exported under api::ic along with call
+
+## [0.8.0] - Public API Consolidation & Error Model Hardening - 2026-01-13
 
 ### Breaking (pre-1.0, intentional)
 - Formalized the public Canic API surface.

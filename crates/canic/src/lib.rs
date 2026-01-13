@@ -72,8 +72,8 @@ pub mod prelude {
                 },
                 env::{self_is_prime_root, self_is_prime_subnet, self_is_root},
             },
-            call::Call,
             canister::CanisterRole,
+            ic::Call,
             ops::{log, perf},
             timer::{timer, timer_interval},
         },
@@ -117,9 +117,12 @@ pub mod api {
         }
     }
 
-    /// Inter-canister call primitives
-    pub mod call {
-        pub use crate::__internal::core::api::ic::call::{Call, CallBuilder, CallResult};
+    /// IC primitives
+    pub mod ic {
+        pub use crate::__internal::core::api::ic::{
+            call::{Call, CallBuilder, CallResult},
+            http::HttpApi,
+        };
     }
 
     /// Canister lifecycle, placement, and topology
