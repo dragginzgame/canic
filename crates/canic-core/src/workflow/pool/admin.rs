@@ -2,7 +2,7 @@
 
 use super::PoolWorkflow;
 use crate::{
-    Error,
+    InternalError,
     dto::pool::{PoolAdminCommand, PoolAdminResponse},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 /// - Pool mechanics
 ///
 impl PoolWorkflow {
-    pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
+    pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, InternalError> {
         match cmd {
             PoolAdminCommand::CreateEmpty => {
                 let pid = Self::pool_create_canister().await?;

@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     infra::ic::signature::SignatureInfra,
     ops::{ic::IcOpsError, prelude::*},
 };
@@ -12,7 +12,7 @@ pub struct SignatureOps;
 
 impl SignatureOps {
     /// Prepare a canister signature (update-only).
-    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
+    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InternalError> {
         SignatureInfra::prepare(domain, seed, message).map_err(IcOpsError::from)?;
 
         Ok(())
@@ -23,7 +23,11 @@ impl SignatureOps {
         SignatureInfra::get(domain, seed, message)
     }
 
-    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    pub fn sign(
+        domain: &[u8],
+        seed: &[u8],
+        message: &[u8],
+    ) -> Result<Option<Vec<u8>>, InternalError> {
         let signature = SignatureInfra::sign(domain, seed, message).map_err(IcOpsError::from)?;
 
         Ok(signature)
@@ -35,7 +39,7 @@ impl SignatureOps {
         message: &[u8],
         signature_cbor: &[u8],
         issuer_pid: Principal,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         SignatureInfra::verify(domain, seed, message, signature_cbor, issuer_pid)
             .map_err(IcOpsError::from)?;
 

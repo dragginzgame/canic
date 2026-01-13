@@ -7,7 +7,7 @@ pub mod signature;
 pub mod xrc;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     ops::ic::{IcOps, nns::registry::NnsRegistryOps},
     workflow::{WorkflowError, prelude::*},
 };
@@ -25,7 +25,7 @@ pub enum IcWorkflowError {
     ProvisionWorkflow(#[from] provision::ProvisionWorkflowError),
 }
 
-impl From<IcWorkflowError> for Error {
+impl From<IcWorkflowError> for InternalError {
     fn from(err: IcWorkflowError) -> Self {
         WorkflowError::from(err).into()
     }
@@ -39,7 +39,7 @@ pub struct IcWorkflow;
 
 impl IcWorkflow {
     /// Queries the NNS registry for the subnet that this canister belongs to and records ICC metrics.
-    pub async fn try_get_current_subnet_pid() -> Result<Option<Principal>, Error> {
+    pub async fn try_get_current_subnet_pid() -> Result<Option<Principal>, InternalError> {
         let subnet_id_opt = NnsRegistryOps::get_subnet_for_canister(IcOps::canister_self()).await?;
 
         if let Some(subnet_id) = subnet_id_opt {

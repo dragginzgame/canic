@@ -1,6 +1,6 @@
 use super::ensure_unique_roles;
 use crate::{
-    Error,
+    InternalError,
     ops::prelude::*,
     storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
 };
@@ -66,7 +66,7 @@ impl SubnetDirectoryOps {
     // -------------------------------------------------------------
 
     /// Import a snapshot into stable storage.
-    pub fn import(snapshot: SubnetDirectorySnapshot) -> Result<(), Error> {
+    pub fn import(snapshot: SubnetDirectorySnapshot) -> Result<(), InternalError> {
         ensure_unique_roles(&snapshot.entries, "subnet")?;
         let data: SubnetDirectoryData = snapshot.into();
         SubnetDirectory::import(data);

@@ -5,7 +5,7 @@
 //! cross-canister orchestration, topology creation, and reconciliation.
 
 use crate::{
-    Error,
+    InternalError,
     config::schema::SubnetConfig,
     dto::validation::{ValidationIssue, ValidationReport},
     ops::{
@@ -42,7 +42,7 @@ struct RootBootstrapSnapshot {
 }
 
 impl RootBootstrapSnapshot {
-    fn load() -> Result<Self, Error> {
+    fn load() -> Result<Self, InternalError> {
         let subnet_cfg = ConfigOps::current_subnet()?;
         let network = NetworkOps::build_network();
 
@@ -211,7 +211,7 @@ pub async fn root_import_pool_from_config() {
 /// ---------------------------------------------------------------------------
 
 /// Ensure all statically configured canisters for this subnet exist.
-pub async fn root_create_canisters() -> Result<(), Error> {
+pub async fn root_create_canisters() -> Result<(), InternalError> {
     let snapshot = RootBootstrapSnapshot::load()?;
 
     log!(
@@ -224,7 +224,7 @@ pub async fn root_create_canisters() -> Result<(), Error> {
     ensure_required_canisters(&snapshot).await
 }
 
-pub fn root_rebuild_directories_from_registry() -> Result<(), Error> {
+pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
     let _ = ProvisionWorkflow::rebuild_directories_from_registry(None)?;
 
     Ok(())
@@ -352,7 +352,7 @@ async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
     }
 }
 
-async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(), Error> {
+async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(), InternalError> {
     for role in &snapshot.subnet_cfg.auto_create {
         // ALWAYS re-check live registry
         if SubnetRegistryOps::has_role(role) {

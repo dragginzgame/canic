@@ -1,5 +1,5 @@
 use crate::{
-    PublicError,
+    Error,
     cdk::{candid::CandidType, types::Principal},
     dto::rpc::{
         CreateCanisterParent, CreateCanisterResponse, Request, Response, UpgradeCanisterResponse,
@@ -16,14 +16,14 @@ use crate::{
 /// These functions:
 /// - form part of the **public API surface**
 /// - are safe to call from downstream canister `lib.rs` code
-/// - return [`PublicError`] suitable for IC boundaries
+/// - return [`Error`] suitable for IC boundaries
 ///
 /// Internally, they delegate to workflow-level RPC implementations,
 /// preserving the layering:
 ///
 ///   user canister -> api -> workflow -> ops -> infra
 ///
-/// Workflow returns internal [`Error`]; conversion to [`PublicError`]
+/// Workflow returns internal [`InternalError`]; conversion to [`Error`]
 /// happens exclusively at this API boundary.
 ///
 
@@ -34,26 +34,26 @@ impl RpcApi {
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
-    ) -> Result<CreateCanisterResponse, PublicError>
+    ) -> Result<CreateCanisterResponse, Error>
     where
         A: CandidType + Send + Sync,
     {
         RpcRequestWorkflow::create_canister_request(canister_role, parent, extra)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 
     pub async fn upgrade_canister_request(
         canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, PublicError> {
+    ) -> Result<UpgradeCanisterResponse, Error> {
         RpcRequestWorkflow::upgrade_canister_request(canister_pid)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 
-    pub async fn response(request: Request) -> Result<Response, PublicError> {
+    pub async fn response(request: Request) -> Result<Response, Error> {
         RootResponseWorkflow::response(request)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 }

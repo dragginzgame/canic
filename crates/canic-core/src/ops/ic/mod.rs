@@ -39,7 +39,7 @@ pub mod xrc;
 pub use cdk::types::{Cycles, TC};
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::{self, types::Principal},
     infra,
     ops::OpsError,
@@ -67,7 +67,7 @@ pub enum IcOpsError {
     XrcOps(#[from] xrc::XrcOpsError),
 }
 
-impl From<IcOpsError> for Error {
+impl From<IcOpsError> for InternalError {
     fn from(err: IcOpsError) -> Self {
         OpsError::from(err).into()
     }

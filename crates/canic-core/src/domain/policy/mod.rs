@@ -7,7 +7,7 @@ pub mod randomness;
 pub mod topology;
 pub mod upgrade;
 
-use crate::{Error, ThisError, domain::DomainError};
+use crate::{InternalError, ThisError, domain::DomainError};
 
 ///
 /// PolicyError
@@ -31,7 +31,7 @@ pub enum PolicyError {
     ShardingPolicy(#[from] placement::sharding::ShardingPolicyError),
 }
 
-impl From<PolicyError> for Error {
+impl From<PolicyError> for InternalError {
     fn from(err: PolicyError) -> Self {
         DomainError::from(err).into()
     }

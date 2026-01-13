@@ -127,13 +127,13 @@ fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
         EndpointKind::Query => quote! {
             if let Err(err) = ::canic::core::access::guard::guard_app_query() {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         },
         EndpointKind::Update => quote! {
             if let Err(err) = ::canic::core::access::guard::guard_app_update() {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         },
     }
@@ -146,13 +146,13 @@ fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
         Some(AuthSpec::Any(rules)) => quote! {
             if let Err(err) = ::canic::auth_require_any!(#(#rules),*) {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         },
         Some(AuthSpec::All(rules)) => quote! {
             if let Err(err) = ::canic::auth_require_all!(#(#rules),*) {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         },
         None => quote!(),
@@ -170,7 +170,7 @@ fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
         quote! {
             if let Err(err) = #expr().await {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         }
     });
@@ -189,7 +189,7 @@ fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
         quote! {
             if let Err(err) = #expr().await {
                 #metric
-                return Err(::canic::core::PublicError::from(err).into());
+                return Err(::canic::Error::from(err).into());
             }
         }
     });

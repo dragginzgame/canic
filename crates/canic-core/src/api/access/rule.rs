@@ -1,4 +1,4 @@
-use crate::{PublicError, access::rule};
+use crate::{Error, access::rule};
 
 ///
 /// RuleApi
@@ -7,11 +7,11 @@ use crate::{PublicError, access::rule};
 pub struct RuleApi;
 
 impl RuleApi {
-    pub async fn build_network_ic() -> Result<(), PublicError> {
-        rule::build_network_ic().await.map_err(PublicError::from)
+    pub async fn build_network_ic() -> Result<(), Error> {
+        rule::build_network_ic().await.map_err(Error::from)
     }
 
-    pub async fn build_network_local() -> Result<(), PublicError> {
-        rule::build_network_local().await.map_err(PublicError::from)
+    pub async fn build_network_local() -> Result<(), Error> {
+        rule::build_network_local().await.map_err(Error::from)
     }
 }

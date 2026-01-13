@@ -1,10 +1,10 @@
 //! ops::ic::mgmt
 //!
 //! Ops-level wrappers over IC management canister calls.
-//! Adds metrics, logging, and normalizes errors into `Error`.
+//! Adds metrics, logging, and normalizes errors into `InternalError`.
 
 use crate::{
-    Error,
+    InternalError,
     cdk::{
         self,
         mgmt::{
@@ -177,7 +177,7 @@ impl MgmtOps {
     pub async fn create_canister(
         controllers: Vec<Principal>,
         cycles: Cycles,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, InternalError> {
         let cycles_snapshot = cycles.clone();
         let pid = MgmtInfra::create_canister(controllers, cycles)
             .await
@@ -194,7 +194,7 @@ impl MgmtOps {
     }
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
-    pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, Error> {
+    pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, InternalError> {
         let status = MgmtInfra::canister_status(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
@@ -215,7 +215,10 @@ impl MgmtOps {
     }
 
     /// Deposits cycles into a canister and records metrics.
-    pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), Error> {
+    pub async fn deposit_cycles(
+        canister_pid: Principal,
+        cycles: u128,
+    ) -> Result<(), InternalError> {
         MgmtInfra::deposit_cycles(canister_pid, cycles)
             .await
             .map_err(IcOpsError::from)?;
@@ -226,7 +229,7 @@ impl MgmtOps {
     }
 
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
-    pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, Error> {
+    pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InternalError> {
         let cycles = MgmtInfra::get_cycles(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
@@ -246,7 +249,7 @@ impl MgmtOps {
         wasm: &[u8],
         payload: P,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         Self::install_code(mode, canister_pid, wasm, (payload, extra_arg)).await
     }
 
@@ -256,7 +259,7 @@ impl MgmtOps {
         canister_pid: Principal,
         wasm: &[u8],
         args: T,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         let cdk_mode = install_mode_to_cdk(mode);
         MgmtInfra::install_code(cdk_mode, canister_pid, wasm, args)
             .await
@@ -281,7 +284,10 @@ impl MgmtOps {
     }
 
     /// Upgrades a canister to the provided wasm.
-    pub async fn upgrade_canister(canister_pid: Principal, wasm: &[u8]) -> Result<(), Error> {
+    pub async fn upgrade_canister(
+        canister_pid: Principal,
+        wasm: &[u8],
+    ) -> Result<(), InternalError> {
         MgmtInfra::upgrade_canister(canister_pid, wasm)
             .await
             .map_err(IcOpsError::from)?;
@@ -300,7 +306,7 @@ impl MgmtOps {
     }
 
     /// Uninstalls code from a canister and records metrics.
-    pub async fn uninstall_code(canister_pid: Principal) -> Result<(), Error> {
+    pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InternalError> {
         MgmtInfra::uninstall_code(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
@@ -317,7 +323,7 @@ impl MgmtOps {
     }
 
     /// Deletes a canister (code + controllers) via the management canister.
-    pub async fn delete_canister(canister_pid: Principal) -> Result<(), Error> {
+    pub async fn delete_canister(canister_pid: Principal) -> Result<(), InternalError> {
         MgmtInfra::delete_canister(canister_pid)
             .await
             .map_err(IcOpsError::from)?;
@@ -332,7 +338,7 @@ impl MgmtOps {
     //
 
     /// Query the management canister for raw randomness and record metrics.
-    pub async fn raw_rand() -> Result<[u8; 32], Error> {
+    pub async fn raw_rand() -> Result<[u8; 32], InternalError> {
         let seed = MgmtInfra::raw_rand().await.map_err(IcOpsError::from)?;
 
         SystemMetrics::increment(SystemMetricKind::RawRand);
@@ -345,7 +351,7 @@ impl MgmtOps {
     //
 
     /// Updates canister settings via the management canister and records metrics.
-    pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), Error> {
+    pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InternalError> {
         let cdk_args = update_settings_to_cdk(args);
         MgmtInfra::update_settings(&cdk_args)
             .await

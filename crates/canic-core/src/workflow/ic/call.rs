@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
     workflow::prelude::*,
 };
@@ -59,7 +59,7 @@ impl CallBuilder {
         }
     }
 
-    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, InternalError>
     where
         A: CandidType,
     {
@@ -68,7 +68,7 @@ impl CallBuilder {
         })
     }
 
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, InternalError>
     where
         A: ArgumentEncoder,
     {
@@ -88,7 +88,7 @@ impl CallBuilder {
 
     // ---------- execution ----------
 
-    pub async fn execute(self) -> Result<CallResult, Error> {
+    pub async fn execute(self) -> Result<CallResult, InternalError> {
         Ok(CallResult {
             inner: self.inner.execute().await?,
         })
@@ -104,14 +104,14 @@ pub struct CallResult {
 }
 
 impl CallResult {
-    pub fn candid<R>(&self) -> Result<R, Error>
+    pub fn candid<R>(&self) -> Result<R, InternalError>
     where
         R: CandidType + DeserializeOwned,
     {
         self.inner.candid()
     }
 
-    pub fn candid_tuple<R>(&self) -> Result<R, Error>
+    pub fn candid_tuple<R>(&self) -> Result<R, InternalError>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {

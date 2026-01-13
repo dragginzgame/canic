@@ -9,7 +9,7 @@
 //! installing WASM modules, and cascading state updates to descendants.
 
 use crate::{
-    Error,
+    InternalError,
     access::env,
     config::Config,
     domain::policy,
@@ -49,7 +49,7 @@ pub enum ProvisionWorkflowError {
     InstallFailed { pid: Principal },
 }
 
-impl From<ProvisionWorkflowError> for Error {
+impl From<ProvisionWorkflowError> for InternalError {
     fn from(err: ProvisionWorkflowError) -> Self {
         IcWorkflowError::from(err).into()
     }
@@ -65,7 +65,7 @@ impl ProvisionWorkflow {
     pub fn build_nonroot_init_payload(
         role: &CanisterRole,
         parent_pid: Principal,
-    ) -> Result<CanisterInitPayload, Error> {
+    ) -> Result<CanisterInitPayload, InternalError> {
         let env = EnvView {
             prime_root_pid: Some(EnvOps::prime_root_pid()?),
             subnet_role: Some(EnvOps::subnet_role()?),
@@ -98,7 +98,7 @@ impl ProvisionWorkflow {
     /// When `updated_role` is provided, only include the sections that list that role.
     pub fn rebuild_directories_from_registry(
         updated_role: Option<&CanisterRole>,
-    ) -> Result<StateSnapshotBuilder, Error> {
+    ) -> Result<StateSnapshotBuilder, InternalError> {
         let cfg = ConfigOps::get()?;
         let subnet_cfg = ConfigOps::current_subnet()?;
         let registry = SubnetRegistryOps::snapshot();
@@ -144,7 +144,7 @@ impl ProvisionWorkflow {
         role: &CanisterRole,
         parent_pid: Principal,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, InternalError> {
         // must have WASM module registered
         WasmOps::try_get(role)?;
 
@@ -192,7 +192,7 @@ impl ProvisionWorkflow {
     /// 2. Remove from SubnetRegistry
     /// 3. Cascade topology
     /// 4. Sync directories
-    pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), Error> {
+    pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), InternalError> {
         env::require_root()?;
 
         // Phase 0: uninstall code
@@ -241,7 +241,9 @@ enum AllocationSource {
 /// Allocate a canister ID and ensure it meets the initial cycle target.
 ///
 /// Reuses a canister from the pool if available; otherwise creates a new one.
-async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, AllocationSource), Error> {
+async fn allocate_canister(
+    role: &CanisterRole,
+) -> Result<(Principal, AllocationSource), InternalError> {
     // use ConfigOps for a clean, ops-layer config lookup
     let cfg = ConfigOps::current_subnet_canister(role)?;
     let target = cfg.initial_cycles;
@@ -288,7 +290,9 @@ async fn allocate_canister(role: &CanisterRole) -> Result<(Principal, Allocation
 }
 
 /// Create a fresh canister on the IC with the configured controllers.
-async fn create_canister_with_configured_controllers(cycles: Cycles) -> Result<Principal, Error> {
+async fn create_canister_with_configured_controllers(
+    cycles: Cycles,
+) -> Result<Principal, InternalError> {
     let root = IcOps::canister_self();
     let mut controllers = Config::get()?.controllers.clone();
     controllers.push(root); // root always controls
@@ -317,7 +321,7 @@ async fn install_canister(
     role: &CanisterRole,
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
-) -> Result<(), Error> {
+) -> Result<(), InternalError> {
     // Fetch and register WASM
     let wasm = WasmOps::try_get(role)?;
 
@@ -334,7 +338,7 @@ async fn install_canister(
         &registry_snapshot,
         &canister_cfg,
     )
-    .map_err(Error::from)?;
+    .map_err(InternalError::from)?;
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;

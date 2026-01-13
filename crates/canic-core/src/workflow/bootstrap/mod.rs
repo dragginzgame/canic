@@ -13,7 +13,7 @@
 pub mod nonroot;
 pub mod root;
 
-use crate::{Error, ThisError, workflow::WorkflowError};
+use crate::{InternalError, ThisError, workflow::WorkflowError};
 
 ///
 /// BootstrapError
@@ -25,7 +25,7 @@ pub enum BootstrapError {
     MissingEnvFields(String),
 }
 
-impl From<BootstrapError> for Error {
+impl From<BootstrapError> for InternalError {
     fn from(err: BootstrapError) -> Self {
         WorkflowError::from(err).into()
     }

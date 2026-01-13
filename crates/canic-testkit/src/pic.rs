@@ -1,6 +1,6 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
+use canic::Error;
 use canic::core::{
-    PublicError,
     cdk::types::TC,
     dto::{
         abi::v1::CanisterInitPayload,
@@ -81,10 +81,7 @@ pub struct Pic(PocketIc);
 
 impl Pic {
     /// Install a root canister with the default root init arguments.
-    pub fn create_and_install_root_canister(
-        &self,
-        wasm: Vec<u8>,
-    ) -> Result<Principal, PublicError> {
+    pub fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
         let init_bytes = install_root_args()?;
 
         Ok(self.create_funded_and_install(wasm, init_bytes))
@@ -97,7 +94,7 @@ impl Pic {
         &self,
         role: CanisterRole,
         wasm: Vec<u8>,
-    ) -> Result<Principal, PublicError> {
+    ) -> Result<Principal, Error> {
         let init_bytes = install_args(role)?;
 
         Ok(self.create_funded_and_install(wasm, init_bytes))
@@ -113,7 +110,7 @@ impl Pic {
         wasm: Vec<u8>,
         app_directory: AppDirectoryView,
         subnet_directory: SubnetDirectoryView,
-    ) -> Result<Principal, PublicError> {
+    ) -> Result<Principal, Error> {
         let init_bytes = install_args_with_directories(role, app_directory, subnet_directory)?;
 
         Ok(self.create_funded_and_install(wasm, init_bytes))
@@ -133,24 +130,23 @@ impl Pic {
         canister_id: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, PublicError>
+    ) -> Result<T, Error>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
         let bytes: Vec<u8> = encode_args(args)
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .update_call(canister_id, Principal::anonymous(), method, bytes)
             .map_err(|err| {
-                PublicError::internal(format!(
+                Error::internal(format!(
                     "pocket_ic update_call failed (canister={canister_id}, method={method}): {err}"
                 ))
             })?;
 
-        decode_one(&result)
-            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+        decode_one(&result).map_err(|err| Error::internal(format!("decode_one failed: {err}")))
     }
 
     /// Generic update call helper with an explicit caller principal.
@@ -160,24 +156,23 @@ impl Pic {
         caller: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, PublicError>
+    ) -> Result<T, Error>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
         let bytes: Vec<u8> = encode_args(args)
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .update_call(canister_id, caller, method, bytes)
             .map_err(|err| {
-                PublicError::internal(format!(
+                Error::internal(format!(
                     "pocket_ic update_call failed (canister={canister_id}, method={method}): {err}"
                 ))
             })?;
 
-        decode_one(&result)
-            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+        decode_one(&result).map_err(|err| Error::internal(format!("decode_one failed: {err}")))
     }
 
     /// Generic query call helper.
@@ -186,24 +181,23 @@ impl Pic {
         canister_id: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, PublicError>
+    ) -> Result<T, Error>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
         let bytes: Vec<u8> = encode_args(args)
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .query_call(canister_id, Principal::anonymous(), method, bytes)
             .map_err(|err| {
-                PublicError::internal(format!(
+                Error::internal(format!(
                     "pocket_ic query_call failed (canister={canister_id}, method={method}): {err}"
                 ))
             })?;
 
-        decode_one(&result)
-            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+        decode_one(&result).map_err(|err| Error::internal(format!("decode_one failed: {err}")))
     }
 
     /// Generic query call helper with an explicit caller principal.
@@ -213,24 +207,23 @@ impl Pic {
         caller: Principal,
         method: &str,
         args: A,
-    ) -> Result<T, PublicError>
+    ) -> Result<T, Error>
     where
         T: CandidType + DeserializeOwned,
         A: ArgumentEncoder,
     {
         let bytes: Vec<u8> = encode_args(args)
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))?;
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
             .0
             .query_call(canister_id, caller, method, bytes)
             .map_err(|err| {
-                PublicError::internal(format!(
+                Error::internal(format!(
                     "pocket_ic query_call failed (canister={canister_id}, method={method}): {err}"
                 ))
             })?;
 
-        decode_one(&result)
-            .map_err(|err| PublicError::internal(format!("decode_one failed: {err}")))
+        decode_one(&result).map_err(|err| Error::internal(format!("decode_one failed: {err}")))
     }
 
     pub fn tick_n(&self, times: usize) {
@@ -253,7 +246,7 @@ impl Pic {
 /// - Directory-dependent logic is opt-in via `install_args_with_directories`.
 /// - Root-provisioned installs will populate directories via cascade.
 ///
-fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
+fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
     if role.is_root() {
         install_root_args()
     } else {
@@ -277,25 +270,25 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, PublicError> {
         };
 
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))
     }
 }
 
-fn install_root_args() -> Result<Vec<u8>, PublicError> {
+fn install_root_args() -> Result<Vec<u8>, Error> {
     encode_one(SubnetIdentity::Manual)
-        .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
+        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
 fn install_args_with_directories(
     role: CanisterRole,
     app_directory: AppDirectoryView,
     subnet_directory: SubnetDirectoryView,
-) -> Result<Vec<u8>, PublicError> {
+) -> Result<Vec<u8>, Error> {
     if role.is_root() {
         // Root canister: runtime identity only.
         // No fake principals. Runtime/bootstrap will resolve actual context.
         encode_one(SubnetIdentity::Manual)
-            .map_err(|err| PublicError::internal(format!("encode_one failed: {err}")))
+            .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
     } else {
         // Non-root canister: pass structural context, not invented identities.
         let env = EnvView {
@@ -314,6 +307,6 @@ fn install_args_with_directories(
         };
 
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-            .map_err(|err| PublicError::internal(format!("encode_args failed: {err}")))
+            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))
     }
 }

@@ -3,7 +3,7 @@ pub mod directory;
 pub mod guard;
 pub mod registry;
 
-use crate::{Error, ThisError, workflow::WorkflowError};
+use crate::{InternalError, ThisError, workflow::WorkflowError};
 
 ///
 /// TopologyWorkflowError
@@ -16,7 +16,7 @@ pub enum TopologyWorkflowError {
     TopologyGuard(#[from] guard::TopologyGuardError),
 }
 
-impl From<TopologyWorkflowError> for Error {
+impl From<TopologyWorkflowError> for InternalError {
     fn from(err: TopologyWorkflowError) -> Self {
         WorkflowError::from(err).into()
     }

@@ -1,4 +1,4 @@
-use crate::{Error, ThisError, workflow::topology::TopologyWorkflowError};
+use crate::{InternalError, ThisError, workflow::topology::TopologyWorkflowError};
 use std::cell::Cell;
 
 ///
@@ -11,7 +11,7 @@ pub enum TopologyGuardError {
     TopologyMutating,
 }
 
-impl From<TopologyGuardError> for Error {
+impl From<TopologyGuardError> for InternalError {
     fn from(err: TopologyGuardError) -> Self {
         TopologyWorkflowError::from(err).into()
     }
@@ -40,7 +40,7 @@ thread_local! {
 pub struct TopologyGuard;
 
 impl TopologyGuard {
-    pub fn try_enter() -> Result<Self, Error> {
+    pub fn try_enter() -> Result<Self, InternalError> {
         let entered = TOPOLOGY_STATE.with(|state| {
             if state.get() == TopologyState::Mutating {
                 false

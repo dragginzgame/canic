@@ -1,7 +1,7 @@
 pub use crate::storage::stable::sharding::ShardKey;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
         ShardEntry as ModelShardEntry,
@@ -81,7 +81,7 @@ pub enum ShardingRegistryOpsError {
     TenantNotAssigned { pool: String, tenant: String },
 }
 
-impl From<ShardingRegistryOpsError> for Error {
+impl From<ShardingRegistryOpsError> for InternalError {
     fn from(err: ShardingRegistryOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
@@ -96,7 +96,7 @@ impl ShardingRegistryOps {
         canister_role: &CanisterRole,
         capacity: u32,
         created_at: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         // NOTE: Slot uniqueness is enforced by linear scan.
         // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
@@ -138,7 +138,7 @@ impl ShardingRegistryOps {
         ShardingRegistry::tenant_shard(pool, tenant)
     }
 
-    pub fn tenant_shard_required(pool: &str, tenant: &str) -> Result<Principal, Error> {
+    pub fn tenant_shard_required(pool: &str, tenant: &str) -> Result<Principal, InternalError> {
         Self::tenant_shard(pool, tenant).ok_or_else(|| {
             ShardingRegistryOpsError::TenantNotAssigned {
                 pool: pool.to_string(),
@@ -166,7 +166,7 @@ impl ShardingRegistryOps {
     /// - enforce referential integrity (target shard must exist)
     /// - enforce pool consistency (assignment pool must match shard entry pool)
     /// - maintain derived counters (`ShardEntry.count`)
-    pub fn assign(pool: &str, tenant: &str, shard: Principal) -> Result<(), Error> {
+    pub fn assign(pool: &str, tenant: &str, shard: Principal) -> Result<(), InternalError> {
         ShardingRegistry::with_mut(|core| {
             let mut entry = core
                 .get_entry(&shard)

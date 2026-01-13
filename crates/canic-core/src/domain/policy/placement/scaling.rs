@@ -6,7 +6,7 @@
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::types::BoundedString64,
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::PolicyError,
@@ -27,7 +27,7 @@ pub enum ScalingPolicyError {
     PoolNotFound(String),
 }
 
-impl From<ScalingPolicyError> for Error {
+impl From<ScalingPolicyError> for InternalError {
     fn from(err: ScalingPolicyError) -> Self {
         PolicyError::from(err).into()
     }
@@ -66,7 +66,7 @@ impl ScalingPolicy {
         pool: &str,
         worker_count: u32,
         scaling: Option<ScalingConfig>,
-    ) -> Result<ScalingPlan, Error> {
+    ) -> Result<ScalingPlan, InternalError> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool, scaling)?;
         let policy = pool_cfg.policy;
 
@@ -112,7 +112,7 @@ impl ScalingPolicy {
     fn get_scaling_pool_cfg(
         pool: &str,
         scaling: Option<ScalingConfig>,
-    ) -> Result<ScalePool, Error> {
+    ) -> Result<ScalePool, InternalError> {
         let Some(scaling) = scaling else {
             return Err(ScalingPolicyError::ScalingDisabled.into());
         };

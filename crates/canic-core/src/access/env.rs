@@ -1,5 +1,6 @@
 use crate::{
-    Error, ThisError, access::AccessError, cdk::api::canister_self, ops::runtime::env::EnvOps,
+    InternalError, ThisError, access::AccessError, cdk::api::canister_self,
+    ops::runtime::env::EnvOps,
 };
 
 ///
@@ -21,7 +22,7 @@ pub enum EnvAccessError {
     IsRoot,
 }
 
-impl From<EnvAccessError> for Error {
+impl From<EnvAccessError> for InternalError {
     fn from(err: EnvAccessError) -> Self {
         AccessError::Env(err).into()
     }
@@ -50,7 +51,7 @@ pub async fn is_prime_subnet() -> Result<(), AccessError> {
 }
 
 /// Ensure the caller is the root canister.
-pub(crate) fn require_root() -> Result<(), Error> {
+pub(crate) fn require_root() -> Result<(), InternalError> {
     let root_pid = EnvOps::root_pid()?;
 
     if root_pid == canister_self() {
@@ -61,7 +62,7 @@ pub(crate) fn require_root() -> Result<(), Error> {
 }
 
 /// Ensure the caller is not the root canister.
-pub(crate) fn deny_root() -> Result<(), Error> {
+pub(crate) fn deny_root() -> Result<(), InternalError> {
     let root_pid = EnvOps::root_pid()?;
 
     if root_pid == canister_self() {

@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     config::{
         Config, ConfigError, ConfigModel,
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
@@ -25,7 +25,7 @@ pub enum ConfigOpsError {
     CanisterNotFound(String, String),
 }
 
-impl From<ConfigOpsError> for Error {
+impl From<ConfigOpsError> for InternalError {
     fn from(err: ConfigOpsError) -> Self {
         OpsError::from(err).into()
     }
@@ -46,7 +46,7 @@ pub struct ConfigOps;
 
 impl ConfigOps {
     /// Export the full current configuration as TOML.
-    pub fn export_toml() -> Result<String, Error> {
+    pub fn export_toml() -> Result<String, InternalError> {
         let toml = Config::to_toml()?;
 
         Ok(toml)
@@ -57,7 +57,7 @@ impl ConfigOps {
     // ---------------------------------------------------------------------
 
     /// Fetch a subnet configuration by role.
-    pub(crate) fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, Error> {
+    pub(crate) fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, InternalError> {
         let cfg = Config::get()?;
 
         cfg.get_subnet(role)
@@ -68,7 +68,7 @@ impl ConfigOps {
     pub(crate) fn try_get_canister(
         subnet_role: &SubnetRole,
         canister_role: &CanisterRole,
-    ) -> Result<CanisterConfig, Error> {
+    ) -> Result<CanisterConfig, InternalError> {
         let subnet_cfg = Self::try_get_subnet(subnet_role)?;
 
         subnet_cfg.get_canister(canister_role).ok_or_else(|| {
@@ -81,31 +81,31 @@ impl ConfigOps {
     // Current-context / infallible helpers
     // ---------------------------------------------------------------------
 
-    pub(crate) fn get() -> Result<Arc<ConfigModel>, Error> {
+    pub(crate) fn get() -> Result<Arc<ConfigModel>, InternalError> {
         let cfg = Config::get()?;
 
         Ok(cfg)
     }
 
-    pub(crate) fn controllers() -> Result<Vec<Principal>, Error> {
+    pub(crate) fn controllers() -> Result<Vec<Principal>, InternalError> {
         Ok(Config::get()?.controllers.clone())
     }
 
-    pub(crate) fn log_config() -> Result<LogConfig, Error> {
+    pub(crate) fn log_config() -> Result<LogConfig, InternalError> {
         Ok(Config::get()?.log.clone())
     }
 
     /// Fetch the configuration record for the *current* subnet.
     ///
     /// Requires that environment initialization has completed.
-    pub(crate) fn current_subnet() -> Result<SubnetConfig, Error> {
+    pub(crate) fn current_subnet() -> Result<SubnetConfig, InternalError> {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_subnet(&subnet_role)
     }
 
     /// Fetch the configuration record for the *current* canister.
-    pub(crate) fn current_canister() -> Result<CanisterConfig, Error> {
+    pub(crate) fn current_canister() -> Result<CanisterConfig, InternalError> {
         let subnet_role = EnvOps::subnet_role()?;
         let canister_role = EnvOps::canister_role()?;
 
@@ -113,14 +113,14 @@ impl ConfigOps {
     }
 
     /// Fetch the scaling configuration for the *current* canister.
-    pub(crate) fn current_scaling_config() -> Result<Option<ScalingConfig>, Error> {
+    pub(crate) fn current_scaling_config() -> Result<Option<ScalingConfig>, InternalError> {
         Ok(Self::current_canister()?.scaling)
     }
 
     /// Fetch the configuration for a specific canister in the *current* subnet.
     pub(crate) fn current_subnet_canister(
         canister_role: &CanisterRole,
-    ) -> Result<CanisterConfig, Error> {
+    ) -> Result<CanisterConfig, InternalError> {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)

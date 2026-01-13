@@ -1,7 +1,7 @@
 pub mod icrc;
 pub mod policy;
 
-use crate::{PublicError, ThisError};
+use crate::{Error, ThisError};
 
 ///
 /// DomainError
@@ -16,7 +16,7 @@ pub enum DomainError {
 impl DomainError {
     #[expect(dead_code)]
     #[allow(clippy::unused_self)]
-    fn public(&self) -> PublicError {
+    fn public(&self) -> Error {
         unreachable!("DomainError::public is not yet semantically diverse");
     }
 }

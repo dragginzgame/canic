@@ -2,7 +2,7 @@
 //!
 //! This module contains thin wrappers exposed to proc-macro–generated
 //! endpoints. Functions here translate public API calls into internal
-//! workflow or ops calls and map internal errors into `PublicError`.
+//! workflow or ops calls and map internal errors into `Error`.
 //!
 //! No orchestration or business logic should live here.
 //! Any wrapper callable from an endpoint must return a `Result` so errors
@@ -31,7 +31,7 @@ pub mod wasm;
 /// - Read-only
 /// - No orchestration or side effects
 /// - No policy or invariant enforcement
-/// - No internal `Error` in public signatures
+/// - No internal `InternalError` in public signatures
 /// - Return DTOs or primitives only
 ///
 /// Queries that can fail with internal errors or enforce invariants
@@ -63,7 +63,7 @@ pub mod metrics {
 
 pub mod prelude {
     pub use crate::{
-        PublicError,
+        Error,
         cdk::types::{Account, Principal},
     };
 }

@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     infra::ic::nns::registry::NnsRegistryInfra,
     ops::{ic::IcOpsError, prelude::*},
 };
@@ -11,7 +11,9 @@ use crate::{
 pub struct NnsRegistryOps;
 
 impl NnsRegistryOps {
-    pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, Error> {
+    pub async fn get_subnet_for_canister(
+        pid: Principal,
+    ) -> Result<Option<Principal>, InternalError> {
         let subnet = NnsRegistryInfra::get_subnet_for_canister(pid)
             .await
             .map_err(IcOpsError::from)?;

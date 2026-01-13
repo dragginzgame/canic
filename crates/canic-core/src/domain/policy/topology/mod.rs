@@ -1,7 +1,7 @@
 pub mod registry;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::types::Principal,
     domain::policy::PolicyError,
     ids::CanisterRole,
@@ -45,7 +45,7 @@ pub enum TopologyPolicyError {
     RegistryPolicy(#[from] registry::RegistryPolicyError),
 }
 
-impl From<TopologyPolicyError> for Error {
+impl From<TopologyPolicyError> for InternalError {
     fn from(err: TopologyPolicyError) -> Self {
         PolicyError::from(err).into()
     }
@@ -81,7 +81,7 @@ impl TopologyPolicy {
     pub(crate) fn assert_parent_exists(
         registry: &SubnetRegistrySnapshot,
         parent_pid: Principal,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         if registry.entries.iter().any(|(pid, _)| *pid == parent_pid) {
             Ok(())
         } else {
@@ -93,7 +93,7 @@ impl TopologyPolicy {
         registry: &SubnetRegistrySnapshot,
         pid: Principal,
         expected_hash: &[u8],
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         let record = Self::registry_record(registry, pid)?;
 
         if record.module_hash.as_deref() == Some(expected_hash) {
@@ -107,7 +107,7 @@ impl TopologyPolicy {
         registry: &SubnetRegistrySnapshot,
         pid: Principal,
         expected_parent: Principal,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         let record = Self::registry_record(registry, pid)?;
 
         match record.parent_pid {

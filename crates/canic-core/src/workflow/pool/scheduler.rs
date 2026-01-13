@@ -14,7 +14,7 @@
 //! All pool semantics live in `workflow.rs`.
 
 use crate::{
-    Error,
+    InternalError,
     domain::policy::pool::PoolPolicyError,
     ops::{ic::IcOps, runtime::timer::TimerId, storage::pool::PoolOps},
     workflow::{
@@ -95,7 +95,7 @@ impl PoolSchedulerWorkflow {
         }
     }
 
-    async fn run_worker(limit: usize) -> Result<(), Error> {
+    async fn run_worker(limit: usize) -> Result<(), InternalError> {
         if limit == 0 {
             return Ok(());
         }
@@ -122,7 +122,7 @@ impl PoolSchedulerWorkflow {
         result
     }
 
-    async fn run_batch(limit: usize) -> Result<(), Error> {
+    async fn run_batch(limit: usize) -> Result<(), InternalError> {
         for _ in 0..limit {
             let Some(entry) = PoolWorkflow::pop_oldest_pending_reset() else {
                 break;

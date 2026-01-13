@@ -63,21 +63,21 @@ impl CallBuilder {
         }
     }
 
-    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, PublicError>
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
     where
         A: CandidType,
     {
         Ok(Self {
-            inner: self.inner.try_with_arg(arg).map_err(PublicError::from)?,
+            inner: self.inner.try_with_arg(arg).map_err(Error::from)?,
         })
     }
 
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, PublicError>
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
     where
         A: ArgumentEncoder,
     {
         Ok(Self {
-            inner: self.inner.try_with_args(args).map_err(PublicError::from)?,
+            inner: self.inner.try_with_args(args).map_err(Error::from)?,
         })
     }
 
@@ -92,9 +92,9 @@ impl CallBuilder {
 
     // ---------- execution ----------
 
-    pub async fn execute(self) -> Result<CallResult, PublicError> {
+    pub async fn execute(self) -> Result<CallResult, Error> {
         Ok(CallResult {
-            inner: self.inner.execute().await.map_err(PublicError::from)?,
+            inner: self.inner.execute().await.map_err(Error::from)?,
         })
     }
 }
@@ -110,17 +110,17 @@ pub struct CallResult {
 }
 
 impl CallResult {
-    pub fn candid<R>(&self) -> Result<R, PublicError>
+    pub fn candid<R>(&self) -> Result<R, Error>
     where
         R: CandidType + DeserializeOwned,
     {
-        self.inner.candid().map_err(PublicError::from)
+        self.inner.candid().map_err(Error::from)
     }
 
-    pub fn candid_tuple<R>(&self) -> Result<R, PublicError>
+    pub fn candid_tuple<R>(&self) -> Result<R, Error>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        self.inner.candid_tuple().map_err(PublicError::from)
+        self.inner.candid_tuple().map_err(Error::from)
     }
 }

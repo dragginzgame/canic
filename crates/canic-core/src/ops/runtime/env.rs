@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::api::canister_self,
     ids::SubnetRole,
     ops::{prelude::*, runtime::RuntimeOpsError},
@@ -34,7 +34,7 @@ pub enum EnvOpsError {
     SubnetRoleUnavailable,
 }
 
-impl From<EnvOpsError> for Error {
+impl From<EnvOpsError> for InternalError {
     fn from(err: EnvOpsError) -> Self {
         RuntimeOpsError::from(err).into()
     }
@@ -153,27 +153,27 @@ impl EnvOps {
     // (env must be initialized; missing values are errors)
     // ---------------------------------------------------------------------
 
-    pub fn subnet_role() -> Result<SubnetRole, Error> {
+    pub fn subnet_role() -> Result<SubnetRole, InternalError> {
         Env::get_subnet_role().ok_or_else(|| EnvOpsError::SubnetRoleUnavailable.into())
     }
 
-    pub fn canister_role() -> Result<CanisterRole, Error> {
+    pub fn canister_role() -> Result<CanisterRole, InternalError> {
         Env::get_canister_role().ok_or_else(|| EnvOpsError::CanisterRoleUnavailable.into())
     }
 
-    pub fn subnet_pid() -> Result<Principal, Error> {
+    pub fn subnet_pid() -> Result<Principal, InternalError> {
         Env::get_subnet_pid().ok_or_else(|| EnvOpsError::SubnetPidUnavailable.into())
     }
 
-    pub fn root_pid() -> Result<Principal, Error> {
+    pub fn root_pid() -> Result<Principal, InternalError> {
         Env::get_root_pid().ok_or_else(|| EnvOpsError::RootPidUnavailable.into())
     }
 
-    pub fn prime_root_pid() -> Result<Principal, Error> {
+    pub fn prime_root_pid() -> Result<Principal, InternalError> {
         Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::PrimeRootPidUnavailable.into())
     }
 
-    pub fn parent_pid() -> Result<Principal, Error> {
+    pub fn parent_pid() -> Result<Principal, InternalError> {
         Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
 
@@ -201,7 +201,7 @@ impl EnvOps {
         data.into()
     }
 
-    pub fn import(snapshot: EnvSnapshot) -> Result<(), Error> {
+    pub fn import(snapshot: EnvSnapshot) -> Result<(), InternalError> {
         let data: EnvData = snapshot.try_into()?;
         Env::import(data);
 
@@ -219,7 +219,7 @@ impl EnvOps {
     /// Restore root environment context after upgrade.
     ///
     /// Root identity and subnet metadata must already be present.
-    pub fn restore_root() -> Result<(), Error> {
+    pub fn restore_root() -> Result<(), InternalError> {
         // Ensure environment was initialized before upgrade
         Self::assert_initialized()?;
 
@@ -232,7 +232,7 @@ impl EnvOps {
     ///
     /// Environment data is expected to already exist in stable memory.
     /// Failure indicates a programmer error or corrupted state.
-    pub fn restore_role(role: CanisterRole) -> Result<(), Error> {
+    pub fn restore_role(role: CanisterRole) -> Result<(), InternalError> {
         // Ensure environment was initialized before upgrade
         Self::assert_initialized()?;
 
@@ -241,7 +241,7 @@ impl EnvOps {
         Ok(())
     }
 
-    fn assert_initialized() -> Result<(), Error> {
+    fn assert_initialized() -> Result<(), InternalError> {
         let mut missing = Vec::new();
         if Env::get_root_pid().is_none() {
             missing.push("root_pid");

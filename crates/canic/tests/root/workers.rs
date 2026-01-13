@@ -1,7 +1,7 @@
 use canic::{
+    Error,
     cdk::types::Principal,
     core::{
-        PublicError,
         dto::{topology::SubnetRegistryEntryView, topology::SubnetRegistryView},
         protocol,
     },
@@ -13,7 +13,7 @@ use canic_testkit::pic::Pic;
 ///
 /// Panics on transport or application failure.
 pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Principal {
-    let result: Result<Result<Principal, PublicError>, PublicError> =
+    let result: Result<Result<Principal, Error>, Error> =
         pic.update_call(hub_pid, "create_worker", ());
 
     result

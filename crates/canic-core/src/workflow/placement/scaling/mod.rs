@@ -11,7 +11,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     ops::{
         config::ConfigOps,
@@ -34,7 +34,7 @@ pub enum ScalingWorkflowError {
     PlanRejected(String),
 }
 
-impl From<ScalingWorkflowError> for Error {
+impl From<ScalingWorkflowError> for InternalError {
     fn from(err: ScalingWorkflowError) -> Self {
         PlacementWorkflowError::Scaling(err).into()
     }
@@ -48,7 +48,7 @@ pub struct ScalingWorkflow;
 
 impl ScalingWorkflow {
     /// Create a new worker canister in the given pool, if policy allows.
-    pub(crate) async fn create_worker(pool: &str) -> Result<Principal, Error> {
+    pub(crate) async fn create_worker(pool: &str) -> Result<Principal, InternalError> {
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
         let scaling = ConfigOps::current_scaling_config()?;
@@ -88,7 +88,7 @@ impl ScalingWorkflow {
     }
 
     /// Plan whether a worker should be created according to policy.
-    pub(crate) fn plan_create_worker(pool: &str) -> Result<bool, Error> {
+    pub(crate) fn plan_create_worker(pool: &str) -> Result<bool, InternalError> {
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
 

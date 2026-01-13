@@ -1,6 +1,6 @@
 use super::ensure_unique_roles;
 use crate::{
-    Error,
+    InternalError,
     ops::prelude::*,
     storage::stable::directory::app::{AppDirectory, AppDirectoryData},
 };
@@ -66,7 +66,7 @@ impl AppDirectoryOps {
         AppDirectory::export().into()
     }
 
-    pub(crate) fn import(snapshot: AppDirectorySnapshot) -> Result<(), Error> {
+    pub(crate) fn import(snapshot: AppDirectorySnapshot) -> Result<(), InternalError> {
         ensure_unique_roles(&snapshot.entries, "app")?;
         let data: AppDirectoryData = snapshot.into();
         AppDirectory::import(data);

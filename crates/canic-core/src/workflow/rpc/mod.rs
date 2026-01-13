@@ -1,7 +1,9 @@
 pub mod adapter;
 pub mod request;
 
-use crate::{Error, ThisError, cdk::types::Principal, ids::CanisterRole, workflow::WorkflowError};
+use crate::{
+    InternalError, ThisError, cdk::types::Principal, ids::CanisterRole, workflow::WorkflowError,
+};
 
 ///
 /// RpcWorkflowError
@@ -25,7 +27,7 @@ pub enum RpcWorkflowError {
     ParentNotFound(Principal),
 }
 
-impl From<RpcWorkflowError> for Error {
+impl From<RpcWorkflowError> for InternalError {
     fn from(err: RpcWorkflowError) -> Self {
         WorkflowError::Rpc(err).into()
     }

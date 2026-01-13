@@ -1,4 +1,4 @@
-use crate::{PublicError, workflow::ic::signature::SignatureWorkflow};
+use crate::{Error, workflow::ic::signature::SignatureWorkflow};
 
 ///
 /// SignatureApi
@@ -8,8 +8,8 @@ use crate::{PublicError, workflow::ic::signature::SignatureWorkflow};
 pub struct SignatureApi;
 
 impl SignatureApi {
-    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), PublicError> {
-        SignatureWorkflow::prepare(domain, seed, message).map_err(PublicError::from)
+    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
+        SignatureWorkflow::prepare(domain, seed, message).map_err(Error::from)
     }
 
     #[must_use]
@@ -17,12 +17,8 @@ impl SignatureApi {
         SignatureWorkflow::get(domain, seed, message)
     }
 
-    pub fn sign(
-        domain: &[u8],
-        seed: &[u8],
-        message: &[u8],
-    ) -> Result<Option<Vec<u8>>, PublicError> {
-        SignatureWorkflow::sign(domain, seed, message).map_err(PublicError::from)
+    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+        SignatureWorkflow::sign(domain, seed, message).map_err(Error::from)
     }
 
     pub fn verify(
@@ -31,9 +27,9 @@ impl SignatureApi {
         message: &[u8],
         signature_cbor: &[u8],
         issuer_pid: crate::cdk::types::Principal,
-    ) -> Result<(), PublicError> {
+    ) -> Result<(), Error> {
         SignatureWorkflow::verify(domain, seed, message, signature_cbor, issuer_pid)
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 
     #[must_use]

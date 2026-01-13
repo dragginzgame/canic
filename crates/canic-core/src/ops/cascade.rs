@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     ops::{prelude::*, rpc::RpcOps},
     protocol,
 };
@@ -14,14 +14,14 @@ impl CascadeOps {
     pub async fn send_state_snapshot<S: CandidType>(
         pid: Principal,
         snapshot: S,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_STATE, snapshot).await
     }
 
     pub async fn send_topology_snapshot<S: CandidType>(
         pid: Principal,
         snapshot: S,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_TOPOLOGY, snapshot).await
     }
 }

@@ -68,7 +68,7 @@ pub mod memory {
     }
 }
 
-use crate::{Error, storage::prelude::*};
+use crate::{InternalError, storage::prelude::*};
 
 ///
 /// StableMemoryError
@@ -80,7 +80,7 @@ pub enum StableMemoryError {
     LogWriteFailed { current_size: u64, delta: u64 },
 }
 
-impl From<StableMemoryError> for Error {
+impl From<StableMemoryError> for InternalError {
     fn from(err: StableMemoryError) -> Self {
         StorageError::StableMemory(err).into()
     }

@@ -1,4 +1,4 @@
-use crate::{PublicError, dto, workflow::http::HttpWorkflow};
+use crate::{Error, dto, workflow::http::HttpWorkflow};
 use serde::de::DeserializeOwned;
 
 ///
@@ -13,13 +13,8 @@ pub struct HttpApi;
 impl HttpApi {
     /// Perform a GET request and deserialize a JSON response.
     /// Returns an error on non-2xx status codes or JSON decode failures.
-    pub async fn get<T: DeserializeOwned>(
-        url: &str,
-        headers: &[(&str, &str)],
-    ) -> Result<T, PublicError> {
-        HttpWorkflow::get(url, headers)
-            .await
-            .map_err(PublicError::from)
+    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
+        HttpWorkflow::get(url, headers).await.map_err(Error::from)
     }
 
     /// Same as `get`, with an explicit metrics label.
@@ -28,16 +23,16 @@ impl HttpApi {
         url: &str,
         headers: &[(&str, &str)],
         label: &str,
-    ) -> Result<T, PublicError> {
+    ) -> Result<T, Error> {
         HttpWorkflow::get_with_label(url, headers, label)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 
     /// Perform a raw HTTP request with metrics, returning the response verbatim.
     pub async fn get_raw(
         args: dto::http::HttpRequestArgs,
-    ) -> Result<dto::http::HttpRequestResult, PublicError> {
-        HttpWorkflow::get_raw(args).await.map_err(PublicError::from)
+    ) -> Result<dto::http::HttpRequestResult, Error> {
+        HttpWorkflow::get_raw(args).await.map_err(Error::from)
     }
 }

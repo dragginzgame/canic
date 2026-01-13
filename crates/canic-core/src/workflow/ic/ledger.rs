@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     infra::ic::ledger::{LedgerInfra, LedgerMeta},
     ops::ic::{IcOps, ledger::LedgerOps},
     workflow::{ic::IcWorkflowError, prelude::*},
@@ -26,7 +26,7 @@ pub enum LedgerWorkflowError {
     },
 }
 
-impl From<LedgerWorkflowError> for Error {
+impl From<LedgerWorkflowError> for InternalError {
     fn from(err: LedgerWorkflowError) -> Self {
         IcWorkflowError::LedgerWorkflow(err).into()
     }
@@ -47,7 +47,7 @@ impl LedgerWorkflow {
         to: Account,
         amount: u64,
         memo: Option<Vec<u8>>,
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, InternalError> {
         LedgerRules::validate_allowance(ledger_id, payer, spender, amount).await?;
 
         let block_index = LedgerOps::transfer_from(ledger_id, payer, to, amount, memo).await?;
@@ -75,7 +75,7 @@ impl LedgerRules {
         payer: Principal,
         spender: Account,
         required_amount: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         let meta = Self::ledger_meta(ledger_id);
 
         let payer_account = Account {

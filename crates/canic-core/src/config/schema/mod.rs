@@ -5,7 +5,7 @@ pub use log::*;
 pub use subnet::*;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::candid::Principal,
     config::ConfigError,
     ids::{CanisterRole, SubnetRole},
@@ -45,7 +45,7 @@ fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), Conf
     Ok(())
 }
 
-impl From<ConfigSchemaError> for Error {
+impl From<ConfigSchemaError> for InternalError {
     fn from(err: ConfigSchemaError) -> Self {
         ConfigError::from(err).into()
     }

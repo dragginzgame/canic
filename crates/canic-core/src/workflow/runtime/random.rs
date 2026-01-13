@@ -1,7 +1,7 @@
 //! Randomness seeding scheduler.
 
 use crate::{
-    Error,
+    InternalError,
     config::schema::{RandomnessConfig, RandomnessSource},
     domain::policy,
     ops::{
@@ -81,7 +81,7 @@ impl RandomWorkflow {
         }
     }
 
-    fn randomness_config() -> Result<RandomnessConfig, Error> {
+    fn randomness_config() -> Result<RandomnessConfig, InternalError> {
         Ok(ConfigOps::current_canister()?.randomness)
     }
 

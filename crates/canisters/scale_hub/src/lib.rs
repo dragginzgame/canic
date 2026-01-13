@@ -5,9 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{
-    PublicError, cdk::types::Principal, core::api::placement::scaling::ScalingApi, prelude::*,
-};
+use canic::{Error, cdk::types::Principal, core::api::placement::scaling::ScalingApi, prelude::*};
 use canic_internal::canister::SCALE_HUB;
 
 const POOL_NAME: &str = "scales";
@@ -29,7 +27,7 @@ async fn canic_upgrade() {}
 /// Create a new worker in the given pool.
 /// no authentication needed as for canic testing
 #[canic_update]
-async fn create_worker() -> Result<Principal, PublicError> {
+async fn create_worker() -> Result<Principal, Error> {
     let worker_pid = ScalingApi::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
@@ -38,7 +36,7 @@ async fn create_worker() -> Result<Principal, PublicError> {
 /// Dry-run the worker creation decision using config-driven policy.
 /// no authentication needed as for canic testing
 #[canic_query]
-async fn plan_create_worker() -> Result<bool, PublicError> {
+async fn plan_create_worker() -> Result<bool, Error> {
     ScalingApi::plan_create_worker(POOL_NAME)
 }
 

@@ -1,6 +1,6 @@
 use super::PoolWorkflow;
 use crate::{
-    Error,
+    InternalError,
     ops::{config::ConfigOps, ic::IcOps},
     workflow::prelude::*,
 };
@@ -23,7 +23,7 @@ use crate::{
 /// Policy decisions about *who* should control pool canisters
 /// are assumed to be encoded in configuration.
 impl PoolWorkflow {
-    pub fn pool_controllers() -> Result<Vec<Principal>, Error> {
+    pub fn pool_controllers() -> Result<Vec<Principal>, InternalError> {
         let mut controllers = ConfigOps::controllers()?;
 
         let root = IcOps::canister_self();

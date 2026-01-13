@@ -2,7 +2,8 @@ pub mod app;
 pub mod subnet;
 
 use crate::{
-    Error, ThisError, cdk::types::Principal, ids::CanisterRole, ops::storage::StorageOpsError,
+    InternalError, ThisError, cdk::types::Principal, ids::CanisterRole,
+    ops::storage::StorageOpsError,
 };
 use std::collections::BTreeSet;
 
@@ -19,7 +20,7 @@ pub enum DirectoryOpsError {
     },
 }
 
-impl From<DirectoryOpsError> for Error {
+impl From<DirectoryOpsError> for InternalError {
     fn from(err: DirectoryOpsError) -> Self {
         StorageOpsError::from(err).into()
     }

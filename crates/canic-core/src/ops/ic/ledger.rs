@@ -5,7 +5,7 @@
 //! sufficiency checks). Policy belongs in access/rules or workflow.
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
     infra::{InfraError, ic::ledger::LedgerInfra},
     ops::{ic::IcOpsError, prelude::*},
@@ -22,7 +22,7 @@ pub enum LedgerOpsError {
     Infra(#[from] InfraError),
 }
 
-impl From<LedgerOpsError> for Error {
+impl From<LedgerOpsError> for InternalError {
     fn from(err: LedgerOpsError) -> Self {
         IcOpsError::from(err).into()
     }
@@ -40,7 +40,7 @@ impl LedgerOps {
         ledger_id: Principal,
         payer: Account,
         spender: Account,
-    ) -> Result<Allowance, Error> {
+    ) -> Result<Allowance, InternalError> {
         let allowance = LedgerInfra::icrc2_allowance(ledger_id, payer, spender)
             .await
             .map_err(LedgerOpsError::from)?;
@@ -55,7 +55,7 @@ impl LedgerOps {
         to: Account,
         amount: u64,
         memo: Option<Vec<u8>>,
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, InternalError> {
         // Note: created_at_time is set at the call site here because ops owns
         // execution conventions; infra owns mechanics.
         let from_account = Account {

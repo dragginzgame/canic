@@ -1,4 +1,4 @@
-use crate::{PublicError, dto::state::AppCommand, workflow::state::AppStateWorkflow};
+use crate::{Error, dto::state::AppCommand, workflow::state::AppStateWorkflow};
 
 /// Workflow Query Re-export
 pub use crate::workflow::state::query::{AppStateQuery, SubnetStateQuery};
@@ -10,9 +10,9 @@ pub use crate::workflow::state::query::{AppStateQuery, SubnetStateQuery};
 pub struct AppStateApi;
 
 impl AppStateApi {
-    pub async fn execute_command(cmd: AppCommand) -> Result<(), PublicError> {
+    pub async fn execute_command(cmd: AppCommand) -> Result<(), Error> {
         AppStateWorkflow::execute_command(cmd)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 }

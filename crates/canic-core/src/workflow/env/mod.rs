@@ -2,7 +2,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    Error,
+    InternalError,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
     ops::{
@@ -19,7 +19,7 @@ use crate::{
 pub struct EnvWorkflow;
 
 impl EnvWorkflow {
-    pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), Error> {
+    pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), InternalError> {
         let mut snapshot = EnvMapper::view_to_snapshot(env_view);
         snapshot.canister_role = Some(role);
 

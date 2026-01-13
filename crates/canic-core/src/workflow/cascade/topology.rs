@@ -5,7 +5,7 @@
 //! Enforces cascade invariants and delegates transport to `CascadeOps`.
 
 use crate::{
-    Error, access,
+    InternalError, access,
     dto::cascade::TopologySnapshotView,
     ops::{
         cascade::CascadeOps,
@@ -39,7 +39,7 @@ impl TopologyCascadeWorkflow {
     // ───────────────────────── Root cascades ─────────────────────────
 
     /// Initiates a topology cascade from the root canister toward `target_pid`.
-    pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), Error> {
+    pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), InternalError> {
         access::env::require_root()?;
 
         let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
@@ -61,7 +61,7 @@ impl TopologyCascadeWorkflow {
     // ──────────────────────── Non-root cascades ──────────────────────
 
     /// Continues a topology cascade on a non-root canister.
-    pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), Error> {
+    pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
         let snapshot = TopologySnapshotAdapter::from_view(view);
@@ -110,7 +110,10 @@ impl TopologyCascadeWorkflow {
 
     // ───────────────────────── Internal helpers ──────────────────────
 
-    async fn send_snapshot(pid: &Principal, snapshot: &TopologySnapshot) -> Result<(), Error> {
+    async fn send_snapshot(
+        pid: &Principal,
+        snapshot: &TopologySnapshot,
+    ) -> Result<(), InternalError> {
         let view = TopologySnapshotAdapter::to_view(snapshot);
 
         CascadeOps::send_topology_snapshot(*pid, &view)
@@ -121,7 +124,7 @@ impl TopologyCascadeWorkflow {
     fn next_child_on_path(
         self_pid: Principal,
         parents: &[TopologyPathNode],
-    ) -> Result<Option<Principal>, Error> {
+    ) -> Result<Option<Principal>, InternalError> {
         let Some(first) = parents.first() else {
             return Err(CascadeWorkflowError::InvalidParentChain.into());
         };
@@ -136,7 +139,7 @@ impl TopologyCascadeWorkflow {
     fn slice_snapshot_for_child(
         next_pid: Principal,
         snapshot: &TopologySnapshot,
-    ) -> Result<TopologySnapshot, Error> {
+    ) -> Result<TopologySnapshot, InternalError> {
         let mut sliced_parents = Vec::new();
         let mut include = false;
 

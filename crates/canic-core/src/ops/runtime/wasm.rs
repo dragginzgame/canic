@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::types::WasmModule,
     ops::{prelude::*, runtime::RuntimeOpsError},
 };
@@ -30,7 +30,7 @@ pub enum WasmOpsError {
     RegistryUninitialized,
 }
 
-impl From<WasmOpsError> for Error {
+impl From<WasmOpsError> for InternalError {
     fn from(err: WasmOpsError) -> Self {
         RuntimeOpsError::WasmOps(err).into()
     }
@@ -51,7 +51,7 @@ impl WasmOps {
     }
 
     /// Ensures embedded WASMs were registered before root bootstrap.
-    pub fn require_initialized() -> Result<(), Error> {
+    pub fn require_initialized() -> Result<(), InternalError> {
         if Self::is_initialized() {
             Ok(())
         } else {
@@ -66,7 +66,7 @@ impl WasmOps {
     }
 
     /// Fetch a WASM module or return an error if missing.
-    pub fn try_get(role: &CanisterRole) -> Result<WasmModule, Error> {
+    pub fn try_get(role: &CanisterRole) -> Result<WasmModule, InternalError> {
         Self::get(role).ok_or_else(|| WasmOpsError::WasmNotFound(role.clone()).into())
     }
 

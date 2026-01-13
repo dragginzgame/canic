@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     ids::CanisterRole,
     ops::storage::{
         directory::DirectoryOpsError,
@@ -19,7 +19,7 @@ impl RootAppDirectoryBuilder {
     pub fn build(
         registry: &SubnetRegistrySnapshot,
         app_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<AppDirectorySnapshot, Error> {
+    ) -> Result<AppDirectorySnapshot, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -52,7 +52,7 @@ impl RootSubnetDirectoryBuilder {
     pub fn build(
         registry: &SubnetRegistrySnapshot,
         subnet_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<SubnetDirectorySnapshot, Error> {
+    ) -> Result<SubnetDirectorySnapshot, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry

@@ -5,7 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{PublicError, prelude::*};
+use canic::{Error, prelude::*};
 use canic_internal::canister::TEST;
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ async fn canic_upgrade() {}
 
 /// main test endpoint for things that can fail
 #[canic_update]
-async fn test() -> Result<(), PublicError> {
+async fn test() -> Result<(), Error> {
     Ok(())
 }
 

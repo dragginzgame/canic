@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::CanisterRecord,
@@ -33,7 +33,7 @@ pub enum SubnetRegistryOpsError {
     ParentNotFound(Principal),
 }
 
-impl From<SubnetRegistryOpsError> for Error {
+impl From<SubnetRegistryOpsError> for InternalError {
     fn from(err: SubnetRegistryOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
@@ -72,7 +72,7 @@ impl SubnetRegistrySnapshot {
     pub(crate) fn parent_chain(
         &self,
         target: Principal,
-    ) -> Result<Vec<(Principal, CanisterRecord)>, Error> {
+    ) -> Result<Vec<(Principal, CanisterRecord)>, InternalError> {
         let registry_len = self.entries.len();
         let index: HashMap<Principal, CanisterRecord> = self.entries.iter().cloned().collect();
 
@@ -128,7 +128,7 @@ impl SubnetRegistryOps {
         parent_pid: Principal,
         module_hash: Vec<u8>,
         created_at: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         if SubnetRegistry::get(pid).is_some() {
             return Err(SubnetRegistryOpsError::AlreadyRegistered(pid).into());
         }
