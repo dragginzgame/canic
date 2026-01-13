@@ -1,7 +1,6 @@
 use crate::{
-    Error,
     cdk::types::Principal,
-    dto::placement::scaling::ScalingRegistryView,
+    dto::{error::Error, placement::scaling::ScalingRegistryView},
     workflow::placement::scaling::{ScalingWorkflow, query::ScalingQuery},
 };
 

@@ -11,7 +11,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError, InternalErrorOrigin,
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     ops::{
         config::ConfigOps,
@@ -19,26 +19,8 @@ use crate::{
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
     },
-    workflow::{placement::PlacementWorkflowError, prelude::*},
+    workflow::prelude::*,
 };
-
-///
-/// ScalingWorkflowError
-///
-/// Errors raised during scaling execution
-///
-
-#[derive(Debug, ThisError)]
-pub enum ScalingWorkflowError {
-    #[error("scaling plan rejected: {0}")]
-    PlanRejected(String),
-}
-
-impl From<ScalingWorkflowError> for InternalError {
-    fn from(err: ScalingWorkflowError) -> Self {
-        PlacementWorkflowError::Scaling(err).into()
-    }
-}
 
 ///
 /// ScalingWorkflow
@@ -61,11 +43,14 @@ impl ScalingWorkflow {
         } = ScalingPolicy::plan_create_worker(pool, worker_count, scaling)?;
 
         if !should_spawn {
-            return Err(ScalingWorkflowError::PlanRejected(reason))?;
+            return Err(InternalError::domain(InternalErrorOrigin::Workflow, reason));
         }
 
         let entry_plan = worker_entry.ok_or_else(|| {
-            ScalingWorkflowError::PlanRejected("worker entry missing for spawn plan".to_string())
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "worker entry missing for spawn plan",
+            )
         })?;
 
         let role = entry_plan.canister_role.clone();

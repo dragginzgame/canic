@@ -2,14 +2,14 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvView,
     ops::{
         ic::network::{BuildNetwork, NetworkOps},
         runtime::env::{EnvOps, EnvSnapshot},
     },
-    workflow::{bootstrap::BootstrapError, env::mapper::EnvMapper, prelude::*},
+    workflow::{env::mapper::EnvMapper, prelude::*},
 };
 
 ///
@@ -32,10 +32,14 @@ impl EnvWorkflow {
             canister_role: snapshot.canister_role,
             parent_pid: snapshot.parent_pid,
         };
+
         let validated = match validate_or_default(network, input) {
             Ok(validated) => validated,
             Err(EnvPolicyError::MissingEnvFields(missing)) => {
-                return Err(BootstrapError::MissingEnvFields(missing).into());
+                return Err(InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    format!("bootstrap failed: missing required env fields: {missing}"),
+                ));
             }
         };
 

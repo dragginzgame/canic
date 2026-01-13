@@ -1,6 +1,8 @@
 use crate::{
-    Error,
-    dto::pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
+    dto::{
+        error::Error,
+        pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
+    },
     workflow::pool::{PoolWorkflow, query::PoolQuery},
 };
 

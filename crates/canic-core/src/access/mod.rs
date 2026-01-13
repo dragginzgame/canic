@@ -1,10 +1,14 @@
+/// Access-layer errors returned by user-defined auth, guard, and rule hooks.
+///
+/// These errors are framework-agnostic and are converted into InternalError
+/// immediately at the framework boundary.
 pub mod auth;
 pub mod env;
 pub mod guard;
 pub mod metrics;
 pub mod rule;
 
-use crate::ThisError;
+use thiserror::Error as ThisError;
 
 ///
 /// AccessError

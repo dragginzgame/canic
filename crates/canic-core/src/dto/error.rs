@@ -1,4 +1,4 @@
-use crate::dto::prelude::*;
+use crate::{InternalError, access::AccessError, dto::prelude::*};
 use std::fmt::{self, Display};
 
 ///
@@ -64,6 +64,12 @@ impl Error {
     /// 401 – Caller is unauthenticated or has an invalid identity.
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message.into())
+    }
+}
+
+impl From<AccessError> for Error {
+    fn from(err: AccessError) -> Self {
+        Self::from(InternalError::from(err))
     }
 }
 

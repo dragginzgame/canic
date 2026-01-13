@@ -1,5 +1,5 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError, InternalErrorOrigin,
     infra::InfraError,
     ops::{
         prelude::*,
@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use candid::encode_one;
+use thiserror::Error as ThisError;
 
 ///
 /// RequestOpsError
@@ -144,11 +145,12 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
-        let extra_arg = extra
-            .map(encode_one)
-            .transpose()
-            .map_err(InfraError::from)
-            .map_err(RequestOpsError::from)?;
+        let extra_arg = extra.map(encode_one).transpose().map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Ops,
+                format!("failed to encode create_canister extra arg: {err}"),
+            )
+        })?;
 
         RpcOps::execute_root_response_rpc(CreateCanisterRpc {
             canister_role: canister_role.clone(),

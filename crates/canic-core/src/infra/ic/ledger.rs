@@ -23,12 +23,14 @@ use crate::{
         spec::standards::icrc::icrc2::{
             Allowance, AllowanceArgs, TransferFromArgs, TransferFromError, TransferFromResult,
         },
+        types::{Account, Principal},
     },
     infra::{
+        InfraError,
         ic::{IcInfraError, call::Call},
-        prelude::*,
     },
 };
+use thiserror::Error as ThisError;
 
 ///
 /// LedgerInfraError

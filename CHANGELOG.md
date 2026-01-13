@@ -5,6 +5,58 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.8.0] - Public API Consolidation & Error Model Hardening
+
+### Breaking (pre-1.0, intentional)
+- Formalized the public Canic API surface.
+- Introduced a structured `canic::api` module that exposes runtime capabilities by intent (access, calls, canisters, RPC, observability, timers). Direct access to internal `canic_core` modules is now explicitly unsupported.
+- Clarified access semantics in the public API by resolving ambiguity between caller-based and self-based checks:
+  - `caller_is_*` functions live under `api::access::auth`.
+  - `self_is_*` environment predicates live under `api::access::env`.
+  - This removes prior naming collisions and makes authorization logic explicit.
+
+### Added
+- Stable public data contracts.
+  - Exposed `canic::dto`, `canic::ids`, and `canic::protocol` as first-class public modules.
+  - These are now the canonical, versioned contracts for Candid, RPC, testing, and tooling.
+- Curated public runtime API.
+  - `api::access` - authorization, environment predicates, guardrails.
+  - `api::call` - inter-canister call primitives.
+  - `api::canister` - placement, scaling, sharding, WASM management.
+  - `api::rpc` - non-IC RPC abstractions.
+  - `api::ops` - observability helpers (logging, perf).
+  - `api::timer` - scheduling helpers.
+- Opinionated prelude aligned with the new API.
+  - Prelude now re-exports only the public API surface (no internal paths, no aliases).
+  - Reduces boilerplate while preserving semantic clarity.
+
+### Changed
+- Internal error model hardened.
+  - Errors now normalize through a single `InternalError` boundary with class + origin metadata.
+  - Workflow, ops, and infra layers consistently map into internal errors before DTO conversion.
+- Macro expansion safety improved.
+  - All DSL and lifecycle macros now rely on the public `api`, `dto`, and `ids` modules.
+  - Internal core access is restricted to a hidden `__internal` module used only during macro expansion.
+- Removed accidental public exposure of core internals.
+  - `canic_core` is no longer re-exported directly.
+  - Downstream crates are guided to stable facade APIs instead of internal modules.
+
+### Cleanups
+- Removed unused or misleading internal error categories.
+- Eliminated workflow-local error enums that existed only as conversion wrappers.
+- Reduced layering violations where ops/workflow code previously tagged errors with incorrect origins.
+
+### Migration Notes
+- Replace direct references to `canic_core` with `canic::api`, `canic::dto`, or `canic::ids`.
+- Update authorization checks:
+  - `is_root` (caller) -> `api::access::auth::caller_is_root`.
+  - Environment checks -> `api::access::env::*`.
+- Macros (`#[canic_query]`, `#[canic_update]`, `start!`, `start_root!`) continue to work unchanged.
+
+### Release Status
+- This release completes a major internal refactor to stabilize Canic's public contract ahead of future feature work.
+- While pre-1.0, 0.8.0 establishes the intended long-term API shape and significantly reduces the likelihood of breaking changes going forward.
+
 ## [0.7.28] - 2026-01-12
 - Moved public macro entrypoints (build/start/timer/perf/auth and endpoint bundles) into the `canic` facade crate.
 

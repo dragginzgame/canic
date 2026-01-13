@@ -23,7 +23,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     func.sig.ident = impl_name.clone();
 
     let cdk_attr = cdk_attr(kind, &args.forwarded);
-
     let dispatch = dispatch(kind, asyncness);
 
     let wrapper_sig = syn::Signature {
@@ -51,8 +50,8 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let completion = completion(&call_ident, returns_fallible, dispatch_call);
 
     quote! {
-       #(#attrs)*
-       #cdk_attr
+        #(#attrs)*
+        #cdk_attr
         #vis #wrapper_sig {
             #call_decl
             #attempted
@@ -83,22 +82,34 @@ fn returns_fallible(sig: &syn::Signature) -> bool {
 
 fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
     match (kind, asyncness) {
-        (EndpointKind::Query, false) => quote!(::canic::core::dispatch::dispatch_query),
-        (EndpointKind::Query, true) => quote!(::canic::core::dispatch::dispatch_query_async),
-        (EndpointKind::Update, false) => quote!(::canic::core::dispatch::dispatch_update),
-        (EndpointKind::Update, true) => quote!(::canic::core::dispatch::dispatch_update_async),
+        (EndpointKind::Query, false) => {
+            quote!(::canic::__internal::core::dispatch::dispatch_query)
+        }
+        (EndpointKind::Query, true) => {
+            quote!(::canic::__internal::core::dispatch::dispatch_query_async)
+        }
+        (EndpointKind::Update, false) => {
+            quote!(::canic::__internal::core::dispatch::dispatch_update)
+        }
+        (EndpointKind::Update, true) => {
+            quote!(::canic::__internal::core::dispatch::dispatch_update_async)
+        }
     }
 }
 
 fn call_decl(kind: EndpointKind, call_ident: &syn::Ident, orig_name: &syn::Ident) -> TokenStream2 {
     let call_kind = match kind {
-        EndpointKind::Query => quote!(::canic::core::ids::EndpointCallKind::Query),
-        EndpointKind::Update => quote!(::canic::core::ids::EndpointCallKind::Update),
+        EndpointKind::Query => {
+            quote!(::canic::__internal::core::ids::EndpointCallKind::Query)
+        }
+        EndpointKind::Update => {
+            quote!(::canic::__internal::core::ids::EndpointCallKind::Update)
+        }
     };
 
     quote! {
-        let #call_ident = ::canic::core::ids::EndpointCall {
-            endpoint: ::canic::core::ids::EndpointId::new(stringify!(#orig_name)),
+        let #call_ident = ::canic::__internal::core::ids::EndpointCall {
+            endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#orig_name)),
             kind: #call_kind,
         };
     }
@@ -106,13 +117,13 @@ fn call_decl(kind: EndpointKind, call_ident: &syn::Ident, orig_name: &syn::Ident
 
 fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
     quote! {
-        ::canic::core::access::metrics::AccessMetrics::increment(#call, #kind);
+        ::canic::__internal::core::access::metrics::AccessMetrics::increment(#call, #kind);
     }
 }
 
 fn attempted(call: &syn::Ident) -> TokenStream2 {
     quote! {
-        ::canic::core::access::metrics::EndpointAttemptMetrics::increment_attempted(#call);
+        ::canic::__internal::core::access::metrics::EndpointAttemptMetrics::increment_attempted(#call);
     }
 }
 
@@ -121,17 +132,20 @@ fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
         return quote!();
     }
 
-    let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Guard));
+    let metric = record_access_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Guard),
+    );
 
     match kind {
         EndpointKind::Query => quote! {
-            if let Err(err) = ::canic::core::access::guard::guard_app_query() {
+            if let Err(err) = ::canic::__internal::core::access::guard::guard_app_query() {
                 #metric
                 return Err(::canic::Error::from(err).into());
             }
         },
         EndpointKind::Update => quote! {
-            if let Err(err) = ::canic::core::access::guard::guard_app_update() {
+            if let Err(err) = ::canic::__internal::core::access::guard::guard_app_update() {
                 #metric
                 return Err(::canic::Error::from(err).into());
             }
@@ -140,7 +154,10 @@ fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
 }
 
 fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
-    let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Auth));
+    let metric = record_access_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Auth),
+    );
 
     match auth {
         Some(AuthSpec::Any(rules)) => quote! {
@@ -164,7 +181,10 @@ fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
         return quote!();
     }
 
-    let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Rule));
+    let metric = record_access_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Rule),
+    );
 
     let checks = rules.iter().map(|expr| {
         quote! {
@@ -183,7 +203,10 @@ fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
         return quote!();
     }
 
-    let metric = record_access_denied(call, quote!(::canic::core::ids::AccessMetricKind::Env));
+    let metric = record_access_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Env),
+    );
 
     let checks = envs.iter().map(|expr| {
         quote! {
@@ -193,6 +216,7 @@ fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
             }
         }
     });
+
     quote!(#(#checks)*)
 }
 
@@ -226,9 +250,9 @@ fn completion(
     let result_metrics = if returns_fallible {
         quote! {
             if out.is_ok() {
-                ::canic::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
+                ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
             } else {
-                ::canic::core::access::metrics::EndpointResultMetrics::increment_err(#call);
+                ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_err(#call);
             }
         }
     } else {
@@ -238,7 +262,7 @@ fn completion(
     quote! {
         {
             let out = #dispatch_call;
-            ::canic::core::access::metrics::EndpointAttemptMetrics::increment_completed(#call);
+            ::canic::__internal::core::access::metrics::EndpointAttemptMetrics::increment_completed(#call);
             #result_metrics
             out
         }

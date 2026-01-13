@@ -168,10 +168,11 @@ impl PoolWorkflow {
                 Ok(())
             }
             Err(err) => {
+                let (class, origin) = err.log_fields();
                 log!(
                     Topic::CanisterPool,
                     Warn,
-                    "pool import failed for {pid}: {err}"
+                    "pool import failed for {pid} class={class} origin={origin}: {err}"
                 );
                 Self::mark_failed(pid, &err);
 

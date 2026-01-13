@@ -5,7 +5,7 @@ pub mod timer;
 pub mod wasm;
 
 use crate::{
-    VERSION, access,
+    InternalError, VERSION, access,
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
@@ -44,7 +44,9 @@ impl RuntimeWorkflow {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() {
-        access::env::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
+        access::env::require_root()
+            .map_err(InternalError::from)
+            .unwrap_or_else(|e| fatal("start_all_root", e));
 
         // start shared timers too
         Self::start_all();

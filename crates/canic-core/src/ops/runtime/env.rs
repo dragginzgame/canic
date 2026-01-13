@@ -1,10 +1,11 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::api::canister_self,
     ids::SubnetRole,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvData},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// EnvOpsError
@@ -17,9 +18,6 @@ pub enum EnvOpsError {
 
     #[error("env import missing required fields: {0}")]
     MissingFields(String),
-
-    #[error("failed to determine current parent principal")]
-    ParentPidUnavailable,
 
     #[error("failed to determine current prime root principal")]
     PrimeRootPidUnavailable,
@@ -171,10 +169,6 @@ impl EnvOps {
 
     pub fn prime_root_pid() -> Result<Principal, InternalError> {
         Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::PrimeRootPidUnavailable.into())
-    }
-
-    pub fn parent_pid() -> Result<Principal, InternalError> {
-        Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
 
     // ---------------------------------------------------------------------

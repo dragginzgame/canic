@@ -1,5 +1,5 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     infra::{
         InfraError,
         ic::call::{
@@ -13,6 +13,7 @@ use candid::{
     utils::{ArgumentDecoder, ArgumentEncoder},
 };
 use serde::de::DeserializeOwned;
+use thiserror::Error as ThisError;
 
 ///
 /// CallError

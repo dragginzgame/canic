@@ -33,30 +33,3 @@ pub mod prelude {
         ops::ic::Cycles,
     };
 }
-
-use crate::ThisError;
-
-///
-/// WorkflowError
-///
-
-#[derive(Debug, ThisError)]
-pub enum WorkflowError {
-    #[error(transparent)]
-    Bootstrap(#[from] bootstrap::BootstrapError),
-
-    #[error(transparent)]
-    Cascade(#[from] cascade::CascadeWorkflowError),
-
-    #[error(transparent)]
-    Ic(#[from] ic::IcWorkflowError),
-
-    #[error(transparent)]
-    Placement(#[from] placement::PlacementWorkflowError),
-
-    #[error(transparent)]
-    Rpc(#[from] rpc::RpcWorkflowError),
-
-    #[error(transparent)]
-    Topology(#[from] topology::TopologyWorkflowError),
-}

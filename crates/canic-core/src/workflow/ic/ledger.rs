@@ -1,36 +1,9 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError, InternalErrorOrigin,
     infra::ic::ledger::{LedgerInfra, LedgerMeta},
     ops::ic::{IcOps, ledger::LedgerOps},
-    workflow::{ic::IcWorkflowError, prelude::*},
+    workflow::prelude::*,
 };
-
-///
-/// LedgerWorkflowError
-///
-
-#[derive(Debug, ThisError)]
-pub enum LedgerWorkflowError {
-    #[error("insufficient {symbol} allowance: has {allowance}, needs {required}")]
-    InsufficientAllowance {
-        symbol: &'static str,
-        allowance: u64,
-        required: u64,
-    },
-
-    #[error("{symbol} allowance expired at {expires_at_nanos} (now {now_nanos})")]
-    AllowanceExpired {
-        symbol: &'static str,
-        expires_at_nanos: u64,
-        now_nanos: u64,
-    },
-}
-
-impl From<LedgerWorkflowError> for InternalError {
-    fn from(err: LedgerWorkflowError) -> Self {
-        IcWorkflowError::LedgerWorkflow(err).into()
-    }
-}
 
 ///
 /// LedgerWorkflow
@@ -77,33 +50,32 @@ impl LedgerRules {
         required_amount: u64,
     ) -> Result<(), InternalError> {
         let meta = Self::ledger_meta(ledger_id);
+        let symbol = meta.symbol;
 
         let payer_account = Account {
             owner: payer,
             subaccount: None,
         };
+        let allowance_record = LedgerOps::allowance(ledger_id, payer_account, spender).await?;
+        let approved_amount = allowance_record.allowance;
 
-        let allowance = LedgerOps::allowance(ledger_id, payer_account, spender).await?;
-
-        if allowance.allowance < required_amount {
-            return Err(LedgerWorkflowError::InsufficientAllowance {
-                symbol: meta.symbol,
-                allowance: allowance.allowance,
-                required: required_amount,
-            }
-            .into());
+        if approved_amount < required_amount {
+            return Err(InternalError::domain(
+                InternalErrorOrigin::Workflow,
+                format!(
+                    "insufficient {symbol} allowance: has {approved_amount}, needs {required_amount}"
+                ),
+            ));
         }
 
-        if let Some(expires_at_nanos) = allowance.expires_at {
+        if let Some(expires_at_nanos) = allowance_record.expires_at {
             let now_nanos = IcOps::now_nanos();
 
             if expires_at_nanos <= now_nanos {
-                return Err(LedgerWorkflowError::AllowanceExpired {
-                    symbol: meta.symbol,
-                    expires_at_nanos,
-                    now_nanos,
-                }
-                .into());
+                return Err(InternalError::domain(
+                    InternalErrorOrigin::Workflow,
+                    format!("{symbol} allowance expired at {expires_at_nanos} (now {now_nanos})"),
+                ));
             }
         }
 

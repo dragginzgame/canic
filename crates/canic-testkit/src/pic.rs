@@ -1,6 +1,6 @@
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
-use canic::Error;
-use canic::core::{
+use canic::{
+    Error,
     cdk::types::TC,
     dto::{
         abi::v1::CanisterInitPayload,

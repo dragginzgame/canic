@@ -12,21 +12,3 @@
 
 pub mod nonroot;
 pub mod root;
-
-use crate::{InternalError, ThisError, workflow::WorkflowError};
-
-///
-/// BootstrapError
-///
-
-#[derive(Debug, ThisError)]
-pub enum BootstrapError {
-    #[error("missing required env fields: {0}")]
-    MissingEnvFields(String),
-}
-
-impl From<BootstrapError> for InternalError {
-    fn from(err: BootstrapError) -> Self {
-        WorkflowError::from(err).into()
-    }
-}

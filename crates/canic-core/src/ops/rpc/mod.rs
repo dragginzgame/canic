@@ -1,18 +1,19 @@
 pub mod request;
 
-use crate::ops::rpc::request::{Request, Response};
 use crate::{
-    Error, InternalError, ThisError,
+    InternalError,
+    dto::error::Error,
     ops::{
         OpsError,
         ic::call::{CallOps, CallResult},
         prelude::*,
-        rpc::request::RequestOpsError,
+        rpc::request::{Request, RequestOpsError, Response},
         runtime::env::EnvOps,
     },
     protocol,
 };
 use serde::de::DeserializeOwned;
+use thiserror::Error as ThisError;
 
 ///
 /// RpcOpsError

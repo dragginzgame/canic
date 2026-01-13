@@ -1,9 +1,10 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::types::WasmModule,
     ops::{prelude::*, runtime::RuntimeOpsError},
 };
 use std::{cell::RefCell, collections::HashMap};
+use thiserror::Error as ThisError;
 
 thread_local! {
     ///

@@ -1,4 +1,7 @@
-use crate::{Error, dto::state::AppCommand, workflow::state::AppStateWorkflow};
+use crate::{
+    dto::{error::Error, state::AppCommand},
+    workflow::state::AppStateWorkflow,
+};
 
 /// Workflow Query Re-export
 pub use crate::workflow::state::query::{AppStateQuery, SubnetStateQuery};

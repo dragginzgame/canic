@@ -5,7 +5,8 @@ pub mod metrics;
 pub mod timer;
 pub mod wasm;
 
-use crate::{InternalError, ThisError, ops::OpsError};
+use crate::{InternalError, ops::OpsError};
+use thiserror::Error as ThisError;
 
 ///
 /// RuntimeOpsError

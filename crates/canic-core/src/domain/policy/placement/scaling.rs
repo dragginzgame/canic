@@ -6,12 +6,13 @@
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::types::BoundedString64,
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::PolicyError,
     ids::CanisterRole,
 };
+use thiserror::Error as ThisError;
 
 ///
 /// ScalingPolicyError

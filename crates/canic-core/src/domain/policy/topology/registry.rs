@@ -1,11 +1,12 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::candid::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     domain::policy::topology::TopologyPolicyError,
     ids::CanisterRole,
     ops::storage::registry::subnet::SubnetRegistrySnapshot,
 };
+use thiserror::Error as ThisError;
 
 ///
 /// RegistryPolicyError

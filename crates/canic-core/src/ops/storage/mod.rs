@@ -9,7 +9,8 @@ pub mod state;
 // re-export from storage
 pub use crate::storage::canister::CanisterRecord;
 
-use crate::{InternalError, ThisError, ops::OpsError};
+use crate::{InternalError, ops::OpsError};
+use thiserror::Error as ThisError;
 
 ///
 /// StorageOpsError

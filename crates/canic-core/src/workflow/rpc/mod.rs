@@ -1,9 +1,8 @@
 pub mod adapter;
 pub mod request;
 
-use crate::{
-    InternalError, ThisError, cdk::types::Principal, ids::CanisterRole, workflow::WorkflowError,
-};
+use crate::{InternalError, InternalErrorOrigin, cdk::types::Principal, ids::CanisterRole};
+use thiserror::Error as ThisError;
 
 ///
 /// RpcWorkflowError
@@ -29,6 +28,6 @@ pub enum RpcWorkflowError {
 
 impl From<RpcWorkflowError> for InternalError {
     fn from(err: RpcWorkflowError) -> Self {
-        WorkflowError::Rpc(err).into()
+        Self::workflow(InternalErrorOrigin::Workflow, err.to_string())
     }
 }

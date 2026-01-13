@@ -1,11 +1,14 @@
 use crate::{
-    ThisError,
     cdk::{
         env::nns::NNS_REGISTRY_CANISTER,
         spec::governance::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
+        types::Principal,
     },
-    infra::{ic::nns::NnsInfraError, prelude::*},
+    infra::{InfraError, ic::call::Call, ic::nns::NnsInfraError},
+    log,
+    log::Topic,
 };
+use thiserror::Error as ThisError;
 
 ///
 /// NnsRegistryInfraError

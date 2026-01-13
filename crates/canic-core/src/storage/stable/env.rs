@@ -95,6 +95,7 @@ impl Env {
     }
 
     #[must_use]
+    #[expect(dead_code)]
     pub(crate) fn get_parent_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().parent_pid)
     }

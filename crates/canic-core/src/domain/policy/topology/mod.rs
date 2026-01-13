@@ -1,13 +1,14 @@
 pub mod registry;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::types::Principal,
     domain::policy::PolicyError,
     ids::CanisterRole,
     ops::storage::{CanisterRecord, registry::subnet::SubnetRegistrySnapshot},
 };
 use std::collections::BTreeSet;
+use thiserror::Error as ThisError;
 
 ///
 /// TopologyPolicyError

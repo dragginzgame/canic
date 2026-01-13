@@ -5,9 +5,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{
-    Error, cdk::types::Principal, core::api::placement::sharding::ShardingApi, prelude::*,
-};
+use canic::{Error, api::canister::placement::ShardingApi, cdk::types::Principal, prelude::*};
 use canic_internal::canister::SHARD_HUB;
 
 const POOL_NAME: &str = "shards";

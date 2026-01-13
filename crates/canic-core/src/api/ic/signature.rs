@@ -1,4 +1,4 @@
-use crate::{Error, workflow::ic::signature::SignatureWorkflow};
+use crate::{dto::error::Error, workflow::ic::signature::SignatureWorkflow};
 
 ///
 /// SignatureApi
