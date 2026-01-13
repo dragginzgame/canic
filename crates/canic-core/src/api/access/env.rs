@@ -1,12 +1,12 @@
 use crate::{InternalError, access, dto::error::Error};
 
 ///
-/// EnvApi
+/// EnvAccessApi
 ///
 
-pub struct EnvApi;
+pub struct EnvAccessApi;
 
-impl EnvApi {
+impl EnvAccessApi {
     pub async fn is_prime_root() -> Result<(), Error> {
         access::env::is_prime_root()
             .await

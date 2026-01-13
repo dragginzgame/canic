@@ -1,12 +1,12 @@
 use crate::{InternalError, access::rule, dto::error::Error};
 
 ///
-/// RuleApi
+/// RuleAccessApi
 ///
 
-pub struct RuleApi;
+pub struct RuleAccessApi;
 
-impl RuleApi {
+impl RuleAccessApi {
     pub async fn build_network_ic() -> Result<(), Error> {
         rule::build_network_ic()
             .await

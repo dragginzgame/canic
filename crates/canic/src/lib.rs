@@ -65,13 +65,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use crate::{
         api::{
-            access::{
-                auth::{
-                    auth_require_all, auth_require_any, caller_is_child, caller_is_controller,
-                    caller_is_parent, caller_is_root,
-                },
-                env::{self_is_prime_root, self_is_prime_subnet, self_is_root},
-            },
+            access::{AuthAccessApi, EnvAccessApi, GuardAccessApi, RuleAccessApi},
             canister::CanisterRole,
             ic::Call,
             ops::{log, perf},
@@ -92,42 +86,39 @@ pub mod prelude {
 ///
 
 pub mod api {
-    // ─────────────────────────────
-    // Access & authorization
-    // ─────────────────────────────
+    /// Access & authorization
     pub mod access {
-        pub mod auth {
-            pub use crate::__internal::core::access::auth::{
-                is_child as caller_is_child, is_controller as caller_is_controller,
-                is_parent as caller_is_parent, is_root as caller_is_root,
-            };
-
-            pub use crate::{auth_require_all, auth_require_any};
-        }
-
-        pub mod env {
-            pub use crate::__internal::core::access::env::{
-                is_prime_root as self_is_prime_root, is_prime_subnet as self_is_prime_subnet,
-                is_root as self_is_root,
-            };
-        }
-
-        pub mod guard {
-            pub use crate::__internal::core::access::guard::{guard_app_query, guard_app_update};
-        }
+        pub use crate::__internal::core::api::access::{
+            auth::AuthAccessApi, env::EnvAccessApi, guard::GuardAccessApi, rule::RuleAccessApi,
+        };
     }
 
-    /// IC primitives
+    /// IC primitives (calls, HTTP, crypto, network, system APIs)
     pub mod ic {
-        pub use crate::__internal::core::api::ic::{
-            call::{Call, CallBuilder, CallResult},
-            http::HttpApi,
-        };
+        pub use crate::__internal::core::api::ic::call::{Call, CallBuilder, CallResult};
+
+        pub mod http {
+            pub use crate::__internal::core::api::ic::http::HttpApi;
+        }
+
+        pub mod network {
+            pub use crate::__internal::core::api::ic::network::NetworkApi;
+        }
+
+        pub mod signature {
+            pub use crate::__internal::core::api::ic::signature::SignatureApi;
+        }
     }
 
     /// Canister lifecycle, placement, and topology
     pub mod canister {
         pub use crate::__internal::core::ids::CanisterRole;
+
+        pub mod directory {
+            pub use crate::__internal::core::api::topology::directory::{
+                AppDirectoryApi, SubnetDirectoryApi,
+            };
+        }
 
         pub mod placement {
             pub use crate::__internal::core::api::placement::{
