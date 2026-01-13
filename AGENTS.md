@@ -1,10 +1,3 @@
-Below is the **complete, consolidated, up-to-date `AGENTS.md`**, incorporating all architectural decisions made during this refactor cycle.
-This version resolves prior inconsistencies, formalizes naming and data taxonomy, and is safe to treat as **normative**.
-
-You can drop this in verbatim.
-
----
-
 # AGENTS.md
 
 This document defines **how agents (contributors, CI, maintainers)** must interact with the codebase.
@@ -368,7 +361,6 @@ Examples:
 * `CycleTrackerView`
 
 DTOs may depend on views, **never on authoritative model types**.
-
 
 ---
 

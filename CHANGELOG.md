@@ -5,6 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Split the DSL surface into `canic-dsl` (symbols) and `canic-dsl-macros` (proc macros), with facade re-exports updated to match.
+- Macro guards now use the `app_is_live` DSL symbol instead of reserving `app`.
+
 ## [0.8.1] - 2026-01-13
 - HttpApi is now exported under api::ic along with call
 

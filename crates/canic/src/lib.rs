@@ -38,6 +38,7 @@ pub use canic_utils as utils;
 // Re-exports
 // -----------------------------------------------------------------------------
 pub use canic_core::dto::error::Error;
+pub use canic_dsl_macros::{canic_query, canic_update};
 pub use canic_memory::{
     eager_init, eager_static, ic_memory, ic_memory_range, impl_storable_bounded,
     impl_storable_unbounded,
@@ -74,7 +75,8 @@ pub mod prelude {
         cdk::{candid::CandidType, export_candid},
     };
 
-    pub use canic_dsl::{canic_query, canic_update};
+    pub use canic_dsl::access::{auth::*, env::*, guard::*};
+    pub use canic_dsl_macros::{canic_query, canic_update};
 }
 
 ///

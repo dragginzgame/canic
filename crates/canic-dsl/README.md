@@ -1,21 +1,16 @@
 # canic-dsl
 
-Proc macros for defining Internet Computer endpoints in Canic canisters.
+Symbolic tokens for Canic endpoint macros.
 
-This crate provides `#[canic_query]` and `#[canic_update]`, which are thin wrappers
-around the IC CDK `#[query]` / `#[update]` attributes and route through Canic’s
-pipeline (guard → auth → env → rule → dispatch).
+This crate defines zero-cost marker constants used inside `#[canic_query]` and
+`#[canic_update]` attributes. The symbols are never evaluated; the proc-macro
+crate pattern-matches on identifiers and expands them into runtime access calls.
 
 ```rust
-use canic_dsl::{canic_query, canic_update};
-use canic::prelude::*;
+use canic_dsl::access::{auth::caller_is_controller, env::self_is_prime_subnet};
+use canic_dsl_macros::canic_update;
 
-#[canic_query]
-fn ping() -> String {
-    "ok".to_string()
-}
-
-#[canic_update(guard(app), auth_any(is_controller), env(is_prime_subnet))]
+#[canic_update(auth_any(caller_is_controller), env(self_is_prime_subnet))]
 async fn admin_only() -> Result<(), canic::Error> {
     Ok(())
 }

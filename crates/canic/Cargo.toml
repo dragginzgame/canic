@@ -18,6 +18,7 @@ candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-core = { workspace = true }
 canic-dsl = { workspace = true }
+canic-dsl-macros = { workspace = true }
 canic-memory = { workspace = true }
 canic-utils = { workspace = true }
 ic-cdk = { workspace = true }
