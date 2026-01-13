@@ -1,4 +1,4 @@
-use crate::endpoint::parse::{AuthSpec, ParsedArgs};
+use crate::endpoint::parse::{AuthSpec, EnvSymbol, ParsedArgs};
 use proc_macro2::TokenStream as TokenStream2;
 use syn::Expr;
 
@@ -17,7 +17,7 @@ pub struct ValidatedArgs {
     pub forwarded: Vec<TokenStream2>,
     pub app_guard: bool,
     pub auth: Option<AuthSpec>,
-    pub env: Vec<Expr>,
+    pub env: Vec<EnvSymbol>,
     pub rules: Vec<Expr>,
 }
 

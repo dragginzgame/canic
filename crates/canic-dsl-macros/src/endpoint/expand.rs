@@ -1,4 +1,8 @@
-use crate::endpoint::{EndpointKind, parse::AuthSpec, validate::ValidatedArgs};
+use crate::endpoint::{
+    EndpointKind,
+    parse::{AuthSpec, AuthSymbol, EnvSymbol},
+    validate::ValidatedArgs,
+};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{Expr, ItemFn};
@@ -139,15 +143,15 @@ fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
 
     match kind {
         EndpointKind::Query => quote! {
-            if let Err(err) = ::canic::__internal::core::access::guard::guard_app_query() {
+            if let Err(err) = ::canic::api::access::GuardAccessApi::guard_app_query() {
                 #metric
-                return Err(::canic::Error::from(err).into());
+                return Err(err.into());
             }
         },
         EndpointKind::Update => quote! {
-            if let Err(err) = ::canic::__internal::core::access::guard::guard_app_update() {
+            if let Err(err) = ::canic::api::access::GuardAccessApi::guard_app_update() {
                 #metric
-                return Err(::canic::Error::from(err).into());
+                return Err(err.into());
             }
         },
     }
@@ -160,18 +164,52 @@ fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
     );
 
     match auth {
-        Some(AuthSpec::Any(rules)) => quote! {
-            if let Err(err) = ::canic::auth_require_any!(#(#rules),*) {
-                #metric
-                return Err(::canic::Error::from(err).into());
+        Some(AuthSpec::Any(rules)) => {
+            let caller = format_ident!("__canic_auth_caller");
+            let authed = format_ident!("__canic_auth_ok");
+            let last_err = format_ident!("__canic_auth_err");
+            let checks = rules.iter().map(|rule| {
+                let call = auth_call(rule, &caller);
+                quote! {
+                    if !#authed {
+                        match #call.await {
+                            Ok(()) => #authed = true,
+                            Err(err) => #last_err = Some(err),
+                        }
+                    }
+                }
+            });
+
+            quote! {
+                let #caller = ::canic::cdk::api::msg_caller();
+                let mut #authed = false;
+                let mut #last_err = None;
+                #(#checks)*
+                if !#authed {
+                    if let Some(err) = #last_err {
+                        #metric
+                        return Err(err.into());
+                    }
+                }
             }
-        },
-        Some(AuthSpec::All(rules)) => quote! {
-            if let Err(err) = ::canic::auth_require_all!(#(#rules),*) {
-                #metric
-                return Err(::canic::Error::from(err).into());
+        }
+        Some(AuthSpec::All(rules)) => {
+            let caller = format_ident!("__canic_auth_caller");
+            let checks = rules.iter().map(|rule| {
+                let call = auth_call(rule, &caller);
+                quote! {
+                    if let Err(err) = #call.await {
+                        #metric
+                        return Err(err.into());
+                    }
+                }
+            });
+
+            quote! {
+                let #caller = ::canic::cdk::api::msg_caller();
+                #(#checks)*
             }
-        },
+        }
         None => quote!(),
     }
 }
@@ -198,7 +236,7 @@ fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
     quote!(#(#checks)*)
 }
 
-fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
+fn env(envs: &[EnvSymbol], call: &syn::Ident) -> TokenStream2 {
     if envs.is_empty() {
         return quote!();
     }
@@ -208,16 +246,54 @@ fn env(envs: &[Expr], call: &syn::Ident) -> TokenStream2 {
         quote!(::canic::__internal::core::ids::AccessMetricKind::Env),
     );
 
-    let checks = envs.iter().map(|expr| {
+    let checks = envs.iter().map(|env| {
+        let call = env_call(env);
         quote! {
-            if let Err(err) = #expr().await {
+            if let Err(err) = #call.await {
                 #metric
-                return Err(::canic::Error::from(err).into());
+                return Err(err.into());
             }
         }
     });
 
     quote!(#(#checks)*)
+}
+
+fn auth_call(rule: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
+    match rule {
+        AuthSymbol::CallerIsController => {
+            quote!(::canic::api::access::AuthAccessApi::is_controller(#caller))
+        }
+        AuthSymbol::CallerIsParent => {
+            quote!(::canic::api::access::AuthAccessApi::is_parent(#caller))
+        }
+        AuthSymbol::CallerIsChild => {
+            quote!(::canic::api::access::AuthAccessApi::is_child(#caller))
+        }
+        AuthSymbol::CallerIsRoot => {
+            quote!(::canic::api::access::AuthAccessApi::is_root(#caller))
+        }
+        AuthSymbol::CallerIsSameCanister => {
+            quote!(::canic::api::access::AuthAccessApi::is_same_canister(#caller))
+        }
+        AuthSymbol::CallerIsRegisteredToSubnet => {
+            quote!(::canic::api::access::AuthAccessApi::is_registered_to_subnet(#caller))
+        }
+        AuthSymbol::CallerIsWhitelisted => {
+            quote!(::canic::api::access::AuthAccessApi::is_whitelisted(#caller))
+        }
+    }
+}
+
+fn env_call(env: &EnvSymbol) -> TokenStream2 {
+    match env {
+        EnvSymbol::SelfIsPrimeSubnet => {
+            quote!(::canic::api::access::EnvAccessApi::is_prime_subnet())
+        }
+        EnvSymbol::SelfIsPrimeRoot => {
+            quote!(::canic::api::access::EnvAccessApi::is_prime_root())
+        }
+    }
 }
 
 fn dispatch_call(

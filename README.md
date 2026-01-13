@@ -30,7 +30,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 * `assets/` – documentation media (logo and shared imagery).
 * `crates/` – workspace crates.
-* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-cdk`, `canic-memory`, and `canic-utils` for consumers.
+* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-dsl-macros`, `canic-cdk`, `canic-memory`, and `canic-utils` for consumers.
 * `crates/canic-core/` – orchestration crate used inside canisters.
 
   * `src/access/` – boundary helpers (authorization, guards, endpoint‑adjacent policy). Must not depend on concrete model types.
@@ -50,7 +50,8 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
 * `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
-* `crates/canic-dsl/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
+* `crates/canic-dsl/` – symbolic DSL tokens for endpoint macros (auth/env/guard symbols).
+* `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable‑structures glue).
 * `crates/canisters/` – reference canisters that exercise the library end to end:
 
