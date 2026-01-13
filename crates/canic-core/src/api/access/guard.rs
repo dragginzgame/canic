@@ -1,12 +1,12 @@
 use crate::{InternalError, access::guard, dto::error::Error};
 
 ///
-/// GuardApi
+/// GuardAccessApi
 ///
 
-pub struct GuardApi;
+pub struct GuardAccessApi;
 
-impl GuardApi {
+impl GuardAccessApi {
     pub fn guard_app_query() -> Result<(), Error> {
         guard::guard_app_query()
             .map_err(InternalError::from)

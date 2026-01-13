@@ -7,12 +7,12 @@ use crate::{
 };
 
 ///
-/// AuthApi
+/// AuthAccessApi
 ///
 
-pub struct AuthApi;
+pub struct AuthAccessApi;
 
-impl AuthApi {
+impl AuthAccessApi {
     // --- Require --------------------------------------------------------
 
     pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), Error> {

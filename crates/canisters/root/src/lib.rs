@@ -7,7 +7,7 @@
 
 use canic::{
     Error,
-    api::{access::env::self_is_prime_subnet, canister::wasm::WasmApi, rpc::RpcApi},
+    api::{access::EnvAccessApi, canister::wasm::WasmApi, rpc::RpcApi},
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     prelude::*,
 };
