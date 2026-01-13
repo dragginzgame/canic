@@ -5,9 +5,8 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-
-### Changed
+## [0.8.3]
+- Added protocol to the public api layer so things like dispatch::Icrc21 can be exported
 - Split the DSL surface into `canic-dsl` (symbols) and `canic-dsl-macros` (proc macros), with facade re-exports updated to match.
 - Macro guards now use the `app_is_live` DSL symbol instead of reserving `app`.
 
