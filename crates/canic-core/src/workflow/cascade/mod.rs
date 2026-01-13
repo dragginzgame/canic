@@ -7,38 +7,9 @@ pub mod snapshot;
 pub mod state;
 pub mod topology;
 
-use crate::{
-    InternalError, ThisError,
-    workflow::{WorkflowError, prelude::*},
-};
+use crate::{log, log::Topic};
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
-
-///
-/// CascadeWorkflowError
-/// Errors raised during synchronization
-///
-
-#[derive(Debug, ThisError)]
-pub enum CascadeWorkflowError {
-    #[error("child rejected cascade: {0:?}")]
-    ChildRejected(Principal),
-
-    #[error("invalid parent chain: empty")]
-    InvalidParentChain,
-
-    #[error("parent chain does not start with self ({0})")]
-    ParentChainMissingSelf(Principal),
-
-    #[error("next hop {0} not found in parent chain")]
-    NextHopNotFound(Principal),
-}
-
-impl From<CascadeWorkflowError> for InternalError {
-    fn from(err: CascadeWorkflowError) -> Self {
-        WorkflowError::from(err).into()
-    }
-}
 
 ///
 /// Helpers

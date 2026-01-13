@@ -15,8 +15,9 @@ use crate::{
     cdk::{
         api::{certified_data_set, in_replicated_execution},
         certified_map::HashTree,
+        types::Principal,
     },
-    infra::{ic::IcInfraError, prelude::*},
+    infra::{InfraError, ic::IcInfraError},
 };
 use ic_canister_sig_creation::{
     CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,
@@ -24,6 +25,7 @@ use ic_canister_sig_creation::{
 };
 use ic_signature_verification::verify_canister_sig;
 use std::{borrow::Cow, cell::RefCell};
+use thiserror::Error as ThisError;
 
 thread_local! {
     /// Transient signature map, kept in heap memory only.

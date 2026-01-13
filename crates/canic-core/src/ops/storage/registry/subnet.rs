@@ -1,5 +1,5 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::CanisterRecord,
@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use std::collections::{HashMap, HashSet};
+use thiserror::Error as ThisError;
 
 ///
 /// SubnetRegistryOpsError

@@ -7,7 +7,7 @@ use crate::{
         },
         types::Principal,
     },
-    infra::InfraError,
+    infra::{InfraError, ic::IcInfraError},
 };
 use candid::{encode_args, encode_one};
 use serde::de::DeserializeOwned;
@@ -78,7 +78,8 @@ impl CallBuilder {
     where
         A: CandidType,
     {
-        self.args = encode_one(arg).map_err(InfraError::from)?;
+        self.args = encode_one(arg).map_err(IcInfraError::from)?;
+
         Ok(self)
     }
 
@@ -87,7 +88,8 @@ impl CallBuilder {
     where
         A: ArgumentEncoder,
     {
-        self.args = encode_args(args).map_err(InfraError::from)?;
+        self.args = encode_args(args).map_err(IcInfraError::from)?;
+
         Ok(self)
     }
 
@@ -106,7 +108,8 @@ impl CallBuilder {
         call = call.with_cycles(self.cycles);
         call = call.with_raw_args(&self.args);
 
-        let response = call.await.map_err(InfraError::from)?;
+        let response = call.await.map_err(IcInfraError::from)?;
+
         Ok(CallResult { inner: response })
     }
 }
@@ -130,7 +133,10 @@ impl CallResult {
     where
         R: CandidType + DeserializeOwned,
     {
-        self.inner.candid().map_err(InfraError::from)
+        self.inner
+            .candid()
+            .map_err(IcInfraError::from)
+            .map_err(InfraError::from)
     }
 
     // Optional: parity with IC Response::candid_tuple
@@ -138,6 +144,9 @@ impl CallResult {
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        self.inner.candid_tuple().map_err(InfraError::from)
+        self.inner
+            .candid_tuple()
+            .map_err(IcInfraError::from)
+            .map_err(InfraError::from)
     }
 }

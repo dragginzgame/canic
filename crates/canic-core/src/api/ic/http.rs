@@ -1,4 +1,10 @@
-use crate::{Error, dto, workflow::http::HttpWorkflow};
+use crate::{
+    dto::{
+        error::Error,
+        http::{HttpRequestArgs, HttpRequestResult},
+    },
+    workflow::http::HttpWorkflow,
+};
 use serde::de::DeserializeOwned;
 
 ///
@@ -30,9 +36,7 @@ impl HttpApi {
     }
 
     /// Perform a raw HTTP request with metrics, returning the response verbatim.
-    pub async fn get_raw(
-        args: dto::http::HttpRequestArgs,
-    ) -> Result<dto::http::HttpRequestResult, Error> {
+    pub async fn get_raw(args: HttpRequestArgs) -> Result<HttpRequestResult, Error> {
         HttpWorkflow::get_raw(args).await.map_err(Error::from)
     }
 }

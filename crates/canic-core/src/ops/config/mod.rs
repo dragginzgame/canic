@@ -1,5 +1,5 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     config::{
         Config, ConfigError, ConfigModel,
         schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
@@ -8,6 +8,7 @@ use crate::{
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
 };
 use std::sync::Arc;
+use thiserror::Error as ThisError;
 
 ///
 /// ConfigOpsError

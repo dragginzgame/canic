@@ -1,9 +1,11 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::{env::nns::EXCHANGE_RATE_CANISTER, spec::standards::xrc::GetExchangeRateResult},
     ops::ic::{IcOpsError, call::CallOps},
 };
+use thiserror::Error as ThisError;
 
+/// re-exports
 pub use crate::cdk::spec::standards::xrc::{ExchangeRate, GetExchangeRateRequest};
 
 ///

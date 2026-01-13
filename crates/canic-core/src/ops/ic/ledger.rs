@@ -5,11 +5,12 @@
 //! sufficiency checks). Policy belongs in access/rules or workflow.
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
     infra::{InfraError, ic::ledger::LedgerInfra},
     ops::{ic::IcOpsError, prelude::*},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// LedgerOpsError

@@ -15,7 +15,6 @@ pub mod stable;
 
 pub mod prelude {
     pub use crate::{
-        ThisError,
         cdk::types::{Cycles, Principal},
         eager_static, ic_memory,
         ids::{CanisterRole, SubnetRole},
@@ -25,7 +24,8 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::storage::prelude::*;
+use crate::{InternalError, InternalErrorOrigin};
+use thiserror::Error as ThisError;
 
 ///
 /// StorageError
@@ -35,4 +35,10 @@ use crate::storage::prelude::*;
 pub enum StorageError {
     #[error(transparent)]
     StableMemory(#[from] stable::StableMemoryError),
+}
+
+impl From<StorageError> for InternalError {
+    fn from(err: StorageError) -> Self {
+        Self::invariant(InternalErrorOrigin::Storage, err.to_string())
+    }
 }

@@ -1,8 +1,8 @@
 use crate::{
-    ThisError,
     cdk::types::Principal,
     ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// EnvInput

@@ -1,5 +1,6 @@
 use crate::{
-    Error, cdk::types::Principal, dto::canister::CanisterStatusView,
+    cdk::types::Principal,
+    dto::{canister::CanisterStatusView, error::Error},
     workflow::ic::mgmt::MgmtWorkflow,
 };
 

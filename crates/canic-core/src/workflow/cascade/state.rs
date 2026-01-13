@@ -1,3 +1,4 @@
+//!
 //! State cascade workflow.
 //!
 //! Coordinates propagation of internal state snapshots across the subnet topology.
@@ -10,7 +11,7 @@
 //! - Persistence and mutation live in ops
 
 use crate::{
-    InternalError, access,
+    InternalError, InternalErrorOrigin, access,
     dto::cascade::StateSnapshotView,
     ops::{
         cascade::CascadeOps,
@@ -24,7 +25,6 @@ use crate::{
     },
     workflow::{
         cascade::{
-            CascadeWorkflowError,
             snapshot::{
                 StateSnapshot, adapter::StateSnapshotAdapter, state_snapshot_debug,
                 state_snapshot_is_empty,
@@ -188,6 +188,11 @@ impl StateCascadeWorkflow {
 
         CascadeOps::send_state_snapshot(pid, &view)
             .await
-            .map_err(|_| CascadeWorkflowError::ChildRejected(pid).into())
+            .map_err(|err| {
+                InternalError::workflow(
+                    InternalErrorOrigin::Workflow,
+                    format!("state cascade rejected by child {pid}: {err}"),
+                )
+            })
     }
 }

@@ -6,12 +6,12 @@
 //! async closures or functions that return [`AuthRuleResult`].
 
 use crate::{
-    InternalError, ThisError,
     access::AccessError,
     cdk::{
         api::{canister_self, msg_caller},
         types::Principal,
     },
+    config::Config,
     ids::CanisterRole,
     log,
     log::Topic,
@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use std::pin::Pin;
+use thiserror::Error as ThisError;
 
 ///
 /// AuthAccessError
@@ -75,12 +76,6 @@ pub enum AuthAccessError {
 
     #[error("caller '{0}' is not on the whitelist")]
     NotWhitelisted(Principal),
-}
-
-impl From<AuthAccessError> for InternalError {
-    fn from(err: AuthAccessError) -> Self {
-        AccessError::Auth(err).into()
-    }
 }
 
 /// Callable issuing an authorization decision for a given caller.
@@ -196,7 +191,10 @@ pub fn is_controller(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_parent(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let parent_pid = EnvOps::parent_pid().map_err(to_access)?;
+        let snapshot = EnvOps::snapshot();
+        let parent_pid = snapshot.parent_pid.ok_or_else(|| {
+            AuthAccessError::DependencyUnavailable("parent pid unavailable".to_string())
+        })?;
 
         if parent_pid == caller {
             Ok(())
@@ -238,7 +236,10 @@ pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
 #[must_use]
 pub fn is_root(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        let root_pid = EnvOps::root_pid().map_err(to_access)?;
+        let snapshot = EnvOps::snapshot();
+        let root_pid = snapshot.root_pid.ok_or_else(|| {
+            AuthAccessError::DependencyUnavailable("root pid unavailable".to_string())
+        })?;
 
         if caller == root_pid {
             Ok(())
@@ -278,8 +279,9 @@ pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRu
 #[must_use]
 pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
     Box::pin(async move {
-        use crate::config::Config;
-        let cfg = Config::get().map_err(to_access)?;
+        let cfg = Config::try_get().ok_or_else(|| {
+            AuthAccessError::DependencyUnavailable("config not initialized".to_string())
+        })?;
 
         if !cfg.is_whitelisted(&caller) {
             return Err(AuthAccessError::NotWhitelisted(caller).into());
@@ -287,10 +289,4 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
 
         Ok(())
     })
-}
-
-/// to_access
-/// helper function
-fn to_access(err: InternalError) -> AccessError {
-    AuthAccessError::DependencyUnavailable(err.to_string()).into()
 }

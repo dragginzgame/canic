@@ -1,21 +1,5 @@
-use crate::{InternalError, ThisError, workflow::topology::TopologyWorkflowError};
+use crate::{InternalError, InternalErrorOrigin};
 use std::cell::Cell;
-
-///
-/// TopologyGuardError
-///
-
-#[derive(Debug, ThisError)]
-pub enum TopologyGuardError {
-    #[error("topology is currently being mutated")]
-    TopologyMutating,
-}
-
-impl From<TopologyGuardError> for InternalError {
-    fn from(err: TopologyGuardError) -> Self {
-        TopologyWorkflowError::from(err).into()
-    }
-}
 
 ///
 /// TopologyState
@@ -53,7 +37,10 @@ impl TopologyGuard {
         if entered {
             Ok(Self)
         } else {
-            Err(TopologyGuardError::TopologyMutating.into())
+            Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "topology is currently being mutated",
+            ))
         }
     }
 }

@@ -1,7 +1,9 @@
 use crate::{
-    Error,
     cdk::types::Principal,
-    dto::placement::sharding::{ShardingPlanStateView, ShardingRegistryView, ShardingTenantsView},
+    dto::{
+        error::Error,
+        placement::sharding::{ShardingPlanStateView, ShardingRegistryView, ShardingTenantsView},
+    },
     workflow::placement::sharding::{ShardingWorkflow, query::ShardingQuery},
 };
 

@@ -11,7 +11,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError, InternalErrorOrigin,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::placement::sharding::{
         CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
@@ -23,11 +23,9 @@ use crate::{
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::sharding::ShardingRegistryOps,
     },
-    workflow::{
-        placement::{PlacementWorkflowError, sharding::mapper::ShardingMapper},
-        prelude::*,
-    },
+    workflow::{placement::sharding::mapper::ShardingMapper, prelude::*},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// ShardingWorkflowError
@@ -46,7 +44,14 @@ pub enum ShardingWorkflowError {
 
 impl From<ShardingWorkflowError> for InternalError {
     fn from(err: ShardingWorkflowError) -> Self {
-        PlacementWorkflowError::Sharding(err).into()
+        match err {
+            ShardingWorkflowError::Policy(e) => {
+                Self::domain(InternalErrorOrigin::Domain, e.to_string())
+            }
+            ShardingWorkflowError::Invariant(msg) => {
+                Self::invariant(InternalErrorOrigin::Workflow, msg)
+            }
+        }
     }
 }
 
@@ -269,7 +274,7 @@ impl ShardingWorkflow {
 mod tests {
     use super::*;
     use crate::{
-        cdk::candid::Principal, config::Config, ids::CanisterRole,
+        InternalErrorClass, cdk::candid::Principal, config::Config, ids::CanisterRole,
         ops::storage::placement::sharding::ShardingRegistryOps,
     };
     use futures::executor::block_on;
@@ -341,24 +346,15 @@ mod tests {
 
         let err = block_on(ShardingWorkflow::assign_to_pool("primary", "c")).unwrap_err();
 
-        let reason = match err {
-            crate::InternalError::Workflow(crate::workflow::WorkflowError::Placement(
-                crate::workflow::placement::PlacementWorkflowError::Sharding(
-                    ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
-                        reason,
-                        ..
-                    }),
-                ),
-            )) => reason,
-            other => panic!("unexpected error: {other:?}"),
-        };
+        assert_eq!(err.class(), InternalErrorClass::Domain);
+        assert_eq!(err.origin(), InternalErrorOrigin::Domain);
 
+        let msg = err.to_string();
         assert!(
-            matches!(
-                reason,
-                CreateBlockedReason::NoFreeSlots | CreateBlockedReason::PoolAtCapacity
-            ),
-            "unexpected block reason: {reason:?}"
+            msg.contains("no free slots")
+                || msg.contains("no free shard slots")
+                || msg.contains("pool at capacity"),
+            "unexpected error message: {msg}",
         );
     }
 }

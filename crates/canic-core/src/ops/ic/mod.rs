@@ -39,11 +39,12 @@ pub mod xrc;
 pub use cdk::types::{Cycles, TC};
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::{self, types::Principal},
     infra,
     ops::OpsError,
 };
+use thiserror::Error as ThisError;
 
 ///
 /// IcOpsError

@@ -2,10 +2,10 @@ pub mod app;
 pub mod subnet;
 
 use crate::{
-    InternalError, ThisError, cdk::types::Principal, ids::CanisterRole,
-    ops::storage::StorageOpsError,
+    InternalError, cdk::types::Principal, ids::CanisterRole, ops::storage::StorageOpsError,
 };
 use std::collections::BTreeSet;
+use thiserror::Error as ThisError;
 
 ///
 /// DirectoryOpsError

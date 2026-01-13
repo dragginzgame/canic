@@ -1,9 +1,10 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
 use derive_more::Display;
+use thiserror::Error as ThisError;
 
 ///
 /// AppStateSnapshot

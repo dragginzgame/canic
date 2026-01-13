@@ -1,13 +1,11 @@
 use canic::{
     cdk::types::Principal,
-    core::{
-        dto::{
-            page::{Page, PageRequest},
-            topology::{DirectoryEntryView, SubnetRegistryEntryView},
-        },
-        ids::CanisterRole,
-        protocol,
+    dto::{
+        page::{Page, PageRequest},
+        topology::{DirectoryEntryView, SubnetRegistryEntryView},
     },
+    ids::CanisterRole,
+    protocol,
 };
 use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};

@@ -2,7 +2,7 @@
 //! Owns TLS setup for memory registry initialization.
 
 use crate::{
-    CRATE_NAME, InternalError, ThisError,
+    CRATE_NAME, InternalError,
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
@@ -13,6 +13,7 @@ use canic_memory::{
         registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
     },
 };
+use thiserror::Error as ThisError;
 
 ///
 /// MemoryRegistryOpsError

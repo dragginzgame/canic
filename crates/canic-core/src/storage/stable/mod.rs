@@ -69,6 +69,7 @@ pub mod memory {
 }
 
 use crate::{InternalError, storage::prelude::*};
+use thiserror::Error as ThisError;
 
 ///
 /// StableMemoryError

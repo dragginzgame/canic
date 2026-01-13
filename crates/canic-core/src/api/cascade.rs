@@ -1,6 +1,8 @@
 use crate::{
-    Error,
-    dto::cascade::{StateSnapshotView, TopologySnapshotView},
+    dto::{
+        cascade::{StateSnapshotView, TopologySnapshotView},
+        error::Error,
+    },
     workflow::cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
 };
 

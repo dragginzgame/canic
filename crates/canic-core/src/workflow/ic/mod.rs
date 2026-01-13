@@ -7,29 +7,10 @@ pub mod signature;
 pub mod xrc;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     ops::ic::{IcOps, nns::registry::NnsRegistryOps},
-    workflow::{WorkflowError, prelude::*},
+    workflow::prelude::*,
 };
-
-///
-/// IcWorkflowError
-///
-
-#[derive(Debug, ThisError)]
-pub enum IcWorkflowError {
-    #[error(transparent)]
-    LedgerWorkflow(#[from] ledger::LedgerWorkflowError),
-
-    #[error(transparent)]
-    ProvisionWorkflow(#[from] provision::ProvisionWorkflowError),
-}
-
-impl From<IcWorkflowError> for InternalError {
-    fn from(err: IcWorkflowError) -> Self {
-        WorkflowError::from(err).into()
-    }
-}
 
 ///
 /// IcWorkflow

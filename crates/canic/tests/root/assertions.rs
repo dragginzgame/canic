@@ -1,15 +1,13 @@
 use canic::{
     cdk::types::Principal,
-    core::{
-        dto::{
-            canister::CanisterRecordView,
-            env::EnvView,
-            page::{Page, PageRequest},
-            topology::{DirectoryEntryView, SubnetRegistryEntryView},
-        },
-        ids::{CanisterRole, SubnetRole},
-        protocol,
+    dto::{
+        canister::CanisterRecordView,
+        env::EnvView,
+        page::{Page, PageRequest},
+        topology::{DirectoryEntryView, SubnetRegistryEntryView},
     },
+    ids::{CanisterRole, SubnetRole},
+    protocol,
 };
 use canic_testkit::pic::Pic;
 use std::collections::HashMap;

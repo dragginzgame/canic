@@ -1,6 +1,6 @@
 use crate::{
-    api::prelude::*,
-    cdk::candid::CandidType,
+    cdk::{candid::CandidType, types::Principal},
+    dto::error::Error,
     workflow::ic::call::{
         CallBuilder as WorkflowCallBuilder, CallResult as WorkflowCallResult, CallWorkflow,
     },

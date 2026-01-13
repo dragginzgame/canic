@@ -1,8 +1,9 @@
 pub mod schema;
 
-use crate::{InternalError, ThisError};
+use crate::{InternalError, InternalErrorOrigin};
 use schema::{ConfigSchemaError, Validate};
 use std::{cell::RefCell, sync::Arc};
+use thiserror::Error as ThisError;
 
 pub use schema::ConfigModel;
 
@@ -44,6 +45,12 @@ pub enum ConfigError {
     ConfigSchema(#[from] ConfigSchemaError),
 }
 
+impl From<ConfigError> for InternalError {
+    fn from(err: ConfigError) -> Self {
+        Self::domain(InternalErrorOrigin::Config, err.to_string())
+    }
+}
+
 ///
 /// Config
 ///
@@ -65,6 +72,25 @@ impl Config {
             #[cfg(not(test))]
             {
                 Err(ConfigError::NotInitialized.into())
+            }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn try_get() -> Option<Arc<ConfigModel>> {
+        CONFIG.with(|cfg| {
+            if let Some(config) = cfg.borrow().as_ref() {
+                return Some(config.clone());
+            }
+
+            #[cfg(test)]
+            {
+                Some(Self::init_for_tests())
+            }
+
+            #[cfg(not(test))]
+            {
+                None
             }
         })
     }

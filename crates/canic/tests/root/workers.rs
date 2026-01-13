@@ -1,10 +1,8 @@
 use canic::{
     Error,
     cdk::types::Principal,
-    core::{
-        dto::{topology::SubnetRegistryEntryView, topology::SubnetRegistryView},
-        protocol,
-    },
+    dto::{topology::SubnetRegistryEntryView, topology::SubnetRegistryView},
+    protocol,
 };
 use canic_internal::canister::SCALE;
 use canic_testkit::pic::Pic;

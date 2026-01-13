@@ -1,13 +1,51 @@
 pub use crate::storage::stable::sharding::ShardKey;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
         ShardEntry as ModelShardEntry,
         registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
     },
 };
+use thiserror::Error as ThisError;
+
+///
+/// ShardingRegistryOpsError
+/// Storage-layer errors for sharding registry CRUD and consistency checks.
+///
+
+#[derive(Debug, ThisError)]
+pub enum ShardingRegistryOpsError {
+    #[error("invalid sharding key: {0}")]
+    InvalidKey(String),
+
+    #[error("shard {pid} belongs to pool '{actual}', not '{expected}'")]
+    PoolMismatch {
+        pid: Principal,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("shard not found: {0}")]
+    ShardNotFound(Principal),
+
+    #[error("slot {slot} in pool '{pool}' already assigned to shard {pid}")]
+    SlotOccupied {
+        pool: String,
+        slot: u32,
+        pid: Principal,
+    },
+
+    #[error("tenant '{tenant}' is not assigned to any shard in pool '{pool}'")]
+    TenantNotAssigned { pool: String, tenant: String },
+}
+
+impl From<ShardingRegistryOpsError> for InternalError {
+    fn from(err: ShardingRegistryOpsError) -> Self {
+        StorageOpsError::from(err).into()
+    }
+}
 
 ///
 /// ShardEntry
@@ -49,43 +87,6 @@ pub struct ShardingRegistrySnapshot {
 ///
 
 pub struct ShardingRegistryOps;
-
-///
-/// ShardingRegistryOpsError
-/// Storage-layer errors for sharding registry CRUD and consistency checks.
-///
-
-#[derive(Debug, ThisError)]
-pub enum ShardingRegistryOpsError {
-    #[error("invalid sharding key: {0}")]
-    InvalidKey(String),
-
-    #[error("shard {pid} belongs to pool '{actual}', not '{expected}'")]
-    PoolMismatch {
-        pid: Principal,
-        expected: String,
-        actual: String,
-    },
-
-    #[error("shard not found: {0}")]
-    ShardNotFound(Principal),
-
-    #[error("slot {slot} in pool '{pool}' already assigned to shard {pid}")]
-    SlotOccupied {
-        pool: String,
-        slot: u32,
-        pid: Principal,
-    },
-
-    #[error("tenant '{tenant}' is not assigned to any shard in pool '{pool}'")]
-    TenantNotAssigned { pool: String, tenant: String },
-}
-
-impl From<ShardingRegistryOpsError> for InternalError {
-    fn from(err: ShardingRegistryOpsError) -> Self {
-        StorageOpsError::from(err).into()
-    }
-}
 
 impl ShardingRegistryOps {
     /// Create a new shard entry in the registry.

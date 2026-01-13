@@ -45,7 +45,8 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::ThisError;
+use crate::{InternalError, InternalErrorOrigin};
+use thiserror::Error as ThisError;
 
 ///
 /// OpsError
@@ -70,4 +71,10 @@ pub enum OpsError {
 
     #[error(transparent)]
     StorageOps(#[from] storage::StorageOpsError),
+}
+
+impl From<OpsError> for InternalError {
+    fn from(err: OpsError) -> Self {
+        Self::ops(InternalErrorOrigin::Ops, err.to_string())
+    }
 }

@@ -7,10 +7,8 @@
 
 use canic::{
     Error,
-    core::{
-        api::rpc::RpcApi,
-        dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
-    },
+    api::rpc::RpcApi,
+    dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
     prelude::*,
 };
 use canic_internal::canister::BLANK;

@@ -4,7 +4,6 @@
 //! ICC call patterns without layering concerns.
 
 use crate::{
-    ThisError,
     cdk::{
         self,
         candid::{Principal, encode_args, utils::ArgumentEncoder},
@@ -13,9 +12,11 @@ use crate::{
             CreateCanisterArgs, DeleteCanisterArgs, DepositCyclesArgs, InstallCodeArgs,
             UninstallCodeArgs, UpdateSettingsArgs, WasmModule,
         },
+        types::Cycles,
     },
-    infra::{ic::IcInfraError, prelude::*},
+    infra::{InfraError, ic::IcInfraError, ic::call::Call},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// MgmtInfraError
@@ -25,12 +26,6 @@ use crate::{
 pub enum MgmtInfraError {
     #[error("raw_rand returned {len} bytes")]
     RawRandInvalidLength { len: usize },
-}
-
-impl From<MgmtInfraError> for InfraError {
-    fn from(err: MgmtInfraError) -> Self {
-        IcInfraError::from(err).into()
-    }
 }
 
 ///
@@ -53,7 +48,8 @@ impl MgmtInfra {
         let args = CreateCanisterArgs { settings };
 
         let pid = cdk::mgmt::create_canister_with_extra_cycles(&args, cycles.to_u128())
-            .await?
+            .await
+            .map_err(IcInfraError::from)?
             .canister_id;
 
         Ok(pid)
@@ -69,7 +65,9 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        let status = cdk::mgmt::canister_status(&args).await?;
+        let status = cdk::mgmt::canister_status(&args)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(status)
     }
@@ -88,7 +86,9 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        cdk::mgmt::deposit_cycles(&args, cycles).await?;
+        cdk::mgmt::deposit_cycles(&args, cycles)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(())
     }
@@ -96,7 +96,6 @@ impl MgmtInfra {
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InfraError> {
         let status = Self::canister_status(canister_pid).await?;
-
         Ok(status.cycles.into())
     }
 
@@ -113,7 +112,8 @@ impl MgmtInfra {
 
         let seed: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| MgmtInfraError::RawRandInvalidLength { len })?;
+            .map_err(|_| MgmtInfraError::RawRandInvalidLength { len })
+            .map_err(IcInfraError::from)?;
 
         Ok(seed)
     }
@@ -127,7 +127,7 @@ impl MgmtInfra {
         wasm: &[u8],
         args: T,
     ) -> Result<(), InfraError> {
-        let arg = encode_args(args)?;
+        let arg = encode_args(args).map_err(IcInfraError::from)?;
 
         let install_args = InstallCodeArgs {
             mode,
@@ -136,7 +136,9 @@ impl MgmtInfra {
             arg,
         };
 
-        cdk::mgmt::install_code(&install_args).await?;
+        cdk::mgmt::install_code(&install_args)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(())
     }
@@ -152,7 +154,9 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        cdk::mgmt::uninstall_code(&args).await?;
+        cdk::mgmt::uninstall_code(&args)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(())
     }
@@ -163,7 +167,9 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        cdk::mgmt::delete_canister(&args).await?;
+        cdk::mgmt::delete_canister(&args)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(())
     }
@@ -172,7 +178,9 @@ impl MgmtInfra {
 
     /// Updates canister settings via the management canister.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InfraError> {
-        cdk::mgmt::update_settings(args).await?;
+        cdk::mgmt::update_settings(args)
+            .await
+            .map_err(IcInfraError::from)?;
 
         Ok(())
     }

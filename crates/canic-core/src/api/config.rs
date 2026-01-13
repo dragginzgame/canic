@@ -1,4 +1,4 @@
-use crate::{Error, workflow::config::ConfigWorkflow};
+use crate::{dto::error::Error, workflow::config::ConfigWorkflow};
 
 ///
 /// ConfigApi

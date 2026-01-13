@@ -5,13 +5,13 @@ pub use log::*;
 pub use subnet::*;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    config::ConfigError,
     ids::{CanisterRole, SubnetRole},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use thiserror::Error as ThisError;
 
 ///
 /// ConfigSchemaError
@@ -47,7 +47,7 @@ fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), Conf
 
 impl From<ConfigSchemaError> for InternalError {
     fn from(err: ConfigSchemaError) -> Self {
-        ConfigError::from(err).into()
+        Self::domain(InternalErrorOrigin::Config, err.to_string())
     }
 }
 

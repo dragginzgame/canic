@@ -9,7 +9,7 @@
 //! installing WASM modules, and cascading state updates to descendants.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     access::env,
     config::Config,
     domain::policy,
@@ -28,7 +28,6 @@ use crate::{
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder,
-        ic::IcWorkflowError,
         pool::PoolWorkflow,
         prelude::*,
         topology::directory::{
@@ -37,23 +36,6 @@ use crate::{
         },
     },
 };
-use thiserror::Error as ThisError;
-
-///
-/// ProvisionWorkflowError
-///
-
-#[derive(Debug, ThisError)]
-pub enum ProvisionWorkflowError {
-    #[error("install failed for {pid}")]
-    InstallFailed { pid: Principal },
-}
-
-impl From<ProvisionWorkflowError> for InternalError {
-    fn from(err: ProvisionWorkflowError) -> Self {
-        IcWorkflowError::from(err).into()
-    }
-}
 
 ///
 /// ProvisionWorkflow
@@ -172,7 +154,10 @@ impl ProvisionWorkflow {
                 );
             }
 
-            return Err(ProvisionWorkflowError::InstallFailed { pid }.into());
+            return Err(InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                format!("failed to install canister {pid}"),
+            ));
         }
 
         Ok(pid)

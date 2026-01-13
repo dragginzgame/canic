@@ -9,15 +9,18 @@ pub mod hrw;
 pub mod metrics;
 
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     cdk::candid::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
-    domain::policy::PolicyError,
+    domain::policy::{
+        PolicyError,
+        placement::sharding::{
+            backfill::plan_slot_backfill, hrw::HrwSelector, metrics::PoolMetrics,
+        },
+    },
     ops::storage::placement::sharding::{ShardEntry, ShardKey},
 };
-use backfill::plan_slot_backfill;
-use hrw::HrwSelector;
-use metrics::PoolMetrics;
+use thiserror::Error as ThisError;
 
 ///
 /// ShardingPolicyError

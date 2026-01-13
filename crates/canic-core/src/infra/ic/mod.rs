@@ -12,13 +12,11 @@ pub mod network;
 pub mod nns;
 pub mod signature;
 
-use crate::{
-    cdk::{
-        call::{CallFailed, CandidDecodeFailed},
-        candid::Error as CandidError,
-    },
-    infra::prelude::*,
+use crate::cdk::{
+    call::{CallFailed, CandidDecodeFailed, Error as CallError},
+    candid::Error as CandidError,
 };
+use thiserror::Error as ThisError;
 
 ///
 /// IcInfraError
@@ -50,4 +48,17 @@ pub enum IcInfraError {
 
     #[error(transparent)]
     CandidDecode(#[from] CandidDecodeFailed),
+}
+
+impl From<CallError> for IcInfraError {
+    fn from(err: CallError) -> Self {
+        match err {
+            CallError::CandidDecodeFailed(err) => err.into(),
+            CallError::InsufficientLiquidCycleBalance(err) => {
+                CallFailed::InsufficientLiquidCycleBalance(err).into()
+            }
+            CallError::CallPerformFailed(err) => CallFailed::CallPerformFailed(err).into(),
+            CallError::CallRejected(err) => CallFailed::CallRejected(err).into(),
+        }
+    }
 }

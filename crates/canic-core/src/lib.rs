@@ -27,6 +27,7 @@ pub mod api;
 pub mod dispatch;
 pub mod domain;
 pub mod dto;
+pub mod error;
 pub mod ids;
 pub mod log;
 pub mod perf;
@@ -46,9 +47,9 @@ pub use {
     ::canic_memory as memory,
     ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
     ::canic_utils as utils,
-    dto::error::{Error, ErrorCode},
-    thiserror::Error as ThisError,
 };
+
+pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};
 
 /// Internal re-exports required for macro expansion.
 /// Not part of the public API.
@@ -63,44 +64,6 @@ pub mod __reexports {
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-///
-/// InternalError
-///
-/// Internal, structured error type.
-///
-/// This error:
-/// - is NOT Candid-exposed
-/// - is NOT stable across versions
-/// - may evolve freely
-///
-/// All canister endpoints must convert this into a public error envelope
-/// defined in dto/.
-///
-
-#[derive(Debug, ThisError)]
-pub(crate) enum InternalError {
-    #[error(transparent)]
-    Access(#[from] access::AccessError),
-
-    #[error(transparent)]
-    Config(#[from] config::ConfigError),
-
-    #[error(transparent)]
-    Domain(#[from] domain::DomainError),
-
-    #[error(transparent)]
-    Infra(#[from] infra::InfraError),
-
-    #[error(transparent)]
-    Ops(#[from] ops::OpsError),
-
-    #[error(transparent)]
-    Storage(#[from] storage::StorageError),
-
-    #[error(transparent)]
-    Workflow(#[from] workflow::WorkflowError),
-}
 
 // init and validate config
 // called from here as config is pub(crate)

@@ -7,7 +7,8 @@ pub mod randomness;
 pub mod topology;
 pub mod upgrade;
 
-use crate::{InternalError, ThisError, domain::DomainError};
+use crate::{InternalError, domain::DomainError};
+use thiserror::Error as ThisError;
 
 ///
 /// PolicyError

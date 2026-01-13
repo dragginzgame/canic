@@ -1,11 +1,13 @@
 use crate::{
-    InternalError, ThisError,
+    InternalError,
     log::Level,
-    ops::config::ConfigOps,
-    ops::runtime::RuntimeOpsError,
-    storage::StorageError,
-    storage::stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
+    ops::{config::ConfigOps, runtime::RuntimeOpsError},
+    storage::{
+        StorageError,
+        stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
+    },
 };
+use thiserror::Error as ThisError;
 
 ///
 /// LogOps

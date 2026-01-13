@@ -1,8 +1,8 @@
 use crate::{
-    InternalError, ThisError,
     access::AccessError,
     ops::storage::state::app::{AppMode, AppStateOps},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// GuardAccessError
@@ -16,12 +16,6 @@ pub enum GuardAccessError {
 
     #[error("application is in readonly mode")]
     AppReadonly,
-}
-
-impl From<GuardAccessError> for InternalError {
-    fn from(err: GuardAccessError) -> Self {
-        AccessError::Guard(err).into()
-    }
 }
 
 /// Validate access for query calls.

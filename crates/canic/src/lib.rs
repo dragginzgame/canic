@@ -13,10 +13,18 @@ mod macros; // private implementation boundary
 
 #[doc(hidden)]
 pub mod __internal {
+    // NOTE:
+    // This module exists ONLY for macro expansion.
+    // Do NOT re-export canic_core publicly.
     pub use canic_core as core;
 }
-#[doc(hidden)]
-pub use __internal::core;
+
+// -----------------------------------------------------------------------------
+// Public data contracts
+// -----------------------------------------------------------------------------
+// DTOs, IDs, and protocol definitions are stable, versioned contracts intended
+// for downstream use (candid, RPC, tests, tooling).
+pub use canic_core::{dto, ids, protocol};
 
 // -----------------------------------------------------------------------------
 // Sub-crates
@@ -55,22 +63,23 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 pub mod prelude {
-    pub use crate::cdk::{
-        api::{canister_self, msg_caller},
-        candid::CandidType,
-        export_candid,
-    };
-
-    pub use canic_dsl::{canic_query, canic_update};
-
-    // Flat, opinionated imports
     pub use crate::api::{
-        auth::{auth_require_all, auth_require_any, is_child, is_controller, is_parent, is_root},
+        access::{
+            auth::{
+                auth_require_all, auth_require_any, caller_is_child, caller_is_controller,
+                caller_is_parent, caller_is_root,
+            },
+            env::{self_is_prime_root, self_is_prime_subnet, self_is_root},
+        },
         call::Call,
         canister::CanisterRole,
         ops::{log, perf},
         timer::{timer, timer_interval},
     };
+
+    pub use crate::cdk::candid::CandidType;
+    pub use crate::cdk::export_candid;
+    pub use canic_dsl::{canic_query, canic_update};
 }
 
 ///
@@ -82,13 +91,29 @@ pub mod prelude {
 ///
 
 pub mod api {
-    /// Authentication and caller/context inspection
-    pub mod auth {
-        pub use crate::__internal::core::access::auth::{
-            is_child, is_controller, is_parent, is_root,
-        };
+    // ─────────────────────────────
+    // Access & authorization
+    // ─────────────────────────────
+    pub mod access {
+        pub mod auth {
+            pub use crate::__internal::core::access::auth::{
+                is_child as caller_is_child, is_controller as caller_is_controller,
+                is_parent as caller_is_parent, is_root as caller_is_root,
+            };
 
-        pub use crate::{auth_require_all, auth_require_any};
+            pub use crate::{auth_require_all, auth_require_any};
+        }
+
+        pub mod env {
+            pub use crate::__internal::core::access::env::{
+                is_prime_root as self_is_prime_root, is_prime_subnet as self_is_prime_subnet,
+                is_root as self_is_root,
+            };
+        }
+
+        pub mod guard {
+            pub use crate::__internal::core::access::guard::{guard_app_query, guard_app_update};
+        }
     }
 
     /// Inter-canister call primitives
@@ -100,10 +125,15 @@ pub mod api {
     pub mod canister {
         pub use crate::__internal::core::ids::CanisterRole;
 
-        pub use crate::__internal::core::api::{
-            placement::{scaling::ScalingApi, sharding::ShardingApi},
-            wasm::WasmApi,
-        };
+        pub mod placement {
+            pub use crate::__internal::core::api::placement::{
+                scaling::ScalingApi, sharding::ShardingApi,
+            };
+        }
+
+        pub mod wasm {
+            pub use crate::__internal::core::api::wasm::WasmApi;
+        }
     }
 
     /// RPC abstractions (non-IC-specific)

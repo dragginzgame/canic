@@ -1,8 +1,11 @@
 use crate::{
-    Error,
     cdk::{candid::CandidType, types::Principal},
-    dto::rpc::{
-        CreateCanisterParent, CreateCanisterResponse, Request, Response, UpgradeCanisterResponse,
+    dto::{
+        error::Error,
+        rpc::{
+            CreateCanisterParent, CreateCanisterResponse, Request, Response,
+            UpgradeCanisterResponse,
+        },
     },
     ids::CanisterRole,
     workflow::rpc::request::{RpcRequestWorkflow, handler::RootResponseWorkflow},
