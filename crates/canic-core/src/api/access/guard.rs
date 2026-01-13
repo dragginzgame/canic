@@ -1,4 +1,4 @@
-use crate::{PublicError, access::guard};
+use crate::{Error, access::guard};
 
 ///
 /// GuardApi
@@ -7,11 +7,11 @@ use crate::{PublicError, access::guard};
 pub struct GuardApi;
 
 impl GuardApi {
-    pub fn guard_app_query() -> Result<(), PublicError> {
-        guard::guard_app_query().map_err(PublicError::from)
+    pub fn guard_app_query() -> Result<(), Error> {
+        guard::guard_app_query().map_err(Error::from)
     }
 
-    pub fn guard_app_update() -> Result<(), PublicError> {
-        guard::guard_app_update().map_err(PublicError::from)
+    pub fn guard_app_update() -> Result<(), Error> {
+        guard::guard_app_update().map_err(Error::from)
     }
 }

@@ -9,7 +9,7 @@ pub mod hrw;
 pub mod metrics;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::candid::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::PolicyError,
@@ -42,7 +42,7 @@ pub enum ShardingPolicyError {
     ShardingDisabled,
 }
 
-impl From<ShardingPolicyError> for Error {
+impl From<ShardingPolicyError> for InternalError {
     fn from(err: ShardingPolicyError) -> Self {
         PolicyError::ShardingPolicy(err).into()
     }

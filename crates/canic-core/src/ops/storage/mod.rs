@@ -9,11 +9,11 @@ pub mod state;
 // re-export from storage
 pub use crate::storage::canister::CanisterRecord;
 
-use crate::{Error, ThisError, ops::OpsError};
+use crate::{InternalError, ThisError, ops::OpsError};
 
 ///
 /// StorageOpsError
-/// Error envelope shared across operations submodules
+/// InternalError envelope shared across operations submodules
 ///
 
 #[derive(Debug, ThisError)]
@@ -31,7 +31,7 @@ pub enum StorageOpsError {
     AppStateOps(#[from] state::app::AppStateOpsError),
 }
 
-impl From<StorageOpsError> for Error {
+impl From<StorageOpsError> for InternalError {
     fn from(err: StorageOpsError) -> Self {
         OpsError::StorageOps(err).into()
     }

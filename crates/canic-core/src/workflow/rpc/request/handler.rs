@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     access::env,
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
@@ -24,7 +24,7 @@ pub struct RootResponseWorkflow;
 
 impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request and produce a [`Response`].
-    pub async fn response(req: Request) -> Result<Response, Error> {
+    pub async fn response(req: Request) -> Result<Response, InternalError> {
         env::require_root()?;
 
         match req {
@@ -35,14 +35,16 @@ impl RootResponseWorkflow {
     }
 
     // create_canister_response
-    async fn create_canister_response(req: &CreateCanisterRequest) -> Result<Response, Error> {
+    async fn create_canister_response(
+        req: &CreateCanisterRequest,
+    ) -> Result<Response, InternalError> {
         env::require_root()?;
 
         let caller = IcOps::msg_caller();
         let role = req.canister_role.clone();
         let parent_desc = format!("{:?}", &req.parent);
 
-        let result: Result<Response, Error> = async {
+        let result: Result<Response, InternalError> = async {
             // Look up parent
             let parent_pid = match &req.parent {
                 CreateCanisterParent::Canister(pid) => *pid,
@@ -85,7 +87,9 @@ impl RootResponseWorkflow {
     }
 
     // upgrade_canister_response
-    async fn upgrade_canister_response(req: &UpgradeCanisterRequest) -> Result<Response, Error> {
+    async fn upgrade_canister_response(
+        req: &UpgradeCanisterRequest,
+    ) -> Result<Response, InternalError> {
         env::require_root()?;
 
         let caller = IcOps::msg_caller();
@@ -106,7 +110,7 @@ impl RootResponseWorkflow {
     }
 
     // cycles_response
-    async fn cycles_response(req: &CyclesRequest) -> Result<Response, Error> {
+    async fn cycles_response(req: &CyclesRequest) -> Result<Response, InternalError> {
         env::require_root()?;
 
         MgmtOps::deposit_cycles(IcOps::msg_caller(), req.cycles).await?;

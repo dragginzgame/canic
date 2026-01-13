@@ -1,4 +1,4 @@
-use crate::{Error, ops::config::ConfigOps};
+use crate::{InternalError, ops::config::ConfigOps};
 use std::time::Duration;
 
 ///
@@ -27,7 +27,7 @@ pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 pub struct ConfigWorkflow;
 
 impl ConfigWorkflow {
-    pub fn export_toml() -> Result<String, Error> {
+    pub fn export_toml() -> Result<String, InternalError> {
         ConfigOps::export_toml()
     }
 }

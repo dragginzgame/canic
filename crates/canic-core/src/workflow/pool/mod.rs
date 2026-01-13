@@ -6,7 +6,7 @@ pub mod query;
 pub mod scheduler;
 
 use crate::{
-    Error,
+    InternalError,
     access::env,
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
@@ -40,7 +40,7 @@ impl PoolWorkflow {
     // Reset
     // -------------------------------------------------------------------------
 
-    pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, Error> {
+    pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, InternalError> {
         MgmtOps::update_settings(&UpdateSettingsArgs {
             canister_id: pid,
             settings: CanisterSettings {
@@ -69,7 +69,7 @@ impl PoolWorkflow {
         PoolOps::mark_ready(pid, cycles, created_at);
     }
 
-    fn mark_failed(pid: Principal, err: &Error) {
+    fn mark_failed(pid: Principal, err: &InternalError) {
         let created_at = IcOps::now_secs();
         PoolOps::mark_failed(pid, err, created_at);
     }
@@ -129,7 +129,7 @@ impl PoolWorkflow {
     // Auth
     // -------------------------------------------------------------------------
 
-    fn require_pool_admin() -> Result<(), Error> {
+    fn require_pool_admin() -> Result<(), InternalError> {
         env::require_root()?;
 
         Ok(())
@@ -139,7 +139,7 @@ impl PoolWorkflow {
     // Creation
     // -------------------------------------------------------------------------
 
-    pub async fn pool_create_canister() -> Result<Principal, Error> {
+    pub async fn pool_create_canister() -> Result<Principal, InternalError> {
         Self::require_pool_admin()?;
 
         let cycles = Cycles::new(POOL_CANISTER_CYCLES);
@@ -155,7 +155,7 @@ impl PoolWorkflow {
     // Import
     // -------------------------------------------------------------------------
 
-    pub async fn pool_import_canister(pid: Principal) -> Result<(), Error> {
+    pub async fn pool_import_canister(pid: Principal) -> Result<(), InternalError> {
         Self::require_pool_admin()?;
         admissibility::check_can_enter_pool(pid).await?;
 
@@ -184,7 +184,7 @@ impl PoolWorkflow {
     // Recycle
     // -------------------------------------------------------------------------
 
-    pub async fn pool_recycle_canister(pid: Principal) -> Result<(), Error> {
+    pub async fn pool_recycle_canister(pid: Principal) -> Result<(), InternalError> {
         Self::require_pool_admin()?;
 
         // Must exist in registry to be recycled
@@ -213,7 +213,7 @@ impl PoolWorkflow {
 
     pub async fn pool_import_queued_canisters(
         pids: Vec<Principal>,
-    ) -> Result<PoolBatchResult, Error> {
+    ) -> Result<PoolBatchResult, InternalError> {
         Self::require_pool_admin()?;
 
         let total = pids.len() as u64;

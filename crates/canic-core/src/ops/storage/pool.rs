@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     ops::prelude::*,
     storage::stable::pool::{
         PoolData, PoolRecord, PoolRecordState, PoolStatus as ModelPoolStatus, PoolStore,
@@ -108,7 +108,7 @@ impl PoolOps {
         Self::register_or_update_state(pid, cycles, PoolStatus::Ready, None, created_at);
     }
 
-    pub fn mark_failed(pid: Principal, err: &Error, created_at: u64) {
+    pub fn mark_failed(pid: Principal, err: &InternalError, created_at: u64) {
         Self::register_or_update_state(
             pid,
             Cycles::default(),

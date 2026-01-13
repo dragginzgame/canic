@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     domain::policy::topology::TopologyPolicy,
     ops::storage::{
         directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -23,7 +23,7 @@ impl PropagationWorkflow {
     ///
     /// Used after structural mutations (create/adopt) to update
     /// parent/child relationships and derived topology views.
-    pub async fn propagate_topology(target: Principal) -> Result<(), Error> {
+    pub async fn propagate_topology(target: Principal) -> Result<(), InternalError> {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
@@ -32,7 +32,7 @@ impl PropagationWorkflow {
     /// This rebuilds directory snapshots from the registry, applies current
     /// app/subnet state, cascades it to dependents, and finally re-asserts
     /// directory ↔ registry consistency.
-    pub async fn propagate_state(role: &CanisterRole) -> Result<(), Error> {
+    pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
         // Ensure newly created/adopted canisters inherit the current app
         // and subnet states
         let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
@@ -50,13 +50,13 @@ impl PropagationWorkflow {
             &registry_snapshot,
             &app_snapshot.entries,
         )
-        .map_err(Error::from)?;
+        .map_err(InternalError::from)?;
 
         TopologyPolicy::assert_directory_consistent_with_registry(
             &registry_snapshot,
             &subnet_snapshot.entries,
         )
-        .map_err(Error::from)?;
+        .map_err(InternalError::from)?;
 
         Ok(())
     }

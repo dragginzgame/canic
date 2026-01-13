@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - bug fixes over multiple versions
 
 ## [0.7.15] - 2026-01-08
-- refactored the endpoint wrappers - now they convert from canic::PublicError into the downstream
+- refactored the endpoint wrappers - now they convert from canic::Error into the downstream
 return error type specified by the developer
 
 ## [0.7.14] - 2026-01-08 - Cleanup Complete
@@ -69,7 +69,7 @@ exposing problems you didn't know existing)
 
 ## [0.7.9] - 2026-01-04
 - mirrored the authentication functions in access/ to api::access for public consumption
-- macro access checks now return PublicError at the endpoint boundary
+- macro access checks now return Error at the endpoint boundary
 
 ## [0.7.8] - 2026-01-04
 - Nested policy directory/registry under policy::topology to align module structure
@@ -92,7 +92,7 @@ exposing problems you didn't know existing)
 
 ## [0.7.3] - 2026-01-04 - Mostly Done
 ### Added
-- Public API `api::ic::call` wrapper that routes through ops for metrics/logging and maps internal errors to `PublicError`.
+- Public API `api::ic::call` wrapper that routes through ops for metrics/logging and maps internal errors to `Error`.
 - Ops-level `ops::ic::call::CallOps` helper for typed IC calls with candid encode/decode handling.
 
 ### Changed

@@ -1,7 +1,7 @@
 pub mod handler;
 
 use crate::{
-    Error,
+    InternalError,
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
     ops::rpc::request::RequestOps,
     workflow::{prelude::*, rpc::adapter::RpcAdapter},
@@ -18,7 +18,7 @@ impl RpcRequestWorkflow {
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
-    ) -> Result<CreateCanisterResponse, Error>
+    ) -> Result<CreateCanisterResponse, InternalError>
     where
         A: CandidType + Send + Sync,
     {
@@ -30,7 +30,7 @@ impl RpcRequestWorkflow {
 
     pub async fn upgrade_canister_request(
         canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, Error> {
+    ) -> Result<UpgradeCanisterResponse, InternalError> {
         let response = RequestOps::upgrade_canister(canister_pid).await?;
 
         Ok(RpcAdapter::upgrade_canister_response_to_dto(response))

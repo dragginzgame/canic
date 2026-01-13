@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     ids::SystemMetricKind,
     infra::{
         InfraError,
@@ -37,7 +37,7 @@ pub enum HttpOpsError {
     HttpDecode(#[from] serde_json::Error),
 }
 
-impl From<HttpOpsError> for Error {
+impl From<HttpOpsError> for InternalError {
     fn from(err: HttpOpsError) -> Self {
         Self::from(IcOpsError::from(err))
     }
@@ -55,7 +55,10 @@ impl HttpOps {
     // -------------------------------------------------------------------------
 
     /// Perform an HTTP GET request and deserialize the JSON response.
-    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
+    pub async fn get<T: DeserializeOwned>(
+        url: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<T, InternalError> {
         Self::get_with_label(url, headers, None).await
     }
 
@@ -64,7 +67,7 @@ impl HttpOps {
         url: &str,
         headers: &[(&str, &str)],
         label: Option<&str>,
-    ) -> Result<T, Error> {
+    ) -> Result<T, InternalError> {
         let args = HttpRequestArgs {
             url: url.to_string(),
             method: HttpMethod::GET,
@@ -91,7 +94,7 @@ impl HttpOps {
     pub async fn get_raw_with_label(
         args: HttpRequestArgs,
         label: Option<&str>,
-    ) -> Result<HttpRequestResult, Error> {
+    ) -> Result<HttpRequestResult, InternalError> {
         Self::perform_request(args, label).await
     }
 
@@ -103,7 +106,7 @@ impl HttpOps {
     async fn perform_request(
         args: HttpRequestArgs,
         label: Option<&str>,
-    ) -> Result<HttpRequestResult, Error> {
+    ) -> Result<HttpRequestResult, InternalError> {
         Self::record_metrics(args.method, &args.url, label);
         let res = HttpInfra::http_request_raw(&args)
             .await

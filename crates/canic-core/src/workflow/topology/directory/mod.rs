@@ -3,7 +3,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    Error,
+    InternalError,
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
@@ -25,7 +25,7 @@ use crate::{
 pub struct AppDirectoryResolver;
 
 impl AppDirectoryResolver {
-    pub fn resolve() -> Result<AppDirectorySnapshot, Error> {
+    pub fn resolve() -> Result<AppDirectorySnapshot, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::snapshot();
             let cfg = ConfigOps::get().expect("config must be available on root");
@@ -44,7 +44,7 @@ impl AppDirectoryResolver {
 pub struct SubnetDirectoryResolver;
 
 impl SubnetDirectoryResolver {
-    pub fn resolve() -> Result<SubnetDirectorySnapshot, Error> {
+    pub fn resolve() -> Result<SubnetDirectorySnapshot, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::snapshot();
             let cfg = ConfigOps::current_subnet().expect("subnet config must be available on root");

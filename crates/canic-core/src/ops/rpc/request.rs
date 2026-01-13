@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     infra::InfraError,
     ops::{
         prelude::*,
@@ -122,7 +122,7 @@ pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }
 
-impl From<RequestOpsError> for Error {
+impl From<RequestOpsError> for InternalError {
     fn from(err: RequestOpsError) -> Self {
         RpcOpsError::from(err).into()
     }
@@ -140,7 +140,7 @@ impl RequestOps {
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
-    ) -> Result<CreateCanisterResponse, Error>
+    ) -> Result<CreateCanisterResponse, InternalError>
     where
         A: CandidType + Send + Sync,
     {
@@ -160,11 +160,11 @@ impl RequestOps {
 
     pub async fn upgrade_canister(
         canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, Error> {
+    ) -> Result<UpgradeCanisterResponse, InternalError> {
         RpcOps::execute_root_response_rpc(UpgradeCanisterRpc { canister_pid }).await
     }
 
-    pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, Error> {
+    pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, InternalError> {
         RpcOps::execute_root_response_rpc(CyclesRpc { cycles }).await
     }
 }
@@ -190,7 +190,7 @@ impl Rpc for CreateCanisterRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
             Response::CreateCanister(r) => Ok(r),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
@@ -215,7 +215,7 @@ impl Rpc for UpgradeCanisterRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
             Response::UpgradeCanister(r) => Ok(r),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
@@ -240,7 +240,7 @@ impl Rpc for CyclesRpc {
         })
     }
 
-    fn try_from_response(resp: Response) -> Result<Self::Response, Error> {
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
             Response::Cycles(r) => Ok(r),
             _ => Err(RequestOpsError::InvalidResponseType.into()),

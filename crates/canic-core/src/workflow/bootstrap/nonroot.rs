@@ -25,7 +25,7 @@
 //! It provides a well-defined extension point should non-root canisters
 //! later require asynchronous local bootstrap behavior.
 
-use crate::{Error, workflow::prelude::*};
+use crate::{InternalError, workflow::prelude::*};
 
 ///
 /// Bootstrap workflow for non-root canisters during init.
@@ -48,7 +48,7 @@ use crate::{Error, workflow::prelude::*};
 /// This function is safe to retry and safe to run multiple times.
 ///
 #[allow(clippy::unused_async)]
-pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), Error> {
+pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
 
@@ -71,7 +71,7 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 /// Current behavior is intentionally minimal.
 ///
 #[allow(clippy::unused_async)]
-pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), Error> {
+pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): post-upgrade start");
     log!(
         Topic::Init,

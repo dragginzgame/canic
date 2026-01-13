@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::candid::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     domain::policy::topology::TopologyPolicyError,
@@ -25,7 +25,7 @@ pub enum RegistryPolicyError {
     },
 }
 
-impl From<RegistryPolicyError> for Error {
+impl From<RegistryPolicyError> for InternalError {
     fn from(err: RegistryPolicyError) -> Self {
         TopologyPolicyError::from(err).into()
     }

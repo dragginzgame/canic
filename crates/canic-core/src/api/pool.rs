@@ -1,5 +1,5 @@
 use crate::{
-    PublicError,
+    Error,
     dto::pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
     workflow::pool::{PoolWorkflow, query::PoolQuery},
 };
@@ -16,9 +16,7 @@ impl CanisterPoolApi {
         PoolQuery::pool_list_view()
     }
 
-    pub async fn admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, PublicError> {
-        PoolWorkflow::handle_admin(cmd)
-            .await
-            .map_err(PublicError::from)
+    pub async fn admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {
+        PoolWorkflow::handle_admin(cmd).await.map_err(Error::from)
     }
 }

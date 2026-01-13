@@ -2,7 +2,7 @@ pub mod request;
 
 use crate::ops::rpc::request::{Request, Response};
 use crate::{
-    Error, PublicError, ThisError,
+    Error, InternalError, ThisError,
     ops::{
         OpsError,
         ic::call::{CallOps, CallResult},
@@ -23,13 +23,13 @@ pub enum RpcOpsError {
     #[error(transparent)]
     RequestOps(#[from] RequestOpsError),
 
-    // PublicError is a wire-level contract only.
+    // Error is a wire-level contract only.
     // It is erased at the ops boundary.
     #[error("rpc rejected: {0}")]
-    RemoteRejected(PublicError),
+    RemoteRejected(Error),
 }
 
-impl From<RpcOpsError> for Error {
+impl From<RpcOpsError> for InternalError {
     fn from(err: RpcOpsError) -> Self {
         OpsError::from(err).into()
     }
@@ -44,7 +44,7 @@ pub trait Rpc {
     type Response: CandidType + DeserializeOwned;
 
     fn into_request(self) -> Request;
-    fn try_from_response(resp: Response) -> Result<Self::Response, Error>;
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError>;
 }
 
 ///
@@ -57,14 +57,14 @@ impl RpcOps {
     ///
     /// call_rpc_result
     ///
-    /// Calls a method that returns `Result<T, PublicError>` and
-    /// erases `PublicError` at the ops boundary.
+    /// Calls a method that returns `Result<T, Error>` and
+    /// erases `Error` at the ops boundary.
     ///
     pub async fn call_rpc_result<T>(
         pid: Principal,
         method: &str,
         arg: impl CandidType,
-    ) -> Result<T, Error>
+    ) -> Result<T, InternalError>
     where
         T: CandidType + DeserializeOwned,
     {
@@ -73,7 +73,7 @@ impl RpcOps {
             .execute()
             .await?;
 
-        let call_res: Result<T, PublicError> = call.candid::<Result<T, PublicError>>()?;
+        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
 
         let res = call_res.map_err(RpcOpsError::RemoteRejected)?;
 
@@ -85,7 +85,7 @@ impl RpcOps {
     ///
     /// Executes a protocol-level RPC via Request/Response.
     ///
-    async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, Error> {
+    async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, InternalError> {
         let root_pid = EnvOps::root_pid()?;
 
         let call: CallResult = CallOps::unbounded_wait(root_pid, protocol::CANIC_RESPONSE)
@@ -94,7 +94,7 @@ impl RpcOps {
             .await?;
 
         let call_res: Response = call
-            .candid::<Result<Response, PublicError>>()?
+            .candid::<Result<Response, Error>>()?
             .map_err(RpcOpsError::RemoteRejected)?;
 
         let response = R::try_from_response(call_res)?;

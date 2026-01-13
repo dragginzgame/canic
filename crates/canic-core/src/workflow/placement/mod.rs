@@ -1,7 +1,7 @@
 pub mod scaling;
 pub mod sharding;
 
-use crate::{Error, ThisError, workflow::WorkflowError};
+use crate::{InternalError, ThisError, workflow::WorkflowError};
 
 ///
 /// PlacementWorkflowError
@@ -16,7 +16,7 @@ pub enum PlacementWorkflowError {
     Sharding(#[from] sharding::ShardingWorkflowError),
 }
 
-impl From<PlacementWorkflowError> for Error {
+impl From<PlacementWorkflowError> for InternalError {
     fn from(err: PlacementWorkflowError) -> Self {
         WorkflowError::Placement(err).into()
     }

@@ -6,7 +6,7 @@
 //! async closures or functions that return [`AuthRuleResult`].
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     access::AccessError,
     cdk::{
         api::{canister_self, msg_caller},
@@ -77,7 +77,7 @@ pub enum AuthAccessError {
     NotWhitelisted(Principal),
 }
 
-impl From<AuthAccessError> for Error {
+impl From<AuthAccessError> for InternalError {
     fn from(err: AuthAccessError) -> Self {
         AccessError::Auth(err).into()
     }
@@ -291,6 +291,6 @@ pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
 
 /// to_access
 /// helper function
-fn to_access(err: Error) -> AccessError {
+fn to_access(err: InternalError) -> AccessError {
     AuthAccessError::DependencyUnavailable(err.to_string()).into()
 }

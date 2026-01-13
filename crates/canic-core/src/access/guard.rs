@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     access::AccessError,
     ops::storage::state::app::{AppMode, AppStateOps},
 };
@@ -18,7 +18,7 @@ pub enum GuardAccessError {
     AppReadonly,
 }
 
-impl From<GuardAccessError> for Error {
+impl From<GuardAccessError> for InternalError {
     fn from(err: GuardAccessError) -> Self {
         AccessError::Guard(err).into()
     }

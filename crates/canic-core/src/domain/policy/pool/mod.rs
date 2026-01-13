@@ -1,7 +1,7 @@
 pub mod admissibility;
 pub mod authority;
 
-use crate::{Error, ThisError, cdk::candid::Principal, domain::policy::PolicyError};
+use crate::{InternalError, ThisError, cdk::candid::Principal, domain::policy::PolicyError};
 
 ///
 /// PoolPolicyError
@@ -31,7 +31,7 @@ pub enum PoolPolicyError {
     NotAuthorized,
 }
 
-impl From<PoolPolicyError> for Error {
+impl From<PoolPolicyError> for InternalError {
     fn from(err: PoolPolicyError) -> Self {
         PolicyError::from(err).into()
     }

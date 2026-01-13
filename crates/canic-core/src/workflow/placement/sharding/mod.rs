@@ -11,7 +11,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::placement::sharding::{
         CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
@@ -44,7 +44,7 @@ pub enum ShardingWorkflowError {
     Invariant(&'static str),
 }
 
-impl From<ShardingWorkflowError> for Error {
+impl From<ShardingWorkflowError> for InternalError {
     fn from(err: ShardingWorkflowError) -> Self {
         PlacementWorkflowError::Sharding(err).into()
     }
@@ -67,7 +67,7 @@ impl ShardAllocator {
         canister_role: &CanisterRole,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, InternalError> {
         let response = RequestOps::create_canister::<Vec<u8>>(
             canister_role,
             CreateCanisterParent::ThisCanister,
@@ -102,7 +102,7 @@ impl ShardingWorkflow {
     pub(crate) async fn assign_to_pool(
         pool: &str,
         tenant: impl AsRef<str>,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, InternalError> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
         Self::assign_with_policy(
             &pool_cfg.canister_role,
@@ -121,7 +121,7 @@ impl ShardingWorkflow {
         tenant: &str,
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<Principal, Error> {
+    ) -> Result<Principal, InternalError> {
         // ---------------------------------------------------------------------
         // Assemble state
         // ---------------------------------------------------------------------
@@ -212,7 +212,7 @@ impl ShardingWorkflow {
     pub(crate) fn plan_assign_to_pool(
         pool: &str,
         tenant: impl AsRef<str>,
-    ) -> Result<ShardingPlanStateView, Error> {
+    ) -> Result<ShardingPlanStateView, InternalError> {
         let registry = ShardingRegistryOps::export();
 
         let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
@@ -238,7 +238,7 @@ impl ShardingWorkflow {
     }
 
     /// Convert a policy block reason into an error.
-    fn blocked(reason: CreateBlockedReason, pool: &str, tenant: &str) -> Error {
+    fn blocked(reason: CreateBlockedReason, pool: &str, tenant: &str) -> InternalError {
         ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
             reason,
             tenant: tenant.to_string(),
@@ -248,7 +248,7 @@ impl ShardingWorkflow {
     }
 
     /// Fetch shard pool configuration for the current canister.
-    fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, Error> {
+    fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, InternalError> {
         let cfg = ConfigOps::current_canister()?;
         let sharding = cfg.sharding.ok_or(ShardingPolicyError::ShardingDisabled)?;
 
@@ -257,7 +257,7 @@ impl ShardingWorkflow {
             .get(pool)
             .cloned()
             .ok_or_else(|| ShardingPolicyError::PoolNotFound(pool.to_string()))
-            .map_err(Error::from)
+            .map_err(InternalError::from)
     }
 }
 
@@ -342,7 +342,7 @@ mod tests {
         let err = block_on(ShardingWorkflow::assign_to_pool("primary", "c")).unwrap_err();
 
         let reason = match err {
-            crate::Error::Workflow(crate::workflow::WorkflowError::Placement(
+            crate::InternalError::Workflow(crate::workflow::WorkflowError::Placement(
                 crate::workflow::placement::PlacementWorkflowError::Sharding(
                     ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
                         reason,

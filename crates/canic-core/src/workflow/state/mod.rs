@@ -2,7 +2,7 @@ pub mod mapper;
 pub mod query;
 
 use crate::{
-    Error,
+    InternalError,
     access::env,
     dto::state::AppCommand,
     ops::storage::state::app::AppStateOps,
@@ -26,9 +26,9 @@ impl AppStateWorkflow {
     /// - rebuilds the relevant state snapshot
     /// - cascades state changes to dependent components
     ///
-    /// Returns internal [`Error`]. Public error mapping is handled
+    /// Returns internal [`InternalError`]. Public error mapping is handled
     /// exclusively at the API boundary.
-    pub async fn execute_command(cmd: AppCommand) -> Result<(), Error> {
+    pub async fn execute_command(cmd: AppCommand) -> Result<(), InternalError> {
         env::require_root()?;
         let cmd = mapper::AppCommandMapper::from_dto(cmd);
         AppStateOps::execute_command(cmd)?;

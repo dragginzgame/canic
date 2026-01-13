@@ -1,7 +1,7 @@
 mod propagation;
 
 use crate::{
-    Error,
+    InternalError,
     domain::policy::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
@@ -54,7 +54,7 @@ pub struct CanisterLifecycleWorkflow;
 impl CanisterLifecycleWorkflow {
     pub(crate) async fn apply(
         event: CanisterLifecycleEvent,
-    ) -> Result<CanisterLifecycleResult, Error> {
+    ) -> Result<CanisterLifecycleResult, InternalError> {
         match event {
             CanisterLifecycleEvent::Create {
                 role,
@@ -72,7 +72,7 @@ impl CanisterLifecycleWorkflow {
         role: CanisterRole,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<CanisterLifecycleResult, Error> {
+    ) -> Result<CanisterLifecycleResult, InternalError> {
         let registry_snapshot = SubnetRegistryOps::snapshot();
         TopologyPolicy::assert_parent_exists(&registry_snapshot, parent)?;
 
@@ -89,11 +89,11 @@ impl CanisterLifecycleWorkflow {
 
     // ───────────────────────── Upgrade ──────────────────────────
 
-    async fn apply_upgrade(pid: Principal) -> Result<CanisterLifecycleResult, Error> {
+    async fn apply_upgrade(pid: Principal) -> Result<CanisterLifecycleResult, InternalError> {
         let registry_snapshot = SubnetRegistryOps::snapshot();
 
         let record = SubnetRegistryOps::get(pid)
-            .ok_or_else(|| Error::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
+            .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
 
         let wasm = WasmOps::try_get(&record.role)?;
         let target_hash = wasm.module_hash();

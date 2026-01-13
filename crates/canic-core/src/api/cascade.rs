@@ -1,5 +1,5 @@
 use crate::{
-    PublicError,
+    Error,
     dto::cascade::{StateSnapshotView, TopologySnapshotView},
     workflow::cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
 };
@@ -11,15 +11,15 @@ use crate::{
 pub struct CascadeApi;
 
 impl CascadeApi {
-    pub async fn sync_state(view: StateSnapshotView) -> Result<(), PublicError> {
+    pub async fn sync_state(view: StateSnapshotView) -> Result<(), Error> {
         StateCascadeWorkflow::nonroot_cascade_state(view)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 
-    pub async fn sync_topology(view: TopologySnapshotView) -> Result<(), PublicError> {
+    pub async fn sync_topology(view: TopologySnapshotView) -> Result<(), Error> {
         TopologyCascadeWorkflow::nonroot_cascade_topology(view)
             .await
-            .map_err(PublicError::from)
+            .map_err(Error::from)
     }
 }

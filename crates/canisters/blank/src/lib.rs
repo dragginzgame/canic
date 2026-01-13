@@ -6,7 +6,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{
-    PublicError,
+    Error,
     core::{
         api::rpc::RpcApi,
         dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
@@ -28,7 +28,7 @@ async fn canic_upgrade() {}
 /// create_blank
 /// no authentication needed as its for local canic testing
 #[canic_update]
-async fn create_blank() -> Result<CreateCanisterResponse, PublicError> {
+async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     RpcApi::create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None::<()>)
         .await
 }

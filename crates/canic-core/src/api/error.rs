@@ -1,16 +1,15 @@
 use crate::{
-    Error,
+    InternalError,
     access::AccessError,
-    dto::error::{Error as PublicError, ErrorCode},
+    dto::error::{Error, ErrorCode},
 };
 
 ///
-/// Error
-/// (re-exported as PublicError)
+/// InternalError
 ///
 
-impl Error {
-    pub fn public(&self) -> PublicError {
+impl InternalError {
+    pub fn public(&self) -> Error {
         match self {
             // ---------------------------------------------------------
             // Access / authorization
@@ -45,34 +44,34 @@ impl Error {
         }
     }
 
-    fn public_message(code: ErrorCode, message: &'static str) -> PublicError {
-        PublicError {
+    fn public_message(code: ErrorCode, message: &'static str) -> Error {
+        Error {
             code,
             message: message.to_string(),
         }
     }
 }
 
-fn access_error(err: &AccessError) -> PublicError {
+fn access_error(err: &AccessError) -> Error {
     match err {
-        AccessError::Denied(reason) => PublicError::unauthorized(reason.clone()),
-        _ => PublicError::unauthorized("unauthorized"),
+        AccessError::Denied(reason) => Error::unauthorized(reason.clone()),
+        _ => Error::unauthorized("unauthorized"),
     }
 }
 
-impl From<&Error> for PublicError {
-    fn from(err: &Error) -> Self {
+impl From<&InternalError> for Error {
+    fn from(err: &InternalError) -> Self {
         err.public()
     }
 }
 
-impl From<Error> for PublicError {
-    fn from(err: Error) -> Self {
+impl From<InternalError> for Error {
+    fn from(err: InternalError) -> Self {
         Self::from(&err)
     }
 }
 
-impl From<AccessError> for PublicError {
+impl From<AccessError> for Error {
     fn from(err: AccessError) -> Self {
         match err {
             AccessError::Auth(e) => Self::new(ErrorCode::Unauthorized, e.to_string()),

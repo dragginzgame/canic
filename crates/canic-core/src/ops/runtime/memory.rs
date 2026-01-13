@@ -2,7 +2,7 @@
 //! Owns TLS setup for memory registry initialization.
 
 use crate::{
-    CRATE_NAME, Error, ThisError,
+    CRATE_NAME, InternalError, ThisError,
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
@@ -25,7 +25,7 @@ pub enum MemoryRegistryOpsError {
     Registry(#[from] MemoryRegistryError),
 }
 
-impl From<MemoryRegistryOpsError> for Error {
+impl From<MemoryRegistryOpsError> for InternalError {
     fn from(err: MemoryRegistryOpsError) -> Self {
         RuntimeOpsError::MemoryRegistryOps(err).into()
     }
@@ -100,7 +100,7 @@ impl MemoryRegistryOps {
         init_eager_tls();
     }
 
-    pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, Error> {
+    pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
         let summary =
             MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
                 .map_err(MemoryRegistryOpsError::from)?;

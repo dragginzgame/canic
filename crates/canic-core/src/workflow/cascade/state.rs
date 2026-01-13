@@ -10,7 +10,7 @@
 //! - Persistence and mutation live in ops
 
 use crate::{
-    Error, access,
+    InternalError, access,
     dto::cascade::StateSnapshotView,
     ops::{
         cascade::CascadeOps,
@@ -47,7 +47,7 @@ impl StateCascadeWorkflow {
     /// Cascade a state snapshot from the root canister to its direct children.
     ///
     /// No-op if the snapshot is empty.
-    pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), Error> {
+    pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         access::env::require_root()?;
 
         if state_snapshot_is_empty(snapshot) {
@@ -99,7 +99,7 @@ impl StateCascadeWorkflow {
     /// Handle a received state snapshot on a non-root canister:
     /// - apply it locally
     /// - forward it to direct children using the children cache
-    pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), Error> {
+    pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
         let snapshot = StateSnapshotAdapter::from_view(view);
@@ -156,7 +156,7 @@ impl StateCascadeWorkflow {
     /// Apply a received state snapshot locally.
     ///
     /// Valid only on non-root canisters.
-    fn apply_state(snapshot: &StateSnapshot) -> Result<(), Error> {
+    fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
         if let Some(app) = &snapshot.app_state {
@@ -183,7 +183,7 @@ impl StateCascadeWorkflow {
     /// Send a state snapshot to another canister.
     ///
     /// Converts internal snapshot → DTO exactly once.
-    async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), Error> {
+    async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), InternalError> {
         let view = StateSnapshotAdapter::to_view(snapshot);
 
         CascadeOps::send_state_snapshot(pid, &view)

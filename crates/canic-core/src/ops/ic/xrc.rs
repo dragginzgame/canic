@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     cdk::{env::nns::EXCHANGE_RATE_CANISTER, spec::standards::xrc::GetExchangeRateResult},
     ops::ic::{IcOpsError, call::CallOps},
 };
@@ -16,7 +16,7 @@ pub enum XrcOpsError {
     Rejected { reason: String },
 }
 
-impl From<XrcOpsError> for Error {
+impl From<XrcOpsError> for InternalError {
     fn from(err: XrcOpsError) -> Self {
         IcOpsError::from(err).into()
     }
@@ -35,7 +35,7 @@ impl XrcOps {
     pub async fn get_exchange_rate(
         req: GetExchangeRateRequest,
         cycles: u128,
-    ) -> Result<ExchangeRate, Error> {
+    ) -> Result<ExchangeRate, InternalError> {
         let response = CallOps::unbounded_wait(*EXCHANGE_RATE_CANISTER, "get_exchange_rate")
             .with_cycles(cycles)
             .try_with_arg(req)?

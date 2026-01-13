@@ -10,7 +10,7 @@
 pub mod adapter;
 
 use crate::{
-    Error,
+    InternalError,
     access::env,
     ops::storage::{
         directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
@@ -53,7 +53,7 @@ pub struct StateSnapshotBuilder {
 }
 
 impl StateSnapshotBuilder {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, InternalError> {
         env::require_root()?;
 
         Ok(Self {
@@ -73,12 +73,12 @@ impl StateSnapshotBuilder {
         self
     }
 
-    pub fn with_app_directory(mut self) -> Result<Self, Error> {
+    pub fn with_app_directory(mut self) -> Result<Self, InternalError> {
         self.snapshot.app_directory = Some(AppDirectoryResolver::resolve()?);
         Ok(self)
     }
 
-    pub fn with_subnet_directory(mut self) -> Result<Self, Error> {
+    pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
         self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve()?);
         Ok(self)
     }
@@ -133,7 +133,7 @@ pub struct TopologySnapshotBuilder {
 }
 
 impl TopologySnapshotBuilder {
-    pub(crate) fn for_target(target_pid: Principal) -> Result<Self, Error> {
+    pub(crate) fn for_target(target_pid: Principal) -> Result<Self, InternalError> {
         let registry_snapshot = SubnetRegistryOps::snapshot();
 
         // Build parent chain (root → target)

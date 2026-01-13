@@ -51,7 +51,7 @@ pub fn validate(
         if !returns_fallible(sig) {
             return Err(syn::Error::new_spanned(
                 &sig.output,
-                "authorized endpoints must return `Result<_, E>` where `E: From<canic::PublicError>`",
+                "authorized endpoints must return `Result<_, E>` where `E: From<canic::Error>`",
             ));
         }
     }
@@ -59,21 +59,21 @@ pub fn validate(
     if parsed.app_guard && !returns_fallible(sig) {
         return Err(syn::Error::new_spanned(
             &sig.output,
-            "`app` guard requires `Result<_, E>` where `E: From<canic::PublicError>`",
+            "`app` guard requires `Result<_, E>` where `E: From<canic::Error>`",
         ));
     }
 
     if !parsed.rules.is_empty() && !returns_fallible(sig) {
         return Err(syn::Error::new_spanned(
             &sig.output,
-            "`rule(...)` requires `Result<_, E>` where `E: From<canic::PublicError>`",
+            "`rule(...)` requires `Result<_, E>` where `E: From<canic::Error>`",
         ));
     }
 
     if !parsed.env.is_empty() && !returns_fallible(sig) {
         return Err(syn::Error::new_spanned(
             &sig.output,
-            "`env(...)` requires `Result<_, E>` where `E: From<canic::PublicError>`",
+            "`env(...)` requires `Result<_, E>` where `E: From<canic::Error>`",
         ));
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     log::Level,
     ops::config::ConfigOps,
     ops::runtime::RuntimeOpsError,
@@ -34,7 +34,7 @@ pub enum LogOpsError {
     Storage(#[from] StorageError),
 }
 
-impl From<LogOpsError> for Error {
+impl From<LogOpsError> for InternalError {
     fn from(err: LogOpsError) -> Self {
         RuntimeOpsError::LogOps(err).into()
     }
@@ -64,7 +64,7 @@ impl LogOps {
         level: Level,
         message: &str,
         created_at: u64,
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, InternalError> {
         if !crate::log::is_ready() {
             return Ok(0);
         }
@@ -85,7 +85,7 @@ impl LogOps {
         cutoff: Option<u64>,
         max_entries: usize,
         max_entry_bytes: u32,
-    ) -> Result<RetentionSummary, Error> {
+    ) -> Result<RetentionSummary, InternalError> {
         let summary =
             apply_retention(cutoff, max_entries, max_entry_bytes).map_err(LogOpsError::from)?;
 

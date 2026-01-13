@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     infra::{
         InfraError,
         ic::call::{
@@ -22,7 +22,7 @@ use serde::de::DeserializeOwned;
 #[error(transparent)]
 pub struct CallError(#[from] InfraError);
 
-impl From<CallError> for Error {
+impl From<CallError> for InternalError {
     fn from(err: CallError) -> Self {
         IcOpsError::from(err).into()
     }
@@ -94,7 +94,7 @@ impl CallBuilder {
         }
     }
 
-    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
+    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, InternalError>
     where
         A: CandidType,
     {
@@ -102,7 +102,7 @@ impl CallBuilder {
         Ok(Self { inner })
     }
 
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
+    pub fn try_with_args<A>(self, args: A) -> Result<Self, InternalError>
     where
         A: ArgumentEncoder,
     {
@@ -116,7 +116,7 @@ impl CallBuilder {
         self
     }
 
-    pub async fn execute(self) -> Result<CallResult, Error> {
+    pub async fn execute(self) -> Result<CallResult, InternalError> {
         let inner = self.inner.execute().await.map_err(CallError::from)?;
         Ok(CallResult { inner })
     }
@@ -131,23 +131,23 @@ pub struct CallResult {
 }
 
 impl CallResult {
-    pub fn candid<R>(&self) -> Result<R, Error>
+    pub fn candid<R>(&self) -> Result<R, InternalError>
     where
         R: CandidType + DeserializeOwned,
     {
         self.inner
             .candid()
             .map_err(CallError::from)
-            .map_err(Error::from)
+            .map_err(InternalError::from)
     }
 
-    pub fn candid_tuple<R>(&self) -> Result<R, Error>
+    pub fn candid_tuple<R>(&self) -> Result<R, InternalError>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
         self.inner
             .candid_tuple()
             .map_err(CallError::from)
-            .map_err(Error::from)
+            .map_err(InternalError::from)
     }
 }

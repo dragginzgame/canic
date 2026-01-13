@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
 };
@@ -76,7 +76,7 @@ pub enum AppStateOpsError {
     MissingField(&'static str),
 }
 
-impl From<AppStateOpsError> for Error {
+impl From<AppStateOpsError> for InternalError {
     fn from(err: AppStateOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
@@ -93,7 +93,7 @@ impl AppStateOps {
     // Commands
     // -------------------------------------------------------------
 
-    pub fn execute_command(cmd: AppStateCommand) -> Result<(), Error> {
+    pub fn execute_command(cmd: AppStateCommand) -> Result<(), InternalError> {
         let old_mode = AppMode::from_model(AppState::get_mode());
 
         let new_mode = match cmd {
@@ -126,7 +126,7 @@ impl AppStateOps {
     /// Import application state from an operational snapshot.
     ///
     /// Validation occurs during snapshot → data conversion.
-    pub fn import(snapshot: AppStateSnapshot) -> Result<(), Error> {
+    pub fn import(snapshot: AppStateSnapshot) -> Result<(), InternalError> {
         let data: AppStateData = snapshot.try_into()?;
         AppState::import(data);
 

@@ -5,7 +5,7 @@ pub mod metrics;
 pub mod timer;
 pub mod wasm;
 
-use crate::{Error, ThisError, ops::OpsError};
+use crate::{InternalError, ThisError, ops::OpsError};
 
 ///
 /// RuntimeOpsError
@@ -26,7 +26,7 @@ pub enum RuntimeOpsError {
     WasmOps(#[from] wasm::WasmOpsError),
 }
 
-impl From<RuntimeOpsError> for Error {
+impl From<RuntimeOpsError> for InternalError {
     fn from(err: RuntimeOpsError) -> Self {
         OpsError::from(err).into()
     }

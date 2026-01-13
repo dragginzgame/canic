@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    InternalError,
     dto::canister::{
         CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView, EnvironmentVariableView,
         LogVisibilityView, MemoryMetricsView, QueryStatsView,
@@ -104,7 +104,7 @@ impl MgmtAdapter {
 pub struct MgmtWorkflow;
 
 impl MgmtWorkflow {
-    pub async fn canister_status_view(pid: Principal) -> Result<CanisterStatusView, Error> {
+    pub async fn canister_status_view(pid: Principal) -> Result<CanisterStatusView, InternalError> {
         let status = MgmtOps::canister_status(pid).await?;
 
         Ok(MgmtAdapter::canister_status_to_view(status))

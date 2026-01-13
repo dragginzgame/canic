@@ -46,7 +46,7 @@ pub use {
     ::canic_memory as memory,
     ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
     ::canic_utils as utils,
-    dto::error::{Error as PublicError, ErrorCode},
+    dto::error::{Error, ErrorCode},
     thiserror::Error as ThisError,
 };
 
@@ -65,7 +65,7 @@ pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
-/// Error
+/// InternalError
 ///
 /// Internal, structured error type.
 ///
@@ -79,7 +79,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 
 #[derive(Debug, ThisError)]
-pub(crate) enum Error {
+pub(crate) enum InternalError {
     #[error(transparent)]
     Access(#[from] access::AccessError),
 

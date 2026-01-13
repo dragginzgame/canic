@@ -1,4 +1,4 @@
-use crate::{Error, ops::ic::signature::SignatureOps, workflow::prelude::*};
+use crate::{InternalError, ops::ic::signature::SignatureOps, workflow::prelude::*};
 
 ///
 /// SignatureWorkflow
@@ -8,7 +8,7 @@ pub struct SignatureWorkflow;
 
 impl SignatureWorkflow {
     /// Prepare a canister signature (update-only).
-    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), Error> {
+    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InternalError> {
         SignatureOps::prepare(domain, seed, message)
     }
 
@@ -17,7 +17,11 @@ impl SignatureWorkflow {
         SignatureOps::get(domain, seed, message)
     }
 
-    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    pub fn sign(
+        domain: &[u8],
+        seed: &[u8],
+        message: &[u8],
+    ) -> Result<Option<Vec<u8>>, InternalError> {
         SignatureOps::sign(domain, seed, message)
     }
 
@@ -27,7 +31,7 @@ impl SignatureWorkflow {
         message: &[u8],
         signature_cbor: &[u8],
         issuer_pid: Principal,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InternalError> {
         SignatureOps::verify(domain, seed, message, signature_cbor, issuer_pid)
     }
 

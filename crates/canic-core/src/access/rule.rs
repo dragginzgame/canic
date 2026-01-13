@@ -1,5 +1,5 @@
 use crate::{
-    Error, ThisError, access::AccessError, ids::BuildNetwork, ops::ic::network::NetworkOps,
+    InternalError, ThisError, access::AccessError, ids::BuildNetwork, ops::ic::network::NetworkOps,
 };
 
 ///
@@ -20,7 +20,7 @@ pub enum RuleAccessError {
     },
 }
 
-impl From<RuleAccessError> for Error {
+impl From<RuleAccessError> for InternalError {
     fn from(err: RuleAccessError) -> Self {
         AccessError::Rule(err).into()
     }

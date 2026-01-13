@@ -8,7 +8,7 @@ pub mod state;
 pub mod topology;
 
 use crate::{
-    Error, ThisError,
+    InternalError, ThisError,
     workflow::{WorkflowError, prelude::*},
 };
 
@@ -34,7 +34,7 @@ pub enum CascadeWorkflowError {
     NextHopNotFound(Principal),
 }
 
-impl From<CascadeWorkflowError> for Error {
+impl From<CascadeWorkflowError> for InternalError {
     fn from(err: CascadeWorkflowError) -> Self {
         WorkflowError::from(err).into()
     }

@@ -50,7 +50,7 @@ use crate::ThisError;
 ///
 /// OpsError
 ///
-/// Ops public APIs return Result<_, Error>.
+/// Ops public APIs return Result<_, InternalError>.
 /// Ops-scoped error enums are implementation details used to preserve structure and ownership.
 ///
 
