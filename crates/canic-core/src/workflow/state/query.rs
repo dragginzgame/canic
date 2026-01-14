@@ -13,9 +13,9 @@ pub struct AppStateQuery;
 impl AppStateQuery {
     #[must_use]
     pub fn view() -> AppStateView {
-        let snapshot = AppStateOps::snapshot();
+        let data = AppStateOps::data();
 
-        AppStateMapper::snapshot_to_view(snapshot)
+        AppStateMapper::data_to_view(data)
     }
 }
 
@@ -28,8 +28,8 @@ pub struct SubnetStateQuery;
 impl SubnetStateQuery {
     #[must_use]
     pub fn view() -> SubnetStateView {
-        let snapshot = SubnetStateOps::snapshot();
+        let data = SubnetStateOps::data();
 
-        SubnetStateMapper::snapshot_to_view(snapshot)
+        SubnetStateMapper::data_to_view(data)
     }
 }

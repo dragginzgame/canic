@@ -1,4 +1,3 @@
-pub mod mapper;
 pub mod query;
 
 use crate::{
@@ -7,9 +6,10 @@ use crate::{
     dto::env::EnvView,
     ops::{
         ic::network::{BuildNetwork, NetworkOps},
-        runtime::env::{EnvOps, EnvSnapshot},
+        runtime::env::EnvOps,
     },
-    workflow::{env::mapper::EnvMapper, prelude::*},
+    storage::stable::env::EnvData,
+    workflow::prelude::*,
 };
 
 ///
@@ -20,17 +20,17 @@ pub struct EnvWorkflow;
 
 impl EnvWorkflow {
     pub fn init_env_from_view(env_view: EnvView, role: CanisterRole) -> Result<(), InternalError> {
-        let mut snapshot = EnvMapper::view_to_snapshot(env_view);
-        snapshot.canister_role = Some(role);
+        let mut data = view_to_data(env_view);
+        data.canister_role = Some(role);
 
         let network = NetworkOps::build_network().unwrap_or(BuildNetwork::Local);
         let input = EnvInput {
-            prime_root_pid: snapshot.prime_root_pid,
-            subnet_role: snapshot.subnet_role,
-            subnet_pid: snapshot.subnet_pid,
-            root_pid: snapshot.root_pid,
-            canister_role: snapshot.canister_role,
-            parent_pid: snapshot.parent_pid,
+            prime_root_pid: data.prime_root_pid,
+            subnet_role: data.subnet_role,
+            subnet_pid: data.subnet_pid,
+            root_pid: data.root_pid,
+            canister_role: data.canister_role,
+            parent_pid: data.parent_pid,
         };
 
         let validated = match validate_or_default(network, input) {
@@ -43,7 +43,7 @@ impl EnvWorkflow {
             }
         };
 
-        EnvOps::import(EnvSnapshot {
+        EnvOps::import(EnvData {
             prime_root_pid: Some(validated.prime_root_pid),
             subnet_role: Some(validated.subnet_role),
             subnet_pid: Some(validated.subnet_pid),
@@ -51,5 +51,27 @@ impl EnvWorkflow {
             canister_role: Some(validated.canister_role),
             parent_pid: Some(validated.parent_pid),
         })
+    }
+}
+
+pub fn view_to_data(view: EnvView) -> EnvData {
+    EnvData {
+        prime_root_pid: view.prime_root_pid,
+        subnet_role: view.subnet_role,
+        subnet_pid: view.subnet_pid,
+        root_pid: view.root_pid,
+        canister_role: view.canister_role,
+        parent_pid: view.parent_pid,
+    }
+}
+
+pub fn data_to_view(data: EnvData) -> EnvView {
+    EnvView {
+        prime_root_pid: data.prime_root_pid,
+        subnet_role: data.subnet_role,
+        subnet_pid: data.subnet_pid,
+        root_pid: data.root_pid,
+        canister_role: data.canister_role,
+        parent_pid: data.parent_pid,
     }
 }

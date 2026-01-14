@@ -1,7 +1,7 @@
 use canic_core::{
     ids::CanisterRole,
     ops::storage::{
-        directory::subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
+        directory::subnet::{SubnetDirectoryData, SubnetDirectoryOps},
         registry::subnet::SubnetRegistryOps,
     },
     workflow::topology::directory::query::subnet_directory_pid_by_role,
@@ -23,7 +23,7 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetDirectoryOps::import(SubnetDirectorySnapshot {
+    SubnetDirectoryOps::import(SubnetDirectoryData {
         entries: vec![(role.clone(), pid_b)],
     })
     .expect("import subnet directory");

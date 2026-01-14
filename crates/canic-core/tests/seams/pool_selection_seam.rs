@@ -9,8 +9,8 @@ use canic_core::{
 fn pool_selection_uses_workflow_ordering() {
     let _guard = crate::lock();
 
-    for entry in PoolOps::snapshot().entries {
-        PoolOps::remove(&entry.pid);
+    for (pid, _) in PoolOps::data().entries {
+        PoolOps::remove(&pid);
     }
 
     let pid_a = crate::p(20);
@@ -46,6 +46,6 @@ fn pool_selection_uses_workflow_ordering() {
     );
 
     let selected = PoolWorkflow::pop_oldest_ready().expect("expected a ready entry");
-    assert_eq!(selected.pid, pid_a);
+    assert_eq!(selected.0, pid_a);
     assert!(!PoolOps::contains(&pid_a));
 }

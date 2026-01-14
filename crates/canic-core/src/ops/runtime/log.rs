@@ -1,10 +1,11 @@
 use crate::{
     InternalError,
+    dto::log::LogEntryView,
     log::Level,
     ops::{config::ConfigOps, runtime::RuntimeOpsError},
     storage::{
         StorageError,
-        stable::log::{Log, LogEntry as ModelLogEntry, RetentionSummary, apply_retention},
+        stable::log::{Log, RetentionSummary, apply_retention},
     },
 };
 use thiserror::Error as ThisError;
@@ -40,15 +41,6 @@ impl From<LogOpsError> for InternalError {
     fn from(err: LogOpsError) -> Self {
         RuntimeOpsError::LogOps(err).into()
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct LogEntrySnapshot {
-    pub crate_name: String,
-    pub created_at: u64,
-    pub level: Level,
-    pub topic: Option<String>,
-    pub message: String,
 }
 
 impl LogOps {
@@ -107,19 +99,16 @@ impl LogOps {
     ///
     /// Intended for read-only querying and view adaptation.
     #[must_use]
-    pub fn snapshot() -> Vec<LogEntrySnapshot> {
-        Log::snapshot().into_iter().map(Into::into).collect()
-    }
-}
-
-impl From<ModelLogEntry> for LogEntrySnapshot {
-    fn from(entry: ModelLogEntry) -> Self {
-        Self {
-            crate_name: entry.crate_name,
-            created_at: entry.created_at,
-            level: entry.level,
-            topic: entry.topic,
-            message: entry.message,
-        }
+    pub fn snapshot() -> Vec<LogEntryView> {
+        Log::snapshot()
+            .into_iter()
+            .map(|entry| LogEntryView {
+                crate_name: entry.crate_name,
+                created_at: entry.created_at,
+                level: entry.level,
+                topic: entry.topic,
+                message: entry.message,
+            })
+            .collect()
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    access::AccessError,
-    ops::storage::state::app::{AppMode, AppStateOps},
+    access::AccessError, ops::storage::state::app::AppStateOps,
+    storage::stable::state::app::AppMode,
 };
 use thiserror::Error as ThisError;
 
@@ -24,7 +24,7 @@ pub enum GuardAccessError {
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_app_query() -> Result<(), AccessError> {
-    let mode = AppStateOps::snapshot().mode.unwrap_or(AppMode::Disabled);
+    let mode = AppStateOps::get_mode();
 
     match mode {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
@@ -39,7 +39,7 @@ pub fn guard_app_query() -> Result<(), AccessError> {
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
 pub fn guard_app_update() -> Result<(), AccessError> {
-    let mode = AppStateOps::snapshot().mode.unwrap_or(AppMode::Disabled);
+    let mode = AppStateOps::get_mode();
 
     match mode {
         AppMode::Enabled => Ok(()),

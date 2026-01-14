@@ -5,7 +5,7 @@ use crate::{
     },
     log::Level,
     ops::runtime::log::LogOps,
-    workflow::{log::mapper::LogMapper, view::paginate::paginate_vec},
+    workflow::view::paginate::paginate_vec,
 };
 
 ///
@@ -39,8 +39,6 @@ impl LogQuery {
         // Newest first
         entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        let views: Vec<LogEntryView> = entries.iter().map(LogMapper::entry_to_view).collect();
-
-        paginate_vec(views, page)
+        paginate_vec(entries, page)
     }
 }

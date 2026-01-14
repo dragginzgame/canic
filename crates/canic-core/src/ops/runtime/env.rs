@@ -39,77 +39,6 @@ impl From<EnvOpsError> for InternalError {
 }
 
 ///
-/// EnvSnapshot
-/// Internal, operational snapshot of environment state.
-///
-/// - May be incomplete during initialization
-/// - Not stable or serialized
-/// - Used only by workflow and ops
-///
-
-pub struct EnvSnapshot {
-    pub prime_root_pid: Option<Principal>,
-    pub subnet_role: Option<SubnetRole>,
-    pub subnet_pid: Option<Principal>,
-    pub root_pid: Option<Principal>,
-    pub canister_role: Option<CanisterRole>,
-    pub parent_pid: Option<Principal>,
-}
-
-impl From<EnvData> for EnvSnapshot {
-    fn from(data: EnvData) -> Self {
-        Self {
-            prime_root_pid: data.prime_root_pid,
-            subnet_role: data.subnet_role,
-            subnet_pid: data.subnet_pid,
-            root_pid: data.root_pid,
-            canister_role: data.canister_role,
-            parent_pid: data.parent_pid,
-        }
-    }
-}
-
-impl TryFrom<EnvSnapshot> for EnvData {
-    type Error = EnvOpsError;
-
-    fn try_from(snapshot: EnvSnapshot) -> Result<Self, Self::Error> {
-        let mut missing = Vec::new();
-
-        if snapshot.prime_root_pid.is_none() {
-            missing.push("prime_root_pid");
-        }
-        if snapshot.subnet_role.is_none() {
-            missing.push("subnet_role");
-        }
-        if snapshot.subnet_pid.is_none() {
-            missing.push("subnet_pid");
-        }
-        if snapshot.root_pid.is_none() {
-            missing.push("root_pid");
-        }
-        if snapshot.canister_role.is_none() {
-            missing.push("canister_role");
-        }
-        if snapshot.parent_pid.is_none() {
-            missing.push("parent_pid");
-        }
-
-        if !missing.is_empty() {
-            return Err(EnvOpsError::MissingFields(missing.join(", ")));
-        }
-
-        Ok(Self {
-            prime_root_pid: snapshot.prime_root_pid,
-            subnet_role: snapshot.subnet_role,
-            subnet_pid: snapshot.subnet_pid,
-            root_pid: snapshot.root_pid,
-            canister_role: snapshot.canister_role,
-            parent_pid: snapshot.parent_pid,
-        })
-    }
-}
-
-///
 /// EnvOps
 /// NOTE:
 /// - Non-`try_*` getters assume the environment has been fully initialized
@@ -184,19 +113,21 @@ impl EnvOps {
     }
 
     // ---------------------------------------------------------------------
-    // Snapshot / Import
+    // Data / Import
     // ---------------------------------------------------------------------
 
-    /// Export a snapshot of the current environment metadata.
+    /// Export the current environment metadata.
     #[must_use]
-    pub fn snapshot() -> EnvSnapshot {
-        let data = Env::export(); // storage-level export
-
-        data.into()
+    pub fn snapshot() -> EnvData {
+        Env::export()
     }
 
-    pub fn import(snapshot: EnvSnapshot) -> Result<(), InternalError> {
-        let data: EnvData = snapshot.try_into()?;
+    pub fn import(data: EnvData) -> Result<(), InternalError> {
+        let missing = required_fields_missing(&data);
+        if !missing.is_empty() {
+            return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
+        }
+
         Env::import(data);
 
         Ok(())
@@ -253,4 +184,29 @@ impl EnvOps {
             Err(EnvOpsError::MissingFields(missing.join(", ")).into())
         }
     }
+}
+
+fn required_fields_missing(data: &EnvData) -> Vec<&'static str> {
+    let mut missing = Vec::new();
+
+    if data.prime_root_pid.is_none() {
+        missing.push("prime_root_pid");
+    }
+    if data.subnet_role.is_none() {
+        missing.push("subnet_role");
+    }
+    if data.subnet_pid.is_none() {
+        missing.push("subnet_pid");
+    }
+    if data.root_pid.is_none() {
+        missing.push("root_pid");
+    }
+    if data.canister_role.is_none() {
+        missing.push("canister_role");
+    }
+    if data.parent_pid.is_none() {
+        missing.push("parent_pid");
+    }
+
+    missing
 }

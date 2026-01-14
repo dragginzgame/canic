@@ -1,12 +1,10 @@
-pub use crate::storage::stable::sharding::ShardKey;
+pub use crate::storage::stable::sharding::registry::ShardingRegistryData;
+pub use crate::storage::stable::sharding::{ShardEntry, ShardKey};
 
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::stable::sharding::{
-        ShardEntry as ModelShardEntry,
-        registry::{ShardingRegistry, ShardingRegistryData as ModelShardingRegistryData},
-    },
+    storage::stable::sharding::registry::ShardingRegistry,
 };
 use thiserror::Error as ThisError;
 
@@ -48,41 +46,6 @@ impl From<ShardingRegistryOpsError> for InternalError {
 }
 
 ///
-/// ShardEntry
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ShardEntry {
-    pub slot: u32,
-    pub capacity: u32,
-    pub count: u32,
-    pub pool: String,
-    pub canister_role: CanisterRole,
-    pub created_at: u64,
-}
-
-impl ShardEntry {
-    /// Sentinel value indicating a shard is not yet assigned a fixed slot.
-    /// Must never collide with a real slot index.
-    pub const UNASSIGNED_SLOT: u32 = u32::MAX;
-}
-
-/// ShardingRegistrySnapshot
-///
-/// Structural snapshot of shard entries only.
-///
-/// NOTE:
-/// - This snapshot intentionally excludes tenant → shard assignments.
-/// - Assignments are unbounded and must be accessed via targeted queries.
-/// - Do NOT add assignments to this snapshot.
-///
-
-#[derive(Clone, Debug)]
-pub struct ShardingRegistrySnapshot {
-    pub entries: Vec<(Principal, ShardEntry)>,
-}
-
-///
 /// ShardingRegistryOps
 ///
 
@@ -118,7 +81,7 @@ impl ShardingRegistryOps {
             }
 
             let entry =
-                ModelShardEntry::try_new(pool, slot, canister_role.clone(), capacity, created_at)
+                ShardEntry::try_new(pool, slot, canister_role.clone(), capacity, created_at)
                     .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
@@ -130,7 +93,7 @@ impl ShardingRegistryOps {
     #[cfg(test)]
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<ShardEntry> {
-        ShardingRegistry::with(|core| core.get_entry(&pid).map(Into::into))
+        ShardingRegistry::with(|core| core.get_entry(&pid))
     }
 
     /// Returns the shard assigned to the given tenant (if any).
@@ -221,38 +184,13 @@ impl ShardingRegistryOps {
 
     /// Export all shard entries
     #[must_use]
-    pub fn export() -> ShardingRegistrySnapshot {
-        ShardingRegistry::export().into()
+    pub fn export() -> ShardingRegistryData {
+        ShardingRegistry::export()
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_test() {
         ShardingRegistry::clear();
-    }
-}
-
-impl From<ModelShardingRegistryData> for ShardingRegistrySnapshot {
-    fn from(data: ModelShardingRegistryData) -> Self {
-        Self {
-            entries: data
-                .entries
-                .into_iter()
-                .map(|(pid, entry)| (pid, entry.into()))
-                .collect(),
-        }
-    }
-}
-
-impl From<ModelShardEntry> for ShardEntry {
-    fn from(entry: ModelShardEntry) -> Self {
-        Self {
-            slot: entry.slot,
-            capacity: entry.capacity,
-            count: entry.count,
-            pool: entry.pool.to_string(),
-            canister_role: entry.canister_role,
-            created_at: entry.created_at,
-        }
     }
 }
 

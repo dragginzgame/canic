@@ -8,13 +8,11 @@ use crate::{
         config::ConfigOps,
         runtime::env::EnvOps,
         storage::{
-            directory::{
-                app::{AppDirectoryOps, AppDirectorySnapshot},
-                subnet::{SubnetDirectoryOps, SubnetDirectorySnapshot},
-            },
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
     },
+    storage::stable::directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
     workflow::topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
 };
 
@@ -25,14 +23,14 @@ use crate::{
 pub struct AppDirectoryResolver;
 
 impl AppDirectoryResolver {
-    pub fn resolve() -> Result<AppDirectorySnapshot, InternalError> {
+    pub fn resolve() -> Result<AppDirectoryData, InternalError> {
         if EnvOps::is_root() {
-            let registry = SubnetRegistryOps::snapshot();
+            let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::get().expect("config must be available on root");
 
             RootAppDirectoryBuilder::build(&registry, &cfg.app_directory)
         } else {
-            Ok(AppDirectoryOps::snapshot())
+            Ok(AppDirectoryOps::data())
         }
     }
 }
@@ -44,14 +42,14 @@ impl AppDirectoryResolver {
 pub struct SubnetDirectoryResolver;
 
 impl SubnetDirectoryResolver {
-    pub fn resolve() -> Result<SubnetDirectorySnapshot, InternalError> {
+    pub fn resolve() -> Result<SubnetDirectoryData, InternalError> {
         if EnvOps::is_root() {
-            let registry = SubnetRegistryOps::snapshot();
+            let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::current_subnet().expect("subnet config must be available on root");
 
             RootSubnetDirectoryBuilder::build(&registry, &cfg.subnet_directory)
         } else {
-            Ok(SubnetDirectoryOps::snapshot())
+            Ok(SubnetDirectoryOps::data())
         }
     }
 }

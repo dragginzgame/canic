@@ -1,33 +1,5 @@
-use crate::{
-    ops::prelude::*,
-    storage::stable::registry::app::{AppRegistry, AppRegistryData},
-};
-
-///
-/// AppRegistrySnapshot
-/// Internal, operational snapshot of the app registry.
-///
-
-#[derive(Clone, Debug)]
-pub struct AppRegistrySnapshot {
-    pub entries: Vec<(Principal, Principal)>,
-}
-
-impl From<AppRegistryData> for AppRegistrySnapshot {
-    fn from(data: AppRegistryData) -> Self {
-        Self {
-            entries: data.entries,
-        }
-    }
-}
-
-impl From<AppRegistrySnapshot> for AppRegistryData {
-    fn from(snapshot: AppRegistrySnapshot) -> Self {
-        Self {
-            entries: snapshot.entries,
-        }
-    }
-}
+use crate::storage::stable::registry::app::AppRegistry;
+pub use crate::storage::stable::registry::app::AppRegistryData;
 
 ///
 /// AppRegistryOps
@@ -36,8 +8,12 @@ impl From<AppRegistrySnapshot> for AppRegistryData {
 pub struct AppRegistryOps;
 
 impl AppRegistryOps {
+    // -------------------------------------------------------------
+    // Canonical data access
+    // -------------------------------------------------------------
+
     #[must_use]
-    pub fn snapshot() -> AppRegistrySnapshot {
-        AppRegistry::export().into()
+    pub fn data() -> AppRegistryData {
+        AppRegistry::export()
     }
 }

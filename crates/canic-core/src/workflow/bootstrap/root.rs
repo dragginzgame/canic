@@ -14,14 +14,15 @@ use crate::{
             IcOps,
             network::{BuildNetwork, NetworkOps},
         },
-        runtime::env::{EnvOps, EnvSnapshot},
+        runtime::env::EnvOps,
         runtime::wasm::WasmOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
-            registry::subnet::{SubnetRegistryOps, SubnetRegistrySnapshot},
+            registry::subnet::SubnetRegistryOps,
         },
     },
+    storage::stable::{env::EnvData, registry::subnet::SubnetRegistryData},
     workflow::{
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         ic::{IcWorkflow, provision::ProvisionWorkflow},
@@ -33,15 +34,15 @@ use crate::{
 use std::collections::BTreeMap;
 
 ///
-/// RootBootstrapSnapshot
+/// RootBootstrapContext
 ///
 
-struct RootBootstrapSnapshot {
+struct RootBootstrapContext {
     subnet_cfg: SubnetConfig,
     network: Option<BuildNetwork>,
 }
 
-impl RootBootstrapSnapshot {
+impl RootBootstrapContext {
     fn load() -> Result<Self, InternalError> {
         let subnet_cfg = ConfigOps::current_subnet()?;
         let network = NetworkOps::build_network();
@@ -191,8 +192,8 @@ pub async fn root_set_subnet_id() {
 ///
 /// Failures are summarized so bootstrap can continue.
 pub async fn root_import_pool_from_config() {
-    let snapshot = match RootBootstrapSnapshot::load() {
-        Ok(snapshot) => snapshot,
+    let data = match RootBootstrapContext::load() {
+        Ok(data) => data,
         Err(err) => {
             log!(
                 Topic::CanisterPool,
@@ -203,7 +204,7 @@ pub async fn root_import_pool_from_config() {
         }
     };
 
-    ensure_pool_imported(&snapshot).await;
+    ensure_pool_imported(&data).await;
 }
 
 /// ---------------------------------------------------------------------------
@@ -212,16 +213,16 @@ pub async fn root_import_pool_from_config() {
 
 /// Ensure all statically configured canisters for this subnet exist.
 pub async fn root_create_canisters() -> Result<(), InternalError> {
-    let snapshot = RootBootstrapSnapshot::load()?;
+    let data = RootBootstrapContext::load()?;
 
     log!(
         Topic::Init,
         Info,
         "auto_create roles: {:?}",
-        snapshot.subnet_cfg.auto_create
+        data.subnet_cfg.auto_create
     );
 
-    ensure_required_canisters(&snapshot).await
+    ensure_required_canisters(&data).await
 }
 
 pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
@@ -231,10 +232,10 @@ pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
 }
 
 #[expect(clippy::too_many_lines)]
-async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
-    let import_list = match snapshot.network {
-        Some(BuildNetwork::Local) => snapshot.subnet_cfg.pool.import.local.clone(),
-        Some(BuildNetwork::Ic) => snapshot.subnet_cfg.pool.import.ic.clone(),
+async fn ensure_pool_imported(data: &RootBootstrapContext) {
+    let import_list = match data.network {
+        Some(BuildNetwork::Local) => data.subnet_cfg.pool.import.local.clone(),
+        Some(BuildNetwork::Ic) => data.subnet_cfg.pool.import.ic.clone(),
         None => {
             log!(
                 Topic::CanisterPool,
@@ -245,16 +246,16 @@ async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
         }
     };
 
-    let initial_limit = snapshot
+    let initial_limit = data
         .subnet_cfg
         .pool
         .import
         .initial
-        .map_or(snapshot.subnet_cfg.pool.minimum_size as usize, |count| {
+        .map_or(data.subnet_cfg.pool.minimum_size as usize, |count| {
             count as usize
         });
 
-    if initial_limit == 0 && !snapshot.subnet_cfg.auto_create.is_empty() {
+    if initial_limit == 0 && !data.subnet_cfg.auto_create.is_empty() {
         log!(
             Topic::CanisterPool,
             Warn,
@@ -352,8 +353,8 @@ async fn ensure_pool_imported(snapshot: &RootBootstrapSnapshot) {
     }
 }
 
-async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(), InternalError> {
-    for role in &snapshot.subnet_cfg.auto_create {
+async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), InternalError> {
+    for role in &data.subnet_cfg.auto_create {
         // ALWAYS re-check live registry
         if SubnetRegistryOps::has_role(role) {
             log!(
@@ -378,14 +379,14 @@ async fn ensure_required_canisters(snapshot: &RootBootstrapSnapshot) -> Result<(
 }
 
 pub fn root_validate_state() -> ValidationReport {
-    let registry_snapshot = SubnetRegistryOps::snapshot();
-    let app_snapshot = AppDirectoryOps::snapshot();
-    let subnet_snapshot = SubnetDirectoryOps::snapshot();
-    let env_snapshot = EnvOps::snapshot();
+    let registry_data = SubnetRegistryOps::data();
+    let app_data = AppDirectoryOps::data();
+    let subnet_data = SubnetDirectoryOps::data();
+    let env_data = EnvOps::snapshot();
 
     let mut issues = Vec::new();
 
-    let env_missing = env_missing_fields(&env_snapshot);
+    let env_missing = env_missing_fields(&env_data);
     let env_complete = env_missing.is_empty();
     if !env_complete {
         issues.push(ValidationIssue {
@@ -394,17 +395,17 @@ pub fn root_validate_state() -> ValidationReport {
         });
     }
 
-    let registry_roles = build_registry_role_index(&registry_snapshot);
+    let registry_roles = build_registry_role_index(&registry_data);
 
     let (app_unique, app_consistent) = check_directory(
         "app_directory",
-        &app_snapshot.entries,
+        &app_data.entries,
         &registry_roles,
         &mut issues,
     );
     let (subnet_unique, subnet_consistent) = check_directory(
         "subnet_directory",
-        &subnet_snapshot.entries,
+        &subnet_data.entries,
         &registry_roles,
         &mut issues,
     );
@@ -422,25 +423,25 @@ pub fn root_validate_state() -> ValidationReport {
     }
 }
 
-fn env_missing_fields(snapshot: &EnvSnapshot) -> Vec<&'static str> {
+fn env_missing_fields(data: &EnvData) -> Vec<&'static str> {
     let mut missing = Vec::new();
 
-    if snapshot.prime_root_pid.is_none() {
+    if data.prime_root_pid.is_none() {
         missing.push("prime_root_pid");
     }
-    if snapshot.subnet_role.is_none() {
+    if data.subnet_role.is_none() {
         missing.push("subnet_role");
     }
-    if snapshot.subnet_pid.is_none() {
+    if data.subnet_pid.is_none() {
         missing.push("subnet_pid");
     }
-    if snapshot.root_pid.is_none() {
+    if data.root_pid.is_none() {
         missing.push("root_pid");
     }
-    if snapshot.canister_role.is_none() {
+    if data.canister_role.is_none() {
         missing.push("canister_role");
     }
-    if snapshot.parent_pid.is_none() {
+    if data.parent_pid.is_none() {
         missing.push("parent_pid");
     }
 
@@ -448,7 +449,7 @@ fn env_missing_fields(snapshot: &EnvSnapshot) -> Vec<&'static str> {
 }
 
 fn build_registry_role_index(
-    registry: &SubnetRegistrySnapshot,
+    registry: &SubnetRegistryData,
 ) -> BTreeMap<CanisterRole, Vec<Principal>> {
     let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
 

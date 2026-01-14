@@ -3,7 +3,7 @@ use crate::{
     dto::topology::{
         AppRegistryEntryView, AppRegistryView, SubnetRegistryEntryView, SubnetRegistryView,
     },
-    ops::storage::registry::{app::AppRegistrySnapshot, subnet::SubnetRegistrySnapshot},
+    storage::stable::registry::{app::AppRegistryData, subnet::SubnetRegistryData},
 };
 
 ///
@@ -14,8 +14,8 @@ pub struct AppRegistryMapper;
 
 impl AppRegistryMapper {
     #[must_use]
-    pub fn snapshot_to_view(snapshot: AppRegistrySnapshot) -> AppRegistryView {
-        let entries = snapshot
+    pub fn data_to_view(data: AppRegistryData) -> AppRegistryView {
+        let entries = data
             .entries
             .into_iter()
             .map(|(subnet_pid, root_pid)| AppRegistryEntryView {
@@ -36,8 +36,8 @@ pub struct SubnetRegistryMapper;
 
 impl SubnetRegistryMapper {
     #[must_use]
-    pub fn snapshot_to_view(snapshot: SubnetRegistrySnapshot) -> SubnetRegistryView {
-        let entries = snapshot
+    pub fn data_to_view(data: SubnetRegistryData) -> SubnetRegistryView {
+        let entries = data
             .entries
             .into_iter()
             .map(|(pid, record)| {

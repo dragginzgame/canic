@@ -3,7 +3,7 @@ use canic_core::{
     config::schema::{CanisterConfig, CanisterKind, RandomnessConfig},
     domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
     ids::CanisterRole,
-    ops::storage::registry::subnet::{SubnetRegistryOps, SubnetRegistrySnapshot},
+    ops::storage::registry::subnet::{SubnetRegistryData, SubnetRegistryOps},
     ops::storage::CanisterRecord,
 };
 
@@ -26,7 +26,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let existing_pid = crate::p(1);
     let root_pid = crate::p(2);
 
-    let snapshot = SubnetRegistrySnapshot {
+    let data = SubnetRegistryData {
         entries: vec![(
             existing_pid,
             CanisterRecord {
@@ -41,7 +41,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let err = RegistryPolicy::can_register_role(
         &role,
         root_pid,
-        &snapshot,
+        &data,
         &single_canister_config(),
     )
     .expect_err("policy should reject duplicate singleton role");

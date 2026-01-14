@@ -124,11 +124,9 @@ impl PoolSchedulerWorkflow {
 
     async fn run_batch(limit: usize) -> Result<(), InternalError> {
         for _ in 0..limit {
-            let Some(entry) = PoolWorkflow::pop_oldest_pending_reset() else {
+            let Some((pid, _)) = PoolWorkflow::pop_oldest_pending_reset() else {
                 break;
             };
-
-            let pid = entry.pid;
 
             match check_can_enter_pool(pid).await {
                 Ok(()) => {}

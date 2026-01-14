@@ -1,34 +1,6 @@
 use super::ensure_unique_roles;
-use crate::{
-    InternalError,
-    ops::prelude::*,
-    storage::stable::directory::app::{AppDirectory, AppDirectoryData},
-};
-
-///
-/// AppDirectorySnapshot
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AppDirectorySnapshot {
-    pub entries: Vec<(CanisterRole, Principal)>,
-}
-
-impl From<AppDirectoryData> for AppDirectorySnapshot {
-    fn from(data: AppDirectoryData) -> Self {
-        Self {
-            entries: data.entries,
-        }
-    }
-}
-
-impl From<AppDirectorySnapshot> for AppDirectoryData {
-    fn from(snapshot: AppDirectorySnapshot) -> Self {
-        Self {
-            entries: snapshot.entries,
-        }
-    }
-}
+pub use crate::storage::stable::directory::app::AppDirectoryData;
+use crate::{InternalError, ops::prelude::*, storage::stable::directory::app::AppDirectory};
 
 ///
 /// AppDirectoryOps
@@ -58,17 +30,16 @@ impl AppDirectoryOps {
     }
 
     // -------------------------------------------------------------
-    // Import
+    // Canonical data access
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn snapshot() -> AppDirectorySnapshot {
-        AppDirectory::export().into()
+    pub fn data() -> AppDirectoryData {
+        AppDirectory::export()
     }
 
-    pub(crate) fn import(snapshot: AppDirectorySnapshot) -> Result<(), InternalError> {
-        ensure_unique_roles(&snapshot.entries, "app")?;
-        let data: AppDirectoryData = snapshot.into();
+    pub(crate) fn import(data: AppDirectoryData) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "app")?;
         AppDirectory::import(data);
 
         Ok(())

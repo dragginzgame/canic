@@ -73,13 +73,13 @@ impl CanisterLifecycleWorkflow {
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<CanisterLifecycleResult, InternalError> {
-        let registry_snapshot = SubnetRegistryOps::snapshot();
-        TopologyPolicy::assert_parent_exists(&registry_snapshot, parent)?;
+        let registry_data = SubnetRegistryOps::data();
+        TopologyPolicy::assert_parent_exists(&registry_data, parent)?;
 
         let pid = ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await?;
 
-        let registry_snapshot = SubnetRegistryOps::snapshot();
-        TopologyPolicy::assert_immediate_parent(&registry_snapshot, pid, parent)?;
+        let registry_data = SubnetRegistryOps::data();
+        TopologyPolicy::assert_immediate_parent(&registry_data, pid, parent)?;
 
         PropagationWorkflow::propagate_topology(pid).await?;
         PropagationWorkflow::propagate_state(&role).await?;
@@ -90,7 +90,7 @@ impl CanisterLifecycleWorkflow {
     // ───────────────────────── Upgrade ──────────────────────────
 
     async fn apply_upgrade(pid: Principal) -> Result<CanisterLifecycleResult, InternalError> {
-        let registry_snapshot = SubnetRegistryOps::snapshot();
+        let registry_data = SubnetRegistryOps::data();
 
         let record = SubnetRegistryOps::get(pid)
             .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
@@ -102,8 +102,8 @@ impl CanisterLifecycleWorkflow {
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
 
         if let Some(parent_pid) = record.parent_pid {
-            TopologyPolicy::assert_parent_exists(&registry_snapshot, parent_pid)?;
-            TopologyPolicy::assert_immediate_parent(&registry_snapshot, pid, parent_pid)?;
+            TopologyPolicy::assert_parent_exists(&registry_data, parent_pid)?;
+            TopologyPolicy::assert_immediate_parent(&registry_data, pid, parent_pid)?;
         }
 
         if !plan.should_upgrade {
@@ -115,8 +115,8 @@ impl CanisterLifecycleWorkflow {
 
             SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
 
-            let registry_snapshot = SubnetRegistryOps::snapshot();
-            TopologyPolicy::assert_module_hash(&registry_snapshot, pid, &target_hash)?;
+            let registry_data = SubnetRegistryOps::data();
+            TopologyPolicy::assert_module_hash(&registry_data, pid, &target_hash)?;
 
             return Ok(CanisterLifecycleResult::default());
         }
@@ -124,8 +124,8 @@ impl CanisterLifecycleWorkflow {
         MgmtOps::upgrade_canister(pid, wasm.bytes()).await?;
         SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
 
-        let registry_snapshot = SubnetRegistryOps::snapshot();
-        TopologyPolicy::assert_module_hash(&registry_snapshot, pid, &target_hash)?;
+        let registry_data = SubnetRegistryOps::data();
+        TopologyPolicy::assert_module_hash(&registry_data, pid, &target_hash)?;
 
         Ok(CanisterLifecycleResult::default())
     }

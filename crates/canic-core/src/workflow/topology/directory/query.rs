@@ -20,8 +20,8 @@ impl AppDirectoryQuery {
     }
 
     pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
-        let snapshot = AppDirectoryOps::snapshot();
-        map_directory_page(paginate_vec(snapshot.entries, page))
+        let data = AppDirectoryOps::data();
+        map_directory_page(paginate_vec(data.entries, page))
     }
 }
 
@@ -38,8 +38,8 @@ impl SubnetDirectoryQuery {
     }
 
     pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
-        let snapshot = SubnetDirectoryOps::snapshot();
-        map_directory_page(paginate_vec(snapshot.entries, page))
+        let data = SubnetDirectoryOps::data();
+        map_directory_page(paginate_vec(data.entries, page))
     }
 }
 

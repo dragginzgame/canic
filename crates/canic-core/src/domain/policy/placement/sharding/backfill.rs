@@ -27,7 +27,7 @@ pub(super) fn plan_slot_backfill(
 ) -> SlotBackfillPlan {
     let mut entries: Vec<(Principal, ShardEntry)> = view
         .iter()
-        .filter(|(_, entry)| entry.pool == pool)
+        .filter(|(_, entry)| entry.pool.as_ref() == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))
         .collect();
 

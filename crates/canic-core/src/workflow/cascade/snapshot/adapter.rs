@@ -36,37 +36,31 @@ impl StateSnapshotAdapter {
     #[must_use]
     pub fn to_view(snapshot: &StateSnapshot) -> StateSnapshotView {
         StateSnapshotView {
-            app_state: snapshot
-                .app_state
-                .clone()
-                .map(AppStateMapper::snapshot_to_view),
+            app_state: snapshot.app_state.map(AppStateMapper::data_to_view),
 
-            subnet_state: snapshot
-                .subnet_state
-                .clone()
-                .map(SubnetStateMapper::snapshot_to_view),
+            subnet_state: snapshot.subnet_state.map(SubnetStateMapper::data_to_view),
 
             app_directory: snapshot
                 .app_directory
                 .clone()
-                .map(AppDirectoryMapper::snapshot_to_view),
+                .map(AppDirectoryMapper::data_to_view),
 
             subnet_directory: snapshot
                 .subnet_directory
                 .clone()
-                .map(SubnetDirectoryMapper::snapshot_to_view),
+                .map(SubnetDirectoryMapper::data_to_view),
         }
     }
 
     #[must_use]
     pub fn from_view(view: StateSnapshotView) -> StateSnapshot {
         StateSnapshot {
-            app_state: view.app_state.map(AppStateMapper::view_to_snapshot),
-            subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_snapshot),
-            app_directory: view.app_directory.map(AppDirectoryMapper::view_to_snapshot),
+            app_state: view.app_state.map(AppStateMapper::view_to_data),
+            subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_data),
+            app_directory: view.app_directory.map(AppDirectoryMapper::view_to_data),
             subnet_directory: view
                 .subnet_directory
-                .map(SubnetDirectoryMapper::view_to_snapshot),
+                .map(SubnetDirectoryMapper::view_to_data),
         }
     }
 }

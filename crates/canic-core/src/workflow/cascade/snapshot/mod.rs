@@ -13,12 +13,12 @@ use crate::{
     InternalError,
     access::env,
     ops::storage::{
-        directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
         registry::subnet::SubnetRegistryOps,
-        state::{
-            app::{AppStateOps, AppStateSnapshot},
-            subnet::{SubnetStateOps, SubnetStateSnapshot},
-        },
+        state::{app::AppStateOps, subnet::SubnetStateOps},
+    },
+    storage::stable::{
+        directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
+        state::{app::AppStateData, subnet::SubnetStateData},
     },
     workflow::{
         prelude::*,
@@ -34,10 +34,10 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct StateSnapshot {
-    pub app_state: Option<AppStateSnapshot>,
-    pub subnet_state: Option<SubnetStateSnapshot>,
-    pub app_directory: Option<AppDirectorySnapshot>,
-    pub subnet_directory: Option<SubnetDirectorySnapshot>,
+    pub app_state: Option<AppStateData>,
+    pub subnet_state: Option<SubnetStateData>,
+    pub app_directory: Option<AppDirectoryData>,
+    pub subnet_directory: Option<SubnetDirectoryData>,
 }
 
 ///
@@ -63,13 +63,13 @@ impl StateSnapshotBuilder {
 
     #[must_use]
     pub fn with_app_state(mut self) -> Self {
-        self.snapshot.app_state = Some(AppStateOps::snapshot());
+        self.snapshot.app_state = Some(AppStateOps::data());
         self
     }
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot());
+        self.snapshot.subnet_state = Some(SubnetStateOps::data());
         self
     }
 
@@ -134,10 +134,10 @@ pub struct TopologySnapshotBuilder {
 
 impl TopologySnapshotBuilder {
     pub(crate) fn for_target(target_pid: Principal) -> Result<Self, InternalError> {
-        let registry_snapshot = SubnetRegistryOps::snapshot();
+        let registry_data = SubnetRegistryOps::data();
 
         // Build parent chain (root → target)
-        let parents: Vec<TopologyPathNode> = registry_snapshot
+        let parents: Vec<TopologyPathNode> = registry_data
             .parent_chain(target_pid)?
             .into_iter()
             .map(|(pid, record)| TopologyPathNode {
@@ -151,7 +151,7 @@ impl TopologySnapshotBuilder {
         let mut children_map: HashMap<Principal, Vec<TopologyDirectChild>> = HashMap::new();
 
         for parent in &parents {
-            let children: Vec<TopologyDirectChild> = registry_snapshot
+            let children: Vec<TopologyDirectChild> = registry_data
                 .entries
                 .iter()
                 .filter_map(|(pid, record)| {

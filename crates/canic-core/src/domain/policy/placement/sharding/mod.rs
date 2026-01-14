@@ -161,7 +161,9 @@ impl ShardingPolicy {
         let shards_with_capacity: Vec<_> = entries
             .iter()
             .filter(|(pid, entry)| {
-                entry.pool == state.pool && entry_has_capacity(entry) && exclude_pid != Some(*pid)
+                entry.pool.as_ref() == state.pool
+                    && entry_has_capacity(entry)
+                    && exclude_pid != Some(*pid)
             })
             .map(|(pid, _)| *pid)
             .collect();

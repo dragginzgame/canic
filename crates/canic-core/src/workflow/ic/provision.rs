@@ -57,9 +57,8 @@ impl ProvisionWorkflow {
             parent_pid: Some(parent_pid),
         };
 
-        let app_directory = AppDirectoryMapper::snapshot_to_view(AppDirectoryOps::snapshot());
-        let subnet_directory =
-            SubnetDirectoryMapper::snapshot_to_view(SubnetDirectoryOps::snapshot());
+        let app_directory = AppDirectoryMapper::data_to_view(AppDirectoryOps::data());
+        let subnet_directory = SubnetDirectoryMapper::data_to_view(SubnetDirectoryOps::data());
 
         Ok(CanisterInitPayload {
             env,
@@ -83,7 +82,7 @@ impl ProvisionWorkflow {
     ) -> Result<StateSnapshotBuilder, InternalError> {
         let cfg = ConfigOps::get()?;
         let subnet_cfg = ConfigOps::current_subnet()?;
-        let registry = SubnetRegistryOps::snapshot();
+        let registry = SubnetRegistryOps::data();
 
         let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
         let include_subnet =
@@ -92,17 +91,17 @@ impl ProvisionWorkflow {
         let mut builder = StateSnapshotBuilder::new()?;
 
         if include_app {
-            let app_snapshot = RootAppDirectoryBuilder::build(&registry, &cfg.app_directory)?;
+            let app_data = RootAppDirectoryBuilder::build(&registry, &cfg.app_directory)?;
 
-            AppDirectoryOps::import(app_snapshot)?;
+            AppDirectoryOps::import(app_data)?;
             builder = builder.with_app_directory()?;
         }
 
         if include_subnet {
-            let subnet_snapshot =
+            let subnet_data =
                 RootSubnetDirectoryBuilder::build(&registry, &subnet_cfg.subnet_directory)?;
 
-            SubnetDirectoryOps::import(subnet_snapshot)?;
+            SubnetDirectoryOps::import(subnet_data)?;
             builder = builder.with_subnet_directory()?;
         }
 
@@ -234,8 +233,7 @@ async fn allocate_canister(
     let target = cfg.initial_cycles;
 
     // Reuse from pool
-    if let Some(entry) = PoolWorkflow::pop_oldest_ready() {
-        let pid = entry.pid;
+    if let Some((pid, _)) = PoolWorkflow::pop_oldest_ready() {
         let mut current = MgmtOps::get_cycles(pid).await?;
 
         if current < target {
@@ -315,12 +313,12 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    let registry_snapshot = SubnetRegistryOps::snapshot();
+    let registry_data = SubnetRegistryOps::data();
     let canister_cfg = ConfigOps::current_subnet_canister(role)?;
     policy::topology::registry::RegistryPolicy::can_register_role(
         role,
         parent_pid,
-        &registry_snapshot,
+        &registry_data,
         &canister_cfg,
     )
     .map_err(InternalError::from)?;
