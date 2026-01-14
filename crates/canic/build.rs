@@ -57,7 +57,7 @@ fn main() {
 
     // Validate the config early so failures are caught at build time.
     let config_str = std::fs::read_to_string(&cfg_path).expect("read canic config for validation");
-    canic_core::init_config(&config_str).expect("invalid canic config");
+    canic_core::bootstrap::init_config(&config_str).expect("invalid canic config");
 
     // Export the canonicalized path for compile-time use.
     println!(

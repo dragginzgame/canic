@@ -1,25 +1,7 @@
 use crate::{
     ops::prelude::*,
-    storage::{
-        canister::CanisterRecord,
-        stable::children::{CanisterChildren, CanisterChildrenData},
-    },
+    storage::stable::children::{CanisterChildren, CanisterChildrenData},
 };
-
-///
-/// ChildrenSnapshot
-/// Internal snapshot of direct child canisters.
-///
-/// This is a cached projection populated via topology cascade.
-/// Canonical derivation lives in `SubnetRegistry::children` /
-/// `SubnetRegistryOps::children`.
-/// Note: for non-root canisters, cached entries may have empty
-/// `module_hash` / `created_at` fields; canonical data lives in the registry.
-///
-#[derive(Clone, Debug)]
-pub struct ChildrenSnapshot {
-    pub entries: Vec<(Principal, CanisterRecord)>,
-}
 
 ///
 /// CanisterChildrenOps
@@ -36,12 +18,12 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn contains_pid(pid: &Principal) -> bool {
-        Self::snapshot().entries.iter().any(|(p, _)| p == pid)
+        Self::data().entries.iter().any(|(p, _)| p == pid)
     }
 
     #[must_use]
     pub fn pids() -> Vec<Principal> {
-        Self::snapshot()
+        Self::data()
             .entries
             .into_iter()
             .map(|(pid, _)| pid)
@@ -49,20 +31,15 @@ impl CanisterChildrenOps {
     }
 
     // -------------------------------------------------------------
-    // Snapshot / Import
+    // Canonical data access
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn snapshot() -> ChildrenSnapshot {
-        let data = CanisterChildren::export();
-        ChildrenSnapshot {
-            entries: data.entries,
-        }
+    pub fn data() -> CanisterChildrenData {
+        CanisterChildren::export()
     }
 
-    pub(crate) fn import(snapshot: ChildrenSnapshot) {
-        CanisterChildren::import(CanisterChildrenData {
-            entries: snapshot.entries,
-        });
+    pub(crate) fn import(data: CanisterChildrenData) {
+        CanisterChildren::import(data);
     }
 }

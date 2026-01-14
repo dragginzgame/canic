@@ -10,11 +10,9 @@ use crate::{
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
-        storage::{
-            CanisterRecord,
-            children::{CanisterChildrenOps, ChildrenSnapshot},
-        },
+        storage::{CanisterRecord, children::CanisterChildrenOps},
     },
+    storage::stable::children::CanisterChildrenData,
     workflow::{
         cascade::{
             snapshot::{
@@ -79,7 +77,7 @@ impl TopologyCascadeWorkflow {
         // Build children cache snapshot using unified CanisterRecord.
         // Note: cached entries may have empty `module_hash` / `created_at`
         // fields; canonical data lives in the registry.
-        let children_snapshot = ChildrenSnapshot {
+        let children_data = CanisterChildrenData {
             entries: children
                 .into_iter()
                 .map(|child| {
@@ -97,7 +95,7 @@ impl TopologyCascadeWorkflow {
         };
 
         // Invariant: children cache is updated only via topology cascade.
-        CanisterChildrenOps::import(children_snapshot);
+        CanisterChildrenOps::import(children_data);
 
         if let Some(next_pid) = next {
             let next_snapshot = Self::slice_snapshot_for_child(next_pid, &snapshot)?;

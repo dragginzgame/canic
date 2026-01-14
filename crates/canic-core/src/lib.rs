@@ -23,6 +23,7 @@
 
 pub mod access; // todo - potentially could be pub(crate) but custom errors would have to change
 pub mod api;
+pub mod bootstrap;
 #[doc(hidden)]
 pub mod dispatch;
 pub mod domain;
@@ -59,16 +60,8 @@ pub mod __reexports {
 }
 
 ///
-/// Crate Version
+/// Consts
 ///
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-// init and validate config
-// called from here as config is pub(crate)
-pub fn init_config(toml: &str) -> Result<(), String> {
-    config::Config::init_from_toml(toml)
-        .map(|_| ())
-        .map_err(|err| err.to_string())
-}
