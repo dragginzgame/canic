@@ -85,9 +85,7 @@ impl CanisterChildrenQuery {
             SubnetRegistryOps::children(IcOps::canister_self())
         } else {
             // Non-root uses cached children from topology cascade.
-            // Note: cached entries may have empty `module_hash` / `created_at`
-            // fields; canonical data lives in the registry.
-            CanisterChildrenOps::snapshot().entries
+            CanisterChildrenOps::data().entries
         }
     }
 
