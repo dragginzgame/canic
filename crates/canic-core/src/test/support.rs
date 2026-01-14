@@ -2,7 +2,8 @@ use crate::{
     cdk::candid::Principal,
     config::Config,
     ids::{CanisterRole, SubnetRole},
-    ops::runtime::env::{EnvOps, EnvSnapshot},
+    ops::runtime::env::EnvOps,
+    storage::stable::env::EnvData,
 };
 
 pub fn init_sharding_test_config() {
@@ -31,7 +32,7 @@ pub fn init_sharding_test_config() {
 
     // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);
-    let snapshot = EnvSnapshot {
+    let snapshot = EnvData {
         canister_role: Some(CanisterRole::from("manager")),
         subnet_role: Some(SubnetRole::PRIME),
         root_pid: Some(root_pid),

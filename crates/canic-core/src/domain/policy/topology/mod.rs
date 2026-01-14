@@ -5,7 +5,7 @@ use crate::{
     cdk::types::Principal,
     domain::policy::PolicyError,
     ids::CanisterRole,
-    ops::storage::{CanisterRecord, registry::subnet::SubnetRegistrySnapshot},
+    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryData},
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -64,7 +64,7 @@ impl TopologyPolicy {
     // -------------------------------------------------------------
 
     fn registry_record(
-        registry: &'_ SubnetRegistrySnapshot,
+        registry: &'_ SubnetRegistryData,
         pid: Principal,
     ) -> Result<&'_ CanisterRecord, TopologyPolicyError> {
         registry
@@ -80,7 +80,7 @@ impl TopologyPolicy {
     // -------------------------------------------------------------
 
     pub(crate) fn assert_parent_exists(
-        registry: &SubnetRegistrySnapshot,
+        registry: &SubnetRegistryData,
         parent_pid: Principal,
     ) -> Result<(), InternalError> {
         if registry.entries.iter().any(|(pid, _)| *pid == parent_pid) {
@@ -91,7 +91,7 @@ impl TopologyPolicy {
     }
 
     pub(crate) fn assert_module_hash(
-        registry: &SubnetRegistrySnapshot,
+        registry: &SubnetRegistryData,
         pid: Principal,
         expected_hash: &[u8],
     ) -> Result<(), InternalError> {
@@ -105,7 +105,7 @@ impl TopologyPolicy {
     }
 
     pub(crate) fn assert_immediate_parent(
-        registry: &SubnetRegistrySnapshot,
+        registry: &SubnetRegistryData,
         pid: Principal,
         expected_parent: Principal,
     ) -> Result<(), InternalError> {
@@ -123,7 +123,7 @@ impl TopologyPolicy {
     }
 
     pub fn assert_directory_consistent_with_registry(
-        registry: &SubnetRegistrySnapshot,
+        registry: &SubnetRegistryData,
         entries: &[(CanisterRole, Principal)],
     ) -> Result<(), TopologyPolicyError> {
         let mut seen_roles = BTreeSet::new();

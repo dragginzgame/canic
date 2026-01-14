@@ -44,13 +44,12 @@ If code conflicts with this document, **the code is wrong**.
 
 ### Build-time Network Requirement
 
-* **`DFX_NETWORK` must always be set** (`local` or `ic`).
+* `DFX_NETWORK` selects the target network (`local` or `ic`).
+* If unset, it defaults to `local`.
 * For scripts / make:
 
   * `NETWORK=local|mainnet|staging`
   * maps to `DFX_NETWORK=local|ic`
-
-Build scripts enforce this; missing configuration is fatal.
 
 ---
 

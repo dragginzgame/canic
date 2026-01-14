@@ -12,9 +12,9 @@ pub struct AppRegistryQuery;
 
 impl AppRegistryQuery {
     pub fn view() -> AppRegistryView {
-        let snapshot = AppRegistryOps::snapshot();
+        let data = AppRegistryOps::data();
 
-        AppRegistryMapper::snapshot_to_view(snapshot)
+        AppRegistryMapper::data_to_view(data)
     }
 }
 
@@ -26,8 +26,8 @@ pub struct SubnetRegistryQuery;
 
 impl SubnetRegistryQuery {
     pub fn view() -> SubnetRegistryView {
-        let snapshot = SubnetRegistryOps::snapshot();
+        let data = SubnetRegistryOps::data();
 
-        SubnetRegistryMapper::snapshot_to_view(snapshot)
+        SubnetRegistryMapper::data_to_view(data)
     }
 }

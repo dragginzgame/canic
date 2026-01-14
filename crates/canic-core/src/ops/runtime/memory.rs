@@ -3,6 +3,7 @@
 
 use crate::{
     CRATE_NAME, InternalError,
+    dto::memory::MemoryRegistryEntryView,
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
@@ -44,24 +45,13 @@ pub struct MemoryRangeSnapshot {
 }
 
 ///
-/// MemoryRegistryEntrySnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct MemoryRegistryEntrySnapshot {
-    pub id: u8,
-    pub crate_name: String,
-    pub label: String,
-}
-
-///
 /// MemoryRegistryInitSummary
 ///
 
 #[derive(Clone, Debug)]
 pub struct MemoryRegistryInitSummary {
     pub ranges: Vec<MemoryRangeSnapshot>,
-    pub entries: Vec<MemoryRegistryEntrySnapshot>,
+    pub entries: Vec<MemoryRegistryEntryView>,
 }
 
 impl MemoryRegistryInitSummary {
@@ -79,7 +69,7 @@ impl MemoryRegistryInitSummary {
         let entries = summary
             .entries
             .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntrySnapshot {
+            .map(|(id, entry)| MemoryRegistryEntryView {
                 id,
                 crate_name: entry.crate_name,
                 label: entry.label,
@@ -110,10 +100,10 @@ impl MemoryRegistryOps {
     }
 
     #[must_use]
-    pub fn snapshot_entries() -> Vec<MemoryRegistryEntrySnapshot> {
+    pub fn snapshot_entries() -> Vec<MemoryRegistryEntryView> {
         MemoryRegistryRuntime::snapshot_entries()
             .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntrySnapshot {
+            .map(|(id, entry)| MemoryRegistryEntryView {
                 id,
                 crate_name: entry.crate_name,
                 label: entry.label,

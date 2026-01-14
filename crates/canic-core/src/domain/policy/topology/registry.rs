@@ -4,7 +4,7 @@ use crate::{
     config::schema::{CanisterConfig, CanisterKind},
     domain::policy::topology::TopologyPolicyError,
     ids::CanisterRole,
-    ops::storage::registry::subnet::SubnetRegistrySnapshot,
+    storage::stable::registry::subnet::SubnetRegistryData,
 };
 use thiserror::Error as ThisError;
 
@@ -42,16 +42,12 @@ impl RegistryPolicy {
     pub fn can_register_role(
         role: &CanisterRole,
         parent_pid: Principal,
-        snapshot: &SubnetRegistrySnapshot,
+        data: &SubnetRegistryData,
         canister_cfg: &CanisterConfig,
     ) -> Result<(), RegistryPolicyError> {
         match canister_cfg.kind {
             CanisterKind::Root => {
-                if let Some((pid, _)) = snapshot
-                    .entries
-                    .iter()
-                    .find(|(_, entry)| entry.role == *role)
-                {
+                if let Some((pid, _)) = data.entries.iter().find(|(_, entry)| entry.role == *role) {
                     return Err(RegistryPolicyError::RoleAlreadyRegistered {
                         role: role.clone(),
                         pid: *pid,
@@ -59,7 +55,7 @@ impl RegistryPolicy {
                 }
             }
             CanisterKind::Node => {
-                if let Some((pid, _)) = snapshot
+                if let Some((pid, _)) = data
                     .entries
                     .iter()
                     .find(|(_, entry)| entry.role == *role && entry.parent_pid == Some(parent_pid))

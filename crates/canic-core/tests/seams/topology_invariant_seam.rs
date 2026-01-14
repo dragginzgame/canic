@@ -3,9 +3,9 @@ use canic_core::{
     ids::CanisterRole,
     ops::storage::{
         CanisterRecord,
-        directory::app::AppDirectorySnapshot,
-        directory::subnet::SubnetDirectorySnapshot,
-        registry::subnet::SubnetRegistrySnapshot,
+        directory::app::AppDirectoryData,
+        directory::subnet::SubnetDirectoryData,
+        registry::subnet::SubnetRegistryData,
     },
 };
 
@@ -23,7 +23,7 @@ fn topology_invariants_live_in_policy() {
     canic_core::init_config(toml).expect("init config");
 
     let role = CanisterRole::new("alpha");
-    let registry_snapshot = SubnetRegistrySnapshot {
+    let registry_data = SubnetRegistryData {
         entries: vec![(
             crate::p(30),
             CanisterRecord {
@@ -35,17 +35,17 @@ fn topology_invariants_live_in_policy() {
         )],
     };
 
-    let app_snapshot = AppDirectorySnapshot {
+    let app_data = AppDirectoryData {
         entries: Vec::new(),
     };
-    let subnet_snapshot = SubnetDirectorySnapshot {
+    let subnet_data = SubnetDirectoryData {
         entries: Vec::new(),
     };
 
     let err = TopologyPolicy::assert_directories_match_registry(
-        &registry_snapshot,
-        &app_snapshot,
-        &subnet_snapshot,
+        &registry_data,
+        &app_data,
+        &subnet_data,
     )
     .expect_err("policy should detect app directory divergence");
 

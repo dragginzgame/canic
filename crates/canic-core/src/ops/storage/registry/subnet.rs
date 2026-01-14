@@ -1,10 +1,8 @@
+pub use crate::storage::stable::registry::subnet::SubnetRegistryData;
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::{
-        canister::CanisterRecord,
-        stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
-    },
+    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistry},
 };
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
@@ -40,33 +38,7 @@ impl From<SubnetRegistryOpsError> for InternalError {
     }
 }
 
-///
-/// SubnetRegistrySnapshot
-/// Operational snapshot of the subnet registry.
-///
-
-#[derive(Clone, Debug)]
-pub struct SubnetRegistrySnapshot {
-    pub entries: Vec<(Principal, CanisterRecord)>,
-}
-
-impl From<SubnetRegistryData> for SubnetRegistrySnapshot {
-    fn from(data: SubnetRegistryData) -> Self {
-        Self {
-            entries: data.entries,
-        }
-    }
-}
-
-impl From<SubnetRegistrySnapshot> for SubnetRegistryData {
-    fn from(snapshot: SubnetRegistrySnapshot) -> Self {
-        Self {
-            entries: snapshot.entries,
-        }
-    }
-}
-
-impl SubnetRegistrySnapshot {
+impl SubnetRegistryData {
     /// Return the canonical parent chain for a canister.
     ///
     /// Returned order: root → … → target
@@ -187,12 +159,12 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
     }
 
-    // ---------------------------------------------------------------------
-    // Snapshot
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------------
+    // Canonical data access
+    // -------------------------------------------------------------
 
     #[must_use]
-    pub fn snapshot() -> SubnetRegistrySnapshot {
-        SubnetRegistry::export().into()
+    pub fn data() -> SubnetRegistryData {
+        SubnetRegistry::export()
     }
 }

@@ -11,7 +11,7 @@ use crate::{
     ops::{
         ic::{IcOps, signature::SignatureOps},
         runtime::{
-            env::{EnvOps, EnvSnapshot},
+            env::EnvOps,
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
         },
         storage::{
@@ -19,6 +19,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
+    storage::stable::env::EnvData,
     workflow::{
         self,
         env::EnvWorkflow,
@@ -127,7 +128,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid),
     };
 
-    let snapshot = EnvSnapshot {
+    let data = EnvData {
         prime_root_pid: Some(prime_root_pid),
         root_pid: Some(self_pid),
         subnet_pid: Some(subnet_pid),
@@ -136,7 +137,7 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         parent_pid: Some(prime_root_pid),
     };
 
-    if let Err(err) = EnvOps::import(snapshot) {
+    if let Err(err) = EnvOps::import(data) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
@@ -184,14 +185,14 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     }
 
     if let Err(err) =
-        AppDirectoryOps::import(AppDirectoryMapper::view_to_snapshot(payload.app_directory))
+        AppDirectoryOps::import(AppDirectoryMapper::view_to_data(payload.app_directory))
     {
         fatal(
             "init_nonroot_canister",
             format!("app directory import failed: {err}"),
         );
     }
-    if let Err(err) = SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_snapshot(
+    if let Err(err) = SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_data(
         payload.subnet_directory,
     )) {
         fatal(

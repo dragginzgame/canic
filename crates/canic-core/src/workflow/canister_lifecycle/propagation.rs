@@ -42,19 +42,19 @@ impl PropagationWorkflow {
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
-        let registry_snapshot = SubnetRegistryOps::snapshot();
-        let app_snapshot = AppDirectoryOps::snapshot();
-        let subnet_snapshot = SubnetDirectoryOps::snapshot();
+        let registry_data = SubnetRegistryOps::data();
+        let app_data = AppDirectoryOps::data();
+        let subnet_data = SubnetDirectoryOps::data();
 
         TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_snapshot,
-            &app_snapshot.entries,
+            &registry_data,
+            &app_data.entries,
         )
         .map_err(InternalError::from)?;
 
         TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_snapshot,
-            &subnet_snapshot.entries,
+            &registry_data,
+            &subnet_data.entries,
         )
         .map_err(InternalError::from)?;
 

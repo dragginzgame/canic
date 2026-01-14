@@ -13,19 +13,18 @@ pub struct PoolQuery;
 impl PoolQuery {
     /// Return a view of a single pool entry (if present).
     pub fn pool_entry_view(pid: Principal) -> Option<CanisterPoolEntryView> {
-        let snapshot = PoolOps::snapshot();
+        let data = PoolOps::data();
 
-        snapshot
-            .entries
+        data.entries
             .into_iter()
-            .find(|e| e.pid == pid)
-            .map(PoolMapper::entry_snapshot_to_view)
+            .find(|(entry_pid, _)| *entry_pid == pid)
+            .map(|(entry_pid, record)| PoolMapper::entry_data_to_view(entry_pid, record))
     }
 
     /// Return a view of the entire pool
     #[must_use]
     pub fn pool_list_view() -> CanisterPoolView {
-        let snapshot = PoolOps::snapshot();
-        PoolMapper::snapshot_to_view(snapshot)
+        let data = PoolOps::data();
+        PoolMapper::data_to_view(data)
     }
 }

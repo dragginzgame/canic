@@ -1,8 +1,9 @@
 use crate::{
     dto::state::{AppCommand, AppModeView, AppStateView, SubnetStateView},
-    ops::storage::state::{
-        app::{AppMode, AppStateCommand, AppStateSnapshot},
-        subnet::SubnetStateSnapshot,
+    ops::storage::state::app::AppStateCommand,
+    storage::stable::state::{
+        app::{AppMode, AppStateData},
+        subnet::SubnetStateData,
     },
 };
 
@@ -49,17 +50,16 @@ impl AppStateMapper {
     }
 
     #[must_use]
-    pub fn snapshot_to_view(snapshot: AppStateSnapshot) -> AppStateView {
-        let mode = snapshot.mode.unwrap_or(AppMode::Disabled);
+    pub const fn data_to_view(data: AppStateData) -> AppStateView {
         AppStateView {
-            mode: Self::app_mode_to_view(mode),
+            mode: Self::app_mode_to_view(data.mode),
         }
     }
 
     #[must_use]
-    pub const fn view_to_snapshot(view: AppStateView) -> AppStateSnapshot {
-        AppStateSnapshot {
-            mode: Some(Self::app_mode_from_view(view.mode)),
+    pub const fn view_to_data(view: AppStateView) -> AppStateData {
+        AppStateData {
+            mode: Self::app_mode_from_view(view.mode),
         }
     }
 }
@@ -72,12 +72,12 @@ pub struct SubnetStateMapper;
 
 impl SubnetStateMapper {
     #[must_use]
-    pub const fn snapshot_to_view(_: SubnetStateSnapshot) -> SubnetStateView {
+    pub const fn data_to_view(_: SubnetStateData) -> SubnetStateView {
         SubnetStateView {}
     }
 
     #[must_use]
-    pub const fn view_to_snapshot(_: SubnetStateView) -> SubnetStateSnapshot {
-        SubnetStateSnapshot {}
+    pub const fn view_to_data(_: SubnetStateView) -> SubnetStateData {
+        SubnetStateData {}
     }
 }

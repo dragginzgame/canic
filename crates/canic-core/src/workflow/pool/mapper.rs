@@ -1,6 +1,7 @@
 use crate::{
     dto::pool::{CanisterPoolEntryView, CanisterPoolStatusView, CanisterPoolView},
-    ops::storage::pool::{PoolEntrySnapshot, PoolSnapshot, PoolStatus},
+    ops::storage::pool::{PoolData, PoolRecord, PoolStatus},
+    workflow::prelude::*,
 };
 
 ///
@@ -11,15 +12,15 @@ pub struct PoolMapper;
 
 impl PoolMapper {
     #[must_use]
-    pub fn entry_snapshot_to_view(entry: PoolEntrySnapshot) -> CanisterPoolEntryView {
+    pub fn entry_data_to_view(pid: Principal, record: PoolRecord) -> CanisterPoolEntryView {
         CanisterPoolEntryView {
-            pid: entry.pid,
-            created_at: entry.created_at,
-            cycles: entry.cycles,
-            status: Self::status_to_view(&entry.status),
-            role: entry.role,
-            parent: entry.parent,
-            module_hash: entry.module_hash,
+            pid,
+            created_at: record.header.created_at,
+            cycles: record.state.cycles,
+            status: Self::status_to_view(&record.state.status),
+            role: record.state.role,
+            parent: record.state.parent,
+            module_hash: record.state.module_hash,
         }
     }
 
@@ -35,12 +36,12 @@ impl PoolMapper {
     }
 
     #[must_use]
-    pub fn snapshot_to_view(snapshot: PoolSnapshot) -> CanisterPoolView {
+    pub fn data_to_view(data: PoolData) -> CanisterPoolView {
         CanisterPoolView {
-            entries: snapshot
+            entries: data
                 .entries
                 .into_iter()
-                .map(Self::entry_snapshot_to_view)
+                .map(|(pid, record)| Self::entry_data_to_view(pid, record))
                 .collect(),
         }
     }

@@ -1,24 +1,9 @@
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::stable::state::app::{AppMode as ModelAppMode, AppState, AppStateData},
+    storage::stable::state::app::{AppMode, AppState, AppStateData},
 };
-use derive_more::Display;
 use thiserror::Error as ThisError;
-
-///
-/// AppStateSnapshot
-/// Internal, operational snapshot of application state.
-///
-/// - Used by workflows and state cascades
-/// - May be partially populated in the future
-/// - Not serialized or exposed externally
-///
-
-#[derive(Clone, Debug, Default)]
-pub struct AppStateSnapshot {
-    pub mode: Option<AppMode>,
-}
 
 ///
 /// AppStateCommand
@@ -32,39 +17,6 @@ pub enum AppStateCommand {
 }
 
 ///
-/// AppMode
-///
-
-#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
-pub enum AppMode {
-    Enabled,
-    Readonly,
-    Disabled,
-}
-
-impl From<AppStateData> for AppStateSnapshot {
-    fn from(data: AppStateData) -> Self {
-        Self {
-            mode: Some(AppMode::from_model(data.mode)),
-        }
-    }
-}
-
-impl TryFrom<AppStateSnapshot> for AppStateData {
-    type Error = AppStateOpsError;
-
-    fn try_from(snapshot: AppStateSnapshot) -> Result<Self, Self::Error> {
-        let Some(mode) = snapshot.mode else {
-            return Err(AppStateOpsError::MissingField("mode"));
-        };
-
-        Ok(Self {
-            mode: AppMode::to_model(mode),
-        })
-    }
-}
-
-///
 /// AppStateOpsError
 ///
 
@@ -72,9 +24,6 @@ impl TryFrom<AppStateSnapshot> for AppStateData {
 pub enum AppStateOpsError {
     #[error("app is already in {0} mode")]
     AlreadyInMode(AppMode),
-
-    #[error("app state snapshot missing required field: {0}")]
-    MissingField(&'static str),
 }
 
 impl From<AppStateOpsError> for InternalError {
@@ -91,11 +40,20 @@ pub struct AppStateOps;
 
 impl AppStateOps {
     // -------------------------------------------------------------
+    // Getters
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub(crate) fn get_mode() -> AppMode {
+        AppState::get_mode()
+    }
+
+    // -------------------------------------------------------------
     // Commands
     // -------------------------------------------------------------
 
     pub fn execute_command(cmd: AppStateCommand) -> Result<(), InternalError> {
-        let old_mode = AppMode::from_model(AppState::get_mode());
+        let old_mode = AppState::get_mode();
 
         let new_mode = match cmd {
             AppStateCommand::Start => AppMode::Enabled,
@@ -107,7 +65,7 @@ impl AppStateOps {
             return Err(AppStateOpsError::AlreadyInMode(old_mode).into());
         }
 
-        AppState::set_mode(AppMode::to_model(new_mode));
+        AppState::set_mode(new_mode);
 
         log!(Topic::App, Ok, "app: mode changed {old_mode} -> {new_mode}");
 
@@ -115,40 +73,19 @@ impl AppStateOps {
     }
 
     // -------------------------------------------------------------
-    // Snapshot / Import
+    // Data / Import
     // -------------------------------------------------------------
 
     /// Export the current application state as an operational snapshot.
     #[must_use]
-    pub fn snapshot() -> AppStateSnapshot {
-        AppState::export().into()
+    pub fn data() -> AppStateData {
+        AppState::export()
     }
 
     /// Import application state from an operational snapshot.
     ///
     /// Validation occurs during snapshot → data conversion.
-    pub fn import(snapshot: AppStateSnapshot) -> Result<(), InternalError> {
-        let data: AppStateData = snapshot.try_into()?;
+    pub fn import(data: AppStateData) {
         AppState::import(data);
-
-        Ok(())
-    }
-}
-
-impl AppMode {
-    const fn from_model(mode: ModelAppMode) -> Self {
-        match mode {
-            ModelAppMode::Enabled => Self::Enabled,
-            ModelAppMode::Readonly => Self::Readonly,
-            ModelAppMode::Disabled => Self::Disabled,
-        }
-    }
-
-    const fn to_model(mode: Self) -> ModelAppMode {
-        match mode {
-            Self::Enabled => ModelAppMode::Enabled,
-            Self::Readonly => ModelAppMode::Readonly,
-            Self::Disabled => ModelAppMode::Disabled,
-        }
     }
 }

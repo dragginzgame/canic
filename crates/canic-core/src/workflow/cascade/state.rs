@@ -160,11 +160,11 @@ impl StateCascadeWorkflow {
         access::env::deny_root()?;
 
         if let Some(app) = &snapshot.app_state {
-            AppStateOps::import(app.clone())?;
+            AppStateOps::import(*app);
         }
 
-        if let Some(subnet_snapshot) = &snapshot.subnet_state {
-            SubnetStateOps::import(subnet_snapshot.clone());
+        if let Some(subnet_data) = &snapshot.subnet_state {
+            SubnetStateOps::import(*subnet_data);
         }
 
         if let Some(dir) = &snapshot.app_directory {

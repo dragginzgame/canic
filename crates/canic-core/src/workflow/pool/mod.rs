@@ -16,7 +16,7 @@ use crate::{
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
         storage::{
-            pool::{PoolEntrySnapshot, PoolOps, PoolSnapshot, PoolStatus},
+            pool::{PoolData, PoolOps, PoolRecord, PoolStatus},
             registry::subnet::SubnetRegistryOps,
         },
     },
@@ -78,29 +78,29 @@ impl PoolWorkflow {
     // Selection
     // -------------------------------------------------------------------------
 
-    pub fn pop_oldest_ready() -> Option<PoolEntrySnapshot> {
+    pub fn pop_oldest_ready() -> Option<(Principal, PoolRecord)> {
         Self::pop_oldest_by_status(PoolStatus::Ready)
     }
 
-    pub fn pop_oldest_pending_reset() -> Option<PoolEntrySnapshot> {
+    pub fn pop_oldest_pending_reset() -> Option<(Principal, PoolRecord)> {
         Self::pop_oldest_by_status(PoolStatus::PendingReset)
     }
 
-    fn pop_oldest_by_status(status: PoolStatus) -> Option<PoolEntrySnapshot> {
-        let snapshot = PoolOps::snapshot();
-        let entry = Self::select_oldest(snapshot, &status)?;
-        PoolOps::remove(&entry.pid);
+    fn pop_oldest_by_status(status: PoolStatus) -> Option<(Principal, PoolRecord)> {
+        let data = PoolOps::data();
+        let entry = Self::select_oldest(data, &status)?;
+        PoolOps::remove(&entry.0);
 
         Some(entry)
     }
 
-    fn select_oldest(snapshot: PoolSnapshot, status: &PoolStatus) -> Option<PoolEntrySnapshot> {
-        let mut selected: Option<PoolEntrySnapshot> = None;
+    fn select_oldest(data: PoolData, status: &PoolStatus) -> Option<(Principal, PoolRecord)> {
+        let mut selected: Option<(Principal, PoolRecord)> = None;
 
-        for entry in snapshot.entries {
+        for (pid, record) in data.entries {
             let matches = match status {
-                PoolStatus::Ready => matches!(entry.status, PoolStatus::Ready),
-                PoolStatus::PendingReset => matches!(entry.status, PoolStatus::PendingReset),
+                PoolStatus::Ready => matches!(record.state.status, PoolStatus::Ready),
+                PoolStatus::PendingReset => matches!(record.state.status, PoolStatus::PendingReset),
                 PoolStatus::Failed { .. } => false,
             };
 
@@ -110,15 +110,15 @@ impl PoolWorkflow {
 
             let replace = match &selected {
                 None => true,
-                Some(best) => {
-                    entry.created_at < best.created_at
-                        || (entry.created_at == best.created_at
-                            && entry.pid.as_slice() < best.pid.as_slice())
+                Some((best_pid, best_record)) => {
+                    record.header.created_at < best_record.header.created_at
+                        || (record.header.created_at == best_record.header.created_at
+                            && pid.as_slice() < best_pid.as_slice())
                 }
             };
 
             if replace {
-                selected = Some(entry);
+                selected = Some((pid, record));
             }
         }
 

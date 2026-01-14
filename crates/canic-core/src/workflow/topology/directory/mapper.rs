@@ -1,6 +1,6 @@
 use crate::{
     dto::topology::{AppDirectoryView, DirectoryEntryView, SubnetDirectoryView},
-    ops::storage::directory::{app::AppDirectorySnapshot, subnet::SubnetDirectorySnapshot},
+    storage::stable::directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
 };
 
 ///
@@ -11,8 +11,8 @@ pub struct AppDirectoryMapper;
 
 impl AppDirectoryMapper {
     #[must_use]
-    pub fn snapshot_to_view(snapshot: AppDirectorySnapshot) -> AppDirectoryView {
-        let entries = snapshot
+    pub fn data_to_view(data: AppDirectoryData) -> AppDirectoryView {
+        let entries = data
             .entries
             .into_iter()
             .map(|(role, pid)| DirectoryEntryView { role, pid })
@@ -22,14 +22,14 @@ impl AppDirectoryMapper {
     }
 
     #[must_use]
-    pub fn view_to_snapshot(view: AppDirectoryView) -> AppDirectorySnapshot {
+    pub fn view_to_data(view: AppDirectoryView) -> AppDirectoryData {
         let entries = view
             .0
             .into_iter()
             .map(|entry| (entry.role, entry.pid))
             .collect();
 
-        AppDirectorySnapshot { entries }
+        AppDirectoryData { entries }
     }
 }
 
@@ -41,8 +41,8 @@ pub struct SubnetDirectoryMapper;
 
 impl SubnetDirectoryMapper {
     #[must_use]
-    pub fn snapshot_to_view(snapshot: SubnetDirectorySnapshot) -> SubnetDirectoryView {
-        let entries = snapshot
+    pub fn data_to_view(data: SubnetDirectoryData) -> SubnetDirectoryView {
+        let entries = data
             .entries
             .into_iter()
             .map(|(role, pid)| DirectoryEntryView { role, pid })
@@ -52,13 +52,13 @@ impl SubnetDirectoryMapper {
     }
 
     #[must_use]
-    pub fn view_to_snapshot(view: SubnetDirectoryView) -> SubnetDirectorySnapshot {
+    pub fn view_to_data(view: SubnetDirectoryView) -> SubnetDirectoryData {
         let entries = view
             .0
             .into_iter()
             .map(|entry| (entry.role, entry.pid))
             .collect();
 
-        SubnetDirectorySnapshot { entries }
+        SubnetDirectoryData { entries }
     }
 }

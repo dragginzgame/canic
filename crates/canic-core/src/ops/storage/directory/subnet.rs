@@ -1,35 +1,6 @@
 use super::ensure_unique_roles;
-use crate::{
-    InternalError,
-    ops::prelude::*,
-    storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
-};
-
-///
-/// SubnetDirectorySnapshot
-/// Internal, operational snapshot of subnet directory.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetDirectorySnapshot {
-    pub entries: Vec<(CanisterRole, Principal)>,
-}
-
-impl From<SubnetDirectoryData> for SubnetDirectorySnapshot {
-    fn from(data: SubnetDirectoryData) -> Self {
-        Self {
-            entries: data.entries,
-        }
-    }
-}
-
-impl From<SubnetDirectorySnapshot> for SubnetDirectoryData {
-    fn from(snapshot: SubnetDirectorySnapshot) -> Self {
-        Self {
-            entries: snapshot.entries,
-        }
-    }
-}
+pub use crate::storage::stable::directory::subnet::SubnetDirectoryData;
+use crate::{InternalError, ops::prelude::*, storage::stable::directory::subnet::SubnetDirectory};
 
 ///
 /// SubnetDirectoryOps
@@ -44,7 +15,7 @@ impl SubnetDirectoryOps {
 
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
-        // This is still an ops-level convenience, but it stays snapshot/data-based
+        // This is still an ops-level convenience, but it stays data-based
         // and does not leak DTOs.
         SubnetDirectory::export()
             .entries
@@ -57,18 +28,17 @@ impl SubnetDirectoryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn snapshot() -> SubnetDirectorySnapshot {
-        SubnetDirectory::export().into()
+    pub fn data() -> SubnetDirectoryData {
+        SubnetDirectory::export()
     }
 
     // -------------------------------------------------------------
     // Import
     // -------------------------------------------------------------
 
-    /// Import a snapshot into stable storage.
-    pub fn import(snapshot: SubnetDirectorySnapshot) -> Result<(), InternalError> {
-        ensure_unique_roles(&snapshot.entries, "subnet")?;
-        let data: SubnetDirectoryData = snapshot.into();
+    /// Import data into stable storage.
+    pub fn import(data: SubnetDirectoryData) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "subnet")?;
         SubnetDirectory::import(data);
 
         Ok(())
