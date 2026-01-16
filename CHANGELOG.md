@@ -5,6 +5,14 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.8.5] - 2026-01-16 - Intent System
+### Added
+- Framework-level intent store backed by stable memory, with ops-layer APIs for reserve/commit/abort and upgrade-safe recovery helpers.
+- Intent IDs reserved in canic-core stable memory registry to prevent accidental reuse.
+- PocketIC contention test canisters + race test to validate intent-based reservation flow under async interleaving.
+- Test-only config builder for programmatic config setup in tests.
+- canic-memory strict registry enforcement and registry introspection helpers for ranges/IDs.
+
 ## [0.8.4] - 2026-01-14 - Cleanup
 - Clarified build docs: `DFX_NETWORK` defaults to `local` when unset.
 - Collapsed redundant snapshot types in ops/workflow (env/scaling/sharding/pool) and kept canonical `*Data` at boundaries.

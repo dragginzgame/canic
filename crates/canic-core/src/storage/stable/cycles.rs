@@ -1,7 +1,7 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     eager_static,
-    storage::{prelude::*, stable::memory::cycles::CYCLE_TRACKER_ID},
+    storage::{prelude::*, stable::memory::observability::CYCLE_TRACKER_ID},
 };
 use canic_memory::ic_memory;
 use std::cell::RefCell;

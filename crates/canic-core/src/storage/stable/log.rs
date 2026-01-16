@@ -14,7 +14,7 @@ use crate::{
         prelude::*,
         stable::{
             StableMemoryError,
-            memory::log::{LOG_DATA_ID, LOG_INDEX_ID},
+            memory::observability::{LOG_DATA_ID, LOG_INDEX_ID},
         },
     },
     utils::case::{Case, Casing},

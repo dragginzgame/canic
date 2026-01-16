@@ -116,6 +116,24 @@ impl Config {
         })
     }
 
+    /// Test-only: initialize the global configuration from an in-memory model.
+    #[cfg(test)]
+    pub fn init_from_model_for_tests(config: ConfigModel) -> Result<Arc<ConfigModel>, ConfigError> {
+        config.validate().map_err(ConfigError::from)?;
+
+        CONFIG.with(|cfg| {
+            let mut borrow = cfg.borrow_mut();
+            if borrow.is_some() {
+                return Err(ConfigError::AlreadyInitialized);
+            }
+
+            let arc = Arc::new(config);
+            *borrow = Some(arc.clone());
+
+            Ok(arc)
+        })
+    }
+
     /// Return the current config as a TOML string.
     pub(crate) fn to_toml() -> Result<String, InternalError> {
         let cfg = Self::get()?;

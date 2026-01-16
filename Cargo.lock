@@ -252,6 +252,7 @@ dependencies = [
  "ic-signature-verification",
  "ic-stable-structures 0.7.2",
  "num-traits",
+ "pocket-ic",
  "remain",
  "serde",
  "serde_bytes",
@@ -1524,6 +1525,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "intent_authority"
+version = "0.8.4"
+dependencies = [
+ "candid",
+ "canic-core",
+ "ic-cdk",
+]
+
+[[package]]
+name = "intent_client"
+version = "0.8.4"
+dependencies = [
+ "candid",
+ "ic-cdk",
+]
+
+[[package]]
+name = "intent_external"
+version = "0.8.4"
+dependencies = [
+ "candid",
+ "ic-cdk",
 ]
 
 [[package]]

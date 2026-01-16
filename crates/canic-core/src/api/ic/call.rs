@@ -1,8 +1,12 @@
 use crate::{
-    cdk::{candid::CandidType, types::Principal},
+    cdk::{
+        candid::CandidType,
+        types::{BoundedString64, Principal},
+    },
     dto::error::Error,
     workflow::ic::call::{
         CallBuilder as WorkflowCallBuilder, CallResult as WorkflowCallResult, CallWorkflow,
+        IntentSpec as WorkflowIntentSpec,
     },
 };
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
@@ -29,6 +33,87 @@ impl Call {
         CallBuilder {
             inner: CallWorkflow::unbounded_wait(canister_id, method),
         }
+    }
+}
+
+///
+/// IntentKey
+///
+
+pub struct IntentKey(String);
+
+impl IntentKey {
+    pub fn try_new(value: impl Into<String>) -> Result<Self, Error> {
+        let value = value.into();
+        let bounded = BoundedString64::try_new(value).map_err(Error::invalid)?;
+
+        Ok(Self(bounded.0))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl AsRef<str> for IntentKey {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<IntentKey> for String {
+    fn from(key: IntentKey) -> Self {
+        key.0
+    }
+}
+
+///
+/// IntentReservation
+///
+
+pub struct IntentReservation {
+    key: IntentKey,
+    quantity: u64,
+    ttl_secs: Option<u64>,
+    max_in_flight: Option<u64>,
+}
+
+impl IntentReservation {
+    #[must_use]
+    pub const fn new(key: IntentKey, quantity: u64) -> Self {
+        Self {
+            key,
+            quantity,
+            ttl_secs: None,
+            max_in_flight: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_ttl_secs(mut self, ttl_secs: u64) -> Self {
+        self.ttl_secs = Some(ttl_secs);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_in_flight(mut self, max_in_flight: u64) -> Self {
+        self.max_in_flight = Some(max_in_flight);
+        self
+    }
+
+    pub(crate) fn into_spec(self) -> WorkflowIntentSpec {
+        WorkflowIntentSpec::new(
+            self.key.into_string(),
+            self.quantity,
+            self.ttl_secs,
+            self.max_in_flight,
+        )
     }
 }
 
@@ -87,6 +172,15 @@ impl CallBuilder {
     pub fn with_cycles(self, cycles: u128) -> Self {
         Self {
             inner: self.inner.with_cycles(cycles),
+        }
+    }
+
+    // ---------- intent ----------
+
+    #[must_use]
+    pub fn with_intent(self, intent: IntentReservation) -> Self {
+        Self {
+            inner: self.inner.with_intent(intent.into_spec()),
         }
     }
 

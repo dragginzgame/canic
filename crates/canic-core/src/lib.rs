@@ -17,11 +17,7 @@
 //!
 //! The default flow is: endpoints → workflow → policy → ops → model.
 
-// -----------------------------------------------------------------------------
-// Phase 0: path coherence re-exports (no behavior change)
-// -----------------------------------------------------------------------------
-
-pub mod access; // todo - potentially could be pub(crate) but custom errors would have to change
+pub mod access;
 pub mod api;
 pub mod bootstrap;
 #[doc(hidden)]

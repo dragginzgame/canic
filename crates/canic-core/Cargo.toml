@@ -13,6 +13,9 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[features]
+intent-test-canisters = []
+
 [dependencies]
 candid = { workspace = true }
 canic-cdk = { workspace = true }
@@ -39,6 +42,7 @@ candid = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 futures = "0.3"
+pocket-ic = { workspace = true }
 
 [[bench]]
 name = "serialize"

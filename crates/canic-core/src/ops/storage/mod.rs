@@ -1,6 +1,7 @@
 pub mod children;
 pub mod cycles;
 pub mod directory;
+pub mod intent;
 pub mod placement;
 pub mod pool;
 pub mod registry;
@@ -30,6 +31,9 @@ pub enum StorageOpsError {
 
     #[error(transparent)]
     AppStateOps(#[from] state::app::AppStateOpsError),
+
+    #[error(transparent)]
+    IntentStoreOps(#[from] intent::IntentStoreOpsError),
 }
 
 impl From<StorageOpsError> for InternalError {
