@@ -6,7 +6,7 @@ pub mod query;
 pub mod scheduler;
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     access::env,
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatusView, PoolBatchResult},
@@ -16,6 +16,7 @@ use crate::{
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
         storage::{
+            intent::{IntentResourceKey, IntentStoreOps},
             pool::{PoolData, PoolOps, PoolRecord, PoolStatus},
             registry::subnet::SubnetRegistryOps,
         },
@@ -159,12 +160,28 @@ impl PoolWorkflow {
         Self::require_pool_admin()?;
         admissibility::check_can_enter_pool(pid).await?;
 
+        let intent_id = IntentStoreOps::allocate_intent_id()?;
+        let intent_key = pool_import_intent_key(pid)?;
+        let created_at = IcOps::now_secs();
+        let _ = IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None)?;
+
+        // Invariant: mark_pending_reset must remain synchronous and non-trapping.
         Self::mark_pending_reset(pid);
 
         match Self::reset_into_pool(pid).await {
             Ok(cycles) => {
                 let _ = SubnetRegistryOps::remove(&pid);
                 Self::mark_ready(pid, cycles);
+
+                if let Err(err) = IntentStoreOps::commit(intent_id) {
+                    log!(
+                        Topic::CanisterPool,
+                        Warn,
+                        "pool import commit failed for {pid}: {err}"
+                    );
+                    return Err(err);
+                }
+
                 Ok(())
             }
             Err(err) => {
@@ -175,6 +192,14 @@ impl PoolWorkflow {
                     "pool import failed for {pid} class={class} origin={origin}: {err}"
                 );
                 Self::mark_failed(pid, &err);
+
+                if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
+                    log!(
+                        Topic::CanisterPool,
+                        Warn,
+                        "pool import abort failed for {pid}: {abort_err}"
+                    );
+                }
 
                 Err(err)
             }
@@ -263,4 +288,36 @@ impl PoolWorkflow {
 
         Ok(result)
     }
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+// Intent helpers
+// ─────────────────────────────────────────────────────────────
+//
+
+fn pool_import_intent_key(pid: Principal) -> Result<IntentResourceKey, InternalError> {
+    let bytes = pid.as_slice();
+    let mut buf = String::with_capacity(3 + bytes.len() * 2);
+    buf.push_str("pi:");
+    buf.push_str(&hex_encode(bytes));
+
+    IntentResourceKey::try_new(buf).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("pool import intent key: {err}"),
+        )
+    })
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+
+    for &b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+
+    out
 }

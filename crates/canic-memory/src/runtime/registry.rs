@@ -1,6 +1,6 @@
 use crate::registry::{
-    MemoryRange, MemoryRegistry, MemoryRegistryEntry, MemoryRegistryError, drain_pending_ranges,
-    drain_pending_registrations,
+    MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
+    MemoryRegistryError, drain_pending_ranges, drain_pending_registrations,
 };
 
 ///
@@ -78,6 +78,18 @@ impl MemoryRegistryRuntime {
     #[must_use]
     pub fn snapshot_ranges() -> Vec<(String, MemoryRange)> {
         MemoryRegistry::export_ranges()
+    }
+
+    /// Snapshot all reserved memory ranges with owners.
+    #[must_use]
+    pub fn snapshot_range_entries() -> Vec<MemoryRangeEntry> {
+        MemoryRegistry::export_range_entries()
+    }
+
+    /// Snapshot registry entries grouped by range.
+    #[must_use]
+    pub fn snapshot_ids_by_range() -> Vec<MemoryRangeSnapshot> {
+        MemoryRegistry::export_ids_by_range()
     }
 
     /// Retrieve a single registry entry by ID.

@@ -1,34 +1,60 @@
 use crate::{
     cdk::candid::Principal,
-    config::Config,
+    cdk::types::Cycles,
+    config::schema::{
+        CanisterConfig, CanisterKind, RandomnessConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
+    },
     ids::{CanisterRole, SubnetRole},
     ops::runtime::env::EnvOps,
     storage::stable::env::EnvData,
+    test::config::ConfigTestBuilder,
 };
 
 pub fn init_sharding_test_config() {
-    // Minimal config + env snapshot for sharding policy tests.
-    let toml = r#"
-        [subnets.prime.canisters.root]
-        kind = "root"
-        initial_cycles = "5T"
+    let mut sharding = ShardingConfig::default();
+    sharding.pools.insert(
+        "primary".to_string(),
+        ShardPool {
+            canister_role: CanisterRole::from("shard"),
+            policy: ShardPoolPolicy {
+                capacity: 1,
+                max_shards: 2,
+            },
+        },
+    );
 
-        [subnets.prime.canisters.manager]
-        kind = "node"
-        initial_cycles = "5T"
+    let root_cfg = CanisterConfig {
+        kind: CanisterKind::Root,
+        initial_cycles: Cycles::new(5_000_000_000_000),
+        topup: None,
+        randomness: RandomnessConfig::default(),
+        scaling: None,
+        sharding: None,
+    };
 
-        [subnets.prime.canisters.manager.sharding.pools.primary]
-        canister_role = "shard"
-        [subnets.prime.canisters.manager.sharding.pools.primary.policy]
-        capacity = 1
-        max_shards = 2
+    let manager_cfg = CanisterConfig {
+        kind: CanisterKind::Node,
+        initial_cycles: Cycles::new(5_000_000_000_000),
+        topup: None,
+        randomness: RandomnessConfig::default(),
+        scaling: None,
+        sharding: Some(sharding),
+    };
 
-        [subnets.prime.canisters.shard]
-        kind = "shard"
-        initial_cycles = "5T"
-    "#;
+    let shard_cfg = CanisterConfig {
+        kind: CanisterKind::Shard,
+        initial_cycles: Cycles::new(5_000_000_000_000),
+        topup: None,
+        randomness: RandomnessConfig::default(),
+        scaling: None,
+        sharding: None,
+    };
 
-    Config::init_from_toml(toml).expect("init sharding test config");
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(CanisterRole::ROOT, root_cfg)
+        .with_prime_canister("manager", manager_cfg)
+        .with_prime_canister("shard", shard_cfg)
+        .install();
 
     // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);

@@ -20,7 +20,7 @@ use crate::{
     },
     eager_static, ic_memory,
     ids::CanisterRole,
-    storage::{canister::CanisterRecord, stable::memory::registry::SUBNET_REGISTRY_ID},
+    storage::{canister::CanisterRecord, stable::memory::topology::SUBNET_REGISTRY_ID},
 };
 use std::cell::RefCell;
 

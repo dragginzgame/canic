@@ -8,7 +8,7 @@ use crate::{
     storage::{
         prelude::*,
         stable::{
-            memory::sharding::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+            memory::placement::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
             sharding::registry::ShardingRegistry,
         },
     },

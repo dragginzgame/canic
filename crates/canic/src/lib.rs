@@ -101,7 +101,9 @@ pub mod api {
 
     /// IC primitives (calls, HTTP, crypto, network, system APIs)
     pub mod ic {
-        pub use crate::__internal::core::api::ic::call::{Call, CallBuilder, CallResult};
+        pub use crate::__internal::core::api::ic::call::{
+            Call, CallBuilder, CallResult, IntentKey, IntentReservation,
+        };
 
         pub mod http {
             pub use crate::__internal::core::api::ic::http::HttpApi;

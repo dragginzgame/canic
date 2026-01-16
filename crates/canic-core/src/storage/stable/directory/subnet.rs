@@ -1,6 +1,6 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::directory::SUBNET_DIRECTORY_ID},
+    storage::{prelude::*, stable::memory::topology::SUBNET_DIRECTORY_ID},
 };
 use std::cell::RefCell;
 

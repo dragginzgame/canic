@@ -105,11 +105,9 @@ fn init() {
 ## Error handling
 
 The registry surfaces `MemoryRegistryError` for:
-- duplicate ranges, overlapping ranges, invalid range (start > end)
-- crate keys or labels longer than 256 bytes
-- registration outside the crate's reserved ranges
-- conflicting registrations on an ID with a different label
-- missing range for the crate
+- overlapping ranges or duplicate ID registrations
+- invalid range (start > end)
+- registration outside the crate's reserved ranges or owned by another crate
 
 Handle these at init time so your canister fails fast on invalid memory layout.
 
@@ -125,6 +123,14 @@ fn reserves_and_registers() {
     canic_memory::registry::MemoryRegistry::register(1, "my_crate", "Slot").unwrap();
 }
 ```
+
+## Registry introspection
+
+For diagnostics, the registry can provide:
+- ranges with owners via `MemoryRegistry::export_range_entries()`
+- registered IDs grouped by range via `MemoryRegistry::export_ids_by_range()`
+
+These helpers are intended for debugging and tests, not as a stable API contract.
 
 ## Notes
 

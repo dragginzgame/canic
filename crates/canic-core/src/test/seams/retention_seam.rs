@@ -1,12 +1,12 @@
-use canic_core::{
-    cdk::types::Cycles,
-    domain::policy,
-    ops::storage::cycles::CycleTrackerOps,
+use crate::{
+    cdk::types::Cycles, domain::policy, ops::storage::cycles::CycleTrackerOps, test::seams::lock,
 };
 
 #[test]
 fn retention_uses_policy_cutoff_for_cycles() {
-    let _guard = crate::lock();
+    let _guard = lock();
+
+    let _ = CycleTrackerOps::purge_before(u64::MAX);
 
     let now = 1_000_000;
     let cutoff = policy::cycles::retention_cutoff(now);

@@ -7,7 +7,7 @@ use crate::{
     eager_static, ic_memory,
     ids::CanisterRole,
     memory::impl_storable_bounded,
-    storage::stable::memory::scaling::SCALING_REGISTRY_ID,
+    storage::stable::memory::placement::SCALING_REGISTRY_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

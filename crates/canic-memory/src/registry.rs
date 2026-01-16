@@ -29,6 +29,27 @@ pub struct MemoryRegistryEntry {
 }
 
 ///
+/// MemoryRangeEntry
+///
+
+#[derive(Clone, Debug)]
+pub struct MemoryRangeEntry {
+    pub owner: String,
+    pub range: MemoryRange,
+}
+
+///
+/// MemoryRangeSnapshot
+///
+
+#[derive(Clone, Debug)]
+pub struct MemoryRangeSnapshot {
+    pub owner: String,
+    pub range: MemoryRange,
+    pub entries: Vec<(u8, MemoryRegistryEntry)>,
+}
+
+///
 /// MemoryRegistryError
 ///
 
@@ -47,8 +68,28 @@ conflicts with crate '{new_crate}' [{new_start}-{new_end}]"
         new_end: u8,
     },
 
+    #[error("memory range is invalid: start={start} end={end}")]
+    InvalidRange { start: u8, end: u8 },
+
     #[error("memory id {0} is already registered; each memory id must be globally unique")]
     DuplicateId(u8),
+
+    #[error("memory id {id} has no reserved range for crate '{crate_name}'")]
+    NoReservedRange { crate_name: String, id: u8 },
+
+    #[error(
+        "memory id {id} reserved to crate '{owner}' [{owner_start}-{owner_end}], not '{crate_name}'"
+    )]
+    IdOwnedByOther {
+        crate_name: String,
+        id: u8,
+        owner: String,
+        owner_start: u8,
+        owner_end: u8,
+    },
+
+    #[error("memory id {id} is outside reserved ranges for crate '{crate_name}'")]
+    IdOutOfRange { crate_name: String, id: u8 },
 }
 
 //
@@ -74,6 +115,10 @@ pub struct MemoryRegistry;
 impl MemoryRegistry {
     /// Reserve a memory range for a crate.
     pub fn reserve_range(crate_name: &str, start: u8, end: u8) -> Result<(), MemoryRegistryError> {
+        if start > end {
+            return Err(MemoryRegistryError::InvalidRange { start, end });
+        }
+
         let range = MemoryRange { start, end };
 
         RESERVED_RANGES.with_borrow(|ranges| {
@@ -109,6 +154,8 @@ impl MemoryRegistry {
 
     /// Register a memory ID.
     pub fn register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
+        validate_registration_range(crate_name, id)?;
+
         REGISTRY.with_borrow(|reg| {
             if reg.contains_key(&id) {
                 return Err(MemoryRegistryError::DuplicateId(id));
@@ -141,6 +188,46 @@ impl MemoryRegistry {
         RESERVED_RANGES.with_borrow(std::clone::Clone::clone)
     }
 
+    /// Export all reserved ranges with explicit owners.
+    #[must_use]
+    pub fn export_range_entries() -> Vec<MemoryRangeEntry> {
+        RESERVED_RANGES.with_borrow(|ranges| {
+            ranges
+                .iter()
+                .map(|(owner, range)| MemoryRangeEntry {
+                    owner: owner.clone(),
+                    range: *range,
+                })
+                .collect()
+        })
+    }
+
+    /// Export registry entries grouped by reserved range.
+    #[must_use]
+    pub fn export_ids_by_range() -> Vec<MemoryRangeSnapshot> {
+        let mut ranges = RESERVED_RANGES.with_borrow(std::clone::Clone::clone);
+        let entries = REGISTRY.with_borrow(std::clone::Clone::clone);
+
+        ranges.sort_by_key(|(_, range)| range.start);
+
+        ranges
+            .into_iter()
+            .map(|(owner, range)| {
+                let entries = entries
+                    .iter()
+                    .filter(|(id, _)| range.contains(**id))
+                    .map(|(id, entry)| (*id, entry.clone()))
+                    .collect();
+
+                MemoryRangeSnapshot {
+                    owner,
+                    range,
+                    entries,
+                }
+            })
+            .collect()
+    }
+
     /// Retrieve a single registry entry.
     #[must_use]
     pub fn get(id: u8) -> Option<MemoryRegistryEntry> {
@@ -153,12 +240,14 @@ impl MemoryRegistry {
 //
 
 pub fn defer_reserve_range(crate_name: &str, start: u8, end: u8) {
+    // Queue range reservations for runtime init to apply deterministically.
     PENDING_RANGES.with_borrow_mut(|ranges| {
         ranges.push((crate_name.to_string(), start, end));
     });
 }
 
 pub fn defer_register(id: u8, crate_name: &str, label: &str) {
+    // Queue ID registrations for runtime init to apply after ranges are reserved.
     PENDING_REGISTRATIONS.with_borrow_mut(|regs| {
         regs.push((id, crate_name.to_string(), label.to_string()));
     });
@@ -192,4 +281,103 @@ pub fn reset_for_tests() {
 
 const fn ranges_overlap(a: MemoryRange, b: MemoryRange) -> bool {
     a.start <= b.end && b.start <= a.end
+}
+
+fn validate_registration_range(crate_name: &str, id: u8) -> Result<(), MemoryRegistryError> {
+    let mut has_range = false;
+    let mut owner_match = false;
+    let mut owner_for_id: Option<(String, MemoryRange)> = None;
+
+    RESERVED_RANGES.with_borrow(|ranges| {
+        for (owner, range) in ranges {
+            if owner == crate_name {
+                has_range = true;
+                if range.contains(id) {
+                    owner_match = true;
+                    break;
+                }
+            }
+
+            if owner_for_id.is_none() && range.contains(id) {
+                owner_for_id = Some((owner.clone(), *range));
+            }
+        }
+    });
+
+    if owner_match {
+        return Ok(());
+    }
+
+    if !has_range {
+        return Err(MemoryRegistryError::NoReservedRange {
+            crate_name: crate_name.to_string(),
+            id,
+        });
+    }
+
+    if let Some((owner, range)) = owner_for_id {
+        return Err(MemoryRegistryError::IdOwnedByOther {
+            crate_name: crate_name.to_string(),
+            id,
+            owner,
+            owner_start: range.start,
+            owner_end: range.end,
+        });
+    }
+
+    Err(MemoryRegistryError::IdOutOfRange {
+        crate_name: crate_name.to_string(),
+        id,
+    })
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allows_in_range() {
+        reset_for_tests();
+
+        MemoryRegistry::reserve_range("crate_a", 1, 3).expect("reserve range");
+        MemoryRegistry::register(2, "crate_a", "slot").expect("register in range");
+    }
+
+    #[test]
+    fn rejects_unreserved() {
+        reset_for_tests();
+
+        let err = MemoryRegistry::register(2, "crate_a", "slot").expect_err("missing range");
+        assert!(matches!(err, MemoryRegistryError::NoReservedRange { .. }));
+    }
+
+    #[test]
+    fn rejects_other_owner() {
+        reset_for_tests();
+
+        MemoryRegistry::reserve_range("crate_a", 1, 3).expect("reserve range A");
+        MemoryRegistry::reserve_range("crate_b", 4, 6).expect("reserve range B");
+
+        let err = MemoryRegistry::register(2, "crate_b", "slot").expect_err("owned by other");
+        assert!(matches!(err, MemoryRegistryError::IdOwnedByOther { .. }));
+    }
+
+    #[test]
+    fn export_ids_by_range_groups_entries() {
+        reset_for_tests();
+
+        MemoryRegistry::reserve_range("crate_a", 1, 3).expect("reserve range A");
+        MemoryRegistry::reserve_range("crate_b", 4, 6).expect("reserve range B");
+        MemoryRegistry::register(1, "crate_a", "a1").expect("register a1");
+        MemoryRegistry::register(5, "crate_b", "b5").expect("register b5");
+
+        let snapshots = MemoryRegistry::export_ids_by_range();
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(snapshots[0].entries.len(), 1);
+        assert_eq!(snapshots[1].entries.len(), 1);
+    }
 }
