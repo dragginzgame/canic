@@ -687,4 +687,20 @@ mod tests {
         assert_eq!(totals_for(&resource_key), totals_after_first);
         assert_eq!(meta(), meta_after_first);
     }
+
+    #[test]
+    fn reserve_accepts_max_key_with_ttl() {
+        reset_store();
+        let intent_id = IntentId(103);
+        let key = "k".repeat(128);
+        let resource_key = IntentResourceKey::try_new(key).expect("key should be valid");
+
+        let record =
+            IntentStoreOps::try_reserve(intent_id, resource_key.clone(), 1, CREATED_AT, Some(60))
+                .expect("reserve should succeed");
+
+        assert_eq!(record.resource_key.as_ref().len(), 128);
+        assert_eq!(record.ttl_secs, Some(60));
+        assert!(IntentStoreOps::get(intent_id).is_some());
+    }
 }

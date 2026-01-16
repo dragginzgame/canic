@@ -10,7 +10,7 @@ use crate::{
             BTreeMap, DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory,
             storable::Bound,
         },
-        types::BoundedString64,
+        types::BoundedString128,
     },
     storage::{
         prelude::*,
@@ -64,7 +64,7 @@ eager_static! {
 /// IntentResourceKey
 ///
 
-pub type IntentResourceKey = BoundedString64;
+pub type IntentResourceKey = BoundedString128;
 
 ///
 /// IntentId
@@ -199,7 +199,7 @@ pub struct IntentPendingEntry {
 }
 
 impl IntentPendingEntry {
-    pub const STORABLE_MAX_SIZE: u32 = 192;
+    pub const STORABLE_MAX_SIZE: u32 = 224;
 }
 
 impl_storable_bounded!(
