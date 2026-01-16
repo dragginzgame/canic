@@ -1,8 +1,10 @@
 use crate::{
     InternalError, InternalErrorOrigin,
-    ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
     ops::{
-        ic::IcOps,
+        ic::{
+            IcOps,
+            call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
+        },
         storage::intent::{IntentResourceKey, IntentStoreOps},
     },
     workflow::prelude::*,
@@ -36,7 +38,7 @@ impl CallWorkflow {
 
 // Internal intent spec for call orchestration.
 pub struct IntentSpec {
-    key: String,
+    key: IntentResourceKey,
     quantity: u64,
     ttl_secs: Option<u64>,
     max_in_flight: Option<u64>,
@@ -44,7 +46,7 @@ pub struct IntentSpec {
 
 impl IntentSpec {
     pub const fn new(
-        key: String,
+        key: IntentResourceKey,
         quantity: u64,
         ttl_secs: Option<u64>,
         max_in_flight: Option<u64>,
