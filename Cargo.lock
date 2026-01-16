@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -264,11 +264,11 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.8.5"
+version = "0.8.6"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
@@ -278,14 +278,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "convert_case",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "canister_auth"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic",
@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "canic-core",
@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1546,7 +1546,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "candid",
  "ic-cdk",
