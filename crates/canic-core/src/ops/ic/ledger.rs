@@ -30,12 +30,34 @@ impl From<LedgerOpsError> for InternalError {
 }
 
 ///
+/// LedgerMeta
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LedgerMeta {
+    pub symbol: &'static str,
+    pub decimals: u8,
+    pub is_known: bool,
+}
+
+///
 /// LedgerOps
 ///
 
 pub struct LedgerOps;
 
 impl LedgerOps {
+    /// Best-effort metadata for a ledger canister.
+    #[must_use]
+    pub fn ledger_meta(ledger_id: Principal) -> LedgerMeta {
+        let meta = LedgerInfra::ledger_meta(ledger_id);
+        LedgerMeta {
+            symbol: meta.symbol,
+            decimals: meta.decimals,
+            is_known: meta.is_known,
+        }
+    }
+
     /// Query ICRC-2 allowance (raw ledger response).
     pub async fn allowance(
         ledger_id: Principal,

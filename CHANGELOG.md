@@ -5,6 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.8.7] - 2026-01-16
+### Added
+- Hourly intent cleanup workflow that aborts expired pending intents and reconciles totals.
+
+### Changed
+- Sharding policy now consumes policy-scoped placement and assignment views assembled by workflow.
+
+### Fixed
+- Intent TTL is enforced logically at read time; expired intents no longer count as pending or reserving capacity.
+
 ## [0.8.6] - 2026-01-16
 ### Fixed
 - Raised intent pending entry storage bound to accommodate 128-byte intent keys with TTL, plus a regression test.
@@ -582,7 +592,7 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 - Tons of little code improvements, especially splitting memory:: and ops::
 
 ## [0.1.7] - 2025-10-08
-- with dfx 0.30 now the subnet's pid can be read, and stored in the root's SubnetContext
+- with dfx 0.30.2 now the subnet's pid can be read, and stored in the root's SubnetContext
 
 ## [0.1.4] - 2025-10-07
 - added ops::delegation::sync_session_with_source to stop repeated code in toko

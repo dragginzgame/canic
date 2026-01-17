@@ -1,4 +1,6 @@
-use crate::{cdk::candid::Principal, ops::storage::placement::sharding::ShardEntry};
+use crate::{
+    cdk::candid::Principal, domain::policy::placement::sharding::view::ShardPlacementView,
+};
 
 ///
 /// PoolMetrics
@@ -15,13 +17,16 @@ pub struct PoolMetrics {
 
 /// compute_pool_metrics
 #[must_use]
-pub fn compute_pool_metrics(pool: &str, entries: &[(Principal, ShardEntry)]) -> PoolMetrics {
+pub fn compute_pool_metrics(
+    pool: &str,
+    entries: &[(Principal, ShardPlacementView)],
+) -> PoolMetrics {
     let mut active = 0;
     let mut cap = 0;
     let mut used = 0;
 
     for (_, e) in entries {
-        if e.capacity > 0 && e.pool.as_ref() == pool {
+        if e.capacity > 0 && e.pool.as_str() == pool {
             active += 1;
             cap += u64::from(e.capacity);
             used += u64::from(e.count);

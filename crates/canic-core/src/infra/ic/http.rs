@@ -4,7 +4,7 @@ use thiserror::Error as ThisError;
 ///
 /// CDK Http Imports
 ///
-pub use crate::cdk::mgmt::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult};
+pub use crate::cdk::mgmt::{HttpRequestArgs, HttpRequestResult};
 
 ///
 /// HttpInfraError

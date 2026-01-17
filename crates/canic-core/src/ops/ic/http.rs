@@ -1,15 +1,16 @@
 use crate::{
     InternalError,
     ids::SystemMetricKind,
-    infra::{
-        InfraError,
-        ic::http::{HttpHeader, HttpInfra, HttpMethod, HttpRequestArgs, HttpRequestResult},
-    },
+    infra::{InfraError, ic::http::HttpInfra},
     ops::{
         ic::IcOpsError,
-        runtime::metrics::{http::HttpMetrics, system::SystemMetrics},
+        runtime::metrics::{
+            http::{HttpMethod as MetricsHttpMethod, HttpMetrics},
+            system::SystemMetrics,
+        },
     },
 };
+use candid::Nat;
 use num_traits::cast::ToPrimitive;
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
@@ -21,6 +22,65 @@ use thiserror::Error as ThisError;
 
 /// Maximum allowed response size for HTTP outcalls.
 pub const MAX_RESPONSE_BYTES: u64 = 200_000;
+
+///
+/// HttpHeader
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+///
+/// HttpMethod
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HttpMethod {
+    Get,
+    Head,
+    Post,
+}
+
+///
+/// HttpRequestArgs
+///
+
+#[derive(Clone, Debug)]
+pub struct HttpRequestArgs {
+    pub url: String,
+    pub max_response_bytes: Option<u64>,
+    pub method: HttpMethod,
+    pub headers: Vec<HttpHeader>,
+    pub body: Option<Vec<u8>>,
+    pub is_replicated: Option<bool>,
+}
+
+impl Default for HttpRequestArgs {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            max_response_bytes: None,
+            method: HttpMethod::Get,
+            headers: Vec::new(),
+            body: None,
+            is_replicated: None,
+        }
+    }
+}
+
+///
+/// HttpRequestResult
+///
+
+#[derive(Clone, Debug)]
+pub struct HttpRequestResult {
+    pub status: Nat,
+    pub headers: Vec<HttpHeader>,
+    pub body: Vec<u8>,
+}
 
 ///
 /// HttpOpsError
@@ -71,7 +131,7 @@ impl HttpOps {
     ) -> Result<T, InternalError> {
         let args = HttpRequestArgs {
             url: url.to_string(),
-            method: HttpMethod::GET,
+            method: HttpMethod::Get,
             headers: Self::headers_from_pairs(headers),
             max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..Default::default()
@@ -109,17 +169,18 @@ impl HttpOps {
         label: Option<&str>,
     ) -> Result<HttpRequestResult, InternalError> {
         Self::record_metrics(args.method, &args.url, label);
-        let res = HttpInfra::http_request_raw(&args)
+        let cdk_args = crate::cdk::mgmt::HttpRequestArgs::from(args);
+        let res = HttpInfra::http_request_raw(&cdk_args)
             .await
             .map_err(HttpOpsError::from)?;
 
-        Ok(res)
+        Ok(HttpRequestResult::from(res))
     }
 
     /// Record outbound HTTP metrics.
     fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        HttpMetrics::record_http_request(method.into(), url, label);
+        HttpMetrics::record_http_request(metrics_method(method), url, label);
     }
 
     ///
@@ -134,5 +195,75 @@ impl HttpOps {
                 value: (*value).to_string(),
             })
             .collect()
+    }
+}
+
+const fn metrics_method(method: HttpMethod) -> MetricsHttpMethod {
+    match method {
+        HttpMethod::Get => MetricsHttpMethod::Get,
+        HttpMethod::Post => MetricsHttpMethod::Post,
+        HttpMethod::Head => MetricsHttpMethod::Head,
+    }
+}
+
+impl From<HttpMethod> for crate::cdk::mgmt::HttpMethod {
+    fn from(method: HttpMethod) -> Self {
+        match method {
+            HttpMethod::Get => Self::GET,
+            HttpMethod::Post => Self::POST,
+            HttpMethod::Head => Self::HEAD,
+        }
+    }
+}
+
+impl From<crate::cdk::mgmt::HttpMethod> for HttpMethod {
+    fn from(method: crate::cdk::mgmt::HttpMethod) -> Self {
+        match method {
+            crate::cdk::mgmt::HttpMethod::GET => Self::Get,
+            crate::cdk::mgmt::HttpMethod::POST => Self::Post,
+            crate::cdk::mgmt::HttpMethod::HEAD => Self::Head,
+        }
+    }
+}
+
+impl From<HttpHeader> for crate::cdk::mgmt::HttpHeader {
+    fn from(header: HttpHeader) -> Self {
+        Self {
+            name: header.name,
+            value: header.value,
+        }
+    }
+}
+
+impl From<crate::cdk::mgmt::HttpHeader> for HttpHeader {
+    fn from(header: crate::cdk::mgmt::HttpHeader) -> Self {
+        Self {
+            name: header.name,
+            value: header.value,
+        }
+    }
+}
+
+impl From<HttpRequestArgs> for crate::cdk::mgmt::HttpRequestArgs {
+    fn from(args: HttpRequestArgs) -> Self {
+        Self {
+            url: args.url,
+            max_response_bytes: args.max_response_bytes,
+            method: args.method.into(),
+            headers: args.headers.into_iter().map(Into::into).collect(),
+            body: args.body,
+            transform: None,
+            is_replicated: args.is_replicated,
+        }
+    }
+}
+
+impl From<crate::cdk::mgmt::HttpRequestResult> for HttpRequestResult {
+    fn from(result: crate::cdk::mgmt::HttpRequestResult) -> Self {
+        Self {
+            status: result.status,
+            headers: result.headers.into_iter().map(Into::into).collect(),
+            body: result.body,
+        }
     }
 }

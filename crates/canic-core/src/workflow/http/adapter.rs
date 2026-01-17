@@ -1,6 +1,6 @@
 use crate::{
     dto::http,
-    infra::ic::http::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult},
+    ops::ic::http::{HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult},
 };
 
 ///
@@ -22,7 +22,6 @@ impl HttpAdapter {
                 .map(Self::header_from_dto)
                 .collect(),
             body: args.body,
-            transform: None,
             is_replicated: args.is_replicated,
         }
     }
@@ -42,9 +41,9 @@ impl HttpAdapter {
 
     const fn method_from_dto(method: http::HttpMethod) -> HttpMethod {
         match method {
-            http::HttpMethod::GET => HttpMethod::GET,
-            http::HttpMethod::POST => HttpMethod::POST,
-            http::HttpMethod::HEAD => HttpMethod::HEAD,
+            http::HttpMethod::GET => HttpMethod::Get,
+            http::HttpMethod::POST => HttpMethod::Post,
+            http::HttpMethod::HEAD => HttpMethod::Head,
         }
     }
 

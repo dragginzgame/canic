@@ -1,4 +1,5 @@
 pub mod cycles;
+pub mod intent;
 pub mod log;
 pub mod random;
 pub mod timer;
@@ -39,6 +40,7 @@ impl RuntimeWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
+        workflow::runtime::intent::IntentCleanupWorkflow::start();
         workflow::runtime::log::LogRetentionWorkflow::start();
         workflow::runtime::random::RandomWorkflow::start();
     }

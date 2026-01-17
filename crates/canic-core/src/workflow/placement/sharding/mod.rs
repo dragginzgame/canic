@@ -132,13 +132,22 @@ impl ShardingWorkflow {
         // ---------------------------------------------------------------------
 
         let registry = ShardingRegistryOps::export();
+        let entry_views: Vec<_> = registry
+            .entries
+            .iter()
+            .map(|(pid, entry)| ShardingMapper::entry_to_policy_view(*pid, entry))
+            .collect();
 
         let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
             pool,
-            &registry.entries,
+            &entry_views,
         );
 
-        let assignments = ShardingRegistryOps::assignments_for_pool(pool);
+        let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
+        let assignment_views: Vec<_> = assignments_raw
+            .iter()
+            .map(|(key, pid)| ShardingMapper::assignment_to_policy_view(key, *pid))
+            .collect();
 
         let state = ShardingState {
             pool,
@@ -147,8 +156,8 @@ impl ShardingWorkflow {
                 policy: policy.clone(),
             },
             metrics: &metrics,
-            entries: &registry.entries,
-            assignments: &assignments,
+            entries: &entry_views,
+            assignments: &assignment_views,
         };
 
         // ---------------------------------------------------------------------
@@ -219,13 +228,22 @@ impl ShardingWorkflow {
         tenant: impl AsRef<str>,
     ) -> Result<ShardingPlanStateView, InternalError> {
         let registry = ShardingRegistryOps::export();
+        let entry_views: Vec<_> = registry
+            .entries
+            .iter()
+            .map(|(pid, entry)| ShardingMapper::entry_to_policy_view(*pid, entry))
+            .collect();
 
         let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
             pool,
-            &registry.entries,
+            &entry_views,
         );
 
-        let assignments = ShardingRegistryOps::assignments_for_pool(pool);
+        let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
+        let assignment_views: Vec<_> = assignments_raw
+            .iter()
+            .map(|(key, pid)| ShardingMapper::assignment_to_policy_view(key, *pid))
+            .collect();
 
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
 
@@ -233,8 +251,8 @@ impl ShardingWorkflow {
             pool,
             config: pool_cfg,
             metrics: &metrics,
-            entries: &registry.entries,
-            assignments: &assignments,
+            entries: &entry_views,
+            assignments: &assignment_views,
         };
 
         let plan = ShardingPolicy::plan_assign(&state, tenant.as_ref(), None);

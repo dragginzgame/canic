@@ -1,123 +1,202 @@
+Below is a **clean, tightened rewrite** of your document.
+I have preserved your intent and structure, but I have:
+
+* Removed ambiguity and self-contradictions
+* Normalized terminology across layers
+* Made rules *testable* rather than aspirational
+* Clarified where async is allowed and why
+* Strengthened the separation between **decision**, **mutation**, and **orchestration**
+* Reduced opportunities for “interpretive compliance”
+
+This version is suitable as a **canonical architecture contract**.
+
+---
+
+# Canic Architecture Model
+
+This document defines the **enforceable architectural boundaries** of the Canic core.
+Each layer has a single responsibility and a clear dependency direction.
+
+> If code appears to belong to more than one layer, it **must be split**.
+
+---
+
+## Dependency Direction (Non-Negotiable)
+
+```
+endpoints/macros
+        ↓
+     workflow
+        ↓
+      policy
+        ↓
+        ops
+        ↓
+       model
+        ↓
+       infra
+```
+
+* Dependencies are **one-way**
+* Lower layers must never depend on higher layers
+* Lateral dependencies are forbidden unless explicitly documented
 
 ---
 
 ## model/
 
-### Purpose
+### Responsibility
 
-* Owns **canonical domain state**
-* Defines **stable memory layout**
-* Enforces **local data invariants**
-* Provides storage-level import/export
+Owns **canonical domain state**.
+
+The model layer defines:
+
+* what is stored
+* how it is stored
+* what is structurally valid at rest
+
+### Guarantees
+
+* Stable memory layout
+* Deterministic serialization
+* Local structural invariants
 
 ### Allowed
 
-* Stable structures
-* Registries and indexes
+* Stable data structures
+* Registries, indexes, and keys
 * Domain data types
-* Structural invariants local to a type
-* Serialization / encoding required for storage
+* Type-local invariants (e.g. uniqueness within a registry)
+* Import/export of stored state
+* Encoding required for stable memory
 
 ### Forbidden
 
 * Config access
-* IC management calls
+* IC or system calls
 * Async code
 * Timers
-* Cross-entity business rules
-* System-wide decisions
+* Cross-entity or system-wide rules
+* Business decisions
+* Lifecycle coordination
 
 ### Rule
 
-> `model` defines what *is true* about stored state.
-> It does not decide *what should happen next*.
+> `model` defines what **is true** about persisted state.
+> It never decides what should happen next.
 
 ---
 
 ## infra/
 
-### Purpose
+### Responsibility
 
-* Low-level, reusable **platform primitives**
-* Raw interfaces to the Internet Computer and system facilities
-* Infra types must not reference domain enums or identifiers.
+Provides **raw platform capabilities**.
 
-Infra exists to answer: *“How do we talk to the platform?”*
+Infra answers:
+
+> “How do we talk to the platform?”
+
+### Guarantees
+
+* No business meaning
+* No application semantics
+* Reusable outside Canic
 
 ### Allowed
 
 * IC management canister calls
-* Inter-canister call helpers
+* Inter-canister call primitives
 * Cryptography and signatures
-* Timers, randomness
+* Timers, randomness, system clocks
 * Performance counters
-* Serialization required by the platform
+* Platform-required serialization
 * Pure utility code
 
 ### Forbidden
 
 * Domain concepts (roles, pools, shards, parents, children)
+* Domain identifiers or enums
 * Model access or mutation
-* Ops errors or ops logic
-* Policy decisions
+* Ops or policy logic
 * Workflow orchestration
-* DTO assembly or pagination
 * Authorization checks
+* DTO assembly or pagination
 
 ### Rule
 
 > `infra` provides **capabilities**, not **meaning**.
-> It must be usable outside this application without modification.
+> It must be usable without knowledge of the application.
 
 ---
 
 ## ops/
 
-### Purpose
+### Responsibility
 
-* Application-level access to model state
-* Command and query façades
-* Deterministic state mutation (no async, no retries, no timing dependence)
-* Adaptation from domain → DTO
+Provides **deterministic access to canonical state**.
 
-This includes `ops/storage/*` and `ops/adapter/*`.
+Ops is the *only* layer allowed to mutate the model.
+
+### Guarantees
+
+* Deterministic behavior
+* No timing dependence
+* No retries or orchestration
+* No policy decisions
 
 ### Allowed
 
 * Reading and writing model state
-* Enforcing **application preconditions** (existence, ownership, mode, etc.)
+* Enforcing **application preconditions**
+
+  * existence
+  * ownership
+  * mode
+  * invariant preservation
 * Returning `Result`, `Option`, or typed errors
-* Translating domain data into DTOs / Views
+* Translating domain state into DTOs / views
 * Wrapping infra capabilities with application semantics
 
 ### Forbidden
 
 * Business policy or optimization logic
-* Multi-step orchestration
-* Cross-canister workflows
-* Acting based on “should we” decisions
+* “Should we?” decisions
+* Multi-step workflows
+* Cross-canister orchestration
+* Async control flow that alters outcomes
 
 ### Rule
 
-> `ops` applies changes safely and deterministically,
-> but does not decide *whether* those changes are desirable.
+> `ops` applies changes **safely and deterministically**,
+> but never decides whether those changes are desirable.
 
 ---
 
 ## policy/
 
-### Purpose
+### Responsibility
 
-* Pure decision-making and rule evaluation
-* System-level rules and constraints
-* Placement, scaling, sharding, eligibility logic
+Pure **decision-making**.
+
+Policy answers:
+
+* “Is this allowed?”
+* “Is this valid?”
+* “Is this optimal?”
+
+### Guarantees
+
+* Deterministic
+* Side-effect free
+* Testable in isolation
 
 ### Allowed
 
-* Reading config (directly or via ops)
-* Evaluating observed state passed in by workflows
-* Deterministic computations
-* “Can we?” / “Should we?” decisions
+* Reading configuration
+* Evaluating observed state passed in by workflow
+* Pure computation
+* Eligibility, placement, scaling, sharding logic
 
 ### Forbidden
 
@@ -126,6 +205,7 @@ This includes `ops/storage/*` and `ops/adapter/*`.
 * Async
 * Timers
 * Side effects of any kind
+* Storage or infra types
 
 ### Rule
 
@@ -135,46 +215,53 @@ This includes `ops/storage/*` and `ops/adapter/*`.
 
 ## workflow/
 
-### Purpose
+### Responsibility
 
-* Orchestration and lifecycle management
-* Multi-step behavior over time
-* Side-effects and coordination
+**Orchestration and lifecycle management**.
+
+Workflow is where *things actually happen*.
+
+### Guarantees
+
+* Explicit sequencing
+* Explicit failure handling
+* Explicit side-effects
 
 ### Allowed
 
-* Async
+* Async execution
 * IC management calls (via infra or ops wrappers)
-* Timers and retries
+* Timers, retries, and scheduling
 * Cascades and rollbacks
-* State mutation **via ops**
+* State mutation **only via ops**
 * Calling policy to validate decisions
 
 ### Forbidden
 
 * Direct model access
-* Embedding policy logic inline
-* Acting without going through ops
+* Inline policy logic
+* Bypassing ops for state changes
 
 ### Rule
 
-> `workflow` is where things happen.
+> `workflow` coordinates behavior over time.
 
 ---
 
 ## endpoints / macros
 
-### Purpose
+### Responsibility
 
-* System boundary
-* Auth, dispatch, wiring
-* ABI / DTO marshalling
+Defines the **system boundary**.
+
+Endpoints translate the outside world into internal execution.
 
 ### Allowed
 
-* Calling workflow or ops entrypoints
-* Guards and authorization
+* Auth and guards
+* Dispatch and wiring
 * Input/output conversion
+* Calling workflow or ops entrypoints
 
 ### Forbidden
 
@@ -192,83 +279,72 @@ This includes `ops/storage/*` and `ops/adapter/*`.
 
 ## dto/
 
-### Purpose
+### Responsibility
 
-* External and semi-external data contracts
-* ABI, views, snapshots, metrics, logs
+Defines **external and semi-external data contracts**.
 
-### Notes
+DTOs are passive representations of state.
 
-* DTOs are **passive**
-* DTOs may duplicate domain fields intentionally
-* DTOs are allowed to be versioned (`dto::abi::v1`)
+### Characteristics
 
-DTOs are **never mutated** and never enforce invariants.
+* Immutable
+* Versionable (`dto::abi::v1`)
+* May intentionally duplicate domain fields
+* Never enforce invariants
+
+### Rule
+
+> DTOs describe data; they never validate or mutate it.
 
 ---
 
 ## Common Classification Examples
 
-| Code does…                        | Layer         |
-|----------------------------------|---------------|
-| Stores parent/child relationships| model         |
-| Reads stable registry            | ops           |
-| Writes stable registry           | ops           |
-| Wraps IC management calls        | infra         |
-| Adds metrics to IC calls         | ops           |
-| Enforces singleton uniqueness    | policy        |
-| Chooses a shard                  | policy        |
-| Validates eligibility            | policy        |
-| Creates a canister               | workflow      |
-| Cascades state                   | workflow      |
-| Schedules a timer                | workflow      |
-| Converts domain → view           | ops (adapter) |
+| Code does…                        | Layer    |
+| --------------------------------- | -------- |
+| Stores parent/child relationships | model    |
+| Reads stable registry             | ops      |
+| Writes stable registry            | ops      |
+| Wraps IC management calls         | infra    |
+| Adds metrics to IC calls          | ops      |
+| Enforces singleton uniqueness     | policy   |
+| Chooses a shard                   | policy   |
+| Validates eligibility             | policy   |
+| Creates a canister                | workflow |
+| Cascades state                    | workflow |
+| Schedules a timer                 | workflow |
+| Converts domain → view            | ops      |
 
 ---
 
-## Architectural Placement Checklist
+## Placement Checklist
 
 When placing code, ask:
 
-1. Does this **store canonical state**? → model
-2. Does this **expose platform mechanics**? → infra
-3. Does this **read or mutate state deterministically**? → ops
-4. Does this **decide whether something is allowed or optimal**? → policy
-5. Does this **coordinate steps or perform effects**? → workflow
+1. Does this store canonical state? → **model**
+2. Does this expose platform mechanics? → **infra**
+3. Does this read or mutate state deterministically? → **ops**
+4. Does this decide whether something is allowed or optimal? → **policy**
+5. Does this coordinate steps or perform effects? → **workflow**
 
-If more than one answer applies, the code must be **split**.
+If more than one answer applies, **split the code**.
 
 ---
 
 ## Non-Goals
 
-* This architecture does not optimize for minimal directories.
-* Thin layers are acceptable if responsibilities are clear.
-* Duplication across layers is allowed when representations differ.
-* Clarity beats cleverness.
+* Minimal directory count
+* Clever abstractions
+* Avoiding duplication at all costs
+
+Duplication is acceptable when representations differ.
+Clarity always wins.
 
 ---
 
 ## Enforcement
 
-* All new code must conform to this model.
-* Refactors should migrate **one feature end-to-end** (model → workflow).
-* Avoid partial migrations that blur responsibilities.
-* When in doubt, **split the code**, not the layer.
-
----
-
-### Final note
-
-This document is now **complete, internally consistent, and enforceable**.
-
-It reflects:
-* your current refactors
-* your infra/ops split
-* your policy/workflow boundary
-* your long-term maintenance goals
-
-It is safe to hand to:
-* junior developers
-* reviewers
-* future you in six months
+* All new code must conform to this model
+* Refactors must migrate **one feature end-to-end**
+* Partial migrations that blur responsibilities are discouraged
+* When in doubt: **split the code, not the layer**
