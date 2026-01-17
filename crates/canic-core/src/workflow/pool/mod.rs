@@ -173,7 +173,7 @@ impl PoolWorkflow {
                 let _ = SubnetRegistryOps::remove(&pid);
                 Self::mark_ready(pid, cycles);
 
-                if let Err(err) = IntentStoreOps::commit(intent_id) {
+                if let Err(err) = IntentStoreOps::commit_at(intent_id, IcOps::now_secs()) {
                     log!(
                         Topic::CanisterPool,
                         Warn,

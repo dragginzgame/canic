@@ -64,7 +64,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `test/` – workspace‑only test canister used by host‑side fixtures.
 * `scripts/` – build, release, and environment helpers.
 
-  * `app/` – dfx bootstrap scripts for the demo topology.
+  * `app/` – bootstrap scripts for the demo topology.
   * `bench/` – local benchmarking helpers.
   * `ci/` – version bumping and security checks used by CI.
   * `env/` – local environment utilities (e.g., shared env updates).

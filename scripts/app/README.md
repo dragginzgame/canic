@@ -14,9 +14,9 @@ These scripts support the reference canisters under `crates/canisters/` and the 
 scripts/app/dfx_start.sh
 ```
 
-This runs `dfx stop` and then `dfx start --clean --system-canisters`.
+This runs `dfx` (`dfx stop` then `dfx start --clean --system-canisters`).
 
-## Build Canisters (dfx)
+## Build Canisters
 
 From the repo root:
 
@@ -32,7 +32,7 @@ dfx build --all
 
 ## Why `.wasm.gz` Exists
 
-`dfx.json` sets `"gzip": true`, so dfx also writes a gzipped artifact:
+`dfx.json` sets `"gzip": true`, so dfx 0.30.2 also writes a gzipped artifact:
 `.dfx/local/canisters/<name>/<name>.wasm.gz`.
 
 The root reference canister (`crates/canisters/root`) embeds these gzipped WASMs via `include_bytes!` to simulate a “WASM bundle” used during local orchestration flows.

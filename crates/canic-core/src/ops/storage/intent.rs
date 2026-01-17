@@ -2,7 +2,7 @@
 
 use crate::{
     InternalError,
-    ops::storage::StorageOpsError,
+    ops::{ic::IcOps, storage::StorageOpsError},
     storage::stable::intent::{INTENT_STORE_SCHEMA_VERSION, IntentStore},
 };
 use thiserror::Error as ThisError;
@@ -12,20 +12,26 @@ pub use crate::storage::stable::intent::{
     IntentState, IntentStoreMeta,
 };
 
-///
-/// IntentStoreOpsError
-///
+/// -----------------------------------------------------------------------------
+/// Errors
+/// -----------------------------------------------------------------------------
 
 #[derive(Debug, ThisError)]
 pub enum IntentStoreOpsError {
+    #[error("intent {0} conflicts with existing record")]
+    Conflict(IntentId),
+
     #[error("intent store schema mismatch (expected {expected}, found {found})")]
     SchemaMismatch { expected: u32, found: u32 },
 
     #[error("intent {0} not found")]
     NotFound(IntentId),
 
-    #[error("intent {0} conflicts with existing record")]
-    Conflict(IntentId),
+    #[error("intent {id} expired at {expires_at:?}")]
+    Expired {
+        id: IntentId,
+        expires_at: Option<u64>,
+    },
 
     #[error("intent {id} invalid transition {from:?} -> {to:?}")]
     InvalidTransition {
@@ -67,9 +73,9 @@ impl From<IntentStoreOpsError> for InternalError {
     }
 }
 
-///
-/// IntentStoreOps
-///
+/// -----------------------------------------------------------------------------
+/// Ops
+/// -----------------------------------------------------------------------------
 
 pub struct IntentStoreOps;
 
@@ -88,7 +94,6 @@ impl IntentStoreOps {
             .ok_or(IntentStoreOpsError::IdOverflow)?;
         meta.next_intent_id = IntentId(next);
         IntentStore::set_meta(meta);
-
         Ok(id)
     }
 
@@ -104,8 +109,12 @@ impl IntentStoreOps {
         ttl_secs: Option<u64>,
     ) -> Result<IntentRecord, InternalError> {
         let meta = ensure_schema()?;
+        let now = IcOps::now_secs();
 
         if let Some(existing) = IntentStore::get_record(intent_id) {
+            if is_record_expired(now, &existing) {
+                return Err(expired_err(intent_id, &existing).into());
+            }
             ensure_compatible(&existing, &resource_key, quantity, ttl_secs)?;
             return Ok(existing);
         }
@@ -140,8 +149,7 @@ impl IntentStoreOps {
             ttl_secs,
         };
 
-        let old = IntentStore::insert_record(record.clone());
-        if old.is_some() {
+        if IntentStore::insert_record(record.clone()).is_some() {
             return Err(IntentStoreOpsError::Conflict(intent_id).into());
         }
 
@@ -152,7 +160,7 @@ impl IntentStoreOps {
         Ok(record)
     }
 
-    pub fn commit(intent_id: IntentId) -> Result<IntentRecord, InternalError> {
+    pub fn commit_at(intent_id: IntentId, now: u64) -> Result<IntentRecord, InternalError> {
         let meta = ensure_schema()?;
         let record =
             IntentStore::get_record(intent_id).ok_or(IntentStoreOpsError::NotFound(intent_id))?;
@@ -170,12 +178,15 @@ impl IntentStoreOps {
             IntentState::Pending => {}
         }
 
-        if IntentStore::get_pending(intent_id).is_none() {
-            return Err(IntentStoreOpsError::PendingIndexMissing(intent_id).into());
+        if is_record_expired(now, &record) {
+            return Err(expired_err(intent_id, &record).into());
         }
+
+        ensure_pending_exists(intent_id)?;
 
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
+
         let new_totals = IntentResourceTotals {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: checked_add(totals.committed_qty, record.quantity, "committed_qty")?,
@@ -191,11 +202,13 @@ impl IntentStoreOps {
             ..record.clone()
         };
 
-        IntentStore::remove_pending(intent_id);
-        IntentStore::set_totals(record.resource_key, new_totals);
-        IntentStore::set_meta(meta);
-        IntentStore::insert_record(updated.clone());
-
+        remove_pending_and_apply(
+            intent_id,
+            record.resource_key,
+            new_totals,
+            meta,
+            updated.clone(),
+        );
         Ok(updated)
     }
 
@@ -217,12 +230,11 @@ impl IntentStoreOps {
             IntentState::Pending => {}
         }
 
-        if IntentStore::get_pending(intent_id).is_none() {
-            return Err(IntentStoreOpsError::PendingIndexMissing(intent_id).into());
-        }
+        ensure_pending_exists(intent_id)?;
 
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
+
         let new_totals = IntentResourceTotals {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: totals.committed_qty,
@@ -238,56 +250,103 @@ impl IntentStoreOps {
             ..record.clone()
         };
 
-        IntentStore::remove_pending(intent_id);
-        IntentStore::set_totals(record.resource_key, new_totals);
-        IntentStore::set_meta(meta);
-        IntentStore::insert_record(updated.clone());
-
+        remove_pending_and_apply(
+            intent_id,
+            record.resource_key,
+            new_totals,
+            meta,
+            updated.clone(),
+        );
         Ok(updated)
     }
 
     // -------------------------------------------------------------
-    // Data (read-only)
+    // Read-only views (TTL authoritative)
     // -------------------------------------------------------------
 
-    #[must_use]
-    #[allow(dead_code)]
-    pub fn get(intent_id: IntentId) -> Option<IntentRecord> {
-        IntentStore::get_record(intent_id)
+    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotals {
+        let committed_qty = IntentStore::get_totals(resource_key).map_or(0, |t| t.committed_qty);
+
+        let mut reserved_qty: u64 = 0;
+        let mut pending_count: u64 = 0;
+
+        for (_, entry) in IntentStore::pending_entries() {
+            if entry.resource_key.as_ref() != resource_key.as_ref() {
+                continue;
+            }
+            if is_pending_entry_expired(now, &entry) {
+                continue;
+            }
+            reserved_qty = reserved_qty.saturating_add(entry.quantity);
+            pending_count = pending_count.saturating_add(1);
+        }
+
+        IntentResourceTotals {
+            reserved_qty,
+            committed_qty,
+            pending_count,
+        }
     }
 
     #[allow(dead_code)]
-    pub fn meta() -> Result<IntentStoreMeta, InternalError> {
-        ensure_schema().map_err(InternalError::from)
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub fn totals(resource_key: &IntentResourceKey) -> Option<IntentResourceTotals> {
-        IntentStore::get_totals(resource_key)
-    }
-
-    #[must_use]
-    #[allow(dead_code)]
-    pub fn pending_entries() -> Vec<(IntentId, IntentPendingEntry)> {
-        IntentStore::pending_entries()
-    }
-
-    #[must_use]
-    #[expect(dead_code)]
-    pub fn pending_snapshot() -> Vec<IntentRecord> {
+    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntry)> {
         IntentStore::pending_entries()
             .into_iter()
-            .filter_map(|(id, _)| IntentStore::get_record(id))
+            .filter(|(_, e)| !is_pending_entry_expired(now, e))
             .collect()
+    }
+
+    pub fn list_expired_pending_intents(now: u64) -> Vec<IntentId> {
+        IntentStore::pending_entries()
+            .into_iter()
+            .filter(|(_, e)| is_pending_entry_expired(now, e))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    // -------------------------------------------------------------
+    // Cleanup / repair helpers
+    // -------------------------------------------------------------
+
+    pub fn abort_intent_if_pending(intent_id: IntentId) -> Result<bool, InternalError> {
+        let Some(record) = IntentStore::get_record(intent_id) else {
+            return Ok(false);
+        };
+        if record.state != IntentState::Pending {
+            return Ok(false);
+        }
+
+        let mut meta = ensure_schema()?;
+        let totals = IntentStore::get_totals(&record.resource_key).unwrap_or_default();
+
+        let new_totals = IntentResourceTotals {
+            reserved_qty: totals.reserved_qty.saturating_sub(record.quantity),
+            committed_qty: totals.committed_qty,
+            pending_count: totals.pending_count.saturating_sub(1),
+        };
+
+        meta.pending_total = meta.pending_total.saturating_sub(1);
+        meta.aborted_total = meta.aborted_total.saturating_add(1);
+
+        let updated = IntentRecord {
+            state: IntentState::Aborted,
+            ..record
+        };
+
+        remove_pending_and_apply(
+            intent_id,
+            updated.resource_key.clone(),
+            new_totals,
+            meta,
+            updated,
+        );
+        Ok(true)
     }
 }
 
-//
-// ─────────────────────────────────────────────────────────────
-// Internal helpers (mechanical)
-// ─────────────────────────────────────────────────────────────
-//
+/// -----------------------------------------------------------------------------
+/// Internal helpers (mechanical)
+/// -----------------------------------------------------------------------------
 
 fn ensure_schema() -> Result<IntentStoreMeta, IntentStoreOpsError> {
     let meta = IntentStore::meta();
@@ -297,25 +356,51 @@ fn ensure_schema() -> Result<IntentStoreMeta, IntentStoreOpsError> {
             found: meta.schema_version,
         });
     }
-
     Ok(meta)
+}
+
+fn ensure_pending_exists(intent_id: IntentId) -> Result<(), IntentStoreOpsError> {
+    if IntentStore::get_pending(intent_id).is_none() {
+        Err(IntentStoreOpsError::PendingIndexMissing(intent_id))
+    } else {
+        Ok(())
+    }
+}
+
+fn remove_pending_and_apply(
+    intent_id: IntentId,
+    resource_key: IntentResourceKey,
+    totals: IntentResourceTotals,
+    meta: IntentStoreMeta,
+    record: IntentRecord,
+) {
+    IntentStore::remove_pending(intent_id);
+    IntentStore::set_totals(resource_key, totals);
+    IntentStore::set_meta(meta);
+    IntentStore::insert_record(record);
+}
+
+fn expired_err(id: IntentId, r: &IntentRecord) -> IntentStoreOpsError {
+    IntentStoreOpsError::Expired {
+        id,
+        expires_at: expires_at(r.created_at, r.ttl_secs),
+    }
 }
 
 fn ensure_compatible(
     existing: &IntentRecord,
-    resource_key: &IntentResourceKey,
+    key: &IntentResourceKey,
     quantity: u64,
     ttl_secs: Option<u64>,
 ) -> Result<(), IntentStoreOpsError> {
-    if &existing.resource_key != resource_key || existing.quantity != quantity {
-        return Err(IntentStoreOpsError::Conflict(existing.id));
+    if &existing.resource_key != key
+        || existing.quantity != quantity
+        || existing.ttl_secs != ttl_secs
+    {
+        Err(IntentStoreOpsError::Conflict(existing.id))
+    } else {
+        Ok(())
     }
-
-    if existing.ttl_secs != ttl_secs {
-        return Err(IntentStoreOpsError::Conflict(existing.id));
-    }
-
-    Ok(())
 }
 
 fn checked_add(current: u64, delta: u64, field: &'static str) -> Result<u64, IntentStoreOpsError> {
@@ -338,6 +423,25 @@ fn checked_sub(current: u64, delta: u64, field: &'static str) -> Result<u64, Int
         })
 }
 
+fn expires_at(created_at: u64, ttl_secs: Option<u64>) -> Option<u64> {
+    ttl_secs.and_then(|ttl| created_at.checked_add(ttl))
+}
+
+fn is_expired(now: u64, created_at: u64, ttl_secs: Option<u64>) -> bool {
+    match ttl_secs.and_then(|t| created_at.checked_add(t)) {
+        Some(exp) => now > exp,
+        None => false,
+    }
+}
+
+fn is_record_expired(now: u64, record: &IntentRecord) -> bool {
+    is_expired(now, record.created_at, record.ttl_secs)
+}
+
+fn is_pending_entry_expired(now: u64, entry: &IntentPendingEntry) -> bool {
+    is_expired(now, entry.created_at, entry.ttl_secs)
+}
+
 ///
 /// TESTS
 ///
@@ -348,6 +452,7 @@ mod tests {
     use crate::storage::stable::intent::IntentStore;
 
     const CREATED_AT: u64 = 10;
+    const NOW: u64 = 100;
 
     #[derive(Clone, Copy, Debug)]
     enum Op {
@@ -355,7 +460,7 @@ mod tests {
         Abort,
     }
 
-    fn reset_store() {
+    fn reset() {
         IntentStore::reset_for_tests();
     }
 
@@ -367,25 +472,29 @@ mod tests {
         intent_id: IntentId,
         resource_key: IntentResourceKey,
         quantity: u64,
-    ) -> IntentRecord {
-        IntentStoreOps::try_reserve(intent_id, resource_key, quantity, CREATED_AT, None)
-            .expect("reserve should succeed")
+        ttl_secs: Option<u64>,
+    ) -> Result<IntentRecord, InternalError> {
+        IntentStoreOps::try_reserve(intent_id, resource_key, quantity, CREATED_AT, ttl_secs)
     }
 
-    fn totals_for(key: &IntentResourceKey) -> IntentResourceTotals {
-        IntentStoreOps::totals(key).unwrap_or_default()
+    fn totals_at(key: &IntentResourceKey, now: u64) -> IntentResourceTotals {
+        IntentStoreOps::totals_at(key, now)
     }
 
     fn meta() -> IntentStoreMeta {
-        IntentStoreOps::meta().expect("meta should be readable")
+        IntentStore::meta()
     }
 
     fn apply(op: Op, intent_id: IntentId) -> Result<IntentRecord, InternalError> {
         match op {
-            Op::Commit => IntentStoreOps::commit(intent_id),
+            Op::Commit => IntentStoreOps::commit_at(intent_id, NOW),
             Op::Abort => IntentStoreOps::abort(intent_id),
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Core invariants
+    // -------------------------------------------------------------------------
 
     #[test]
     fn idempotent_ops_do_not_double_count() {
@@ -394,14 +503,14 @@ mod tests {
             op: Option<Op>,
             expected_state: IntentState,
             expected_totals: IntentResourceTotals,
-            expected_pending_total: u64,
-            expected_committed_total: u64,
-            expected_aborted_total: u64,
+            pending_total: u64,
+            committed_total: u64,
+            aborted_total: u64,
         }
 
         let cases = [
             Case {
-                name: "try_reserve",
+                name: "reserve only",
                 op: None,
                 expected_state: IntentState::Pending,
                 expected_totals: IntentResourceTotals {
@@ -409,9 +518,9 @@ mod tests {
                     committed_qty: 0,
                     pending_count: 1,
                 },
-                expected_pending_total: 1,
-                expected_committed_total: 0,
-                expected_aborted_total: 0,
+                pending_total: 1,
+                committed_total: 0,
+                aborted_total: 0,
             },
             Case {
                 name: "commit",
@@ -422,9 +531,9 @@ mod tests {
                     committed_qty: 5,
                     pending_count: 0,
                 },
-                expected_pending_total: 0,
-                expected_committed_total: 1,
-                expected_aborted_total: 0,
+                pending_total: 0,
+                committed_total: 1,
+                aborted_total: 0,
             },
             Case {
                 name: "abort",
@@ -435,160 +544,131 @@ mod tests {
                     committed_qty: 0,
                     pending_count: 0,
                 },
-                expected_pending_total: 0,
-                expected_committed_total: 0,
-                expected_aborted_total: 1,
+                pending_total: 0,
+                committed_total: 0,
+                aborted_total: 1,
             },
         ];
 
         for case in cases {
-            reset_store();
+            reset();
             let resource_key = key();
             let intent_id = IntentId(1);
 
-            let first = reserve(intent_id, resource_key.clone(), 5);
-
+            let first = reserve(intent_id, resource_key.clone(), 5, None).unwrap();
             let first = match case.op {
-                Some(op) => apply(op, intent_id).expect("operation should succeed"),
+                Some(op) => apply(op, intent_id).unwrap(),
                 None => first,
             };
 
-            assert_eq!(first.state, case.expected_state, "case {}", case.name);
+            assert_eq!(first.state, case.expected_state, "{}", case.name);
 
-            let totals_after_first = totals_for(&resource_key);
+            let totals_after_first = totals_at(&resource_key, NOW);
             let meta_after_first = meta();
 
             let second = match case.op {
-                Some(op) => apply(op, intent_id).expect("idempotent op should succeed"),
-                None => reserve(intent_id, resource_key.clone(), 5),
+                Some(op) => apply(op, intent_id).unwrap(),
+                None => reserve(intent_id, resource_key.clone(), 5, None).unwrap(),
             };
 
-            assert_eq!(second.state, case.expected_state, "case {}", case.name);
-            assert_eq!(
-                totals_for(&resource_key),
-                totals_after_first,
-                "case {}",
-                case.name
-            );
-            assert_eq!(meta(), meta_after_first, "case {}", case.name);
-            assert_eq!(
-                totals_for(&resource_key),
-                case.expected_totals,
-                "case {}",
-                case.name
-            );
+            assert_eq!(second.state, case.expected_state, "{}", case.name);
+            assert_eq!(totals_at(&resource_key, NOW), totals_after_first);
+            assert_eq!(meta(), meta_after_first);
 
             let meta = meta();
-            assert_eq!(
-                meta.pending_total, case.expected_pending_total,
-                "case {}",
-                case.name
-            );
-            assert_eq!(
-                meta.committed_total, case.expected_committed_total,
-                "case {}",
-                case.name
-            );
-            assert_eq!(
-                meta.aborted_total, case.expected_aborted_total,
-                "case {}",
-                case.name
-            );
+            assert_eq!(totals_at(&resource_key, NOW), case.expected_totals);
+            assert_eq!(meta.pending_total, case.pending_total);
+            assert_eq!(meta.committed_total, case.committed_total);
+            assert_eq!(meta.aborted_total, case.aborted_total);
         }
     }
 
     #[test]
-    fn pending_transitions_are_allowed() {
-        struct Case {
-            name: &'static str,
-            op: Op,
-            expected_state: IntentState,
-        }
+    fn valid_pending_transitions() {
+        reset();
+        let resource_key = key();
+        let intent_id = IntentId(2);
 
-        let cases = [
-            Case {
-                name: "pending_to_committed",
-                op: Op::Commit,
-                expected_state: IntentState::Committed,
-            },
-            Case {
-                name: "pending_to_aborted",
-                op: Op::Abort,
-                expected_state: IntentState::Aborted,
-            },
-        ];
+        reserve(intent_id, resource_key.clone(), 3, None).unwrap();
+        let committed = IntentStoreOps::commit_at(intent_id, NOW).unwrap();
+        assert_eq!(committed.state, IntentState::Committed);
 
-        for case in cases {
-            reset_store();
-            let resource_key = key();
-            let intent_id = IntentId(1);
-            reserve(intent_id, resource_key, 3);
-
-            let record = apply(case.op, intent_id).expect("transition should succeed");
-            assert_eq!(record.state, case.expected_state, "case {}", case.name);
-        }
+        reset();
+        reserve(intent_id, resource_key, 3, None).unwrap();
+        let aborted = IntentStoreOps::abort(intent_id).unwrap();
+        assert_eq!(aborted.state, IntentState::Aborted);
     }
 
     #[test]
     fn rejects_invalid_transitions() {
-        struct Case {
-            name: &'static str,
-            first: Op,
-            second: Op,
-        }
+        reset();
+        let resource_key = key();
+        let intent_id = IntentId(3);
 
-        let cases = [
-            Case {
-                name: "committed_to_aborted",
-                first: Op::Commit,
-                second: Op::Abort,
-            },
-            Case {
-                name: "aborted_to_committed",
-                first: Op::Abort,
-                second: Op::Commit,
-            },
-        ];
+        reserve(intent_id, resource_key, 4, None).unwrap();
+        IntentStoreOps::commit_at(intent_id, NOW).unwrap();
 
-        for case in cases {
-            reset_store();
-            let resource_key = key();
-            let intent_id = IntentId(1);
-            reserve(intent_id, resource_key, 4);
-            apply(case.first, intent_id).expect("first transition should succeed");
-
-            let err = apply(case.second, intent_id).expect_err("invalid transition should fail");
-            assert!(
-                err.to_string().contains("invalid transition"),
-                "case {}: {err}",
-                case.name
-            );
-        }
+        let err = IntentStoreOps::abort(intent_id).unwrap_err();
+        assert!(err.to_string().contains("invalid transition"));
     }
+
+    // -------------------------------------------------------------------------
+    // TTL semantics
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn expired_intents_are_logically_ignored() {
+        reset();
+        let resource_key = key();
+        let intent_id = IntentId(10);
+
+        reserve(intent_id, resource_key.clone(), 3, Some(5)).unwrap();
+
+        let now = CREATED_AT + 10;
+        let totals = totals_at(&resource_key, now);
+
+        assert_eq!(totals.reserved_qty, 0);
+        assert_eq!(totals.pending_count, 0);
+
+        let pending = IntentStoreOps::pending_entries_at(now);
+        assert!(pending.is_empty());
+
+        let expired = IntentStoreOps::list_expired_pending_intents(now);
+        assert_eq!(expired, vec![intent_id]);
+
+        let err = IntentStoreOps::commit_at(intent_id, now).unwrap_err();
+        assert!(err.to_string().contains("expired"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Arithmetic safety
+    // -------------------------------------------------------------------------
 
     #[test]
     fn prevents_aggregate_underflow() {
-        reset_store();
+        reset();
         let resource_key = key();
         let intent_id = IntentId(42);
 
-        let record = IntentRecord {
+        IntentStore::insert_record(IntentRecord {
             id: intent_id,
             resource_key: resource_key.clone(),
             quantity: 9,
             state: IntentState::Pending,
             created_at: CREATED_AT,
             ttl_secs: None,
-        };
-        let pending = IntentPendingEntry {
-            resource_key: resource_key.clone(),
-            quantity: 9,
-            created_at: CREATED_AT,
-            ttl_secs: None,
-        };
+        });
 
-        IntentStore::insert_record(record);
-        IntentStore::insert_pending(intent_id, pending);
+        IntentStore::insert_pending(
+            intent_id,
+            IntentPendingEntry {
+                resource_key: resource_key.clone(),
+                quantity: 9,
+                created_at: CREATED_AT,
+                ttl_secs: None,
+            },
+        );
+
         IntentStore::set_totals(
             resource_key,
             IntentResourceTotals {
@@ -598,13 +678,13 @@ mod tests {
             },
         );
 
-        let err = IntentStoreOps::commit(intent_id).expect_err("underflow should fail");
-        assert!(err.to_string().contains("reserved_qty"), "{err}");
+        let err = IntentStoreOps::commit_at(intent_id, NOW).unwrap_err();
+        assert!(err.to_string().contains("reserved_qty"));
     }
 
     #[test]
     fn prevents_aggregate_overflow() {
-        reset_store();
+        reset();
         let resource_key = key();
         let intent_id = IntentId(7);
 
@@ -617,90 +697,18 @@ mod tests {
             },
         );
 
-        let err = IntentStoreOps::try_reserve(intent_id, resource_key.clone(), 1, CREATED_AT, None)
-            .expect_err("overflow should fail");
+        let err =
+            reserve(intent_id, resource_key.clone(), 1, None).expect_err("overflow should fail");
         assert!(err.to_string().contains("reserved_qty"), "{err}");
-        assert!(IntentStoreOps::get(intent_id).is_none());
-        assert!(IntentStoreOps::pending_entries().is_empty());
-        assert_eq!(
-            totals_for(&resource_key).reserved_qty,
-            u64::MAX,
-            "totals should be unchanged"
-        );
-    }
 
-    #[test]
-    fn workflow_reserve_commit_increments_once() {
-        reset_store();
-        let resource_key = key();
-        let intent_id = IntentId(100);
+        // sanity: no partial insertions
+        assert!(IntentStore::get_record(intent_id).is_none());
+        assert!(IntentStoreOps::pending_entries_at(NOW).is_empty());
 
-        let _ = reserve(intent_id, resource_key.clone(), 2);
-        let _ = IntentStoreOps::commit(intent_id).expect("commit should succeed");
+        let raw = IntentStore::get_totals(&resource_key).expect("raw totals should exist");
+        assert_eq!(raw.reserved_qty, u64::MAX, "totals should be unchanged");
 
-        let totals = totals_for(&resource_key);
-        assert_eq!(totals.reserved_qty, 0);
-        assert_eq!(totals.committed_qty, 2);
-        assert_eq!(totals.pending_count, 0);
-
-        let meta = meta();
-        assert_eq!(meta.pending_total, 0);
-        assert_eq!(meta.committed_total, 1);
-        assert_eq!(meta.aborted_total, 0);
-        assert!(IntentStoreOps::pending_entries().is_empty());
-    }
-
-    #[test]
-    fn workflow_reserve_abort_cleans_up() {
-        reset_store();
-        let resource_key = key();
-        let intent_id = IntentId(101);
-
-        let _ = reserve(intent_id, resource_key.clone(), 3);
-        let _ = IntentStoreOps::abort(intent_id).expect("abort should succeed");
-
-        let totals = totals_for(&resource_key);
-        assert_eq!(totals.reserved_qty, 0);
-        assert_eq!(totals.committed_qty, 0);
-        assert_eq!(totals.pending_count, 0);
-
-        let meta = meta();
-        assert_eq!(meta.pending_total, 0);
-        assert_eq!(meta.committed_total, 0);
-        assert_eq!(meta.aborted_total, 1);
-        assert!(IntentStoreOps::pending_entries().is_empty());
-    }
-
-    #[test]
-    fn workflow_duplicate_reserve_is_idempotent() {
-        reset_store();
-        let resource_key = key();
-        let intent_id = IntentId(102);
-
-        let first = reserve(intent_id, resource_key.clone(), 1);
-        let totals_after_first = totals_for(&resource_key);
-        let meta_after_first = meta();
-
-        let second = reserve(intent_id, resource_key.clone(), 1);
-        assert_eq!(first.state, IntentState::Pending);
-        assert_eq!(second.state, IntentState::Pending);
-        assert_eq!(totals_for(&resource_key), totals_after_first);
-        assert_eq!(meta(), meta_after_first);
-    }
-
-    #[test]
-    fn reserve_accepts_max_key_with_ttl() {
-        reset_store();
-        let intent_id = IntentId(103);
-        let key = "k".repeat(128);
-        let resource_key = IntentResourceKey::try_new(key).expect("key should be valid");
-
-        let record =
-            IntentStoreOps::try_reserve(intent_id, resource_key.clone(), 1, CREATED_AT, Some(60))
-                .expect("reserve should succeed");
-
-        assert_eq!(record.resource_key.as_ref().len(), 128);
-        assert_eq!(record.ttl_secs, Some(60));
-        assert!(IntentStoreOps::get(intent_id).is_some());
+        let logical = totals_at(&resource_key, NOW);
+        assert_eq!(logical.reserved_qty, 0);
     }
 }

@@ -125,6 +125,7 @@ pub struct IntentRecord {
     pub quantity: u64,
     pub state: IntentState,
     pub created_at: u64,
+    // TTL is enforced logically at read time; cleanup is asynchronous.
     pub ttl_secs: Option<u64>,
 }
 
@@ -195,6 +196,7 @@ pub struct IntentPendingEntry {
     pub resource_key: IntentResourceKey,
     pub quantity: u64,
     pub created_at: u64,
+    // TTL is enforced logically at read time; cleanup is asynchronous.
     pub ttl_secs: Option<u64>,
 }
 

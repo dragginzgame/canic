@@ -4,7 +4,9 @@
 //! shard placement decisions. It must never be persisted or exposed
 //! outside the policy layer.
 
-use crate::{cdk::candid::Principal, ops::storage::placement::sharding::ShardEntry};
+use crate::{
+    cdk::candid::Principal, domain::policy::placement::sharding::view::ShardPlacementView,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -22,12 +24,12 @@ pub(super) struct SlotBackfillPlan {
 
 pub(super) fn plan_slot_backfill(
     pool: &str,
-    view: &[(Principal, ShardEntry)],
+    view: &[(Principal, ShardPlacementView)],
     max_slots: u32,
 ) -> SlotBackfillPlan {
-    let mut entries: Vec<(Principal, ShardEntry)> = view
+    let mut entries: Vec<(Principal, ShardPlacementView)> = view
         .iter()
-        .filter(|(_, entry)| entry.pool.as_ref() == pool)
+        .filter(|(_, entry)| entry.pool.as_str() == pool)
         .map(|(pid, entry)| (*pid, entry.clone()))
         .collect();
 
@@ -76,6 +78,6 @@ pub(super) fn plan_slot_backfill(
     SlotBackfillPlan { slots, occupied }
 }
 
-const fn entry_has_assigned_slot(entry: &ShardEntry) -> bool {
-    entry.slot != ShardEntry::UNASSIGNED_SLOT
+const fn entry_has_assigned_slot(entry: &ShardPlacementView) -> bool {
+    entry.slot != ShardPlacementView::UNASSIGNED_SLOT
 }

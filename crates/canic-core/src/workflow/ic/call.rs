@@ -146,6 +146,7 @@ impl CallBuilder {
         // - commit on success; commit errors are logged, call result still returned
         // - abort on failure; abort errors are attached to the call error
         let Self { inner, intent } = self;
+        let now = IcOps::now_secs();
 
         let Some(intent) = intent else {
             return Ok(CallResult {
@@ -161,7 +162,7 @@ impl CallBuilder {
         })?;
 
         if let Some(max_in_flight) = intent.max_in_flight {
-            let totals = IntentStoreOps::totals(&resource_key).unwrap_or_default();
+            let totals = IntentStoreOps::totals_at(&resource_key, now);
             let in_flight = totals
                 .reserved_qty
                 .checked_add(totals.committed_qty)
@@ -171,6 +172,7 @@ impl CallBuilder {
                         "intent in-flight overflow",
                     )
                 })?;
+
             let next = in_flight.checked_add(intent.quantity).ok_or_else(|| {
                 InternalError::invariant(
                     InternalErrorOrigin::Workflow,
@@ -202,7 +204,7 @@ requested={} max_in_flight={max_in_flight}",
 
         match inner.execute().await {
             Ok(inner) => {
-                if let Err(err) = IntentStoreOps::commit(intent_id) {
+                if let Err(err) = IntentStoreOps::commit_at(intent_id, now) {
                     crate::log!(
                         Error,
                         "intent commit failed id={intent_id} key={resource_key}: {err}"

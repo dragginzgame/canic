@@ -7,6 +7,7 @@
 mod backfill;
 pub mod hrw;
 pub mod metrics;
+pub mod view;
 
 use crate::{
     InternalError,
@@ -15,10 +16,12 @@ use crate::{
     domain::policy::{
         PolicyError,
         placement::sharding::{
-            backfill::plan_slot_backfill, hrw::HrwSelector, metrics::PoolMetrics,
+            backfill::plan_slot_backfill,
+            hrw::HrwSelector,
+            metrics::PoolMetrics,
+            view::{ShardPlacementView, ShardTenantAssignmentView},
         },
     },
-    ops::storage::placement::sharding::{ShardEntry, ShardKey},
 };
 use thiserror::Error as ThisError;
 
@@ -64,8 +67,8 @@ pub struct ShardingState<'a> {
     pub pool: &'a str,
     pub config: ShardPool,
     pub metrics: &'a PoolMetrics,
-    pub entries: &'a [(Principal, ShardEntry)],
-    pub assignments: &'a [(ShardKey, Principal)], // tenants for *this pool only*
+    pub entries: &'a [(Principal, ShardPlacementView)],
+    pub assignments: &'a [ShardTenantAssignmentView], // tenants for *this pool only*
 }
 
 ///
@@ -129,12 +132,12 @@ impl ShardingPolicy {
     #[must_use]
     pub(crate) fn lookup_tenant(
         tenant: &str,
-        assignments: &[(ShardKey, Principal)],
+        assignments: &[ShardTenantAssignmentView],
     ) -> Option<Principal> {
         assignments
             .iter()
-            .find(|(key, _)| key.tenant.as_ref() == tenant)
-            .map(|(_, pid)| *pid)
+            .find(|assignment| assignment.tenant == tenant)
+            .map(|assignment| assignment.pid)
     }
 
     /// Perform a dry-run assignment plan.
@@ -161,7 +164,7 @@ impl ShardingPolicy {
         let shards_with_capacity: Vec<_> = entries
             .iter()
             .filter(|(pid, entry)| {
-                entry.pool.as_ref() == state.pool
+                entry.pool.as_str() == state.pool
                     && entry_has_capacity(entry)
                     && exclude_pid != Some(*pid)
             })
@@ -225,6 +228,6 @@ impl ShardingPolicy {
     }
 }
 
-const fn entry_has_capacity(entry: &ShardEntry) -> bool {
+const fn entry_has_capacity(entry: &ShardPlacementView) -> bool {
     entry.count < entry.capacity
 }
