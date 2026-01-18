@@ -27,6 +27,7 @@
 //! transported, not what guarantees it provides.
 
 pub mod abi;
+pub mod auth;
 pub mod canister;
 pub mod cascade;
 pub mod cycles;
