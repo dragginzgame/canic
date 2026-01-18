@@ -10,7 +10,7 @@ crate pattern-matches on identifiers and expands them into runtime access calls.
 use canic_dsl::access::{auth::caller_is_controller, env::self_is_prime_subnet};
 use canic_dsl_macros::canic_update;
 
-#[canic_update(auth_any(caller_is_controller), env(self_is_prime_subnet))]
+#[canic_update(auth(caller_is_controller), env(self_is_prime_subnet))]
 async fn admin_only() -> Result<(), canic::Error> {
     Ok(())
 }

@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod bootstrap;
 pub mod canister_lifecycle;
 pub mod cascade;

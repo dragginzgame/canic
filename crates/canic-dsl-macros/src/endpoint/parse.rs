@@ -1,27 +1,25 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
+use syn::{Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 
 //
 // ============================================================================
-// parse — attribute grammar only
+// parse — attribute grammar only (symbolic DSL)
 // ============================================================================
 //
 
-///
-/// AuthSpec
-///
-
-#[derive(Clone, Debug)]
-pub enum AuthSpec {
-    Any(Vec<AuthSymbol>),
-    All(Vec<AuthSymbol>),
-}
+//
+// GuardSymbol
+//
 
 #[derive(Clone, Debug)]
 pub enum GuardSymbol {
     AppIsLive,
 }
+
+//
+// AuthSymbol
+//
 
 #[derive(Clone, Debug)]
 pub enum AuthSymbol {
@@ -34,30 +32,41 @@ pub enum AuthSymbol {
     CallerIsWhitelisted,
 }
 
+//
+// EnvSymbol
+//
+
 #[derive(Clone, Debug)]
 pub enum EnvSymbol {
     SelfIsPrimeSubnet,
     SelfIsPrimeRoot,
 }
 
-///
-/// ParsedArgs
-///
+//
+// RuleSymbol
+//
+
+#[derive(Clone, Debug)]
+pub enum RuleSymbol {
+    BuildIcOnly,
+    BuildLocalOnly,
+}
+
+//
+// ParsedArgs
+//
 
 #[derive(Debug)]
 pub struct ParsedArgs {
     pub forwarded: Vec<TokenStream2>,
-    pub app_guard: bool,
-    pub user_guard: bool,
-    pub auth: Option<AuthSpec>,
+    pub guard: Vec<GuardSymbol>,
+    pub auth: Vec<AuthSymbol>,
     pub env: Vec<EnvSymbol>,
-    pub rules: Vec<Expr>,
+    pub rules: Vec<RuleSymbol>,
 }
 
 pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
-        // If the attr doesn't parse as Meta list, fall back to forwarding raw tokens to the CDK.
-        // This preserves compatibility with CDK syntax we don't model.
         if attr.is_empty() {
             return Ok(empty());
         }
@@ -69,163 +78,119 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     };
 
     let mut forwarded = Vec::new();
-    let mut app_guard = false;
-    let mut user_guard = false;
-    let mut auth = None::<AuthSpec>;
-    let mut env = Vec::<EnvSymbol>::new();
-    let mut rules = Vec::<Expr>::new();
+    let mut guard = Vec::new();
+    let mut auth = Vec::new();
+    let mut env = Vec::new();
+    let mut rules = Vec::new();
 
     for meta in metas {
         match meta {
+            Meta::List(list) if list.path.is_ident("app") => {
+                return Err(syn::Error::new_spanned(
+                    list,
+                    "app DSL is not supported; use guard instead",
+                ));
+            }
+
             // guard(...)
-            //
-            // Canic-specific guard stage. Top-level `app` is no longer accepted.
             Meta::List(list) if list.path.is_ident("guard") => {
-                let inner = Punctuated::<Meta, Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())?
+                let symbols = parse_paths(&list)?;
+                let parsed: Vec<GuardSymbol> = symbols
                     .into_iter()
-                    .collect::<Vec<_>>();
+                    .map(parse_guard_symbol)
+                    .collect::<syn::Result<_>>()?;
 
-                if inner.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "`guard(...)` expects at least one symbol (e.g., `guard(app_is_live)`)",
-                    ));
-                }
-
-                for item in inner {
-                    match item {
-                        Meta::Path(p) => match parse_guard_symbol(p)? {
-                            GuardSymbol::AppIsLive => app_guard = true,
-                        },
-                        other => {
-                            return Err(syn::Error::new_spanned(
-                                other,
-                                "only `guard(app_is_live)` is supported",
-                            ));
-                        }
-                    }
-                }
+                guard.extend(parsed);
             }
 
-            // auth_any(...)
-            Meta::List(list) if list.path.is_ident("auth_any") => {
-                if auth.is_some() {
-                    return Err(conflicting_auth(&list));
-                }
-                let rules = parse_auth_symbols(&list)?;
-                auth = Some(AuthSpec::Any(rules));
-            }
-
-            // auth_all(...)
-            Meta::List(list) if list.path.is_ident("auth_all") => {
-                if auth.is_some() {
-                    return Err(conflicting_auth(&list));
-                }
-                let rules = parse_auth_symbols(&list)?;
-                auth = Some(AuthSpec::All(rules));
-            }
-
-            // rule(...)
-            //
-            // Parse as Expr so you can do rule(local_only()), rule(max_rounds(rounds, 10_000)), etc.
-            Meta::List(list) if list.path.is_ident("rule") => {
-                let parsed = Punctuated::<Expr, Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())?
+            // auth(...)
+            Meta::List(list) if list.path.is_ident("auth") => {
+                let symbols = parse_paths(&list)?;
+                let parsed: Vec<AuthSymbol> = symbols
                     .into_iter()
-                    .collect::<Vec<_>>();
+                    .map(parse_auth_symbol)
+                    .collect::<syn::Result<_>>()?;
 
-                if parsed.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "`rule(...)` expects at least one rule expression",
-                    ));
-                }
-
-                rules.extend(parsed);
+                auth.extend(parsed);
             }
 
             // env(...)
-            //
-            // Parse as DSL symbols like env(self_is_prime_subnet).
             Meta::List(list) if list.path.is_ident("env") => {
-                let parsed = Punctuated::<Path, Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())?
+                let symbols = parse_paths(&list)?;
+                let parsed: Vec<EnvSymbol> = symbols
                     .into_iter()
                     .map(parse_env_symbol)
-                    .collect::<syn::Result<Vec<_>>>()?;
-
-                if parsed.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        list,
-                        "`env(...)` expects at least one symbol",
-                    ));
-                }
+                    .collect::<syn::Result<_>>()?;
 
                 env.extend(parsed);
             }
 
-            // explicit CDK guard = ...
-            //
-            // We still forward it, but track that it exists so validation can ban combinations.
-            Meta::NameValue(nv) if nv.path.is_ident("guard") => {
-                user_guard = true;
-                forwarded.push(quote!(#nv));
+            // rule(...)
+            Meta::List(list) if list.path.is_ident("rule") => {
+                let symbols = parse_paths(&list)?;
+                let parsed: Vec<RuleSymbol> = symbols
+                    .into_iter()
+                    .map(parse_rule_symbol)
+                    .collect::<syn::Result<_>>()?;
+
+                rules.extend(parsed);
             }
 
-            // Everything else is forwarded to the CDK attribute unchanged.
-            _ => forwarded.push(quote!(#meta)),
+            // Everything else is forwarded untouched
+            other => forwarded.push(quote!(#other)),
         }
     }
 
     Ok(ParsedArgs {
         forwarded,
-        app_guard,
-        user_guard,
+        guard,
         auth,
         env,
         rules,
     })
 }
+
 const fn empty() -> ParsedArgs {
     ParsedArgs {
         forwarded: Vec::new(),
-        app_guard: false,
-        user_guard: false,
-        auth: None,
+        guard: Vec::new(),
+        auth: Vec::new(),
         env: Vec::new(),
         rules: Vec::new(),
     }
 }
 
-fn parse_auth_symbols(list: &syn::MetaList) -> syn::Result<Vec<AuthSymbol>> {
-    let rules = Punctuated::<Path, Token![,]>::parse_terminated
+//
+// ---------------------------------------------------------------------------
+// Symbol parsing helpers
+// ---------------------------------------------------------------------------
+//
+
+fn parse_paths(list: &syn::MetaList) -> syn::Result<Vec<Path>> {
+    let paths = Punctuated::<Path, Token![,]>::parse_terminated
         .parse2(list.tokens.clone())?
         .into_iter()
-        .map(parse_auth_symbol)
-        .collect::<syn::Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
-    if rules.is_empty() {
+    if paths.is_empty() {
         return Err(syn::Error::new_spanned(
             list,
-            "authorization requires at least one symbol",
+            "expected at least one DSL symbol",
         ));
     }
 
-    Ok(rules)
+    Ok(paths)
 }
 
 fn parse_guard_symbol(path: Path) -> syn::Result<GuardSymbol> {
-    let ident = path_ident(&path)?;
-    match ident.to_string().as_str() {
+    match path_ident(&path)?.to_string().as_str() {
         "app_is_live" => Ok(GuardSymbol::AppIsLive),
-        _ => Err(syn::Error::new_spanned(path, "unknown guard DSL symbol")),
+        _ => Err(unknown_symbol(path, "guard")),
     }
 }
 
 fn parse_auth_symbol(path: Path) -> syn::Result<AuthSymbol> {
-    let ident = path_ident(&path)?;
-    match ident.to_string().as_str() {
+    match path_ident(&path)?.to_string().as_str() {
         "caller_is_controller" => Ok(AuthSymbol::CallerIsController),
         "caller_is_parent" => Ok(AuthSymbol::CallerIsParent),
         "caller_is_child" => Ok(AuthSymbol::CallerIsChild),
@@ -233,16 +198,23 @@ fn parse_auth_symbol(path: Path) -> syn::Result<AuthSymbol> {
         "caller_is_same_canister" => Ok(AuthSymbol::CallerIsSameCanister),
         "caller_is_registered_to_subnet" => Ok(AuthSymbol::CallerIsRegisteredToSubnet),
         "caller_is_whitelisted" => Ok(AuthSymbol::CallerIsWhitelisted),
-        _ => Err(syn::Error::new_spanned(path, "unknown auth DSL symbol")),
+        _ => Err(unknown_symbol(path, "auth")),
     }
 }
 
 fn parse_env_symbol(path: Path) -> syn::Result<EnvSymbol> {
-    let ident = path_ident(&path)?;
-    match ident.to_string().as_str() {
+    match path_ident(&path)?.to_string().as_str() {
         "self_is_prime_subnet" => Ok(EnvSymbol::SelfIsPrimeSubnet),
         "self_is_prime_root" => Ok(EnvSymbol::SelfIsPrimeRoot),
-        _ => Err(syn::Error::new_spanned(path, "unknown env DSL symbol")),
+        _ => Err(unknown_symbol(path, "env")),
+    }
+}
+
+fn parse_rule_symbol(path: Path) -> syn::Result<RuleSymbol> {
+    match path_ident(&path)?.to_string().as_str() {
+        "build_ic_only" => Ok(RuleSymbol::BuildIcOnly),
+        "build_local_only" => Ok(RuleSymbol::BuildLocalOnly),
+        _ => Err(unknown_symbol(path, "rule")),
     }
 }
 
@@ -262,6 +234,6 @@ fn path_ident(path: &Path) -> syn::Result<&Ident> {
         .ok_or_else(|| syn::Error::new_spanned(path, "expected a DSL symbol"))
 }
 
-fn conflicting_auth(list: &syn::MetaList) -> syn::Error {
-    syn::Error::new_spanned(list, "conflicting authorization composition")
+fn unknown_symbol(path: Path, category: &str) -> syn::Error {
+    syn::Error::new_spanned(path, format!("unknown {category} DSL symbol"))
 }

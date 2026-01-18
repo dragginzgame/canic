@@ -61,6 +61,9 @@ The model layer defines:
 * Deterministic serialization
 * Local structural invariants
 
+New stable memory IDs MUST be allocated within an existing module’s reserved range.
+Creating a new module or expanding a range requires an explicit architectural change.
+
 ### Allowed
 
 * Stable data structures
