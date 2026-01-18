@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod children;
 pub mod cycles;
 pub mod directory;
@@ -32,6 +33,16 @@ pub const CANIC_MEMORY_MAX: u8 = 40;
 
 pub mod memory {
 
+    // =====================================================================
+    // Stable memory layout
+    //
+    // Conventions:
+    // - IDs are permanent once assigned
+    // - Ranges are intentionally reserved for future growth
+    // - Modules own their entire numeric range
+    // - This file is ordered by increasing ID, not by dependency
+    // =====================================================================
+
     // ---------------------------------------------------------------------
     // Topology & discovery state (5–9)
     //
@@ -51,7 +62,7 @@ pub mod memory {
     }
 
     // ---------------------------------------------------------------------
-    // Environment & configuration state (10–11)
+    // Environment & configuration state (10)
     //
     // Ownership:
     // - Deployment environment
@@ -62,7 +73,23 @@ pub mod memory {
 
     pub mod env {
         pub const ENV_ID: u8 = 10;
-        // Reserved: 11
+    }
+
+    // ---------------------------------------------------------------------
+    // Auth & signing state (11–14)
+    //
+    // Ownership:
+    // - Delegated signing state
+    // - Authorization credentials
+    // - Future revocation / rotation metadata
+    //
+    // Expected growth: medium
+    // ---------------------------------------------------------------------
+
+    pub mod auth {
+        pub const DELEGATION_STATE_ID: u8 = 11;
+
+        // Reserved: 12–14
     }
 
     // ---------------------------------------------------------------------

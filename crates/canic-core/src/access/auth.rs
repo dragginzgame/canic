@@ -1,292 +1,170 @@
-//! Authorization helpers for canister-to-canister and user calls.
+//! Cryptographic authorization helpers.
 //!
-//! Compose rule futures and enforce them with [`require_all`] or
-//! [`require_any`]. For ergonomics, prefer the facade macros
-//! `canic::auth_require_all!` and `canic::auth_require_any!`, which accept
-//! async closures or functions that return [`AuthRuleResult`].
+//! This module verifies tokens and claims.
+//! It does not inspect topology or configuration.
 
 use crate::{
-    access::AccessError,
-    cdk::{
-        api::{canister_self, msg_caller},
-        types::Principal,
-    },
-    config::Config,
-    ids::CanisterRole,
-    log,
-    log::Topic,
-    ops::{
-        runtime::env::EnvOps,
-        storage::{
-            children::CanisterChildrenOps,
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-            registry::subnet::SubnetRegistryOps,
-        },
-    },
+    access::{AccessError, AccessRuleResult},
+    cdk::types::Principal,
+    dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    ops::auth::DelegatedTokenOps,
 };
-use std::pin::Pin;
-use thiserror::Error as ThisError;
 
-///
-/// AuthAccessError
-///
-/// Each variant captures the principal that failed a rule (where relevant),
-/// making it easy to emit actionable diagnostics in logs.
-///
-
-#[derive(Debug, ThisError)]
-pub enum AuthAccessError {
-    /// Guardrail for unreachable states (should not be observed in practice).
-    #[error("invalid error state - this should never happen")]
-    InvalidState,
-
-    /// No rules were provided to an authorization check.
-    #[error("one or more rules must be defined")]
-    NoRulesDefined,
-
-    #[error("access dependency unavailable: {0}")]
-    DependencyUnavailable(String),
-
-    #[error("caller '{0}' does not match the app directory's canister role '{1}'")]
-    NotAppDirectoryType(Principal, CanisterRole),
-
-    #[error("caller '{0}' does not match the subnet directory's canister role '{1}'")]
-    NotSubnetDirectoryType(Principal, CanisterRole),
-
-    #[error("caller '{0}' is not a child of this canister")]
-    NotChild(Principal),
-
-    #[error("caller '{0}' is not a controller of this canister")]
-    NotController(Principal),
-
-    #[error("caller '{0}' is not the parent of this canister")]
-    NotParent(Principal),
-
-    #[error("expected caller principal '{1}' got '{0}'")]
-    NotPrincipal(Principal, Principal),
-
-    #[error("caller '{0}' is not root")]
-    NotRoot(Principal),
-
-    #[error("caller '{0}' is not the current canister")]
-    NotSameCanister(Principal),
-
-    #[error("caller '{0}' is not registered on the subnet registry")]
-    NotRegisteredToSubnet(Principal),
-
-    #[error("caller '{0}' is not on the whitelist")]
-    NotWhitelisted(Principal),
+/// Verify a delegated token against the configured authority.
+#[must_use]
+pub fn verify_token(
+    token: DelegatedToken,
+    authority_pid: Principal,
+    now_secs: u64,
+) -> AccessRuleResult {
+    Box::pin(async move {
+        DelegatedTokenOps::verify_token(&token, authority_pid, now_secs)
+            .map(|_| ())
+            .map_err(|err| AccessError::Denied(err.to_string()))
+    })
 }
 
-/// Callable issuing an authorization decision for a given caller.
-pub type AuthRuleFn = Box<
-    dyn Fn(Principal) -> Pin<Box<dyn Future<Output = Result<(), AccessError>> + Send>>
-        + Send
-        + Sync,
->;
-
-/// Future produced by an [`AuthRuleFn`].
-pub type AuthRuleResult = Pin<Box<dyn Future<Output = Result<(), AccessError>> + Send>>;
-
-/// Require that all provided rules pass for the current caller.
-///
-/// Returns the first failing rule error, or [`AuthError::NoRulesDefined`] if
-/// `rules` is empty.
-pub async fn require_all(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
-    let caller = msg_caller();
-
-    if rules.is_empty() {
-        return Err(AuthAccessError::NoRulesDefined.into());
-    }
-
-    for rule in rules {
-        if let Err(err) = rule(caller).await {
-            log!(
-                Topic::Auth,
-                Warn,
-                "auth failed (all) caller={caller}: {err}",
-            );
-
-            return Err(err);
+/// Require that the claims include the requested scope.
+#[must_use]
+pub fn require_scope(claims: DelegatedTokenClaims, required_scope: String) -> AccessRuleResult {
+    Box::pin(async move {
+        if claims.scopes.iter().any(|scope| scope == &required_scope) {
+            Ok(())
+        } else {
+            Err(AccessError::Denied(format!(
+                "missing required scope '{required_scope}'"
+            )))
         }
-    }
-
-    Ok(())
+    })
 }
 
-/// Require that any one of the provided rules passes for the current caller.
-///
-/// Returns the last failing rule error if none pass, or
-/// [`AuthError::NoRulesDefined`] if `rules` is empty.
-pub async fn require_any(rules: Vec<AuthRuleFn>) -> Result<(), AccessError> {
-    let caller = msg_caller();
-
-    if rules.is_empty() {
-        return Err(AuthAccessError::NoRulesDefined.into());
-    }
-
-    let mut last_error = None;
-    for rule in rules {
-        match rule(caller).await {
-            Ok(()) => return Ok(()),
-            Err(e) => last_error = Some(e),
+/// Require that the claims target the expected audience.
+#[must_use]
+pub fn require_audience(
+    claims: DelegatedTokenClaims,
+    required_audience: String,
+) -> AccessRuleResult {
+    Box::pin(async move {
+        if claims.aud == required_audience {
+            Ok(())
+        } else {
+            Err(AccessError::Denied(format!(
+                "expected audience '{required_audience}'"
+            )))
         }
-    }
-
-    let err = last_error.unwrap_or_else(|| AuthAccessError::InvalidState.into());
-    log!(
-        Topic::Auth,
-        Warn,
-        "auth failed (any) caller={caller}: {err}",
-    );
-
-    Err(err)
+    })
 }
 
 // -----------------------------------------------------------------------------
-// Rule functions
+// Tests
 // -----------------------------------------------------------------------------
 
-/// Ensure the caller matches the subnet directory entry recorded for `role`.
-/// Use for admin endpoints that expect specific app directory canisters.
-#[must_use]
-pub fn is_app_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
-    Box::pin(async move {
-        if AppDirectoryOps::matches(&role, caller) {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotAppDirectoryType(caller, role).into())
+#[cfg(test)]
+mod tests {
+    use super::{require_audience, require_scope, verify_token};
+    use crate::{
+        access::AccessError,
+        cdk::types::Principal,
+        dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+    };
+    use futures::executor::block_on;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn base_claims() -> DelegatedTokenClaims {
+        DelegatedTokenClaims {
+            sub: p(1),
+            aud: "canic:user-api".to_string(),
+            scopes: vec!["user:read".to_string(), "user:write".to_string()],
+            iat: 0,
+            exp: 10,
+            nonce: None,
         }
-    })
-}
+    }
 
-/// Require that the caller is a direct child of the current canister.
-/// Protects child-only endpoints (e.g., sync) from sibling/root callers.
-#[must_use]
-pub fn is_child(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        if CanisterChildrenOps::contains_pid(&caller) {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotChild(caller).into())
+    #[test]
+    fn require_scope_allows_matching_scope() {
+        let claims = base_claims();
+        let result = block_on(require_scope(claims, "user:read".to_string()));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn require_scope_denies_missing_scope() {
+        let claims = base_claims();
+        let result = block_on(require_scope(claims, "admin:write".to_string()));
+
+        match result {
+            Err(AccessError::Denied(msg)) => {
+                assert!(msg.contains("missing required scope"));
+            }
+            other => panic!("expected denied, got {other:?}"),
         }
-    })
-}
+    }
 
-/// Require that the caller controls the current canister.
-/// Allows controller-only maintenance calls.
-#[must_use]
-pub fn is_controller(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        if crate::cdk::api::is_controller(&caller) {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotController(caller).into())
+    #[test]
+    fn require_audience_allows_matching_audience() {
+        let claims = base_claims();
+        let result = block_on(require_audience(claims, "canic:user-api".to_string()));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn require_audience_denies_mismatch() {
+        let claims = base_claims();
+        let result = block_on(require_audience(claims, "canic:admin".to_string()));
+
+        match result {
+            Err(AccessError::Denied(msg)) => {
+                assert!(msg.contains("expected audience"));
+            }
+            other => panic!("expected denied, got {other:?}"),
         }
-    })
-}
+    }
 
-/// Require that the caller is the configured parent canister.
-/// Use on child sync endpoints to enforce parent-only calls.
-#[must_use]
-pub fn is_parent(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        let snapshot = EnvOps::snapshot();
-        let parent_pid = snapshot.parent_pid.ok_or_else(|| {
-            AuthAccessError::DependencyUnavailable("parent pid unavailable".to_string())
-        })?;
+    #[test]
+    fn verify_token_denies_missing_cert_signature() {
+        let cert = DelegationCert {
+            v: 1,
+            signer_pid: p(2),
+            audiences: vec!["canic:user-api".to_string()],
+            scopes: vec!["user:read".to_string()],
+            issued_at: 0,
+            expires_at: 10,
+        };
 
-        if parent_pid == caller {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotParent(caller).into())
+        let proof = DelegationProof {
+            cert,
+            cert_sig: Vec::new(),
+        };
+
+        let claims = DelegatedTokenClaims {
+            sub: p(1),
+            aud: "canic:user-api".to_string(),
+            scopes: vec!["user:read".to_string()],
+            iat: 0,
+            exp: 10,
+            nonce: None,
+        };
+
+        let token = DelegatedToken {
+            v: 1,
+            claims,
+            proof,
+            token_sig: Vec::new(),
+        };
+
+        let result = block_on(verify_token(token, p(9), 1));
+
+        match result {
+            Err(AccessError::Denied(msg)) => {
+                assert!(msg.contains("delegation cert signature unavailable"));
+            }
+            other => panic!("expected denied, got {other:?}"),
         }
-    })
-}
-
-/// Require that the caller equals the provided `expected` principal.
-/// Handy for single-tenant or pre-registered callers.
-#[must_use]
-pub fn is_principal(caller: Principal, expected: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        if caller == expected {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotPrincipal(caller, expected).into())
-        }
-    })
-}
-
-/// Require that the caller is registered as a canister on this subnet.
-///
-/// NOTE: Currently enforced only on the root canister.
-#[must_use]
-pub fn is_registered_to_subnet(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        if SubnetRegistryOps::is_registered(caller) {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotRegisteredToSubnet(caller).into())
-        }
-    })
-}
-
-/// Require that the caller equals the configured root canister.
-/// Gate root-only operations (e.g., topology mutations).
-#[must_use]
-pub fn is_root(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        let snapshot = EnvOps::snapshot();
-        let root_pid = snapshot.root_pid.ok_or_else(|| {
-            AuthAccessError::DependencyUnavailable("root pid unavailable".to_string())
-        })?;
-
-        if caller == root_pid {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotRoot(caller).into())
-        }
-    })
-}
-
-/// Require that the caller is the currently executing canister.
-/// For self-calls only.
-#[must_use]
-pub fn is_same_canister(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        if caller == canister_self() {
-            Ok(())
-        } else {
-            Err(AuthAccessError::NotSameCanister(caller).into())
-        }
-    })
-}
-
-/// Ensure the caller matches the subnet directory entry recorded for `role`.
-/// Use for admin endpoints that expect specific app directory canisters.
-#[must_use]
-pub fn is_subnet_directory_role(caller: Principal, role: CanisterRole) -> AuthRuleResult {
-    Box::pin(async move {
-        match SubnetDirectoryOps::get(&role) {
-            Some(pid) if pid == caller => Ok(()),
-            _ => Err(AuthAccessError::NotSubnetDirectoryType(caller, role).into()),
-        }
-    })
-}
-
-/// Require that the caller appears in the active whitelist (IC deployments).
-/// No-op on local builds; enforces whitelist on IC.
-#[must_use]
-pub fn is_whitelisted(caller: Principal) -> AuthRuleResult {
-    Box::pin(async move {
-        let cfg = Config::try_get().ok_or_else(|| {
-            AuthAccessError::DependencyUnavailable("config not initialized".to_string())
-        })?;
-
-        if !cfg.is_whitelisted(&caller) {
-            return Err(AuthAccessError::NotWhitelisted(caller).into());
-        }
-
-        Ok(())
-    })
+    }
 }

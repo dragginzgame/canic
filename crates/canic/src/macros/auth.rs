@@ -9,7 +9,7 @@
 #[macro_export]
 macro_rules! auth_require_all {
     ($($f:expr),* $(,)?) => {{
-        $crate::__internal::core::access::auth::require_all(vec![
+        $crate::__internal::core::access::require_all(vec![
             $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};
@@ -22,7 +22,7 @@ macro_rules! auth_require_all {
 #[macro_export]
 macro_rules! auth_require_any {
     ($($f:expr),* $(,)?) => {{
-        $crate::__internal::core::access::auth::require_any(vec![
+        $crate::__internal::core::access::require_any(vec![
             $( Box::new(move |caller| Box::pin($f(caller))) ),*
         ]).await
     }};

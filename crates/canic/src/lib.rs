@@ -96,6 +96,7 @@ pub mod api {
     pub mod access {
         pub use crate::__internal::core::api::access::{
             auth::AuthAccessApi, env::EnvAccessApi, guard::GuardAccessApi, rule::RuleAccessApi,
+            token::DelegatedTokenApi,
         };
     }
 

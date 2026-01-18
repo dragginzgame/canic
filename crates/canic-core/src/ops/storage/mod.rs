@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod children;
 pub mod cycles;
 pub mod directory;

@@ -1,11 +1,11 @@
 use crate::endpoint::{
     EndpointKind,
-    parse::{AuthSpec, AuthSymbol, EnvSymbol},
+    parse::{AuthSymbol, EnvSymbol, GuardSymbol, RuleSymbol},
     validate::ValidatedArgs,
 };
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{Expr, ItemFn};
+use syn::ItemFn;
 
 //
 // ============================================================================
@@ -27,7 +27,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     func.sig.ident = impl_name.clone();
 
     let cdk_attr = cdk_attr(kind, &args.forwarded);
-    let dispatch = dispatch(kind, asyncness);
+    let dispatch_fn = dispatch(kind, asyncness);
 
     let wrapper_sig = syn::Signature {
         ident: orig_name.clone(),
@@ -40,17 +40,18 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let call_decl = call_decl(kind, &call_ident, &orig_name);
 
     let attempted = attempted(&call_ident);
-    let guard = guard(kind, args.app_guard, &call_ident);
-    let auth = auth(args.auth.as_ref(), &call_ident);
-    let env = env(&args.env, &call_ident);
-    let rule = rule(&args.rules, &call_ident);
+
+    let guard_stage = guard_stage(kind, &args.guard, &call_ident);
+    let auth_stage = auth_stage(&args.auth, &call_ident);
+    let env_stage = env_stage(&args.env, &call_ident);
+    let rule_stage = rule_stage(&args.rules, &call_ident);
 
     let call_args = match extract_args(&orig_sig) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error(),
     };
 
-    let dispatch_call = dispatch_call(asyncness, dispatch, &call_ident, impl_name, &call_args);
+    let dispatch_call = dispatch_call(asyncness, dispatch_fn, &call_ident, impl_name, &call_args);
     let completion = completion(&call_ident, returns_fallible, dispatch_call);
 
     quote! {
@@ -59,16 +60,22 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #vis #wrapper_sig {
             #call_decl
             #attempted
-            #guard
-            #auth
-            #env
-            #rule
+            #guard_stage
+            #auth_stage
+            #env_stage
+            #rule_stage
             #completion
         }
 
         #func
     }
 }
+
+//
+// ============================================================================
+// helpers
+// ============================================================================
+//
 
 fn returns_fallible(sig: &syn::Signature) -> bool {
     let syn::ReturnType::Type(_, ty) = &sig.output else {
@@ -101,7 +108,7 @@ fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
     }
 }
 
-fn call_decl(kind: EndpointKind, call_ident: &syn::Ident, orig_name: &syn::Ident) -> TokenStream2 {
+fn call_decl(kind: EndpointKind, call: &syn::Ident, name: &syn::Ident) -> TokenStream2 {
     let call_kind = match kind {
         EndpointKind::Query => {
             quote!(::canic::__internal::core::ids::EndpointCallKind::Query)
@@ -112,16 +119,10 @@ fn call_decl(kind: EndpointKind, call_ident: &syn::Ident, orig_name: &syn::Ident
     };
 
     quote! {
-        let #call_ident = ::canic::__internal::core::ids::EndpointCall {
-            endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#orig_name)),
+        let #call = ::canic::__internal::core::ids::EndpointCall {
+            endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#name)),
             kind: #call_kind,
         };
-    }
-}
-
-fn record_access_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
-    quote! {
-        ::canic::__internal::core::access::metrics::AccessMetrics::increment(#call, #kind);
     }
 }
 
@@ -131,104 +132,34 @@ fn attempted(call: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn guard(kind: EndpointKind, enabled: bool, call: &syn::Ident) -> TokenStream2 {
-    if !enabled {
+fn record_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
+    quote! {
+        ::canic::__internal::core::access::metrics::AccessMetrics::increment(#call, #kind);
+    }
+}
+
+//
+// ============================================================================
+// stages
+// ============================================================================
+//
+
+fn guard_stage(kind: EndpointKind, guard: &[GuardSymbol], call: &syn::Ident) -> TokenStream2 {
+    if guard.is_empty() {
         return quote!();
     }
 
-    let metric = record_access_denied(
+    let metric = record_denied(
         call,
         quote!(::canic::__internal::core::ids::AccessMetricKind::Guard),
     );
 
-    match kind {
-        EndpointKind::Query => quote! {
-            if let Err(err) = ::canic::api::access::GuardAccessApi::guard_app_query() {
-                #metric
-                return Err(err.into());
-            }
-        },
-        EndpointKind::Update => quote! {
-            if let Err(err) = ::canic::api::access::GuardAccessApi::guard_app_update() {
-                #metric
-                return Err(err.into());
-            }
-        },
-    }
-}
-
-fn auth(auth: Option<&AuthSpec>, call: &syn::Ident) -> TokenStream2 {
-    let metric = record_access_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Auth),
-    );
-
-    match auth {
-        Some(AuthSpec::Any(rules)) => {
-            let caller = format_ident!("__canic_auth_caller");
-            let authed = format_ident!("__canic_auth_ok");
-            let last_err = format_ident!("__canic_auth_err");
-            let checks = rules.iter().map(|rule| {
-                let call = auth_call(rule, &caller);
-                quote! {
-                    if !#authed {
-                        match #call.await {
-                            Ok(()) => #authed = true,
-                            Err(err) => #last_err = Some(err),
-                        }
-                    }
-                }
-            });
-
-            quote! {
-                let #caller = ::canic::cdk::api::msg_caller();
-                let mut #authed = false;
-                let mut #last_err = None;
-                #(#checks)*
-                if !#authed {
-                    if let Some(err) = #last_err {
-                        #metric
-                        return Err(err.into());
-                    }
-                }
-            }
-        }
-        Some(AuthSpec::All(rules)) => {
-            let caller = format_ident!("__canic_auth_caller");
-            let checks = rules.iter().map(|rule| {
-                let call = auth_call(rule, &caller);
-                quote! {
-                    if let Err(err) = #call.await {
-                        #metric
-                        return Err(err.into());
-                    }
-                }
-            });
-
-            quote! {
-                let #caller = ::canic::cdk::api::msg_caller();
-                #(#checks)*
-            }
-        }
-        None => quote!(),
-    }
-}
-
-fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
-    if rules.is_empty() {
-        return quote!();
-    }
-
-    let metric = record_access_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Rule),
-    );
-
-    let checks = rules.iter().map(|expr| {
+    let checks = guard.iter().map(|sym| {
+        let call = guard_call(sym, kind);
         quote! {
-            if let Err(err) = #expr().await {
+            if let Err(err) = #call {
                 #metric
-                return Err(::canic::Error::from(err).into());
+                return Err(err.into());
             }
         }
     });
@@ -236,18 +167,46 @@ fn rule(rules: &[Expr], call: &syn::Ident) -> TokenStream2 {
     quote!(#(#checks)*)
 }
 
-fn env(envs: &[EnvSymbol], call: &syn::Ident) -> TokenStream2 {
-    if envs.is_empty() {
+fn auth_stage(auth: &[AuthSymbol], call: &syn::Ident) -> TokenStream2 {
+    if auth.is_empty() {
         return quote!();
     }
 
-    let metric = record_access_denied(
+    let metric = record_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Auth),
+    );
+
+    let caller = format_ident!("__canic_caller");
+
+    let checks = auth.iter().map(|sym| {
+        let call = auth_call(sym, &caller);
+        quote! {
+            if let Err(err) = #call.await {
+                #metric
+                return Err(err.into());
+            }
+        }
+    });
+
+    quote! {
+        let #caller = ::canic::cdk::api::msg_caller();
+        #(#checks)*
+    }
+}
+
+fn env_stage(env: &[EnvSymbol], call: &syn::Ident) -> TokenStream2 {
+    if env.is_empty() {
+        return quote!();
+    }
+
+    let metric = record_denied(
         call,
         quote!(::canic::__internal::core::ids::AccessMetricKind::Env),
     );
 
-    let checks = envs.iter().map(|env| {
-        let call = env_call(env);
+    let checks = env.iter().map(|sym| {
+        let call = env_call(sym);
         quote! {
             if let Err(err) = #call.await {
                 #metric
@@ -259,8 +218,37 @@ fn env(envs: &[EnvSymbol], call: &syn::Ident) -> TokenStream2 {
     quote!(#(#checks)*)
 }
 
-fn auth_call(rule: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
-    match rule {
+fn rule_stage(rules: &[RuleSymbol], call: &syn::Ident) -> TokenStream2 {
+    if rules.is_empty() {
+        return quote!();
+    }
+
+    let metric = record_denied(
+        call,
+        quote!(::canic::__internal::core::ids::AccessMetricKind::Rule),
+    );
+
+    let checks = rules.iter().map(|sym| {
+        let call = rule_call(sym);
+        quote! {
+            if let Err(err) = #call {
+                #metric
+                return Err(err.into());
+            }
+        }
+    });
+
+    quote!(#(#checks)*)
+}
+
+//
+// ============================================================================
+// symbol → API mapping
+// ============================================================================
+//
+
+fn auth_call(sym: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
+    match sym {
         AuthSymbol::CallerIsController => {
             quote!(::canic::api::access::AuthAccessApi::is_controller(#caller))
         }
@@ -285,8 +273,19 @@ fn auth_call(rule: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn env_call(env: &EnvSymbol) -> TokenStream2 {
-    match env {
+fn guard_call(sym: &GuardSymbol, kind: EndpointKind) -> TokenStream2 {
+    match (sym, kind) {
+        (GuardSymbol::AppIsLive, EndpointKind::Query) => {
+            quote!(::canic::api::access::GuardAccessApi::guard_app_query())
+        }
+        (GuardSymbol::AppIsLive, EndpointKind::Update) => {
+            quote!(::canic::api::access::GuardAccessApi::guard_app_update())
+        }
+    }
+}
+
+fn env_call(sym: &EnvSymbol) -> TokenStream2 {
+    match sym {
         EnvSymbol::SelfIsPrimeSubnet => {
             quote!(::canic::api::access::EnvAccessApi::is_prime_subnet())
         }
@@ -296,23 +295,40 @@ fn env_call(env: &EnvSymbol) -> TokenStream2 {
     }
 }
 
+fn rule_call(sym: &RuleSymbol) -> TokenStream2 {
+    match sym {
+        RuleSymbol::BuildIcOnly => {
+            quote!(::canic::api::access::RuleAccessApi::require_ic())
+        }
+        RuleSymbol::BuildLocalOnly => {
+            quote!(::canic::api::access::RuleAccessApi::require_local())
+        }
+    }
+}
+
+//
+// ============================================================================
+// dispatch + completion
+// ============================================================================
+//
+
 fn dispatch_call(
     asyncness: bool,
     dispatch: TokenStream2,
     call: &syn::Ident,
     impl_name: syn::Ident,
-    call_args: &[TokenStream2],
+    args: &[TokenStream2],
 ) -> TokenStream2 {
     if asyncness {
         quote! {
             #dispatch(#call, || async move {
-                #impl_name(#(#call_args),*).await
+                #impl_name(#(#args),*).await
             }).await
         }
     } else {
         quote! {
             #dispatch(#call, || {
-                #impl_name(#(#call_args),*)
+                #impl_name(#(#args),*)
             })
         }
     }

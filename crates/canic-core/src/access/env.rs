@@ -1,4 +1,9 @@
-use crate::{access::AccessError, cdk::api::canister_self, ops::runtime::env::EnvOps};
+use crate::{
+    access::{AccessError, AccessRuleError, AccessRuleResult},
+    cdk::{api::canister_self, api::is_controller as caller_is_controller, types::Principal},
+    config::Config,
+    ops::runtime::env::EnvOps,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -93,4 +98,38 @@ pub(crate) fn deny_root() -> Result<(), AccessError> {
     } else {
         Ok(())
     }
+}
+
+// -----------------------------------------------------------------------------
+// Caller rules
+// -----------------------------------------------------------------------------
+
+/// Require that the caller controls the current canister.
+/// Allows controller-only maintenance calls.
+#[must_use]
+pub fn is_controller(caller: Principal) -> AccessRuleResult {
+    Box::pin(async move {
+        if caller_is_controller(&caller) {
+            Ok(())
+        } else {
+            Err(AccessRuleError::NotController(caller).into())
+        }
+    })
+}
+
+/// Require that the caller appears in the active whitelist (IC deployments).
+/// No-op on local builds; enforces whitelist on IC.
+#[must_use]
+pub fn is_whitelisted(caller: Principal) -> AccessRuleResult {
+    Box::pin(async move {
+        let cfg = Config::try_get().ok_or_else(|| {
+            AccessRuleError::DependencyUnavailable("config not initialized".to_string())
+        })?;
+
+        if !cfg.is_whitelisted(&caller) {
+            return Err(AccessRuleError::NotWhitelisted(caller).into());
+        }
+
+        Ok(())
+    })
 }

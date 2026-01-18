@@ -20,6 +20,7 @@
 //! The use of `*Ops` types does **not** imply ownership of state or additional
 //! abstraction; they are zero-cost namespaces over free functions.
 
+pub mod auth;
 pub mod cascade;
 pub mod config;
 pub mod ic;

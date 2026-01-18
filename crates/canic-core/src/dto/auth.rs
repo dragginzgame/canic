@@ -1,13 +1,14 @@
 //! Delegated signing DTOs.
 //!
-//! These types define the data model for delegated signing:
-//! a root authority delegates signing capability to shard-local keys,
-//! and shards sign tokens that can be verified locally without any
+//! These types define the data model for delegated signing using
+//! IC canister signatures only:
+//! a root authority delegates signing capability to signer canisters,
+//! and signers issue tokens that can be verified locally without any
 //! directory, registry, or topology lookup.
 //!
 //! Trust model summary:
-//! - The root authority signs DelegationCerts.
-//! - Shards sign DelegatedTokens using a delegated key.
+//! - The root authority signs DelegationCerts (IC canister signature).
+//! - Signer canisters sign DelegatedTokens (IC canister signature).
 //! - Verifiers trust tokens only if the delegation chain is valid.
 //! - No canister calls occur during verification.
 
@@ -17,19 +18,16 @@ use crate::dto::prelude::*;
 /// DelegationCert
 ///
 /// A root-signed certificate that delegates token-signing authority
-/// to a specific public key.
+/// to a signer canister principal.
 ///
 /// This is the *only* object signed by the root authority canister.
 /// Verifiers treat this as the trust anchor for delegated tokens.
 ///
 /// Authority semantics:
 /// - The root signature over this struct establishes trust.
-/// - `signer_pubkey` is the delegated signing key.
+/// - `signer_pid` is the delegated signer canister.
 /// - `audiences` and `scopes` bound what the signer is allowed to issue.
 /// - `expires_at` limits delegation lifetime.
-///
-/// Non-authoritative metadata:
-/// - `signer_pid` is optional and informational only (audit/debug).
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct DelegationCert {
@@ -37,14 +35,9 @@ pub struct DelegationCert {
     /// Allows forward-compatible evolution of fields and semantics.
     pub v: u16,
 
-    /// Stable identifier for the delegated key.
-    /// Used as a seed/domain discriminator for root signing
-    /// and for key rotation tracking.
-    pub key_id: String,
-
-    /// Public key corresponding to the shard’s local signing key.
-    /// Tokens must be signed with the private key matching this value.
-    pub signer_pubkey: Vec<u8>,
+    /// Delegated signer canister principal.
+    /// Tokens must be signed by this canister.
+    pub signer_pid: Principal,
 
     /// Audiences the delegated signer is allowed to issue tokens for.
     /// Token claims.aud must be a member of this set.
@@ -60,13 +53,6 @@ pub struct DelegationCert {
     /// Absolute expiration time of this delegation.
     /// Tokens must not outlive the certificate.
     pub expires_at: u64,
-
-    /// Optional PID of the canister holding the signing key.
-    ///
-    /// This field is NOT authoritative and MUST NOT be used
-    /// as a trust decision. It exists only for auditability
-    /// and diagnostics.
-    pub signer_pid: Option<Principal>,
 }
 
 ///
@@ -75,7 +61,7 @@ pub struct DelegationCert {
 /// Proof that a DelegationCert was authorized by the root authority.
 ///
 /// This object binds the DelegationCert to a root signature.
-/// Verifiers validate `cert_sig_cbor` using the root authority’s
+/// Verifiers validate `cert_sig` using the root authority’s
 /// public key and a fixed domain separator.
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
@@ -83,11 +69,11 @@ pub struct DelegationProof {
     /// The delegated certificate describing signer authority.
     pub cert: DelegationCert,
 
-    /// Root authority signature over the CBOR-encoded DelegationCert.
+    /// Root authority signature over the DelegationCert hash.
     ///
     /// This signature establishes the delegation chain:
-    /// root → signer_pubkey.
-    pub cert_sig_cbor: Vec<u8>,
+    /// root → signer_pid.
+    pub cert_sig: Vec<u8>,
 }
 
 ///
@@ -124,14 +110,6 @@ pub struct DelegatedTokenClaims {
 
     /// Optional nonce for replay protection or correlation.
     pub nonce: Option<Vec<u8>>,
-
-    /// Optional tenant identifier.
-    /// Informational unless enforced by endpoint policy.
-    pub tenant: Option<String>,
-
-    /// Optional pool identifier.
-    /// Informational unless enforced by endpoint policy.
-    pub pool: Option<String>,
 }
 
 ///
@@ -143,7 +121,7 @@ pub struct DelegatedTokenClaims {
 /// 1. Validate token version.
 /// 2. Verify delegation certificate root signature.
 /// 3. Validate time bounds and scope constraints.
-/// 4. Verify token signature using delegated public key.
+/// 4. Verify token signature using the signer canister.
 ///
 /// No directory, registry, or topology lookup is required.
 ///
@@ -159,6 +137,6 @@ pub struct DelegatedToken {
     pub proof: DelegationProof,
 
     /// Signature over canonicalized claims and delegation hash,
-    /// produced by the delegated signer’s private key.
-    pub signature: Vec<u8>,
+    /// produced by the signer canister.
+    pub token_sig: Vec<u8>,
 }

@@ -15,7 +15,7 @@ fn ping() -> String {
     "ok".to_string()
 }
 
-#[canic_update(guard(app_is_live), auth_any(caller_is_controller), env(self_is_prime_subnet))]
+#[canic_update(guard(app_is_live), auth(caller_is_controller), env(self_is_prime_subnet))]
 async fn admin_only() -> Result<(), canic::Error> {
     Ok(())
 }
