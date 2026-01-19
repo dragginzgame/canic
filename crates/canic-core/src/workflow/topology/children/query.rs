@@ -10,11 +10,7 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::IcOps,
-        runtime::env::EnvOps,
-        storage::{
-            CanisterRecord, children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps,
-        },
+        storage::{CanisterRecord, children::CanisterChildrenOps},
     },
     workflow::view::paginate::paginate_vec,
 };
@@ -80,13 +76,7 @@ impl CanisterChildrenQuery {
     }
 
     fn records() -> Vec<(Principal, CanisterRecord)> {
-        if EnvOps::is_root() {
-            // Root derives children from the registry.
-            SubnetRegistryOps::children(IcOps::canister_self())
-        } else {
-            // Non-root uses cached children from topology cascade.
-            CanisterChildrenOps::data().entries
-        }
+        CanisterChildrenOps::records()
     }
 
     fn record_to_view(pid: Principal, record: CanisterRecord) -> CanisterRecordView {

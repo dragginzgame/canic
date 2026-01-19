@@ -28,6 +28,7 @@ pub mod perf;
 pub mod rpc;
 pub mod runtime;
 pub mod storage;
+pub mod topology;
 
 ///
 /// Prelude

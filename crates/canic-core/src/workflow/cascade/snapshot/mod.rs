@@ -12,18 +12,18 @@ pub mod adapter;
 use crate::{
     InternalError,
     access::env,
-    ops::storage::{
-        registry::subnet::SubnetRegistryOps,
-        state::{app::AppStateOps, subnet::SubnetStateOps},
+    ops::{
+        storage::{
+            registry::subnet::SubnetRegistryOps,
+            state::{app::AppStateOps, subnet::SubnetStateOps},
+        },
+        topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
     },
     storage::stable::{
         directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
         state::{app::AppStateData, subnet::SubnetStateData},
     },
-    workflow::{
-        prelude::*,
-        topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
-    },
+    workflow::prelude::*,
 };
 use std::collections::HashMap;
 

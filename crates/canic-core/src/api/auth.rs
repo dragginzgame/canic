@@ -5,6 +5,7 @@ use crate::{
         auth::{DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof},
         error::Error,
     },
+    error::InternalErrorClass,
     ops::{config::ConfigOps, ic::IcOps, storage::auth::DelegationStateOps},
     workflow::auth::DelegationWorkflow,
 };
@@ -19,13 +20,59 @@ use std::{sync::Arc, time::Duration};
 pub struct DelegationApi;
 
 impl DelegationApi {
+    fn map_delegation_error(err: crate::InternalError) -> Error {
+        match err.class() {
+            InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
+                Error::internal(err.to_string())
+            }
+            _ => Error::from(err),
+        }
+    }
+
+    pub fn prepare_issue(cert: DelegationCert) -> Result<(), Error> {
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        DelegationWorkflow::prepare_delegation(&cert).map_err(Self::map_delegation_error)
+    }
+
+    pub fn get_issue(cert: DelegationCert) -> Result<DelegationProof, Error> {
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        DelegationWorkflow::get_delegation(cert).map_err(Self::map_delegation_error)
+    }
+
     pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, Error> {
         let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden("delegation disabled"));
         }
 
-        DelegationWorkflow::issue_and_store(cert).map_err(Error::from)
+        DelegationWorkflow::issue_and_store(cert).map_err(Self::map_delegation_error)
+    }
+
+    pub fn store_proof(proof: DelegationProof) -> Result<(), Error> {
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        DelegationStateOps::set_proof(proof);
+        Ok(())
+    }
+
+    pub fn require_proof() -> Result<DelegationProof, Error> {
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        DelegationStateOps::proof().ok_or_else(|| Error::not_found("delegation proof not set"))
     }
 }
 

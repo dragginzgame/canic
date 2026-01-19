@@ -128,14 +128,14 @@ impl SignatureInfra {
     }
 
     ///
-    /// Verify a user token that was issued by the auth canister.
+    /// Verify a user token that was issued by a delegated signer canister.
     /// Callers must pass the domain separator and seed that were used during signing.
     ///
     /// - `domain`:    the domain separator used during signing
     /// - `seed`:      the seed that derived the signing public key
     /// - `message`: the CBOR-encoded message Token
-    /// - `signature`:  the CBOR canister signature returned by auth
-    /// - `issuer_pid`: the Principal of the auth canister (the one that signed)
+    /// - `signature`:  the CBOR canister signature returned by the signer
+    /// - `issuer_pid`: the Principal of the signer canister (the one that signed)
     ///
     pub fn verify(
         domain: &[u8],

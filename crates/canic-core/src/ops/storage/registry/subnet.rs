@@ -1,4 +1,3 @@
-pub use crate::storage::stable::registry::subnet::SubnetRegistryData;
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
@@ -6,6 +5,9 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
+
+// re-exports
+pub use crate::storage::stable::registry::subnet::SubnetRegistryData;
 
 ///
 /// SubnetRegistryOpsError

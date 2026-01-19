@@ -162,14 +162,17 @@ Fields:
 
 ```toml
 controllers = ["aaaaa-aa"]
-app_directory = ["scale_hub", "shard_hub"]
+app_directory = ["auth_hub", "scale_hub", "shard_hub"]
+
+[delegation]
+enabled = true
 
 [standards]
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["app", "auth", "scale_hub", "shard_hub"]
-subnet_directory = ["app", "auth", "scale_hub", "shard_hub"]
+auto_create = ["app", "auth_hub", "scale_hub", "shard_hub"]
+subnet_directory = ["app", "auth_hub", "scale_hub", "shard_hub"]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]
@@ -178,8 +181,15 @@ pool.import.ic = ["aaaaa-aa"]
 [subnets.prime.canisters.app]
 kind = "node"
 
-[subnets.prime.canisters.auth]
+[subnets.prime.canisters.auth_hub]
 kind = "node"
+topup.threshold = "10T"
+topup.amount = "5T"
+
+[subnets.prime.canisters.auth_hub.sharding.pools.auth_shards]
+canister_role = "auth_shard"
+policy.capacity = 100
+policy.max_shards = 4
 
 [subnets.prime.canisters.scale_hub]
 kind = "node"
@@ -207,6 +217,10 @@ policy.max_shards = 8
 [subnets.prime.canisters.shard]
 kind = "shard"
 [subnets.prime.canisters.shard.sharding]
+
+[subnets.prime.canisters.auth_shard]
+kind = "shard"
+[subnets.prime.canisters.auth_shard.sharding]
 
 [subnets.general]
 
