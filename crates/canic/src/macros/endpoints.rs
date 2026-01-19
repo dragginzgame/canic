@@ -60,13 +60,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_memory_registry() -> ::canic::dto::memory::MemoryRegistryView {
-            $crate::__internal::core::api::memory::MemoryQuery::registry_view()
+        fn canic_memory_registry() -> ::canic::dto::memory::MemoryRegistryResponse {
+            $crate::__internal::core::api::memory::MemoryQuery::registry()
         }
 
         #[canic_query]
-        fn canic_env() -> ::canic::dto::env::EnvView {
-            $crate::__internal::core::api::env::EnvQuery::view()
+        fn canic_env() -> ::canic::dto::env::EnvSnapshotResponse {
+            $crate::__internal::core::api::env::EnvQuery::snapshot()
         }
 
         #[canic_query]
@@ -75,7 +75,7 @@ macro_rules! canic_endpoints {
             topic: Option<String>,
             min_level: Option<::canic::__internal::core::log::Level>,
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::log::LogEntryView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::log::LogEntry> {
             $crate::__internal::core::api::log::LogQuery::page(crate_name, topic, min_level, page)
         }
 
@@ -135,7 +135,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_metrics_endpoint_health(
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::metrics::EndpointHealthView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::metrics::EndpointHealth> {
             $crate::__internal::core::api::metrics::MetricsQuery::endpoint_health_page(
                 page,
                 Some($crate::__internal::core::protocol::CANIC_METRICS_ENDPOINT_HEALTH),
@@ -147,13 +147,13 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_app_state() -> ::canic::dto::state::AppStateView {
-            $crate::__internal::core::api::state::AppStateQuery::view()
+        fn canic_app_state() -> ::canic::dto::state::AppStateResponse {
+            $crate::__internal::core::api::state::AppStateQuery::snapshot()
         }
 
         #[canic_query]
-        fn canic_subnet_state() -> ::canic::dto::state::SubnetStateView {
-            $crate::__internal::core::api::state::SubnetStateQuery::view()
+        fn canic_subnet_state() -> ::canic::dto::state::SubnetStateResponse {
+            $crate::__internal::core::api::state::SubnetStateQuery::snapshot()
         }
 
         //
@@ -163,14 +163,14 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_app_directory(
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryResponse> {
             $crate::__internal::core::api::topology::directory::AppDirectoryApi::page(page)
         }
 
         #[canic_query]
         fn canic_subnet_directory(
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryResponse> {
             $crate::__internal::core::api::topology::directory::SubnetDirectoryApi::page(page)
         }
 
@@ -181,7 +181,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_canister_children(
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::canister::CanisterRecordView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo> {
             $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(page)
         }
 
@@ -192,7 +192,7 @@ macro_rules! canic_endpoints {
         #[canic_query]
         fn canic_cycle_tracker(
             page: ::canic::dto::page::PageRequest,
-        ) -> ::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntryView> {
+        ) -> ::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry> {
             $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page)
         }
 
@@ -202,8 +202,8 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
         async fn canic_scaling_registry()
-        -> Result<::canic::dto::placement::scaling::ScalingRegistryView, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::scaling::ScalingApi::registry_view())
+        -> Result<::canic::dto::placement::scaling::ScalingRegistryResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::placement::scaling::ScalingApi::registry())
         }
 
         //
@@ -212,16 +212,16 @@ macro_rules! canic_endpoints {
 
         #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
         async fn canic_sharding_registry()
-        -> Result<::canic::dto::placement::sharding::ShardingRegistryView, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry_view())
+        -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry())
         }
 
         #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
         async fn canic_sharding_tenants(
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
-        ) -> Result<::canic::dto::placement::sharding::ShardingTenantsView, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::tenants_view(&pool, shard_pid))
+        ) -> Result<::canic::dto::placement::sharding::ShardingTenantsResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::tenants(&pool, shard_pid))
         }
 
         //
@@ -246,14 +246,14 @@ macro_rules! canic_endpoints {
         }
 
         #[canic_query]
-        fn icts_metadata() -> ::canic::dto::icts::CanisterMetadataView {
+        fn icts_metadata() -> ::canic::dto::icts::CanisterMetadataResponse {
             $crate::__internal::core::api::icts::IctsApi::metadata()
         }
 
         /// ICTS add-on endpoint: returns string errors by design.
         #[canic_update]
         async fn icts_canister_status()
-        -> Result<::canic::dto::canister::CanisterStatusView, String> {
+        -> Result<::canic::dto::canister::CanisterStatusResponse, String> {
             use $crate::cdk::api::msg_caller;
 
             static ICTS_CALLER: ::std::sync::LazyLock<::candid::Principal> =
@@ -316,7 +316,7 @@ macro_rules! canic_endpoints_root {
         ))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
-        ) -> Result<::canic::dto::canister::CanisterStatusView, ::canic::Error> {
+        ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(pid).await
         }
 
@@ -334,13 +334,13 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        fn canic_app_registry() -> ::canic::dto::topology::AppRegistryView {
-            $crate::__internal::core::api::topology::registry::AppRegistryApi::view()
+        fn canic_app_registry() -> ::canic::dto::topology::AppRegistryResponse {
+            $crate::__internal::core::api::topology::registry::AppRegistryApi::registry()
         }
 
         #[canic_query]
-        fn canic_subnet_registry() -> ::canic::dto::topology::SubnetRegistryView {
-            $crate::__internal::core::api::topology::registry::SubnetRegistryApi::view()
+        fn canic_subnet_registry() -> ::canic::dto::topology::SubnetRegistryResponse {
+            $crate::__internal::core::api::topology::registry::SubnetRegistryApi::registry()
         }
 
         //
@@ -348,8 +348,8 @@ macro_rules! canic_endpoints_root {
         //
 
         #[canic_query]
-        async fn canic_pool_list() -> ::canic::dto::pool::CanisterPoolView {
-            $crate::__internal::core::api::pool::CanisterPoolApi::list_view()
+        async fn canic_pool_list() -> ::canic::dto::pool::CanisterPoolResponse {
+            $crate::__internal::core::api::pool::CanisterPoolApi::list()
         }
 
         #[canic_update(auth(::canic::dsl::access::auth::caller_is_controller))]
@@ -396,14 +396,14 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(auth(::canic::dsl::access::auth::caller_is_parent))]
         async fn canic_sync_state(
-            snapshot: ::canic::dto::cascade::StateSnapshotView,
+            snapshot: ::canic::dto::cascade::StateSnapshotInput,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await
         }
 
         #[canic_update(auth(::canic::dsl::access::auth::caller_is_parent))]
         async fn canic_sync_topology(
-            snapshot: ::canic::dto::cascade::TopologySnapshotView,
+            snapshot: ::canic::dto::cascade::TopologySnapshotInput,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::cascade::CascadeApi::sync_topology(snapshot).await
         }

@@ -1,11 +1,11 @@
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
 ///
-/// CycleTrackerEntryView
+/// CycleTrackerEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CycleTrackerEntryView {
+pub struct CycleTrackerEntry {
     pub timestamp_secs: u64,
     pub cycles: Cycles,
 }

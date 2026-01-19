@@ -35,7 +35,7 @@
 //
 //    Successful requests MUST emit NO access metrics.
 //
-//    These invariants are relied upon by EndpointHealthView and metrics
+//    These invariants are relied upon by EndpointHealth and metrics
 //    aggregation logic.
 //
 // 3. Lifecycle metrics

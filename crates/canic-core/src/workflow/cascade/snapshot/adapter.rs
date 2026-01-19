@@ -3,7 +3,7 @@
 //!
 //! This module owns conversion between:
 //! - internal workflow snapshots (`StateSnapshot`, `TopologySnapshot`)
-//! - transport DTOs (`StateSnapshotView`, `TopologySnapshotView`)
+//! - transport DTOs (`StateSnapshotInput`, `TopologySnapshotInput`)
 //!
 //! RULES:
 //! - No assembly logic here
@@ -14,15 +14,11 @@
 
 use crate::{
     dto::cascade::{
-        StateSnapshotView, TopologyChildrenView, TopologyDirectChildView, TopologyPathNodeView,
-        TopologySnapshotView,
+        StateSnapshotInput, TopologyChildren, TopologyDirectChild as TopologyDirectChildDto,
+        TopologyPathNode as TopologyPathNodeDto, TopologySnapshotInput,
     },
-    workflow::{
-        cascade::snapshot::{
-            StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot,
-        },
-        state::mapper::{AppStateMapper, SubnetStateMapper},
-        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
+    workflow::cascade::snapshot::{
+        StateSnapshot, TopologyDirectChild, TopologyPathNode, TopologySnapshot,
     },
 };
 
@@ -34,34 +30,18 @@ pub struct StateSnapshotAdapter;
 
 impl StateSnapshotAdapter {
     #[must_use]
-    pub fn to_view(snapshot: &StateSnapshot) -> StateSnapshotView {
-        StateSnapshotView {
-            app_state: snapshot.app_state.map(AppStateMapper::data_to_view),
-
-            subnet_state: snapshot.subnet_state.map(SubnetStateMapper::data_to_view),
-
-            app_directory: snapshot
-                .app_directory
-                .clone()
-                .map(AppDirectoryMapper::data_to_view),
-
-            subnet_directory: snapshot
-                .subnet_directory
-                .clone()
-                .map(SubnetDirectoryMapper::data_to_view),
+    pub fn to_input(snapshot: &StateSnapshot) -> StateSnapshotInput {
+        StateSnapshotInput {
+            app_state: snapshot.app_state,
+            subnet_state: snapshot.subnet_state,
+            app_directory: snapshot.app_directory.clone(),
+            subnet_directory: snapshot.subnet_directory.clone(),
         }
     }
 
     #[must_use]
-    pub fn from_view(view: StateSnapshotView) -> StateSnapshot {
-        StateSnapshot {
-            app_state: view.app_state.map(AppStateMapper::view_to_data),
-            subnet_state: view.subnet_state.map(SubnetStateMapper::view_to_data),
-            app_directory: view.app_directory.map(AppDirectoryMapper::view_to_data),
-            subnet_directory: view
-                .subnet_directory
-                .map(SubnetDirectoryMapper::view_to_data),
-        }
+    pub fn from_input(view: StateSnapshotInput) -> StateSnapshot {
+        StateSnapshot::from(view)
     }
 }
 
@@ -73,12 +53,12 @@ pub struct TopologySnapshotAdapter;
 
 impl TopologySnapshotAdapter {
     #[must_use]
-    pub fn to_view(snapshot: &TopologySnapshot) -> TopologySnapshotView {
-        TopologySnapshotView {
+    pub fn to_input(snapshot: &TopologySnapshot) -> TopologySnapshotInput {
+        TopologySnapshotInput {
             parents: snapshot
                 .parents
                 .iter()
-                .map(|p| TopologyPathNodeView {
+                .map(|p| TopologyPathNodeDto {
                     pid: p.pid,
                     role: p.role.clone(),
                     parent_pid: p.parent_pid,
@@ -88,11 +68,11 @@ impl TopologySnapshotAdapter {
             children_map: snapshot
                 .children_map
                 .iter()
-                .map(|(pid, children)| TopologyChildrenView {
+                .map(|(pid, children)| TopologyChildren {
                     parent_pid: *pid,
                     children: children
                         .iter()
-                        .map(|c| TopologyDirectChildView {
+                        .map(|c| TopologyDirectChildDto {
                             pid: c.pid,
                             role: c.role.clone(),
                         })
@@ -103,7 +83,7 @@ impl TopologySnapshotAdapter {
     }
 
     #[must_use]
-    pub fn from_view(view: TopologySnapshotView) -> TopologySnapshot {
+    pub fn from_input(view: TopologySnapshotInput) -> TopologySnapshot {
         TopologySnapshot {
             parents: view
                 .parents

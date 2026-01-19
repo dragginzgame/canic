@@ -1,28 +1,28 @@
 use crate::dto::prelude::*;
 
 ///
-/// ScalingRegistryEntryView
+/// ScalingRegistryEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ScalingRegistryEntryView {
+pub struct ScalingRegistryEntry {
     pub pid: Principal,
-    pub entry: WorkerEntryView,
+    pub entry: WorkerEntry,
 }
 
 ///
-/// ScalingRegistryView
+/// ScalingRegistryResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ScalingRegistryView(pub Vec<ScalingRegistryEntryView>);
+pub struct ScalingRegistryResponse(pub Vec<ScalingRegistryEntry>);
 
 ///
-/// WorkerEntryView
+/// WorkerEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct WorkerEntryView {
+pub struct WorkerEntry {
     pub pool: String,                // which scale pool this belongs to
     pub canister_role: CanisterRole, // canister role
     pub created_at_secs: u64,        // timestamp

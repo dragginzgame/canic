@@ -110,7 +110,7 @@ impl DelegationWorkflow {
     /// Authority MUST be enforced by the caller.
     pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let proof = Self::issue_delegation(cert)?;
-        DelegationStateOps::set_proof(proof.clone());
+        DelegationStateOps::set_proof_from_dto(proof.clone());
 
         Ok(proof)
     }

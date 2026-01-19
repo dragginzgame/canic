@@ -13,7 +13,7 @@ use crate::{
     access::env,
     config::Config,
     domain::policy,
-    dto::{abi::v1::CanisterInitPayload, env::EnvView},
+    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
     ops::topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     ops::{
         config::ConfigOps,
@@ -26,13 +26,9 @@ use crate::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
+        topology::policy::RegistryPolicyInputMapper,
     },
-    workflow::{
-        cascade::snapshot::StateSnapshotBuilder,
-        pool::PoolWorkflow,
-        prelude::*,
-        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
-    },
+    workflow::{cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*},
 };
 
 ///
@@ -46,7 +42,7 @@ impl ProvisionWorkflow {
         role: &CanisterRole,
         parent_pid: Principal,
     ) -> Result<CanisterInitPayload, InternalError> {
-        let env = EnvView {
+        let env = EnvBootstrapArgs {
             prime_root_pid: Some(EnvOps::prime_root_pid()?),
             subnet_role: Some(EnvOps::subnet_role()?),
             subnet_pid: Some(EnvOps::subnet_pid()?),
@@ -55,8 +51,8 @@ impl ProvisionWorkflow {
             parent_pid: Some(parent_pid),
         };
 
-        let app_directory = AppDirectoryMapper::data_to_view(AppDirectoryOps::data());
-        let subnet_directory = SubnetDirectoryMapper::data_to_view(SubnetDirectoryOps::data());
+        let app_directory = AppDirectoryOps::snapshot_args();
+        let subnet_directory = SubnetDirectoryOps::snapshot_args();
 
         Ok(CanisterInitPayload {
             env,
@@ -231,7 +227,7 @@ async fn allocate_canister(
     let target = cfg.initial_cycles;
 
     // Reuse from pool
-    if let Some((pid, _)) = PoolWorkflow::pop_oldest_ready() {
+    if let Some(pid) = PoolWorkflow::pop_oldest_ready() {
         let mut current = MgmtOps::get_cycles(pid).await?;
 
         if current < target {
@@ -312,11 +308,12 @@ async fn install_canister(
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
     let registry_data = SubnetRegistryOps::data();
+    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
     let canister_cfg = ConfigOps::current_subnet_canister(role)?;
     policy::topology::registry::RegistryPolicy::can_register_role(
         role,
         parent_pid,
-        &registry_data,
+        &registry_input,
         &canister_cfg,
     )
     .map_err(InternalError::from)?;

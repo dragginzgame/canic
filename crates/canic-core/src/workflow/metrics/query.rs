@@ -1,14 +1,24 @@
 use crate::{
     dto::{
         metrics::{
-            AccessMetricEntry, DelegationMetricEntry, EndpointHealthView, HttpMetricEntry,
+            AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry,
             IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
-    ops::{perf::PerfOps, runtime::metrics::MetricsOps},
+    ops::{
+        perf::PerfOps,
+        runtime::metrics::{
+            MetricsOps,
+            mapper::{
+                AccessMetricEntryMapper, DelegationMetricEntryMapper, EndpointHealthMapper,
+                HttpMetricEntryMapper, IccMetricEntryMapper, SystemMetricEntryMapper,
+                TimerMetricEntryMapper,
+            },
+        },
+    },
     perf::PerfEntry,
-    workflow::{metrics::mapper::MetricsMapper, view::paginate::paginate_vec},
+    workflow::view::paginate::paginate_vec,
 };
 
 ///
@@ -24,7 +34,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn system_snapshot() -> Vec<SystemMetricEntry> {
         let snapshot = MetricsOps::system_snapshot();
-        let mut entries = MetricsMapper::system_metrics_to_view(snapshot.entries);
+        let mut entries = SystemMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| a.kind.cmp(&b.kind));
 
@@ -34,7 +44,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn icc_page(page: PageRequest) -> Page<IccMetricEntry> {
         let snapshot = MetricsOps::icc_snapshot();
-        let mut entries = MetricsMapper::icc_metrics_to_view(snapshot.entries);
+        let mut entries = IccMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| {
             a.target
@@ -49,7 +59,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn http_page(page: PageRequest) -> Page<HttpMetricEntry> {
         let snapshot = MetricsOps::http_snapshot();
-        let mut entries = MetricsMapper::http_metrics_to_view(snapshot.entries);
+        let mut entries = HttpMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
 
@@ -59,7 +69,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
         let snapshot = MetricsOps::timer_snapshot();
-        let mut entries = MetricsMapper::timer_metrics_to_view(snapshot.entries);
+        let mut entries = TimerMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| {
             a.mode
@@ -74,7 +84,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn access_page(page: PageRequest) -> Page<AccessMetricEntry> {
         let snapshot = MetricsOps::access_snapshot();
-        let mut entries = MetricsMapper::access_metrics_to_view(snapshot.entries);
+        let mut entries = AccessMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| {
             a.endpoint
@@ -88,7 +98,7 @@ impl MetricsQuery {
     #[must_use]
     pub fn delegation_page(page: PageRequest) -> Page<DelegationMetricEntry> {
         let snapshot = MetricsOps::delegation_snapshot();
-        let mut entries = MetricsMapper::delegation_metrics_to_view(snapshot.entries);
+        let mut entries = DelegationMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| a.authority.as_slice().cmp(b.authority.as_slice()));
 
@@ -105,9 +115,9 @@ impl MetricsQuery {
     pub fn endpoint_health_page(
         page: PageRequest,
         exclude_endpoint: Option<&str>,
-    ) -> Page<EndpointHealthView> {
+    ) -> Page<EndpointHealth> {
         let snapshot = MetricsOps::endpoint_health_snapshot();
-        let mut entries = MetricsMapper::endpoint_health_to_view(
+        let mut entries = EndpointHealthMapper::record_to_view(
             snapshot.attempts,
             snapshot.results,
             snapshot.access,

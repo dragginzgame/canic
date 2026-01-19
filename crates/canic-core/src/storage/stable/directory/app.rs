@@ -10,11 +10,11 @@ eager_static! {
 }
 
 ///
-/// AppDirectoryData
+/// AppDirectoryRecord
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AppDirectoryData {
+pub struct AppDirectoryRecord {
     pub entries: Vec<(CanisterRole, Principal)>,
 }
 
@@ -34,8 +34,8 @@ pub struct AppDirectory;
 impl AppDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> AppDirectoryData {
-        AppDirectoryData {
+    pub(crate) fn export() -> AppDirectoryRecord {
+        AppDirectoryRecord {
             entries: APP_DIRECTORY.with_borrow(|map| {
                 map.iter()
                     .map(|entry| (entry.key().clone(), entry.value()))
@@ -44,7 +44,7 @@ impl AppDirectory {
         }
     }
 
-    pub(crate) fn import(data: AppDirectoryData) {
+    pub(crate) fn import(data: AppDirectoryRecord) {
         APP_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (role, pid) in data.entries {

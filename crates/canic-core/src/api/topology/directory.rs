@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
-        topology::DirectoryEntryView,
+        topology::DirectoryEntryResponse,
     },
     ids::CanisterRole,
     workflow::topology::directory::query::{AppDirectoryQuery, SubnetDirectoryQuery},
@@ -16,7 +16,7 @@ pub struct AppDirectoryApi;
 
 impl AppDirectoryApi {
     #[must_use]
-    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         AppDirectoryQuery::page(page)
     }
 
@@ -37,7 +37,7 @@ pub struct SubnetDirectoryApi;
 
 impl SubnetDirectoryApi {
     #[must_use]
-    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         SubnetDirectoryQuery::page(page)
     }
 

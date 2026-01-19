@@ -70,6 +70,24 @@ jobs:
           mkdir -p .dfx/local/canisters/root
           cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
+      - name: Layering guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rg "storage::stable::.*Record" crates/canic-core/src/workflow; then
+            echo "workflow must not touch storage records"
+            exit 1
+          fi
+
+          if rg "pub use .*Record" crates/canic-core/src | rg -v "pub\\(crate\\)"; then
+            echo "record types must not be publicly re-exported"
+            exit 1
+          fi
+
+          if rg "(to_view|from_view)" crates/canic-core/src | rg -v "record_to_view|view::"; then
+            echo "misuse of 'view' detected in function names"
+            exit 1
+          fi
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1

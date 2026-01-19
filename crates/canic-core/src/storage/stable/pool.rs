@@ -20,12 +20,12 @@ eager_static! {
 }
 
 ///
-/// PoolData
+/// PoolStoreRecord
 /// Canonical storage-level export.
 ///
 
 #[derive(Clone, Debug)]
-pub struct PoolData {
+pub struct PoolStoreRecord {
     pub entries: Vec<(Principal, PoolRecord)>,
 }
 
@@ -51,29 +51,29 @@ pub enum PoolStatus {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PoolRecord {
-    pub header: PoolRecordHeader,
-    pub state: PoolRecordState,
+    pub header: PoolHeaderRecord,
+    pub state: PoolStateRecord,
 }
 
 impl_storable_unbounded!(PoolRecord);
 
 ///
-/// PoolRecordHeader
+/// PoolHeaderRecord
 /// Immutable, ordering-relevant metadata.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PoolRecordHeader {
+pub struct PoolHeaderRecord {
     pub created_at: u64,
 }
 
 ///
-/// PoolRecordState
+/// PoolStateRecord
 /// Mutable lifecycle state.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct PoolRecordState {
+pub struct PoolStateRecord {
     pub cycles: Cycles,
     pub status: PoolStatus,
     pub role: Option<CanisterRole>,
@@ -100,8 +100,8 @@ impl PoolStore {
         created_at: u64,
     ) {
         let record = PoolRecord {
-            header: PoolRecordHeader { created_at },
-            state: PoolRecordState {
+            header: PoolHeaderRecord { created_at },
+            state: PoolStateRecord {
                 cycles,
                 status,
                 role,
@@ -118,7 +118,7 @@ impl PoolStore {
     /// Update mutable state while preserving header invariants.
     pub(crate) fn update_state_with<F>(pid: Principal, f: F) -> bool
     where
-        F: FnOnce(PoolRecordState) -> PoolRecordState,
+        F: FnOnce(PoolStateRecord) -> PoolStateRecord,
     {
         POOL_STORE.with_borrow_mut(|map| {
             let Some(old) = map.get(&pid) else {
@@ -141,8 +141,8 @@ impl PoolStore {
     }
 
     #[must_use]
-    pub(crate) fn export() -> PoolData {
-        PoolData {
+    pub(crate) fn export() -> PoolStoreRecord {
+        PoolStoreRecord {
             entries: POOL_STORE.with_borrow(BTreeMap::to_vec),
         }
     }

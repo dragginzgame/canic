@@ -1,6 +1,11 @@
 use super::ensure_unique_roles;
-pub use crate::storage::stable::directory::app::AppDirectoryData;
-use crate::{InternalError, ops::prelude::*, storage::stable::directory::app::AppDirectory};
+use crate::{
+    InternalError,
+    dto::topology::AppDirectoryArgs,
+    ops::prelude::*,
+    ops::storage::directory::mapper::AppDirectoryRecordMapper,
+    storage::stable::directory::app::{AppDirectory, AppDirectoryRecord},
+};
 
 ///
 /// AppDirectoryOps
@@ -34,11 +39,21 @@ impl AppDirectoryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppDirectoryData {
+    pub fn data() -> AppDirectoryRecord {
         AppDirectory::export()
     }
 
-    pub(crate) fn import(data: AppDirectoryData) -> Result<(), InternalError> {
+    #[must_use]
+    pub fn snapshot_args() -> AppDirectoryArgs {
+        AppDirectoryRecordMapper::record_to_view(AppDirectory::export())
+    }
+
+    pub(crate) fn import_args(args: AppDirectoryArgs) -> Result<(), InternalError> {
+        let data = AppDirectoryRecordMapper::dto_to_record(args);
+        Self::import(data)
+    }
+
+    pub(crate) fn import(data: AppDirectoryRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         AppDirectory::import(data);
 

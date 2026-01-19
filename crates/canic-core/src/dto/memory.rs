@@ -1,20 +1,20 @@
 use crate::dto::prelude::*;
 
 ///
-/// MemoryRegistryView
+/// MemoryRegistryResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct MemoryRegistryView {
-    pub entries: Vec<MemoryRegistryEntryView>,
+pub struct MemoryRegistryResponse {
+    pub entries: Vec<MemoryRegistryEntry>,
 }
 
 ///
-/// MemoryRegistryEntryView
+/// MemoryRegistryEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct MemoryRegistryEntryView {
+pub struct MemoryRegistryEntry {
     pub id: u8,
     pub crate_name: String,
     pub label: String,

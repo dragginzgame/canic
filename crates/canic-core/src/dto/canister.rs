@@ -1,11 +1,11 @@
 use crate::dto::prelude::*;
 
 ///
-/// CanisterRecordView
+/// CanisterInfo
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanisterRecordView {
+pub struct CanisterInfo {
     pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,
@@ -14,28 +14,28 @@ pub struct CanisterRecordView {
 }
 
 ///
-/// CanisterStatusView
+/// CanisterStatusResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterStatusView {
-    pub status: CanisterStatusTypeView,
-    pub settings: CanisterSettingsView,
+pub struct CanisterStatusResponse {
+    pub status: CanisterStatusType,
+    pub settings: CanisterSettings,
     pub module_hash: Option<Vec<u8>>,
     pub memory_size: Nat,
-    pub memory_metrics: MemoryMetricsView,
+    pub memory_metrics: MemoryMetrics,
     pub cycles: Nat,
     pub reserved_cycles: Nat,
     pub idle_cycles_burned_per_day: Nat,
-    pub query_stats: QueryStatsView,
+    pub query_stats: QueryStats,
 }
 
 ///
-/// CanisterStatusTypeView
+/// CanisterStatusType
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
-pub enum CanisterStatusTypeView {
+pub enum CanisterStatusType {
     #[serde(rename = "running")]
     Running,
     #[serde(rename = "stopping")]
@@ -45,28 +45,28 @@ pub enum CanisterStatusTypeView {
 }
 
 ///
-/// CanisterSettingsView
+/// CanisterSettings
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterSettingsView {
+pub struct CanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
     pub memory_allocation: Nat,
     pub freezing_threshold: Nat,
     pub reserved_cycles_limit: Nat,
-    pub log_visibility: LogVisibilityView,
+    pub log_visibility: LogVisibility,
     pub wasm_memory_limit: Nat,
     pub wasm_memory_threshold: Nat,
-    pub environment_variables: Vec<EnvironmentVariableView>,
+    pub environment_variables: Vec<EnvironmentVariable>,
 }
 
 ///
-/// LogVisibilityView
+/// LogVisibility
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum LogVisibilityView {
+pub enum LogVisibility {
     #[serde(rename = "controllers")]
     Controllers,
     #[serde(rename = "public")]
@@ -76,21 +76,21 @@ pub enum LogVisibilityView {
 }
 
 ///
-/// EnvironmentVariableView
+/// EnvironmentVariable
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EnvironmentVariableView {
+pub struct EnvironmentVariable {
     pub name: String,
     pub value: String,
 }
 
 ///
-/// MemoryMetricsView
+/// MemoryMetrics
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct MemoryMetricsView {
+pub struct MemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
     pub global_memory_size: Nat,
@@ -102,11 +102,11 @@ pub struct MemoryMetricsView {
 }
 
 ///
-/// QueryStatsView
+/// QueryStats
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct QueryStatsView {
+pub struct QueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,
     pub request_payload_bytes_total: Nat,

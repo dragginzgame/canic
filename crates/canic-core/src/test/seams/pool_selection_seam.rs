@@ -47,11 +47,11 @@ fn pool_selection_uses_workflow_ordering() {
     );
 
     let selected = PoolWorkflow::pop_oldest_ready().expect("expected a ready entry");
-    assert_eq!(selected.0, pid_a);
+    assert_eq!(selected, pid_a);
     assert!(!PoolOps::contains(&pid_a));
 
     let next = PoolWorkflow::pop_oldest_ready().expect("expected a second ready entry");
-    assert_eq!(next.0, pid_b);
+    assert_eq!(next, pid_b);
     assert!(!PoolOps::contains(&pid_b));
     assert!(PoolOps::contains(&pid_c));
 }

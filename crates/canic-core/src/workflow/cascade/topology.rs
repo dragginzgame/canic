@@ -6,13 +6,8 @@
 
 use crate::{
     InternalError, InternalErrorOrigin, access,
-    dto::cascade::TopologySnapshotView,
-    ops::{
-        cascade::CascadeOps,
-        ic::IcOps,
-        storage::{CanisterRecord, children::CanisterChildrenOps},
-    },
-    storage::stable::children::CanisterChildrenData,
+    dto::cascade::TopologySnapshotInput,
+    ops::{cascade::CascadeOps, ic::IcOps, storage::children::CanisterChildrenOps},
     workflow::{
         cascade::{
             snapshot::{
@@ -58,10 +53,12 @@ impl TopologyCascadeWorkflow {
     // ──────────────────────── Non-root cascades ──────────────────────
 
     /// Continues a topology cascade on a non-root canister.
-    pub async fn nonroot_cascade_topology(view: TopologySnapshotView) -> Result<(), InternalError> {
+    pub async fn nonroot_cascade_topology(
+        view: TopologySnapshotInput,
+    ) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
-        let snapshot = TopologySnapshotAdapter::from_view(view);
+        let snapshot = TopologySnapshotAdapter::from_input(view);
 
         let self_pid = IcOps::canister_self();
         let next = Self::next_child_on_path(self_pid, &snapshot.parents)?;
@@ -74,28 +71,12 @@ impl TopologyCascadeWorkflow {
 
         warn_if_large("nonroot fanout", children.len());
 
-        // Build children cache snapshot using unified CanisterRecord.
-        // Note: cached entries may have empty `module_hash` / `created_at`
-        // fields; canonical data lives in the registry.
-        let children_data = CanisterChildrenData {
-            entries: children
-                .into_iter()
-                .map(|child| {
-                    (
-                        child.pid,
-                        CanisterRecord {
-                            role: child.role,
-                            parent_pid: Some(self_pid),
-                            module_hash: None,
-                            created_at: 0,
-                        },
-                    )
-                })
-                .collect(),
-        };
+        let children_entries = children
+            .into_iter()
+            .map(|child| (child.pid, child.role))
+            .collect();
 
-        // Invariant: children cache is updated only via topology cascade.
-        CanisterChildrenOps::import(children_data);
+        CanisterChildrenOps::import_direct_children(self_pid, children_entries);
 
         if let Some(next_pid) = next {
             let next_snapshot = Self::slice_snapshot_for_child(next_pid, &snapshot)?;
@@ -111,7 +92,7 @@ impl TopologyCascadeWorkflow {
         pid: &Principal,
         snapshot: &TopologySnapshot,
     ) -> Result<(), InternalError> {
-        let view = TopologySnapshotAdapter::to_view(snapshot);
+        let view = TopologySnapshotAdapter::to_input(snapshot);
 
         CascadeOps::send_topology_snapshot(*pid, &view)
             .await

@@ -2,11 +2,9 @@ use crate::{
     cdk::types::Cycles,
     config::schema::{CanisterConfig, CanisterKind, RandomnessConfig},
     domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
+    domain::policy::topology::{RegistryPolicyInput, TopologyPolicyInput},
     ids::CanisterRole,
-    ops::{
-        storage::CanisterRecord,
-        storage::registry::subnet::{SubnetRegistryData, SubnetRegistryOps},
-    },
+    ops::storage::registry::subnet::SubnetRegistryOps,
     test::seams::{lock, p},
 };
 
@@ -44,16 +42,13 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let existing_pid = p(1);
     let root_pid = p(2);
 
-    let data = SubnetRegistryData {
-        entries: vec![(
-            existing_pid,
-            CanisterRecord {
-                role: role.clone(),
-                parent_pid: Some(root_pid),
-                module_hash: None,
-                created_at: 1,
-            },
-        )],
+    let data = RegistryPolicyInput {
+        entries: vec![TopologyPolicyInput {
+            pid: existing_pid,
+            role: role.clone(),
+            parent_pid: Some(root_pid),
+            module_hash: None,
+        }],
     };
 
     let err = RegistryPolicy::can_register_role(&role, root_pid, &data, &single_canister_config())
@@ -98,16 +93,13 @@ fn registry_node_policy_blocks_under_parent() {
     let parent_pid = p(4);
     let existing_pid = p(5);
 
-    let data = SubnetRegistryData {
-        entries: vec![(
-            existing_pid,
-            CanisterRecord {
-                role: role.clone(),
-                parent_pid: Some(parent_pid),
-                module_hash: None,
-                created_at: 1,
-            },
-        )],
+    let data = RegistryPolicyInput {
+        entries: vec![TopologyPolicyInput {
+            pid: existing_pid,
+            role: role.clone(),
+            parent_pid: Some(parent_pid),
+            module_hash: None,
+        }],
     };
 
     let err = RegistryPolicy::can_register_role(&role, parent_pid, &data, &node_canister_config())

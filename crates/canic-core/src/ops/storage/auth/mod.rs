@@ -1,7 +1,10 @@
+pub mod mapper;
+
 use crate::{
     dto::auth::DelegationProof,
-    storage::stable::auth::{DelegationState, DelegationStateData},
+    storage::stable::auth::{DelegationProofRecord, DelegationState, DelegationStateRecord},
 };
+use mapper::DelegationProofRecordMapper;
 
 ///
 /// DelegationStateOps
@@ -36,7 +39,7 @@ impl DelegationStateOps {
     /// MUST NOT be used during request handling or verification.
     #[must_use]
     #[expect(dead_code)]
-    pub fn data() -> DelegationStateData {
+    pub fn data() -> DelegationStateRecord {
         DelegationState::export()
     }
 
@@ -48,7 +51,7 @@ impl DelegationStateOps {
     ///
     /// Callers MUST ensure the imported data has already been validated.
     #[expect(dead_code)]
-    pub fn import(data: DelegationStateData) {
+    pub fn import(data: DelegationStateRecord) {
         DelegationState::import(data);
     }
 
@@ -60,8 +63,14 @@ impl DelegationStateOps {
     ///
     /// This value represents the *current trust anchor* for delegated tokens.
     #[must_use]
-    pub fn proof() -> Option<DelegationProof> {
+    pub fn proof() -> Option<DelegationProofRecord> {
         DelegationState::get_proof()
+    }
+
+    /// Get the current delegation proof as a DTO.
+    #[must_use]
+    pub fn proof_dto() -> Option<DelegationProof> {
+        Self::proof().map(DelegationProofRecordMapper::record_to_view)
     }
 
     /// Set the active delegation proof.
@@ -73,8 +82,13 @@ impl DelegationStateOps {
     /// IMPORTANT:
     /// - This operation invalidates all previously issued delegated tokens.
     /// - Callers MUST ensure atomicity at a higher level if required.
-    pub fn set_proof(proof: DelegationProof) {
+    pub fn set_proof(proof: DelegationProofRecord) {
         DelegationState::set_proof(proof);
+    }
+
+    /// Set the active delegation proof from a DTO.
+    pub fn set_proof_from_dto(proof: DelegationProof) {
+        Self::set_proof(DelegationProofRecordMapper::dto_to_record(proof));
     }
 
     /// Clear the active delegation proof.

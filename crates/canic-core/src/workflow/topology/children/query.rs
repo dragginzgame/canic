@@ -1,17 +1,13 @@
 use crate::{
-    cdk::types::Principal,
     config::schema::CanisterKind,
     dto::{
-        canister::CanisterRecordView,
+        canister::CanisterInfo,
         page::{Page, PageRequest},
     },
     ids::CanisterRole,
     log,
     log::Topic,
-    ops::{
-        config::ConfigOps,
-        storage::{CanisterRecord, children::CanisterChildrenOps},
-    },
+    ops::{config::ConfigOps, storage::children::CanisterChildrenOps},
     workflow::view::paginate::paginate_vec,
 };
 
@@ -22,21 +18,16 @@ use crate::{
 pub struct CanisterChildrenQuery;
 
 impl CanisterChildrenQuery {
-    pub fn page(page: PageRequest) -> Page<CanisterRecordView> {
-        let records = Self::records();
+    pub fn page(page: PageRequest) -> Page<CanisterInfo> {
+        let entries = CanisterChildrenOps::infos();
 
-        let views: Vec<CanisterRecordView> = records
-            .into_iter()
-            .map(|(pid, record)| Self::record_to_view(pid, record))
-            .collect();
-
-        paginate_vec(views, page)
+        paginate_vec(entries, page)
     }
 
     /// Returns the per-parent node child for `role`, if present.
     /// Valid only for kind = Node.
     #[must_use]
-    pub fn get_node_child(role: &CanisterRole) -> Option<CanisterRecordView> {
+    pub fn get_node_child(role: &CanisterRole) -> Option<CanisterInfo> {
         let kind = match ConfigOps::current_subnet_canister(role) {
             Ok(cfg) => cfg.kind,
             Err(err) => {
@@ -58,34 +49,18 @@ impl CanisterChildrenQuery {
             return None;
         }
 
-        Self::records()
+        CanisterChildrenOps::infos()
             .into_iter()
-            .find(|(_, record)| &record.role == role)
-            .map(|(pid, record)| Self::record_to_view(pid, record))
+            .find(|entry| &entry.role == role)
     }
 
     /// Returns all children with the given role.
     /// Intended for worker or shard kinds.
     #[must_use]
-    pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterRecordView> {
-        Self::records()
+    pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterInfo> {
+        CanisterChildrenOps::infos()
             .into_iter()
-            .filter(|(_, record)| &record.role == role)
-            .map(|(pid, record)| Self::record_to_view(pid, record))
+            .filter(|entry| &entry.role == role)
             .collect()
-    }
-
-    fn records() -> Vec<(Principal, CanisterRecord)> {
-        CanisterChildrenOps::records()
-    }
-
-    fn record_to_view(pid: Principal, record: CanisterRecord) -> CanisterRecordView {
-        CanisterRecordView {
-            pid,
-            role: record.role,
-            parent_pid: record.parent_pid,
-            module_hash: record.module_hash,
-            created_at: record.created_at,
-        }
     }
 }

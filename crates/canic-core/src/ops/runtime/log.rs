@@ -1,12 +1,13 @@
 use crate::{
     InternalError,
-    dto::log::LogEntryView,
+    dto::log::LogEntry,
     log::Level,
     ops::{config::ConfigOps, runtime::RuntimeOpsError},
     storage::{
         StorageError,
-        stable::log::{Log, RetentionSummary, apply_retention},
+        stable::log::{Log, LogEntryRecord, LogLevelRecord, RetentionSummary, apply_retention},
     },
+    utils::case::{Case, Casing},
 };
 use thiserror::Error as ThisError;
 
@@ -64,10 +65,18 @@ impl LogOps {
         }
 
         let cfg = ConfigOps::log_config()?;
+        let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
+
+        let entry = LogEntryRecord {
+            crate_name: crate_name.to_string(),
+            created_at,
+            level: level_to_record(level),
+            topic: normalize_topic(topic),
+            message: message.to_string(),
+        };
 
         // This is a defensive size guard to protect runtime memory; workflow may also validate, but ops enforces the hard limit.
-        let id = Log::append(&cfg, created_at, crate_name, topic, level, message)
-            .map_err(LogOpsError::from)?;
+        let id = Log::append(max_entries, cfg.max_entry_bytes, entry).map_err(LogOpsError::from)?;
 
         Ok(id)
     }
@@ -99,16 +108,41 @@ impl LogOps {
     ///
     /// Intended for read-only querying and view adaptation.
     #[must_use]
-    pub fn snapshot() -> Vec<LogEntryView> {
+    pub fn snapshot() -> Vec<LogEntry> {
         Log::snapshot()
             .into_iter()
-            .map(|entry| LogEntryView {
+            .map(|entry| LogEntry {
                 crate_name: entry.crate_name,
                 created_at: entry.created_at,
-                level: entry.level,
+                level: record_to_level(entry.level),
                 topic: entry.topic,
                 message: entry.message,
             })
             .collect()
     }
+}
+
+const fn level_to_record(level: Level) -> LogLevelRecord {
+    match level {
+        Level::Debug => LogLevelRecord::Debug,
+        Level::Info => LogLevelRecord::Info,
+        Level::Ok => LogLevelRecord::Ok,
+        Level::Warn => LogLevelRecord::Warn,
+        Level::Error => LogLevelRecord::Error,
+    }
+}
+
+const fn record_to_level(level: LogLevelRecord) -> Level {
+    match level {
+        LogLevelRecord::Debug => Level::Debug,
+        LogLevelRecord::Info => Level::Info,
+        LogLevelRecord::Ok => Level::Ok,
+        LogLevelRecord::Warn => Level::Warn,
+        LogLevelRecord::Error => Level::Error,
+    }
+}
+
+#[allow(clippy::single_option_map)]
+fn normalize_topic(topic: Option<&str>) -> Option<String> {
+    topic.map(|t| t.to_string().to_case(Case::Snake))
 }

@@ -2,7 +2,9 @@ use crate::{
     cdk::types::Principal,
     dto::{
         error::Error,
-        placement::sharding::{ShardingPlanStateView, ShardingRegistryView, ShardingTenantsView},
+        placement::sharding::{
+            ShardingPlanStateResponse, ShardingRegistryResponse, ShardingTenantsResponse,
+        },
     },
     workflow::placement::sharding::{ShardingWorkflow, query::ShardingQuery},
 };
@@ -40,14 +42,14 @@ impl ShardingApi {
 
     /// Return a view of the full sharding registry.
     #[must_use]
-    pub fn registry_view() -> ShardingRegistryView {
-        ShardingQuery::registry_view()
+    pub fn registry() -> ShardingRegistryResponse {
+        ShardingQuery::registry()
     }
 
     /// Return all tenants currently assigned to a shard.
     #[must_use]
-    pub fn tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
-        ShardingQuery::tenants_view(pool, shard)
+    pub fn tenants(pool: &str, shard: Principal) -> ShardingTenantsResponse {
+        ShardingQuery::tenants(pool, shard)
     }
 
     // ─────────────────────── Workflows ────────────────────────
@@ -65,7 +67,7 @@ impl ShardingApi {
     pub fn plan_assign_to_pool(
         pool: &str,
         tenant: impl AsRef<str>,
-    ) -> Result<ShardingPlanStateView, Error> {
+    ) -> Result<ShardingPlanStateResponse, Error> {
         ShardingWorkflow::plan_assign_to_pool(pool, tenant).map_err(Error::from)
     }
 }

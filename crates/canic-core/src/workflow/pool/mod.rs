@@ -1,7 +1,6 @@
 pub mod admin;
 pub mod admissibility;
 pub mod controllers;
-pub mod mapper;
 pub mod query;
 pub mod scheduler;
 
@@ -9,17 +8,14 @@ use crate::{
     InternalError, InternalErrorOrigin,
     access::env,
     domain::policy::pool::PoolPolicyError,
-    dto::pool::{CanisterPoolStatusView, PoolBatchResult},
+    dto::pool::{CanisterPoolStatus, PoolBatchResult},
+    ids::IntentResourceKey,
     ops::{
         ic::{
             IcOps, TC,
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
-        storage::{
-            intent::{IntentResourceKey, IntentStoreOps},
-            pool::{PoolData, PoolOps, PoolRecord, PoolStatus},
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
         pool::{query::PoolQuery, scheduler::PoolSchedulerWorkflow},
@@ -79,51 +75,12 @@ impl PoolWorkflow {
     // Selection
     // -------------------------------------------------------------------------
 
-    pub fn pop_oldest_ready() -> Option<(Principal, PoolRecord)> {
-        Self::pop_oldest_by_status(PoolStatus::Ready)
+    pub fn pop_oldest_ready() -> Option<Principal> {
+        PoolOps::pop_oldest_ready_pid()
     }
 
-    pub fn pop_oldest_pending_reset() -> Option<(Principal, PoolRecord)> {
-        Self::pop_oldest_by_status(PoolStatus::PendingReset)
-    }
-
-    fn pop_oldest_by_status(status: PoolStatus) -> Option<(Principal, PoolRecord)> {
-        let data = PoolOps::data();
-        let entry = Self::select_oldest(data, &status)?;
-        PoolOps::remove(&entry.0);
-
-        Some(entry)
-    }
-
-    fn select_oldest(data: PoolData, status: &PoolStatus) -> Option<(Principal, PoolRecord)> {
-        let mut selected: Option<(Principal, PoolRecord)> = None;
-
-        for (pid, record) in data.entries {
-            let matches = match status {
-                PoolStatus::Ready => matches!(record.state.status, PoolStatus::Ready),
-                PoolStatus::PendingReset => matches!(record.state.status, PoolStatus::PendingReset),
-                PoolStatus::Failed { .. } => false,
-            };
-
-            if !matches {
-                continue;
-            }
-
-            let replace = match &selected {
-                None => true,
-                Some((best_pid, best_record)) => {
-                    record.header.created_at < best_record.header.created_at
-                        || (record.header.created_at == best_record.header.created_at
-                            && pid.as_slice() < best_pid.as_slice())
-                }
-            };
-
-            if replace {
-                selected = Some((pid, record));
-            }
-        }
-
-        selected
+    pub fn pop_oldest_pending_reset() -> Option<Principal> {
+        PoolOps::pop_oldest_pending_reset_pid()
     }
 
     // -------------------------------------------------------------------------
@@ -251,9 +208,9 @@ impl PoolWorkflow {
         for pid in pids {
             match admissibility::check_can_enter_pool(pid).await {
                 Ok(()) => {
-                    if let Some(entry) = PoolQuery::pool_entry_view(pid) {
+                    if let Some(entry) = PoolQuery::pool_entry(pid) {
                         match entry.status {
-                            CanisterPoolStatusView::Failed { .. } => {
+                            CanisterPoolStatus::Failed { .. } => {
                                 Self::mark_pending_reset(pid);
                                 requeued += 1;
                             }

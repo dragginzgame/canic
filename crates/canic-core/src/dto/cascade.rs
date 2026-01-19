@@ -1,25 +1,25 @@
 use crate::dto::{
     prelude::*,
-    state::{AppStateView, SubnetStateView},
-    topology::{AppDirectoryView, SubnetDirectoryView},
+    state::{AppStateInput, SubnetStateInput},
+    topology::{AppDirectoryArgs, SubnetDirectoryArgs},
 };
 
 ///
-/// StateSnapshotView
+/// StateSnapshotInput
 /// Snapshot of mutable state and directory sections that can be propagated to peers.
 /// Pure DTO.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct StateSnapshotView {
-    pub app_state: Option<AppStateView>,
-    pub subnet_state: Option<SubnetStateView>,
-    pub app_directory: Option<AppDirectoryView>,
-    pub subnet_directory: Option<SubnetDirectoryView>,
+pub struct StateSnapshotInput {
+    pub app_state: Option<AppStateInput>,
+    pub subnet_state: Option<SubnetStateInput>,
+    pub app_directory: Option<AppDirectoryArgs>,
+    pub subnet_directory: Option<SubnetDirectoryArgs>,
 }
 
 ///
-/// TopologySnapshotView
+/// TopologySnapshotInput
 /// Partial topology snapshot used for cascade.
 /// Contains:
 /// - a parent path (root -> target)
@@ -31,41 +31,41 @@ pub struct StateSnapshotView {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologySnapshotView {
-    pub parents: Vec<TopologyPathNodeView>,
+pub struct TopologySnapshotInput {
+    pub parents: Vec<TopologyPathNode>,
     /// Children keyed by their parent pid (at most one entry per parent).
-    pub children_map: Vec<TopologyChildrenView>,
+    pub children_map: Vec<TopologyChildren>,
 }
 
 ///
-/// TopologyChildrenView
+/// TopologyChildren
 /// Parent-keyed children list used in topology cascades.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologyChildrenView {
+pub struct TopologyChildren {
     pub parent_pid: Principal,
-    pub children: Vec<TopologyDirectChildView>,
+    pub children: Vec<TopologyDirectChild>,
 }
 
 ///
-/// TopologyDirectChildView
+/// TopologyDirectChild
 /// Direct child node for parent-keyed topology maps.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologyDirectChildView {
+pub struct TopologyDirectChild {
     pub pid: Principal,
     pub role: CanisterRole,
 }
 
 ///
-/// TopologyPathNodeView
+/// TopologyPathNode
 /// Snapshot node for parent-path traversal (includes identity).
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TopologyPathNodeView {
+pub struct TopologyPathNode {
     pub pid: Principal,
     pub role: CanisterRole,
     pub parent_pid: Option<Principal>,

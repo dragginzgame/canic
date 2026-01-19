@@ -1,24 +1,24 @@
-use crate::dto::{canister::CanisterRecordView, prelude::*};
+use crate::dto::{canister::CanisterInfo, prelude::*};
 
 ///
-/// AppRegistryView
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AppRegistryView(pub Vec<AppRegistryEntryView>);
-
-///
-/// AppRegistryEntryView
+/// AppRegistryResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AppRegistryEntryView {
+pub struct AppRegistryResponse(pub Vec<AppRegistryEntry>);
+
+///
+/// AppRegistryEntry
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct AppRegistryEntry {
     pub subnet_pid: Principal,
     pub root_pid: Principal,
 }
 
 ///
-/// SubnetRegistryView
+/// SubnetRegistryResponse
 ///
 /// External view of the subnet registry.
 /// Each entry is identity-bearing (`pid`) and includes the full
@@ -26,10 +26,10 @@ pub struct AppRegistryEntryView {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct SubnetRegistryView(pub Vec<SubnetRegistryEntryView>);
+pub struct SubnetRegistryResponse(pub Vec<SubnetRegistryEntry>);
 
 ///
-/// SubnetRegistryEntryView
+/// SubnetRegistryEntry
 ///
 /// Registry entry keyed by canister principal.
 /// The `role` is duplicated outside the record for convenient
@@ -37,32 +37,42 @@ pub struct SubnetRegistryView(pub Vec<SubnetRegistryEntryView>);
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct SubnetRegistryEntryView {
+pub struct SubnetRegistryEntry {
     pub pid: Principal,
     pub role: CanisterRole,
-    pub record: CanisterRecordView,
+    pub record: CanisterInfo,
 }
 
 ///
-/// AppDirectoryView
+/// AppDirectoryArgs
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AppDirectoryView(pub Vec<DirectoryEntryView>);
+pub struct AppDirectoryArgs(pub Vec<DirectoryEntryInput>);
 
 ///
-/// SubnetDirectoryView
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetDirectoryView(pub Vec<DirectoryEntryView>);
-
-///
-/// DirectoryEntryView
+/// SubnetDirectoryArgs
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DirectoryEntryView {
+pub struct SubnetDirectoryArgs(pub Vec<DirectoryEntryInput>);
+
+///
+/// DirectoryEntryInput
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DirectoryEntryInput {
+    pub role: CanisterRole,
+    pub pid: Principal,
+}
+
+///
+/// DirectoryEntryResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DirectoryEntryResponse {
     pub role: CanisterRole,
     pub pid: Principal,
 }

@@ -1,3 +1,10 @@
+//!
+//! App demo canister used for local/dev Canic testing.
+//!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
+
 #![allow(clippy::unused_async)]
 
 use canic::prelude::*;

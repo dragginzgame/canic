@@ -3,8 +3,8 @@ use crate::{
     ids::CanisterRole,
     ops::storage::directory::DirectoryOpsError,
     storage::stable::{
-        directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
-        registry::subnet::SubnetRegistryData,
+        directory::{app::AppDirectoryRecord, subnet::SubnetDirectoryRecord},
+        registry::subnet::SubnetRegistryRecord,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,9 +17,9 @@ pub struct RootAppDirectoryBuilder;
 
 impl RootAppDirectoryBuilder {
     pub fn build(
-        registry: &SubnetRegistryData,
+        registry: &SubnetRegistryRecord,
         app_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<AppDirectoryData, InternalError> {
+    ) -> Result<AppDirectoryRecord, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -36,7 +36,7 @@ impl RootAppDirectoryBuilder {
             }
         }
 
-        Ok(AppDirectoryData {
+        Ok(AppDirectoryRecord {
             entries: entries.into_iter().collect(),
         })
     }
@@ -50,9 +50,9 @@ pub struct RootSubnetDirectoryBuilder;
 
 impl RootSubnetDirectoryBuilder {
     pub fn build(
-        registry: &SubnetRegistryData,
+        registry: &SubnetRegistryRecord,
         subnet_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<SubnetDirectoryData, InternalError> {
+    ) -> Result<SubnetDirectoryRecord, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -69,7 +69,7 @@ impl RootSubnetDirectoryBuilder {
             }
         }
 
-        Ok(SubnetDirectoryData {
+        Ok(SubnetDirectoryRecord {
             entries: entries.into_iter().collect(),
         })
     }

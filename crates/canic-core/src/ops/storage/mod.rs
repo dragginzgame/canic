@@ -8,9 +8,6 @@ pub mod pool;
 pub mod registry;
 pub mod state;
 
-// re-export from storage
-pub use crate::storage::canister::CanisterRecord;
-
 use crate::{InternalError, ops::OpsError};
 use thiserror::Error as ThisError;
 
@@ -22,19 +19,19 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
+    AppStateOps(#[from] state::app::AppStateOpsError),
+
+    #[error(transparent)]
     DirectoryOps(#[from] directory::DirectoryOpsError),
+
+    #[error(transparent)]
+    IntentStoreOps(#[from] intent::IntentStoreOpsError),
 
     #[error(transparent)]
     ShardingRegistryOps(#[from] placement::sharding::ShardingRegistryOpsError),
 
     #[error(transparent)]
     SubnetRegistryOps(#[from] registry::subnet::SubnetRegistryOpsError),
-
-    #[error(transparent)]
-    AppStateOps(#[from] state::app::AppStateOpsError),
-
-    #[error(transparent)]
-    IntentStoreOps(#[from] intent::IntentStoreOpsError),
 }
 
 impl From<StorageOpsError> for InternalError {

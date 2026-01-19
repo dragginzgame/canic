@@ -1,10 +1,13 @@
 use crate::{
     InternalError,
     dto::placement::sharding::{
-        ShardingRegistryEntryView, ShardingRegistryView, ShardingTenantsView,
+        ShardingRegistryEntry, ShardingRegistryResponse, ShardingTenantsResponse,
     },
-    ops::storage::placement::sharding::ShardingRegistryOps,
-    workflow::{placement::sharding::mapper::ShardingMapper, prelude::*},
+    ops::{
+        placement::sharding::mapper::ShardEntryMapper,
+        storage::placement::sharding::ShardingRegistryOps,
+    },
+    workflow::prelude::*,
 };
 
 ///
@@ -28,26 +31,26 @@ impl ShardingQuery {
 
     /// Return a view of the full sharding registry.
     #[must_use]
-    pub fn registry_view() -> ShardingRegistryView {
+    pub fn registry() -> ShardingRegistryResponse {
         let data = ShardingRegistryOps::export();
 
         let view = data
             .entries
             .into_iter()
-            .map(|(pid, entry)| ShardingRegistryEntryView {
+            .map(|(pid, entry)| ShardingRegistryEntry {
                 pid,
-                entry: ShardingMapper::shard_entry_to_view(&entry),
+                entry: ShardEntryMapper::record_to_view(&entry),
             })
             .collect();
 
-        ShardingRegistryView(view)
+        ShardingRegistryResponse(view)
     }
 
     /// Return all tenants currently assigned to a shard.
     #[must_use]
-    pub fn tenants_view(pool: &str, shard: Principal) -> ShardingTenantsView {
+    pub fn tenants(pool: &str, shard: Principal) -> ShardingTenantsResponse {
         let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
 
-        ShardingTenantsView(tenants)
+        ShardingTenantsResponse(tenants)
     }
 }

@@ -2,6 +2,9 @@
 //! Scaling worker demo canister used to exercise the ops scaling helpers.
 //! Part of the `crates/canisters` showcase suite.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
 
 #![allow(clippy::unused_async)]
 

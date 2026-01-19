@@ -7,10 +7,11 @@ pub mod wasm;
 
 use crate::{
     InternalError, VERSION, access,
+    domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
-        ic::{IcOps, signature::SignatureOps},
+        ic::{IcOps, network::NetworkOps, signature::SignatureOps},
         runtime::{
             env::EnvOps,
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
@@ -20,13 +21,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    storage::stable::env::EnvData,
-    workflow::{
-        self,
-        env::EnvWorkflow,
-        prelude::*,
-        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
-    },
+    workflow::{self, env::EnvWorkflow, prelude::*},
 };
 
 ///
@@ -130,16 +125,28 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid),
     };
 
-    let data = EnvData {
+    let input = EnvInput {
         prime_root_pid: Some(prime_root_pid),
-        root_pid: Some(self_pid),
-        subnet_pid: Some(subnet_pid),
         subnet_role: Some(subnet_role),
+        subnet_pid: Some(subnet_pid),
+        root_pid: Some(self_pid),
         canister_role: Some(CanisterRole::ROOT),
         parent_pid: Some(prime_root_pid),
     };
 
-    if let Err(err) = EnvOps::import(data) {
+    let network = NetworkOps::build_network()
+        .unwrap_or_else(|| fatal("init_root_canister", "failed to determine runtime network"));
+    let validated = match validate_or_default(network, input) {
+        Ok(validated) => validated,
+        Err(EnvPolicyError::MissingEnvFields(missing)) => {
+            fatal(
+                "init_root_canister",
+                format!("bootstrap failed: missing required env fields: {missing}"),
+            );
+        }
+    };
+
+    if let Err(err) = EnvOps::import_validated(validated) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
@@ -182,21 +189,17 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
-    if let Err(err) = EnvWorkflow::init_env_from_view(payload.env, canister_role) {
+    if let Err(err) = EnvWorkflow::init_env_from_args(payload.env, canister_role) {
         fatal("init_nonroot_canister", format!("env import failed: {err}"));
     }
 
-    if let Err(err) =
-        AppDirectoryOps::import(AppDirectoryMapper::view_to_data(payload.app_directory))
-    {
+    if let Err(err) = AppDirectoryOps::import_args(payload.app_directory) {
         fatal(
             "init_nonroot_canister",
             format!("app directory import failed: {err}"),
         );
     }
-    if let Err(err) = SubnetDirectoryOps::import(SubnetDirectoryMapper::view_to_data(
-        payload.subnet_directory,
-    )) {
+    if let Err(err) = SubnetDirectoryOps::import_args(payload.subnet_directory) {
         fatal(
             "init_nonroot_canister",
             format!("subnet directory import failed: {err}"),

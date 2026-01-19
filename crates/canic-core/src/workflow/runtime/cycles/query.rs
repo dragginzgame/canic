@@ -1,6 +1,6 @@
 use crate::{
     dto::{
-        cycles::CycleTrackerEntryView,
+        cycles::CycleTrackerEntry,
         page::{Page, PageRequest},
     },
     ops::storage::cycles::CycleTrackerOps,
@@ -15,13 +15,13 @@ pub struct CycleTrackerQuery;
 
 impl CycleTrackerQuery {
     #[must_use]
-    pub fn page(page: PageRequest) -> Page<CycleTrackerEntryView> {
+    pub fn page(page: PageRequest) -> Page<CycleTrackerEntry> {
         let snapshot = CycleTrackerOps::snapshot();
         let page = paginate_vec(snapshot.entries, page);
         let entries = page
             .entries
             .into_iter()
-            .map(|(timestamp_secs, cycles)| CycleTrackerEntryView {
+            .map(|(timestamp_secs, cycles)| CycleTrackerEntry {
                 timestamp_secs,
                 cycles,
             })

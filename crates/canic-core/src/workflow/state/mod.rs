@@ -1,4 +1,3 @@
-pub mod mapper;
 pub mod query;
 
 use crate::{
@@ -30,8 +29,7 @@ impl AppStateWorkflow {
     /// exclusively at the API boundary.
     pub async fn execute_command(cmd: AppCommand) -> Result<(), InternalError> {
         env::require_root()?;
-        let cmd = mapper::AppCommandMapper::from_dto(cmd);
-        AppStateOps::execute_command(cmd)?;
+        AppStateOps::apply_command(cmd)?;
 
         let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;

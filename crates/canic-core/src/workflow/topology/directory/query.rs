@@ -1,7 +1,7 @@
 use crate::{
     dto::{
         page::{Page, PageRequest},
-        topology::DirectoryEntryView,
+        topology::DirectoryEntryResponse,
     },
     ops::storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
     workflow::{prelude::*, view::paginate::paginate_vec},
@@ -19,7 +19,7 @@ impl AppDirectoryQuery {
         AppDirectoryOps::get(&role)
     }
 
-    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         let data = AppDirectoryOps::data();
         map_directory_page(paginate_vec(data.entries, page))
     }
@@ -37,17 +37,17 @@ impl SubnetDirectoryQuery {
         SubnetDirectoryOps::get(&role)
     }
 
-    pub fn page(page: PageRequest) -> Page<DirectoryEntryView> {
+    pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         let data = SubnetDirectoryOps::data();
         map_directory_page(paginate_vec(data.entries, page))
     }
 }
 
-fn map_directory_page(page: Page<(CanisterRole, Principal)>) -> Page<DirectoryEntryView> {
+fn map_directory_page(page: Page<(CanisterRole, Principal)>) -> Page<DirectoryEntryResponse> {
     let entries = page
         .entries
         .into_iter()
-        .map(|(role, pid)| DirectoryEntryView { role, pid })
+        .map(|(role, pid)| DirectoryEntryResponse { role, pid })
         .collect();
 
     Page {

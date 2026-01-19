@@ -1,6 +1,10 @@
 //!
 //! Auth hub canister that provisions auth shard workers for delegated signing.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target. Its endpoints may intentionally omit
+//! production-grade auth because they are exercised only in controlled tests.
+//!
 
 #![allow(clippy::unused_async)]
 
@@ -34,6 +38,8 @@ async fn canic_upgrade() {}
 
 /// create_auth_shard
 /// Provision or re-use an auth shard for the provided tenant label.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn create_auth_shard(tenant: Principal) -> Result<Principal, Error> {
     ShardingApi::assign_to_pool(POOL_NAME, tenant.to_string()).await
@@ -41,6 +47,8 @@ async fn create_auth_shard(tenant: Principal) -> Result<Principal, Error> {
 
 /// plan_create_auth_shard
 /// Dry-run shard allocation decision for a tenant.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_query]
 async fn plan_create_auth_shard(tenant: Principal) -> Result<String, Error> {
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, tenant.to_string())?;
@@ -49,6 +57,8 @@ async fn plan_create_auth_shard(tenant: Principal) -> Result<String, Error> {
 
 /// provision_auth_shard
 /// Prepare a root-signed delegation cert and return it for query retrieval.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn provision_auth_shard(
     tenant: Principal,
@@ -62,7 +72,7 @@ async fn provision_auth_shard(
 
     let shard_pid = ShardingApi::assign_to_pool(POOL_NAME, tenant.to_string()).await?;
 
-    let root_pid = EnvQuery::view()
+    let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
@@ -85,13 +95,15 @@ async fn provision_auth_shard(
 
 /// finalize_auth_shard
 /// Install a root-signed delegation proof on the shard.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Result<(), Error> {
     if proof.cert.signer_pid != shard_pid {
         return Err(Error::invalid("proof signer does not match shard"));
     }
 
-    let root_pid = EnvQuery::view()
+    let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 

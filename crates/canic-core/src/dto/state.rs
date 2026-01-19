@@ -12,29 +12,44 @@ pub enum AppCommand {
 }
 
 ///
-/// AppModeView
+/// AppMode
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AppModeView {
+pub enum AppMode {
     Enabled,
     Readonly,
     Disabled,
 }
 
 ///
-/// AppStateView
-/// Read-only snapshot of application state for transfer and inspection.
+/// AppStateInput
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AppStateView {
-    pub mode: AppModeView,
+pub struct AppStateInput {
+    pub mode: AppMode,
 }
 
 ///
-/// SubnetStateView
+/// AppStateResponse
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetStateView {}
+pub struct AppStateResponse {
+    pub mode: AppMode,
+}
+
+///
+/// SubnetStateInput
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetStateInput {}
+
+///
+/// SubnetStateResponse
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetStateResponse {}

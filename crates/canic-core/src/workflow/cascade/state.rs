@@ -6,13 +6,13 @@
 //!
 //! Layering rules:
 //! - Workflow operates on `StateSnapshot` (internal)
-//! - `StateSnapshotView` is used only for transport (RPC / API)
+//! - `StateSnapshotInput` is used only for transport (RPC / API)
 //! - Snapshot assembly lives in `workflow::cascade::snapshot`
 //! - Persistence and mutation live in ops
 
 use crate::{
     InternalError, InternalErrorOrigin, access,
-    dto::cascade::StateSnapshotView,
+    dto::cascade::StateSnapshotInput,
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
@@ -99,10 +99,10 @@ impl StateCascadeWorkflow {
     /// Handle a received state snapshot on a non-root canister:
     /// - apply it locally
     /// - forward it to direct children using the children cache
-    pub async fn nonroot_cascade_state(view: StateSnapshotView) -> Result<(), InternalError> {
+    pub async fn nonroot_cascade_state(view: StateSnapshotInput) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
-        let snapshot = StateSnapshotAdapter::from_view(view);
+        let snapshot = StateSnapshotAdapter::from_input(view);
 
         if state_snapshot_is_empty(&snapshot) {
             log!(
@@ -159,20 +159,20 @@ impl StateCascadeWorkflow {
     fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         access::env::deny_root()?;
 
-        if let Some(app) = &snapshot.app_state {
-            AppStateOps::import(*app);
+        if let Some(app) = snapshot.app_state {
+            AppStateOps::import_input(app);
         }
 
-        if let Some(subnet_data) = &snapshot.subnet_state {
-            SubnetStateOps::import(*subnet_data);
+        if let Some(subnet_data) = snapshot.subnet_state {
+            SubnetStateOps::import_input(subnet_data);
         }
 
         if let Some(dir) = &snapshot.app_directory {
-            AppDirectoryOps::import(dir.clone())?;
+            AppDirectoryOps::import_args(dir.clone())?;
         }
 
         if let Some(dir) = &snapshot.subnet_directory {
-            SubnetDirectoryOps::import(dir.clone())?;
+            SubnetDirectoryOps::import_args(dir.clone())?;
         }
 
         Ok(())
@@ -184,7 +184,7 @@ impl StateCascadeWorkflow {
     ///
     /// Converts internal snapshot → DTO exactly once.
     async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        let view = StateSnapshotAdapter::to_view(snapshot);
+        let view = StateSnapshotAdapter::to_input(snapshot);
 
         CascadeOps::send_state_snapshot(pid, &view)
             .await

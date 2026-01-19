@@ -36,7 +36,7 @@ eager_static! {
 /// Snapshot of registry contents (for export / tests)
 ///
 #[derive(Clone, Debug)]
-pub struct SubnetRegistryData {
+pub struct SubnetRegistryRecord {
     pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
@@ -155,8 +155,8 @@ impl SubnetRegistry {
 
     /// Returns a snapshot of all registry entries.
     #[must_use]
-    pub(crate) fn export() -> SubnetRegistryData {
-        SUBNET_REGISTRY.with_borrow(|map| SubnetRegistryData {
+    pub(crate) fn export() -> SubnetRegistryRecord {
+        SUBNET_REGISTRY.with_borrow(|map| SubnetRegistryRecord {
             entries: map.iter().map(|e| (*e.key(), e.value())).collect(),
         })
     }

@@ -1,4 +1,4 @@
-use crate::{dto::env::EnvView, ops::runtime::env::EnvOps, workflow::env::data_to_view};
+use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::EnvOps};
 
 ///
 /// EnvQuery
@@ -8,8 +8,7 @@ pub struct EnvQuery;
 
 impl EnvQuery {
     #[must_use]
-    pub fn view() -> EnvView {
-        let data = EnvOps::snapshot();
-        data_to_view(data)
+    pub fn snapshot() -> EnvSnapshotResponse {
+        EnvOps::snapshot_response()
     }
 }

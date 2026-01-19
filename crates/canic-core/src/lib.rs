@@ -31,6 +31,7 @@ pub mod perf;
 pub mod protocol;
 #[cfg(test)]
 pub mod test;
+pub(crate) mod view;
 
 pub(crate) mod config;
 pub(crate) mod infra;

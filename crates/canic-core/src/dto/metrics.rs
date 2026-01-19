@@ -116,7 +116,7 @@ pub struct EndpointResultMetricEntry {
 }
 
 ///
-/// EndpointHealthView
+/// EndpointHealth
 ///
 /// Derived, read-only view combining multiple metric streams.
 ///
@@ -131,7 +131,7 @@ pub struct EndpointResultMetricEntry {
 /// It exists purely for observability convenience.
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointHealthView {
+pub struct EndpointHealth {
     /// Normalized endpoint name.
     pub endpoint: String,
 

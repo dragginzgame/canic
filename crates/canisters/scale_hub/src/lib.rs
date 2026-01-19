@@ -2,6 +2,9 @@
 //! Scaling hub demo canister showcasing pool orchestration endpoints.
 //! Exists under `crates/canisters` strictly for test and example flows.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
 
 #![allow(clippy::unused_async)]
 

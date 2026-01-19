@@ -5,6 +5,7 @@ use crate::{
         directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
         registry::subnet::SubnetRegistryOps,
     },
+    ops::topology::policy::RegistryPolicyInputMapper,
     workflow::{
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
         ic::provision::ProvisionWorkflow,
@@ -43,17 +44,18 @@ impl PropagationWorkflow {
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         let registry_data = SubnetRegistryOps::data();
+        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
         let app_data = AppDirectoryOps::data();
         let subnet_data = SubnetDirectoryOps::data();
 
         TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_data,
+            &registry_input,
             &app_data.entries,
         )
         .map_err(InternalError::from)?;
 
         TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_data,
+            &registry_input,
             &subnet_data.entries,
         )
         .map_err(InternalError::from)?;

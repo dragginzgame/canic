@@ -2,16 +2,14 @@
 
 use crate::{
     InternalError,
+    ids::IntentResourceKey,
     ops::{ic::IcOps, storage::StorageOpsError},
-    storage::stable::intent::{INTENT_STORE_SCHEMA_VERSION, IntentStore},
+    storage::stable::intent::{
+        INTENT_STORE_SCHEMA_VERSION, IntentId, IntentPendingEntryRecord, IntentRecord,
+        IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
+    },
 };
 use thiserror::Error as ThisError;
-
-// re-exports
-pub use crate::storage::stable::intent::{
-    IntentId, IntentPendingEntry, IntentRecord, IntentResourceKey, IntentResourceTotals,
-    IntentState, IntentStoreMeta,
-};
 
 /// -----------------------------------------------------------------------------
 /// Errors
@@ -125,7 +123,7 @@ impl IntentStoreOps {
         }
 
         let totals = IntentStore::get_totals(&resource_key).unwrap_or_default();
-        let new_totals = IntentResourceTotals {
+        let new_totals = IntentResourceTotalsRecord {
             reserved_qty: checked_add(totals.reserved_qty, quantity, "reserved_qty")?,
             committed_qty: totals.committed_qty,
             pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
@@ -143,7 +141,7 @@ impl IntentStoreOps {
             ttl_secs,
         };
 
-        let pending = IntentPendingEntry {
+        let pending = IntentPendingEntryRecord {
             resource_key: resource_key.clone(),
             quantity,
             created_at,
@@ -188,7 +186,7 @@ impl IntentStoreOps {
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
 
-        let new_totals = IntentResourceTotals {
+        let new_totals = IntentResourceTotalsRecord {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: checked_add(totals.committed_qty, record.quantity, "committed_qty")?,
             pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
@@ -236,7 +234,7 @@ impl IntentStoreOps {
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
 
-        let new_totals = IntentResourceTotals {
+        let new_totals = IntentResourceTotalsRecord {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: totals.committed_qty,
             pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
@@ -265,7 +263,7 @@ impl IntentStoreOps {
     // Read-only views (TTL authoritative)
     // -------------------------------------------------------------
 
-    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotals {
+    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
         let committed_qty = IntentStore::get_totals(resource_key).map_or(0, |t| t.committed_qty);
 
         let mut reserved_qty: u64 = 0;
@@ -282,7 +280,7 @@ impl IntentStoreOps {
             pending_count = pending_count.saturating_add(1);
         }
 
-        IntentResourceTotals {
+        IntentResourceTotalsRecord {
             reserved_qty,
             committed_qty,
             pending_count,
@@ -290,7 +288,7 @@ impl IntentStoreOps {
     }
 
     #[allow(dead_code)]
-    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntry)> {
+    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
         IntentStore::pending_entries()
             .into_iter()
             .filter(|(_, e)| !is_pending_entry_expired(now, e))
@@ -320,7 +318,7 @@ impl IntentStoreOps {
         let mut meta = ensure_schema()?;
         let totals = IntentStore::get_totals(&record.resource_key).unwrap_or_default();
 
-        let new_totals = IntentResourceTotals {
+        let new_totals = IntentResourceTotalsRecord {
             reserved_qty: totals.reserved_qty.saturating_sub(record.quantity),
             committed_qty: totals.committed_qty,
             pending_count: totals.pending_count.saturating_sub(1),
@@ -349,7 +347,7 @@ impl IntentStoreOps {
 /// Internal helpers (mechanical)
 /// -----------------------------------------------------------------------------
 
-fn ensure_schema() -> Result<IntentStoreMeta, IntentStoreOpsError> {
+fn ensure_schema() -> Result<IntentStoreMetaRecord, IntentStoreOpsError> {
     let meta = IntentStore::meta();
     if meta.schema_version != INTENT_STORE_SCHEMA_VERSION {
         return Err(IntentStoreOpsError::SchemaMismatch {
@@ -371,8 +369,8 @@ fn ensure_pending_exists(intent_id: IntentId) -> Result<(), IntentStoreOpsError>
 fn remove_pending_and_apply(
     intent_id: IntentId,
     resource_key: IntentResourceKey,
-    totals: IntentResourceTotals,
-    meta: IntentStoreMeta,
+    totals: IntentResourceTotalsRecord,
+    meta: IntentStoreMetaRecord,
     record: IntentRecord,
 ) {
     IntentStore::remove_pending(intent_id);
@@ -439,7 +437,7 @@ fn is_record_expired(now: u64, record: &IntentRecord) -> bool {
     is_expired(now, record.created_at, record.ttl_secs)
 }
 
-fn is_pending_entry_expired(now: u64, entry: &IntentPendingEntry) -> bool {
+fn is_pending_entry_expired(now: u64, entry: &IntentPendingEntryRecord) -> bool {
     is_expired(now, entry.created_at, entry.ttl_secs)
 }
 
@@ -478,11 +476,11 @@ mod tests {
         IntentStoreOps::try_reserve(intent_id, resource_key, quantity, CREATED_AT, ttl_secs)
     }
 
-    fn totals_at(key: &IntentResourceKey, now: u64) -> IntentResourceTotals {
+    fn totals_at(key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
         IntentStoreOps::totals_at(key, now)
     }
 
-    fn meta() -> IntentStoreMeta {
+    fn meta() -> IntentStoreMetaRecord {
         IntentStore::meta()
     }
 
@@ -503,7 +501,7 @@ mod tests {
             name: &'static str,
             op: Option<Op>,
             expected_state: IntentState,
-            expected_totals: IntentResourceTotals,
+            expected_totals: IntentResourceTotalsRecord,
             pending_total: u64,
             committed_total: u64,
             aborted_total: u64,
@@ -514,7 +512,7 @@ mod tests {
                 name: "reserve only",
                 op: None,
                 expected_state: IntentState::Pending,
-                expected_totals: IntentResourceTotals {
+                expected_totals: IntentResourceTotalsRecord {
                     reserved_qty: 5,
                     committed_qty: 0,
                     pending_count: 1,
@@ -527,7 +525,7 @@ mod tests {
                 name: "commit",
                 op: Some(Op::Commit),
                 expected_state: IntentState::Committed,
-                expected_totals: IntentResourceTotals {
+                expected_totals: IntentResourceTotalsRecord {
                     reserved_qty: 0,
                     committed_qty: 5,
                     pending_count: 0,
@@ -540,7 +538,7 @@ mod tests {
                 name: "abort",
                 op: Some(Op::Abort),
                 expected_state: IntentState::Aborted,
-                expected_totals: IntentResourceTotals {
+                expected_totals: IntentResourceTotalsRecord {
                     reserved_qty: 0,
                     committed_qty: 0,
                     pending_count: 0,
@@ -662,7 +660,7 @@ mod tests {
 
         IntentStore::insert_pending(
             intent_id,
-            IntentPendingEntry {
+            IntentPendingEntryRecord {
                 resource_key: resource_key.clone(),
                 quantity: 9,
                 created_at: CREATED_AT,
@@ -672,7 +670,7 @@ mod tests {
 
         IntentStore::set_totals(
             resource_key,
-            IntentResourceTotals {
+            IntentResourceTotalsRecord {
                 reserved_qty: 0,
                 committed_qty: 0,
                 pending_count: 1,
@@ -691,7 +689,7 @@ mod tests {
 
         IntentStore::set_totals(
             resource_key.clone(),
-            IntentResourceTotals {
+            IntentResourceTotalsRecord {
                 reserved_qty: u64::MAX,
                 committed_qty: 0,
                 pending_count: 0,

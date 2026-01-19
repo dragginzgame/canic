@@ -1,12 +1,16 @@
+mod mapper;
+
 use crate::{
+    dto::canister::CanisterInfo,
     ops::{
         ic::IcOps, prelude::*, runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps,
     },
     storage::{
         canister::CanisterRecord,
-        stable::children::{CanisterChildren, CanisterChildrenData},
+        stable::children::{CanisterChildren, CanisterChildrenRecord},
     },
 };
+use mapper::CanisterRecordMapper;
 
 ///
 /// CanisterChildrenOps
@@ -33,7 +37,15 @@ impl CanisterChildrenOps {
     }
 
     #[must_use]
-    pub fn records() -> Vec<(Principal, CanisterRecord)> {
+    pub fn infos() -> Vec<CanisterInfo> {
+        Self::records()
+            .into_iter()
+            .map(|(pid, record)| CanisterRecordMapper::record_to_response(pid, record))
+            .collect()
+    }
+
+    #[must_use]
+    fn records() -> Vec<(Principal, CanisterRecord)> {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(IcOps::canister_self())
         } else {
@@ -55,11 +67,37 @@ impl CanisterChildrenOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> CanisterChildrenData {
+    pub fn data() -> CanisterChildrenRecord {
         CanisterChildren::export()
     }
 
-    pub(crate) fn import(data: CanisterChildrenData) {
+    #[allow(dead_code)]
+    pub(crate) fn import(data: CanisterChildrenRecord) {
+        CanisterChildren::import(data);
+    }
+
+    pub(crate) fn import_direct_children(
+        parent_pid: Principal,
+        children: Vec<(Principal, CanisterRole)>,
+    ) {
+        // Cache entries omit module hash/created_at; canonical data lives in the registry.
+        let data = CanisterChildrenRecord {
+            entries: children
+                .into_iter()
+                .map(|(pid, role)| {
+                    (
+                        pid,
+                        CanisterRecord {
+                            role,
+                            parent_pid: Some(parent_pid),
+                            module_hash: None,
+                            created_at: 0,
+                        },
+                    )
+                })
+                .collect(),
+        };
+
         CanisterChildren::import(data);
     }
 }

@@ -25,6 +25,7 @@ pub mod cascade;
 pub mod config;
 pub mod ic;
 pub mod perf;
+pub mod placement;
 pub mod rpc;
 pub mod runtime;
 pub mod storage;

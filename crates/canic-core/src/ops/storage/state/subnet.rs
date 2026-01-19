@@ -1,5 +1,8 @@
-use crate::storage::stable::state::subnet::SubnetState;
-pub use crate::storage::stable::state::subnet::SubnetStateData;
+use crate::{
+    dto::state::SubnetStateInput,
+    ops::storage::state::mapper::SubnetStateInputMapper,
+    storage::stable::state::subnet::{SubnetState, SubnetStateRecord},
+};
 
 ///
 /// SubnetStateOps
@@ -13,11 +16,23 @@ impl SubnetStateOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> SubnetStateData {
+    pub fn data() -> SubnetStateRecord {
         SubnetState::export()
     }
 
-    pub fn import(data: SubnetStateData) {
+    /// Export the current subnet state as a DTO snapshot.
+    #[must_use]
+    pub fn snapshot_input() -> SubnetStateInput {
+        SubnetStateInputMapper::record_to_view(SubnetState::export())
+    }
+
+    #[allow(dead_code)]
+    pub fn import(data: SubnetStateRecord) {
         SubnetState::import(data);
+    }
+
+    pub fn import_input(view: SubnetStateInput) {
+        let record = SubnetStateInputMapper::dto_to_record(view);
+        SubnetState::import(record);
     }
 }

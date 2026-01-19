@@ -83,7 +83,7 @@ pub fn verify_token(
             return Err(AccessError::Denied("delegated token expired".to_string()));
         }
 
-        let stored = DelegationStateOps::proof().ok_or_else(|| {
+        let stored = DelegationStateOps::proof_dto().ok_or_else(|| {
             AccessRuleError::DependencyUnavailable("delegation proof unavailable".to_string())
         })?;
 

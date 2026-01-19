@@ -1,7 +1,7 @@
 use crate::{
     dto::{
         error::Error,
-        pool::{CanisterPoolView, PoolAdminCommand, PoolAdminResponse},
+        pool::{CanisterPoolResponse, PoolAdminCommand, PoolAdminResponse},
     },
     workflow::pool::{PoolWorkflow, query::PoolQuery},
 };
@@ -14,8 +14,8 @@ pub struct CanisterPoolApi;
 
 impl CanisterPoolApi {
     #[must_use]
-    pub fn list_view() -> CanisterPoolView {
-        PoolQuery::pool_list_view()
+    pub fn list() -> CanisterPoolResponse {
+        PoolQuery::pool_list()
     }
 
     pub async fn admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, Error> {

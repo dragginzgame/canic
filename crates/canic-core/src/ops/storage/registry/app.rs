@@ -1,5 +1,4 @@
-use crate::storage::stable::registry::app::AppRegistry;
-pub use crate::storage::stable::registry::app::AppRegistryData;
+use crate::storage::stable::registry::app::{AppRegistry, AppRegistryRecord};
 
 ///
 /// AppRegistryOps
@@ -13,7 +12,7 @@ impl AppRegistryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppRegistryData {
+    pub fn data() -> AppRegistryRecord {
         AppRegistry::export()
     }
 }

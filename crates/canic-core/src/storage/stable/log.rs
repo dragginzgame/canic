@@ -6,9 +6,7 @@ use crate::{
         log::{Log as StableLogImpl, WriteError},
         memory::VirtualMemory,
     },
-    config::schema::LogConfig,
     eager_static, ic_memory,
-    log::Level,
     memory::impl_storable_unbounded,
     storage::{
         prelude::*,
@@ -17,7 +15,6 @@ use crate::{
             memory::observability::{LOG_DATA_ID, LOG_INDEX_ID},
         },
     },
-    utils::case::{Case, Casing},
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};
@@ -26,8 +23,11 @@ use std::{cell::RefCell, collections::VecDeque};
 /// StableLog
 ///
 
-type StableLog =
-    StableLogImpl<LogEntry, VirtualMemory<DefaultMemoryImpl>, VirtualMemory<DefaultMemoryImpl>>;
+type StableLog = StableLogImpl<
+    LogEntryRecord,
+    VirtualMemory<DefaultMemoryImpl>,
+    VirtualMemory<DefaultMemoryImpl>,
+>;
 
 struct LogIndexMemory;
 struct LogDataMemory;
@@ -68,19 +68,32 @@ fn with_log_mut<R>(f: impl FnOnce(&mut StableLog) -> R) -> R {
 }
 
 ///
-/// LogEntry
+/// LogLevelRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum LogLevelRecord {
+    Debug,
+    Info,
+    Ok,
+    Warn,
+    Error,
+}
+
+///
+/// LogEntryRecord
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LogEntry {
+pub struct LogEntryRecord {
     pub crate_name: String,
     pub created_at: u64,
-    pub level: Level,
+    pub level: LogLevelRecord,
     pub topic: Option<String>,
     pub message: String,
 }
 
-impl_storable_unbounded!(LogEntry);
+impl_storable_unbounded!(LogEntryRecord);
 
 ///
 /// Log
@@ -89,38 +102,23 @@ impl_storable_unbounded!(LogEntry);
 pub struct Log;
 
 impl Log {
-    pub(crate) fn append<T, M>(
-        cfg: &LogConfig,
-        now_secs: u64,
-        crate_name: &str,
-        topic: Option<T>,
-        level: Level,
-        message: M,
-    ) -> Result<u64, StorageError>
-    where
-        T: ToString,
-        M: AsRef<str>,
-    {
-        if cfg.max_entries == 0 {
+    pub(crate) fn append(
+        max_entries: usize,
+        max_entry_bytes: u32,
+        entry: LogEntryRecord,
+    ) -> Result<u64, StorageError> {
+        if max_entries == 0 {
             return Ok(0);
         }
 
-        let entry = LogEntry {
-            crate_name: crate_name.to_string(),
-            created_at: now_secs,
-            level,
-            topic: normalize_topic(topic),
-            message: message.as_ref().to_string(),
-        };
-
-        let entry = truncate_entry(entry, cfg.max_entry_bytes);
+        let entry = truncate_entry(entry, max_entry_bytes);
         let id = append_raw(&entry)?;
 
         Ok(id)
     }
 
     #[must_use]
-    pub(crate) fn snapshot() -> Vec<LogEntry> {
+    pub(crate) fn snapshot() -> Vec<LogEntryRecord> {
         let mut out = Vec::new();
         with_log(|log| {
             for entry in log.iter() {
@@ -231,7 +229,7 @@ pub fn apply_retention(
 
 const TRUNCATION_SUFFIX: &str = "...[truncated]";
 
-fn append_raw(entry: &LogEntry) -> Result<u64, StorageError> {
+fn append_raw(entry: &LogEntryRecord) -> Result<u64, StorageError> {
     with_log(|log| log.append(entry)).map_err(|e| StorageError::from(map_write_error(e)))
 }
 
@@ -247,13 +245,7 @@ const fn map_write_error(err: WriteError) -> StableMemoryError {
     }
 }
 
-// Centralizes topic normalization to enforce invariants.
-#[allow(clippy::single_option_map)]
-fn normalize_topic<T: ToString>(topic: Option<T>) -> Option<String> {
-    topic.map(|t| t.to_string().to_case(Case::Snake))
-}
-
-fn truncate_entry(mut entry: LogEntry, max_bytes: u32) -> LogEntry {
+fn truncate_entry(mut entry: LogEntryRecord, max_bytes: u32) -> LogEntryRecord {
     if let Some(msg) = truncate_message(&entry.message, max_bytes) {
         entry.message = msg;
     }

@@ -1,10 +1,14 @@
+pub mod mapper;
+
 use crate::{
     InternalError,
     cdk::api::canister_self,
+    domain::policy::env::ValidatedEnv,
     ids::SubnetRole,
     ops::{prelude::*, runtime::RuntimeOpsError},
-    storage::stable::env::{Env, EnvData},
+    storage::stable::env::{Env, EnvRecord},
 };
+use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::mapper::EnvRecordMapper};
 use thiserror::Error as ThisError;
 
 ///
@@ -124,11 +128,24 @@ impl EnvOps {
 
     /// Export the current environment metadata.
     #[must_use]
-    pub fn snapshot() -> EnvData {
+    pub fn snapshot() -> EnvRecord {
         Env::export()
     }
 
-    pub fn import(data: EnvData) -> Result<(), InternalError> {
+    /// Export the current environment metadata as a DTO.
+    #[must_use]
+    pub fn snapshot_response() -> EnvSnapshotResponse {
+        EnvRecordMapper::record_to_view(&Env::export())
+    }
+
+    /// Return any missing required fields for a complete environment snapshot.
+    #[must_use]
+    pub fn missing_required_fields() -> Vec<&'static str> {
+        let data = Env::export();
+        required_fields_missing(&data)
+    }
+
+    pub fn import(data: EnvRecord) -> Result<(), InternalError> {
         let missing = required_fields_missing(&data);
         if !missing.is_empty() {
             return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
@@ -137,6 +154,11 @@ impl EnvOps {
         Env::import(data);
 
         Ok(())
+    }
+
+    pub fn import_validated(validated: ValidatedEnv) -> Result<(), InternalError> {
+        let record = EnvRecordMapper::validated_to_record(validated);
+        Self::import(record)
     }
 
     // ---------------------------------------------------------------------
@@ -192,7 +214,7 @@ impl EnvOps {
     }
 }
 
-fn required_fields_missing(data: &EnvData) -> Vec<&'static str> {
+fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     let mut missing = Vec::new();
 
     if data.prime_root_pid.is_none() {

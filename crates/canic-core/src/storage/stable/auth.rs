@@ -1,6 +1,5 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    dto::auth::DelegationProof,
     eager_static, ic_memory,
     memory::impl_storable_unbounded,
     storage::{prelude::*, stable::memory::auth::DELEGATION_STATE_ID},
@@ -8,10 +7,10 @@ use crate::{
 use std::cell::RefCell;
 
 eager_static! {
-    static DELEGATION_STATE: RefCell<Cell<DelegationStateData, VirtualMemory<DefaultMemoryImpl>>> =
+    static DELEGATION_STATE: RefCell<Cell<DelegationStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             ic_memory!(DelegationState, DELEGATION_STATE_ID),
-            DelegationStateData::default(),
+            DelegationStateRecord::default(),
         ));
 }
 
@@ -23,20 +22,20 @@ pub struct DelegationState;
 
 impl DelegationState {
     #[must_use]
-    pub(crate) fn export() -> DelegationStateData {
+    pub(crate) fn export() -> DelegationStateRecord {
         DELEGATION_STATE.with_borrow(|cell| cell.get().clone())
     }
 
-    pub(crate) fn import(data: DelegationStateData) {
+    pub(crate) fn import(data: DelegationStateRecord) {
         DELEGATION_STATE.with_borrow_mut(|cell| cell.set(data));
     }
 
     #[must_use]
-    pub(crate) fn get_proof() -> Option<DelegationProof> {
+    pub(crate) fn get_proof() -> Option<DelegationProofRecord> {
         DELEGATION_STATE.with_borrow(|cell| cell.get().proof.clone())
     }
 
-    pub(crate) fn set_proof(proof: DelegationProof) {
+    pub(crate) fn set_proof(proof: DelegationProofRecord) {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.proof = Some(proof);
@@ -54,12 +53,36 @@ impl DelegationState {
 }
 
 ///
-/// DelegationStateData
+/// DelegationCertRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationCertRecord {
+    pub v: u16,
+    pub signer_pid: Principal,
+    pub audiences: Vec<String>,
+    pub scopes: Vec<String>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
+
+///
+/// DelegationProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationProofRecord {
+    pub cert: DelegationCertRecord,
+    pub cert_sig: Vec<u8>,
+}
+
+///
+/// DelegationStateRecord
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DelegationStateData {
-    pub proof: Option<DelegationProof>,
+pub struct DelegationStateRecord {
+    pub proof: Option<DelegationProofRecord>,
 }
 
-impl_storable_unbounded!(DelegationStateData);
+impl_storable_unbounded!(DelegationStateRecord);

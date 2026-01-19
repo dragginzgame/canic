@@ -2,6 +2,9 @@
 //! Root demo canister that orchestrates the other sample canisters for tests.
 //! Lives in `crates/canisters` purely to showcase cross-canister workflows.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
 
 #![allow(clippy::unused_async)]
 

@@ -1,11 +1,11 @@
 use crate::{cdk::candid::Principal, ids::CanisterRole};
 
 ///
-/// ShardPlacementView
+/// ShardPlacement
 ///
 
 #[derive(Clone, Debug)]
-pub struct ShardPlacementView {
+pub struct ShardPlacement {
     pub pool: String,
     pub slot: u32,
     pub capacity: u32,
@@ -14,16 +14,16 @@ pub struct ShardPlacementView {
     pub created_at: u64,
 }
 
-impl ShardPlacementView {
+impl ShardPlacement {
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 }
 
 ///
-/// ShardTenantAssignmentView
+/// ShardTenantAssignment
 ///
 
 #[derive(Clone, Debug)]
-pub struct ShardTenantAssignmentView {
+pub struct ShardTenantAssignment {
     pub tenant: String,
     pub pid: Principal,
 }

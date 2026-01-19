@@ -1,10 +1,10 @@
+use super::input::RegistryPolicyInput;
 use crate::{
     InternalError,
     cdk::candid::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     domain::policy::topology::TopologyPolicyError,
     ids::CanisterRole,
-    storage::stable::registry::subnet::SubnetRegistryData,
 };
 use thiserror::Error as ThisError;
 
@@ -42,28 +42,28 @@ impl RegistryPolicy {
     pub fn can_register_role(
         role: &CanisterRole,
         parent_pid: Principal,
-        data: &SubnetRegistryData,
+        data: &RegistryPolicyInput,
         canister_cfg: &CanisterConfig,
     ) -> Result<(), RegistryPolicyError> {
         match canister_cfg.kind {
             CanisterKind::Root => {
-                if let Some((pid, _)) = data.entries.iter().find(|(_, entry)| entry.role == *role) {
+                if let Some(entry) = data.entries.iter().find(|entry| entry.role == *role) {
                     return Err(RegistryPolicyError::RoleAlreadyRegistered {
                         role: role.clone(),
-                        pid: *pid,
+                        pid: entry.pid,
                     });
                 }
             }
             CanisterKind::Node => {
-                if let Some((pid, _)) = data
+                if let Some(entry) = data
                     .entries
                     .iter()
-                    .find(|(_, entry)| entry.role == *role && entry.parent_pid == Some(parent_pid))
+                    .find(|entry| entry.role == *role && entry.parent_pid == Some(parent_pid))
                 {
                     return Err(RegistryPolicyError::RoleAlreadyRegisteredUnderParent {
                         role: role.clone(),
                         parent_pid,
-                        pid: *pid,
+                        pid: entry.pid,
                     });
                 }
             }

@@ -5,13 +5,10 @@
 //! aggregate consistency). Policy and capacity decisions live above this layer.
 
 use crate::{
-    cdk::{
-        structures::{
-            BTreeMap, DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory,
-            storable::Bound,
-        },
-        types::BoundedString128,
+    cdk::structures::{
+        BTreeMap, DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
+    ids::IntentResourceKey,
     storage::{
         prelude::*,
         stable::memory::intent::{
@@ -19,8 +16,11 @@ use crate::{
         },
     },
 };
-use derive_more::Display;
-use std::{borrow::Cow, cell::RefCell};
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    fmt::{self, Display},
+};
 
 //
 // INTENT STORE
@@ -29,10 +29,10 @@ use std::{borrow::Cow, cell::RefCell};
 pub const INTENT_STORE_SCHEMA_VERSION: u32 = 1;
 
 eager_static! {
-    static INTENT_META: RefCell<Cell<IntentStoreMeta, VirtualMemory<DefaultMemoryImpl>>> =
+    static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(IntentStoreMeta, INTENT_META_ID),
-            IntentStoreMeta::default(),
+            ic_memory!(IntentStoreMetaRecord, INTENT_META_ID),
+            IntentStoreMetaRecord::default(),
         ));
 }
 
@@ -46,33 +46,25 @@ eager_static! {
 
 eager_static! {
     static INTENT_TOTALS: RefCell<
-        BTreeMap<IntentResourceKey, IntentResourceTotals, VirtualMemory<DefaultMemoryImpl>>
+        BTreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(IntentResourceTotals, INTENT_TOTALS_ID)),
+        BTreeMap::init(ic_memory!(IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
     );
 }
 
 eager_static! {
     static INTENT_PENDING: RefCell<
-        BTreeMap<IntentId, IntentPendingEntry, VirtualMemory<DefaultMemoryImpl>>
+        BTreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(IntentPendingEntry, INTENT_PENDING_ID)),
+        BTreeMap::init(ic_memory!(IntentPendingEntryRecord, INTENT_PENDING_ID)),
     );
 }
-
-///
-/// IntentResourceKey
-///
-
-pub type IntentResourceKey = BoundedString128;
 
 ///
 /// IntentId
 ///
 
-#[derive(
-    Clone, Copy, Debug, Default, Display, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct IntentId(pub u64);
 
 impl Storable for IntentId {
@@ -100,6 +92,12 @@ impl Storable for IntentId {
         arr.copy_from_slice(b);
 
         Self(u64::from_be_bytes(arr))
+    }
+}
+
+impl Display for IntentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -136,11 +134,11 @@ impl IntentRecord {
 impl_storable_bounded!(IntentRecord, IntentRecord::STORABLE_MAX_SIZE, false);
 
 ///
-/// IntentStoreMeta
+/// IntentStoreMetaRecord
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IntentStoreMeta {
+pub struct IntentStoreMetaRecord {
     pub schema_version: u32,
     pub next_intent_id: IntentId,
     pub pending_total: u64,
@@ -148,7 +146,7 @@ pub struct IntentStoreMeta {
     pub aborted_total: u64,
 }
 
-impl Default for IntentStoreMeta {
+impl Default for IntentStoreMetaRecord {
     fn default() -> Self {
         Self {
             schema_version: INTENT_STORE_SCHEMA_VERSION,
@@ -160,39 +158,43 @@ impl Default for IntentStoreMeta {
     }
 }
 
-impl IntentStoreMeta {
+impl IntentStoreMetaRecord {
     pub const STORABLE_MAX_SIZE: u32 = 96;
 }
 
-impl_storable_bounded!(IntentStoreMeta, IntentStoreMeta::STORABLE_MAX_SIZE, false);
+impl_storable_bounded!(
+    IntentStoreMetaRecord,
+    IntentStoreMetaRecord::STORABLE_MAX_SIZE,
+    false
+);
 
 ///
-/// IntentResourceTotals
+/// IntentResourceTotalsRecord
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IntentResourceTotals {
+pub struct IntentResourceTotalsRecord {
     pub reserved_qty: u64,
     pub committed_qty: u64,
     pub pending_count: u64,
 }
 
-impl IntentResourceTotals {
+impl IntentResourceTotalsRecord {
     pub const STORABLE_MAX_SIZE: u32 = 64;
 }
 
 impl_storable_bounded!(
-    IntentResourceTotals,
-    IntentResourceTotals::STORABLE_MAX_SIZE,
+    IntentResourceTotalsRecord,
+    IntentResourceTotalsRecord::STORABLE_MAX_SIZE,
     false
 );
 
 ///
-/// IntentPendingEntry
+/// IntentPendingEntryRecord
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IntentPendingEntry {
+pub struct IntentPendingEntryRecord {
     pub resource_key: IntentResourceKey,
     pub quantity: u64,
     pub created_at: u64,
@@ -200,13 +202,13 @@ pub struct IntentPendingEntry {
     pub ttl_secs: Option<u64>,
 }
 
-impl IntentPendingEntry {
+impl IntentPendingEntryRecord {
     pub const STORABLE_MAX_SIZE: u32 = 224;
 }
 
 impl_storable_bounded!(
-    IntentPendingEntry,
-    IntentPendingEntry::STORABLE_MAX_SIZE,
+    IntentPendingEntryRecord,
+    IntentPendingEntryRecord::STORABLE_MAX_SIZE,
     false
 );
 
@@ -222,11 +224,11 @@ impl IntentStore {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn meta() -> IntentStoreMeta {
+    pub(crate) fn meta() -> IntentStoreMetaRecord {
         INTENT_META.with_borrow(|cell| *cell.get())
     }
 
-    pub(crate) fn set_meta(meta: IntentStoreMeta) {
+    pub(crate) fn set_meta(meta: IntentStoreMetaRecord) {
         INTENT_META.with_borrow_mut(|cell| cell.set(meta));
     }
 
@@ -248,14 +250,14 @@ impl IntentStore {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn get_totals(key: &IntentResourceKey) -> Option<IntentResourceTotals> {
+    pub(crate) fn get_totals(key: &IntentResourceKey) -> Option<IntentResourceTotalsRecord> {
         INTENT_TOTALS.with_borrow(|map| map.get(key))
     }
 
     pub(crate) fn set_totals(
         key: IntentResourceKey,
-        totals: IntentResourceTotals,
-    ) -> Option<IntentResourceTotals> {
+        totals: IntentResourceTotalsRecord,
+    ) -> Option<IntentResourceTotalsRecord> {
         INTENT_TOTALS.with_borrow_mut(|map| map.insert(key, totals))
     }
 
@@ -264,23 +266,23 @@ impl IntentStore {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn get_pending(id: IntentId) -> Option<IntentPendingEntry> {
+    pub(crate) fn get_pending(id: IntentId) -> Option<IntentPendingEntryRecord> {
         INTENT_PENDING.with_borrow(|map| map.get(&id))
     }
 
     pub(crate) fn insert_pending(
         id: IntentId,
-        entry: IntentPendingEntry,
-    ) -> Option<IntentPendingEntry> {
+        entry: IntentPendingEntryRecord,
+    ) -> Option<IntentPendingEntryRecord> {
         INTENT_PENDING.with_borrow_mut(|map| map.insert(id, entry))
     }
 
-    pub(crate) fn remove_pending(id: IntentId) -> Option<IntentPendingEntry> {
+    pub(crate) fn remove_pending(id: IntentId) -> Option<IntentPendingEntryRecord> {
         INTENT_PENDING.with_borrow_mut(|map| map.remove(&id))
     }
 
     #[must_use]
-    pub(crate) fn pending_entries() -> Vec<(IntentId, IntentPendingEntry)> {
+    pub(crate) fn pending_entries() -> Vec<(IntentId, IntentPendingEntryRecord)> {
         INTENT_PENDING.with_borrow(BTreeMap::to_vec)
     }
 }
@@ -297,6 +299,6 @@ impl IntentStore {
         INTENT_RECORDS.with_borrow_mut(BTreeMap::clear);
         INTENT_TOTALS.with_borrow_mut(BTreeMap::clear);
         INTENT_PENDING.with_borrow_mut(BTreeMap::clear);
-        INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMeta::default()));
+        INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
     }
 }

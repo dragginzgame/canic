@@ -1,9 +1,7 @@
 use crate::{
     ids::CanisterRole,
-    ops::storage::{
-        directory::subnet::{SubnetDirectoryData, SubnetDirectoryOps},
-        registry::subnet::SubnetRegistryOps,
-    },
+    ops::storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
+    storage::stable::directory::subnet::SubnetDirectoryRecord,
     test::seams::{lock, p},
     workflow::topology::directory::query::SubnetDirectoryQuery,
 };
@@ -15,7 +13,7 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import(SubnetDirectoryData {
+    SubnetDirectoryOps::import(SubnetDirectoryRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet directory");
@@ -32,7 +30,7 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetDirectoryOps::import(SubnetDirectoryData {
+    SubnetDirectoryOps::import(SubnetDirectoryRecord {
         entries: vec![(role.clone(), pid_b)],
     })
     .expect("import subnet directory");
@@ -56,7 +54,7 @@ fn directory_addressing_does_not_fallback_to_registry() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import(SubnetDirectoryData {
+    SubnetDirectoryOps::import(SubnetDirectoryRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet directory");

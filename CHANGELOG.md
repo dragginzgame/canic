@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Layering guard checks in CI to prevent workflow record usage, public record re-exports, and misuse of "view" naming.
+- Formalized layer and naming rules in AGENTS.md (DTO/view/record/ids and mapper naming).
+
+### Changed
+- Separated DTO inputs/responses from internal views across core modules and updated mappers accordingly.
+- Standardized conversion helper names to avoid "view" outside view projections.
+- Reduced storage record exposure by removing public re-exports and routing record access through storage modules.
+- Pushed record-to-DTO shaping into ops helpers across env/state/directory/auth/scaling workflows.
+- Moved `IntentResourceKey` to ids to keep workflow free of storage schema types.
+
 All notable, and occasionally less notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)

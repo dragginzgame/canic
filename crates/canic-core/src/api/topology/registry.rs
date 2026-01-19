@@ -1,5 +1,5 @@
 use crate::{
-    dto::topology::{AppRegistryView, SubnetRegistryView},
+    dto::topology::{AppRegistryResponse, SubnetRegistryResponse},
     workflow::topology::registry::query::{AppRegistryQuery, SubnetRegistryQuery},
 };
 
@@ -11,8 +11,8 @@ pub struct AppRegistryApi;
 
 impl AppRegistryApi {
     #[must_use]
-    pub fn view() -> AppRegistryView {
-        AppRegistryQuery::view()
+    pub fn registry() -> AppRegistryResponse {
+        AppRegistryQuery::registry()
     }
 }
 
@@ -24,7 +24,7 @@ pub struct SubnetRegistryApi;
 
 impl SubnetRegistryApi {
     #[must_use]
-    pub fn view() -> SubnetRegistryView {
-        SubnetRegistryQuery::view()
+    pub fn registry() -> SubnetRegistryResponse {
+        SubnetRegistryQuery::registry()
     }
 }

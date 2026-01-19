@@ -10,15 +10,15 @@ eager_static! {
     // ENV
     // All the environment variables a canister needs
     //
-    static ENV: RefCell<Cell<EnvData, VirtualMemory<DefaultMemoryImpl>>> =
+    static ENV: RefCell<Cell<EnvRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(EnvData, ENV_ID),
-            EnvData::default(),
+            ic_memory!(EnvRecord, ENV_ID),
+            EnvRecord::default(),
         ));
 }
 
 ///
-/// EnvData
+/// EnvRecord
 ///
 /// `prime_root_pid` : passed to the root during install arguments.
 /// `parent_pid`     : passed to the root during install arguments.
@@ -29,7 +29,7 @@ eager_static! {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct EnvData {
+pub struct EnvRecord {
     // app
     pub prime_root_pid: Option<Principal>,
 
@@ -43,7 +43,7 @@ pub struct EnvData {
     pub parent_pid: Option<Principal>,
 }
 
-impl_storable_bounded!(EnvData, 256, true);
+impl_storable_bounded!(EnvRecord, 256, true);
 
 ///
 /// Env
@@ -102,15 +102,15 @@ impl Env {
 
     // ---- Import / Export ----
 
-    /// Import a complete EnvData record, replacing any existing state.
-    pub(crate) fn import(data: EnvData) {
+    /// Import a complete EnvRecord, replacing any existing state.
+    pub(crate) fn import(data: EnvRecord) {
         ENV.with_borrow_mut(|cell| {
             cell.set(data);
         });
     }
 
     #[must_use]
-    pub(crate) fn export() -> EnvData {
+    pub(crate) fn export() -> EnvRecord {
         ENV.with_borrow(|cell| cell.get().clone())
     }
 }
