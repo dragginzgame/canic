@@ -2,7 +2,7 @@ use crate::{
     InternalError,
     config::{
         Config, ConfigError, ConfigModel,
-        schema::{CanisterConfig, LogConfig, ScalingConfig, SubnetConfig},
+        schema::{CanisterConfig, DelegationConfig, LogConfig, ScalingConfig, SubnetConfig},
     },
     ids::SubnetRole,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
@@ -47,6 +47,7 @@ pub struct ConfigOps;
 
 impl ConfigOps {
     /// Export the full current configuration as TOML.
+    /// Intended for diagnostics and tooling only.
     pub fn export_toml() -> Result<String, InternalError> {
         let toml = Config::to_toml()?;
 
@@ -94,6 +95,10 @@ impl ConfigOps {
 
     pub(crate) fn log_config() -> Result<LogConfig, InternalError> {
         Ok(Config::get()?.log.clone())
+    }
+
+    pub(crate) fn delegation_config() -> Result<DelegationConfig, InternalError> {
+        Ok(Config::get()?.delegation.clone())
     }
 
     /// Fetch the configuration record for the *current* subnet.

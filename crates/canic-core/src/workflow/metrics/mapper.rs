@@ -1,7 +1,8 @@
 use crate::{
+    cdk::types::Principal,
     dto::metrics::{
-        AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry, SystemMetricEntry,
-        TimerMetricEntry,
+        AccessMetricEntry, DelegationMetricEntry, EndpointHealthView, HttpMetricEntry,
+        IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
@@ -87,13 +88,24 @@ impl MetricsMapper {
     }
 
     #[must_use]
+    pub fn delegation_metrics_to_view(
+        raw: impl IntoIterator<Item = (Principal, u64)>,
+    ) -> Vec<DelegationMetricEntry> {
+        raw.into_iter()
+            .map(|(authority, count)| DelegationMetricEntry { authority, count })
+            .collect()
+    }
+
+    #[must_use]
     pub fn endpoint_health_to_view(
         attempts: impl IntoIterator<Item = (&'static str, EndpointAttemptCounts)>,
         results: impl IntoIterator<Item = (&'static str, EndpointResultCounts)>,
         access: impl IntoIterator<Item = (AccessMetricKey, u64)>,
         exclude_endpoint: Option<&str>,
     ) -> Vec<EndpointHealthView> {
+        // Aggregate access-stage denials (guard/auth/env/rule) per endpoint
         let mut denied: HashMap<String, u64> = HashMap::new();
+
         for (key, count) in access {
             denied
                 .entry(key.endpoint)

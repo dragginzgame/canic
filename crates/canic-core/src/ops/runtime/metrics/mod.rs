@@ -1,4 +1,5 @@
 pub mod access;
+pub mod delegation;
 pub mod endpoint;
 pub mod http;
 pub mod icc;
@@ -7,6 +8,7 @@ pub mod timer;
 
 use {
     access::{AccessMetrics, AccessMetricsSnapshot},
+    delegation::{DelegationMetrics, DelegationMetricsSnapshot},
     endpoint::{EndpointHealthSnapshot, EndpointMetrics},
     http::{HttpMetrics, HttpMetricsSnapshot},
     icc::{IccMetrics, IccMetricsSnapshot},
@@ -35,6 +37,11 @@ impl MetricsOps {
     #[must_use]
     pub fn access_snapshot() -> AccessMetricsSnapshot {
         AccessMetrics::snapshot()
+    }
+
+    #[must_use]
+    pub fn delegation_snapshot() -> DelegationMetricsSnapshot {
+        DelegationMetrics::snapshot()
     }
 
     #[must_use]

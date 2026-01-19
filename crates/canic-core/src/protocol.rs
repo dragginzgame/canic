@@ -13,6 +13,7 @@ pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
+pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
 
 // Non-root sync endpoints.
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
@@ -37,6 +38,7 @@ pub const CANIC_METRICS_ICC: &str = "canic_metrics_icc";
 pub const CANIC_METRICS_HTTP: &str = "canic_metrics_http";
 pub const CANIC_METRICS_TIMER: &str = "canic_metrics_timer";
 pub const CANIC_METRICS_ACCESS: &str = "canic_metrics_access";
+pub const CANIC_METRICS_DELEGATION: &str = "canic_metrics_delegation";
 pub const CANIC_METRICS_PERF: &str = "canic_metrics_perf";
 pub const CANIC_METRICS_ENDPOINT_HEALTH: &str = "canic_metrics_endpoint_health";
 pub const CANIC_APP_STATE: &str = "canic_app_state";

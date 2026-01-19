@@ -1,8 +1,8 @@
 use crate::{
     dto::{
         metrics::{
-            AccessMetricEntry, EndpointHealthView, HttpMetricEntry, IccMetricEntry,
-            SystemMetricEntry, TimerMetricEntry,
+            AccessMetricEntry, DelegationMetricEntry, EndpointHealthView, HttpMetricEntry,
+            IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
@@ -13,6 +13,9 @@ use crate::{
 
 ///
 /// MetricsQuery
+///
+/// Read-only query façade over metric snapshots.
+/// Responsible for mapping, sorting, and pagination only.
 ///
 
 pub struct MetricsQuery;
@@ -78,6 +81,16 @@ impl MetricsQuery {
                 .cmp(&b.endpoint)
                 .then_with(|| a.kind.cmp(&b.kind))
         });
+
+        paginate_vec(entries, page)
+    }
+
+    #[must_use]
+    pub fn delegation_page(page: PageRequest) -> Page<DelegationMetricEntry> {
+        let snapshot = MetricsOps::delegation_snapshot();
+        let mut entries = MetricsMapper::delegation_metrics_to_view(snapshot.entries);
+
+        entries.sort_by(|a, b| a.authority.as_slice().cmp(b.authority.as_slice()));
 
         paginate_vec(entries, page)
     }

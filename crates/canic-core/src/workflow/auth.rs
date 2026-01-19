@@ -1,17 +1,31 @@
 //! Delegation issuance and rotation workflow.
+//!
+//! This module defines the **operational workflow** for:
+//! - issuing delegated signing authority
+//! - rotating that authority on a timer
+//!
+//! It is intentionally *thin* and orchestration-only.
+//! All cryptographic validation, authorization, and policy enforcement
+//! occur elsewhere.
 
 use crate::{
     InternalError,
     dto::auth::{DelegationCert, DelegationProof},
     log,
     log::Topic,
-    ops::auth::DelegatedTokenOps,
-    ops::storage::auth::DelegationStateOps,
+    ops::{auth::DelegatedTokenOps, storage::auth::DelegationStateOps},
     workflow::runtime::timer::{TimerId, TimerWorkflow},
 };
 use std::{cell::RefCell, sync::Arc, time::Duration};
 
 thread_local! {
+    /// Guarded timer handle for delegation rotation.
+    ///
+    /// WHY THIS IS THREAD-LOCAL:
+    /// - Ensures exactly one rotation task is active per canister instance
+    /// - Prevents duplicate timers after upgrades or reinitialization
+    ///
+    /// Access is mediated exclusively through TimerWorkflow.
     static ROTATION_TIMER: RefCell<Option<TimerId>> = const {
         RefCell::new(None)
     };
@@ -19,6 +33,27 @@ thread_local! {
 
 ///
 /// DelegationWorkflow
+///
+/// WHY THIS MODULE EXISTS
+/// ----------------------
+/// This module coordinates **delegation issuance and rotation** as a workflow,
+/// separating *orchestration* from:
+/// - cryptographic operations
+/// - storage details
+/// - authorization policy
+///
+/// Responsibilities:
+/// - Call cryptographic primitives in the correct order
+/// - Coordinate persistence and publication
+/// - Schedule and manage rotation timers
+///
+/// Explicit non-responsibilities:
+/// - Authorization (caller must enforce)
+/// - Validation (delegation certs are assumed valid inputs)
+/// - Retry or recovery logic
+/// - Token verification
+///
+/// This separation ensures delegation remains auditable and predictable.
 ///
 
 pub struct DelegationWorkflow;
@@ -30,17 +65,38 @@ impl DelegationWorkflow {
 
     /// Issue a root-signed delegation proof for a delegated signer key.
     ///
-    /// Authority is enforced by the caller if required.
+    /// WHAT THIS DOES:
+    /// - Signs the provided DelegationCert using the root authority
+    /// - Produces a DelegationProof suitable for verification
+    ///
+    /// WHAT THIS DOES NOT DO:
+    /// - Persist the proof
+    /// - Validate cert contents
+    /// - Enforce caller authority
+    ///
+    /// WHY:
+    /// - Keeps cryptographic issuance separable from storage and policy
+    ///
+    /// Authority MUST be enforced by the caller.
     pub fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         DelegatedTokenOps::sign_delegation_cert(cert)
     }
 
     /// Issue and persist the delegation proof in stable state.
     ///
-    /// Authority is enforced by the caller if required.
+    /// Semantics:
+    /// - Any previously stored delegation proof is replaced
+    /// - All previously issued delegated tokens become invalid
+    ///
+    /// Intended usage:
+    /// - Initial delegation bootstrap
+    /// - Controlled, immediate rotation
+    ///
+    /// Authority MUST be enforced by the caller.
     pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let proof = Self::issue_delegation(cert)?;
         DelegationStateOps::set_proof(proof.clone());
+
         Ok(proof)
     }
 
@@ -50,21 +106,39 @@ impl DelegationWorkflow {
 
     /// Start a periodic delegation rotation task.
     ///
-    /// The caller supplies:
-    /// - `build_cert`: constructs the next delegation cert.
-    /// - `publish`: persists or distributes the resulting proof.
+    /// Rotation model:
+    /// - A new delegation certificate is periodically built
+    /// - The certificate is signed by the root
+    /// - The resulting proof is published by the caller
     ///
-    /// Authority and key ownership are enforced by the caller.
+    /// Caller responsibilities:
+    /// - Enforce authority (root-only)
+    /// - Ensure key ownership and correctness
+    /// - Decide how and where proofs are published
+    ///
+    /// Design notes:
+    /// - Rotation failures are logged and skipped
+    /// - No retries are performed
+    /// - Partial failures do NOT stop future rotations
+    ///
+    /// Returns:
+    /// - true if rotation was started
+    /// - false if a rotation task was already running
     pub fn start_rotation(
         interval: Duration,
         build_cert: Arc<dyn Fn() -> Result<DelegationCert, InternalError> + Send + Sync>,
         publish: Arc<dyn Fn(DelegationProof) -> Result<(), InternalError> + Send + Sync>,
     ) -> bool {
+        // Clone closures for initial and periodic execution.
+        // This avoids capturing moved values inside async blocks.
         let init_build = build_cert.clone();
         let init_publish = publish.clone();
         let tick_build = build_cert;
         let tick_publish = publish;
 
+        // Schedule a guarded timer:
+        // - Runs immediately once
+        // - Then runs periodically at the specified interval
         TimerWorkflow::set_guarded_interval(
             &ROTATION_TIMER,
             Duration::ZERO,
@@ -84,10 +158,28 @@ impl DelegationWorkflow {
         )
     }
 
+    /// Stop the periodic delegation rotation task.
+    ///
+    /// Semantics:
+    /// - No further rotations will occur
+    /// - The currently active delegation proof remains valid
+    ///
+    /// Returns:
+    /// - true if a task was stopped
+    /// - false if no rotation task was running
     pub fn stop_rotation() -> bool {
         TimerWorkflow::clear_guarded(&ROTATION_TIMER)
     }
 
+    /// Execute a single delegation rotation step.
+    ///
+    /// This function is intentionally:
+    /// - synchronous in control flow
+    /// - non-panicking
+    /// - failure-tolerant
+    ///
+    /// Any failure results in a logged warning and early return.
+    /// The rotation schedule continues unaffected.
     fn rotate_once(
         build_cert: &dyn Fn() -> Result<DelegationCert, InternalError>,
         publish: &dyn Fn(DelegationProof) -> Result<(), InternalError>,

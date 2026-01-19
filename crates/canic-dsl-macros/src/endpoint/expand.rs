@@ -1,3 +1,68 @@
+//
+// ============================================================================
+// ACCESS PIPELINE & METRICS INVARIANTS
+// ============================================================================
+//
+// This macro generates the complete access-control wrapper for canister
+// endpoints. The code below is SECURITY- AND METRICS-SENSITIVE.
+//
+// The following invariants are intentional and MUST be preserved:
+//
+// 1. Access pipeline semantics
+//    --------------------------
+//    Access checks execute in the following order:
+//
+//        guard → auth → env → rule → dispatch
+//
+//    Evaluation short-circuits on the FIRST failure.
+//    Later stages MUST NOT execute after a failure.
+//
+//    NOTE:
+//    This ordering is intentional and may differ from conceptual models
+//    (e.g. env-first). Do not reorder without auditing metrics semantics
+//    and denial attribution.
+//
+// 2. Access metrics (denial-only)
+//    -----------------------------
+//    Access metrics are emitted ONLY on access denial paths.
+//    Each denied request MUST emit EXACTLY ONE access metric,
+//    tagged with the stage that denied access:
+//
+//        Guard → AccessMetricKind::Guard
+//        Auth  → AccessMetricKind::Auth
+//        Env   → AccessMetricKind::Env
+//        Rule  → AccessMetricKind::Rule
+//
+//    Successful requests MUST emit NO access metrics.
+//
+//    These invariants are relied upon by EndpointHealthView and metrics
+//    aggregation logic.
+//
+// 3. Lifecycle metrics
+//    ------------------
+//    - increment_attempted() is emitted before any access checks.
+//    - increment_completed() is emitted ONLY after successful dispatch.
+//    - Access denials MUST return before completion is recorded.
+//
+//    For fallible endpoints (Result-returning):
+//    - exactly one of increment_ok() or increment_err() is emitted.
+//
+// 4. Error handling
+//    --------------
+//    All access failures are converted into endpoint errors and returned
+//    immediately. There must be no panic paths and no implicit fallthrough.
+//
+// 5. Macro constraints
+//    ------------------
+//    - Only simple identifier arguments are supported.
+//    - `self` receivers are forbidden.
+//    - Fallibility detection assumes a direct `Result<_, _>` return type.
+//
+// Any change to this file should be reviewed against ALL of the above
+// invariants. Violating them will silently corrupt access metrics or
+// authorization behavior.
+//
+
 use crate::endpoint::{
     EndpointKind,
     parse::{AuthSymbol, EnvSymbol, GuardSymbol, RuleSymbol},
@@ -178,6 +243,7 @@ fn auth_stage(auth: &[AuthSymbol], call: &syn::Ident) -> TokenStream2 {
     );
 
     let caller = format_ident!("__canic_caller");
+    let needs_caller = auth.iter().any(auth_uses_caller);
 
     let checks = auth.iter().map(|sym| {
         let call = auth_call(sym, &caller);
@@ -189,8 +255,14 @@ fn auth_stage(auth: &[AuthSymbol], call: &syn::Ident) -> TokenStream2 {
         }
     });
 
+    let caller_decl = if needs_caller {
+        quote!(let #caller = ::canic::cdk::api::msg_caller();)
+    } else {
+        quote!()
+    };
+
     quote! {
-        let #caller = ::canic::cdk::api::msg_caller();
+        #caller_decl
         #(#checks)*
     }
 }
@@ -270,7 +342,23 @@ fn auth_call(sym: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
         AuthSymbol::CallerIsWhitelisted => {
             quote!(::canic::api::access::AuthAccessApi::is_whitelisted(#caller))
         }
+        AuthSymbol::DelegatedTokenValid => {
+            quote!(::canic::api::access::AuthAccessApi::verify_delegated_token())
+        }
     }
+}
+
+const fn auth_uses_caller(sym: &AuthSymbol) -> bool {
+    matches!(
+        sym,
+        AuthSymbol::CallerIsController
+            | AuthSymbol::CallerIsParent
+            | AuthSymbol::CallerIsChild
+            | AuthSymbol::CallerIsRoot
+            | AuthSymbol::CallerIsSameCanister
+            | AuthSymbol::CallerIsRegisteredToSubnet
+            | AuthSymbol::CallerIsWhitelisted
+    )
 }
 
 fn guard_call(sym: &GuardSymbol, kind: EndpointKind) -> TokenStream2 {
@@ -334,6 +422,7 @@ fn dispatch_call(
     }
 }
 
+// Must run only after successful dispatch; access denials return earlier.
 fn completion(
     call: &syn::Ident,
     returns_fallible: bool,
@@ -348,7 +437,9 @@ fn completion(
             }
         }
     } else {
-        quote!()
+        quote! {
+            ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
+        }
     };
 
     quote! {
