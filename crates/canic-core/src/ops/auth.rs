@@ -1,7 +1,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
-    ops::{ic::signature::SignatureOps, prelude::*},
+    ops::{ic::signature::SignatureOps, prelude::*, runtime::env::EnvOps},
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -24,6 +24,11 @@ pub enum DelegatedTokenOpsError {
     #[error("delegation cert expired at {expires_at}")]
     CertExpired { expires_at: u64 },
 
+    #[error(
+        "delegation cert expires_at ({expires_at}) must be greater than issued_at ({issued_at})"
+    )]
+    CertInvalidWindow { issued_at: u64, expires_at: u64 },
+
     #[error("delegation cert signature unavailable")]
     CertSignatureUnavailable,
 
@@ -38,6 +43,12 @@ pub enum DelegatedTokenOpsError {
 
     #[error("scope '{scope}' not allowed by delegation")]
     ScopeNotAllowed { scope: String },
+
+    #[error("signer pid mismatch (expected {expected}, found {found})")]
+    SignerPidMismatch {
+        expected: Principal,
+        found: Principal,
+    },
 
     #[error("token expired at {exp}")]
     TokenExpired { exp: u64 },
@@ -56,6 +67,9 @@ pub enum DelegatedTokenOpsError {
 
     #[error("token expires after delegation (exp {token_exp} > cert {cert_exp})")]
     TokenOutlivesDelegation { token_exp: u64, cert_exp: u64 },
+
+    #[error("certified query required")]
+    UncertifiedRuntime,
 }
 
 impl From<DelegatedTokenOpsError> for InternalError {
@@ -90,6 +104,10 @@ impl DelegatedTokenOps {
         Ok(())
     }
 
+    /// Retrieve a prepared delegation proof (query-only).
+    ///
+    /// Requires a certified query context; will fail under PocketIC or
+    /// uncertified query engines.
     pub fn get_delegation_proof(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::get(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)
@@ -101,6 +119,10 @@ impl DelegatedTokenOps {
         })
     }
 
+    /// Sign a delegation cert in one step.
+    ///
+    /// Requires a certified query context; will fail under PocketIC or
+    /// uncertified query engines.
     pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::sign(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?
@@ -112,15 +134,47 @@ impl DelegatedTokenOps {
         })
     }
 
-    pub fn verify_delegation_proof(
+    /// Structural verification for a delegation proof.
+    ///
+    /// This phase is always testable and does not require certified data.
+    pub fn verify_delegation_structure(
+        proof: &DelegationProof,
+        expected_signer: Option<Principal>,
+    ) -> Result<(), InternalError> {
+        if proof.cert.expires_at <= proof.cert.issued_at {
+            return Err(DelegatedTokenOpsError::CertInvalidWindow {
+                issued_at: proof.cert.issued_at,
+                expires_at: proof.cert.expires_at,
+            }
+            .into());
+        }
+
+        if let Some(expected) = expected_signer
+            && proof.cert.signer_pid != expected
+        {
+            return Err(DelegatedTokenOpsError::SignerPidMismatch {
+                expected,
+                found: proof.cert.signer_pid,
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    /// Cryptographic verification for a delegation proof.
+    ///
+    /// Requires a certified query context; will fail under PocketIC or
+    /// uncertified query engines.
+    pub fn verify_delegation_signature(
         proof: &DelegationProof,
         authority_pid: Principal,
     ) -> Result<(), InternalError> {
-        let hash = cert_hash(&proof.cert)?;
         if proof.cert_sig.is_empty() {
             return Err(DelegatedTokenOpsError::CertSignatureUnavailable.into());
         }
 
+        let hash = cert_hash(&proof.cert)?;
         SignatureOps::verify(
             DELEGATION_CERT_DOMAIN,
             DELEGATION_CERT_SEED,
@@ -128,7 +182,21 @@ impl DelegatedTokenOps {
             &proof.cert_sig,
             authority_pid,
         )
-        .map_err(|err| DelegatedTokenOpsError::CertSignatureInvalid(err.to_string()))?;
+        .map_err(|err| map_signature_error(err, SignatureKind::Delegation))?;
+
+        Ok(())
+    }
+
+    /// Full delegation proof verification (structure + signature).
+    ///
+    /// Signature verification requires a certified query context and will fail
+    /// under PocketIC or uncertified query engines.
+    pub fn verify_delegation_proof(
+        proof: &DelegationProof,
+        authority_pid: Principal,
+    ) -> Result<(), InternalError> {
+        Self::verify_delegation_structure(proof, None)?;
+        Self::verify_delegation_signature(proof, authority_pid)?;
 
         Ok(())
     }
@@ -161,20 +229,50 @@ impl DelegatedTokenOps {
     // Token verification
     // -------------------------------------------------------------------------
 
+    /// Full delegated token verification (structure + signature).
+    ///
+    /// Signature verification requires a certified query context and will fail
+    /// under PocketIC or uncertified query engines.
     pub fn verify_token(
         token: &DelegatedToken,
         authority_pid: Principal,
         now_secs: u64,
     ) -> Result<VerifiedDelegatedToken, InternalError> {
-        Self::verify_delegation_proof(&token.proof, authority_pid)?;
-        verify_token_signature(token)?;
-        verify_time_bounds(&token.claims, &token.proof.cert, now_secs)?;
-        validate_claims_against_cert(&token.claims, &token.proof.cert)?;
+        Self::verify_token_structure(token, now_secs)?;
+        Self::verify_token_signature(token, authority_pid)?;
 
         Ok(VerifiedDelegatedToken {
             claims: token.claims.clone(),
             cert: token.proof.cert.clone(),
         })
+    }
+
+    /// Structural verification for a delegated token.
+    ///
+    /// This phase is always testable and does not require certified data.
+    pub fn verify_token_structure(
+        token: &DelegatedToken,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
+        Self::verify_delegation_structure(&token.proof, None)?;
+        verify_time_bounds(&token.claims, &token.proof.cert, now_secs)?;
+        validate_claims_against_cert(&token.claims, &token.proof.cert)?;
+
+        Ok(())
+    }
+
+    /// Cryptographic verification for a delegated token.
+    ///
+    /// Requires a certified query context; will fail under PocketIC or
+    /// uncertified query engines.
+    pub fn verify_token_signature(
+        token: &DelegatedToken,
+        authority_pid: Principal,
+    ) -> Result<(), InternalError> {
+        Self::verify_delegation_signature(&token.proof, authority_pid)?;
+        verify_token_sig(token)?;
+
+        Ok(())
     }
 }
 
@@ -229,7 +327,32 @@ fn hash_bytes(payload: &[u8]) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-fn verify_token_signature(token: &DelegatedToken) -> Result<(), InternalError> {
+enum SignatureKind {
+    Delegation,
+    Token,
+}
+
+fn map_signature_error(err: InternalError, kind: SignatureKind) -> InternalError {
+    if EnvOps::is_uncertified_runtime() && is_certified_query_error(&err) {
+        return DelegatedTokenOpsError::UncertifiedRuntime.into();
+    }
+
+    match kind {
+        SignatureKind::Delegation => {
+            DelegatedTokenOpsError::CertSignatureInvalid(err.to_string()).into()
+        }
+        SignatureKind::Token => {
+            DelegatedTokenOpsError::TokenSignatureInvalid(err.to_string()).into()
+        }
+    }
+}
+
+fn is_certified_query_error(err: &InternalError) -> bool {
+    let message = err.to_string();
+    message.contains("certified_data")
+}
+
+fn verify_token_sig(token: &DelegatedToken) -> Result<(), InternalError> {
     if token.token_sig.is_empty() {
         return Err(DelegatedTokenOpsError::TokenSignatureUnavailable.into());
     }
@@ -242,7 +365,7 @@ fn verify_token_signature(token: &DelegatedToken) -> Result<(), InternalError> {
         &token.token_sig,
         token.proof.cert.signer_pid,
     )
-    .map_err(|err| DelegatedTokenOpsError::TokenSignatureInvalid(err.to_string()))?;
+    .map_err(|err| map_signature_error(err, SignatureKind::Token))?;
 
     Ok(())
 }

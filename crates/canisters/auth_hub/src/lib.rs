@@ -95,7 +95,8 @@ async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Re
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
+    DelegatedTokenApi::verify_delegation_structure(&proof, Some(shard_pid))?;
+    DelegatedTokenApi::verify_delegation_signature(&proof, root_pid)?;
     install_proof(shard_pid, proof).await
 }
 

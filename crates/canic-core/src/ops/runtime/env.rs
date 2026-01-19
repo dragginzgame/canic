@@ -75,6 +75,12 @@ impl EnvOps {
         Env::get_root_pid().is_some_and(|pid| pid == canister_self())
     }
 
+    /// Returns true when the build is configured for uncertified-runtime testing.
+    #[must_use]
+    pub const fn is_uncertified_runtime() -> bool {
+        cfg!(feature = "uncertified-testing")
+    }
+
     // ---------------------------------------------------------------------
     // Steady-state / required accessors
     // (env must be initialized; missing values are errors)
