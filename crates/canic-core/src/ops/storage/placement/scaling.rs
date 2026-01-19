@@ -40,6 +40,7 @@ impl ScalingRegistryOps {
     }
 
     #[must_use]
+    #[expect(dead_code)]
     pub fn export() -> ScalingRegistryRecord {
         ScalingRegistry::export()
     }
