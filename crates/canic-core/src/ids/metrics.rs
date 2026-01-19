@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// AccessMetricKind
 /// Enumerates the access-control stage that rejected the call.
+/// Access metrics are emitted only on denial.
 ///
 
 #[derive(

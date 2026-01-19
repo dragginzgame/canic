@@ -1,5 +1,4 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
 use syn::{Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 
 //
@@ -7,6 +6,8 @@ use syn::{Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 // parse — attribute grammar only (symbolic DSL)
 // ============================================================================
 //
+// Allowed access DSL:
+// #[canic_update(guard(...), auth(...), env(...), rule(...))]
 
 //
 // GuardSymbol
@@ -30,6 +31,7 @@ pub enum AuthSymbol {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
+    DelegatedTokenValid,
 }
 
 //
@@ -66,18 +68,19 @@ pub struct ParsedArgs {
 }
 
 pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
-    let Ok(metas) = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(attr.clone()) else {
-        if attr.is_empty() {
-            return Ok(empty());
-        }
+    if attr.is_empty() {
+        return Ok(empty());
+    }
 
-        return Ok(ParsedArgs {
-            forwarded: vec![attr],
-            ..empty()
-        });
-    };
+    let metas = Punctuated::<Meta, Token![,]>::parse_terminated
+        .parse2(attr.clone())
+        .map_err(|_| {
+            syn::Error::new_spanned(
+                &attr,
+                "expected a comma-separated list of guard(...), auth(...), env(...), or rule(...)",
+            )
+        })?;
 
-    let mut forwarded = Vec::new();
     let mut guard = Vec::new();
     let mut auth = Vec::new();
     let mut env = Vec::new();
@@ -85,13 +88,6 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
 
     for meta in metas {
         match meta {
-            Meta::List(list) if list.path.is_ident("app") => {
-                return Err(syn::Error::new_spanned(
-                    list,
-                    "app DSL is not supported; use guard instead",
-                ));
-            }
-
             // guard(...)
             Meta::List(list) if list.path.is_ident("guard") => {
                 let symbols = parse_paths(&list)?;
@@ -136,13 +132,38 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                 rules.extend(parsed);
             }
 
-            // Everything else is forwarded untouched
-            other => forwarded.push(quote!(#other)),
+            Meta::List(list) if list.path.is_ident("app") => {
+                return Err(syn::Error::new_spanned(
+                    list,
+                    "app DSL is not supported; use guard instead",
+                ));
+            }
+
+            Meta::List(list) => {
+                return Err(syn::Error::new_spanned(
+                    list,
+                    "unknown access DSL clause; expected guard(...), auth(...), env(...), or rule(...)",
+                ));
+            }
+
+            Meta::Path(path) => {
+                return Err(syn::Error::new_spanned(
+                    path,
+                    "access DSL clauses must be lists like guard(...), auth(...), env(...), or rule(...)",
+                ));
+            }
+
+            Meta::NameValue(name_value) => {
+                return Err(syn::Error::new_spanned(
+                    name_value,
+                    "access DSL clauses must be lists like guard(...), auth(...), env(...), or rule(...)",
+                ));
+            }
         }
     }
 
     Ok(ParsedArgs {
-        forwarded,
+        forwarded: Vec::new(),
         guard,
         auth,
         env,
@@ -167,16 +188,39 @@ const fn empty() -> ParsedArgs {
 //
 
 fn parse_paths(list: &syn::MetaList) -> syn::Result<Vec<Path>> {
-    let paths = Punctuated::<Path, Token![,]>::parse_terminated
-        .parse2(list.tokens.clone())?
-        .into_iter()
-        .collect::<Vec<_>>();
+    let metas = Punctuated::<Meta, Token![,]>::parse_terminated
+        .parse2(list.tokens.clone())
+        .map_err(|_| {
+            syn::Error::new_spanned(
+                list,
+                "expected a comma-separated list of DSL symbols (paths only; no expressions or closures)",
+            )
+        })?;
 
-    if paths.is_empty() {
+    if metas.is_empty() {
         return Err(syn::Error::new_spanned(
             list,
             "expected at least one DSL symbol",
         ));
+    }
+
+    let mut paths = Vec::new();
+    for meta in metas {
+        match meta {
+            Meta::Path(path) => paths.push(path),
+            Meta::List(list) => {
+                return Err(syn::Error::new_spanned(
+                    list,
+                    "DSL symbols must be paths; remove parentheses",
+                ));
+            }
+            Meta::NameValue(name_value) => {
+                return Err(syn::Error::new_spanned(
+                    name_value,
+                    "DSL symbols must be paths; remove assignments",
+                ));
+            }
+        }
     }
 
     Ok(paths)
@@ -198,6 +242,7 @@ fn parse_auth_symbol(path: Path) -> syn::Result<AuthSymbol> {
         "caller_is_same_canister" => Ok(AuthSymbol::CallerIsSameCanister),
         "caller_is_registered_to_subnet" => Ok(AuthSymbol::CallerIsRegisteredToSubnet),
         "caller_is_whitelisted" => Ok(AuthSymbol::CallerIsWhitelisted),
+        "delegated_token_valid" => Ok(AuthSymbol::DelegatedTokenValid),
         _ => Err(unknown_symbol(path, "auth")),
     }
 }

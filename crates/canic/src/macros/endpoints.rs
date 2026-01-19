@@ -116,6 +116,13 @@ macro_rules! canic_endpoints {
             $crate::__internal::core::api::metrics::MetricsQuery::access_page(page)
         }
 
+        #[canic_query]
+        fn canic_metrics_delegation(
+            page: ::canic::dto::page::PageRequest,
+        ) -> ::canic::dto::page::Page<::canic::dto::metrics::DelegationMetricEntry> {
+            $crate::__internal::core::api::metrics::MetricsQuery::delegation_page(page)
+        }
+
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(
@@ -350,6 +357,17 @@ macro_rules! canic_endpoints_root {
             cmd: ::canic::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::dto::pool::PoolAdminResponse, ::canic::Error> {
             $crate::__internal::core::api::pool::CanisterPoolApi::admin(cmd).await
+        }
+
+        //
+        // DELEGATION
+        //
+
+        #[canic_update(auth(::canic::dsl::access::auth::caller_is_root))]
+        async fn canic_delegation_admin(
+            cmd: ::canic::dto::auth::DelegationAdminCommand,
+        ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
     };
 }

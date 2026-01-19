@@ -100,6 +100,11 @@ pub mod api {
         };
     }
 
+    /// Delegation workflow helpers
+    pub mod auth {
+        pub use crate::__internal::core::api::auth::{DelegationAdminApi, DelegationApi};
+    }
+
     /// IC primitives (calls, HTTP, crypto, network, system APIs)
     pub mod ic {
         pub use crate::__internal::core::api::ic::call::{

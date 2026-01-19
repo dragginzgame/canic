@@ -1,0 +1,147 @@
+use crate::{
+    api::access::auth::AuthAccessApi,
+    cdk::types::Principal,
+    dto::{
+        auth::{DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof},
+        error::Error,
+    },
+    ops::{config::ConfigOps, ic::IcOps, storage::auth::DelegationStateOps},
+    workflow::auth::DelegationWorkflow,
+};
+use std::{sync::Arc, time::Duration};
+
+///
+/// DelegationApi
+///
+/// Requires delegation.enabled = true in config.
+///
+
+pub struct DelegationApi;
+
+impl DelegationApi {
+    pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, Error> {
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        DelegationWorkflow::issue_and_store(cert).map_err(Error::from)
+    }
+}
+
+///
+/// DelegationAdminApi
+///
+/// Admin façade for delegation rotation control.
+///
+
+pub struct DelegationAdminApi;
+
+impl DelegationAdminApi {
+    pub async fn admin(cmd: DelegationAdminCommand) -> Result<DelegationAdminResponse, Error> {
+        match cmd {
+            DelegationAdminCommand::StartRotation { interval_secs } => {
+                let started = Self::start_rotation(interval_secs).await?;
+                Ok(if started {
+                    DelegationAdminResponse::RotationStarted
+                } else {
+                    DelegationAdminResponse::RotationAlreadyRunning
+                })
+            }
+            DelegationAdminCommand::StopRotation => {
+                let stopped = Self::stop_rotation().await?;
+                Ok(if stopped {
+                    DelegationAdminResponse::RotationStopped
+                } else {
+                    DelegationAdminResponse::RotationNotRunning
+                })
+            }
+        }
+    }
+
+    pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
+        AuthAccessApi::is_root(IcOps::msg_caller()).await?;
+
+        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden("delegation disabled"));
+        }
+
+        if interval_secs == 0 {
+            return Err(Error::invalid(
+                "rotation interval must be greater than zero",
+            ));
+        }
+
+        let template = rotation_template()?;
+        let template = Arc::new(template);
+        let interval = Duration::from_secs(interval_secs);
+
+        let started = DelegationWorkflow::start_rotation(
+            interval,
+            Arc::new({
+                let template = Arc::clone(&template);
+                move || {
+                    let now_secs = IcOps::now_secs();
+                    Ok(build_rotation_cert(template.as_ref(), now_secs))
+                }
+            }),
+            Arc::new(|proof| {
+                DelegationStateOps::set_proof(proof);
+                Ok(())
+            }),
+        );
+
+        Ok(started)
+    }
+
+    pub async fn stop_rotation() -> Result<bool, Error> {
+        AuthAccessApi::is_root(IcOps::msg_caller()).await?;
+        Ok(DelegationWorkflow::stop_rotation())
+    }
+}
+
+///
+/// DelegationRotationTemplate
+///
+
+struct DelegationRotationTemplate {
+    v: u16,
+    signer_pid: Principal,
+    audiences: Vec<String>,
+    scopes: Vec<String>,
+    ttl_secs: u64,
+}
+
+fn rotation_template() -> Result<DelegationRotationTemplate, Error> {
+    let proof =
+        DelegationStateOps::proof().ok_or_else(|| Error::not_found("delegation proof not set"))?;
+    let cert = proof.cert;
+
+    if cert.expires_at <= cert.issued_at {
+        return Err(Error::invalid(
+            "delegation cert expires_at must be greater than issued_at",
+        ));
+    }
+
+    let ttl_secs = cert.expires_at - cert.issued_at;
+
+    Ok(DelegationRotationTemplate {
+        v: cert.v,
+        signer_pid: cert.signer_pid,
+        audiences: cert.audiences,
+        scopes: cert.scopes,
+        ttl_secs,
+    })
+}
+
+fn build_rotation_cert(template: &DelegationRotationTemplate, now_secs: u64) -> DelegationCert {
+    DelegationCert {
+        v: template.v,
+        signer_pid: template.signer_pid,
+        audiences: template.audiences.clone(),
+        scopes: template.scopes.clone(),
+        issued_at: now_secs,
+        expires_at: now_secs.saturating_add(template.ttl_secs),
+    }
+}
