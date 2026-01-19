@@ -21,6 +21,10 @@ pub struct DelegationApi;
 
 impl DelegationApi {
     fn map_delegation_error(err: crate::InternalError) -> Error {
+        if err.to_string().contains("certified query required") {
+            return Error::invalid("certified query required");
+        }
+
         match err.class() {
             InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
                 Error::internal(err.to_string())
@@ -35,6 +39,7 @@ impl DelegationApi {
             return Err(Error::forbidden("delegation disabled"));
         }
 
+        // Update-only step for certified delegation signatures.
         DelegationWorkflow::prepare_delegation(&cert).map_err(Self::map_delegation_error)
     }
 
@@ -44,6 +49,7 @@ impl DelegationApi {
             return Err(Error::forbidden("delegation disabled"));
         }
 
+        // Query-only step; requires a certified query context.
         DelegationWorkflow::get_delegation(cert).map_err(Self::map_delegation_error)
     }
 

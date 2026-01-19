@@ -53,6 +53,23 @@ The delegation model is fixed and must remain consistent:
 * `auth_shard` stores a `DelegationProof` and mints delegated tokens locally.
 * Token verification is local-only and validates against the stored proof.
 
+## Certified Queries and Delegation
+
+Delegation signatures are canister signatures and **require certified queries**.
+
+Implications:
+
+* Delegation signing and verification must run in a certified query context.
+* Uncertified query engines (including PocketIC) cannot validate the signature
+  tree against `certified_data`.
+* PocketIC is not a security-equivalent environment for delegation.
+
+Test contract:
+
+* Structural verification is always testable.
+* Cryptographic verification must fail with an explicit
+  "certified query required" error when `uncertified-testing` is enabled.
+
 ---
 
 ## model/

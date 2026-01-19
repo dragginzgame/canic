@@ -13,6 +13,9 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[features]
+uncertified-testing = ["canic-core/uncertified-testing"]
+
 [dependencies]
 candid = { workspace = true }
 canic-cdk = { workspace = true }

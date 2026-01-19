@@ -29,7 +29,12 @@ if [ "${RELEASE:-0}" = "1" ]; then
     PROFILE_DIR="release"
 fi
 
-cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
+FEATURES_FLAG=""
+if [ "${CANIC_UNCERTIFIED_TESTING:-0}" = "1" ]; then
+    FEATURES_FLAG="--features canic/uncertified-testing"
+fi
+
+cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG $FEATURES_FLAG
 cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
 
 # extract candid

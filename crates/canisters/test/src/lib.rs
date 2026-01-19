@@ -52,6 +52,24 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
     DelegationApi::store_proof(proof)
 }
 
+/// test_verify_delegation_structure
+/// Root-only helper to validate delegation structure without signatures.
+#[canic_update(auth(caller_is_root))]
+async fn test_verify_delegation_structure(proof: DelegationProof) -> Result<(), Error> {
+    DelegatedTokenApi::verify_delegation_structure(&proof, None)
+}
+
+/// test_verify_delegation_signature
+/// Root-only helper to validate delegation signatures.
+#[canic_update(auth(caller_is_root))]
+async fn test_verify_delegation_signature(proof: DelegationProof) -> Result<(), Error> {
+    let root_pid = EnvQuery::view()
+        .root_pid
+        .ok_or_else(|| Error::internal("root pid unavailable"))?;
+
+    DelegatedTokenApi::verify_delegation_signature(&proof, root_pid)
+}
+
 /// test_verify_delegated_token
 /// Verifies delegated tokens using the access guard.
 #[canic_update(auth(delegated_token_valid))]

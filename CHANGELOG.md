@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Delegation proof storage helpers on the public delegation API for shard-local proof handling.
 - Public `api::env::EnvQuery` re-export for canister-level environment queries.
 - Delegation flow test now emits signature debug details when certified-data validation fails.
+- Delegation structure/signature verification APIs plus an uncertified-testing mode for PocketIC.
+- Local canister builds accept `CANIC_UNCERTIFIED_TESTING=1` to enable uncertified-test signatures.
+- Certified-data access helper on signature infra for explicit availability checks.
+- Test canister endpoints for delegation structure/signature verification.
 
 ### Changed
 - Delegation issuance now uses prepare/get endpoints with subnet-registered callers for proof retrieval.
@@ -18,8 +22,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Child-canister resolution centralized in ops (root uses registry, non-root uses cached children).
 - Root bootstrap test harness waits for subnet directory materialization before proceeding.
 - Documentation updated to reflect auth_hub/auth_shard topology and access-stage ordering.
- - Auth shard proof updates now accept any subnet-registered caller (auth_hub is not a parent).
-- Delegation flow test now skips unless certified queries are explicitly enabled.
+- Auth shard proof updates now accept any subnet-registered caller (auth_hub is not a parent).
+- Delegation flow test now asserts structural verification separately when running under PocketIC.
+- Architecture docs now spell out certified-query requirements for delegation.
+- Local test/build defaults set `CANIC_UNCERTIFIED_TESTING=1` for PocketIC runs.
 
 ### Fixed
 - Endpoint metrics completion now treats non-Result endpoints as implicit ok counts.

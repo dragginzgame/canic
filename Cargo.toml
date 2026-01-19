@@ -110,6 +110,7 @@ needless_pass_by_value = "allow"
 option_if_let_else = "allow"
 significant_drop_tightening = "allow"
 struct_field_names = "allow"
+used_underscore_binding = "allow"
 wildcard_imports = "allow"
 # --------------------------------------------------------------------
 #   IMPORTANT: patch section MUST be at the top level (not nested)

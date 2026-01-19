@@ -33,13 +33,20 @@ async fn canic_upgrade() {}
 /// Store a root-signed delegation proof for this shard.
 #[canic_update(auth(caller_is_registered_to_subnet))]
 async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
-    ensure_signer_is_self(&proof)?;
+    let self_pid = canister_self();
+    if proof.cert.signer_pid != self_pid {
+        return Err(Error::forbidden(
+            "delegation signer does not match canister",
+        ));
+    }
+
+    DelegatedTokenApi::verify_delegation_structure(&proof, Some(self_pid))?;
 
     let root_pid = EnvQuery::view()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
+    DelegatedTokenApi::verify_delegation_signature(&proof, root_pid)?;
     DelegationApi::store_proof(proof)
 }
 
@@ -49,17 +56,6 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
 async fn auth_shard_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
     let proof = DelegationApi::require_proof()?;
     DelegatedTokenApi::sign_token(TOKEN_VERSION, claims, proof)
-}
-
-fn ensure_signer_is_self(proof: &DelegationProof) -> Result<(), Error> {
-    let self_pid = canister_self();
-    if proof.cert.signer_pid != self_pid {
-        return Err(Error::forbidden(
-            "delegation signer does not match canister",
-        ));
-    }
-
-    Ok(())
 }
 
 export_candid!();

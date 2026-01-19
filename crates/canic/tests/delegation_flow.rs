@@ -20,11 +20,6 @@ const fn p(id: u8) -> Principal {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn delegated_token_flow() {
-    if std::env::var("CANIC_CERTIFIED_QUERIES").as_deref() != Ok("1") {
-        eprintln!("skipping delegation flow: certified queries unavailable");
-        return;
-    }
-
     let setup = setup_root();
 
     let auth_hub_pid = setup
@@ -92,6 +87,43 @@ fn delegated_token_flow() {
         panic!("canic_delegation_get retries exhausted: {last_error:?}");
     });
 
+    // Structural verification is always testable. Signature verification requires
+    // certified queries, which PocketIC does not provide.
+    let structural: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+        test_pid,
+        setup.root_id,
+        "test_verify_delegation_structure",
+        (proof.clone(),),
+    );
+
+    structural
+        .expect("test_verify_delegation_structure transport failed")
+        .expect("test_verify_delegation_structure application failed");
+
+    let uncertified_testing = std::env::var("CANIC_UNCERTIFIED_TESTING")
+        .as_deref()
+        .is_ok_and(|value| value == "1");
+
+    if uncertified_testing {
+        // In real replicas, unset CANIC_UNCERTIFIED_TESTING to exercise full verification.
+        let signature: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+            test_pid,
+            setup.root_id,
+            "test_verify_delegation_signature",
+            (proof,),
+        );
+
+        let err = signature
+            .expect("test_verify_delegation_signature transport failed")
+            .expect_err("expected certified query failure");
+
+        assert!(
+            err.message.contains("certified query required"),
+            "unexpected error: {err:?}"
+        );
+        return;
+    }
+
     let finalized: Result<Result<(), Error>, Error> = setup.pic.update_call(
         auth_hub_pid,
         "finalize_auth_shard",
@@ -100,17 +132,10 @@ fn delegated_token_flow() {
 
     match finalized {
         Ok(Ok(())) => {}
-        Ok(Err(err))
-            if err
-                .message
-                .contains("certified_data doesn't match sig tree digest") =>
-        {
+        Ok(Err(err)) => {
             let debug = debug_delegation_signature(&proof, setup.root_id)
                 .unwrap_or_else(|| "signature debug unavailable".to_string());
             panic!("finalize_auth_shard application failed: {err:?}\n{debug}");
-        }
-        Ok(Err(err)) => {
-            panic!("finalize_auth_shard application failed: {err:?}");
         }
         Err(err) => {
             panic!("finalize_auth_shard transport failed: {err:?}");

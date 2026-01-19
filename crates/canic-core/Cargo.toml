@@ -15,6 +15,7 @@ publish = true
 
 [features]
 intent-test-canisters = []
+uncertified-testing = []
 
 [dependencies]
 candid = { workspace = true }

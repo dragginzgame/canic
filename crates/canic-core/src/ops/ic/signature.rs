@@ -55,4 +55,11 @@ impl SignatureOps {
     pub fn sync_certified_data() {
         SignatureInfra::sync_certified_data();
     }
+
+    /// Return the data certificate for the current query context, if available.
+    #[must_use]
+    #[expect(dead_code)]
+    pub fn certified_data_or_none() -> Option<Vec<u8>> {
+        SignatureInfra::certified_data_or_none()
+    }
 }
