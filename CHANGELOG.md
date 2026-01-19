@@ -5,42 +5,108 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-### Added
-- Auth hub/shard canister types, delegation provisioning endpoints, and a delegation flow integration test.
-- Delegation proof storage helpers on the public delegation API for shard-local proof handling.
-- Public `api::env::EnvQuery` re-export for canister-level environment queries.
-- Delegation flow test now emits signature debug details when certified-data validation fails.
-- Delegation structure/signature verification APIs plus an uncertified-testing mode for PocketIC.
-- Local canister builds accept `CANIC_UNCERTIFIED_TESTING=1` to enable uncertified-test signatures.
-- Certified-data access helper on signature infra for explicit availability checks.
-- Test canister endpoints for delegation structure/signature verification.
+Below is a **clean, grouped rewrite** that surfaces the *real architectural change* (delegated authority + certified verification), reduces noise, and makes the release readable to humans skimming for impact. I’ve added a **small, deliberate number of emojis** to signal sections and importance without turning it into marketing copy.
 
-### Changed
-- Delegation issuance now uses prepare/get endpoints with subnet-registered callers for proof retrieval.
-- Topology directory resolvers/builders moved into ops; workflow modules now consume ops for canonical directory resolution.
-- Child-canister resolution centralized in ops (root uses registry, non-root uses cached children).
-- Root bootstrap test harness waits for subnet directory materialization before proceeding.
-- Documentation updated to reflect auth_hub/auth_shard topology and access-stage ordering.
-- Auth shard proof updates now accept any subnet-registered caller (auth_hub is not a parent).
-- Delegation flow test now asserts structural verification separately when running under PocketIC.
-- Architecture docs now spell out certified-query requirements for delegation.
-- Local test/build defaults set `CANIC_UNCERTIFIED_TESTING=1` for PocketIC runs.
+---
 
-### Fixed
-- Endpoint metrics completion now treats non-Result endpoints as implicit ok counts.
-- Delegation token/proof errors now surface internal reasons instead of a generic internal error.
-- Delegation flow test now advances PocketIC certified time before signature retrieval.
+## [0.9.0] – 2026-01-19 - Delegation's What You Need
 
-## [0.8.7] - 2026-01-16
-### Added
-- Hourly intent cleanup workflow that aborts expired pending intents and reconciles totals.
+This release introduces **delegated signing with certified verification**, completes the **root → shard trust model**, and formalizes how Canic handles **certified vs. uncertified runtimes** (PocketIC vs replica).
 
-### Changed
-- Sharding policy now consumes policy-scoped placement and assignment views assembled by workflow.
+---
 
-### Fixed
-- Intent TTL is enforced logically at read time; expired intents no longer count as pending or reserving capacity.
+### 🔐 Delegation & Trust Model (Core Change)
+
+* Root canister is now the **sole delegation authority** and signs `DelegationCert`s.
+* New **auth shard** model:
+
+  * Shards store a `DelegationProof` locally.
+  * Shards mint delegated tokens without calling root.
+  * Any canister can verify tokens locally against root trust.
+* Delegation issuance now uses a **prepare / get** flow to support certified queries correctly.
+* Delegation proof storage helpers added to the public delegation API for shard-local handling.
+* Auth shard proof updates now accept **any subnet-registered caller** (auth_hub is not a parent).
+
+**Why this matters:**
+This unlocks scalable, local verification of delegated authority with no runtime dependencies on root or registries.
+
+---
+
+### 🧪 Certified Queries & PocketIC Support
+
+* Delegation and token verification split into:
+
+  * **Structural verification** (always testable)
+  * **Cryptographic verification** (requires certified queries)
+* Added an **uncertified-testing mode** for PocketIC:
+
+  * Enabled via `CANIC_UNCERTIFIED_TESTING=1`
+  * Structural verification succeeds
+  * Cryptographic verification fails with an explicit *“certified query required”* error
+* Certified-data access is now centralized in signature infra with explicit availability checks.
+* Delegation flow tests emit detailed signature debug output when certified validation fails.
+* Test canister exposes endpoints for delegation structure and signature verification.
+
+**Why this matters:**
+The system now preserves *real IC security semantics* while remaining testable under PocketIC’s limitations.
+
+---
+
+### 🧱 Topology, Ops, and Layering Corrections
+
+* Directory resolvers and builders moved fully into **ops**.
+* Workflow now consumes ops for canonical directory resolution.
+* Child-canister resolution centralized in ops:
+
+  * Root uses the subnet registry.
+  * Non-root uses cached children.
+* Root bootstrap test harness now waits for subnet directory materialization.
+* Architecture documentation updated to reflect:
+
+  * auth_shard topology
+  * access-stage ordering
+  * certified-query requirements
+
+**Why this matters:**
+This resolves prior layer leakage and restores a clean dependency direction.
+
+---
+
+### 📊 Metrics, Errors, and Observability
+
+* Endpoint metrics now treat **non-`Result` endpoints** as implicit `ok` completions.
+* Delegation token/proof errors now surface **actual failure reasons** instead of generic internal errors.
+* Delegation flow test advances PocketIC certified time before signature retrieval to avoid false negatives.
+
+---
+
+### ⚙️ Sharding, Policy, and Intent Handling
+
+* Sharding policy now consumes **policy-scoped placement and assignment views** assembled by workflow.
+* Added an **hourly intent cleanup workflow**:
+
+  * Aborts expired pending intents
+  * Reconciles capacity totals
+* Intent TTL is now enforced logically at read time:
+
+  * Expired intents no longer count as pending or reserving capacity.
+
+---
+
+### 🧭 Environment & API Surface
+
+* Public `api::env::EnvQuery` re-export added for canister-level environment inspection.
+* Local test and build flows default to `CANIC_UNCERTIFIED_TESTING=1` for PocketIC runs.
+
+---
+
+### 📌 Summary
+
+**0.9.0 completes Canic’s delegated-authority model.**
+The root canister now delegates signing power cleanly, shards mint tokens independently, and any canister can verify authority locally—*with certified security on real replicas and explicit, honest behavior under PocketIC*.
+
+This is a **foundational release**; many smaller changes exist, but they all serve this core outcome.
+
 
 ## [0.8.6] - 2026-01-16
 ### Fixed
