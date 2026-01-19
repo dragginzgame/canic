@@ -1,12 +1,13 @@
 use crate::{
     InternalError,
     dto::canister::{
-        CanisterSettingsView, CanisterStatusTypeView, CanisterStatusView, EnvironmentVariableView,
-        LogVisibilityView, MemoryMetricsView, QueryStatsView,
+        CanisterSettings, CanisterStatusResponse, CanisterStatusType, EnvironmentVariable,
+        LogVisibility, MemoryMetrics, QueryStats,
     },
     ops::ic::mgmt::{
-        CanisterSettingsSnapshot, CanisterStatus, CanisterStatusType, EnvironmentVariable,
-        LogVisibility, MemoryMetricsSnapshot, MgmtOps, QueryStatsSnapshot,
+        CanisterSettingsSnapshot, CanisterStatus, CanisterStatusType as MgmtCanisterStatusType,
+        EnvironmentVariable as MgmtEnvironmentVariable, LogVisibility as MgmtLogVisibility,
+        MemoryMetricsSnapshot, MgmtOps, QueryStatsSnapshot,
     },
     workflow::prelude::*,
 };
@@ -19,63 +20,63 @@ pub struct MgmtAdapter;
 
 impl MgmtAdapter {
     #[must_use]
-    pub fn canister_status_to_view(status: CanisterStatus) -> CanisterStatusView {
-        CanisterStatusView {
-            status: Self::status_type_to_view(status.status),
-            settings: Self::settings_to_view(status.settings),
+    pub fn canister_status_to_dto(status: CanisterStatus) -> CanisterStatusResponse {
+        CanisterStatusResponse {
+            status: Self::status_type_to_dto(status.status),
+            settings: Self::settings_to_dto(status.settings),
             module_hash: status.module_hash,
             memory_size: status.memory_size,
-            memory_metrics: Self::memory_metrics_to_view(status.memory_metrics),
+            memory_metrics: Self::memory_metrics_to_dto(status.memory_metrics),
             cycles: status.cycles,
             reserved_cycles: status.reserved_cycles,
             idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
-            query_stats: Self::query_stats_to_view(status.query_stats),
+            query_stats: Self::query_stats_to_dto(status.query_stats),
         }
     }
 
-    const fn status_type_to_view(status: CanisterStatusType) -> CanisterStatusTypeView {
+    const fn status_type_to_dto(status: MgmtCanisterStatusType) -> CanisterStatusType {
         match status {
-            CanisterStatusType::Running => CanisterStatusTypeView::Running,
-            CanisterStatusType::Stopping => CanisterStatusTypeView::Stopping,
-            CanisterStatusType::Stopped => CanisterStatusTypeView::Stopped,
+            MgmtCanisterStatusType::Running => CanisterStatusType::Running,
+            MgmtCanisterStatusType::Stopping => CanisterStatusType::Stopping,
+            MgmtCanisterStatusType::Stopped => CanisterStatusType::Stopped,
         }
     }
 
-    fn settings_to_view(settings: CanisterSettingsSnapshot) -> CanisterSettingsView {
-        CanisterSettingsView {
+    fn settings_to_dto(settings: CanisterSettingsSnapshot) -> CanisterSettings {
+        CanisterSettings {
             controllers: settings.controllers,
             compute_allocation: settings.compute_allocation,
             memory_allocation: settings.memory_allocation,
             freezing_threshold: settings.freezing_threshold,
             reserved_cycles_limit: settings.reserved_cycles_limit,
-            log_visibility: Self::log_visibility_to_view(settings.log_visibility),
+            log_visibility: Self::log_visibility_to_dto(settings.log_visibility),
             wasm_memory_limit: settings.wasm_memory_limit,
             wasm_memory_threshold: settings.wasm_memory_threshold,
             environment_variables: settings
                 .environment_variables
                 .into_iter()
-                .map(Self::environment_variable_to_view)
+                .map(Self::environment_variable_to_dto)
                 .collect(),
         }
     }
 
-    fn log_visibility_to_view(log_visibility: LogVisibility) -> LogVisibilityView {
+    fn log_visibility_to_dto(log_visibility: MgmtLogVisibility) -> LogVisibility {
         match log_visibility {
-            LogVisibility::Controllers => LogVisibilityView::Controllers,
-            LogVisibility::Public => LogVisibilityView::Public,
-            LogVisibility::AllowedViewers(viewers) => LogVisibilityView::AllowedViewers(viewers),
+            MgmtLogVisibility::Controllers => LogVisibility::Controllers,
+            MgmtLogVisibility::Public => LogVisibility::Public,
+            MgmtLogVisibility::AllowedViewers(viewers) => LogVisibility::AllowedViewers(viewers),
         }
     }
 
-    fn environment_variable_to_view(variable: EnvironmentVariable) -> EnvironmentVariableView {
-        EnvironmentVariableView {
+    fn environment_variable_to_dto(variable: MgmtEnvironmentVariable) -> EnvironmentVariable {
+        EnvironmentVariable {
             name: variable.name,
             value: variable.value,
         }
     }
 
-    fn memory_metrics_to_view(metrics: MemoryMetricsSnapshot) -> MemoryMetricsView {
-        MemoryMetricsView {
+    fn memory_metrics_to_dto(metrics: MemoryMetricsSnapshot) -> MemoryMetrics {
+        MemoryMetrics {
             wasm_memory_size: metrics.wasm_memory_size,
             stable_memory_size: metrics.stable_memory_size,
             global_memory_size: metrics.global_memory_size,
@@ -87,8 +88,8 @@ impl MgmtAdapter {
         }
     }
 
-    fn query_stats_to_view(stats: QueryStatsSnapshot) -> QueryStatsView {
-        QueryStatsView {
+    fn query_stats_to_dto(stats: QueryStatsSnapshot) -> QueryStats {
+        QueryStats {
             num_calls_total: stats.num_calls_total,
             num_instructions_total: stats.num_instructions_total,
             request_payload_bytes_total: stats.request_payload_bytes_total,
@@ -104,9 +105,9 @@ impl MgmtAdapter {
 pub struct MgmtWorkflow;
 
 impl MgmtWorkflow {
-    pub async fn canister_status_view(pid: Principal) -> Result<CanisterStatusView, InternalError> {
+    pub async fn canister_status(pid: Principal) -> Result<CanisterStatusResponse, InternalError> {
         let status = MgmtOps::canister_status(pid).await?;
 
-        Ok(MgmtAdapter::canister_status_to_view(status))
+        Ok(MgmtAdapter::canister_status_to_dto(status))
     }
 }

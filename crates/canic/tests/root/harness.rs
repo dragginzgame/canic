@@ -2,7 +2,7 @@ use canic::{
     cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
-        topology::{DirectoryEntryView, SubnetRegistryEntryView},
+        topology::{DirectoryEntryResponse, SubnetRegistryEntry},
     },
     ids::CanisterRole,
     protocol,
@@ -119,14 +119,14 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     None
 }
 
-fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntryView> {
+fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntry> {
     pic.query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query registry")
 }
 
 /// Fetch the subnet directory from root as a role → principal map.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
-    let page: Page<DirectoryEntryView> = pic
+    let page: Page<DirectoryEntryResponse> = pic
         .query_call(
             root_id,
             protocol::CANIC_SUBNET_DIRECTORY,

@@ -1,9 +1,10 @@
-pub use crate::storage::stable::sharding::{ShardEntry, ShardKey, registry::ShardingRegistryData};
-
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::stable::sharding::registry::ShardingRegistry,
+    storage::stable::sharding::{
+        ShardEntryRecord, ShardKey,
+        registry::{ShardingRegistry, ShardingRegistryRecord},
+    },
 };
 use thiserror::Error as ThisError;
 
@@ -63,7 +64,7 @@ impl ShardingRegistryOps {
         // NOTE: Slot uniqueness is enforced by linear scan.
         // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
-            if slot != ShardEntry::UNASSIGNED_SLOT {
+            if slot != ShardEntryRecord::UNASSIGNED_SLOT {
                 for (other_pid, other_entry) in core.all_entries() {
                     if other_pid != pid
                         && other_entry.pool.as_ref() == pool
@@ -80,7 +81,7 @@ impl ShardingRegistryOps {
             }
 
             let entry =
-                ShardEntry::try_new(pool, slot, canister_role.clone(), capacity, created_at)
+                ShardEntryRecord::try_new(pool, slot, canister_role.clone(), capacity, created_at)
                     .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
@@ -91,7 +92,7 @@ impl ShardingRegistryOps {
     /// Fetch a shard entry by principal (tests only).
     #[cfg(test)]
     #[must_use]
-    pub(crate) fn get(pid: Principal) -> Option<ShardEntry> {
+    pub(crate) fn get(pid: Principal) -> Option<ShardEntryRecord> {
         ShardingRegistry::with(|core| core.get_entry(&pid))
     }
 
@@ -128,7 +129,7 @@ impl ShardingRegistryOps {
     /// Storage responsibilities:
     /// - enforce referential integrity (target shard must exist)
     /// - enforce pool consistency (assignment pool must match shard entry pool)
-    /// - maintain derived counters (`ShardEntry.count`)
+    /// - maintain derived counters (`ShardEntryRecord.count`)
     pub fn assign(pool: &str, tenant: &str, shard: Principal) -> Result<(), InternalError> {
         ShardingRegistry::with_mut(|core| {
             let mut entry = core
@@ -183,7 +184,7 @@ impl ShardingRegistryOps {
 
     /// Export all shard entries
     #[must_use]
-    pub fn export() -> ShardingRegistryData {
+    pub fn export() -> ShardingRegistryRecord {
         ShardingRegistry::export()
     }
 

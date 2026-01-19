@@ -2,17 +2,17 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{
         prelude::*,
-        stable::sharding::{SHARDING_CORE, ShardEntry, ShardKey, ShardingCore},
+        stable::sharding::{SHARDING_CORE, ShardEntryRecord, ShardKey, ShardingCore},
     },
 };
 
 ///
-/// ShardingRegistryData
+/// ShardingRegistryRecord
 ///
 
 #[derive(Clone, Debug)]
-pub struct ShardingRegistryData {
-    pub entries: Vec<(Principal, ShardEntry)>,
+pub struct ShardingRegistryRecord {
+    pub entries: Vec<(Principal, ShardEntryRecord)>,
 }
 ///
 /// ShardingRegistry
@@ -96,8 +96,8 @@ impl ShardingRegistry {
     /// - Assignments are intentionally excluded.
     /// - Tenant → shard mappings are unbounded and must be queried explicitly.
     #[must_use]
-    pub(crate) fn export() -> ShardingRegistryData {
-        ShardingRegistryData {
+    pub(crate) fn export() -> ShardingRegistryRecord {
+        ShardingRegistryRecord {
             entries: Self::with(ShardingCore::all_entries),
         }
     }

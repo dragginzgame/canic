@@ -2,18 +2,20 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::state::APP_STATE_ID},
 };
-use derive_more::Display;
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    fmt::{self, Display},
+};
 
 //
 // APP_STATE
 //
 
 eager_static! {
-    static APP_STATE: RefCell<Cell<AppStateData, VirtualMemory<DefaultMemoryImpl>>> =
+    static APP_STATE: RefCell<Cell<AppStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             ic_memory!(AppState, APP_STATE_ID),
-            AppStateData::default(),
+            AppStateRecord::default(),
         ));
 }
 
@@ -22,7 +24,7 @@ eager_static! {
 /// Application mode used by query/update guards.
 ///
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AppMode {
     Enabled,
     Readonly,
@@ -30,16 +32,28 @@ pub enum AppMode {
     Disabled,
 }
 
+impl Display for AppMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Enabled => "Enabled",
+            Self::Readonly => "Readonly",
+            Self::Disabled => "Disabled",
+        };
+
+        f.write_str(label)
+    }
+}
+
 ///
-/// AppStateData
+/// AppStateRecord
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AppStateData {
+pub struct AppStateRecord {
     pub mode: AppMode,
 }
 
-impl_storable_bounded!(AppStateData, 32, true);
+impl_storable_bounded!(AppStateRecord, 32, true);
 
 ///
 /// AppState
@@ -61,12 +75,12 @@ impl AppState {
         });
     }
 
-    pub(crate) fn import(data: AppStateData) {
+    pub(crate) fn import(data: AppStateRecord) {
         APP_STATE.with_borrow_mut(|cell| cell.set(data));
     }
 
     #[must_use]
-    pub(crate) fn export() -> AppStateData {
+    pub(crate) fn export() -> AppStateRecord {
         APP_STATE.with_borrow(|cell| *cell.get())
     }
 }
@@ -80,7 +94,7 @@ mod tests {
     use super::*;
 
     fn reset_state(mode: AppMode) {
-        AppState::import(AppStateData { mode });
+        AppState::import(AppStateRecord { mode });
     }
 
     #[test]
@@ -104,7 +118,7 @@ mod tests {
     fn import_and_export_state() {
         reset_state(AppMode::Disabled);
 
-        let data = AppStateData {
+        let data = AppStateRecord {
             mode: AppMode::Readonly,
         };
         AppState::import(data);

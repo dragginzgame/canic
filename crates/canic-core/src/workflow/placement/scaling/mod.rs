@@ -7,7 +7,6 @@
 //!
 //! All async and IC interactions live here.
 
-pub mod mapper;
 pub mod query;
 
 use crate::{
@@ -15,9 +14,8 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     ops::{
         config::ConfigOps,
-        ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
-        storage::placement::scaling::{ScalingRegistryOps, WorkerEntry},
+        storage::placement::scaling::ScalingRegistryOps,
     },
     workflow::prelude::*,
 };
@@ -62,12 +60,7 @@ impl ScalingWorkflow {
                 .new_canister_pid;
 
         // 4. Register in memory
-        let entry = WorkerEntry {
-            pool: entry_plan.pool,
-            canister_role: entry_plan.canister_role,
-            created_at_secs: IcOps::now_secs(),
-        };
-        ScalingRegistryOps::upsert(pid, entry);
+        ScalingRegistryOps::upsert_from_plan(pid, entry_plan);
 
         Ok(pid)
     }

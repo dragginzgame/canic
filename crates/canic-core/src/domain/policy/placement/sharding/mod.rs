@@ -7,7 +7,6 @@
 mod backfill;
 pub mod hrw;
 pub mod metrics;
-pub mod view;
 
 use crate::{
     InternalError,
@@ -16,12 +15,10 @@ use crate::{
     domain::policy::{
         PolicyError,
         placement::sharding::{
-            backfill::plan_slot_backfill,
-            hrw::HrwSelector,
-            metrics::PoolMetrics,
-            view::{ShardPlacementView, ShardTenantAssignmentView},
+            backfill::plan_slot_backfill, hrw::HrwSelector, metrics::PoolMetrics,
         },
     },
+    view::placement::sharding::{ShardPlacement, ShardTenantAssignment},
 };
 use thiserror::Error as ThisError;
 
@@ -67,8 +64,8 @@ pub struct ShardingState<'a> {
     pub pool: &'a str,
     pub config: ShardPool,
     pub metrics: &'a PoolMetrics,
-    pub entries: &'a [(Principal, ShardPlacementView)],
-    pub assignments: &'a [ShardTenantAssignmentView], // tenants for *this pool only*
+    pub entries: &'a [(Principal, ShardPlacement)],
+    pub assignments: &'a [ShardTenantAssignment], // tenants for *this pool only*
 }
 
 ///
@@ -132,7 +129,7 @@ impl ShardingPolicy {
     #[must_use]
     pub(crate) fn lookup_tenant(
         tenant: &str,
-        assignments: &[ShardTenantAssignmentView],
+        assignments: &[ShardTenantAssignment],
     ) -> Option<Principal> {
         assignments
             .iter()
@@ -228,6 +225,6 @@ impl ShardingPolicy {
     }
 }
 
-const fn entry_has_capacity(entry: &ShardPlacementView) -> bool {
+const fn entry_has_capacity(entry: &ShardPlacement) -> bool {
     entry.count < entry.capacity
 }

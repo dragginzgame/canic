@@ -7,7 +7,6 @@
 //!
 //! This layer contains NO policy logic.
 
-pub mod mapper;
 pub mod query;
 
 use crate::{
@@ -16,14 +15,18 @@ use crate::{
     domain::policy::placement::sharding::{
         CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
     },
-    dto::placement::sharding::ShardingPlanStateView,
+    dto::placement::sharding::ShardingPlanStateResponse,
     ops::{
         config::ConfigOps,
         ic::IcOps,
+        placement::sharding::mapper::{
+            ShardPlacementPolicyInputMapper, ShardTenantAssignmentPolicyInputMapper,
+            ShardingPlanStateResponseMapper,
+        },
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::sharding::ShardingRegistryOps,
     },
-    workflow::{placement::sharding::mapper::ShardingMapper, prelude::*},
+    workflow::prelude::*,
 };
 use thiserror::Error as ThisError;
 
@@ -135,7 +138,9 @@ impl ShardingWorkflow {
         let entry_views: Vec<_> = registry
             .entries
             .iter()
-            .map(|(pid, entry)| ShardingMapper::entry_to_policy_view(*pid, entry))
+            .map(|(pid, entry)| {
+                ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
+            })
             .collect();
 
         let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
@@ -146,7 +151,9 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .map(|(key, pid)| ShardingMapper::assignment_to_policy_view(key, *pid))
+            .map(|(key, pid)| {
+                ShardTenantAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+            })
             .collect();
 
         let state = ShardingState {
@@ -226,12 +233,14 @@ impl ShardingWorkflow {
     pub(crate) fn plan_assign_to_pool(
         pool: &str,
         tenant: impl AsRef<str>,
-    ) -> Result<ShardingPlanStateView, InternalError> {
+    ) -> Result<ShardingPlanStateResponse, InternalError> {
         let registry = ShardingRegistryOps::export();
         let entry_views: Vec<_> = registry
             .entries
             .iter()
-            .map(|(pid, entry)| ShardingMapper::entry_to_policy_view(*pid, entry))
+            .map(|(pid, entry)| {
+                ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
+            })
             .collect();
 
         let metrics = crate::domain::policy::placement::sharding::metrics::compute_pool_metrics(
@@ -242,7 +251,9 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .map(|(key, pid)| ShardingMapper::assignment_to_policy_view(key, *pid))
+            .map(|(key, pid)| {
+                ShardTenantAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+            })
             .collect();
 
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
@@ -257,7 +268,7 @@ impl ShardingWorkflow {
 
         let plan = ShardingPolicy::plan_assign(&state, tenant.as_ref(), None);
 
-        Ok(ShardingMapper::sharding_plan_state_to_view(plan.state))
+        Ok(ShardingPlanStateResponseMapper::record_to_view(plan.state))
     }
 
     /// Convert a policy block reason into an error.

@@ -1,7 +1,10 @@
 use crate::{
-    dto::state::{AppStateView, SubnetStateView},
-    ops::storage::state::{app::AppStateOps, subnet::SubnetStateOps},
-    workflow::state::mapper::{AppStateMapper, SubnetStateMapper},
+    dto::state::{AppStateResponse, SubnetStateResponse},
+    ops::storage::state::{
+        app::AppStateOps,
+        mapper::{AppStateResponseMapper, SubnetStateResponseMapper},
+        subnet::SubnetStateOps,
+    },
 };
 
 ///
@@ -12,10 +15,10 @@ pub struct AppStateQuery;
 
 impl AppStateQuery {
     #[must_use]
-    pub fn view() -> AppStateView {
+    pub fn snapshot() -> AppStateResponse {
         let data = AppStateOps::data();
 
-        AppStateMapper::data_to_view(data)
+        AppStateResponseMapper::record_to_view(data)
     }
 }
 
@@ -27,9 +30,9 @@ pub struct SubnetStateQuery;
 
 impl SubnetStateQuery {
     #[must_use]
-    pub fn view() -> SubnetStateView {
+    pub fn snapshot() -> SubnetStateResponse {
         let data = SubnetStateOps::data();
 
-        SubnetStateMapper::data_to_view(data)
+        SubnetStateResponseMapper::record_to_view(data)
     }
 }

@@ -1,8 +1,9 @@
 use crate::{
     config::schema::CanisterKind,
-    domain::policy::topology::{TopologyPolicy, TopologyPolicyError},
+    domain::policy::topology::{
+        RegistryPolicyInput, TopologyPolicy, TopologyPolicyError, TopologyPolicyInput,
+    },
     ids::CanisterRole,
-    ops::storage::{CanisterRecord, registry::subnet::SubnetRegistryData},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -19,16 +20,13 @@ fn topology_invariants_live_in_policy() {
         .install();
 
     let role = CanisterRole::new("alpha");
-    let registry_data = SubnetRegistryData {
-        entries: vec![(
-            p(30),
-            CanisterRecord {
-                role,
-                parent_pid: None,
-                module_hash: None,
-                created_at: 1,
-            },
-        )],
+    let registry_data = RegistryPolicyInput {
+        entries: vec![TopologyPolicyInput {
+            pid: p(30),
+            role,
+            parent_pid: None,
+            module_hash: None,
+        }],
     };
 
     let mismatched = vec![(CanisterRole::new("beta"), p(30))];

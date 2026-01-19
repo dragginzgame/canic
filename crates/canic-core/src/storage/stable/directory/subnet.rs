@@ -10,11 +10,11 @@ eager_static! {
 }
 
 ///
-/// SubnetDirectoryData
+/// SubnetDirectoryRecord
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetDirectoryData {
+pub struct SubnetDirectoryRecord {
     pub entries: Vec<(CanisterRole, Principal)>,
 }
 
@@ -27,7 +27,7 @@ pub struct SubnetDirectoryData {
 /// Invariants:
 /// - Each role appears at most once.
 /// - This directory is authoritative and replaced wholesale on import.
-/// - View/snapshot representations are constructed in higher layers.
+/// - DTO/snapshot representations are constructed in higher layers.
 ///
 
 pub struct SubnetDirectory;
@@ -35,8 +35,8 @@ pub struct SubnetDirectory;
 impl SubnetDirectory {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> SubnetDirectoryData {
-        SubnetDirectoryData {
+    pub(crate) fn export() -> SubnetDirectoryRecord {
+        SubnetDirectoryRecord {
             entries: SUBNET_DIRECTORY.with_borrow(|map| {
                 map.iter()
                     .map(|entry| (entry.key().clone(), entry.value()))
@@ -45,7 +45,7 @@ impl SubnetDirectory {
         }
     }
 
-    pub(crate) fn import(data: SubnetDirectoryData) {
+    pub(crate) fn import(data: SubnetDirectoryRecord) {
         SUBNET_DIRECTORY.with_borrow_mut(|map| {
             map.clear();
             for (role, pid) in data.entries {

@@ -1,6 +1,4 @@
-use crate::{
-    cdk::candid::Principal, domain::policy::placement::sharding::view::ShardPlacementView,
-};
+use crate::{cdk::candid::Principal, view::placement::sharding::ShardPlacement};
 
 ///
 /// PoolMetrics
@@ -17,10 +15,7 @@ pub struct PoolMetrics {
 
 /// compute_pool_metrics
 #[must_use]
-pub fn compute_pool_metrics(
-    pool: &str,
-    entries: &[(Principal, ShardPlacementView)],
-) -> PoolMetrics {
+pub fn compute_pool_metrics(pool: &str, entries: &[(Principal, ShardPlacement)]) -> PoolMetrics {
     let mut active = 0;
     let mut cap = 0;
     let mut used = 0;

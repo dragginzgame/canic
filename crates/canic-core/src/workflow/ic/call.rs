@@ -1,11 +1,12 @@
 use crate::{
     InternalError, InternalErrorOrigin,
+    ids::IntentResourceKey,
     ops::{
         ic::{
             IcOps,
             call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
         },
-        storage::intent::{IntentResourceKey, IntentStoreOps},
+        storage::intent::IntentStoreOps,
     },
     workflow::prelude::*,
 };

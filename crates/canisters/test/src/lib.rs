@@ -2,6 +2,9 @@
 //! Blank demo canister used in tests to exercise provisioning flows.
 //! Lives in `crates/canisters` solely as a showcase for ops helpers.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
 
 #![allow(clippy::unused_async)]
 
@@ -44,7 +47,7 @@ async fn test() -> Result<(), Error> {
 /// Root-only helper to install a delegation proof for auth tests.
 #[canic_update(auth(caller_is_root))]
 async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> {
-    let root_pid = EnvQuery::view()
+    let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
@@ -63,7 +66,7 @@ async fn test_verify_delegation_structure(proof: DelegationProof) -> Result<(), 
 /// Root-only helper to validate delegation signatures.
 #[canic_update(auth(caller_is_root))]
 async fn test_verify_delegation_signature(proof: DelegationProof) -> Result<(), Error> {
-    let root_pid = EnvQuery::view()
+    let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 

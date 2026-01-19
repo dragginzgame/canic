@@ -6,7 +6,7 @@
 //! These types:
 //! - are pure data
 //! - contain no logic
-//! - are safe to serialize / persist / expose
+//! - are safe to serialize / expose
 //!
 //! They must NOT:
 //! - perform validation
@@ -16,36 +16,36 @@
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
 ///
-/// CanisterPoolView
+/// CanisterPoolResponse
 /// Read-only pool snapshot for endpoints.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolView {
-    pub entries: Vec<CanisterPoolEntryView>,
+pub struct CanisterPoolResponse {
+    pub entries: Vec<CanisterPoolEntry>,
 }
 
 ///
-/// CanisterPoolEntryView
+/// CanisterPoolEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterPoolEntryView {
+pub struct CanisterPoolEntry {
     pub pid: Principal,
     pub created_at: u64,
     pub cycles: Cycles,
-    pub status: CanisterPoolStatusView,
+    pub status: CanisterPoolStatus,
     pub role: Option<CanisterRole>,
     pub parent: Option<Principal>,
     pub module_hash: Option<Vec<u8>>,
 }
 
 ///
-/// CanisterPoolStatusView
+/// CanisterPoolStatus
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum CanisterPoolStatusView {
+pub enum CanisterPoolStatus {
     PendingReset,
     Ready,
     Failed { reason: String },

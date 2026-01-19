@@ -1,10 +1,10 @@
 use canic::{
     cdk::types::Principal,
     dto::{
-        canister::CanisterRecordView,
-        env::EnvView,
+        canister::CanisterInfo,
+        env::EnvSnapshotResponse,
         page::{Page, PageRequest},
-        topology::{DirectoryEntryView, SubnetRegistryEntryView},
+        topology::{DirectoryEntryResponse, SubnetRegistryEntry},
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
@@ -18,7 +18,7 @@ pub fn assert_registry_parents(
     root_id: Principal,
     expected: &[(CanisterRole, Option<Principal>)],
 ) {
-    let registry: Vec<SubnetRegistryEntryView> = pic
+    let registry: Vec<SubnetRegistryEntry> = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query registry");
 
@@ -35,9 +35,9 @@ pub fn assert_registry_parents(
     }
 }
 
-/// Assert that a child canister exposes a correct EnvView.
+/// Assert that a child canister exposes a correct EnvSnapshotResponse.
 pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, root_id: Principal) {
-    let env: EnvView = pic
+    let env: EnvSnapshotResponse = pic
         .query_call(child_pid, protocol::CANIC_ENV, ())
         .expect("query env");
 
@@ -70,7 +70,7 @@ pub fn assert_directories_consistent(
     root_id: Principal,
     subnet_directory: &HashMap<CanisterRole, Principal>,
 ) {
-    let root_app_dir: Page<DirectoryEntryView> = pic
+    let root_app_dir: Page<DirectoryEntryResponse> = pic
         .query_call(
             root_id,
             protocol::CANIC_APP_DIRECTORY,
@@ -81,7 +81,7 @@ pub fn assert_directories_consistent(
         )
         .expect("root app directory");
 
-    let root_subnet_dir: Page<DirectoryEntryView> = pic
+    let root_subnet_dir: Page<DirectoryEntryResponse> = pic
         .query_call(
             root_id,
             protocol::CANIC_SUBNET_DIRECTORY,
@@ -93,7 +93,7 @@ pub fn assert_directories_consistent(
         .expect("root subnet directory");
 
     for (role, pid) in subnet_directory.iter().filter(|(r, _)| !r.is_root()) {
-        let app_dir: Page<DirectoryEntryView> = pic
+        let app_dir: Page<DirectoryEntryResponse> = pic
             .query_call(
                 *pid,
                 protocol::CANIC_APP_DIRECTORY,
@@ -104,7 +104,7 @@ pub fn assert_directories_consistent(
             )
             .expect("child app directory");
 
-        let subnet_dir: Page<DirectoryEntryView> = pic
+        let subnet_dir: Page<DirectoryEntryResponse> = pic
             .query_call(
                 *pid,
                 protocol::CANIC_SUBNET_DIRECTORY,
@@ -136,15 +136,15 @@ pub fn assert_directories_consistent(
 /// Assert that the CANIC_CANISTER_CHILDREN endpoint matches the registry.
 pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     // 1. Query authoritative registry
-    let registry: Vec<SubnetRegistryEntryView> = pic
+    let registry: Vec<SubnetRegistryEntry> = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query registry");
 
     // 2. Build expected children from registry (topology-only)
-    let mut expected: Vec<CanisterRecordView> = registry
+    let mut expected: Vec<CanisterInfo> = registry
         .iter()
         .filter(|entry| entry.record.parent_pid == Some(root_id))
-        .map(|entry| CanisterRecordView {
+        .map(|entry| CanisterInfo {
             pid: entry.pid,
             role: entry.role.clone(),
             parent_pid: entry.record.parent_pid,
@@ -159,7 +159,7 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     );
 
     // 3. Query children endpoint
-    let mut page: Page<CanisterRecordView> = pic
+    let mut page: Page<CanisterInfo> = pic
         .query_call(
             root_id,
             protocol::CANIC_CANISTER_CHILDREN,

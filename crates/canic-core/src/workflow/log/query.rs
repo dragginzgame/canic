@@ -1,6 +1,6 @@
 use crate::{
     dto::{
-        log::LogEntryView,
+        log::LogEntry,
         page::{Page, PageRequest},
     },
     log::Level,
@@ -22,7 +22,7 @@ impl LogQuery {
         topic: Option<String>,
         min_level: Option<Level>,
         page: PageRequest,
-    ) -> Page<LogEntryView> {
+    ) -> Page<LogEntry> {
         let mut entries = LogOps::snapshot();
 
         // Filter

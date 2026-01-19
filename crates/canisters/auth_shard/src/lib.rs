@@ -1,6 +1,10 @@
 //!
 //! Auth shard canister that stores delegation proofs and mints delegated tokens.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target. Its endpoints may intentionally omit
+//! production-grade auth because they are exercised only in controlled tests.
+//!
 
 #![allow(clippy::unused_async)]
 
@@ -31,6 +35,8 @@ async fn canic_upgrade() {}
 
 /// auth_shard_set_proof
 /// Store a root-signed delegation proof for this shard.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update(auth(caller_is_registered_to_subnet))]
 async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
     let self_pid = canister_self();
@@ -42,7 +48,7 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
 
     DelegatedTokenApi::verify_delegation_structure(&proof, Some(self_pid))?;
 
-    let root_pid = EnvQuery::view()
+    let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
@@ -52,6 +58,8 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
 
 /// auth_shard_mint_token
 /// Mint a delegated token using the locally stored delegation proof.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn auth_shard_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
     let proof = DelegationApi::require_proof()?;

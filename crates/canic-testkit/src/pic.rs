@@ -4,9 +4,9 @@ use canic::{
     cdk::types::TC,
     dto::{
         abi::v1::CanisterInitPayload,
-        env::EnvView,
+        env::EnvBootstrapArgs,
         subnet::SubnetIdentity,
-        topology::{AppDirectoryView, SubnetDirectoryView},
+        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     },
     ids::CanisterRole,
 };
@@ -109,8 +109,8 @@ impl Pic {
         &self,
         role: CanisterRole,
         wasm: Vec<u8>,
-        app_directory: AppDirectoryView,
-        subnet_directory: SubnetDirectoryView,
+        app_directory: AppDirectoryArgs,
+        subnet_directory: SubnetDirectoryArgs,
     ) -> Result<Principal, Error> {
         let init_bytes = install_args_with_directories(role, app_directory, subnet_directory)?;
 
@@ -248,7 +248,7 @@ impl Pic {
 ///
 /// Init semantics:
 /// - Root canisters receive a `SubnetIdentity` (direct root bootstrap).
-/// - Non-root canisters receive `EnvView` + optional directory snapshots.
+/// - Non-root canisters receive `EnvBootstrapArgs` + optional directory snapshots.
 ///
 /// Directory handling:
 /// - By default, directory views are empty for standalone installs.
@@ -261,7 +261,7 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
     } else {
         // Non-root standalone install.
         // Provide only what is structurally known at install time.
-        let env = EnvView {
+        let env = EnvBootstrapArgs {
             prime_root_pid: None,
             subnet_role: None,
             subnet_pid: None,
@@ -274,8 +274,8 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
         // a test explicitly exercises directory-dependent behavior.
         let payload = CanisterInitPayload {
             env,
-            app_directory: AppDirectoryView(Vec::new()),
-            subnet_directory: SubnetDirectoryView(Vec::new()),
+            app_directory: AppDirectoryArgs(Vec::new()),
+            subnet_directory: SubnetDirectoryArgs(Vec::new()),
         };
 
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
@@ -290,8 +290,8 @@ fn install_root_args() -> Result<Vec<u8>, Error> {
 
 fn install_args_with_directories(
     role: CanisterRole,
-    app_directory: AppDirectoryView,
-    subnet_directory: SubnetDirectoryView,
+    app_directory: AppDirectoryArgs,
+    subnet_directory: SubnetDirectoryArgs,
 ) -> Result<Vec<u8>, Error> {
     if role.is_root() {
         // Root canister: runtime identity only.
@@ -300,7 +300,7 @@ fn install_args_with_directories(
             .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
     } else {
         // Non-root canister: pass structural context, not invented identities.
-        let env = EnvView {
+        let env = EnvBootstrapArgs {
             prime_root_pid: None,
             subnet_role: None,
             subnet_pid: None,

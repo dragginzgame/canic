@@ -2,6 +2,9 @@
 //! Shard hub demo canister coordinating shard assignments for testing.
 //! Ships in `crates/canisters` solely to showcase sharding functionality.
 //!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target.
+//!
 
 #![allow(clippy::unused_async)]
 

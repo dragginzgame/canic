@@ -1,8 +1,8 @@
 use crate::{
     cdk::types::Principal,
     dto::metrics::{
-        AccessMetricEntry, DelegationMetricEntry, EndpointHealthView, HttpMetricEntry,
-        IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
+        AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry, IccMetricEntry,
+        SystemMetricEntry, TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
@@ -16,26 +16,49 @@ use crate::{
 use std::collections::{BTreeSet, HashMap};
 
 ///
-/// MetricsMapper
+/// SystemMetricEntryMapper
 ///
 
-pub struct MetricsMapper;
+pub struct SystemMetricEntryMapper;
 
-impl MetricsMapper {
+impl SystemMetricEntryMapper {
     #[must_use]
-    pub fn system_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (SystemMetricKind, u64)>,
     ) -> Vec<SystemMetricEntry> {
         raw.into_iter()
             .map(|(kind, count)| SystemMetricEntry {
-                kind: Self::kind_to_string(kind),
+                kind: match kind {
+                    SystemMetricKind::CanisterCall => "CanisterCall",
+                    SystemMetricKind::CanisterStatus => "CanisterStatus",
+                    SystemMetricKind::CreateCanister => "CreateCanister",
+                    SystemMetricKind::DeleteCanister => "DeleteCanister",
+                    SystemMetricKind::DepositCycles => "DepositCycles",
+                    SystemMetricKind::HttpOutcall => "HttpOutcall",
+                    SystemMetricKind::InstallCode => "InstallCode",
+                    SystemMetricKind::RawRand => "RawRand",
+                    SystemMetricKind::ReinstallCode => "ReinstallCode",
+                    SystemMetricKind::TimerScheduled => "TimerScheduled",
+                    SystemMetricKind::UninstallCode => "UninstallCode",
+                    SystemMetricKind::UpdateSettings => "UpdateSettings",
+                    SystemMetricKind::UpgradeCode => "UpgradeCode",
+                }
+                .to_string(),
                 count,
             })
             .collect()
     }
+}
 
+///
+/// HttpMetricEntryMapper
+///
+
+pub struct HttpMetricEntryMapper;
+
+impl HttpMetricEntryMapper {
     #[must_use]
-    pub fn http_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (HttpMetricKey, u64)>,
     ) -> Vec<HttpMetricEntry> {
         raw.into_iter()
@@ -46,9 +69,17 @@ impl MetricsMapper {
             })
             .collect()
     }
+}
 
+///
+/// IccMetricEntryMapper
+///
+
+pub struct IccMetricEntryMapper;
+
+impl IccMetricEntryMapper {
     #[must_use]
-    pub fn icc_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (IccMetricKey, u64)>,
     ) -> Vec<IccMetricEntry> {
         raw.into_iter()
@@ -59,23 +90,43 @@ impl MetricsMapper {
             })
             .collect()
     }
+}
 
+///
+/// TimerMetricEntryMapper
+///
+
+pub struct TimerMetricEntryMapper;
+
+impl TimerMetricEntryMapper {
     #[must_use]
-    pub fn timer_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (TimerMetricKey, u64)>,
     ) -> Vec<TimerMetricEntry> {
         raw.into_iter()
             .map(|(key, count)| TimerMetricEntry {
-                mode: Self::mode_to_string(key.mode),
+                mode: match key.mode {
+                    TimerMode::Once => "once",
+                    TimerMode::Interval => "interval",
+                }
+                .to_string(),
                 delay_ms: key.delay_ms,
                 label: key.label,
                 count,
             })
             .collect()
     }
+}
 
+///
+/// AccessMetricEntryMapper
+///
+
+pub struct AccessMetricEntryMapper;
+
+impl AccessMetricEntryMapper {
     #[must_use]
-    pub fn access_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (AccessMetricKey, u64)>,
     ) -> Vec<AccessMetricEntry> {
         raw.into_iter()
@@ -86,24 +137,40 @@ impl MetricsMapper {
             })
             .collect()
     }
+}
 
+///
+/// DelegationMetricEntryMapper
+///
+
+pub struct DelegationMetricEntryMapper;
+
+impl DelegationMetricEntryMapper {
     #[must_use]
-    pub fn delegation_metrics_to_view(
+    pub fn record_to_view(
         raw: impl IntoIterator<Item = (Principal, u64)>,
     ) -> Vec<DelegationMetricEntry> {
         raw.into_iter()
             .map(|(authority, count)| DelegationMetricEntry { authority, count })
             .collect()
     }
+}
 
+///
+/// EndpointHealthMapper
+///
+
+pub struct EndpointHealthMapper;
+
+impl EndpointHealthMapper {
     #[must_use]
-    pub fn endpoint_health_to_view(
+    pub fn record_to_view(
         attempts: impl IntoIterator<Item = (&'static str, EndpointAttemptCounts)>,
         results: impl IntoIterator<Item = (&'static str, EndpointResultCounts)>,
         access: impl IntoIterator<Item = (AccessMetricKey, u64)>,
         exclude_endpoint: Option<&str>,
-    ) -> Vec<EndpointHealthView> {
-        // Aggregate access-stage denials (guard/auth/env/rule) per endpoint
+    ) -> Vec<EndpointHealth> {
+        // Aggregate access-stage denials (guard/auth/env/rule) per endpoint.
         let mut denied: HashMap<String, u64> = HashMap::new();
 
         for (key, count) in access {
@@ -148,7 +215,7 @@ impl MetricsMapper {
 
                 let denied = denied.get(&endpoint).copied().unwrap_or(0);
 
-                EndpointHealthView {
+                EndpointHealth {
                     endpoint,
                     attempted,
                     denied,
@@ -158,32 +225,5 @@ impl MetricsMapper {
                 }
             })
             .collect()
-    }
-
-    fn kind_to_string(kind: SystemMetricKind) -> String {
-        match kind {
-            SystemMetricKind::CanisterCall => "CanisterCall",
-            SystemMetricKind::CanisterStatus => "CanisterStatus",
-            SystemMetricKind::CreateCanister => "CreateCanister",
-            SystemMetricKind::DeleteCanister => "DeleteCanister",
-            SystemMetricKind::DepositCycles => "DepositCycles",
-            SystemMetricKind::HttpOutcall => "HttpOutcall",
-            SystemMetricKind::InstallCode => "InstallCode",
-            SystemMetricKind::RawRand => "RawRand",
-            SystemMetricKind::ReinstallCode => "ReinstallCode",
-            SystemMetricKind::TimerScheduled => "TimerScheduled",
-            SystemMetricKind::UninstallCode => "UninstallCode",
-            SystemMetricKind::UpdateSettings => "UpdateSettings",
-            SystemMetricKind::UpgradeCode => "UpgradeCode",
-        }
-        .to_string()
-    }
-
-    fn mode_to_string(mode: TimerMode) -> String {
-        match mode {
-            TimerMode::Once => "once",
-            TimerMode::Interval => "interval",
-        }
-        .to_string()
     }
 }

@@ -2,15 +2,17 @@ pub mod builder;
 
 use crate::{
     InternalError,
+    dto::topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
         storage::{
+            directory::mapper::{AppDirectoryRecordMapper, SubnetDirectoryRecordMapper},
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
     },
-    storage::stable::directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
+    storage::stable::directory::{app::AppDirectoryRecord, subnet::SubnetDirectoryRecord},
 };
 
 use self::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder};
@@ -22,7 +24,7 @@ use self::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder};
 pub struct AppDirectoryResolver;
 
 impl AppDirectoryResolver {
-    pub fn resolve() -> Result<AppDirectoryData, InternalError> {
+    pub fn resolve() -> Result<AppDirectoryRecord, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::get().expect("config must be available on root");
@@ -31,6 +33,10 @@ impl AppDirectoryResolver {
         } else {
             Ok(AppDirectoryOps::data())
         }
+    }
+
+    pub fn resolve_input() -> Result<AppDirectoryArgs, InternalError> {
+        Self::resolve().map(AppDirectoryRecordMapper::record_to_view)
     }
 }
 
@@ -41,7 +47,7 @@ impl AppDirectoryResolver {
 pub struct SubnetDirectoryResolver;
 
 impl SubnetDirectoryResolver {
-    pub fn resolve() -> Result<SubnetDirectoryData, InternalError> {
+    pub fn resolve() -> Result<SubnetDirectoryRecord, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::current_subnet().expect("subnet config must be available on root");
@@ -50,5 +56,9 @@ impl SubnetDirectoryResolver {
         } else {
             Ok(SubnetDirectoryOps::data())
         }
+    }
+
+    pub fn resolve_input() -> Result<SubnetDirectoryArgs, InternalError> {
+        Self::resolve().map(SubnetDirectoryRecordMapper::record_to_view)
     }
 }

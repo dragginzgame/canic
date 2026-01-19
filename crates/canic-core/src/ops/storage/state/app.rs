@@ -1,7 +1,9 @@
 use crate::{
     InternalError,
+    dto::state::{AppCommand, AppStateInput},
+    ops::storage::state::mapper::{AppStateCommandMapper, AppStateInputMapper},
     ops::{prelude::*, storage::StorageOpsError},
-    storage::stable::state::app::{AppMode, AppState, AppStateData},
+    storage::stable::state::app::{AppMode, AppState, AppStateRecord},
 };
 use thiserror::Error as ThisError;
 
@@ -72,20 +74,37 @@ impl AppStateOps {
         Ok(())
     }
 
+    pub fn apply_command(cmd: AppCommand) -> Result<(), InternalError> {
+        let internal = AppStateCommandMapper::dto_to_record(cmd);
+        Self::execute_command(internal)
+    }
+
     // -------------------------------------------------------------
     // Data / Import
     // -------------------------------------------------------------
 
     /// Export the current application state as an operational snapshot.
     #[must_use]
-    pub fn data() -> AppStateData {
+    pub fn data() -> AppStateRecord {
         AppState::export()
+    }
+
+    /// Export the current application state as a DTO snapshot.
+    #[must_use]
+    pub fn snapshot_input() -> AppStateInput {
+        AppStateInputMapper::record_to_view(AppState::export())
     }
 
     /// Import application state from an operational snapshot.
     ///
     /// Validation occurs during snapshot → data conversion.
-    pub fn import(data: AppStateData) {
+    pub fn import(data: AppStateRecord) {
         AppState::import(data);
+    }
+
+    /// Import application state from a DTO snapshot.
+    pub fn import_input(view: AppStateInput) {
+        let record = AppStateInputMapper::dto_to_record(view);
+        AppState::import(record);
     }
 }

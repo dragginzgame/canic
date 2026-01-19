@@ -30,11 +30,11 @@ eager_static! {
 }
 
 ///
-/// CanisterChildrenData
+/// CanisterChildrenRecord
 ///
 
 #[derive(Clone, Debug)]
-pub struct CanisterChildrenData {
+pub struct CanisterChildrenRecord {
     pub entries: Vec<(Principal, CanisterRecord)>,
 }
 
@@ -46,14 +46,14 @@ pub struct CanisterChildren;
 
 impl CanisterChildren {
     #[must_use]
-    pub fn export() -> CanisterChildrenData {
-        CanisterChildrenData {
+    pub fn export() -> CanisterChildrenRecord {
+        CanisterChildrenRecord {
             entries: CANISTER_CHILDREN
                 .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
         }
     }
 
-    pub(crate) fn import(data: CanisterChildrenData) {
+    pub(crate) fn import(data: CanisterChildrenRecord) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear();
             for (pid, entry) in data.entries {

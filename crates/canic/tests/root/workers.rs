@@ -1,7 +1,7 @@
 use canic::{
     Error,
     cdk::types::Principal,
-    dto::{topology::SubnetRegistryEntryView, topology::SubnetRegistryView},
+    dto::{topology::SubnetRegistryEntry, topology::SubnetRegistryResponse},
     protocol,
 };
 use canic_internal::canister::SCALE;
@@ -21,13 +21,13 @@ pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Principal {
 
 /// Count worker canisters registered under a given parent.
 pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> usize {
-    let SubnetRegistryView(registry): SubnetRegistryView = pic
+    let SubnetRegistryResponse(registry): SubnetRegistryResponse = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query subnet registry");
 
     registry
         .iter()
-        .filter(|entry: &&SubnetRegistryEntryView| {
+        .filter(|entry: &&SubnetRegistryEntry| {
             entry.role == SCALE && entry.record.parent_pid == Some(parent_pid)
         })
         .count()

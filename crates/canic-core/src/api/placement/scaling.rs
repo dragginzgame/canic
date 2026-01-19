@@ -1,6 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::{error::Error, placement::scaling::ScalingRegistryView},
+    dto::{error::Error, placement::scaling::ScalingRegistryResponse},
     workflow::placement::scaling::{ScalingWorkflow, query::ScalingQuery},
 };
 
@@ -24,7 +24,7 @@ impl ScalingApi {
     }
 
     #[must_use]
-    pub fn registry_view() -> ScalingRegistryView {
-        ScalingQuery::registry_view()
+    pub fn registry() -> ScalingRegistryResponse {
+        ScalingQuery::registry()
     }
 }

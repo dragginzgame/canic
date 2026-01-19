@@ -22,7 +22,6 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    storage::stable::{env::EnvData, registry::subnet::SubnetRegistryData},
     workflow::{
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         ic::{IcWorkflow, provision::ProvisionWorkflow},
@@ -379,14 +378,12 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
 }
 
 pub fn root_validate_state() -> ValidationReport {
-    let registry_data = SubnetRegistryOps::data();
     let app_data = AppDirectoryOps::data();
     let subnet_data = SubnetDirectoryOps::data();
-    let env_data = EnvOps::snapshot();
 
     let mut issues = Vec::new();
 
-    let env_missing = env_missing_fields(&env_data);
+    let env_missing = EnvOps::missing_required_fields();
     let env_complete = env_missing.is_empty();
     if !env_complete {
         issues.push(ValidationIssue {
@@ -395,7 +392,7 @@ pub fn root_validate_state() -> ValidationReport {
         });
     }
 
-    let registry_roles = build_registry_role_index(&registry_data);
+    let registry_roles = SubnetRegistryOps::role_index();
 
     let (app_unique, app_consistent) = check_directory(
         "app_directory",
@@ -421,43 +418,6 @@ pub fn root_validate_state() -> ValidationReport {
         env_complete,
         issues,
     }
-}
-
-fn env_missing_fields(data: &EnvData) -> Vec<&'static str> {
-    let mut missing = Vec::new();
-
-    if data.prime_root_pid.is_none() {
-        missing.push("prime_root_pid");
-    }
-    if data.subnet_role.is_none() {
-        missing.push("subnet_role");
-    }
-    if data.subnet_pid.is_none() {
-        missing.push("subnet_pid");
-    }
-    if data.root_pid.is_none() {
-        missing.push("root_pid");
-    }
-    if data.canister_role.is_none() {
-        missing.push("canister_role");
-    }
-    if data.parent_pid.is_none() {
-        missing.push("parent_pid");
-    }
-
-    missing
-}
-
-fn build_registry_role_index(
-    registry: &SubnetRegistryData,
-) -> BTreeMap<CanisterRole, Vec<Principal>> {
-    let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
-
-    for (pid, entry) in &registry.entries {
-        roles.entry(entry.role.clone()).or_default().push(*pid);
-    }
-
-    roles
 }
 
 fn check_directory(

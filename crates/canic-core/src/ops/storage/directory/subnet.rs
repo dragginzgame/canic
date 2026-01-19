@@ -1,6 +1,10 @@
-use super::ensure_unique_roles;
-pub use crate::storage::stable::directory::subnet::SubnetDirectoryData;
-use crate::{InternalError, ops::prelude::*, storage::stable::directory::subnet::SubnetDirectory};
+use crate::{
+    InternalError,
+    dto::topology::SubnetDirectoryArgs,
+    ops::storage::directory::mapper::SubnetDirectoryRecordMapper,
+    ops::{prelude::*, storage::directory::ensure_unique_roles},
+    storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryRecord},
+};
 
 ///
 /// SubnetDirectoryOps
@@ -28,8 +32,18 @@ impl SubnetDirectoryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> SubnetDirectoryData {
+    pub fn data() -> SubnetDirectoryRecord {
         SubnetDirectory::export()
+    }
+
+    #[must_use]
+    pub fn snapshot_args() -> SubnetDirectoryArgs {
+        SubnetDirectoryRecordMapper::record_to_view(SubnetDirectory::export())
+    }
+
+    pub(crate) fn import_args(args: SubnetDirectoryArgs) -> Result<(), InternalError> {
+        let data = SubnetDirectoryRecordMapper::dto_to_record(args);
+        Self::import(data)
     }
 
     // -------------------------------------------------------------
@@ -37,7 +51,7 @@ impl SubnetDirectoryOps {
     // -------------------------------------------------------------
 
     /// Import data into stable storage.
-    pub fn import(data: SubnetDirectoryData) -> Result<(), InternalError> {
+    pub fn import(data: SubnetDirectoryRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "subnet")?;
         SubnetDirectory::import(data);
 

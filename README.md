@@ -146,7 +146,7 @@ Sharding is configured via `canic.toml` and executed through the ops layer. The 
 
 ```rust
 canic_sharding_registry()
-    -> Result<canic::dto::placement::ShardingRegistryView, canic::Error>
+    -> Result<canic::dto::placement::ShardingRegistryResponse, canic::Error>
 ```
 
 ### Scaling & Pool Capacity ⚖️
@@ -154,9 +154,9 @@ canic_sharding_registry()
 * `canic_scaling_registry()` provides controller insight into scaling pools via the shared endpoint bundle.
 * Root canisters manage spare capacity through `canic_pool_list()` and the controller‑only `canic_pool_admin(cmd)` endpoint.
 
-### Directory Views 📇
+### Directory Listings 📇
 
-* `canic_app_directory(PageRequest)` returns the prime root directory view for operator dashboards.
+* `canic_app_directory(PageRequest)` returns the prime root directory listing for operator dashboards.
 * `canic_subnet_directory(PageRequest)` exposes the per‑subnet directory so children can discover peers.
 
 Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.

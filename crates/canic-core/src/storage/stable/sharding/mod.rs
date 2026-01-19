@@ -53,14 +53,14 @@ impl ShardKey {
 impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 
 ///
-/// ShardEntry
+/// ShardEntryRecord
 /// (bare-bones; policy like has_capacity is higher-level)
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ShardEntry {
+pub struct ShardEntryRecord {
     /// Logical slot index within the pool (assigned deterministically).
-    #[serde(default = "ShardEntry::slot_default")]
+    #[serde(default = "ShardEntryRecord::slot_default")]
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
@@ -69,7 +69,7 @@ pub struct ShardEntry {
     pub created_at: u64,
 }
 
-impl ShardEntry {
+impl ShardEntryRecord {
     pub const STORABLE_MAX_SIZE: u32 = 240;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
@@ -102,7 +102,7 @@ impl ShardEntry {
     }
 }
 
-impl_storable_bounded!(ShardEntry, ShardEntry::STORABLE_MAX_SIZE, false);
+impl_storable_bounded!(ShardEntryRecord, ShardEntryRecord::STORABLE_MAX_SIZE, false);
 
 ///
 /// ShardingCore
@@ -110,13 +110,13 @@ impl_storable_bounded!(ShardEntry, ShardEntry::STORABLE_MAX_SIZE, false);
 ///
 
 pub struct ShardingCore<M: Memory> {
-    registry: BTreeMap<Principal, ShardEntry, M>,
+    registry: BTreeMap<Principal, ShardEntryRecord, M>,
     assignments: BTreeMap<ShardKey, Principal, M>,
 }
 
 impl<M: Memory> ShardingCore<M> {
     pub const fn new(
-        registry: BTreeMap<Principal, ShardEntry, M>,
+        registry: BTreeMap<Principal, ShardEntryRecord, M>,
         assignments: BTreeMap<ShardKey, Principal, M>,
     ) -> Self {
         Self {
@@ -129,15 +129,15 @@ impl<M: Memory> ShardingCore<M> {
     // Registry CRUD
     // ---------------------------
 
-    pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntry) {
+    pub fn insert_entry(&mut self, pid: Principal, entry: ShardEntryRecord) {
         self.registry.insert(pid, entry);
     }
 
-    pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntry> {
+    pub fn get_entry(&self, pid: &Principal) -> Option<ShardEntryRecord> {
         self.registry.get(pid)
     }
 
-    pub fn all_entries(&self) -> Vec<(Principal, ShardEntry)> {
+    pub fn all_entries(&self) -> Vec<(Principal, ShardEntryRecord)> {
         self.registry
             .iter()
             .map(|e| (*e.key(), e.value()))

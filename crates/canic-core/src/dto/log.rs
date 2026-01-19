@@ -1,11 +1,11 @@
 use crate::{dto::prelude::*, log::Level};
 
 ///
-/// LogEntryView
+/// LogEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct LogEntryView {
+pub struct LogEntry {
     pub crate_name: String,
     pub created_at: u64,
     pub level: Level,

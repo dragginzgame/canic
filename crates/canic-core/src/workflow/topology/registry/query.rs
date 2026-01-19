@@ -1,7 +1,10 @@
 use crate::{
-    dto::topology::{AppRegistryView, SubnetRegistryView},
-    ops::storage::registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
-    workflow::topology::registry::mapper::{AppRegistryMapper, SubnetRegistryMapper},
+    dto::topology::{AppRegistryResponse, SubnetRegistryResponse},
+    ops::storage::registry::{
+        app::AppRegistryOps,
+        mapper::{AppRegistryResponseMapper, SubnetRegistryResponseMapper},
+        subnet::SubnetRegistryOps,
+    },
 };
 
 ///
@@ -11,10 +14,10 @@ use crate::{
 pub struct AppRegistryQuery;
 
 impl AppRegistryQuery {
-    pub fn view() -> AppRegistryView {
+    pub fn registry() -> AppRegistryResponse {
         let data = AppRegistryOps::data();
 
-        AppRegistryMapper::data_to_view(data)
+        AppRegistryResponseMapper::record_to_view(data)
     }
 }
 
@@ -25,9 +28,9 @@ impl AppRegistryQuery {
 pub struct SubnetRegistryQuery;
 
 impl SubnetRegistryQuery {
-    pub fn view() -> SubnetRegistryView {
+    pub fn registry() -> SubnetRegistryResponse {
         let data = SubnetRegistryOps::data();
 
-        SubnetRegistryMapper::data_to_view(data)
+        SubnetRegistryResponseMapper::record_to_view(data)
     }
 }

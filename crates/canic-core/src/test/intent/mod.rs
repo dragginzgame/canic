@@ -1,11 +1,14 @@
 //! Test-only intent store wrappers for PocketIC canisters.
 
-use crate::{ops::storage::intent::IntentStoreOps, storage::stable::intent::IntentStore};
+use crate::{
+    ids::IntentResourceKey, ops::storage::intent::IntentStoreOps,
+    storage::stable::intent::IntentStore,
+};
 
 #[doc(hidden)]
-pub use crate::ops::storage::intent::{
-    IntentId, IntentPendingEntry, IntentRecord, IntentResourceKey, IntentResourceTotals,
-    IntentState, IntentStoreMeta,
+pub(crate) use crate::storage::stable::intent::{
+    IntentId, IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord,
+    IntentStoreMetaRecord,
 };
 
 ///
@@ -64,12 +67,12 @@ impl IntentTestOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotals {
+    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
         IntentStoreOps::totals_at(resource_key, now)
     }
 
     #[must_use]
-    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntry)> {
+    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
         IntentStoreOps::pending_entries_at(now)
     }
 
@@ -83,7 +86,7 @@ impl IntentTestOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn meta() -> IntentStoreMeta {
+    pub fn meta() -> IntentStoreMetaRecord {
         // Tests are allowed to read storage internals directly
         IntentStore::meta()
     }

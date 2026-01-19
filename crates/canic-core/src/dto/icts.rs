@@ -1,11 +1,11 @@
 use crate::dto::prelude::*;
 
 ///
-/// CanisterMetadataView
+/// CanisterMetadataResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CanisterMetadataView {
+pub struct CanisterMetadataResponse {
     pub name: String,
     pub version: String,
     pub description: String,

@@ -119,6 +119,23 @@ model
 Instrumentation modules (`perf`/logging/tracing) are layer-neutral and may be
 used anywhere.
 
+### Storage Modules (constraint)
+
+Storage-owned types must be std-only and avoid proc-macro dependencies. Apply
+this rule narrowly to storage-owned types only; do not modify non-storage
+types for consistency.
+
+### Non-Negotiable Invariants
+
+Policy must not depend on storage records. Policy depends only on policy
+inputs and value types (IDs/enums), not on storage schema.
+
+Workflow must not construct or mutate *Record types. Workflow orchestrates;
+ops owns conversion into persisted schemas.
+
+All DTO↔Record, Record↔View, Policy↔Record conversions live in ops::*.
+Workflow adapters may exist only for orchestration glue, not shape conversion.
+
 ---
 
 ## `dto/` — **Data Transfer Objects (pure)**
@@ -330,6 +347,38 @@ Conversions into `InfraError` must be direct wrappers only.
 Type aliases do not constitute boundaries.
 Any type that crosses a layer boundary must be a named struct or enum.
 
+### Type Layer Rules (Non-negotiable)
+
+Layer | Directory | Meaning
+----- | --------- | -------
+DTO | `dto/` | External API contract (inputs + responses)
+View | `view/` | Internal read-only projections for policy/workflow
+Record | `storage/**` | Persisted schema / stable memory
+Ops | `ops/**` | Boundary layer that touches storage/infra
+Workflow | `workflow/**` | Orchestration only, no schema ownership
+IDs | `ids/` | Identity/value types, stable across layers
+
+Hard rule:
+A type’s directory defines its role. Names must not contradict the directory.
+
+### Naming Rules (Locked)
+
+Types:
+* DTO inputs: `*Input`, `*Args`, `*Request`
+* DTO outputs: `*Response`
+* DTOs must not use `View` in type or function names
+* Views: no suffix; must live under `view/`; read-only, internal, non-persisted
+* Records: persisted aggregates end in `*Record`
+* IDs and value types never end in `Record`
+
+Functions:
+* `dto_to_record` — DTO → storage
+* `record_to_view` — storage → view/ projection
+* `record_to_response` — storage → DTO response
+* `to_input` / `from_input` — workflow ↔ DTO input
+* `*_to_dto` — ops → DTO
+* `*_view` — forbidden unless using `view::*`
+
 The codebase distinguishes **three outward-facing representations**.
 
 ### `*Data` — Canonical snapshots
@@ -347,18 +396,18 @@ Examples:
 
 ---
 
-### `*View` — Read-only projections
+### Views — Read-only projections
 
 * Data-only snapshots
 * No invariants, no mutation
-* May be exposed externally if explicitly wrapped in a DTO
-* Used by ops, workflow, DTOs, endpoints
+* Internal-only; may be wrapped in DTOs when explicitly needed
+* Used by ops, workflow, policy
 
 Examples:
 
-* `DirectoryView`
-* `RegistryView`
-* `CycleTrackerView`
+* `Directory`
+* `Registry`
+* `CycleTracker`
 
 DTOs may depend on views, **never on authoritative model types**.
 
@@ -387,11 +436,7 @@ Rules:
 
 * `export()` / `import()` operate on `*Data` types
 * Views and DTOs must not use `export()` naming
-* Projection functions should be named:
-
-  * `get_*_view`
-  * `snapshot_*`
-  * `to_*_view`
+* Use the function naming rules above for conversions and projections
 
 ---
 

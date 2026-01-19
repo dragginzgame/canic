@@ -1,47 +1,47 @@
 use crate::{
-    dto::canister::CanisterRecordView,
+    dto::canister::CanisterInfo,
     dto::topology::{
-        AppRegistryEntryView, AppRegistryView, SubnetRegistryEntryView, SubnetRegistryView,
+        AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry, SubnetRegistryResponse,
     },
-    storage::stable::registry::{app::AppRegistryData, subnet::SubnetRegistryData},
+    storage::stable::registry::{app::AppRegistryRecord, subnet::SubnetRegistryRecord},
 };
 
 ///
-/// AppRegistryMapper
+/// AppRegistryResponseMapper
 ///
 
-pub struct AppRegistryMapper;
+pub struct AppRegistryResponseMapper;
 
-impl AppRegistryMapper {
+impl AppRegistryResponseMapper {
     #[must_use]
-    pub fn data_to_view(data: AppRegistryData) -> AppRegistryView {
+    pub fn record_to_view(data: AppRegistryRecord) -> AppRegistryResponse {
         let entries = data
             .entries
             .into_iter()
-            .map(|(subnet_pid, root_pid)| AppRegistryEntryView {
+            .map(|(subnet_pid, root_pid)| AppRegistryEntry {
                 subnet_pid,
                 root_pid,
             })
             .collect();
 
-        AppRegistryView(entries)
+        AppRegistryResponse(entries)
     }
 }
 
 ///
-/// SubnetRegistryMapper
+/// SubnetRegistryResponseMapper
 ///
 
-pub struct SubnetRegistryMapper;
+pub struct SubnetRegistryResponseMapper;
 
-impl SubnetRegistryMapper {
+impl SubnetRegistryResponseMapper {
     #[must_use]
-    pub fn data_to_view(data: SubnetRegistryData) -> SubnetRegistryView {
+    pub fn record_to_view(data: SubnetRegistryRecord) -> SubnetRegistryResponse {
         let entries = data
             .entries
             .into_iter()
             .map(|(pid, record)| {
-                let record_view = CanisterRecordView {
+                let record_view = CanisterInfo {
                     pid,
                     role: record.role.clone(),
                     parent_pid: record.parent_pid,
@@ -49,7 +49,7 @@ impl SubnetRegistryMapper {
                     created_at: record.created_at,
                 };
 
-                SubnetRegistryEntryView {
+                SubnetRegistryEntry {
                     pid,
                     role: record_view.role.clone(),
                     record: record_view,
@@ -57,6 +57,6 @@ impl SubnetRegistryMapper {
             })
             .collect();
 
-        SubnetRegistryView(entries)
+        SubnetRegistryResponse(entries)
     }
 }

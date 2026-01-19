@@ -68,7 +68,7 @@ impl DelegationApi {
             return Err(Error::forbidden("delegation disabled"));
         }
 
-        DelegationStateOps::set_proof(proof);
+        DelegationStateOps::set_proof_from_dto(proof);
         Ok(())
     }
 
@@ -78,7 +78,7 @@ impl DelegationApi {
             return Err(Error::forbidden("delegation disabled"));
         }
 
-        DelegationStateOps::proof().ok_or_else(|| Error::not_found("delegation proof not set"))
+        DelegationStateOps::proof_dto().ok_or_else(|| Error::not_found("delegation proof not set"))
     }
 }
 
@@ -140,7 +140,7 @@ impl DelegationAdminApi {
                 }
             }),
             Arc::new(|proof| {
-                DelegationStateOps::set_proof(proof);
+                DelegationStateOps::set_proof_from_dto(proof);
                 Ok(())
             }),
         );
@@ -167,8 +167,8 @@ struct DelegationRotationTemplate {
 }
 
 fn rotation_template() -> Result<DelegationRotationTemplate, Error> {
-    let proof =
-        DelegationStateOps::proof().ok_or_else(|| Error::not_found("delegation proof not set"))?;
+    let proof = DelegationStateOps::proof_dto()
+        .ok_or_else(|| Error::not_found("delegation proof not set"))?;
     let cert = proof.cert;
 
     if cert.expires_at <= cert.issued_at {

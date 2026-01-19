@@ -1,13 +1,13 @@
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
-    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistry},
+    storage::{
+        canister::CanisterRecord,
+        stable::registry::subnet::{SubnetRegistry, SubnetRegistryRecord},
+    },
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error as ThisError;
-
-// re-exports
-pub use crate::storage::stable::registry::subnet::SubnetRegistryData;
 
 ///
 /// SubnetRegistryOpsError
@@ -40,7 +40,7 @@ impl From<SubnetRegistryOpsError> for InternalError {
     }
 }
 
-impl SubnetRegistryData {
+impl SubnetRegistryRecord {
     /// Return the canonical parent chain for a canister.
     ///
     /// Returned order: root → … → target
@@ -166,7 +166,18 @@ impl SubnetRegistryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> SubnetRegistryData {
+    pub fn data() -> SubnetRegistryRecord {
         SubnetRegistry::export()
+    }
+
+    #[must_use]
+    pub fn role_index() -> BTreeMap<CanisterRole, Vec<Principal>> {
+        let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
+
+        for (pid, entry) in SubnetRegistry::export().entries {
+            roles.entry(entry.role).or_default().push(pid);
+        }
+
+        roles
     }
 }

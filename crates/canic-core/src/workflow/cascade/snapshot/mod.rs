@@ -12,16 +12,17 @@ pub mod adapter;
 use crate::{
     InternalError,
     access::env,
+    dto::{
+        cascade::StateSnapshotInput,
+        state::{AppStateInput, SubnetStateInput},
+        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+    },
     ops::{
         storage::{
             registry::subnet::SubnetRegistryOps,
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
         topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
-    },
-    storage::stable::{
-        directory::{app::AppDirectoryData, subnet::SubnetDirectoryData},
-        state::{app::AppStateData, subnet::SubnetStateData},
     },
     workflow::prelude::*,
 };
@@ -34,17 +35,17 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct StateSnapshot {
-    pub app_state: Option<AppStateData>,
-    pub subnet_state: Option<SubnetStateData>,
-    pub app_directory: Option<AppDirectoryData>,
-    pub subnet_directory: Option<SubnetDirectoryData>,
+    pub app_state: Option<AppStateInput>,
+    pub subnet_state: Option<SubnetStateInput>,
+    pub app_directory: Option<AppDirectoryArgs>,
+    pub subnet_directory: Option<SubnetDirectoryArgs>,
 }
 
 ///
 /// StateSnapshotBuilder
 ///
 /// Assembles internal `StateSnapshot` values from authoritative state.
-/// DTO conversion happens via `StateSnapshotAdapter`.
+/// DTO shaping happens in ops; snapshot assembly remains in workflow.
 /// Root-only; construction enforces root context.
 ///
 
@@ -63,29 +64,40 @@ impl StateSnapshotBuilder {
 
     #[must_use]
     pub fn with_app_state(mut self) -> Self {
-        self.snapshot.app_state = Some(AppStateOps::data());
+        self.snapshot.app_state = Some(AppStateOps::snapshot_input());
         self
     }
 
     #[must_use]
     pub fn with_subnet_state(mut self) -> Self {
-        self.snapshot.subnet_state = Some(SubnetStateOps::data());
+        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot_input());
         self
     }
 
     pub fn with_app_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve()?);
+        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve_input()?);
         Ok(self)
     }
 
     pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve()?);
+        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve_input()?);
         Ok(self)
     }
 
     #[must_use]
     pub fn build(self) -> StateSnapshot {
         self.snapshot
+    }
+}
+
+impl From<StateSnapshotInput> for StateSnapshot {
+    fn from(snapshot: StateSnapshotInput) -> Self {
+        Self {
+            app_state: snapshot.app_state,
+            subnet_state: snapshot.subnet_state,
+            app_directory: snapshot.app_directory,
+            subnet_directory: snapshot.subnet_directory,
+        }
     }
 }
 

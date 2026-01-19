@@ -1,35 +1,35 @@
 use crate::dto::prelude::*;
 
 ///
-/// ShardingRegistryEntryView
+/// ShardingRegistryEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingRegistryEntryView {
+pub struct ShardingRegistryEntry {
     pub pid: Principal,
-    pub entry: ShardEntryView,
+    pub entry: ShardEntry,
 }
 
 ///
-/// ShardingRegistryView
+/// ShardingRegistryResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingRegistryView(pub Vec<ShardingRegistryEntryView>);
+pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
 
 ///
-/// ShardingTenantsView
+/// ShardingTenantsResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingTenantsView(pub Vec<String>);
+pub struct ShardingTenantsResponse(pub Vec<String>);
 
 ///
-/// ShardEntryView
+/// ShardEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ShardEntryView {
+pub struct ShardEntry {
     /// Logical slot index within the pool (assigned deterministically).
     pub slot: u32,
     pub capacity: u32,
@@ -40,11 +40,11 @@ pub struct ShardEntryView {
 }
 
 ///
-/// ShardingPlanStateView
+/// ShardingPlanStateResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardingPlanStateView {
+pub enum ShardingPlanStateResponse {
     /// Tenant already has a shard assigned.
     AlreadyAssigned { pid: Principal },
 
