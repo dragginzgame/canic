@@ -5,9 +5,6 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-Below is a **clean, grouped rewrite** that surfaces the *real architectural change* (delegated authority + certified verification), reduces noise, and makes the release readable to humans skimming for impact. I’ve added a **small, deliberate number of emojis** to signal sections and importance without turning it into marketing copy.
-
----
 
 ## [0.9.0] – 2026-01-19 - Delegation's What You Need
 
