@@ -104,7 +104,7 @@ pub struct DelegationCert {
 /// This struct binds it to a **root canister signature**, establishing
 /// a verifiable trust chain:
 ///
-///     root authority → signer canister
+/// root authority -> signer canister
 ///
 /// Verifiers validate `cert_sig` using:
 /// - the root authority’s public key

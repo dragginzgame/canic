@@ -105,6 +105,11 @@ pub mod api {
         pub use crate::__internal::core::api::auth::{DelegationAdminApi, DelegationApi};
     }
 
+    /// Environment queries
+    pub mod env {
+        pub use crate::__internal::core::api::env::EnvQuery;
+    }
+
     /// IC primitives (calls, HTTP, crypto, network, system APIs)
     pub mod ic {
         pub use crate::__internal::core::api::ic::call::{

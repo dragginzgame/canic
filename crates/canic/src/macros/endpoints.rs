@@ -369,6 +369,20 @@ macro_rules! canic_endpoints_root {
         ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
+
+        #[canic_update(auth(::canic::dsl::access::auth::caller_is_child))]
+        async fn canic_delegation_prepare(
+            cert: ::canic::dto::auth::DelegationCert,
+        ) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::prepare_issue(cert)
+        }
+
+        #[canic_query(auth(::canic::dsl::access::auth::caller_is_registered_to_subnet))]
+        async fn canic_delegation_get(
+            cert: ::canic::dto::auth::DelegationCert,
+        ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::get_issue(cert)
+        }
     };
 }
 

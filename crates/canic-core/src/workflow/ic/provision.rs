@@ -14,6 +14,7 @@ use crate::{
     config::Config,
     domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvView},
+    ops::topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     ops::{
         config::ConfigOps,
         ic::{
@@ -30,10 +31,7 @@ use crate::{
         cascade::snapshot::StateSnapshotBuilder,
         pool::PoolWorkflow,
         prelude::*,
-        topology::directory::{
-            builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-            mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
-        },
+        topology::directory::mapper::{AppDirectoryMapper, SubnetDirectoryMapper},
     },
 };
 

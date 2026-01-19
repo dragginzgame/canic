@@ -43,6 +43,18 @@ endpoints/macros
 
 ---
 
+## Delegation Topology
+
+The delegation model is fixed and must remain consistent:
+
+* The root canister is the delegation authority and signs `DelegationCert`s.
+* `auth_hub` provisions `auth_shard` canisters via the sharding system.
+* `auth_hub` is not part of the trust graph; it only coordinates provisioning.
+* `auth_shard` stores a `DelegationProof` and mints delegated tokens locally.
+* Token verification is local-only and validates against the stored proof.
+
+---
+
 ## model/
 
 ### Responsibility

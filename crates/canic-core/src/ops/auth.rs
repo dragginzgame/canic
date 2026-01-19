@@ -84,6 +84,23 @@ impl DelegatedTokenOps {
     // Delegation cert issuance
     // -------------------------------------------------------------------------
 
+    pub fn prepare_delegation_cert(cert: &DelegationCert) -> Result<(), InternalError> {
+        let hash = cert_hash(cert)?;
+        SignatureOps::prepare(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?;
+        Ok(())
+    }
+
+    pub fn get_delegation_proof(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+        let hash = cert_hash(&cert)?;
+        let sig = SignatureOps::get(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)
+            .ok_or(DelegatedTokenOpsError::CertSignatureUnavailable)?;
+
+        Ok(DelegationProof {
+            cert,
+            cert_sig: sig,
+        })
+    }
+
     pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::sign(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?

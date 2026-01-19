@@ -1,5 +1,4 @@
-pub use crate::storage::stable::sharding::registry::ShardingRegistryData;
-pub use crate::storage::stable::sharding::{ShardEntry, ShardKey};
+pub use crate::storage::stable::sharding::{ShardEntry, ShardKey, registry::ShardingRegistryData};
 
 use crate::{
     InternalError,

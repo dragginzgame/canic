@@ -5,6 +5,27 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+- Auth hub/shard canister types, delegation provisioning endpoints, and a delegation flow integration test.
+- Delegation proof storage helpers on the public delegation API for shard-local proof handling.
+- Public `api::env::EnvQuery` re-export for canister-level environment queries.
+- Delegation flow test now emits signature debug details when certified-data validation fails.
+
+### Changed
+- Delegation issuance now uses prepare/get endpoints with subnet-registered callers for proof retrieval.
+- Topology directory resolvers/builders moved into ops; workflow modules now consume ops for canonical directory resolution.
+- Child-canister resolution centralized in ops (root uses registry, non-root uses cached children).
+- Root bootstrap test harness waits for subnet directory materialization before proceeding.
+- Documentation updated to reflect auth_hub/auth_shard topology and access-stage ordering.
+ - Auth shard proof updates now accept any subnet-registered caller (auth_hub is not a parent).
+- Delegation flow test now skips unless certified queries are explicitly enabled.
+
+### Fixed
+- Endpoint metrics completion now treats non-Result endpoints as implicit ok counts.
+- Delegation token/proof errors now surface internal reasons instead of a generic internal error.
+- Delegation flow test now advances PocketIC certified time before signature retrieval.
+
 ## [0.8.7] - 2026-01-16
 ### Added
 - Hourly intent cleanup workflow that aborts expired pending intents and reconciles totals.

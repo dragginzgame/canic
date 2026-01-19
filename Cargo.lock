@@ -210,7 +210,12 @@ dependencies = [
  "canic-memory",
  "canic-testkit",
  "canic-utils",
+ "hex",
  "ic-cdk",
+ "ic-certification 3.0.3",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
 ]
 
 [[package]]
@@ -330,7 +335,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_auth"
+name = "canister_auth_hub"
+version = "0.8.6"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-internal",
+ "ic-cdk",
+]
+
+[[package]]
+name = "canister_auth_shard"
 version = "0.8.6"
 dependencies = [
  "candid",

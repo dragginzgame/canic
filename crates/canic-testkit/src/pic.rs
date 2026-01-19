@@ -13,6 +13,7 @@ use canic::{
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
+use std::time::Duration;
 
 const INSTALL_CYCLES: u128 = 500 * TC;
 
@@ -230,6 +231,14 @@ impl Pic {
         for _ in 0..times {
             self.tick();
         }
+    }
+
+    pub fn certify_time(&self) {
+        let now = self.0.get_time();
+        let next = now + Duration::from_secs(1);
+        self.0.set_time(next);
+        self.0.set_certified_time(next);
+        self.0.tick();
     }
 }
 

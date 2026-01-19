@@ -7,6 +7,7 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
+// re-exports
 pub use crate::storage::stable::intent::{
     IntentId, IntentPendingEntry, IntentRecord, IntentResourceKey, IntentResourceTotals,
     IntentState, IntentStoreMeta,
@@ -18,37 +19,6 @@ pub use crate::storage::stable::intent::{
 
 #[derive(Debug, ThisError)]
 pub enum IntentStoreOpsError {
-    #[error("intent {0} conflicts with existing record")]
-    Conflict(IntentId),
-
-    #[error("intent store schema mismatch (expected {expected}, found {found})")]
-    SchemaMismatch { expected: u32, found: u32 },
-
-    #[error("intent {0} not found")]
-    NotFound(IntentId),
-
-    #[error("intent {id} expired at {expires_at:?}")]
-    Expired {
-        id: IntentId,
-        expires_at: Option<u64>,
-    },
-
-    #[error("intent {id} invalid transition {from:?} -> {to:?}")]
-    InvalidTransition {
-        id: IntentId,
-        from: IntentState,
-        to: IntentState,
-    },
-
-    #[error("intent pending index missing for {0}")]
-    PendingIndexMissing(IntentId),
-
-    #[error("intent pending index already exists for {0}")]
-    PendingIndexExists(IntentId),
-
-    #[error("intent totals missing for resource {0}")]
-    TotalsMissing(IntentResourceKey),
-
     #[error("intent aggregate underflow for {field}: current={current}, delta={delta}")]
     AggregateUnderflow {
         field: &'static str,
@@ -63,8 +33,39 @@ pub enum IntentStoreOpsError {
         delta: u64,
     },
 
+    #[error("intent {0} conflicts with existing record")]
+    Conflict(IntentId),
+
+    #[error("intent {id} expired at {expires_at:?}")]
+    Expired {
+        id: IntentId,
+        expires_at: Option<u64>,
+    },
+
     #[error("intent id space exhausted")]
     IdOverflow,
+
+    #[error("intent {id} invalid transition {from:?} -> {to:?}")]
+    InvalidTransition {
+        id: IntentId,
+        from: IntentState,
+        to: IntentState,
+    },
+
+    #[error("intent {0} not found")]
+    NotFound(IntentId),
+
+    #[error("intent pending index missing for {0}")]
+    PendingIndexMissing(IntentId),
+
+    #[error("intent pending index already exists for {0}")]
+    PendingIndexExists(IntentId),
+
+    #[error("intent store schema mismatch (expected {expected}, found {found})")]
+    SchemaMismatch { expected: u32, found: u32 },
+
+    #[error("intent totals missing for resource {0}")]
+    TotalsMissing(IntentResourceKey),
 }
 
 impl From<IntentStoreOpsError> for InternalError {

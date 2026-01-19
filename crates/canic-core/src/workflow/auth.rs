@@ -82,6 +82,21 @@ impl DelegationWorkflow {
         DelegatedTokenOps::sign_delegation_cert(cert)
     }
 
+    /// Prepare a delegation certificate signature.
+    ///
+    /// This must be called from an update context before retrieving
+    /// the signature in a query.
+    pub fn prepare_delegation(cert: &DelegationCert) -> Result<(), InternalError> {
+        DelegatedTokenOps::prepare_delegation_cert(cert)
+    }
+
+    /// Retrieve a prepared delegation proof.
+    ///
+    /// This must be called from a query context after preparation.
+    pub fn get_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+        DelegatedTokenOps::get_delegation_proof(cert)
+    }
+
     /// Issue and persist the delegation proof in stable state.
     ///
     /// Semantics:

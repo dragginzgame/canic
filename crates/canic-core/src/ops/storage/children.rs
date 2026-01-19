@@ -1,6 +1,11 @@
 use crate::{
-    ops::prelude::*,
-    storage::stable::children::{CanisterChildren, CanisterChildrenData},
+    ops::{
+        ic::IcOps, prelude::*, runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps,
+    },
+    storage::{
+        canister::CanisterRecord,
+        stable::children::{CanisterChildren, CanisterChildrenData},
+    },
 };
 
 ///
@@ -18,7 +23,22 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn contains_pid(pid: &Principal) -> bool {
-        Self::data().entries.iter().any(|(p, _)| p == pid)
+        if EnvOps::is_root() {
+            SubnetRegistryOps::children(IcOps::canister_self())
+                .iter()
+                .any(|(child_pid, _)| child_pid == pid)
+        } else {
+            Self::data().entries.iter().any(|(p, _)| p == pid)
+        }
+    }
+
+    #[must_use]
+    pub fn records() -> Vec<(Principal, CanisterRecord)> {
+        if EnvOps::is_root() {
+            SubnetRegistryOps::children(IcOps::canister_self())
+        } else {
+            Self::data().entries
+        }
     }
 
     #[must_use]

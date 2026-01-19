@@ -51,10 +51,17 @@ pub fn setup_root() -> RootSetup {
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
-    let expected_roles = [
+    let expected_registry_roles = [
         CanisterRole::ROOT,
         canister::APP,
-        canister::AUTH,
+        canister::AUTH_HUB,
+        canister::SCALE_HUB,
+        canister::SHARD_HUB,
+        canister::TEST,
+    ];
+    let expected_directory_roles = [
+        canister::APP,
+        canister::AUTH_HUB,
         canister::SCALE_HUB,
         canister::SHARD_HUB,
         canister::TEST,
@@ -64,18 +71,28 @@ fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
         pic.tick();
 
         let registry = fetch_registry(pic, root_id);
-        if expected_roles
+        let registry_ready = expected_registry_roles
             .iter()
-            .all(|role| registry.iter().any(|entry| &entry.role == role))
-        {
-            return;
+            .all(|role| registry.iter().any(|entry| &entry.role == role));
+
+        if registry_ready {
+            let subnet_directory = fetch_subnet_directory(pic, root_id);
+            let directory_ready = expected_directory_roles
+                .iter()
+                .all(|role| subnet_directory.contains_key(role));
+
+            if directory_ready {
+                return;
+            }
         }
     }
 
     let registry = fetch_registry(pic, root_id);
     let roles: Vec<CanisterRole> = registry.into_iter().map(|entry| entry.role).collect();
+    let directory = fetch_subnet_directory(pic, root_id);
+    let directory_roles: Vec<CanisterRole> = directory.into_keys().collect();
     panic!(
-        "root bootstrap did not create required canisters after {BOOTSTRAP_TICK_LIMIT} ticks; registry roles: {roles:?}"
+        "root bootstrap did not create required canisters after {BOOTSTRAP_TICK_LIMIT} ticks; registry roles: {roles:?}; subnet directory roles: {directory_roles:?}"
     );
 }
 
