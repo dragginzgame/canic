@@ -11,11 +11,12 @@
 //! - Persistence and mutation live in ops
 
 use crate::{
-    InternalError, InternalErrorOrigin, access,
+    InternalError, InternalErrorOrigin,
     dto::cascade::StateSnapshotInput,
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
+        runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -48,7 +49,7 @@ impl StateCascadeWorkflow {
     ///
     /// No-op if the snapshot is empty.
     pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        access::env::require_root()?;
+        EnvOps::require_root()?;
 
         if state_snapshot_is_empty(snapshot) {
             log!(
@@ -100,7 +101,7 @@ impl StateCascadeWorkflow {
     /// - apply it locally
     /// - forward it to direct children using the children cache
     pub async fn nonroot_cascade_state(view: StateSnapshotInput) -> Result<(), InternalError> {
-        access::env::deny_root()?;
+        EnvOps::deny_root()?;
 
         let snapshot = StateSnapshotAdapter::from_input(view);
 
@@ -157,7 +158,7 @@ impl StateCascadeWorkflow {
     ///
     /// Valid only on non-root canisters.
     fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        access::env::deny_root()?;
+        EnvOps::deny_root()?;
 
         if let Some(app) = snapshot.app_state {
             AppStateOps::import_input(app);

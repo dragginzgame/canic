@@ -42,10 +42,9 @@ pub fn is_parent(caller: Principal) -> AccessRuleResult {
 /// Require that the caller equals the configured root canister.
 /// Gate root-only operations (e.g., topology mutations).
 #[must_use]
-pub fn is_root(caller: Principal) -> AccessRuleResult {
+pub fn caller_is_root(caller: Principal) -> AccessRuleResult {
     Box::pin(async move {
-        let snapshot = EnvOps::snapshot();
-        let root_pid = snapshot.root_pid.ok_or_else(|| {
+        let root_pid = EnvOps::root_pid().map_err(|_| {
             AccessRuleError::DependencyUnavailable("root pid unavailable".to_string())
         })?;
 

@@ -11,13 +11,13 @@ pub mod adapter;
 
 use crate::{
     InternalError,
-    access::env,
     dto::{
         cascade::StateSnapshotInput,
         state::{AppStateInput, SubnetStateInput},
         topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     },
     ops::{
+        runtime::env::EnvOps,
         storage::{
             registry::subnet::SubnetRegistryOps,
             state::{app::AppStateOps, subnet::SubnetStateOps},
@@ -55,7 +55,7 @@ pub struct StateSnapshotBuilder {
 
 impl StateSnapshotBuilder {
     pub fn new() -> Result<Self, InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         Ok(Self {
             snapshot: StateSnapshot::default(),
@@ -146,11 +146,8 @@ pub struct TopologySnapshotBuilder {
 
 impl TopologySnapshotBuilder {
     pub(crate) fn for_target(target_pid: Principal) -> Result<Self, InternalError> {
-        let registry_data = SubnetRegistryOps::data();
-
         // Build parent chain (root → target)
-        let parents: Vec<TopologyPathNode> = registry_data
-            .parent_chain(target_pid)?
+        let parents: Vec<TopologyPathNode> = SubnetRegistryOps::parent_chain(target_pid)?
             .into_iter()
             .map(|(pid, record)| TopologyPathNode {
                 pid,
@@ -160,26 +157,22 @@ impl TopologySnapshotBuilder {
             .collect();
 
         // Build direct-children map for each parent in the chain
-        let mut children_map: HashMap<Principal, Vec<TopologyDirectChild>> = HashMap::new();
+        let parent_pids: Vec<Principal> = parents.iter().map(|parent| parent.pid).collect();
+        let raw_children = SubnetRegistryOps::direct_children_map(&parent_pids);
 
-        for parent in &parents {
-            let children: Vec<TopologyDirectChild> = registry_data
-                .entries
-                .iter()
-                .filter_map(|(pid, record)| {
-                    if record.parent_pid == Some(parent.pid) {
-                        Some(TopologyDirectChild {
-                            pid: *pid,
-                            role: record.role.clone(),
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            children_map.insert(parent.pid, children);
-        }
+        let children_map: HashMap<Principal, Vec<TopologyDirectChild>> = raw_children
+            .into_iter()
+            .map(|(parent_pid, children)| {
+                let mapped = children
+                    .into_iter()
+                    .map(|(pid, record)| TopologyDirectChild {
+                        pid,
+                        role: record.role,
+                    })
+                    .collect();
+                (parent_pid, mapped)
+            })
+            .collect();
 
         Ok(Self {
             snapshot: TopologySnapshot {

@@ -1,6 +1,13 @@
 # Changelog
 
-## [Unreleased]
+All notable, and occasionally less notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](http://keepachangelog.com/)
+and this project adheres to [Semantic Versioning](http://semver.org/).
+
+---
+
+## [0.9.2] - Consolidation and Consistency Audits
 
 ### Added
 - Layering guard checks in CI to prevent workflow record usage, public record re-exports, and misuse of "view" naming.
@@ -12,16 +19,16 @@
 - Reduced storage record exposure by removing public re-exports and routing record access through storage modules.
 - Pushed record-to-DTO shaping into ops helpers across env/state/directory/auth/scaling workflows.
 - Moved `IntentResourceKey` to ids to keep workflow free of storage schema types.
+- Split delegation flow tests so issuance runs only under certified runtime conditions.
 
-All notable, and occasionally less notable changes to this project will be documented in this file.
+### Broked
+- 🚨 Auth is currently broken pending redesign.
 
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
-and this project adheres to [Semantic Versioning](http://semver.org/).
-
+---
 
 ## [0.9.0] – 2026-01-19 - Delegation's What You Need
 
-This release introduces **delegated signing with certified verification**, completes the **root → shard trust model**, and formalizes how Canic handles **certified vs. uncertified runtimes** (PocketIC vs replica).
+This release introduces **delegated signing with local verification**, completes the **root → shard trust model**, and clarifies certified-data requirements for issuance (PocketIC vs replica).
 
 ---
 
@@ -42,23 +49,18 @@ This unlocks scalable, local verification of delegated authority with no runtime
 
 ---
 
-### 🧪 Certified Queries & PocketIC Support
+### 🧪 Delegation Verification
 
-* Delegation and token verification split into:
-
-  * **Structural verification** (always testable)
-  * **Cryptographic verification** (requires certified queries)
-* Added an **uncertified-testing mode** for PocketIC:
-
-  * Enabled via `CANIC_UNCERTIFIED_TESTING=1`
-  * Structural verification succeeds
-  * Cryptographic verification fails with an explicit *“certified query required”* error
-* Certified-data access is now centralized in signature infra with explicit availability checks.
-* Delegation flow tests emit detailed signature debug output when certified validation fails.
-* Test canister exposes endpoints for delegation structure and signature verification.
+* Delegation and token verification are local-only and validate against the
+  stored proof.
+* Verification does not require certified data or a query context.
+* Issuance still depends on data certificates when retrieving canister
+  signatures.
+* Test-only partial verification endpoints were removed.
 
 **Why this matters:**
-The system now preserves *real IC security semantics* while remaining testable under PocketIC’s limitations.
+Verification is deterministic and testable without query-time assumptions,
+while issuance remains explicit about its certified-data dependency.
 
 ---
 

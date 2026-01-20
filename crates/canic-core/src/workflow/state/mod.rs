@@ -2,9 +2,8 @@ pub mod query;
 
 use crate::{
     InternalError,
-    access::env,
     dto::state::AppCommand,
-    ops::storage::state::app::AppStateOps,
+    ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
     workflow::cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
 };
 
@@ -28,7 +27,7 @@ impl AppStateWorkflow {
     /// Returns internal [`InternalError`]. Public error mapping is handled
     /// exclusively at the API boundary.
     pub async fn execute_command(cmd: AppCommand) -> Result<(), InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
         AppStateOps::apply_command(cmd)?;
 
         let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();

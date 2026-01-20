@@ -108,6 +108,10 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
     env(self_is_prime_subnet)
 )]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     RpcApi::create_canister_request::<()>(
         &canister::BLANK,
         CreateCanisterParent::ThisCanister,
@@ -120,6 +124,10 @@ async fn create_blank() -> Result<CreateCanisterResponse, Error> {
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
 #[canic_update(guard(app_is_live), auth(caller_is_controller))]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     Ok(stress_perf_compute(rounds))
 }
 

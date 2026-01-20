@@ -42,6 +42,10 @@ async fn canic_upgrade() {}
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn create_auth_shard(tenant: Principal) -> Result<Principal, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     ShardingApi::assign_to_pool(POOL_NAME, tenant.to_string()).await
 }
 
@@ -51,6 +55,10 @@ async fn create_auth_shard(tenant: Principal) -> Result<Principal, Error> {
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_query]
 async fn plan_create_auth_shard(tenant: Principal) -> Result<String, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, tenant.to_string())?;
     Ok(format!("{plan:?}"))
 }
@@ -66,6 +74,10 @@ async fn provision_auth_shard(
     scopes: Vec<String>,
     ttl_secs: u64,
 ) -> Result<(Principal, DelegationCert), Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     if ttl_secs == 0 {
         return Err(Error::invalid("ttl_secs must be greater than zero"));
     }
@@ -99,6 +111,10 @@ async fn provision_auth_shard(
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Result<(), Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     if proof.cert.signer_pid != shard_pid {
         return Err(Error::invalid("proof signer does not match shard"));
     }
@@ -107,8 +123,7 @@ async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Re
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_structure(&proof, Some(shard_pid))?;
-    DelegatedTokenApi::verify_delegation_signature(&proof, root_pid)?;
+    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
     install_proof(shard_pid, proof).await
 }
 

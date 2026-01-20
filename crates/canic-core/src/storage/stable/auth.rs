@@ -22,15 +22,6 @@ pub struct DelegationState;
 
 impl DelegationState {
     #[must_use]
-    pub(crate) fn export() -> DelegationStateRecord {
-        DELEGATION_STATE.with_borrow(|cell| cell.get().clone())
-    }
-
-    pub(crate) fn import(data: DelegationStateRecord) {
-        DELEGATION_STATE.with_borrow_mut(|cell| cell.set(data));
-    }
-
-    #[must_use]
     pub(crate) fn get_proof() -> Option<DelegationProofRecord> {
         DELEGATION_STATE.with_borrow(|cell| cell.get().proof.clone())
     }
@@ -39,14 +30,6 @@ impl DelegationState {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.proof = Some(proof);
-            cell.set(data);
-        });
-    }
-
-    pub(crate) fn clear_proof() {
-        DELEGATION_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            data.proof = None;
             cell.set(data);
         });
     }

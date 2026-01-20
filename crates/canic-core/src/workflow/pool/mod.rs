@@ -6,7 +6,6 @@ pub mod scheduler;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    access::env,
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
     ids::IntentResourceKey,
@@ -15,6 +14,7 @@ use crate::{
             IcOps, TC,
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
+        runtime::env::EnvOps,
         storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
@@ -88,7 +88,7 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     fn require_pool_admin() -> Result<(), InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         Ok(())
     }

@@ -38,12 +38,6 @@ impl IntentCleanupWorkflow {
         );
     }
 
-    /// Stop periodic cleanup sweeps.
-    #[expect(dead_code)]
-    pub fn stop() {
-        let _ = TimerWorkflow::clear_guarded(&INTENT_CLEANUP_TIMER);
-    }
-
     /// Run a cleanup sweep immediately.
     #[must_use]
     pub fn cleanup() -> bool {

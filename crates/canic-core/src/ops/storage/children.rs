@@ -55,11 +55,7 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn pids() -> Vec<Principal> {
-        Self::data()
-            .entries
-            .into_iter()
-            .map(|(pid, _)| pid)
-            .collect()
+        Self::records().into_iter().map(|(pid, _)| pid).collect()
     }
 
     // -------------------------------------------------------------
@@ -69,11 +65,6 @@ impl CanisterChildrenOps {
     #[must_use]
     pub fn data() -> CanisterChildrenRecord {
         CanisterChildren::export()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn import(data: CanisterChildrenRecord) {
-        CanisterChildren::import(data);
     }
 
     pub(crate) fn import_direct_children(

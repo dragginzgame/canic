@@ -50,12 +50,6 @@ impl CycleTrackerWorkflow {
         );
     }
 
-    /// Stop recurring cycle tracking.
-    #[expect(dead_code)]
-    pub fn stop() {
-        let _ = TimerWorkflow::clear_guarded(&TIMER);
-    }
-
     pub fn track() {
         let ts = IcOps::now_secs();
         let cycles = MgmtOps::canister_cycle_balance();

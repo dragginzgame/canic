@@ -39,6 +39,10 @@ async fn canic_upgrade() {}
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update(auth(caller_is_registered_to_subnet))]
 async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     let self_pid = canister_self();
     if proof.cert.signer_pid != self_pid {
         return Err(Error::forbidden(
@@ -46,13 +50,11 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
         ));
     }
 
-    DelegatedTokenApi::verify_delegation_structure(&proof, Some(self_pid))?;
-
     let root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_signature(&proof, root_pid)?;
+    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
     DelegationApi::store_proof(proof)
 }
 
@@ -62,6 +64,10 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn auth_shard_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     let proof = DelegationApi::require_proof()?;
     DelegatedTokenApi::sign_token(TOKEN_VERSION, claims, proof)
 }
