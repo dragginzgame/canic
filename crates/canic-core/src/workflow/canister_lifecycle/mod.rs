@@ -8,7 +8,7 @@ use crate::{
     },
     ops::{
         ic::mgmt::MgmtOps, runtime::wasm::WasmOps, storage::registry::subnet::SubnetRegistryOps,
-        topology::policy::RegistryPolicyInputMapper,
+        topology::policy::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,

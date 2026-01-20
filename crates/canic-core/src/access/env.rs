@@ -12,17 +12,17 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum EnvAccessError {
+    #[error("operation cannot be called from the root canister")]
+    IsRoot,
+
+    #[error("operation must be called from the root canister")]
+    NotRoot,
+
     #[error("this endpoint is only available on the prime subnet")]
     NotPrimeSubnet,
 
     #[error("this endpoint is only available on prime root")]
     NotPrimeRoot,
-
-    #[error("operation must be called from the root canister")]
-    NotRoot,
-
-    #[error("operation cannot be called from the root canister")]
-    IsRoot,
 }
 
 ///

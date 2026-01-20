@@ -26,11 +26,10 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             candid::CandidType,
-            types::{Account, Principal},
+            types::{Account, Cycles, Principal},
         },
         ids::CanisterRole,
         log,
         log::Topic,
-        ops::ic::Cycles,
     };
 }

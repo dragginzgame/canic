@@ -1,4 +1,4 @@
-use crate::ops::ic::network::{BuildNetwork, NetworkOps};
+use crate::{ids::BuildNetwork, ops::ic::network::NetworkOps};
 
 ///
 /// NetworkWorkflow

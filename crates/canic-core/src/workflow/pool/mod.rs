@@ -6,12 +6,13 @@ pub mod scheduler;
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    cdk::types::TC,
     domain::policy::pool::PoolPolicyError,
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
     ids::IntentResourceKey,
     ops::{
         ic::{
-            IcOps, TC,
+            IcOps,
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
         runtime::env::EnvOps,

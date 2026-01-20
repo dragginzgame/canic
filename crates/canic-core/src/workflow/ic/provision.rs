@@ -13,7 +13,6 @@ use crate::{
     config::Config,
     domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
-    ops::topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     ops::{
         config::ConfigOps,
         ic::{
@@ -25,7 +24,10 @@ use crate::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
-        topology::policy::RegistryPolicyInputMapper,
+        topology::{
+            directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
+            policy::mapper::RegistryPolicyInputMapper,
+        },
     },
     workflow::{cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*},
 };

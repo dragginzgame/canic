@@ -8,12 +8,10 @@ use crate::{
     InternalError,
     config::schema::SubnetConfig,
     dto::validation::{ValidationIssue, ValidationReport},
+    ids::BuildNetwork,
     ops::{
         config::ConfigOps,
-        ic::{
-            IcOps,
-            network::{BuildNetwork, NetworkOps},
-        },
+        ic::{IcOps, network::NetworkOps},
         runtime::env::EnvOps,
         runtime::wasm::WasmOps,
         storage::{
