@@ -13,7 +13,7 @@
 
 use crate::{
     cdk::{
-        api::{certified_data_set, data_certificate, in_replicated_execution},
+        api::{certified_data_set, in_replicated_execution},
         certified_map::HashTree,
         types::Principal,
     },
@@ -210,13 +210,6 @@ impl SignatureInfra {
 
             certified_data_set(tree.reconstruct());
         });
-    }
-
-    /// Return the data certificate for the current query context, if available.
-    #[must_use]
-    #[allow(dead_code)]
-    pub fn certified_data_or_none() -> Option<Vec<u8>> {
-        data_certificate()
     }
 }
 

@@ -6,7 +6,10 @@ use crate::{
         error::Error,
     },
     error::InternalErrorClass,
-    ops::{config::ConfigOps, ic::IcOps, storage::auth::DelegationStateOps},
+    ops::{
+        auth::DelegatedTokenOps, config::ConfigOps, ic::IcOps, runtime::env::EnvOps,
+        storage::auth::DelegationStateOps,
+    },
     workflow::auth::DelegationWorkflow,
 };
 use std::{sync::Arc, time::Duration};
@@ -21,10 +24,6 @@ pub struct DelegationApi;
 
 impl DelegationApi {
     fn map_delegation_error(err: crate::InternalError) -> Error {
-        if err.to_string().contains("certified query required") {
-            return Error::invalid("certified query required");
-        }
-
         match err.class() {
             InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
                 Error::internal(err.to_string())
@@ -49,7 +48,7 @@ impl DelegationApi {
             return Err(Error::forbidden("delegation disabled"));
         }
 
-        // Query-only step; requires a certified query context.
+        // Query-only step; requires a data certificate in the query context.
         DelegationWorkflow::get_delegation(cert).map_err(Self::map_delegation_error)
     }
 
@@ -67,6 +66,17 @@ impl DelegationApi {
         if !cfg.enabled {
             return Err(Error::forbidden("delegation disabled"));
         }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "delegation proof store requires root caller",
+            ));
+        }
+
+        DelegatedTokenOps::verify_delegation_proof(&proof, root_pid)
+            .map_err(Self::map_delegation_error)?;
 
         DelegationStateOps::set_proof_from_dto(proof);
         Ok(())
@@ -113,7 +123,7 @@ impl DelegationAdminApi {
     }
 
     pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
-        AuthAccessApi::is_root(IcOps::msg_caller()).await?;
+        AuthAccessApi::caller_is_root(IcOps::msg_caller()).await?;
 
         let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
         if !cfg.enabled {
@@ -149,7 +159,7 @@ impl DelegationAdminApi {
     }
 
     pub async fn stop_rotation() -> Result<bool, Error> {
-        AuthAccessApi::is_root(IcOps::msg_caller()).await?;
+        AuthAccessApi::caller_is_root(IcOps::msg_caller()).await?;
         Ok(DelegationWorkflow::stop_rotation())
     }
 }

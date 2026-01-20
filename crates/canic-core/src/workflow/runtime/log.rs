@@ -43,12 +43,6 @@ impl LogRetentionWorkflow {
         );
     }
 
-    /// Stop periodic retention sweeps.
-    #[expect(dead_code)]
-    pub fn stop() {
-        let _ = TimerWorkflow::clear_guarded(&RETENTION_TIMER);
-    }
-
     /// Run a retention sweep immediately.
     #[must_use]
     pub fn retain() -> bool {

@@ -108,8 +108,8 @@ impl AuthAccessApi {
             .map_err(Error::from)
     }
 
-    pub async fn is_root(caller: Principal) -> Result<(), Error> {
-        access::topology::is_root(caller)
+    pub async fn caller_is_root(caller: Principal) -> Result<(), Error> {
+        access::topology::caller_is_root(caller)
             .await
             .map_err(InternalError::from)
             .map_err(Error::from)

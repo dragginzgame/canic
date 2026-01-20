@@ -161,6 +161,22 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
     }
 
+    pub(crate) fn parent_chain(
+        target: Principal,
+    ) -> Result<Vec<(Principal, CanisterRecord)>, InternalError> {
+        SubnetRegistry::export().parent_chain(target)
+    }
+
+    #[must_use]
+    pub(crate) fn direct_children_map(
+        parents: &[Principal],
+    ) -> HashMap<Principal, Vec<(Principal, CanisterRecord)>> {
+        parents
+            .iter()
+            .map(|pid| (*pid, Self::children(*pid)))
+            .collect()
+    }
+
     // -------------------------------------------------------------
     // Canonical data access
     // -------------------------------------------------------------

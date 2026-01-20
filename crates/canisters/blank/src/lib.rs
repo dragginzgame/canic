@@ -30,6 +30,10 @@ async fn canic_upgrade() {}
 /// no authentication needed as its for local canic testing
 #[canic_update]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     RpcApi::create_canister_request::<()>(&BLANK, CreateCanisterParent::ThisCanister, None::<()>)
         .await
 }

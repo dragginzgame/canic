@@ -331,7 +331,7 @@ fn auth_call(sym: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
             quote!(::canic::api::access::AuthAccessApi::is_child(#caller))
         }
         AuthSymbol::CallerIsRoot => {
-            quote!(::canic::api::access::AuthAccessApi::is_root(#caller))
+            quote!(::canic::api::access::AuthAccessApi::caller_is_root(#caller))
         }
         AuthSymbol::CallerIsSameCanister => {
             quote!(::canic::api::access::AuthAccessApi::is_same_canister(#caller))

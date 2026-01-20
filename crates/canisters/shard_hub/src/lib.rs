@@ -30,6 +30,10 @@ async fn canic_upgrade() {}
 // don't need authentication as this is a local canic test
 #[canic_update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     let shard_pid = ShardingApi::assign_to_pool(POOL_NAME, pid.to_string()).await?;
 
     Ok(shard_pid)
@@ -38,6 +42,10 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 /// Dry-run the player registration decision using config-driven policy.
 #[canic_query]
 async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
     Ok(format!("{plan:?}"))

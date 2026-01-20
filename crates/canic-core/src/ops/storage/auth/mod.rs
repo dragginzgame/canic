@@ -2,7 +2,7 @@ pub mod mapper;
 
 use crate::{
     dto::auth::DelegationProof,
-    storage::stable::auth::{DelegationProofRecord, DelegationState, DelegationStateRecord},
+    storage::stable::auth::{DelegationProofRecord, DelegationState},
 };
 use mapper::DelegationProofRecordMapper;
 
@@ -30,31 +30,6 @@ use mapper::DelegationProofRecordMapper;
 pub struct DelegationStateOps;
 
 impl DelegationStateOps {
-    /// Export the full delegation state.
-    ///
-    /// Intended usage:
-    /// - Stable memory migration
-    /// - Snapshotting for upgrades
-    ///
-    /// MUST NOT be used during request handling or verification.
-    #[must_use]
-    #[expect(dead_code)]
-    pub fn data() -> DelegationStateRecord {
-        DelegationState::export()
-    }
-
-    /// Import a previously exported delegation state.
-    ///
-    /// Intended usage:
-    /// - Post-upgrade restoration
-    /// - Controlled administrative recovery
-    ///
-    /// Callers MUST ensure the imported data has already been validated.
-    #[expect(dead_code)]
-    pub fn import(data: DelegationStateRecord) {
-        DelegationState::import(data);
-    }
-
     /// Get the currently active delegation proof.
     ///
     /// Semantics:
@@ -89,17 +64,5 @@ impl DelegationStateOps {
     /// Set the active delegation proof from a DTO.
     pub fn set_proof_from_dto(proof: DelegationProof) {
         Self::set_proof(DelegationProofRecordMapper::dto_to_record(proof));
-    }
-
-    /// Clear the active delegation proof.
-    ///
-    /// Intended usage:
-    /// - Emergency revocation
-    /// - Controlled teardown during tests
-    ///
-    /// After this call, all delegated token verification MUST fail.
-    #[allow(dead_code)]
-    pub fn clear_proof() {
-        DelegationState::clear_proof();
     }
 }

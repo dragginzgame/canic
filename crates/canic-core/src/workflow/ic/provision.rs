@@ -10,7 +10,6 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    access::env,
     config::Config,
     domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
@@ -171,7 +170,7 @@ impl ProvisionWorkflow {
     /// 3. Cascade topology
     /// 4. Sync directories
     pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         // Phase 0: uninstall code
         MgmtOps::uninstall_code(pid).await?;

@@ -5,9 +5,12 @@
 //! Enforces cascade invariants and delegates transport to `CascadeOps`.
 
 use crate::{
-    InternalError, InternalErrorOrigin, access,
+    InternalError, InternalErrorOrigin,
     dto::cascade::TopologySnapshotInput,
-    ops::{cascade::CascadeOps, ic::IcOps, storage::children::CanisterChildrenOps},
+    ops::{
+        cascade::CascadeOps, ic::IcOps, runtime::env::EnvOps,
+        storage::children::CanisterChildrenOps,
+    },
     workflow::{
         cascade::{
             snapshot::{
@@ -32,7 +35,7 @@ impl TopologyCascadeWorkflow {
 
     /// Initiates a topology cascade from the root canister toward `target_pid`.
     pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), InternalError> {
-        access::env::require_root()?;
+        EnvOps::require_root()?;
 
         let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
 
@@ -56,7 +59,7 @@ impl TopologyCascadeWorkflow {
     pub async fn nonroot_cascade_topology(
         view: TopologySnapshotInput,
     ) -> Result<(), InternalError> {
-        access::env::deny_root()?;
+        EnvOps::deny_root()?;
 
         let snapshot = TopologySnapshotAdapter::from_input(view);
 

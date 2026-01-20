@@ -1,6 +1,6 @@
 use crate::{
     access::{AccessError, AccessRuleError, AccessRuleResult},
-    cdk::{api::canister_self, api::is_controller as caller_is_controller, types::Principal},
+    cdk::{api::is_controller as caller_is_controller, types::Principal},
     config::Config,
     ops::runtime::env::EnvOps,
 };
@@ -23,9 +23,6 @@ pub enum EnvAccessError {
 
     #[error("operation cannot be called from the root canister")]
     IsRoot,
-
-    #[error("access dependency unavailable: {0}")]
-    DependencyUnavailable(String),
 }
 
 ///
@@ -33,11 +30,8 @@ pub enum EnvAccessError {
 ///
 
 #[allow(clippy::unused_async)]
-pub async fn is_root() -> Result<(), AccessError> {
-    let root_pid = EnvOps::root_pid()
-        .map_err(|_| EnvAccessError::DependencyUnavailable("root pid unavailable".to_string()))?;
-
-    if root_pid == canister_self() {
+pub async fn self_is_root() -> Result<(), AccessError> {
+    if EnvOps::is_root() {
         Ok(())
     } else {
         Err(EnvAccessError::NotRoot.into())
@@ -45,11 +39,8 @@ pub async fn is_root() -> Result<(), AccessError> {
 }
 
 #[allow(clippy::unused_async)]
-pub async fn is_not_root() -> Result<(), AccessError> {
-    let root_pid = EnvOps::root_pid()
-        .map_err(|_| EnvAccessError::DependencyUnavailable("root pid unavailable".to_string()))?;
-
-    if root_pid == canister_self() {
+pub async fn self_is_not_root() -> Result<(), AccessError> {
+    if EnvOps::is_root() {
         Err(EnvAccessError::IsRoot.into())
     } else {
         Ok(())
@@ -71,32 +62,6 @@ pub async fn is_prime_subnet() -> Result<(), AccessError> {
         Ok(())
     } else {
         Err(EnvAccessError::NotPrimeSubnet.into())
-    }
-}
-
-/// Ensure the caller is the root canister.
-pub(crate) fn require_root() -> Result<(), AccessError> {
-    let root_pid = EnvOps::snapshot()
-        .root_pid
-        .ok_or_else(|| EnvAccessError::DependencyUnavailable("root pid unavailable".to_string()))?;
-
-    if root_pid == canister_self() {
-        Ok(())
-    } else {
-        Err(EnvAccessError::NotRoot.into())
-    }
-}
-
-/// Ensure the caller is not the root canister.
-pub(crate) fn deny_root() -> Result<(), AccessError> {
-    let root_pid = EnvOps::snapshot()
-        .root_pid
-        .ok_or_else(|| EnvAccessError::DependencyUnavailable("root pid unavailable".to_string()))?;
-
-    if root_pid == canister_self() {
-        Err(EnvAccessError::IsRoot.into())
-    } else {
-        Ok(())
     }
 }
 

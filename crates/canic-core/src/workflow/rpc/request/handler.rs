@@ -1,12 +1,12 @@
 use crate::{
     InternalError,
-    access::env,
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Request, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
     ops::{
         ic::{IcOps, mgmt::MgmtOps},
+        runtime::env::EnvOps,
         storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
@@ -25,7 +25,7 @@ pub struct RootResponseWorkflow;
 impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request and produce a [`Response`].
     pub async fn response(req: Request) -> Result<Response, InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         match req {
             Request::CreateCanister(req) => Self::create_canister_response(&req).await,
@@ -38,7 +38,7 @@ impl RootResponseWorkflow {
     async fn create_canister_response(
         req: &CreateCanisterRequest,
     ) -> Result<Response, InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         let caller = IcOps::msg_caller();
         let role = req.canister_role.clone();
@@ -90,7 +90,7 @@ impl RootResponseWorkflow {
     async fn upgrade_canister_response(
         req: &UpgradeCanisterRequest,
     ) -> Result<Response, InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         let caller = IcOps::msg_caller();
         let registry_entry = SubnetRegistryOps::get(req.canister_pid)
@@ -111,7 +111,7 @@ impl RootResponseWorkflow {
 
     // cycles_response
     async fn cycles_response(req: &CyclesRequest) -> Result<Response, InternalError> {
-        env::require_root()?;
+        EnvOps::require_root()?;
 
         MgmtOps::deposit_cycles(IcOps::msg_caller(), req.cycles).await?;
 

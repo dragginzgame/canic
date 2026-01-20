@@ -34,6 +34,12 @@ pub enum EnvOpsError {
 
     #[error("failed to determine current subnet role")]
     SubnetRoleUnavailable,
+
+    #[error("operation must be called from the root canister")]
+    NotRoot,
+
+    #[error("operation cannot be called from the root canister")]
+    IsRoot,
 }
 
 impl From<EnvOpsError> for InternalError {
@@ -79,10 +85,24 @@ impl EnvOps {
         Env::get_root_pid().is_some_and(|pid| pid == canister_self())
     }
 
-    /// Returns true when the build is configured for uncertified-runtime testing.
-    #[must_use]
-    pub const fn is_uncertified_runtime() -> bool {
-        cfg!(feature = "uncertified-testing")
+    pub fn require_root() -> Result<(), InternalError> {
+        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+
+        if root_pid == canister_self() {
+            Ok(())
+        } else {
+            Err(EnvOpsError::NotRoot.into())
+        }
+    }
+
+    pub fn deny_root() -> Result<(), InternalError> {
+        let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
+
+        if root_pid == canister_self() {
+            Err(EnvOpsError::IsRoot.into())
+        } else {
+            Ok(())
+        }
     }
 
     // ---------------------------------------------------------------------

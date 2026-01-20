@@ -1,7 +1,10 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
-    ops::{ic::signature::SignatureOps, prelude::*, runtime::env::EnvOps},
+    ops::{
+        config::ConfigOps, ic::signature::SignatureOps, prelude::*,
+        storage::auth::DelegationStateOps,
+    },
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -68,8 +71,20 @@ pub enum DelegatedTokenOpsError {
     #[error("token expires after delegation (exp {token_exp} > cert {cert_exp})")]
     TokenOutlivesDelegation { token_exp: u64, cert_exp: u64 },
 
-    #[error("certified query required")]
-    UncertifiedRuntime,
+    #[error("delegation disabled")]
+    DelegationDisabled,
+
+    #[error("delegation proof unavailable")]
+    ProofUnavailable,
+
+    #[error("delegation proof does not match current proof")]
+    ProofMismatch,
+
+    #[error("delegated token expiry precedes issued_at")]
+    TokenExpiryBeforeIssued,
+
+    #[error("delegated token ttl exceeds max {max_ttl_secs}s (ttl {ttl_secs}s)")]
+    TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
 }
 
 impl From<DelegatedTokenOpsError> for InternalError {
@@ -106,8 +121,7 @@ impl DelegatedTokenOps {
 
     /// Retrieve a prepared delegation proof (query-only).
     ///
-    /// Requires a certified query context; will fail under PocketIC or
-    /// uncertified query engines.
+    /// Requires a data certificate in the current query context.
     pub fn get_delegation_proof(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::get(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)
@@ -121,8 +135,7 @@ impl DelegatedTokenOps {
 
     /// Sign a delegation cert in one step.
     ///
-    /// Requires a certified query context; will fail under PocketIC or
-    /// uncertified query engines.
+    /// Returns an error when no data certificate is available for the signature.
     pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::sign(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?
@@ -137,7 +150,7 @@ impl DelegatedTokenOps {
     /// Structural verification for a delegation proof.
     ///
     /// This phase is always testable and does not require certified data.
-    pub fn verify_delegation_structure(
+    fn verify_delegation_structure(
         proof: &DelegationProof,
         expected_signer: Option<Principal>,
     ) -> Result<(), InternalError> {
@@ -164,9 +177,9 @@ impl DelegatedTokenOps {
 
     /// Cryptographic verification for a delegation proof.
     ///
-    /// Requires a certified query context; will fail under PocketIC or
-    /// uncertified query engines.
-    pub fn verify_delegation_signature(
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    fn verify_delegation_signature(
         proof: &DelegationProof,
         authority_pid: Principal,
     ) -> Result<(), InternalError> {
@@ -189,8 +202,8 @@ impl DelegatedTokenOps {
 
     /// Full delegation proof verification (structure + signature).
     ///
-    /// Signature verification requires a certified query context and will fail
-    /// under PocketIC or uncertified query engines.
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
     pub fn verify_delegation_proof(
         proof: &DelegationProof,
         authority_pid: Principal,
@@ -231,14 +244,26 @@ impl DelegatedTokenOps {
 
     /// Full delegated token verification (structure + signature).
     ///
-    /// Signature verification requires a certified query context and will fail
-    /// under PocketIC or uncertified query engines.
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    // Invariant: All delegated token validation (time, proof binding, config)
+    // must flow through this method. No other layer may revalidate.
     pub fn verify_token(
         token: &DelegatedToken,
         authority_pid: Principal,
         now_secs: u64,
     ) -> Result<VerifiedDelegatedToken, InternalError> {
+        let cfg = ConfigOps::delegation_config()?;
+        if !cfg.enabled {
+            return Err(DelegatedTokenOpsError::DelegationDisabled.into());
+        }
+
         Self::verify_token_structure(token, now_secs)?;
+        if let Some(max_ttl_secs) = cfg.max_ttl_secs {
+            verify_max_ttl(token, max_ttl_secs)?;
+        }
+
+        verify_current_proof(&token.proof)?;
         Self::verify_token_signature(token, authority_pid)?;
 
         Ok(VerifiedDelegatedToken {
@@ -250,10 +275,7 @@ impl DelegatedTokenOps {
     /// Structural verification for a delegated token.
     ///
     /// This phase is always testable and does not require certified data.
-    pub fn verify_token_structure(
-        token: &DelegatedToken,
-        now_secs: u64,
-    ) -> Result<(), InternalError> {
+    fn verify_token_structure(token: &DelegatedToken, now_secs: u64) -> Result<(), InternalError> {
         Self::verify_delegation_structure(&token.proof, None)?;
         verify_time_bounds(&token.claims, &token.proof.cert, now_secs)?;
         validate_claims_against_cert(&token.claims, &token.proof.cert)?;
@@ -263,9 +285,9 @@ impl DelegatedTokenOps {
 
     /// Cryptographic verification for a delegated token.
     ///
-    /// Requires a certified query context; will fail under PocketIC or
-    /// uncertified query engines.
-    pub fn verify_token_signature(
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    fn verify_token_signature(
         token: &DelegatedToken,
         authority_pid: Principal,
     ) -> Result<(), InternalError> {
@@ -333,10 +355,6 @@ enum SignatureKind {
 }
 
 fn map_signature_error(err: InternalError, kind: SignatureKind) -> InternalError {
-    if EnvOps::is_uncertified_runtime() && is_certified_query_error(&err) {
-        return DelegatedTokenOpsError::UncertifiedRuntime.into();
-    }
-
     match kind {
         SignatureKind::Delegation => {
             DelegatedTokenOpsError::CertSignatureInvalid(err.to_string()).into()
@@ -345,11 +363,6 @@ fn map_signature_error(err: InternalError, kind: SignatureKind) -> InternalError
             DelegatedTokenOpsError::TokenSignatureInvalid(err.to_string()).into()
         }
     }
-}
-
-fn is_certified_query_error(err: &InternalError) -> bool {
-    let message = err.to_string();
-    message.contains("certified_data")
 }
 
 fn verify_token_sig(token: &DelegatedToken) -> Result<(), InternalError> {
@@ -375,6 +388,10 @@ fn verify_time_bounds(
     cert: &DelegationCert,
     now_secs: u64,
 ) -> Result<(), InternalError> {
+    if claims.exp < claims.iat {
+        return Err(DelegatedTokenOpsError::TokenExpiryBeforeIssued.into());
+    }
+
     if now_secs < claims.iat {
         return Err(DelegatedTokenOpsError::TokenNotYetValid { iat: claims.iat }.into());
     }
@@ -402,6 +419,43 @@ fn verify_time_bounds(
         return Err(DelegatedTokenOpsError::TokenOutlivesDelegation {
             token_exp: claims.exp,
             cert_exp: cert.expires_at,
+        }
+        .into());
+    }
+
+    Ok(())
+}
+
+fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
+    let stored =
+        DelegationStateOps::proof_dto().ok_or_else(|| DelegatedTokenOpsError::ProofUnavailable)?;
+
+    if proofs_equal(proof, &stored) {
+        Ok(())
+    } else {
+        Err(DelegatedTokenOpsError::ProofMismatch.into())
+    }
+}
+
+fn proofs_equal(a: &DelegationProof, b: &DelegationProof) -> bool {
+    let a_cert = &a.cert;
+    let b_cert = &b.cert;
+
+    a_cert.v == b_cert.v
+        && a_cert.signer_pid == b_cert.signer_pid
+        && a_cert.audiences == b_cert.audiences
+        && a_cert.scopes == b_cert.scopes
+        && a_cert.issued_at == b_cert.issued_at
+        && a_cert.expires_at == b_cert.expires_at
+        && a.cert_sig == b.cert_sig
+}
+
+fn verify_max_ttl(token: &DelegatedToken, max_ttl_secs: u64) -> Result<(), InternalError> {
+    let ttl_secs = token.claims.exp - token.claims.iat;
+    if ttl_secs > max_ttl_secs {
+        return Err(DelegatedTokenOpsError::TokenTtlExceeded {
+            ttl_secs,
+            max_ttl_secs,
         }
         .into());
     }
