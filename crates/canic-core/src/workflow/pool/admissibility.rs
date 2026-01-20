@@ -1,10 +1,8 @@
 use crate::{
     domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
+    ids::BuildNetwork,
     ops::{
-        ic::{
-            mgmt::MgmtOps,
-            network::{BuildNetwork, NetworkOps},
-        },
+        ic::{mgmt::MgmtOps, network::NetworkOps},
         storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::prelude::*,

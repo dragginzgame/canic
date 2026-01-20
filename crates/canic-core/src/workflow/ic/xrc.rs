@@ -2,7 +2,8 @@
 
 use crate::{
     InternalError,
-    ops::ic::xrc::{ExchangeRate, GetExchangeRateRequest, XrcOps},
+    cdk::spec::standards::xrc::{ExchangeRate, GetExchangeRateRequest},
+    ops::ic::xrc::XrcOps,
 };
 
 ///

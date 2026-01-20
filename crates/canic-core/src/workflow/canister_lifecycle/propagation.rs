@@ -5,7 +5,7 @@ use crate::{
         directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
         registry::subnet::SubnetRegistryOps,
     },
-    ops::topology::policy::RegistryPolicyInputMapper,
+    ops::topology::policy::mapper::RegistryPolicyInputMapper,
     workflow::{
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
         ic::provision::ProvisionWorkflow,

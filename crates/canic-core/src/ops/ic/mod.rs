@@ -28,15 +28,12 @@
 
 pub mod call;
 pub mod http;
-pub mod icrc;
 pub mod ledger;
 pub mod mgmt;
 pub mod network;
 pub mod nns;
 pub mod signature;
 pub mod xrc;
-
-pub use cdk::types::{Cycles, TC};
 
 use crate::{
     InternalError,
@@ -102,12 +99,14 @@ impl IcOps {
 
     /// Return the current UNIX epoch time in milliseconds.
     #[must_use]
+    #[expect(dead_code)]
     pub fn now_millis() -> u64 {
         cdk::utils::time::now_millis()
     }
 
     /// Return the current UNIX epoch time in microseconds.
     #[must_use]
+    #[expect(dead_code)]
     pub fn now_micros() -> u64 {
         cdk::utils::time::now_micros()
     }
