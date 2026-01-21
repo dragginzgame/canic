@@ -2,10 +2,13 @@ use crate::{
     InternalError,
     config::{
         Config, ConfigError, ConfigModel,
-        schema::{CanisterConfig, DelegationConfig, LogConfig, ScalingConfig, SubnetConfig},
+        schema::{
+            AppInitMode, CanisterConfig, DelegationConfig, LogConfig, ScalingConfig, SubnetConfig,
+        },
     },
     ids::SubnetRole,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
+    storage::stable::state::app::AppMode,
 };
 use std::sync::Arc;
 use thiserror::Error as ThisError;
@@ -99,6 +102,16 @@ impl ConfigOps {
 
     pub(crate) fn delegation_config() -> Result<DelegationConfig, InternalError> {
         Ok(Config::get()?.delegation.clone())
+    }
+
+    pub(crate) fn app_init_mode() -> Result<AppMode, InternalError> {
+        let mode = match Config::get()?.app_state.mode {
+            AppInitMode::Enabled => AppMode::Enabled,
+            AppInitMode::Readonly => AppMode::Readonly,
+            AppInitMode::Disabled => AppMode::Disabled,
+        };
+
+        Ok(mode)
     }
 
     /// Fetch the configuration record for the *current* subnet.

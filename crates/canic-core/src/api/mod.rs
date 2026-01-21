@@ -8,7 +8,6 @@
 //! Any wrapper callable from an endpoint must return a `Result` so errors
 //! are consistently mapped at the boundary.
 
-pub mod access;
 pub mod auth;
 pub mod cascade;
 pub mod config;

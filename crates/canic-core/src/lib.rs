@@ -8,7 +8,7 @@
 //! ## Layering
 //!
 //! Canic is organized to keep endpoint code thin and policies centralized:
-//! - `access/` contains guard/auth/rule helpers for boundary enforcement.
+//! - `access/` contains access expressions, predicates, and metrics for boundary enforcement.
 //! - `workflow/` implements orchestration and lifecycle workflows.
 //! - `policy/` owns deterministic decision rules.
 //! - `ops/` provides mechanical, reusable side-effecting operations.

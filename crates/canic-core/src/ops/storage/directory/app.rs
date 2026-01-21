@@ -26,14 +26,6 @@ impl AppDirectoryOps {
             .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
 
-    #[must_use]
-    pub fn matches(role: &CanisterRole, caller: Principal) -> bool {
-        AppDirectory::export()
-            .entries
-            .iter()
-            .any(|(r, pid)| r == role && *pid == caller)
-    }
-
     // -------------------------------------------------------------
     // Canonical data access
     // -------------------------------------------------------------

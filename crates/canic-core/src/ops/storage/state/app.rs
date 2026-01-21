@@ -79,6 +79,13 @@ impl AppStateOps {
         Self::execute_command(internal)
     }
 
+    /// Initialize app state directly from configuration.
+    ///
+    /// This is intended for install-time bootstraps only.
+    pub fn init_mode(mode: AppMode) {
+        AppState::import(AppStateRecord { mode });
+    }
+
     // -------------------------------------------------------------
     // Data / Import
     // -------------------------------------------------------------

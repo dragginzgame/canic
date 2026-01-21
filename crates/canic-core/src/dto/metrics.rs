@@ -29,10 +29,10 @@ use crate::{dto::prelude::*, ids::AccessMetricKind};
 ///
 /// AccessMetricEntry
 ///
-/// Snapshot entry pairing an endpoint with an access denial stage.
+/// Snapshot entry pairing an endpoint with an access denial kind.
 ///
-/// Access metrics are emitted only on denial and represent the stage where
-/// access failed.
+/// Access metrics are emitted only on denial and represent the kind and
+/// predicate where access failed.
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct AccessMetricEntry {
@@ -42,10 +42,16 @@ pub struct AccessMetricEntry {
     /// and must not include dynamic or user-derived data.
     pub endpoint: String,
 
-    /// Access denial stage (guard, auth, env, rule).
+    /// Access denial kind (guard, auth, env, rule, custom).
     pub kind: AccessMetricKind,
 
-    /// Total count for this (endpoint, kind) pair.
+    /// Predicate name that denied access.
+    ///
+    /// This is either a built-in predicate name (e.g. "caller_is_root")
+    /// or a custom predicate name returned by user-defined access checks.
+    pub predicate: String,
+
+    /// Total count for this (endpoint, kind, predicate) tuple.
     pub count: u64,
 }
 

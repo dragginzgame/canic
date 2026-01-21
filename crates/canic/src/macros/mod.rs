@@ -1,5 +1,4 @@
 //! Facade macros for downstream canister crates.
-mod auth;
 mod build;
 mod endpoints;
 mod start;

@@ -7,7 +7,60 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.2] - Consolidation and Consistency Audits
+## [0.9.3] - App State Gating Defaults
+
+- ✅ Default app-state gating now applies to all endpoints unless an explicit app predicate is present; app-mode checks use `app::allows_updates()` and `app::is_queryable()`.
+- 🧱 Internal protocol endpoints can be marked with `internal` to bypass app-state gating; app predicates are rejected at compile time for these endpoints.
+- ⚙️ Added `app_state.mode` configuration for initial app mode (default `enabled`) and apply it during canister init.
+- 🧹 Removed `app::is_live` from the DSL, access layer, and docs.
+
+---
+
+## [0.9.2] - Auth Refactor
+
+- 🔐 Auth refactor: Replaced staged access control with a single requires(...) expression model using composable predicates (caller::, app::, self_env::), all evaluated by one async evaluator.
+
+- 🧹 Cleanup: Removed legacy DSL syntax, rule/stage APIs, and error enums; access behavior, metrics, and Unauthorized mapping remain unchanged.
+
+```rust
+// Example: complex access expression with composition
+#[canic_update(requires(any(
+    caller::is_root(),
+    all(
+        caller::is_controller(),
+        not(app::is_readonly()),
+        custom(HasPaidAccount),
+    ),
+)))]
+async fn update_critical_settings(
+    input: SettingsInput,
+) -> Result<(), canic::Error> {
+    // …
+}
+```
+
+This demonstrates, at a glance:
+
+- 🔀 boolean composition (any, all, not)
+- 👤 caller-based predicates
+- 📦 app state predicates
+- 🔧 custom async predicates
+- 🔐 a single, readable access surface
+
+
+Access predicates are grouped explicitly using boolean combinators:
+
+- all(...) — AND: every predicate in the group must pass
+- any(...) — OR: at least one predicate in the group must pass
+- not(...) — NOT: inverts a single predicate or group
+
+Groups can be nested arbitrarily, so complex policies are expressed declaratively and read top-down. Evaluation short-circuits on the first failure, and only the denying predicate is recorded for metrics and logs.
+
+This keeps access logic local, composable, and auditable without hidden ordering or implicit stages.
+
+---
+
+## [0.9.1] - Consolidation and Consistency Audits
 
 ### Added
 - Layering guard checks in CI to prevent workflow record usage, public record re-exports, and misuse of "view" naming.
@@ -20,6 +73,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Pushed record-to-DTO shaping into ops helpers across env/state/directory/auth/scaling workflows.
 - Moved `IntentResourceKey` to ids to keep workflow free of storage schema types.
 - Split delegation flow tests so issuance runs only under certified runtime conditions.
+- Reworked access control around expression-based predicates (`all`/`any`/`not`/`custom`) and centralized evaluation under `access::expr`.
+- Access-denial metrics now record the predicate name (built-in or custom) alongside the coarse kind.
+- Delegation auth APIs now expose local sign/verify helpers for proofs and tokens; auth shard/test flows use the unified helpers.
 
 ### Broked
 - 🚨 Auth is currently broken pending redesign.
@@ -108,7 +164,6 @@ This resolves prior layer leakage and restores a clean dependency direction.
 ### 🧭 Environment & API Surface
 
 * Public `api::env::EnvQuery` re-export added for canister-level environment inspection.
-* Local test and build flows default to `CANIC_UNCERTIFIED_TESTING=1` for PocketIC runs.
 
 ---
 

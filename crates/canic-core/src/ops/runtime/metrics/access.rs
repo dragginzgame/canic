@@ -16,29 +16,31 @@ pub struct AccessMetricsSnapshot {
 
 ///
 /// AccessMetricKey
-/// Uniquely identifies a rejected access attempt by endpoint + stage.
+/// Uniquely identifies a rejected access attempt by endpoint + kind + predicate.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AccessMetricKey {
     pub endpoint: String,
     pub kind: AccessMetricKind,
+    pub predicate: String,
 }
 
 ///
 /// AccessMetrics
-/// Volatile counters for unsuccessful access attempts by endpoint + stage.
+/// Volatile counters for unsuccessful access attempts by endpoint + kind.
 ///
 
 pub struct AccessMetrics;
 
 impl AccessMetrics {
-    /// Increment the access-rejection counter for an endpoint/stage pair.
-    pub fn increment(endpoint: &str, kind: AccessMetricKind) {
+    /// Increment the access-rejection counter for an endpoint/kind/predicate tuple.
+    pub fn increment(endpoint: &str, kind: AccessMetricKind, predicate: &str) {
         ACCESS_METRICS.with_borrow_mut(|counts| {
             let key = AccessMetricKey {
                 endpoint: endpoint.to_string(),
                 kind,
+                predicate: predicate.to_string(),
             };
 
             let entry = counts.entry(key).or_insert(0);
@@ -70,35 +72,47 @@ impl AccessMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> HashMap<(String, AccessMetricKind), u64> {
+    fn snapshot_map() -> HashMap<(String, AccessMetricKind, String), u64> {
         AccessMetrics::snapshot()
             .entries
             .into_iter()
-            .map(|(key, count)| ((key.endpoint, key.kind), count))
+            .map(|(key, count)| ((key.endpoint, key.kind, key.predicate), count))
             .collect()
     }
 
     #[test]
-    fn access_metrics_track_endpoint_and_stage() {
+    fn access_metrics_track_endpoint_kind_and_predicate() {
         AccessMetrics::reset();
 
-        AccessMetrics::increment("foo", AccessMetricKind::Guard);
-        AccessMetrics::increment("foo", AccessMetricKind::Guard);
-        AccessMetrics::increment("foo", AccessMetricKind::Auth);
-        AccessMetrics::increment("bar", AccessMetricKind::Rule);
+        AccessMetrics::increment("foo", AccessMetricKind::Guard, "app_allows_updates");
+        AccessMetrics::increment("foo", AccessMetricKind::Guard, "app_allows_updates");
+        AccessMetrics::increment("foo", AccessMetricKind::Auth, "caller_is_root");
+        AccessMetrics::increment("bar", AccessMetricKind::Rule, "build_ic_only");
 
         let mut map = snapshot_map();
 
         assert_eq!(
-            map.remove(&("foo".to_string(), AccessMetricKind::Guard)),
+            map.remove(&(
+                "foo".to_string(),
+                AccessMetricKind::Guard,
+                "app_allows_updates".to_string()
+            )),
             Some(2)
         );
         assert_eq!(
-            map.remove(&("foo".to_string(), AccessMetricKind::Auth)),
+            map.remove(&(
+                "foo".to_string(),
+                AccessMetricKind::Auth,
+                "caller_is_root".to_string()
+            )),
             Some(1)
         );
         assert_eq!(
-            map.remove(&("bar".to_string(), AccessMetricKind::Rule)),
+            map.remove(&(
+                "bar".to_string(),
+                AccessMetricKind::Rule,
+                "build_ic_only".to_string()
+            )),
             Some(1)
         );
         assert!(map.is_empty());

@@ -148,12 +148,12 @@ publish: ensure-clean
 test: test-canisters test-unit
 
 test-unit:
-	CANIC_UNCERTIFIED_TESTING=1 $(CARGO_ENV) cargo test --workspace
+	$(CARGO_ENV) cargo test --workspace
 
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \
 		( dfx canister create --all -qq ); \
-		( CANIC_UNCERTIFIED_TESTING=1 dfx build --all ); \
+		( dfx build --all ); \
 		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
 		( dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
 		( dfx canister install test --mode=reinstall -y --argument '(record { env = record { prime_root_pid = null; subnet_type = null; subnet_pid = null; root_pid = null; canister_role = opt "test"; parent_pid = null }; app_directory = vec {}; subnet_directory = vec {} }, null)' ); \

@@ -26,9 +26,9 @@ eager_static! {
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AppMode {
+    #[default]
     Enabled,
     Readonly,
-    #[default]
     Disabled,
 }
 
@@ -98,9 +98,9 @@ mod tests {
     }
 
     #[test]
-    fn default_mode_is_disabled() {
-        reset_state(AppMode::Disabled);
-        assert_eq!(AppState::get_mode(), AppMode::Disabled);
+    fn default_mode_is_enabled() {
+        AppState::import(AppStateRecord::default());
+        assert_eq!(AppState::get_mode(), AppMode::Enabled);
     }
 
     #[test]

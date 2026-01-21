@@ -1,8 +1,10 @@
 use crate::{
-    api::access::auth::AuthAccessApi,
     cdk::types::Principal,
     dto::{
-        auth::{DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof},
+        auth::{
+            DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
+            DelegationCert, DelegationProof,
+        },
         error::Error,
     },
     error::InternalErrorClass,
@@ -30,6 +32,60 @@ impl DelegationApi {
             }
             _ => Error::from(err),
         }
+    }
+
+    /// Sign a delegation cert.
+    pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, Error> {
+        DelegatedTokenOps::sign_delegation_cert(cert).map_err(Self::map_delegation_error)
+    }
+
+    /// Full delegation proof verification (structure + signature).
+    ///
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    pub fn verify_delegation_proof(
+        proof: &DelegationProof,
+        authority_pid: Principal,
+    ) -> Result<(), Error> {
+        DelegatedTokenOps::verify_delegation_proof(proof, authority_pid)
+            .map_err(Self::map_delegation_error)
+    }
+
+    pub fn sign_token(
+        token_version: u16,
+        claims: DelegatedTokenClaims,
+        proof: DelegationProof,
+    ) -> Result<DelegatedToken, Error> {
+        DelegatedTokenOps::sign_token(token_version, claims, proof)
+            .map_err(Self::map_delegation_error)
+    }
+
+    /// Full delegated token verification (structure + signature).
+    ///
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    pub fn verify_token(
+        token: &DelegatedToken,
+        authority_pid: Principal,
+        now_secs: u64,
+    ) -> Result<(), Error> {
+        DelegatedTokenOps::verify_token(token, authority_pid, now_secs)
+            .map(|_| ())
+            .map_err(Self::map_delegation_error)
+    }
+
+    /// Return verified claims after full token verification.
+    ///
+    /// Purely local verification; does not read certified data or require a
+    /// query context.
+    pub fn verify_token_claims(
+        token: &DelegatedToken,
+        authority_pid: Principal,
+        now_secs: u64,
+    ) -> Result<DelegatedTokenClaims, Error> {
+        DelegatedTokenOps::verify_token(token, authority_pid, now_secs)
+            .map(|verified| verified.claims)
+            .map_err(Self::map_delegation_error)
     }
 
     pub fn prepare_issue(cert: DelegationCert) -> Result<(), Error> {
@@ -122,9 +178,8 @@ impl DelegationAdminApi {
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
-        AuthAccessApi::caller_is_root(IcOps::msg_caller()).await?;
-
         let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden("delegation disabled"));
@@ -158,8 +213,8 @@ impl DelegationAdminApi {
         Ok(started)
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn stop_rotation() -> Result<bool, Error> {
-        AuthAccessApi::caller_is_root(IcOps::msg_caller()).await?;
         Ok(DelegationWorkflow::stop_rotation())
     }
 }

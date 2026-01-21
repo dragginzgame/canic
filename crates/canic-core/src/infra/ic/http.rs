@@ -1,10 +1,8 @@
-use crate::infra::{InfraError, ic::IcInfraError};
+use crate::{
+    cdk::mgmt::{HttpRequestArgs, HttpRequestResult},
+    infra::{InfraError, ic::IcInfraError},
+};
 use thiserror::Error as ThisError;
-
-///
-/// CDK Http Imports
-///
-pub use crate::cdk::mgmt::{HttpRequestArgs, HttpRequestResult};
 
 ///
 /// HttpInfraError

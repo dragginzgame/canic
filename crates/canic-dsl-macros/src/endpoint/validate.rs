@@ -1,4 +1,4 @@
-use crate::endpoint::parse::{AuthSymbol, EnvSymbol, GuardSymbol, ParsedArgs, RuleSymbol};
+use crate::endpoint::parse::{AccessExprAst, ParsedArgs};
 use proc_macro2::TokenStream as TokenStream2;
 use syn::Signature;
 
@@ -15,10 +15,8 @@ use syn::Signature;
 ///
 pub struct ValidatedArgs {
     pub forwarded: Vec<TokenStream2>,
-    pub guard: Vec<GuardSymbol>,
-    pub auth: Vec<AuthSymbol>,
-    pub env: Vec<EnvSymbol>,
-    pub rules: Vec<RuleSymbol>,
+    pub requires: Vec<AccessExprAst>,
+    pub internal: bool,
 }
 
 pub fn validate(
@@ -26,25 +24,14 @@ pub fn validate(
     sig: &Signature,
     asyncness: bool,
 ) -> syn::Result<ValidatedArgs> {
-    let has_guard = !parsed.guard.is_empty();
-    let has_auth = !parsed.auth.is_empty();
-    let has_env = !parsed.env.is_empty();
-    let has_rules = !parsed.rules.is_empty();
-
-    // Any access DSL beyond pure forwarding requires async
-    let requires_async = has_auth || has_env || has_rules;
-
-    // Any access DSL at all requires Result<_, E>
-    let requires_fallible = has_guard || has_auth || has_env || has_rules;
-
-    if requires_async && !asyncness {
+    if parsed.requires_async && !asyncness {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "this endpoint requires `async fn` due to access rules",
+            "this endpoint requires `async fn` due to access predicates",
         ));
     }
 
-    if requires_fallible && !returns_fallible(sig) {
+    if parsed.requires_fallible && !returns_fallible(sig) {
         return Err(syn::Error::new_spanned(
             &sig.output,
             "this endpoint must return `Result<_, E>` where `E: From<canic::Error>`",
@@ -53,10 +40,8 @@ pub fn validate(
 
     Ok(ValidatedArgs {
         forwarded: parsed.forwarded,
-        guard: parsed.guard,
-        auth: parsed.auth,
-        env: parsed.env,
-        rules: parsed.rules,
+        requires: parsed.requires,
+        internal: parsed.internal,
     })
 }
 

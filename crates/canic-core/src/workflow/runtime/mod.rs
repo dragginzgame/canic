@@ -11,6 +11,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
+        config::ConfigOps,
         ic::{IcOps, network::NetworkOps, signature::SignatureOps},
         runtime::{
             env::EnvOps,
@@ -19,6 +20,7 @@ use crate::{
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
+            state::app::AppStateOps,
         },
     },
     workflow::{self, env::EnvWorkflow, prelude::*},
@@ -148,6 +150,10 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         fatal("init_root_canister", format!("env import failed: {err}"));
     }
 
+    let app_mode = ConfigOps::app_init_mode()
+        .unwrap_or_else(|err| fatal("init_root_canister", format!("app mode init failed: {err}")));
+    AppStateOps::init_mode(app_mode);
+
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root(self_pid, created_at);
 
@@ -203,6 +209,14 @@ pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitP
             format!("subnet directory import failed: {err}"),
         );
     }
+
+    let app_mode = ConfigOps::app_init_mode().unwrap_or_else(|err| {
+        fatal(
+            "init_nonroot_canister",
+            format!("app mode init failed: {err}"),
+        )
+    });
+    AppStateOps::init_mode(app_mode);
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all();

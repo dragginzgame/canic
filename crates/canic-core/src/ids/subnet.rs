@@ -103,7 +103,7 @@ impl_storable_bounded!(SubnetRole, 64, false);
 
 #[cfg(test)]
 mod tests {
-    use super::SubnetRole;
+    use super::*;
 
     #[test]
     fn basic_traits_and_utils() {

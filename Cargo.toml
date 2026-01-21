@@ -40,6 +40,7 @@ categories = ["wasm"]
 readme = "README.md"
 
 [workspace.dependencies]
+async-trait = "0.1"
 
 base32 = "0.5"
 candid = { version = "0.10", default-features = false }

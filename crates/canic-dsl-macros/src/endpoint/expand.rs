@@ -10,28 +10,16 @@
 //
 // 1. Access pipeline semantics
 //    --------------------------
-//    Access checks execute in the following order:
-//
-//        guard → auth → env → rule → dispatch
+//    Access checks are evaluated via `access::expr::eval_access`.
+//    `requires(...)` always lowers to a single AccessExpr::All list.
 //
 //    Evaluation short-circuits on the FIRST failure.
-//    Later stages MUST NOT execute after a failure.
-//
-//    NOTE:
-//    This ordering is intentional and may differ from conceptual models
-//    (e.g. env-first). Do not reorder without auditing metrics semantics
-//    and denial attribution.
 //
 // 2. Access metrics (denial-only)
 //    -----------------------------
 //    Access metrics are emitted ONLY on access denial paths.
-//    Each denied request MUST emit EXACTLY ONE access metric,
-//    tagged with the stage that denied access:
-//
-//        Guard → AccessMetricKind::Guard
-//        Auth  → AccessMetricKind::Auth
-//        Env   → AccessMetricKind::Env
-//        Rule  → AccessMetricKind::Rule
+//    Each denied request MUST emit EXACTLY ONE access metric via the
+//    expression evaluator, tagged with the predicate kind that denied access.
 //
 //    Successful requests MUST emit NO access metrics.
 //
@@ -49,12 +37,13 @@
 //
 // 4. Error handling
 //    --------------
-//    All access failures are converted into endpoint errors and returned
-//    immediately. There must be no panic paths and no implicit fallthrough.
+//    Access failures for fallible endpoints return an error; for infallible
+//    endpoints (implicit app gating only), the wrapper traps to preserve
+//    signatures. There must be no implicit fallthrough.
 //
 // 5. Macro constraints
 //    ------------------
-//    - Only simple identifier arguments are supported.
+//    - requires(...) accepts only expression calls (all/any/not/custom + built-ins).
 //    - `self` receivers are forbidden.
 //    - Fallibility detection assumes a direct `Result<_, _>` return type.
 //
@@ -65,19 +54,20 @@
 
 use crate::endpoint::{
     EndpointKind,
-    parse::{AuthSymbol, EnvSymbol, GuardSymbol, RuleSymbol},
+    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate},
     validate::ValidatedArgs,
 };
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::ItemFn;
+use syn::{GenericArgument, ItemFn, PathArguments, Signature, Type, visit::Visit};
 
 //
 // ============================================================================
-// expand — code generation only
+// expand - code generation only
 // ============================================================================
 //
 
+#[allow(clippy::default_trait_access)]
 pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream2 {
     let attrs = func.attrs.clone();
     let orig_sig = func.sig.clone();
@@ -85,17 +75,30 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let vis = func.vis.clone();
     let inputs = orig_sig.inputs.clone();
     let output = orig_sig.output.clone();
-    let asyncness = orig_sig.asyncness.is_some();
+    let impl_async = orig_sig.asyncness.is_some();
     let returns_fallible = returns_fallible(&orig_sig);
+
+    let has_explicit_requires = !args.requires.is_empty();
+    let access_expr = match build_access_expr(kind, &args, &orig_sig) {
+        Ok(expr) => expr,
+        Err(err) => return err.to_compile_error(),
+    };
+
+    let wrapper_async = impl_async || access_expr.is_some();
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
 
     let cdk_attr = cdk_attr(kind, &args.forwarded);
-    let dispatch_fn = dispatch(kind, asyncness);
+    let dispatch_fn = dispatch(kind, wrapper_async);
 
     let wrapper_sig = syn::Signature {
         ident: orig_name.clone(),
+        asyncness: if wrapper_async {
+            Some(Default::default())
+        } else {
+            None
+        },
         inputs,
         output,
         ..orig_sig.clone()
@@ -106,17 +109,26 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let attempted = attempted(&call_ident);
 
-    let guard_stage = guard_stage(kind, &args.guard, &call_ident);
-    let auth_stage = auth_stage(&args.auth, &call_ident);
-    let env_stage = env_stage(&args.env, &call_ident);
-    let rule_stage = rule_stage(&args.rules, &call_ident);
+    let access_stage = access_stage(
+        access_expr.as_ref(),
+        &call_ident,
+        returns_fallible,
+        has_explicit_requires,
+    );
 
     let call_args = match extract_args(&orig_sig) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error(),
     };
 
-    let dispatch_call = dispatch_call(asyncness, dispatch_fn, &call_ident, impl_name, &call_args);
+    let dispatch_call = dispatch_call(
+        wrapper_async,
+        impl_async,
+        dispatch_fn,
+        &call_ident,
+        impl_name,
+        &call_args,
+    );
     let completion = completion(&call_ident, returns_fallible, dispatch_call);
 
     quote! {
@@ -125,10 +137,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #vis #wrapper_sig {
             #call_decl
             #attempted
-            #guard_stage
-            #auth_stage
-            #env_stage
-            #rule_stage
+            #access_stage
             #completion
         }
 
@@ -197,201 +206,235 @@ fn attempted(call: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn record_denied(call: &syn::Ident, kind: TokenStream2) -> TokenStream2 {
-    quote! {
-        ::canic::__internal::core::access::metrics::AccessMetrics::increment(#call, #kind);
-    }
-}
-
-//
-// ============================================================================
-// stages
-// ============================================================================
-//
-
-fn guard_stage(kind: EndpointKind, guard: &[GuardSymbol], call: &syn::Ident) -> TokenStream2 {
-    if guard.is_empty() {
-        return quote!();
-    }
-
-    let metric = record_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Guard),
-    );
-
-    let checks = guard.iter().map(|sym| {
-        let call = guard_call(sym, kind);
-        quote! {
-            if let Err(err) = #call {
-                #metric
-                return Err(err.into());
-            }
-        }
-    });
-
-    quote!(#(#checks)*)
-}
-
-fn auth_stage(auth: &[AuthSymbol], call: &syn::Ident) -> TokenStream2 {
-    if auth.is_empty() {
-        return quote!();
-    }
-
-    let metric = record_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Auth),
-    );
-
+fn access_stage(
+    expr: Option<&TokenStream2>,
+    call: &syn::Ident,
+    returns_fallible: bool,
+    has_explicit_requires: bool,
+) -> TokenStream2 {
     let caller = format_ident!("__canic_caller");
-    let needs_caller = auth.iter().any(auth_uses_caller);
+    let ctx = format_ident!("__canic_access_ctx");
+    let expr_ident = format_ident!("__canic_access_expr");
 
-    let checks = auth.iter().map(|sym| {
-        let call = auth_call(sym, &caller);
-        quote! {
-            if let Err(err) = #call.await {
-                #metric
-                return Err(err.into());
-            }
-        }
-    });
+    let Some(expr) = expr else {
+        return quote!();
+    };
 
-    let caller_decl = if needs_caller {
-        quote!(let #caller = ::canic::cdk::api::msg_caller();)
+    let deny = if has_explicit_requires && returns_fallible {
+        quote!(return Err(err.into());)
     } else {
-        quote!()
+        quote!(::canic::cdk::api::trap(&err.to_string());)
     };
 
     quote! {
-        #caller_decl
-        #(#checks)*
+        let #caller = ::canic::cdk::api::msg_caller();
+        let #ctx = ::canic::__internal::core::access::expr::AccessContext {
+            caller: #caller,
+            call: #call,
+        };
+        let #expr_ident = #expr;
+        if let Err(err) = ::canic::__internal::core::access::expr::eval_access(&#expr_ident, &#ctx).await {
+            #deny
+        }
     }
 }
 
-fn env_stage(env: &[EnvSymbol], call: &syn::Ident) -> TokenStream2 {
-    if env.is_empty() {
-        return quote!();
+// ---------------------------------------------------------------------------
+// Access expression synthesis
+// ---------------------------------------------------------------------------
+
+fn build_access_expr(
+    kind: EndpointKind,
+    args: &ValidatedArgs,
+    sig: &Signature,
+) -> syn::Result<Option<TokenStream2>> {
+    let is_app_command = is_app_command_endpoint(sig);
+    let is_internal = args.internal || is_app_command;
+    let has_app_state = exprs_have_app_state_predicate(&args.requires);
+
+    if is_internal && has_app_state {
+        let message = if is_app_command {
+            "AppCommand endpoints must never be gated on application state."
+        } else {
+            "Internal protocol endpoints must never be gated on application state."
+        };
+        return Err(syn::Error::new_spanned(&sig.ident, message));
     }
 
-    let metric = record_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Env),
-    );
+    let mut exprs = args.requires.clone();
 
-    let checks = env.iter().map(|sym| {
-        let call = env_call(sym);
-        quote! {
-            if let Err(err) = #call.await {
-                #metric
-                return Err(err.into());
+    if !is_internal && !has_app_state {
+        let injected = match kind {
+            EndpointKind::Update => BuiltinPredicate::AppAllowsUpdates,
+            EndpointKind::Query => BuiltinPredicate::AppIsQueryable,
+        };
+        exprs.push(AccessExprAst::Pred(AccessPredicateAst::Builtin(injected)));
+    }
+
+    if exprs.is_empty() {
+        return Ok(None);
+    }
+
+    let exprs: Vec<_> = exprs.iter().map(expr_from_ast).collect();
+
+    Ok(Some(quote! {
+        ::canic::__internal::core::access::expr::AccessExpr::All(vec![#(#exprs),*])
+    }))
+}
+
+fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
+    match expr {
+        AccessExprAst::All(exprs) => {
+            let items = exprs.iter().map(expr_from_ast);
+            quote!(::canic::__internal::core::access::expr::AccessExpr::All(
+                vec![#(#items),*]
+            ))
+        }
+        AccessExprAst::Any(exprs) => {
+            let items = exprs.iter().map(expr_from_ast);
+            quote!(::canic::__internal::core::access::expr::AccessExpr::Any(
+                vec![#(#items),*]
+            ))
+        }
+        AccessExprAst::Not(expr) => {
+            let inner = expr_from_ast(expr);
+            quote!(::canic::__internal::core::access::expr::AccessExpr::Not(Box::new(#inner)))
+        }
+        AccessExprAst::Pred(pred) => match pred {
+            AccessPredicateAst::Builtin(builtin) => expr_from_builtin(*builtin),
+            AccessPredicateAst::Custom(expr) => {
+                quote!(::canic::__internal::core::access::expr::custom(#expr))
             }
-        }
-    });
-
-    quote!(#(#checks)*)
-}
-
-fn rule_stage(rules: &[RuleSymbol], call: &syn::Ident) -> TokenStream2 {
-    if rules.is_empty() {
-        return quote!();
+        },
     }
-
-    let metric = record_denied(
-        call,
-        quote!(::canic::__internal::core::ids::AccessMetricKind::Rule),
-    );
-
-    let checks = rules.iter().map(|sym| {
-        let call = rule_call(sym);
-        quote! {
-            if let Err(err) = #call {
-                #metric
-                return Err(err.into());
-            }
-        }
-    });
-
-    quote!(#(#checks)*)
 }
 
-//
-// ============================================================================
-// symbol → API mapping
-// ============================================================================
-//
-
-fn auth_call(sym: &AuthSymbol, caller: &syn::Ident) -> TokenStream2 {
-    match sym {
-        AuthSymbol::CallerIsController => {
-            quote!(::canic::api::access::AuthAccessApi::is_controller(#caller))
+fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
+    match pred {
+        BuiltinPredicate::AppAllowsUpdates => {
+            quote!(::canic::__internal::core::access::expr::app::allows_updates())
         }
-        AuthSymbol::CallerIsParent => {
-            quote!(::canic::api::access::AuthAccessApi::is_parent(#caller))
+        BuiltinPredicate::AppIsQueryable => {
+            quote!(::canic::__internal::core::access::expr::app::is_queryable())
         }
-        AuthSymbol::CallerIsChild => {
-            quote!(::canic::api::access::AuthAccessApi::is_child(#caller))
+        BuiltinPredicate::SelfIsPrimeSubnet => {
+            quote!(::canic::__internal::core::access::expr::env::is_prime_subnet())
         }
-        AuthSymbol::CallerIsRoot => {
-            quote!(::canic::api::access::AuthAccessApi::caller_is_root(#caller))
+        BuiltinPredicate::SelfIsPrimeRoot => {
+            quote!(::canic::__internal::core::access::expr::env::is_prime_root())
         }
-        AuthSymbol::CallerIsSameCanister => {
-            quote!(::canic::api::access::AuthAccessApi::is_same_canister(#caller))
+        BuiltinPredicate::CallerIsController => {
+            quote!(::canic::__internal::core::access::expr::caller::is_controller())
         }
-        AuthSymbol::CallerIsRegisteredToSubnet => {
-            quote!(::canic::api::access::AuthAccessApi::is_registered_to_subnet(#caller))
+        BuiltinPredicate::CallerIsParent => {
+            quote!(::canic::__internal::core::access::expr::caller::is_parent())
         }
-        AuthSymbol::CallerIsWhitelisted => {
-            quote!(::canic::api::access::AuthAccessApi::is_whitelisted(#caller))
+        BuiltinPredicate::CallerIsChild => {
+            quote!(::canic::__internal::core::access::expr::caller::is_child())
         }
-        AuthSymbol::DelegatedTokenValid => {
-            quote!(::canic::api::access::AuthAccessApi::verify_delegated_token())
+        BuiltinPredicate::CallerIsRoot => {
+            quote!(::canic::__internal::core::access::expr::caller::is_root())
+        }
+        BuiltinPredicate::CallerIsSameCanister => {
+            quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
+        }
+        BuiltinPredicate::CallerIsRegisteredToSubnet => {
+            quote!(::canic::__internal::core::access::expr::caller::is_registered_to_subnet())
+        }
+        BuiltinPredicate::CallerIsWhitelisted => {
+            quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
+        }
+        BuiltinPredicate::DelegatedTokenValid => {
+            quote!(::canic::__internal::core::access::expr::auth::delegated_token_valid())
+        }
+        BuiltinPredicate::BuildIcOnly => {
+            quote!(::canic::__internal::core::access::expr::rule::build_ic_only())
+        }
+        BuiltinPredicate::BuildLocalOnly => {
+            quote!(::canic::__internal::core::access::expr::rule::build_local_only())
         }
     }
 }
 
-const fn auth_uses_caller(sym: &AuthSymbol) -> bool {
+fn exprs_have_app_state_predicate(exprs: &[AccessExprAst]) -> bool {
+    exprs.iter().any(expr_has_app_state_predicate)
+}
+
+fn expr_has_app_state_predicate(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(expr_has_app_state_predicate)
+        }
+        AccessExprAst::Not(expr) => expr_has_app_state_predicate(expr),
+        AccessExprAst::Pred(pred) => match pred {
+            AccessPredicateAst::Builtin(builtin) => builtin_is_app_state(*builtin),
+            AccessPredicateAst::Custom(tokens) => custom_has_app_state_is(tokens),
+        },
+    }
+}
+
+const fn builtin_is_app_state(pred: BuiltinPredicate) -> bool {
     matches!(
-        sym,
-        AuthSymbol::CallerIsController
-            | AuthSymbol::CallerIsParent
-            | AuthSymbol::CallerIsChild
-            | AuthSymbol::CallerIsRoot
-            | AuthSymbol::CallerIsSameCanister
-            | AuthSymbol::CallerIsRegisteredToSubnet
-            | AuthSymbol::CallerIsWhitelisted
+        pred,
+        BuiltinPredicate::AppAllowsUpdates | BuiltinPredicate::AppIsQueryable
     )
 }
 
-fn guard_call(sym: &GuardSymbol, kind: EndpointKind) -> TokenStream2 {
-    match (sym, kind) {
-        (GuardSymbol::AppIsLive, EndpointKind::Query) => {
-            quote!(::canic::api::access::GuardAccessApi::guard_app_query())
+fn custom_has_app_state_is(tokens: &TokenStream2) -> bool {
+    let Ok(expr) = syn::parse2::<syn::Expr>(tokens.clone()) else {
+        return false;
+    };
+    let mut visitor = AppStateVisitor { found: false };
+    visitor.visit_expr(&expr);
+    visitor.found
+}
+
+struct AppStateVisitor {
+    found: bool,
+}
+
+impl Visit<'_> for AppStateVisitor {
+    fn visit_path(&mut self, path: &syn::Path) {
+        if path.segments.iter().any(|seg| seg.ident == "AppStateIs") {
+            self.found = true;
+            return;
         }
-        (GuardSymbol::AppIsLive, EndpointKind::Update) => {
-            quote!(::canic::api::access::GuardAccessApi::guard_app_update())
-        }
+        syn::visit::visit_path(self, path);
     }
 }
 
-fn env_call(sym: &EnvSymbol) -> TokenStream2 {
-    match sym {
-        EnvSymbol::SelfIsPrimeSubnet => {
-            quote!(::canic::api::access::EnvAccessApi::is_prime_subnet())
-        }
-        EnvSymbol::SelfIsPrimeRoot => {
-            quote!(::canic::api::access::EnvAccessApi::is_prime_root())
-        }
+fn is_app_command_endpoint(sig: &Signature) -> bool {
+    sig.inputs.iter().any(|input| match input {
+        syn::FnArg::Typed(pat) => type_has_app_command(&pat.ty),
+        syn::FnArg::Receiver(_) => true,
+    })
+}
+
+fn type_has_app_command(ty: &Type) -> bool {
+    match ty {
+        Type::Path(path) => path_has_app_command(&path.path),
+        Type::Reference(reference) => type_has_app_command(&reference.elem),
+        Type::Group(group) => type_has_app_command(&group.elem),
+        Type::Paren(paren) => type_has_app_command(&paren.elem),
+        Type::Tuple(tuple) => tuple.elems.iter().any(type_has_app_command),
+        _ => false,
     }
 }
 
-fn rule_call(sym: &RuleSymbol) -> TokenStream2 {
-    match sym {
-        RuleSymbol::BuildIcOnly => {
-            quote!(::canic::api::access::RuleAccessApi::require_ic())
+fn path_has_app_command(path: &syn::Path) -> bool {
+    path.segments.iter().any(|seg| {
+        if seg.ident == "AppCommand" {
+            return true;
         }
-        RuleSymbol::BuildLocalOnly => {
-            quote!(::canic::api::access::RuleAccessApi::require_local())
+
+        match &seg.arguments {
+            PathArguments::AngleBracketed(args) => args.args.iter().any(|arg| match arg {
+                GenericArgument::Type(ty) => type_has_app_command(ty),
+                _ => false,
+            }),
+            _ => false,
         }
-    }
+    })
 }
 
 //
@@ -401,17 +444,26 @@ fn rule_call(sym: &RuleSymbol) -> TokenStream2 {
 //
 
 fn dispatch_call(
-    asyncness: bool,
+    wrapper_async: bool,
+    impl_async: bool,
     dispatch: TokenStream2,
     call: &syn::Ident,
     impl_name: syn::Ident,
     args: &[TokenStream2],
 ) -> TokenStream2 {
-    if asyncness {
-        quote! {
-            #dispatch(#call, || async move {
-                #impl_name(#(#args),*).await
-            }).await
+    if wrapper_async {
+        if impl_async {
+            quote! {
+                #dispatch(#call, || async move {
+                    #impl_name(#(#args),*).await
+                }).await
+            }
+        } else {
+            quote! {
+                #dispatch(#call, || async move {
+                    #impl_name(#(#args),*)
+                }).await
+            }
         }
     } else {
         quote! {

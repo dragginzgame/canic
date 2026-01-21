@@ -24,7 +24,7 @@ impl_storable_bounded!(CanisterRecord, CanisterRecord::STORABLE_MAX_SIZE, false)
 ///
 
 #[cfg(test)]
-pub mod test {
+mod tests {
     use super::*;
     use crate::cdk::structures::Storable;
     use std::str::FromStr;

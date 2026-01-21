@@ -90,6 +90,7 @@ impl MetricsQuery {
             a.endpoint
                 .cmp(&b.endpoint)
                 .then_with(|| a.kind.cmp(&b.kind))
+                .then_with(|| a.predicate.cmp(&b.predicate))
         });
 
         paginate_vec(entries, page)

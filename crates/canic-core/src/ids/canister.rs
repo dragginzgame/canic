@@ -108,7 +108,8 @@ impl_storable_bounded!(CanisterRole, 64, false);
 
 #[cfg(test)]
 mod tests {
-    use super::CanisterRole;
+    use super::*;
+
     #[test]
     fn basic_traits_and_utils() {
         let a = CanisterRole::ROOT;
