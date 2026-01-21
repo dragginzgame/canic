@@ -342,8 +342,8 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
         }
         (Some("caller"), "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
         (Some("auth"), "delegated_token_valid") => Some(BuiltinPredicate::DelegatedTokenValid),
-        (Some("rule"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
-        (Some("rule"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
+        (Some("env"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
+        (Some("env"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,
     }
 }

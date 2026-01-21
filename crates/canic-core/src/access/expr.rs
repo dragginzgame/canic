@@ -4,7 +4,10 @@
 //! used to compose access control without changing existing semantics.
 
 use crate::{
-    access::{self, AccessError, metrics::AccessMetrics},
+    access::{
+        self, AccessError,
+        metrics::{AccessMetrics, DelegationMetrics},
+    },
     cdk::types::Principal,
     ids::{AccessMetricKind, EndpointCall},
     log,
@@ -187,19 +190,6 @@ pub mod env {
     pub const fn is_prime_root() -> AccessExpr {
         builtin(BuiltinPredicate::SelfIsPrimeRoot)
     }
-}
-
-pub mod auth {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
-
-    #[must_use]
-    pub const fn delegated_token_valid() -> AccessExpr {
-        builtin(BuiltinPredicate::DelegatedTokenValid)
-    }
-}
-
-pub mod rule {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
     pub const fn build_ic_only() -> AccessExpr {
@@ -209,6 +199,15 @@ pub mod rule {
     #[must_use]
     pub const fn build_local_only() -> AccessExpr {
         builtin(BuiltinPredicate::BuildLocalOnly)
+    }
+}
+
+pub mod auth {
+    use super::{AccessExpr, BuiltinPredicate, builtin};
+
+    #[must_use]
+    pub const fn delegated_token_valid() -> AccessExpr {
+        builtin(BuiltinPredicate::DelegatedTokenValid)
     }
 }
 
@@ -227,8 +226,8 @@ pub fn eval_default_app_guard(
     ctx: &AccessContext,
 ) -> Result<(), AccessError> {
     let result = match guard {
-        DefaultAppGuard::AllowsUpdates => access::guard::guard_app_update(),
-        DefaultAppGuard::IsQueryable => access::guard::guard_app_query(),
+        DefaultAppGuard::AllowsUpdates => access::app::guard_app_update(),
+        DefaultAppGuard::IsQueryable => access::app::guard_app_query(),
     };
 
     match result {
@@ -292,22 +291,26 @@ fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> Access
 
 async fn eval_builtin(pred: &BuiltinPredicate, ctx: &AccessContext) -> Result<(), AccessError> {
     match pred {
-        BuiltinPredicate::AppAllowsUpdates => access::guard::guard_app_update(),
-        BuiltinPredicate::AppIsQueryable => access::guard::guard_app_query(),
-        BuiltinPredicate::SelfIsPrimeSubnet => access::env::is_prime_subnet().await,
-        BuiltinPredicate::SelfIsPrimeRoot => access::env::is_prime_root().await,
+        BuiltinPredicate::AppAllowsUpdates => access::app::guard_app_update(),
+        BuiltinPredicate::AppIsQueryable => access::app::guard_app_query(),
+        BuiltinPredicate::SelfIsPrimeSubnet => access::env::is_prime_subnet(),
+        BuiltinPredicate::SelfIsPrimeRoot => access::env::is_prime_root(),
         BuiltinPredicate::CallerIsController => access::auth::is_controller(ctx.caller).await,
         BuiltinPredicate::CallerIsParent => access::auth::is_parent(ctx.caller).await,
         BuiltinPredicate::CallerIsChild => access::auth::is_child(ctx.caller).await,
-        BuiltinPredicate::CallerIsRoot => access::auth::caller_is_root(ctx.caller).await,
+        BuiltinPredicate::CallerIsRoot => access::auth::is_root(ctx.caller).await,
         BuiltinPredicate::CallerIsSameCanister => access::auth::is_same_canister(ctx.caller).await,
         BuiltinPredicate::CallerIsRegisteredToSubnet => {
             access::auth::is_registered_to_subnet(ctx.caller).await
         }
         BuiltinPredicate::CallerIsWhitelisted => access::auth::is_whitelisted(ctx.caller).await,
-        BuiltinPredicate::DelegatedTokenValid => access::auth::verify_delegated_token().await,
-        BuiltinPredicate::BuildIcOnly => access::rule::build_network_ic().await,
-        BuiltinPredicate::BuildLocalOnly => access::rule::build_network_local().await,
+        BuiltinPredicate::DelegatedTokenValid => {
+            let verified = access::auth::delegated_token_verified(ctx.caller).await?;
+            DelegationMetrics::record_authority(verified.cert.signer_pid);
+            Ok(())
+        }
+        BuiltinPredicate::BuildIcOnly => access::env::build_network_ic(),
+        BuiltinPredicate::BuildLocalOnly => access::env::build_network_local(),
     }
 }
 

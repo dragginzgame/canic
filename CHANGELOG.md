@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.5] - Access Families + DSL Alignment
+
+- 🧭 Refactored access predicates into explicit families (`app`, `auth`, `env`) with `expr` as internal evaluation only.
+- 🔓 Exposed public, composable auth predicates under `canic::access::auth` without duplicating logic.
+- 🧹 Removed legacy DSL shims and aligned DSL built-ins with access families (env owns build-network rules).
+
+---
+
 ## [0.9.4] - App State Init + Sync Access
 
 - ✅ App init mode is now config-driven (`app_state.mode`) with a default of `enabled`.

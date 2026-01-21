@@ -8,12 +8,12 @@
 ///
 /// These errors are framework-agnostic and are converted into InternalError
 /// immediately at the framework boundary.
-pub(crate) mod auth;
-pub(crate) mod env;
+pub mod app;
+pub mod auth;
+pub mod env;
+#[doc(hidden)]
 pub mod expr;
-pub(crate) mod guard;
 pub mod metrics;
-pub(crate) mod rule;
 
 use thiserror::Error as ThisError;
 
