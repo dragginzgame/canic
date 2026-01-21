@@ -420,6 +420,10 @@ fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessE
     failure.error
 }
 
+///
+/// TESTS
+///
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -442,7 +446,7 @@ mod tests {
     fn caller_is_parent_matches_access_auth() {
         let _guard = seams::lock();
         let original = Env::export();
-        let _restore = EnvRestore(original.clone());
+        let _restore = EnvRestore(original);
 
         let parent = seams::p(1);
         let other = seams::p(2);
