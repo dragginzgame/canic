@@ -260,11 +260,19 @@ fn access_stage(
 // Access expression synthesis
 // ---------------------------------------------------------------------------
 
+///
+/// DefaultAppGuard
+///
+
 #[derive(Clone, Copy)]
 enum DefaultAppGuard {
     AllowsUpdates,
     IsQueryable,
 }
+
+///
+/// AccessPlan
+///
 
 enum AccessPlan {
     None,
@@ -273,8 +281,8 @@ enum AccessPlan {
 }
 
 impl AccessPlan {
-    fn requires_async(&self) -> bool {
-        matches!(self, AccessPlan::Expr(_))
+    const fn requires_async(&self) -> bool {
+        matches!(self, Self::Expr(_))
     }
 }
 
@@ -402,10 +410,10 @@ fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
             quote!(::canic::__internal::core::access::expr::auth::delegated_token_valid())
         }
         BuiltinPredicate::BuildIcOnly => {
-            quote!(::canic::__internal::core::access::expr::rule::build_ic_only())
+            quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }
         BuiltinPredicate::BuildLocalOnly => {
-            quote!(::canic::__internal::core::access::expr::rule::build_local_only())
+            quote!(::canic::__internal::core::access::expr::env::build_local_only())
         }
     }
 }

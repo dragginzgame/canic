@@ -1,9 +1,9 @@
-//! Auth bucket access checks.
+//! Auth access checks.
 //!
-//! This module is a mixed bucket that includes:
+//! This bucket includes:
 //! - caller identity checks (controller/whitelist)
 //! - topology checks (parent/child/root/same canister)
-//! - registry checks
+//! - registry-based role checks
 //! - delegated token verification
 //!
 //! Security invariants for delegated tokens:
@@ -12,7 +12,7 @@
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 
 use crate::{
-    access::{AccessError, metrics::DelegationMetrics},
+    access::AccessError,
     cdk::{
         api::{canister_self, is_controller as caller_is_controller, msg_arg_data},
         candid::Decode,
@@ -20,8 +20,9 @@ use crate::{
     },
     config::Config,
     dto::auth::DelegatedToken,
+    ids::CanisterRole,
     ops::{
-        auth::DelegatedTokenOps,
+        auth::{DelegatedTokenOps, VerifiedDelegatedToken},
         ic::IcOps,
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
@@ -30,12 +31,22 @@ use crate::{
 
 const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 
+pub type Role = CanisterRole;
+
 /// Verify a delegated token read from the ingress payload.
 ///
 /// Contract:
 /// - The delegated token MUST be the first candid argument.
 /// - Decoding failures result in access denial.
-pub async fn verify_delegated_token() -> Result<(), AccessError> {
+/// - The caller argument is accepted for composability and is not inspected.
+pub async fn delegated_token_valid(_caller: Principal) -> Result<(), AccessError> {
+    let _ = delegated_token_verified(_caller).await?;
+    Ok(())
+}
+
+pub(crate) async fn delegated_token_verified(
+    _caller: Principal,
+) -> Result<VerifiedDelegatedToken, AccessError> {
     let token = delegated_token_from_args()?;
 
     let authority_pid =
@@ -52,13 +63,10 @@ async fn verify_token(
     token: DelegatedToken,
     authority_pid: Principal,
     now_secs: u64,
-) -> Result<(), AccessError> {
+) -> Result<VerifiedDelegatedToken, AccessError> {
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
-
-    DelegationMetrics::record_authority(verified.cert.signer_pid);
-
-    Ok(())
+    Ok(verified)
 }
 
 // -----------------------------------------------------------------------------
@@ -124,7 +132,7 @@ pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
 
 /// Require that the caller equals the configured root canister.
 #[allow(clippy::unused_async)]
-pub async fn caller_is_root(caller: Principal) -> Result<(), AccessError> {
+pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
     let root_pid =
         EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
 
@@ -152,6 +160,24 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 // -----------------------------------------------------------------------------
 // Registry predicates
 // -----------------------------------------------------------------------------
+
+/// Require that the caller is registered with the expected canister role.
+#[allow(clippy::unused_async)]
+pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
+    let record = SubnetRegistryOps::get(caller).ok_or_else(|| {
+        AccessError::Denied(format!(
+            "caller '{caller}' is not registered on the subnet registry"
+        ))
+    })?;
+
+    if record.role == role {
+        Ok(())
+    } else {
+        Err(AccessError::Denied(format!(
+            "caller '{caller}' does not have role '{role}'"
+        )))
+    }
+}
 
 /// Ensure the caller matches the app directory entry recorded for `role`.
 /// Require that the caller is registered as a canister on this subnet.

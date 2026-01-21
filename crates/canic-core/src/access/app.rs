@@ -1,6 +1,6 @@
 //! App mode gating for endpoints.
 //!
-//! The guard bucket only inspects the application mode and does not
+//! The app bucket only inspects the application mode and does not
 //! evaluate caller identity or environment predicates.
 
 use crate::{

@@ -9,7 +9,7 @@ Use `requires(...)` expressions with `all(...)`, `any(...)`, and `not(...)` to
 compose predicates.
 
 ```rust
-use canic::api::access::expr::{app, caller};
+use canic_dsl::access::{app, caller};
 use canic_dsl_macros::canic_update;
 
 #[canic_update(requires(app::allows_updates(), caller::is_controller()))]
