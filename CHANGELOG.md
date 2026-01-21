@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.4] - App State Init + Sync Access
+
+- ✅ App init mode is now config-driven (`app_state.mode`) with a default of `enabled`.
+- ⚡ Endpoints only become async when explicit access predicates are present; implicit app gating stays sync.
+- 🧱 Internal protocol endpoints bypass app-state gating and reject app predicates at compile time.
+
+---
+
 ## [0.9.3] - App State Gating Defaults
 
 - ✅ Default app-state gating now applies to all endpoints unless an explicit app predicate is present; app-mode checks use `app::allows_updates()` and `app::is_queryable()`.

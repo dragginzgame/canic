@@ -24,6 +24,16 @@ pub struct AccessContext {
 }
 
 ///
+/// DefaultAppGuard
+///
+/// Synchronous app-mode guards used for implicit gating.
+///
+pub enum DefaultAppGuard {
+    AllowsUpdates,
+    IsQueryable,
+}
+
+///
 /// AccessExpr
 ///
 
@@ -206,23 +216,35 @@ pub mod rule {
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
     match eval_access_inner(expr, ctx).await {
         Ok(()) => Ok(()),
-        Err(failure) => {
-            AccessMetrics::increment(ctx.call, failure.metric_kind, failure.predicate);
-            log!(
-                Topic::Auth,
-                Warn,
-                "access denied kind={} predicate={} context={:?}: {}",
-                failure.metric_kind.as_str(),
-                failure.predicate,
-                failure.context,
-                failure.error,
-            );
-            Err(failure.error)
-        }
+        Err(failure) => Err(record_access_failure(ctx, failure)),
     }
 }
 
 type AccessEvalFuture<'a> = Pin<Box<dyn Future<Output = Result<(), AccessFailure>> + Send + 'a>>;
+
+pub fn eval_default_app_guard(
+    guard: DefaultAppGuard,
+    ctx: &AccessContext,
+) -> Result<(), AccessError> {
+    let result = match guard {
+        DefaultAppGuard::AllowsUpdates => access::guard::guard_app_update(),
+        DefaultAppGuard::IsQueryable => access::guard::guard_app_query(),
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let predicate = match guard {
+                DefaultAppGuard::AllowsUpdates => BuiltinPredicate::AppAllowsUpdates,
+                DefaultAppGuard::IsQueryable => BuiltinPredicate::AppIsQueryable,
+            };
+            Err(record_access_failure(
+                ctx,
+                AccessFailure::from_builtin(predicate, err),
+            ))
+        }
+    }
+}
 
 fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> AccessEvalFuture<'a> {
     Box::pin(async move {
@@ -379,4 +401,18 @@ impl BuiltinPredicate {
             | Self::DelegatedTokenValid => AccessMetricKind::Auth,
         }
     }
+}
+
+fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessError {
+    AccessMetrics::increment(ctx.call, failure.metric_kind, failure.predicate);
+    log!(
+        Topic::Auth,
+        Warn,
+        "access denied kind={} predicate={} context={:?}: {}",
+        failure.metric_kind.as_str(),
+        failure.predicate,
+        failure.context,
+        failure.error,
+    );
+    failure.error
 }

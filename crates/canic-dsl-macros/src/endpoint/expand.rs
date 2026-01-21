@@ -79,12 +79,12 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let returns_fallible = returns_fallible(&orig_sig);
 
     let has_explicit_requires = !args.requires.is_empty();
-    let access_expr = match build_access_expr(kind, &args, &orig_sig) {
-        Ok(expr) => expr,
+    let access_plan = match build_access_plan(kind, &args, &orig_sig) {
+        Ok(plan) => plan,
         Err(err) => return err.to_compile_error(),
     };
 
-    let wrapper_async = impl_async || access_expr.is_some();
+    let wrapper_async = impl_async || access_plan.requires_async();
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
@@ -110,7 +110,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let attempted = attempted(&call_ident);
 
     let access_stage = access_stage(
-        access_expr.as_ref(),
+        &access_plan,
         &call_ident,
         returns_fallible,
         has_explicit_requires,
@@ -207,18 +207,13 @@ fn attempted(call: &syn::Ident) -> TokenStream2 {
 }
 
 fn access_stage(
-    expr: Option<&TokenStream2>,
+    plan: &AccessPlan,
     call: &syn::Ident,
     returns_fallible: bool,
     has_explicit_requires: bool,
 ) -> TokenStream2 {
     let caller = format_ident!("__canic_caller");
     let ctx = format_ident!("__canic_access_ctx");
-    let expr_ident = format_ident!("__canic_access_expr");
-
-    let Some(expr) = expr else {
-        return quote!();
-    };
 
     let deny = if has_explicit_requires && returns_fallible {
         quote!(return Err(err.into());)
@@ -226,15 +221,37 @@ fn access_stage(
         quote!(::canic::cdk::api::trap(&err.to_string());)
     };
 
-    quote! {
-        let #caller = ::canic::cdk::api::msg_caller();
-        let #ctx = ::canic::__internal::core::access::expr::AccessContext {
-            caller: #caller,
-            call: #call,
-        };
-        let #expr_ident = #expr;
-        if let Err(err) = ::canic::__internal::core::access::expr::eval_access(&#expr_ident, &#ctx).await {
-            #deny
+    match plan {
+        AccessPlan::None => quote!(),
+        AccessPlan::DefaultApp(guard) => {
+            let guard_expr = guard_tokens(*guard);
+            quote! {
+                let #caller = ::canic::cdk::api::msg_caller();
+                let #ctx = ::canic::__internal::core::access::expr::AccessContext {
+                    caller: #caller,
+                    call: #call,
+                };
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_default_app_guard(
+                    #guard_expr,
+                    &#ctx,
+                ) {
+                    #deny
+                }
+            }
+        }
+        AccessPlan::Expr(expr) => {
+            let expr_ident = format_ident!("__canic_access_expr");
+            quote! {
+                let #caller = ::canic::cdk::api::msg_caller();
+                let #ctx = ::canic::__internal::core::access::expr::AccessContext {
+                    caller: #caller,
+                    call: #call,
+                };
+                let #expr_ident = #expr;
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_access(&#expr_ident, &#ctx).await {
+                    #deny
+                }
+            }
         }
     }
 }
@@ -243,11 +260,40 @@ fn access_stage(
 // Access expression synthesis
 // ---------------------------------------------------------------------------
 
-fn build_access_expr(
+#[derive(Clone, Copy)]
+enum DefaultAppGuard {
+    AllowsUpdates,
+    IsQueryable,
+}
+
+enum AccessPlan {
+    None,
+    DefaultApp(DefaultAppGuard),
+    Expr(TokenStream2),
+}
+
+impl AccessPlan {
+    fn requires_async(&self) -> bool {
+        matches!(self, AccessPlan::Expr(_))
+    }
+}
+
+fn guard_tokens(guard: DefaultAppGuard) -> TokenStream2 {
+    match guard {
+        DefaultAppGuard::AllowsUpdates => {
+            quote!(::canic::__internal::core::access::expr::DefaultAppGuard::AllowsUpdates)
+        }
+        DefaultAppGuard::IsQueryable => {
+            quote!(::canic::__internal::core::access::expr::DefaultAppGuard::IsQueryable)
+        }
+    }
+}
+
+fn build_access_plan(
     kind: EndpointKind,
     args: &ValidatedArgs,
     sig: &Signature,
-) -> syn::Result<Option<TokenStream2>> {
+) -> syn::Result<AccessPlan> {
     let is_app_command = is_app_command_endpoint(sig);
     let is_internal = args.internal || is_app_command;
     let has_app_state = exprs_have_app_state_predicate(&args.requires);
@@ -264,6 +310,14 @@ fn build_access_expr(
     let mut exprs = args.requires.clone();
 
     if !is_internal && !has_app_state {
+        if exprs.is_empty() {
+            let default_guard = match kind {
+                EndpointKind::Update => DefaultAppGuard::AllowsUpdates,
+                EndpointKind::Query => DefaultAppGuard::IsQueryable,
+            };
+            return Ok(AccessPlan::DefaultApp(default_guard));
+        }
+
         let injected = match kind {
             EndpointKind::Update => BuiltinPredicate::AppAllowsUpdates,
             EndpointKind::Query => BuiltinPredicate::AppIsQueryable,
@@ -272,12 +326,12 @@ fn build_access_expr(
     }
 
     if exprs.is_empty() {
-        return Ok(None);
+        return Ok(AccessPlan::None);
     }
 
     let exprs: Vec<_> = exprs.iter().map(expr_from_ast).collect();
 
-    Ok(Some(quote! {
+    Ok(AccessPlan::Expr(quote! {
         ::canic::__internal::core::access::expr::AccessExpr::All(vec![#(#exprs),*])
     }))
 }
