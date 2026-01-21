@@ -8,8 +8,8 @@
 controllers = []
 app_directory = ["auth_hub", "scale_hub", "shard_hub"]
 
-[app_state]
-mode = "enabled"
+[app]
+init_mode = "enabled"
 
 [delegation]
 enabled = true

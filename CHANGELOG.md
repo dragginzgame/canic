@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [Unreleased]
+
+- 🔧 Renamed config: `app_state` → `app`, `app.mode` → `app.init_mode`, and `whitelist` → `app.whitelist`.
+
+---
+
 ## [0.9.5] - Access Families + DSL Alignment
 
 - 🧭 Refactored access predicates into explicit families (`app`, `auth`, `env`) with `expr` as internal evaluation only.
@@ -17,7 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.9.4] - App State Init + Sync Access
 
-- ✅ App init mode is now config-driven (`app_state.mode`) with a default of `enabled`.
+- ✅ App init mode is now config-driven (`app.init_mode`) with a default of `enabled`.
 - ⚡ Endpoints only become async when explicit access predicates are present; implicit app gating stays sync.
 - 🧱 Internal protocol endpoints bypass app-state gating and reject app predicates at compile time.
 
@@ -27,7 +33,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - ✅ Default app-state gating now applies to all endpoints unless an explicit app predicate is present; app-mode checks use `app::allows_updates()` and `app::is_queryable()`.
 - 🧱 Internal protocol endpoints can be marked with `internal` to bypass app-state gating; app predicates are rejected at compile time for these endpoints.
-- ⚙️ Added `app_state.mode` configuration for initial app mode (default `enabled`) and apply it during canister init.
+- ⚙️ Added `app.init_mode` configuration for initial app mode (default `enabled`) and apply it during canister init.
 - 🧹 Removed `app::is_live` from the DSL, access layer, and docs.
 
 ---

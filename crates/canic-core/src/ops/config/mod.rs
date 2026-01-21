@@ -105,7 +105,7 @@ impl ConfigOps {
     }
 
     pub(crate) fn app_init_mode() -> Result<AppMode, InternalError> {
-        let mode = match Config::get()?.app_state.mode {
+        let mode = match Config::get()?.app.init_mode {
             AppInitMode::Enabled => AppMode::Enabled,
             AppInitMode::Readonly => AppMode::Readonly,
             AppInitMode::Disabled => AppMode::Disabled,

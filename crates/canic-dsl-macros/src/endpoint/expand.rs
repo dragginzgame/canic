@@ -264,7 +264,7 @@ fn access_stage(
 /// DefaultAppGuard
 ///
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum DefaultAppGuard {
     AllowsUpdates,
     IsQueryable,
@@ -274,6 +274,7 @@ enum DefaultAppGuard {
 /// AccessPlan
 ///
 
+#[derive(Debug)]
 enum AccessPlan {
     None,
     DefaultApp(DefaultAppGuard),
@@ -606,5 +607,68 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
                 quote!(#[::canic::cdk::update(#(#forwarded),*)])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_app_guard_keeps_sync_wrapper_sync() {
+        let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
+        let args = ValidatedArgs {
+            forwarded: Vec::new(),
+            requires: Vec::new(),
+            internal: false,
+        };
+        let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
+
+        assert!(!plan.requires_async());
+        assert!(!(sig.asyncness.is_some() || plan.requires_async()));
+    }
+
+    #[test]
+    fn explicit_requires_forces_async_wrapper() {
+        let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
+        let args = ValidatedArgs {
+            forwarded: Vec::new(),
+            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerIsController,
+            ))],
+            internal: false,
+        };
+        let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
+
+        assert!(plan.requires_async());
+        assert!(sig.asyncness.is_some() || plan.requires_async());
+    }
+
+    #[test]
+    fn app_command_endpoints_skip_app_guard_and_reject_gating() {
+        let sig: Signature = syn::parse_quote!(
+            fn apply(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error>
+        );
+
+        let args = ValidatedArgs {
+            forwarded: Vec::new(),
+            requires: Vec::new(),
+            internal: false,
+        };
+        let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
+        assert!(matches!(plan, AccessPlan::None));
+
+        let args = ValidatedArgs {
+            forwarded: Vec::new(),
+            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::AppAllowsUpdates,
+            ))],
+            internal: false,
+        };
+        let err = build_access_plan(EndpointKind::Update, &args, &sig).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("AppCommand endpoints must never be gated on application state.")
+        );
     }
 }

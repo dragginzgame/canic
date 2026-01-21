@@ -131,8 +131,9 @@ pub struct ConfigModel {
     #[serde(default)]
     pub delegation: DelegationConfig,
 
+    /// App-level configuration (init mode, whitelist).
     #[serde(default)]
-    pub app_state: AppStateConfig,
+    pub app: AppConfig,
 
     /// Canister roles that participate in the application directory.
     /// These must exist in the PRIME subnet and be NODE canisters.
@@ -142,14 +143,6 @@ pub struct ConfigModel {
     /// All subnets keyed by role.
     #[serde(default)]
     pub subnets: BTreeMap<SubnetRole, SubnetConfig>,
-
-    /// Principal whitelist.
-    ///
-    /// Semantics:
-    /// - None  => allow all principals (default-open)
-    /// - Some  => allow only listed principals (default-closed)
-    #[serde(default)]
-    pub whitelist: Option<Whitelist>,
 }
 
 impl ConfigModel {
@@ -195,7 +188,8 @@ impl ConfigModel {
     /// can be rejected at config load time.
     #[must_use]
     pub fn is_whitelisted(&self, principal: &Principal) -> bool {
-        self.whitelist
+        self.app
+            .whitelist
             .as_ref()
             .is_none_or(|w| w.principals.contains(&principal.to_string()))
     }
@@ -212,7 +206,7 @@ impl Validate for ConfigModel {
 
         self.log.validate()?;
         self.delegation.validate()?;
-        self.app_state.validate()?;
+        self.app.validate()?;
 
         // PRIME subnet must exist
         let prime = SubnetRole::PRIME;
@@ -267,10 +261,6 @@ impl Validate for ConfigModel {
             )));
         }
 
-        if let Some(list) = &self.whitelist {
-            list.validate()?;
-        }
-
         for subnet in self.subnets.values() {
             subnet.validate()?;
         }
@@ -280,28 +270,38 @@ impl Validate for ConfigModel {
 }
 
 ///
-/// AppStateConfig
-///
-/// Controls the initial application mode on canister install.
+/// AppConfig
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct AppStateConfig {
+pub struct AppConfig {
     #[serde(default)]
-    pub mode: AppInitMode,
+    pub init_mode: AppInitMode,
+
+    /// Principal whitelist.
+    ///
+    /// Semantics:
+    /// - None  => allow all principals (default-open)
+    /// - Some  => allow only listed principals (default-closed)
+    #[serde(default)]
+    pub whitelist: Option<Whitelist>,
 }
 
-impl Default for AppStateConfig {
+impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            mode: AppInitMode::Enabled,
+            init_mode: AppInitMode::Enabled,
+            whitelist: None,
         }
     }
 }
 
-impl Validate for AppStateConfig {
+impl Validate for AppConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
+        if let Some(list) = &self.whitelist {
+            list.validate()?;
+        }
         Ok(())
     }
 }
@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn invalid_whitelist_principal_is_rejected() {
         let mut cfg = ConfigModel::test_default();
-        cfg.whitelist = Some(Whitelist {
+        cfg.app.whitelist = Some(Whitelist {
             principals: std::iter::once("not-a-principal".into()).collect(),
         });
 

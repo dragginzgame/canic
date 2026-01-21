@@ -4,7 +4,7 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Global cluster settings (`controllers`, `app_directory`, `standards`, `whitelist`).
+- Global cluster settings (`controllers`, `app_directory`, `standards`, `app`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 
@@ -37,11 +37,18 @@ Optional list of controller principals appended to every provisioned canister.
 
 Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "node"`.
 
-### `[app_state]`
+### `[app]`
 
 Initial application mode applied at canister install.
 
-- `mode = "enabled" | "readonly" | "disabled"` – default `enabled`.
+- `init_mode = "enabled" | "readonly" | "disabled"` – default `enabled`.
+
+### `[app.whitelist]`
+
+Optional allow-list for privileged operations.
+
+- `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
+  - If omitted, whitelist checks allow all principals.
 
 ### `[subnets.<name>.pool]`
 
@@ -69,13 +76,6 @@ Feature toggles tied to public standards.
 
 - `icrc21: bool` – enable the ICRC-21 consent endpoint (default `false`).
 - `icrc103: bool` – include ICRC-103 metadata (default `false`).
-
-### `[whitelist]`
-
-Optional allow-list for privileged operations.
-
-- `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
-  - If omitted, whitelist checks allow all principals.
 
 ---
 

@@ -419,3 +419,62 @@ fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessE
     );
     failure.error
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        access,
+        ids::{EndpointCall, EndpointCallKind, EndpointId},
+        storage::stable::env::{Env, EnvRecord},
+        test::seams,
+    };
+
+    struct EnvRestore(EnvRecord);
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            Env::import(self.0.clone());
+        }
+    }
+
+    #[test]
+    fn caller_is_parent_matches_access_auth() {
+        let _guard = seams::lock();
+        let original = Env::export();
+        let _restore = EnvRestore(original.clone());
+
+        let parent = seams::p(1);
+        let other = seams::p(2);
+        Env::import(EnvRecord {
+            parent_pid: Some(parent),
+            ..EnvRecord::default()
+        });
+
+        let expr = caller::is_parent();
+
+        let ctx_parent = AccessContext {
+            caller: parent,
+            call: test_call(),
+        };
+        let ctx_other = AccessContext {
+            caller: other,
+            call: test_call(),
+        };
+
+        let expr_parent = futures::executor::block_on(eval_access(&expr, &ctx_parent));
+        let auth_parent = futures::executor::block_on(access::auth::is_parent(parent));
+        assert_eq!(expr_parent.is_ok(), auth_parent.is_ok());
+
+        let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
+        let auth_other = futures::executor::block_on(access::auth::is_parent(other));
+        assert_eq!(expr_other.is_ok(), auth_other.is_ok());
+    }
+
+    fn test_call() -> EndpointCall {
+        EndpointCall {
+            endpoint: EndpointId::new("test"),
+            kind: EndpointCallKind::Update,
+        }
+    }
+}
