@@ -2,9 +2,10 @@ mod root;
 
 use canic::{
     Error,
-    api::access::DelegatedTokenApi,
+    api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+    ids::BuildNetwork,
     protocol,
 };
 use canic_internal::canister;
@@ -44,7 +45,7 @@ fn delegation_issuance_flow() {
 
     let proof = issue_delegation_proof(&setup, auth_hub_pid, &cert);
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, setup.root_id)
+    DelegationApi::verify_delegation_proof(&proof, setup.root_id)
         .expect("delegation proof must verify");
 }
 
@@ -143,12 +144,11 @@ fn delegated_token_flow() {
 }
 
 fn should_run_certified(test_name: &str) -> bool {
-    match std::env::var("CANIC_UNCERTIFIED_TESTING") {
-        Ok(value) if value == "1" => {
-            eprintln!("{test_name}: skipped (uncertified runtime)");
-            false
-        }
-        _ => true,
+    if NetworkApi::build_network() == Some(BuildNetwork::Ic) {
+        true
+    } else {
+        eprintln!("{test_name}: skipped (non-ic build)");
+        false
     }
 }
 

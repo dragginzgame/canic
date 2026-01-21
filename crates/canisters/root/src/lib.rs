@@ -102,11 +102,7 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
 
 /// create_blank
 /// Controller-only helper for local Canic testing.
-#[canic_update(
-    auth(caller_is_controller),
-    guard(app_is_live),
-    env(self_is_prime_subnet)
-)]
+#[canic_update(requires(caller::is_controller()))]
 async fn create_blank() -> Result<CreateCanisterResponse, Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));
@@ -122,7 +118,7 @@ async fn create_blank() -> Result<CreateCanisterResponse, Error> {
 
 /// stress_perf
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
-#[canic_update(guard(app_is_live), auth(caller_is_controller))]
+#[canic_update(requires(caller::is_controller()))]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));

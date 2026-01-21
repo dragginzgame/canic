@@ -10,7 +10,7 @@
 
 use canic::{
     Error,
-    api::{access::DelegatedTokenApi, auth::DelegationApi, env::EnvQuery},
+    api::{auth::DelegationApi, env::EnvQuery},
     cdk::api::canister_self,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof},
     prelude::*,
@@ -37,7 +37,7 @@ async fn canic_upgrade() {}
 /// Store a root-signed delegation proof for this shard.
 ///
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
-#[canic_update(auth(caller_is_registered_to_subnet))]
+#[canic_update(internal, requires(caller::is_registered_to_subnet()))]
 async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));
@@ -54,7 +54,7 @@ async fn auth_shard_set_proof(proof: DelegationProof) -> Result<(), Error> {
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
+    DelegationApi::verify_delegation_proof(&proof, root_pid)?;
     DelegationApi::store_proof(proof)
 }
 
@@ -69,7 +69,7 @@ async fn auth_shard_mint_token(claims: DelegatedTokenClaims) -> Result<Delegated
     }
 
     let proof = DelegationApi::require_proof()?;
-    DelegatedTokenApi::sign_token(TOKEN_VERSION, claims, proof)
+    DelegationApi::sign_token(TOKEN_VERSION, claims, proof)
 }
 
 export_candid!();

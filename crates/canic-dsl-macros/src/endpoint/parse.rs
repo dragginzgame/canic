@@ -1,29 +1,29 @@
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
+use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 
 //
 // ============================================================================
-// parse — attribute grammar only (symbolic DSL)
+// parse - attribute grammar (expression-only access DSL)
 // ============================================================================
 //
 // Allowed access DSL:
-// #[canic_update(guard(...), auth(...), env(...), rule(...))]
-
 //
-// GuardSymbol
+//   #[canic_update(requires(...))]
 //
-
-#[derive(Clone, Debug)]
-pub enum GuardSymbol {
-    AppIsLive,
-}
-
-//
-// AuthSymbol
+// `requires(...)` is the only access-control surface.
+// All access semantics are expressed as AccessExprAst.
 //
 
-#[derive(Clone, Debug)]
-pub enum AuthSymbol {
+///
+/// BuiltinPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum BuiltinPredicate {
+    AppAllowsUpdates,
+    AppIsQueryable,
+    SelfIsPrimeSubnet,
+    SelfIsPrimeRoot,
     CallerIsController,
     CallerIsParent,
     CallerIsChild,
@@ -32,26 +32,30 @@ pub enum AuthSymbol {
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
     DelegatedTokenValid,
-}
-
-//
-// EnvSymbol
-//
-
-#[derive(Clone, Debug)]
-pub enum EnvSymbol {
-    SelfIsPrimeSubnet,
-    SelfIsPrimeRoot,
-}
-
-//
-// RuleSymbol
-//
-
-#[derive(Clone, Debug)]
-pub enum RuleSymbol {
     BuildIcOnly,
     BuildLocalOnly,
+}
+
+///
+/// AccessExprAst
+///
+
+#[derive(Clone, Debug)]
+pub enum AccessExprAst {
+    All(Vec<Self>),
+    Any(Vec<Self>),
+    Not(Box<Self>),
+    Pred(AccessPredicateAst),
+}
+
+///
+/// AccessPredicateAst
+///
+
+#[derive(Clone, Debug)]
+pub enum AccessPredicateAst {
+    Builtin(BuiltinPredicate),
+    Custom(TokenStream2),
 }
 
 //
@@ -61,10 +65,10 @@ pub enum RuleSymbol {
 #[derive(Debug)]
 pub struct ParsedArgs {
     pub forwarded: Vec<TokenStream2>,
-    pub guard: Vec<GuardSymbol>,
-    pub auth: Vec<AuthSymbol>,
-    pub env: Vec<EnvSymbol>,
-    pub rules: Vec<RuleSymbol>,
+    pub requires: Vec<AccessExprAst>,
+    pub requires_async: bool,
+    pub requires_fallible: bool,
+    pub internal: bool,
 }
 
 pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
@@ -74,192 +78,273 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
 
     let metas = Punctuated::<Meta, Token![,]>::parse_terminated
         .parse2(attr.clone())
-        .map_err(|_| {
-            syn::Error::new_spanned(
-                &attr,
-                "expected a comma-separated list of guard(...), auth(...), env(...), or rule(...)",
-            )
-        })?;
+        .map_err(|_| syn::Error::new_spanned(&attr, "expected requires(...)"))?;
 
-    let mut guard = Vec::new();
-    let mut auth = Vec::new();
-    let mut env = Vec::new();
-    let mut rules = Vec::new();
+    let mut requires = Vec::new();
+    let mut internal = false;
 
     for meta in metas {
         match meta {
-            // guard(...)
-            Meta::List(list) if list.path.is_ident("guard") => {
-                let symbols = parse_paths(&list)?;
-                let parsed: Vec<GuardSymbol> = symbols
-                    .into_iter()
-                    .map(parse_guard_symbol)
-                    .collect::<syn::Result<_>>()?;
-
-                guard.extend(parsed);
+            Meta::List(list) if list.path.is_ident("requires") => {
+                requires.push(parse_requires(&list)?);
             }
-
-            // auth(...)
-            Meta::List(list) if list.path.is_ident("auth") => {
-                let symbols = parse_paths(&list)?;
-                let parsed: Vec<AuthSymbol> = symbols
-                    .into_iter()
-                    .map(parse_auth_symbol)
-                    .collect::<syn::Result<_>>()?;
-
-                auth.extend(parsed);
+            Meta::Path(path) if path.is_ident("internal") => {
+                if internal {
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        "internal endpoint marker must appear only once",
+                    ));
+                }
+                internal = true;
             }
-
-            // env(...)
-            Meta::List(list) if list.path.is_ident("env") => {
-                let symbols = parse_paths(&list)?;
-                let parsed: Vec<EnvSymbol> = symbols
-                    .into_iter()
-                    .map(parse_env_symbol)
-                    .collect::<syn::Result<_>>()?;
-
-                env.extend(parsed);
+            Meta::NameValue(nv) if nv.path.is_ident("internal") => {
+                if internal {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "internal endpoint marker must appear only once",
+                    ));
+                }
+                let value = match &nv.value {
+                    Expr::Lit(expr) => match &expr.lit {
+                        syn::Lit::Bool(lit) => lit.value,
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                nv,
+                                "internal must be set to a boolean literal",
+                            ));
+                        }
+                    },
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            nv,
+                            "internal must be set to a boolean literal",
+                        ));
+                    }
+                };
+                if !value {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "internal must be true when specified",
+                    ));
+                }
+                internal = true;
             }
-
-            // rule(...)
-            Meta::List(list) if list.path.is_ident("rule") => {
-                let symbols = parse_paths(&list)?;
-                let parsed: Vec<RuleSymbol> = symbols
-                    .into_iter()
-                    .map(parse_rule_symbol)
-                    .collect::<syn::Result<_>>()?;
-
-                rules.extend(parsed);
-            }
-
-            Meta::List(list) if list.path.is_ident("app") => {
-                return Err(syn::Error::new_spanned(
-                    list,
-                    "app DSL is not supported; use guard instead",
-                ));
-            }
-
             Meta::List(list) => {
                 return Err(syn::Error::new_spanned(
                     list,
-                    "unknown access DSL clause; expected guard(...), auth(...), env(...), or rule(...)",
+                    "unsupported access clause; use requires(...)",
                 ));
             }
-
             Meta::Path(path) => {
                 return Err(syn::Error::new_spanned(
                     path,
-                    "access DSL clauses must be lists like guard(...), auth(...), env(...), or rule(...)",
+                    "access control must be expressed via requires(...) or internal",
                 ));
             }
-
-            Meta::NameValue(name_value) => {
+            Meta::NameValue(nv) => {
                 return Err(syn::Error::new_spanned(
-                    name_value,
-                    "access DSL clauses must be lists like guard(...), auth(...), env(...), or rule(...)",
+                    nv,
+                    "access control must be expressed via requires(...) or internal",
                 ));
             }
         }
     }
 
+    if requires.is_empty() && !internal {
+        return Err(syn::Error::new_spanned(attr, "expected requires(...)"));
+    }
+
+    let requires_async = !requires.is_empty();
+    let requires_fallible = !requires.is_empty();
+
     Ok(ParsedArgs {
         forwarded: Vec::new(),
-        guard,
-        auth,
-        env,
-        rules,
+        requires,
+        requires_async,
+        requires_fallible,
+        internal,
     })
 }
 
 const fn empty() -> ParsedArgs {
     ParsedArgs {
         forwarded: Vec::new(),
-        guard: Vec::new(),
-        auth: Vec::new(),
-        env: Vec::new(),
-        rules: Vec::new(),
+        requires: Vec::new(),
+        requires_async: false,
+        requires_fallible: false,
+        internal: false,
     }
 }
 
 //
 // ---------------------------------------------------------------------------
-// Symbol parsing helpers
+// Access expression parsing helpers
 // ---------------------------------------------------------------------------
 //
+fn parse_requires(list: &syn::MetaList) -> syn::Result<AccessExprAst> {
+    let exprs = parse_expr_list(&list.tokens)?;
+    Ok(AccessExprAst::All(exprs))
+}
 
-fn parse_paths(list: &syn::MetaList) -> syn::Result<Vec<Path>> {
-    let metas = Punctuated::<Meta, Token![,]>::parse_terminated
-        .parse2(list.tokens.clone())
+fn parse_expr_list(tokens: &TokenStream2) -> syn::Result<Vec<AccessExprAst>> {
+    let exprs = Punctuated::<Expr, Token![,]>::parse_terminated
+        .parse2(tokens.clone())
         .map_err(|_| {
             syn::Error::new_spanned(
-                list,
-                "expected a comma-separated list of DSL symbols (paths only; no expressions or closures)",
+                tokens,
+                "expected a comma-separated list of access expressions",
             )
         })?;
 
-    if metas.is_empty() {
+    if exprs.is_empty() {
         return Err(syn::Error::new_spanned(
-            list,
-            "expected at least one DSL symbol",
+            tokens,
+            "expected at least one access expression",
         ));
     }
 
-    let mut paths = Vec::new();
-    for meta in metas {
-        match meta {
-            Meta::Path(path) => paths.push(path),
-            Meta::List(list) => {
+    exprs.into_iter().map(parse_expr).collect()
+}
+
+fn parse_expr(expr: Expr) -> syn::Result<AccessExprAst> {
+    match expr {
+        Expr::Call(call) => parse_call_expr(call),
+        other => Err(syn::Error::new_spanned(
+            other,
+            "expected access expression call (all/any/not/custom or built-in predicate)",
+        )),
+    }
+}
+
+fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
+    let path = match *call.func {
+        Expr::Path(expr) => expr.path,
+        other => {
+            return Err(syn::Error::new_spanned(
+                other,
+                "access expressions must be path-based calls",
+            ));
+        }
+    };
+
+    let name = path_ident(&path)?.to_string();
+    let mut args = call.args.into_iter();
+
+    match name.as_str() {
+        "all" | "requires" => {
+            let exprs = parse_expr_args(args)?;
+            Ok(AccessExprAst::All(exprs))
+        }
+        "any" => {
+            let exprs = parse_expr_args(args)?;
+            Ok(AccessExprAst::Any(exprs))
+        }
+        "not" => {
+            let expr = args
+                .next()
+                .ok_or_else(|| syn::Error::new_spanned(&path, "not(...) requires one argument"))?;
+            if args.next().is_some() {
                 return Err(syn::Error::new_spanned(
-                    list,
-                    "DSL symbols must be paths; remove parentheses",
+                    &path,
+                    "not(...) accepts exactly one argument",
                 ));
             }
-            Meta::NameValue(name_value) => {
+            Ok(AccessExprAst::Not(Box::new(parse_expr(expr)?)))
+        }
+        "custom" => {
+            let expr = args.next().ok_or_else(|| {
+                syn::Error::new_spanned(&path, "custom(...) requires one argument")
+            })?;
+            if args.next().is_some() {
                 return Err(syn::Error::new_spanned(
-                    name_value,
-                    "DSL symbols must be paths; remove assignments",
+                    &path,
+                    "custom(...) accepts exactly one argument",
                 ));
             }
+            Ok(AccessExprAst::Pred(AccessPredicateAst::Custom(
+                quote::quote!(#expr),
+            )))
+        }
+        _ => {
+            if args.next().is_some() {
+                return Err(syn::Error::new_spanned(
+                    &path,
+                    "built-in predicates do not accept arguments",
+                ));
+            }
+            let builtin = builtin_from_path(&path).ok_or_else(|| {
+                if builtin_from_path_tail(&path).is_some() {
+                    return syn::Error::new_spanned(
+                        &path,
+                        "built-in predicates must use short paths like auth::delegated_token_valid()",
+                    );
+                }
+                syn::Error::new_spanned(
+                    &path,
+                    "unknown access predicate; expected built-in predicate or any/all/not/custom",
+                )
+            })?;
+            Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)))
         }
     }
-
-    Ok(paths)
 }
 
-fn parse_guard_symbol(path: Path) -> syn::Result<GuardSymbol> {
-    match path_ident(&path)?.to_string().as_str() {
-        "app_is_live" => Ok(GuardSymbol::AppIsLive),
-        _ => Err(unknown_symbol(path, "guard")),
+fn parse_expr_args<I>(args: I) -> syn::Result<Vec<AccessExprAst>>
+where
+    I: IntoIterator<Item = Expr>,
+{
+    let mut out = Vec::new();
+    for expr in args {
+        out.push(parse_expr(expr)?);
     }
-}
-
-fn parse_auth_symbol(path: Path) -> syn::Result<AuthSymbol> {
-    match path_ident(&path)?.to_string().as_str() {
-        "caller_is_controller" => Ok(AuthSymbol::CallerIsController),
-        "caller_is_parent" => Ok(AuthSymbol::CallerIsParent),
-        "caller_is_child" => Ok(AuthSymbol::CallerIsChild),
-        "caller_is_root" => Ok(AuthSymbol::CallerIsRoot),
-        "caller_is_same_canister" => Ok(AuthSymbol::CallerIsSameCanister),
-        "caller_is_registered_to_subnet" => Ok(AuthSymbol::CallerIsRegisteredToSubnet),
-        "caller_is_whitelisted" => Ok(AuthSymbol::CallerIsWhitelisted),
-        "delegated_token_valid" => Ok(AuthSymbol::DelegatedTokenValid),
-        _ => Err(unknown_symbol(path, "auth")),
+    if out.is_empty() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "expected at least one access expression",
+        ));
     }
+    Ok(out)
 }
 
-fn parse_env_symbol(path: Path) -> syn::Result<EnvSymbol> {
-    match path_ident(&path)?.to_string().as_str() {
-        "self_is_prime_subnet" => Ok(EnvSymbol::SelfIsPrimeSubnet),
-        "self_is_prime_root" => Ok(EnvSymbol::SelfIsPrimeRoot),
-        _ => Err(unknown_symbol(path, "env")),
+//
+// ---------------------------------------------------------------------------
+// Built-in predicate resolution
+// ---------------------------------------------------------------------------
+//
+
+fn builtin_from_path(path: &Path) -> Option<BuiltinPredicate> {
+    if path.leading_colon.is_some() {
+        return None;
     }
+    if path.segments.len() != 2 {
+        return None;
+    }
+    builtin_from_path_tail(path)
 }
 
-fn parse_rule_symbol(path: Path) -> syn::Result<RuleSymbol> {
-    match path_ident(&path)?.to_string().as_str() {
-        "build_ic_only" => Ok(RuleSymbol::BuildIcOnly),
-        "build_local_only" => Ok(RuleSymbol::BuildLocalOnly),
-        _ => Err(unknown_symbol(path, "rule")),
+fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back()?;
+    let module = names.next_back();
+
+    match (module.as_deref(), last.as_str()) {
+        (Some("app"), "allows_updates") => Some(BuiltinPredicate::AppAllowsUpdates),
+        (Some("app"), "is_queryable") => Some(BuiltinPredicate::AppIsQueryable),
+        (Some("env"), "is_prime_subnet") => Some(BuiltinPredicate::SelfIsPrimeSubnet),
+        (Some("env"), "is_prime_root") => Some(BuiltinPredicate::SelfIsPrimeRoot),
+        (Some("caller"), "is_controller") => Some(BuiltinPredicate::CallerIsController),
+        (Some("caller"), "is_parent") => Some(BuiltinPredicate::CallerIsParent),
+        (Some("caller"), "is_child") => Some(BuiltinPredicate::CallerIsChild),
+        (Some("caller"), "is_root") => Some(BuiltinPredicate::CallerIsRoot),
+        (Some("caller"), "is_same_canister") => Some(BuiltinPredicate::CallerIsSameCanister),
+        (Some("caller"), "is_registered_to_subnet") => {
+            Some(BuiltinPredicate::CallerIsRegisteredToSubnet)
+        }
+        (Some("caller"), "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
+        (Some("auth"), "delegated_token_valid") => Some(BuiltinPredicate::DelegatedTokenValid),
+        (Some("rule"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
+        (Some("rule"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
+        _ => None,
     }
 }
 
@@ -277,8 +362,4 @@ fn path_ident(path: &Path) -> syn::Result<&Ident> {
         .last()
         .map(|segment| &segment.ident)
         .ok_or_else(|| syn::Error::new_spanned(path, "expected a DSL symbol"))
-}
-
-fn unknown_symbol(path: Path, category: &str) -> syn::Error {
-    syn::Error::new_spanned(path, format!("unknown {category} DSL symbol"))
 }

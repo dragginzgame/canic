@@ -66,7 +66,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use crate::{
         api::{
-            access::{AuthAccessApi, EnvAccessApi, GuardAccessApi, RuleAccessApi},
             canister::CanisterRole,
             ic::Call,
             ops::{log, perf},
@@ -79,7 +78,6 @@ pub mod prelude {
         },
     };
 
-    pub use canic_dsl::access::{auth::*, env::*, guard::*};
     pub use canic_dsl_macros::{canic_query, canic_update};
 }
 
@@ -92,13 +90,6 @@ pub mod prelude {
 ///
 
 pub mod api {
-    /// Access & authorization
-    pub mod access {
-        pub use crate::__internal::core::api::access::{
-            auth::AuthAccessApi, env::EnvAccessApi, guard::GuardAccessApi, rule::RuleAccessApi,
-            token::DelegatedTokenApi,
-        };
-    }
 
     /// Delegation workflow helpers
     pub mod auth {

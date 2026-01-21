@@ -7,8 +7,11 @@ use crate::{
         config::ConfigOps,
         runtime::env::EnvOps,
         storage::{
-            directory::mapper::{AppDirectoryRecordMapper, SubnetDirectoryRecordMapper},
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            directory::{
+                app::AppDirectoryOps,
+                mapper::{AppDirectoryRecordMapper, SubnetDirectoryRecordMapper},
+                subnet::SubnetDirectoryOps,
+            },
             registry::subnet::SubnetRegistryOps,
         },
     },

@@ -3,8 +3,10 @@ use serde::{Deserialize, Serialize};
 
 ///
 /// AccessMetricKind
-/// Enumerates the access-control stage that rejected the call.
+/// Enumerates the access predicate kind that rejected the call.
 /// Access metrics are emitted only on denial.
+/// Custom predicates report AccessMetricKind::Custom.
+/// Predicate names are recorded separately alongside the kind.
 ///
 
 #[derive(
@@ -13,9 +15,23 @@ use serde::{Deserialize, Serialize};
 #[remain::sorted]
 pub enum AccessMetricKind {
     Auth,
+    Custom,
     Env,
     Guard,
     Rule,
+}
+
+impl AccessMetricKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auth => "auth",
+            Self::Custom => "custom",
+            Self::Env => "env",
+            Self::Guard => "guard",
+            Self::Rule => "rule",
+        }
+    }
 }
 
 ///

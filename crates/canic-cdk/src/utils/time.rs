@@ -52,7 +52,7 @@ pub fn now_nanos() -> u64 {
 ///
 
 #[cfg(test)]
-pub mod test {
+mod tests {
     use super::*;
 
     #[test]

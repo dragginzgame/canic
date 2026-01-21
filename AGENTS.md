@@ -528,6 +528,7 @@ Rules:
   * `///`
   * (blank line)
   * then the `struct` definition
+* Prefer a blank line after any multi-line `///` doc comment block before the item it documents (in addition to the struct-specific rule above).
 * Keep comments directly adjacent
 * Use section banners for structure
 * Large groups of related functions must be separated with a header divider like:

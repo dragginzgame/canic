@@ -1,7 +1,8 @@
-pub use crate::ops::runtime::timer::TimerId;
-
 use crate::ops::runtime::timer::TimerOps;
 use std::{cell::RefCell, future::Future, thread::LocalKey, time::Duration};
+
+// re-exports
+pub use crate::ops::runtime::timer::TimerId;
 
 ///
 /// TimerWorkflow

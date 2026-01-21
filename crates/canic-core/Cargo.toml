@@ -13,11 +13,8 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[features]
-intent-test-canisters = []
-uncertified-testing = []
-
 [dependencies]
+async-trait = { workspace = true }
 candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-memory = { workspace = true }

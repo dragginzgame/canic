@@ -10,7 +10,7 @@
 
 use canic::{
     Error,
-    api::{access::DelegatedTokenApi, auth::DelegationApi, env::EnvQuery},
+    api::{auth::DelegationApi, env::EnvQuery},
     dto::auth::{DelegatedToken, DelegationProof},
     prelude::*,
 };
@@ -49,7 +49,7 @@ async fn test() -> Result<(), Error> {
 
 /// test_set_delegation_proof
 /// Root-only helper to install a delegation proof for auth tests.
-#[canic_update(auth(caller_is_root))]
+#[canic_update(internal, requires(caller::is_root()))]
 async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));
@@ -59,13 +59,13 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
+    DelegationApi::verify_delegation_proof(&proof, root_pid)?;
     DelegationApi::store_proof(proof)
 }
 
 /// test_verify_delegated_token
 /// Verifies delegated tokens using the access guard.
-#[canic_update(auth(delegated_token_valid))]
+#[canic_update(requires(auth::delegated_token_valid()))]
 async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));

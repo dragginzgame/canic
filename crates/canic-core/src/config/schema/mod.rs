@@ -131,6 +131,9 @@ pub struct ConfigModel {
     #[serde(default)]
     pub delegation: DelegationConfig,
 
+    #[serde(default)]
+    pub app_state: AppStateConfig,
+
     /// Canister roles that participate in the application directory.
     /// These must exist in the PRIME subnet and be NODE canisters.
     #[serde(default)]
@@ -209,6 +212,7 @@ impl Validate for ConfigModel {
 
         self.log.validate()?;
         self.delegation.validate()?;
+        self.app_state.validate()?;
 
         // PRIME subnet must exist
         let prime = SubnetRole::PRIME;
@@ -276,6 +280,48 @@ impl Validate for ConfigModel {
 }
 
 ///
+/// AppStateConfig
+///
+/// Controls the initial application mode on canister install.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AppStateConfig {
+    #[serde(default)]
+    pub mode: AppInitMode,
+}
+
+impl Default for AppStateConfig {
+    fn default() -> Self {
+        Self {
+            mode: AppInitMode::Enabled,
+        }
+    }
+}
+
+impl Validate for AppStateConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        Ok(())
+    }
+}
+
+///
+/// AppInitMode
+///
+/// Configurable initial app state.
+///
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AppInitMode {
+    #[default]
+    Enabled,
+    Readonly,
+    Disabled,
+}
+
+///
 /// DelegationConfig
 ///
 /// Controls delegated token authentication.
@@ -285,6 +331,7 @@ impl Validate for ConfigModel {
 /// - max_ttl_secs = None => no upper TTL bound
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DelegationConfig {

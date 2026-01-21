@@ -37,6 +37,12 @@ Optional list of controller principals appended to every provisioned canister.
 
 Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "node"`.
 
+### `[app_state]`
+
+Initial application mode applied at canister install.
+
+- `mode = "enabled" | "readonly" | "disabled"` – default `enabled`.
+
 ### `[subnets.<name>.pool]`
 
 Controls the warm canister pool for a subnet.

@@ -10,7 +10,7 @@
 
 use canic::{
     Error,
-    api::{access::DelegatedTokenApi, canister::placement::ShardingApi, env::EnvQuery, ic::Call},
+    api::{auth::DelegationApi, canister::placement::ShardingApi, env::EnvQuery, ic::Call},
     cdk::{types::Principal, utils::time::now_secs},
     dto::auth::{DelegationCert, DelegationProof},
     prelude::*,
@@ -123,7 +123,7 @@ async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Re
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegatedTokenApi::verify_delegation_proof(&proof, root_pid)?;
+    DelegationApi::verify_delegation_proof(&proof, root_pid)?;
     install_proof(shard_pid, proof).await
 }
 

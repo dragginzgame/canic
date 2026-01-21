@@ -1,26 +1,16 @@
+//! App mode gating for endpoints.
+//!
+//! The guard bucket only inspects the application mode and does not
+//! evaluate caller identity or environment predicates.
+
 use crate::{
     access::AccessError, ops::storage::state::app::AppStateOps,
     storage::stable::state::app::AppMode,
 };
-use thiserror::Error as ThisError;
-
-///
-/// GuardAccessError
-/// Access errors raised by application state guards.
-///
-
-#[derive(Debug, ThisError)]
-pub enum GuardAccessError {
-    #[error("application is disabled")]
-    AppDisabled,
-
-    #[error("application is in readonly mode")]
-    AppReadonly,
-}
 
 /// Validate access for query calls.
 ///
-/// Rules:
+/// Behavior:
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_app_query() -> Result<(), AccessError> {
@@ -28,13 +18,13 @@ pub fn guard_app_query() -> Result<(), AccessError> {
 
     match mode {
         AppMode::Enabled | AppMode::Readonly => Ok(()),
-        AppMode::Disabled => Err(GuardAccessError::AppDisabled.into()),
+        AppMode::Disabled => Err(AccessError::Denied("application is disabled".to_string())),
     }
 }
 
 /// Validate access for update calls.
 ///
-/// Rules:
+/// Behavior:
 /// - Enabled mode permits updates.
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
@@ -43,7 +33,9 @@ pub fn guard_app_update() -> Result<(), AccessError> {
 
     match mode {
         AppMode::Enabled => Ok(()),
-        AppMode::Readonly => Err(GuardAccessError::AppReadonly.into()),
-        AppMode::Disabled => Err(GuardAccessError::AppDisabled.into()),
+        AppMode::Readonly => Err(AccessError::Denied(
+            "application is in readonly mode".to_string(),
+        )),
+        AppMode::Disabled => Err(AccessError::Denied("application is disabled".to_string())),
     }
 }

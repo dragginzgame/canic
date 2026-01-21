@@ -133,6 +133,7 @@ impl AccessMetricEntryMapper {
             .map(|(key, count)| AccessMetricEntry {
                 endpoint: key.endpoint,
                 kind: key.kind,
+                predicate: key.predicate,
                 count,
             })
             .collect()
@@ -170,7 +171,7 @@ impl EndpointHealthMapper {
         access: impl IntoIterator<Item = (AccessMetricKey, u64)>,
         exclude_endpoint: Option<&str>,
     ) -> Vec<EndpointHealth> {
-        // Aggregate access-stage denials (guard/auth/env/rule) per endpoint.
+        // Aggregate access-kind denials (guard/auth/env/rule/custom) per endpoint.
         let mut denied: HashMap<String, u64> = HashMap::new();
 
         for (key, count) in access {

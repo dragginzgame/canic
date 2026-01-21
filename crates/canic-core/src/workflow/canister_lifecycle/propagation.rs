@@ -1,11 +1,13 @@
 use crate::{
     InternalError,
     domain::policy::topology::TopologyPolicy,
-    ops::storage::{
-        directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
-        registry::subnet::SubnetRegistryOps,
+    ops::{
+        storage::{
+            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            registry::subnet::SubnetRegistryOps,
+        },
+        topology::policy::mapper::RegistryPolicyInputMapper,
     },
-    ops::topology::policy::mapper::RegistryPolicyInputMapper,
     workflow::{
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
         ic::provision::ProvisionWorkflow,

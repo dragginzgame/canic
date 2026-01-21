@@ -200,7 +200,7 @@ macro_rules! canic_endpoints {
         // SCALING
         //
 
-        #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_query(requires(caller::is_controller()))]
         async fn canic_scaling_registry()
         -> Result<::canic::dto::placement::scaling::ScalingRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::placement::scaling::ScalingApi::registry())
@@ -210,13 +210,13 @@ macro_rules! canic_endpoints {
         // SHARDING
         //
 
-        #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry())
         }
 
-        #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_tenants(
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
@@ -279,13 +279,13 @@ macro_rules! canic_endpoints_root {
     () => {
         // canic_app
         // root-only app-level state mutation endpoint
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_update(internal, requires(caller::is_controller()))]
         async fn canic_app(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::state::AppStateApi::execute_command(cmd).await
         }
 
         // canic_canister_upgrade
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_update(requires(caller::is_controller()))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::dto::rpc::UpgradeCanisterResponse, ::canic::Error> {
@@ -299,7 +299,7 @@ macro_rules! canic_endpoints_root {
         // canic_response
         // root's way to respond to a generic request from another canister
         // has to come from a direct child canister
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_registered_to_subnet))]
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_response(
             request: ::canic::dto::rpc::Request,
         ) -> Result<::canic::dto::rpc::Response, ::canic::Error> {
@@ -310,10 +310,7 @@ macro_rules! canic_endpoints_root {
 
         // canic_canister_status
         // this can be called via root as root is the master controller
-        #[canic_update(auth(
-            ::canic::dsl::access::auth::caller_is_root,
-            ::canic::dsl::access::auth::caller_is_controller
-        ))]
+        #[canic_update(requires(caller::is_root(), caller::is_controller()))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {
@@ -324,7 +321,7 @@ macro_rules! canic_endpoints_root {
         // CONFIG
         //
 
-        #[canic_query(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_query(requires(caller::is_controller()))]
         async fn canic_config() -> Result<String, ::canic::Error> {
             $crate::__internal::core::api::config::ConfigApi::export_toml()
         }
@@ -352,7 +349,7 @@ macro_rules! canic_endpoints_root {
             $crate::__internal::core::api::pool::CanisterPoolApi::list()
         }
 
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_controller))]
+        #[canic_update(requires(caller::is_controller()))]
         async fn canic_pool_admin(
             cmd: ::canic::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::dto::pool::PoolAdminResponse, ::canic::Error> {
@@ -363,21 +360,21 @@ macro_rules! canic_endpoints_root {
         // DELEGATION
         //
 
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_root))]
+        #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_admin(
             cmd: ::canic::dto::auth::DelegationAdminCommand,
         ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
 
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_child))]
+        #[canic_update(internal, requires(caller::is_child()))]
         async fn canic_delegation_prepare(
             cert: ::canic::dto::auth::DelegationCert,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::prepare_issue(cert)
         }
 
-        #[canic_query(auth(::canic::dsl::access::auth::caller_is_registered_to_subnet))]
+        #[canic_query(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_delegation_get(
             cert: ::canic::dto::auth::DelegationCert,
         ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
@@ -394,14 +391,14 @@ macro_rules! canic_endpoints_nonroot {
         // SYNC
         //
 
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_parent))]
+        #[canic_update(internal, requires(caller::is_parent()))]
         async fn canic_sync_state(
             snapshot: ::canic::dto::cascade::StateSnapshotInput,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await
         }
 
-        #[canic_update(auth(::canic::dsl::access::auth::caller_is_parent))]
+        #[canic_update(internal, requires(caller::is_parent()))]
         async fn canic_sync_topology(
             snapshot: ::canic::dto::cascade::TopologySnapshotInput,
         ) -> Result<(), ::canic::Error> {
