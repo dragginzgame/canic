@@ -70,6 +70,13 @@ Configure log retention for every canister.
 - `max_entry_bytes: u32` – maximum message size in bytes per entry; oversized entries are truncated with a `...[truncated]` suffix (default `16384`).
 - `max_age_secs: u64` – optional maximum age; entries older than this (in seconds) are purged (default `null` = no age limit).
 
+### `[auth.delegated_tokens]`
+
+Root-signed delegated token authentication (cert -> proof -> token).
+
+- `enabled: bool` – enable delegated token auth (default `true`).
+- `max_ttl_secs: u64` – optional upper bound on delegated token TTL in seconds (default `null` = no upper bound; must be > 0 when set).
+
 ### `[standards]`
 
 Feature toggles tied to public standards.
@@ -170,7 +177,7 @@ Fields:
 controllers = ["aaaaa-aa"]
 app_directory = ["auth_hub", "scale_hub", "shard_hub"]
 
-[delegation]
+[auth.delegated_tokens]
 enabled = true
 
 [standards]

@@ -14,8 +14,9 @@
 //! - Call ops beyond minimal environment restoration
 
 use crate::{
-    cdk::api::trap,
+    bootstrap,
     ids::CanisterRole,
+    lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
     log::Topic,
     ops::runtime::{env::EnvOps, timer::TimerOps},
@@ -26,13 +27,24 @@ use core::time::Duration;
 /// Post-upgrade entrypoint for the root canister.
 ///
 /// Root identity and subnet context are restored from stable state.
-pub fn post_upgrade_root_canister() {
+pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
+    if let Err(err) = bootstrap::init_config(config_str) {
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
     // Restore root environment context
     if let Err(err) = EnvOps::restore_root() {
-        let msg = format!("env restore failed (root upgrade): {err}");
-        trap(&msg);
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("env restore failed (root upgrade): {err}"),
+        );
     }
-    workflow::runtime::post_upgrade_root_canister();
+    if let Err(err) = workflow::runtime::post_upgrade_root_canister() {
+        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
+    }
 
     // Delegate to async bootstrap workflow
     TimerOps::set(
@@ -48,13 +60,24 @@ pub fn post_upgrade_root_canister() {
 ///
 /// Environment state is expected to be persisted across upgrade;
 /// only role context needs to be restored before delegating.
-pub fn post_upgrade_nonroot_canister(role: CanisterRole) {
+pub fn post_upgrade_nonroot_canister(role: CanisterRole, config_str: &str, config_path: &str) {
+    if let Err(err) = bootstrap::init_config(config_str) {
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
     // Restore role context (env data already persisted)
     if let Err(err) = EnvOps::restore_role(role.clone()) {
-        let msg = format!("env restore failed (nonroot upgrade): {err}");
-        trap(&msg);
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("env restore failed (nonroot upgrade): {err}"),
+        );
     }
-    workflow::runtime::post_upgrade_nonroot_canister(role);
+    if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister(role) {
+        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
+    }
 
     // Delegate to async bootstrap workflow
     TimerOps::set(

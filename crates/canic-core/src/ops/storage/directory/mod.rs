@@ -19,6 +19,12 @@ pub enum DirectoryOpsError {
         directory: &'static str,
         role: CanisterRole,
     },
+
+    #[error("{directory} directory missing required roles: {roles}")]
+    MissingRoles {
+        directory: &'static str,
+        roles: String,
+    },
 }
 
 impl From<DirectoryOpsError> for InternalError {
@@ -42,4 +48,30 @@ pub(super) fn ensure_unique_roles(
     }
 
     Ok(())
+}
+
+pub(super) fn ensure_required_roles(
+    entries: &[(CanisterRole, Principal)],
+    directory: &'static str,
+    required: &BTreeSet<CanisterRole>,
+) -> Result<(), DirectoryOpsError> {
+    if required.is_empty() {
+        return Ok(());
+    }
+
+    let mut missing = Vec::new();
+    for role in required {
+        if !entries.iter().any(|(entry_role, _)| entry_role == role) {
+            missing.push(role.to_string());
+        }
+    }
+
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(DirectoryOpsError::MissingRoles {
+            directory,
+            roles: missing.join(", "),
+        })
+    }
 }

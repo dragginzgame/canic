@@ -120,13 +120,16 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 }
 
 fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntry> {
-    pic.query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry")
+    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query registry transport");
+
+    registry.expect("query registry application").0
 }
 
 /// Fetch the subnet directory from root as a role → principal map.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
-    let page: Page<DirectoryEntryResponse> = pic
+    let page: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
         .query_call(
             root_id,
             protocol::CANIC_SUBNET_DIRECTORY,
@@ -135,7 +138,9 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
                 offset: 0,
             },),
         )
-        .expect("query subnet directory");
+        .expect("query subnet directory transport");
+
+    let page = page.expect("query subnet directory application");
 
     page.entries
         .into_iter()

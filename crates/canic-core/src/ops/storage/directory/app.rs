@@ -1,7 +1,8 @@
-use super::ensure_unique_roles;
+use super::{ensure_required_roles, ensure_unique_roles};
 use crate::{
     InternalError,
     dto::topology::AppDirectoryArgs,
+    ops::config::ConfigOps,
     ops::prelude::*,
     ops::storage::directory::mapper::AppDirectoryRecordMapper,
     storage::stable::directory::app::{AppDirectory, AppDirectoryRecord},
@@ -40,12 +41,23 @@ impl AppDirectoryOps {
         AppDirectoryRecordMapper::record_to_view(AppDirectory::export())
     }
 
-    pub(crate) fn import_args(args: AppDirectoryArgs) -> Result<(), InternalError> {
+    pub(crate) fn import_args_allow_incomplete(
+        args: AppDirectoryArgs,
+    ) -> Result<(), InternalError> {
         let data = AppDirectoryRecordMapper::dto_to_record(args);
-        Self::import(data)
+        Self::import_allow_incomplete(data)
     }
 
     pub(crate) fn import(data: AppDirectoryRecord) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "app")?;
+        let required = ConfigOps::get()?.app_directory.clone();
+        ensure_required_roles(&data.entries, "app", &required)?;
+        AppDirectory::import(data);
+
+        Ok(())
+    }
+
+    pub(crate) fn import_allow_incomplete(data: AppDirectoryRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         AppDirectory::import(data);
 

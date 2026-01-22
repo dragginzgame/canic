@@ -169,11 +169,11 @@ impl StateCascadeWorkflow {
         }
 
         if let Some(dir) = &snapshot.app_directory {
-            AppDirectoryOps::import_args(dir.clone())?;
+            AppDirectoryOps::import_args_allow_incomplete(dir.clone())?;
         }
 
         if let Some(dir) = &snapshot.subnet_directory {
-            SubnetDirectoryOps::import_args(dir.clone())?;
+            SubnetDirectoryOps::import_args_allow_incomplete(dir.clone())?;
         }
 
         Ok(())

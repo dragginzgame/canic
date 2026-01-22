@@ -117,11 +117,6 @@ impl IcOps {
         cdk::utils::time::now_nanos()
     }
 
-    /// Trap the canister with the provided message.
-    pub fn trap(message: &str) -> ! {
-        cdk::api::trap(message)
-    }
-
     /// Print a line to the IC debug output.
     pub fn println(message: &str) {
         cdk::println!("{message}");

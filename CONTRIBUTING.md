@@ -8,3 +8,4 @@ Thanks for your interest in helping out! The codebase is still in heavy flux and
 - New DSL predicate maps to exactly one `access::*` function
 - Macros only wire access rules; no access logic inside macro bodies
 - Access code returns `AccessError`, never `canic::Error`
+- `ic_cdk::trap` is forbidden outside lifecycle adapters (`crates/canic-core/src/lifecycle`)

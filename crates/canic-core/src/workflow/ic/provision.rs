@@ -78,6 +78,7 @@ impl ProvisionWorkflow {
         let cfg = ConfigOps::get()?;
         let subnet_cfg = ConfigOps::current_subnet()?;
         let registry = SubnetRegistryOps::data();
+        let allow_incomplete = updated_role.is_some();
 
         let include_app = updated_role.is_none_or(|role| cfg.app_directory.contains(role));
         let include_subnet =
@@ -88,7 +89,11 @@ impl ProvisionWorkflow {
         if include_app {
             let app_data = RootAppDirectoryBuilder::build(&registry, &cfg.app_directory)?;
 
-            AppDirectoryOps::import(app_data)?;
+            if allow_incomplete {
+                AppDirectoryOps::import_allow_incomplete(app_data)?;
+            } else {
+                AppDirectoryOps::import(app_data)?;
+            }
             builder = builder.with_app_directory()?;
         }
 
@@ -96,7 +101,11 @@ impl ProvisionWorkflow {
             let subnet_data =
                 RootSubnetDirectoryBuilder::build(&registry, &subnet_cfg.subnet_directory)?;
 
-            SubnetDirectoryOps::import(subnet_data)?;
+            if allow_incomplete {
+                SubnetDirectoryOps::import_allow_incomplete(subnet_data)?;
+            } else {
+                SubnetDirectoryOps::import(subnet_data)?;
+            }
             builder = builder.with_subnet_directory()?;
         }
 
@@ -128,10 +137,12 @@ impl ProvisionWorkflow {
         let (pid, source) = allocate_canister(role).await?;
 
         // Phase 2: installation
-        if install_canister(pid, role, parent_pid, extra_arg)
-            .await
-            .is_err()
-        {
+        if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
+            log!(
+                Topic::CanisterLifecycle,
+                Error,
+                "install failed for {pid} ({role}): {err}"
+            );
             if source == AllocationSource::Pool {
                 if let Err(recycle_err) = PoolWorkflow::pool_import_canister(pid).await {
                     log!(
@@ -150,7 +161,7 @@ impl ProvisionWorkflow {
 
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                format!("failed to install canister {pid}"),
+                format!("failed to install canister {pid}: {err}"),
             ));
         }
 

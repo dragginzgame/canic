@@ -13,7 +13,7 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import(SubnetDirectoryRecord {
+    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet directory");
@@ -30,7 +30,7 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetDirectoryOps::import(SubnetDirectoryRecord {
+    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
         entries: vec![(role.clone(), pid_b)],
     })
     .expect("import subnet directory");
@@ -54,7 +54,7 @@ fn directory_addressing_does_not_fallback_to_registry() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import(SubnetDirectoryRecord {
+    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet directory");

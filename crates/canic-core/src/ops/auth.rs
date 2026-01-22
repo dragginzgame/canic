@@ -71,8 +71,8 @@ pub enum DelegatedTokenOpsError {
     #[error("token expires after delegation (exp {token_exp} > cert {cert_exp})")]
     TokenOutlivesDelegation { token_exp: u64, cert_exp: u64 },
 
-    #[error("delegation disabled")]
-    DelegationDisabled,
+    #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
+    DelegatedTokenAuthDisabled,
 
     #[error("delegation proof unavailable")]
     ProofUnavailable,
@@ -253,9 +253,9 @@ impl DelegatedTokenOps {
         authority_pid: Principal,
         now_secs: u64,
     ) -> Result<VerifiedDelegatedToken, InternalError> {
-        let cfg = ConfigOps::delegation_config()?;
+        let cfg = ConfigOps::delegated_tokens_config()?;
         if !cfg.enabled {
-            return Err(DelegatedTokenOpsError::DelegationDisabled.into());
+            return Err(DelegatedTokenOpsError::DelegatedTokenAuthDisabled.into());
         }
 
         Self::verify_token_structure(token, now_secs)?;

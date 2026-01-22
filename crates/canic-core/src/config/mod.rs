@@ -97,7 +97,7 @@ impl Config {
 
     /// Initialize the global configuration from a TOML string.
     /// return the config as it is read at build time
-    pub fn init_from_toml(config_str: &str) -> Result<Arc<ConfigModel>, ConfigError> {
+    pub fn init_from_toml(config_str: &str) -> Result<(), ConfigError> {
         let config: ConfigModel =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
@@ -110,9 +110,9 @@ impl Config {
                 return Err(ConfigError::AlreadyInitialized);
             }
             let arc = Arc::new(config);
-            *borrow = Some(arc.clone());
+            *borrow = Some(arc);
 
-            Ok(arc)
+            Ok(())
         })
     }
 

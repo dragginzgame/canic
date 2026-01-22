@@ -20,17 +20,28 @@
 //! policy, and domain logic must remain in `workflow`.
 
 use crate::{
+    bootstrap,
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::CanisterRole,
+    lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
     log::Topic,
     workflow::{self, runtime::timer::TimerWorkflow},
 };
 use std::time::Duration;
 
-pub fn init_root_canister(identity: SubnetIdentity) {
+pub fn init_root_canister(identity: SubnetIdentity, config_str: &str, config_path: &str) {
+    if let Err(err) = bootstrap::init_config(config_str) {
+        lifecycle_trap(
+            LifecyclePhase::Init,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
     // Perform minimal synchronous runtime seeding during IC init.
-    workflow::runtime::init_root_canister(identity);
+    if let Err(err) = workflow::runtime::init_root_canister(identity) {
+        lifecycle_trap(LifecyclePhase::Init, err);
+    }
 
     // Schedule async bootstrap immediately after init returns.
     TimerWorkflow::set(
@@ -46,9 +57,20 @@ pub fn init_nonroot_canister(
     role: CanisterRole,
     payload: CanisterInitPayload,
     args: Option<Vec<u8>>,
+    config_str: &str,
+    config_path: &str,
 ) {
+    if let Err(err) = bootstrap::init_config(config_str) {
+        lifecycle_trap(
+            LifecyclePhase::Init,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
     // Perform minimal synchronous runtime seeding during IC init.
-    workflow::runtime::init_nonroot_canister(role, payload);
+    if let Err(err) = workflow::runtime::init_nonroot_canister(role, payload) {
+        lifecycle_trap(LifecyclePhase::Init, err);
+    }
 
     // Schedule async bootstrap immediately after init returns.
     // Duration::ZERO ensures execution on the next tick without

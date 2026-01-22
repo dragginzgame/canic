@@ -2,7 +2,8 @@ use crate::{
     InternalError,
     dto::topology::SubnetDirectoryArgs,
     ops::storage::directory::mapper::SubnetDirectoryRecordMapper,
-    ops::{prelude::*, storage::directory::ensure_unique_roles},
+    ops::storage::directory::{ensure_required_roles, ensure_unique_roles},
+    ops::{config::ConfigOps, prelude::*},
     storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryRecord},
 };
 
@@ -41,9 +42,11 @@ impl SubnetDirectoryOps {
         SubnetDirectoryRecordMapper::record_to_view(SubnetDirectory::export())
     }
 
-    pub(crate) fn import_args(args: SubnetDirectoryArgs) -> Result<(), InternalError> {
+    pub(crate) fn import_args_allow_incomplete(
+        args: SubnetDirectoryArgs,
+    ) -> Result<(), InternalError> {
         let data = SubnetDirectoryRecordMapper::dto_to_record(args);
-        Self::import(data)
+        Self::import_allow_incomplete(data)
     }
 
     // -------------------------------------------------------------
@@ -52,6 +55,17 @@ impl SubnetDirectoryOps {
 
     /// Import data into stable storage.
     pub fn import(data: SubnetDirectoryRecord) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "subnet")?;
+        let subnet_cfg = ConfigOps::current_subnet()?;
+        ensure_required_roles(&data.entries, "subnet", &subnet_cfg.subnet_directory)?;
+        SubnetDirectory::import(data);
+
+        Ok(())
+    }
+
+    pub(crate) fn import_allow_incomplete(
+        data: SubnetDirectoryRecord,
+    ) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "subnet")?;
         SubnetDirectory::import(data);
 

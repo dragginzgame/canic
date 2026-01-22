@@ -1,4 +1,4 @@
-use crate::config::{Config, schema::ConfigModel};
+use crate::config::{Config, ConfigError, schema::ConfigModel};
 use std::sync::Arc;
 
 /// Parse, validate, and install the Canic configuration.
@@ -10,10 +10,12 @@ use std::sync::Arc;
 ///
 /// It is safe to call from both build-time validation and
 /// canister init / post-upgrade bootstrap paths.
-pub fn init_config(toml: &str) -> Result<(), String> {
-    parse_and_install_config(toml).map(|_| ())
+pub fn init_config(toml: &str) -> Result<Arc<ConfigModel>, ConfigError> {
+    parse_and_install_config(toml)
 }
 
-fn parse_and_install_config(toml: &str) -> Result<Arc<ConfigModel>, String> {
-    Config::init_from_toml(toml).map_err(|err| err.to_string())
+fn parse_and_install_config(toml: &str) -> Result<Arc<ConfigModel>, ConfigError> {
+    Config::init_from_toml(toml)?;
+
+    Config::try_get().ok_or(ConfigError::NotInitialized)
 }

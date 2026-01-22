@@ -20,7 +20,7 @@ pub enum EnvOpsError {
     #[error("failed to determine current canister role")]
     CanisterRoleUnavailable,
 
-    #[error("env import missing required fields: {0}")]
+    #[error("env missing required fields: {0}")]
     MissingFields(String),
 
     #[error("failed to determine current prime root principal")]
@@ -110,6 +110,7 @@ impl EnvOps {
     // (env must be initialized; missing values are errors)
     // ---------------------------------------------------------------------
 
+    /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
     pub fn subnet_role() -> Result<SubnetRole, InternalError> {
         Env::get_subnet_role().ok_or_else(|| EnvOpsError::SubnetRoleUnavailable.into())
     }
@@ -224,6 +225,15 @@ impl EnvOps {
         }
         if Env::get_prime_root_pid().is_none() {
             missing.push("prime_root_pid");
+        }
+        if Env::get_subnet_role().is_none() {
+            missing.push("subnet_role");
+        }
+        if Env::get_parent_pid().is_none() {
+            missing.push("parent_pid");
+        }
+        if Env::get_canister_role().is_none() {
+            missing.push("canister_role");
         }
 
         if missing.is_empty() {
