@@ -18,8 +18,8 @@ mod canister {
     pub static WASMS: &[(CanisterRole, &[u8])] = &[];
 
     #[canic_update]
-    async fn ping() -> String {
-        "pong".to_string()
+    async fn ping() -> Result<String, canic::Error> {
+        Ok("pong".to_string())
     }
 
     export_candid!();

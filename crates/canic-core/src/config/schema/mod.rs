@@ -111,7 +111,7 @@ pub trait Validate {
 /// - ROOT canister MUST be in the PRIME subnet
 /// - App directory canisters must be NODEs in PRIME
 /// - Role names are length-limited
-/// - Delegation TTL is sane
+/// - Delegated token TTL is sane
 /// - Whitelist principals are valid
 ///
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -129,7 +129,7 @@ pub struct ConfigModel {
     pub log: LogConfig,
 
     #[serde(default)]
-    pub delegation: DelegationConfig,
+    pub auth: AuthConfig,
 
     /// App-level configuration (init mode, whitelist).
     #[serde(default)]
@@ -205,7 +205,7 @@ impl Validate for ConfigModel {
         }
 
         self.log.validate()?;
-        self.delegation.validate()?;
+        self.auth.validate()?;
         self.app.validate()?;
 
         // PRIME subnet must exist
@@ -322,33 +322,65 @@ pub enum AppInitMode {
 }
 
 ///
-/// DelegationConfig
+/// AuthConfig
 ///
-/// Controls delegated token authentication.
-///
-/// Semantics:
-/// - enabled = false => delegation disabled entirely
-/// - max_ttl_secs = None => no upper TTL bound
-/// - max_ttl_secs = Some => hard upper bound on token lifetime
+/// Groups authentication-related configuration.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct DelegationConfig {
+pub struct AuthConfig {
     #[serde(default)]
+    pub delegated_tokens: DelegatedTokenConfig,
+}
+
+impl Validate for AuthConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        self.delegated_tokens.validate()
+    }
+}
+
+///
+/// DelegatedTokenConfig
+///
+/// Controls root-signed delegated token authentication.
+///
+/// Semantics:
+/// - enabled = false => delegated token auth disabled entirely
+/// - max_ttl_secs = None => no upper TTL bound
+/// - max_ttl_secs = Some => hard upper bound on token lifetime
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DelegatedTokenConfig {
+    #[serde(default = "default_delegated_tokens_enabled")]
     pub enabled: bool,
 
     #[serde(default)]
     pub max_ttl_secs: Option<u64>,
 }
 
-impl Validate for DelegationConfig {
+const fn default_delegated_tokens_enabled() -> bool {
+    true
+}
+
+impl Default for DelegatedTokenConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_delegated_tokens_enabled(),
+            max_ttl_secs: None,
+        }
+    }
+}
+
+impl Validate for DelegatedTokenConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if let Some(max_ttl_secs) = self.max_ttl_secs
             && max_ttl_secs == 0
         {
             return Err(ConfigSchemaError::ValidationError(
-                "delegation.max_ttl_secs must be greater than zero".into(),
+                "auth.delegated_tokens.max_ttl_secs must be greater than zero".into(),
             ));
         }
         Ok(())
@@ -459,10 +491,9 @@ mod tests {
     }
 
     #[test]
-    fn delegation_max_ttl_zero_is_invalid() {
+    fn delegated_tokens_max_ttl_zero_is_invalid() {
         let mut cfg = ConfigModel::test_default();
-        cfg.delegation.enabled = true;
-        cfg.delegation.max_ttl_secs = Some(0);
+        cfg.auth.delegated_tokens.max_ttl_secs = Some(0);
 
         cfg.validate().expect_err("expected zero ttl to fail");
     }

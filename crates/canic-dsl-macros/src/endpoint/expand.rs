@@ -37,9 +37,9 @@
 //
 // 4. Error handling
 //    --------------
-//    Access failures for fallible endpoints return an error; for infallible
-//    endpoints (implicit app gating only), the wrapper traps to preserve
-//    signatures. There must be no implicit fallthrough.
+//    Access failures for gated endpoints must return a Result error; trapping
+//    is forbidden outside lifecycle adapters. Infallible endpoints that can
+//    deny access are rejected at compile time.
 //
 // 5. Macro constraints
 //    ------------------
@@ -78,11 +78,14 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let impl_async = orig_sig.asyncness.is_some();
     let returns_fallible = returns_fallible(&orig_sig);
 
-    let has_explicit_requires = !args.requires.is_empty();
     let access_plan = match build_access_plan(kind, &args, &orig_sig) {
         Ok(plan) => plan,
         Err(err) => return err.to_compile_error(),
     };
+    if !returns_fallible && !matches!(access_plan, AccessPlan::None) {
+        let message = "access-gated endpoints must return Result<_, Error> to avoid traps";
+        return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
+    }
 
     let wrapper_async = impl_async || access_plan.requires_async();
 
@@ -109,12 +112,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let attempted = attempted(&call_ident);
 
-    let access_stage = access_stage(
-        &access_plan,
-        &call_ident,
-        returns_fallible,
-        has_explicit_requires,
-    );
+    let access_stage = access_stage(&access_plan, &call_ident);
 
     let call_args = match extract_args(&orig_sig) {
         Ok(v) => v,
@@ -206,20 +204,11 @@ fn attempted(call: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn access_stage(
-    plan: &AccessPlan,
-    call: &syn::Ident,
-    returns_fallible: bool,
-    has_explicit_requires: bool,
-) -> TokenStream2 {
+fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2 {
     let caller = format_ident!("__canic_caller");
     let ctx = format_ident!("__canic_access_ctx");
 
-    let deny = if has_explicit_requires && returns_fallible {
-        quote!(return Err(err.into());)
-    } else {
-        quote!(::canic::cdk::api::trap(&err.to_string());)
-    };
+    let deny = quote!(return Err(err.into()););
 
     match plan {
         AccessPlan::None => quote!(),

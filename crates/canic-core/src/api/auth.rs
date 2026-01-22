@@ -19,12 +19,15 @@ use std::{sync::Arc, time::Duration};
 ///
 /// DelegationApi
 ///
-/// Requires delegation.enabled = true in config.
+/// Requires auth.delegated_tokens.enabled = true in config.
 ///
 
 pub struct DelegationApi;
 
 impl DelegationApi {
+    const DELEGATED_TOKENS_DISABLED: &str =
+        "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
+
     fn map_delegation_error(err: crate::InternalError) -> Error {
         match err.class() {
             InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
@@ -89,9 +92,9 @@ impl DelegationApi {
     }
 
     pub fn prepare_issue(cert: DelegationCert) -> Result<(), Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         // Update-only step for certified delegation signatures.
@@ -99,9 +102,9 @@ impl DelegationApi {
     }
 
     pub fn get_issue(cert: DelegationCert) -> Result<DelegationProof, Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         // Query-only step; requires a data certificate in the query context.
@@ -109,18 +112,18 @@ impl DelegationApi {
     }
 
     pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         DelegationWorkflow::issue_and_store(cert).map_err(Self::map_delegation_error)
     }
 
     pub fn store_proof(proof: DelegationProof) -> Result<(), Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
@@ -139,9 +142,9 @@ impl DelegationApi {
     }
 
     pub fn require_proof() -> Result<DelegationProof, Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         DelegationStateOps::proof_dto().ok_or_else(|| Error::not_found("delegation proof not set"))
@@ -180,9 +183,9 @@ impl DelegationAdminApi {
 
     #[allow(clippy::unused_async)]
     pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
-        let cfg = ConfigOps::delegation_config().map_err(Error::from)?;
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden("delegation disabled"));
+            return Err(Error::forbidden(DelegationApi::DELEGATED_TOKENS_DISABLED));
         }
 
         if interval_secs == 0 {

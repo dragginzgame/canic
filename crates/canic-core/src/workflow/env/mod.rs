@@ -22,7 +22,7 @@ impl EnvWorkflow {
         let network = NetworkOps::build_network().ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "failed to determine runtime network".to_string(),
+                "runtime network unavailable; set DFX_NETWORK=local|ic at build time".to_string(),
             )
         })?;
 
@@ -40,7 +40,7 @@ impl EnvWorkflow {
             Err(EnvPolicyError::MissingEnvFields(missing)) => {
                 return Err(InternalError::invariant(
                     InternalErrorOrigin::Workflow,
-                    format!("bootstrap failed: missing required env fields: {missing}"),
+                    format!("env args missing {missing}; local builds require explicit env fields"),
                 ));
             }
         };

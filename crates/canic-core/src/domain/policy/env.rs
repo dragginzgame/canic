@@ -42,8 +42,19 @@ pub enum EnvPolicyError {
     MissingEnvFields(String),
 }
 
+fn allow_incomplete_env() -> bool {
+    if cfg!(test) {
+        return true;
+    }
+
+    match option_env!("CANIC_ALLOW_INCOMPLETE_ENV") {
+        Some(value) => value == "1",
+        None => false,
+    }
+}
+
 pub fn validate_or_default(
-    network: BuildNetwork,
+    _network: BuildNetwork,
     raw_env: EnvInput,
 ) -> Result<ValidatedEnv, EnvPolicyError> {
     let mut missing = Vec::new();
@@ -67,17 +78,36 @@ pub fn validate_or_default(
     }
 
     if missing.is_empty() {
+        let prime_root_pid = raw_env
+            .prime_root_pid
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("prime_root_pid".to_string()))?;
+        let subnet_role = raw_env
+            .subnet_role
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_role".to_string()))?;
+        let subnet_pid = raw_env
+            .subnet_pid
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_pid".to_string()))?;
+        let root_pid = raw_env
+            .root_pid
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("root_pid".to_string()))?;
+        let canister_role = raw_env
+            .canister_role
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("canister_role".to_string()))?;
+        let parent_pid = raw_env
+            .parent_pid
+            .ok_or_else(|| EnvPolicyError::MissingEnvFields("parent_pid".to_string()))?;
+
         return Ok(ValidatedEnv {
-            prime_root_pid: raw_env.prime_root_pid.expect("checked"),
-            subnet_role: raw_env.subnet_role.expect("checked"),
-            subnet_pid: raw_env.subnet_pid.expect("checked"),
-            root_pid: raw_env.root_pid.expect("checked"),
-            canister_role: raw_env.canister_role.expect("checked"),
-            parent_pid: raw_env.parent_pid.expect("checked"),
+            prime_root_pid,
+            subnet_role,
+            subnet_pid,
+            root_pid,
+            canister_role,
+            parent_pid,
         });
     }
 
-    if network == BuildNetwork::Ic {
+    if !allow_incomplete_env() {
         return Err(EnvPolicyError::MissingEnvFields(missing.join(", ")));
     }
 

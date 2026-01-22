@@ -21,9 +21,11 @@ pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Principal {
 
 /// Count worker canisters registered under a given parent.
 pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> usize {
-    let SubnetRegistryResponse(registry): SubnetRegistryResponse = pic
+    let registry: Result<SubnetRegistryResponse, Error> = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query subnet registry");
+        .expect("query subnet registry transport");
+    let SubnetRegistryResponse(registry): SubnetRegistryResponse =
+        registry.expect("query subnet registry application");
 
     registry
         .iter()

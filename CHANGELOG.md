@@ -7,13 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.9.6] - 2026-01-22 - Lifecycle Hardening
 
-- 🔧 Renamed config: `app_state` → `app`, `app.mode` → `app.init_mode`, and `whitelist` → `app.whitelist`.
+- 🛸 Renamed config: `app_state` → `app`, `app.mode` → `app.init_mode`, and `whitelist` → `app.whitelist`.
+- 🥑 Renamed `[delegation]` to `[auth.delegated_tokens]`, default enabled, with clearer disable errors.
+- 🧯 Lifecycle init/post-upgrade now surface phase-correct failures; traps are restricted to lifecycle adapters.
+- 🧷 Canic built-in endpoints now return `Result` to avoid trapping on access denials.
+- 🪑 Env bootstrap defaults are test-only unless `CANIC_ALLOW_INCOMPLETE_ENV=1` is set.
+- 🧸 Directory imports validate required roles against config.
+- 🪐 Added lifecycle boundary regression test and a trap-usage guard.
 
 ---
 
-## [0.9.5] - Access Families + DSL Alignment
+## [0.9.5] - 2026-01-21 - Access Families + DSL Alignment
 
 - 🧭 Refactored access predicates into explicit families (`app`, `auth`, `env`) with `expr` as internal evaluation only.
 - 🔓 Exposed public, composable auth predicates under `canic::access::auth` without duplicating logic.
@@ -21,7 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.4] - App State Init + Sync Access
+## [0.9.4] - 2026-01-21 - App State Init + Sync Access
 
 - ✅ App init mode is now config-driven (`app.init_mode`) with a default of `enabled`.
 - ⚡ Endpoints only become async when explicit access predicates are present; implicit app gating stays sync.
@@ -29,7 +35,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.3] - App State Gating Defaults
+## [0.9.3] - 2026-01-21 - App State Gating Defaults
 
 - ✅ Default app-state gating now applies to all endpoints unless an explicit app predicate is present; app-mode checks use `app::allows_updates()` and `app::is_queryable()`.
 - 🧱 Internal protocol endpoints can be marked with `internal` to bypass app-state gating; app predicates are rejected at compile time for these endpoints.
@@ -38,7 +44,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.2] - Auth Refactor
+## [0.9.2] - 2026-01-20 - Auth Refactor
 
 - 🔐 Auth refactor: Replaced staged access control with a single requires(...) expression model using composable predicates (caller::, app::, self_env::), all evaluated by one async evaluator.
 
@@ -82,7 +88,7 @@ This keeps access logic local, composable, and auditable without hidden ordering
 
 ---
 
-## [0.9.1] - Consolidation and Consistency Audits
+## [0.9.1] - 2026-01-20 - Consolidation and Consistency Audits
 
 ### Added
 - Layering guard checks in CI to prevent workflow record usage, public record re-exports, and misuse of "view" naming.

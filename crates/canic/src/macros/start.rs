@@ -22,13 +22,15 @@ macro_rules! start {
         #[::canic::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             // Load embedded configuration early.
-            $crate::__canic_load_config!();
+            let (config_str, config_path) = $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter (NOT workflow).
             $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister(
                 $canister_role,
                 payload,
                 args.clone(),
+                config_str,
+                config_path,
             );
 
             // ---- userland lifecycle hooks (scheduled last) ----
@@ -45,11 +47,13 @@ macro_rules! start {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             // Reload embedded configuration on upgrade.
-            $crate::__canic_load_config!();
+            let (config_str, config_path) = $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
             $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister(
                 $canister_role,
+                config_str,
+                config_path,
             );
 
             // ---- userland lifecycle hooks (scheduled last) ----
@@ -85,10 +89,14 @@ macro_rules! start_root {
         #[::canic::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             // Load embedded configuration early.
-            $crate::__canic_load_config!();
+            let (config_str, config_path) = $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_root_canister(identity);
+            $crate::__internal::core::api::lifecycle::LifecycleApi::init_root_canister(
+                identity,
+                config_str,
+                config_path,
+            );
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
@@ -104,10 +112,13 @@ macro_rules! start_root {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             // Reload embedded configuration on upgrade.
-            $crate::__canic_load_config!();
+            let (config_str, config_path) = $crate::__canic_load_config!();
 
             // Delegate to lifecycle adapter.
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_root_canister();
+            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_root_canister(
+                config_str,
+                config_path,
+            );
 
             // ---- userland lifecycle hooks (scheduled last) ----
             $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
@@ -136,19 +147,8 @@ macro_rules! start_root {
 #[macro_export]
 macro_rules! __canic_load_config {
     () => {{
+        let config_path = env!("CANIC_CONFIG_PATH");
         let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
-        if let Err(err) = $crate::__internal::core::bootstrap::init_config(config_str) {
-            $crate::cdk::println!(
-                "[canic] FATAL: config init failed (CANIC_CONFIG_PATH={}): {err}",
-                env!("CANIC_CONFIG_PATH")
-            );
-
-            let msg = format!(
-                "canic init failed: config init failed (CANIC_CONFIG_PATH={}): {err}",
-                env!("CANIC_CONFIG_PATH")
-            );
-
-            $crate::cdk::api::trap(&msg);
-        }
+        (config_str, config_path)
     }};
 }

@@ -6,7 +6,7 @@ pub mod timer;
 pub mod wasm;
 
 use crate::{
-    VERSION,
+    InternalError, InternalErrorOrigin, VERSION,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
@@ -43,33 +43,20 @@ impl RuntimeWorkflow {
     }
 
     /// Start timers that should run only on root canisters.
-    pub fn start_all_root() {
-        EnvOps::require_root().unwrap_or_else(|e| fatal("start_all_root", e));
+    pub fn start_all_root() -> Result<(), InternalError> {
+        EnvOps::require_root().map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("root context required: {err}"),
+            )
+        })?;
 
         // start shared timers too
         Self::start_all();
 
         // root-only services
         workflow::pool::scheduler::PoolSchedulerWorkflow::start();
-    }
-}
-
-//
-// ─────────────────────────────────────────────────────────────
-// Fatal helpers (lifecycle boundary)
-// ─────────────────────────────────────────────────────────────
-//
-
-fn fatal(phase: &str, err: impl std::fmt::Display) -> ! {
-    let msg = format!("canic init failed during {phase}: {err}");
-    IcOps::println(&format!("[canic] FATAL: {msg}"));
-    IcOps::trap(&msg);
-}
-
-fn init_memory_or_trap(phase: &str) -> MemoryRegistryInitSummary {
-    match MemoryRegistryOps::init_registry() {
-        Ok(summary) => summary,
-        Err(err) => fatal(phase, format!("memory init failed: {err}")),
+        Ok(())
     }
 }
 
@@ -99,10 +86,18 @@ fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
 /// Bootstraps the root canister runtime and environment.
 ///
 
-pub fn init_root_canister(identity: SubnetIdentity) {
+pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
-    let memory_summary = init_memory_or_trap("init_root_canister");
+    let memory_summary = match MemoryRegistryOps::init_registry() {
+        Ok(summary) => summary,
+        Err(err) => {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("memory init failed: {err}"),
+            ));
+        }
+    };
     crate::log::set_ready();
 
     // log header
@@ -134,41 +129,64 @@ pub fn init_root_canister(identity: SubnetIdentity) {
         parent_pid: Some(prime_root_pid),
     };
 
-    let network = NetworkOps::build_network()
-        .unwrap_or_else(|| fatal("init_root_canister", "failed to determine runtime network"));
+    let network = NetworkOps::build_network().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "runtime network unavailable; set DFX_NETWORK=local|ic at build time".to_string(),
+        )
+    })?;
     let validated = match validate_or_default(network, input) {
         Ok(validated) => validated,
         Err(EnvPolicyError::MissingEnvFields(missing)) => {
-            fatal(
-                "init_root_canister",
-                format!("bootstrap failed: missing required env fields: {missing}"),
-            );
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("env args missing {missing}; local builds require explicit env fields"),
+            ));
         }
     };
 
     if let Err(err) = EnvOps::import_validated(validated) {
-        fatal("init_root_canister", format!("env import failed: {err}"));
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("env import failed: {err}"),
+        ));
     }
 
-    let app_mode = ConfigOps::app_init_mode()
-        .unwrap_or_else(|err| fatal("init_root_canister", format!("app mode init failed: {err}")));
+    let app_mode = ConfigOps::app_init_mode().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("app mode init failed: {err}"),
+        )
+    })?;
     AppStateOps::init_mode(app_mode);
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root(self_pid, created_at);
 
     // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all_root();
+    RuntimeWorkflow::start_all_root().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("root service startup failed: {err}"),
+        )
+    })?;
+
+    Ok(())
 }
 
 ///
 /// post_upgrade_root_canister
 ///
 
-pub fn post_upgrade_root_canister() {
+pub fn post_upgrade_root_canister() -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
-    let memory_summary = init_memory_or_trap("post_upgrade_root_canister");
+    let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("memory init failed: {err}"),
+        )
+    })?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
     log_memory_summary(&memory_summary);
@@ -177,59 +195,84 @@ pub fn post_upgrade_root_canister() {
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all_root();
+    RuntimeWorkflow::start_all_root().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("root service startup failed: {err}"),
+        )
+    })?;
+
+    Ok(())
 }
 
 ///
 /// init_nonroot_canister
 ///
 
-pub fn init_nonroot_canister(canister_role: CanisterRole, payload: CanisterInitPayload) {
+pub fn init_nonroot_canister(
+    canister_role: CanisterRole,
+    payload: CanisterInitPayload,
+) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
-    let memory_summary = init_memory_or_trap("init_nonroot_canister");
+    let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("memory init failed: {err}"),
+        )
+    })?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
-    if let Err(err) = EnvWorkflow::init_env_from_args(payload.env, canister_role) {
-        fatal("init_nonroot_canister", format!("env import failed: {err}"));
-    }
+    EnvWorkflow::init_env_from_args(payload.env, canister_role).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("env import failed: {err}"),
+        )
+    })?;
 
-    if let Err(err) = AppDirectoryOps::import_args(payload.app_directory) {
-        fatal(
-            "init_nonroot_canister",
+    AppDirectoryOps::import_args_allow_incomplete(payload.app_directory).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
             format!("app directory import failed: {err}"),
-        );
-    }
-    if let Err(err) = SubnetDirectoryOps::import_args(payload.subnet_directory) {
-        fatal(
-            "init_nonroot_canister",
+        )
+    })?;
+    SubnetDirectoryOps::import_args_allow_incomplete(payload.subnet_directory).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
             format!("subnet directory import failed: {err}"),
-        );
-    }
+        )
+    })?;
 
-    let app_mode = ConfigOps::app_init_mode().unwrap_or_else(|err| {
-        fatal(
-            "init_nonroot_canister",
+    let app_mode = ConfigOps::app_init_mode().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
             format!("app mode init failed: {err}"),
         )
-    });
+    })?;
     AppStateOps::init_mode(app_mode);
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all();
+
+    Ok(())
 }
 
 ///
 /// post_upgrade_nonroot_canister
 ///
 
-pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
+pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
-    let memory_summary = init_memory_or_trap("post_upgrade_nonroot_canister");
+    let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("memory init failed: {err}"),
+        )
+    })?;
     crate::log::set_ready();
     crate::log!(
         Topic::Init,
@@ -244,4 +287,6 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) {
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all();
+
+    Ok(())
 }
