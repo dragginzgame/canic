@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.7] - 2026-01-23 - IC Call Cleanup
+
+### ⚡ Optimisations
+
+- IC call builders now treat argument encoding as fallible end-to-end and expose raw-arg injection.
+- Removed `try_with_*` in favor of a single fallible `with_*` path across infra/ops/workflow/api call layers.
+- Intent pending scans now iterate stable maps directly to avoid cloning the full pending index.
+- Endpoint metrics snapshots avoid intermediate HashMap clones.
+- Env setters avoid redundant clones and writes for unchanged values.
+
+### 🧯 Reliability
+
+- Root directory resolvers now propagate config errors instead of panicking.
+
+### 🧭 Practices
+
+- Tests no longer match errors by string; use typed errors or observable state.
+
+### 🔒 Security
+
+- Removed raw IC signature APIs from the public CanIC surface. Delegated authentication is now the only supported runtime signing mechanism. This prevents misuse of low-level signature primitives and enforces delegated-auth invariants.
+
+---
+
 ## [0.9.6] - 2026-01-22 - Lifecycle Hardening
 
 - 🛸 Renamed config: `app_state` → `app`, `app.mode` → `app.init_mode`, and `whitelist` → `app.whitelist`.

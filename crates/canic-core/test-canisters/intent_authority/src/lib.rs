@@ -31,11 +31,11 @@ async fn buy(qty: u64) -> Result<(), String> {
     let external = external_principal()?;
     ic_cdk::println!("intent_authority: call external perform {}", external);
     let intent = IntentReservation::new(intent_key()?, qty).with_max_in_flight(CAPACITY);
-    let call_result = Call::unbounded_wait(external, "perform")
+    let call_builder = Call::unbounded_wait(external, "perform")
         .with_intent(intent)
         .with_arg(())
-        .execute()
-        .await;
+        .map_err(|err| err.to_string())?;
+    let call_result = call_builder.execute().await;
 
     match call_result {
         Ok(_) => {

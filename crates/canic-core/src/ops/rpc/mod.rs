@@ -70,7 +70,7 @@ impl RpcOps {
         T: CandidType + DeserializeOwned,
     {
         let call: CallResult = CallOps::unbounded_wait(pid, method)
-            .try_with_arg(arg)?
+            .with_arg(arg)?
             .execute()
             .await?;
 
@@ -90,7 +90,7 @@ impl RpcOps {
         let root_pid = EnvOps::root_pid()?;
 
         let call: CallResult = CallOps::unbounded_wait(root_pid, protocol::CANIC_RESPONSE)
-            .try_with_arg(rpc.into_request())?
+            .with_arg(rpc.into_request())?
             .execute()
             .await?;
 

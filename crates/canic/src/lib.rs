@@ -121,10 +121,6 @@ pub mod api {
         pub mod network {
             pub use crate::__internal::core::api::ic::network::NetworkApi;
         }
-
-        pub mod signature {
-            pub use crate::__internal::core::api::ic::signature::SignatureApi;
-        }
     }
 
     /// Canister lifecycle, placement, and topology

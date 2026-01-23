@@ -175,42 +175,32 @@ pub struct CallBuilder {
 impl CallBuilder {
     // ---------- arguments ----------
 
-    #[must_use]
-    pub fn with_arg<A>(self, arg: A) -> Self
-    where
-        A: CandidType,
-    {
-        Self {
-            inner: self.inner.with_arg(arg),
-        }
-    }
-
-    #[must_use]
-    pub fn with_args<A>(self, args: A) -> Self
-    where
-        A: ArgumentEncoder,
-    {
-        Self {
-            inner: self.inner.with_args(args),
-        }
-    }
-
-    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, Error>
+    /// Encode a single argument into Candid bytes (fallible).
+    pub fn with_arg<A>(self, arg: A) -> Result<Self, Error>
     where
         A: CandidType,
     {
         Ok(Self {
-            inner: self.inner.try_with_arg(arg).map_err(Error::from)?,
+            inner: self.inner.with_arg(arg).map_err(Error::from)?,
         })
     }
 
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, Error>
+    /// Encode multiple arguments into Candid bytes (fallible).
+    pub fn with_args<A>(self, args: A) -> Result<Self, Error>
     where
         A: ArgumentEncoder,
     {
         Ok(Self {
-            inner: self.inner.try_with_args(args).map_err(Error::from)?,
+            inner: self.inner.with_args(args).map_err(Error::from)?,
         })
+    }
+
+    /// Use pre-encoded Candid arguments (no validation performed).
+    #[must_use]
+    pub fn with_raw_args(self, args: Vec<u8>) -> Self {
+        Self {
+            inner: self.inner.with_raw_args(args),
+        }
     }
 
     // ---------- cycles ----------

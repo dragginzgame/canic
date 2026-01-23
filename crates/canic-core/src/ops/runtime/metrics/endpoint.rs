@@ -49,8 +49,8 @@ pub struct EndpointMetrics;
 impl EndpointMetrics {
     #[must_use]
     pub fn health_snapshot() -> EndpointHealthSnapshot {
-        let attempts = EndpointAttemptMetrics::export_raw().into_iter().collect();
-        let results = EndpointResultMetrics::export_raw().into_iter().collect();
+        let attempts = EndpointAttemptMetrics::snapshot_entries();
+        let results = EndpointResultMetrics::snapshot_entries();
         let access = AccessMetrics::snapshot().entries;
 
         EndpointHealthSnapshot {
@@ -91,9 +91,20 @@ impl EndpointAttemptMetrics {
         });
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn export_raw() -> HashMap<&'static str, EndpointAttemptCounts> {
         ENDPOINT_ATTEMPT_METRICS.with_borrow(std::clone::Clone::clone)
+    }
+
+    #[must_use]
+    pub fn snapshot_entries() -> Vec<(&'static str, EndpointAttemptCounts)> {
+        ENDPOINT_ATTEMPT_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect()
+        })
     }
 
     #[cfg(test)]
@@ -127,9 +138,20 @@ impl EndpointResultMetrics {
         });
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn export_raw() -> HashMap<&'static str, EndpointResultCounts> {
         ENDPOINT_RESULT_METRICS.with_borrow(std::clone::Clone::clone)
+    }
+
+    #[must_use]
+    pub fn snapshot_entries() -> Vec<(&'static str, EndpointResultCounts)> {
+        ENDPOINT_RESULT_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect()
+        })
     }
 
     #[cfg(test)]
@@ -221,6 +243,25 @@ mod tests {
         assert_eq!(b.completed, 1);
     }
 
+    #[test]
+    fn attempt_snapshot_entries_match_export_raw() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointAttemptMetrics::increment_completed(EP_B);
+
+        let raw = EndpointAttemptMetrics::export_raw();
+        let snapshot = EndpointAttemptMetrics::snapshot_entries();
+
+        assert_eq!(raw.len(), snapshot.len());
+
+        for (key, counts) in snapshot {
+            let entry = raw.get(key).unwrap();
+            assert_eq!(entry.attempted, counts.attempted);
+            assert_eq!(entry.completed, counts.completed);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // EndpointResultMetrics
     // -------------------------------------------------------------------------
@@ -291,5 +332,51 @@ mod tests {
 
         assert_eq!(b.ok, 0);
         assert_eq!(b.err, 1);
+    }
+
+    #[test]
+    fn result_snapshot_entries_match_export_raw() {
+        EndpointResultMetrics::reset();
+
+        EndpointResultMetrics::increment_ok(EP_A);
+        EndpointResultMetrics::increment_err(EP_B);
+
+        let raw = EndpointResultMetrics::export_raw();
+        let snapshot = EndpointResultMetrics::snapshot_entries();
+
+        assert_eq!(raw.len(), snapshot.len());
+
+        for (key, counts) in snapshot {
+            let entry = raw.get(key).unwrap();
+            assert_eq!(entry.ok, counts.ok);
+            assert_eq!(entry.err, counts.err);
+        }
+    }
+
+    #[test]
+    fn health_snapshot_includes_attempts_and_results() {
+        EndpointAttemptMetrics::reset();
+        EndpointResultMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointResultMetrics::increment_ok(EP_A);
+
+        let snapshot = EndpointMetrics::health_snapshot();
+
+        let attempts = snapshot
+            .attempts
+            .iter()
+            .find(|(key, _)| *key == EP_A)
+            .expect("missing attempt snapshot");
+        assert_eq!(attempts.1.attempted, 1);
+        assert_eq!(attempts.1.completed, 0);
+
+        let results = snapshot
+            .results
+            .iter()
+            .find(|(key, _)| *key == EP_A)
+            .expect("missing result snapshot");
+        assert_eq!(results.1.ok, 1);
+        assert_eq!(results.1.err, 0);
     }
 }

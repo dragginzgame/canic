@@ -30,7 +30,7 @@ impl AppDirectoryResolver {
     pub fn resolve() -> Result<AppDirectoryRecord, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
-            let cfg = ConfigOps::get().expect("config must be available on root");
+            let cfg = ConfigOps::get()?;
 
             RootAppDirectoryBuilder::build(&registry, &cfg.app_directory)
         } else {
@@ -53,7 +53,7 @@ impl SubnetDirectoryResolver {
     pub fn resolve() -> Result<SubnetDirectoryRecord, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
-            let cfg = ConfigOps::current_subnet().expect("subnet config must be available on root");
+            let cfg = ConfigOps::current_subnet()?;
 
             RootSubnetDirectoryBuilder::build(&registry, &cfg.subnet_directory)
         } else {

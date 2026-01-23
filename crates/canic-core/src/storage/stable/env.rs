@@ -69,9 +69,13 @@ impl Env {
 
     pub(crate) fn set_subnet_pid(pid: Principal) {
         ENV.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            data.subnet_pid = Some(pid);
-            cell.set(data);
+            let data = cell.get();
+            if data.subnet_pid.as_ref() == Some(&pid) {
+                return;
+            }
+            let mut updated = data.clone();
+            updated.subnet_pid = Some(pid);
+            cell.set(updated);
         });
     }
 
@@ -88,9 +92,13 @@ impl Env {
     /// Set/replace the current canister role.
     pub(crate) fn set_canister_role(role: CanisterRole) {
         ENV.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            data.canister_role = Some(role);
-            cell.set(data);
+            let data = cell.get();
+            if data.canister_role.as_ref() == Some(&role) {
+                return;
+            }
+            let mut updated = data.clone();
+            updated.canister_role = Some(role);
+            cell.set(updated);
         });
     }
 
