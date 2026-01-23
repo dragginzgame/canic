@@ -73,50 +73,35 @@ pub struct CallBuilder {
 impl CallBuilder {
     // ---------- arguments ----------
 
-    #[must_use]
-    pub fn with_arg<A>(self, arg: A) -> Self
+    /// Encode a single argument into Candid bytes (fallible).
+    pub fn with_arg<A>(self, arg: A) -> Result<Self, InternalError>
     where
         A: CandidType,
     {
         let Self { inner, intent } = self;
+        let inner = inner.with_arg(arg)?;
 
-        Self {
-            inner: inner.with_arg(arg),
-            intent,
-        }
+        Ok(Self { inner, intent })
     }
 
+    /// Encode multiple arguments into Candid bytes (fallible).
+    pub fn with_args<A>(self, args: A) -> Result<Self, InternalError>
+    where
+        A: ArgumentEncoder,
+    {
+        let Self { inner, intent } = self;
+        let inner = inner.with_args(args)?;
+
+        Ok(Self { inner, intent })
+    }
+
+    /// Use pre-encoded Candid arguments (no validation performed).
     #[must_use]
-    pub fn with_args<A>(self, args: A) -> Self
-    where
-        A: ArgumentEncoder,
-    {
+    pub fn with_raw_args(self, args: Vec<u8>) -> Self {
         let Self { inner, intent } = self;
+        let inner = inner.with_raw_args(args);
 
-        Self {
-            inner: inner.with_args(args),
-            intent,
-        }
-    }
-
-    pub fn try_with_arg<A>(self, arg: A) -> Result<Self, InternalError>
-    where
-        A: CandidType,
-    {
-        let Self { inner, intent } = self;
-        let inner = inner.try_with_arg(arg)?;
-
-        Ok(Self { inner, intent })
-    }
-
-    pub fn try_with_args<A>(self, args: A) -> Result<Self, InternalError>
-    where
-        A: ArgumentEncoder,
-    {
-        let Self { inner, intent } = self;
-        let inner = inner.try_with_args(args)?;
-
-        Ok(Self { inner, intent })
+        Self { inner, intent }
     }
 
     // ---------- cycles ----------

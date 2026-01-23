@@ -130,7 +130,7 @@ async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Re
 async fn prepare_delegation(root_pid: Principal, cert: DelegationCert) -> Result<(), Error> {
     let response: Result<(), Error> =
         Call::unbounded_wait(root_pid, protocol::CANIC_DELEGATION_PREPARE)
-            .with_arg(cert)
+            .with_arg(cert)?
             .execute()
             .await?
             .candid()?;
@@ -140,7 +140,7 @@ async fn prepare_delegation(root_pid: Principal, cert: DelegationCert) -> Result
 
 async fn install_proof(shard_pid: Principal, proof: DelegationProof) -> Result<(), Error> {
     let response: Result<(), Error> = Call::unbounded_wait(shard_pid, AUTH_SHARD_SET_PROOF)
-        .with_arg(proof)
+        .with_arg(proof)?
         .execute()
         .await?
         .candid()?;

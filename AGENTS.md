@@ -550,6 +550,7 @@ fn p(id: u8) -> Principal {
 
 * Test names: `snake_case`
 * All tests must pass under `make test`
+* Never match errors by string; assert on typed errors or observable state instead.
 
 ---
 

@@ -281,9 +281,12 @@ impl IntentStore {
         INTENT_PENDING.with_borrow_mut(|map| map.remove(&id))
     }
 
-    #[must_use]
-    pub(crate) fn pending_entries() -> Vec<(IntentId, IntentPendingEntryRecord)> {
-        INTENT_PENDING.with_borrow(BTreeMap::to_vec)
+    pub(crate) fn with_pending_entries<R>(
+        f: impl FnOnce(
+            &BTreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>,
+        ) -> R,
+    ) -> R {
+        INTENT_PENDING.with_borrow(|map| f(map))
     }
 }
 

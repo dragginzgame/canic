@@ -269,16 +269,19 @@ impl IntentStoreOps {
         let mut reserved_qty: u64 = 0;
         let mut pending_count: u64 = 0;
 
-        for (_, entry) in IntentStore::pending_entries() {
-            if entry.resource_key.as_ref() != resource_key.as_ref() {
-                continue;
+        IntentStore::with_pending_entries(|pending| {
+            for entry in pending.iter() {
+                let record = entry.value();
+                if record.resource_key.as_ref() != resource_key.as_ref() {
+                    continue;
+                }
+                if is_pending_entry_expired(now, &record) {
+                    continue;
+                }
+                reserved_qty = reserved_qty.saturating_add(record.quantity);
+                pending_count = pending_count.saturating_add(1);
             }
-            if is_pending_entry_expired(now, &entry) {
-                continue;
-            }
-            reserved_qty = reserved_qty.saturating_add(entry.quantity);
-            pending_count = pending_count.saturating_add(1);
-        }
+        });
 
         IntentResourceTotalsRecord {
             reserved_qty,
@@ -289,18 +292,34 @@ impl IntentStoreOps {
 
     #[allow(dead_code)]
     pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
-        IntentStore::pending_entries()
-            .into_iter()
-            .filter(|(_, e)| !is_pending_entry_expired(now, e))
-            .collect()
+        let mut entries = Vec::new();
+
+        IntentStore::with_pending_entries(|pending| {
+            for entry in pending.iter() {
+                let record = entry.value();
+                if is_pending_entry_expired(now, &record) {
+                    continue;
+                }
+                entries.push((*entry.key(), record));
+            }
+        });
+
+        entries
     }
 
     pub fn list_expired_pending_intents(now: u64) -> Vec<IntentId> {
-        IntentStore::pending_entries()
-            .into_iter()
-            .filter(|(_, e)| is_pending_entry_expired(now, e))
-            .map(|(id, _)| id)
-            .collect()
+        let mut expired = Vec::new();
+
+        IntentStore::with_pending_entries(|pending| {
+            for entry in pending.iter() {
+                let record = entry.value();
+                if is_pending_entry_expired(now, &record) {
+                    expired.push(*entry.key());
+                }
+            }
+        });
+
+        expired
     }
 
     // -------------------------------------------------------------
@@ -607,8 +626,11 @@ mod tests {
         reserve(intent_id, resource_key, 4, None).unwrap();
         IntentStoreOps::commit_at(intent_id, NOW).unwrap();
 
-        let err = IntentStoreOps::abort(intent_id).unwrap_err();
-        assert!(err.to_string().contains("invalid transition"));
+        IntentStoreOps::abort(intent_id).unwrap_err();
+
+        let record = IntentStore::get_record(intent_id).expect("record should exist");
+        assert_eq!(record.state, IntentState::Committed);
+        assert!(IntentStore::get_pending(intent_id).is_none());
     }
 
     // -------------------------------------------------------------------------
@@ -635,8 +657,11 @@ mod tests {
         let expired = IntentStoreOps::list_expired_pending_intents(now);
         assert_eq!(expired, vec![intent_id]);
 
-        let err = IntentStoreOps::commit_at(intent_id, now).unwrap_err();
-        assert!(err.to_string().contains("expired"));
+        IntentStoreOps::commit_at(intent_id, now).unwrap_err();
+
+        let record = IntentStore::get_record(intent_id).expect("record should exist");
+        assert_eq!(record.state, IntentState::Pending);
+        assert!(IntentStore::get_pending(intent_id).is_some());
     }
 
     // -------------------------------------------------------------------------
@@ -669,7 +694,7 @@ mod tests {
         );
 
         IntentStore::set_totals(
-            resource_key,
+            resource_key.clone(),
             IntentResourceTotalsRecord {
                 reserved_qty: 0,
                 committed_qty: 0,
@@ -677,8 +702,13 @@ mod tests {
             },
         );
 
-        let err = IntentStoreOps::commit_at(intent_id, NOW).unwrap_err();
-        assert!(err.to_string().contains("reserved_qty"));
+        IntentStoreOps::commit_at(intent_id, NOW).unwrap_err();
+
+        let record = IntentStore::get_record(intent_id).expect("record should exist");
+        assert_eq!(record.state, IntentState::Pending);
+        let totals = IntentStore::get_totals(&resource_key).expect("totals should exist");
+        assert_eq!(totals.reserved_qty, 0);
+        assert_eq!(totals.pending_count, 1);
     }
 
     #[test]
@@ -696,9 +726,7 @@ mod tests {
             },
         );
 
-        let err =
-            reserve(intent_id, resource_key.clone(), 1, None).expect_err("overflow should fail");
-        assert!(err.to_string().contains("reserved_qty"), "{err}");
+        reserve(intent_id, resource_key.clone(), 1, None).expect_err("overflow should fail");
 
         // sanity: no partial insertions
         assert!(IntentStore::get_record(intent_id).is_none());

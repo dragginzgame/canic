@@ -46,6 +46,8 @@ impl SignatureOps {
         Ok(())
     }
 
+    #[cfg(test)]
+    #[allow(dead_code)]
     #[must_use]
     pub fn root_hash() -> Vec<u8> {
         SignatureInfra::root_hash()

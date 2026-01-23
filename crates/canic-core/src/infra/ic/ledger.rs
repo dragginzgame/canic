@@ -108,7 +108,7 @@ impl LedgerInfra {
         let args = AllowanceArgs { account, spender };
 
         let allowance: Allowance = Call::unbounded_wait(ledger_id, "icrc2_allowance")
-            .try_with_arg(args)?
+            .with_arg(args)?
             .execute()
             .await?
             .candid()?;
@@ -123,7 +123,7 @@ impl LedgerInfra {
         args: TransferFromArgs,
     ) -> Result<TransferFromResult, InfraError> {
         let result: TransferFromResult = Call::unbounded_wait(ledger_id, "icrc2_transfer_from")
-            .try_with_arg(args)?
+            .with_arg(args)?
             .execute()
             .await?
             .candid()?;

@@ -162,10 +162,8 @@ impl SignatureInfra {
         Ok(())
     }
 
-    ///
-    /// Returns the canister’s current signature root hash.
-    /// Useful for debugging or introspection.
-    ///
+    #[cfg(test)]
+    #[allow(dead_code)]
     #[must_use]
     pub fn root_hash() -> Vec<u8> {
         SIGNATURES.with_borrow(|sigs| sigs.root_hash().to_vec())
@@ -220,6 +218,7 @@ impl SignatureInfra {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_err_variant;
     use candid::Principal;
     use sha2::{Digest, Sha256};
 
@@ -253,6 +252,11 @@ mod tests {
             issuer_pid,
         )
         .expect_err("expected invalid signature, not success");
-        assert!(err.to_string().starts_with("invalid signature"));
+        assert_err_variant!(
+            err,
+            InfraError::IcInfra(IcInfraError::SignatureInfra(
+                SignatureInfraError::InvalidSignature { .. }
+            ))
+        );
     }
 }

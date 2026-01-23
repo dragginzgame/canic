@@ -4,7 +4,10 @@ use canic::{
     Error,
     api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+    dto::{
+        auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+        error::ErrorCode,
+    },
     ids::BuildNetwork,
     protocol,
 };
@@ -141,6 +144,54 @@ fn delegated_token_flow() {
     verify
         .expect("test_verify_delegated_token transport failed")
         .expect("test_verify_delegated_token application failed");
+}
+
+#[test]
+fn delegated_token_requires_proof() {
+    if !should_run_certified("delegated_token_requires_proof") {
+        return;
+    }
+
+    let setup = setup_root();
+
+    let auth_hub_pid = setup
+        .subnet_directory
+        .get(&canister::AUTH_HUB)
+        .copied()
+        .expect("auth_hub must exist in subnet directory");
+
+    let tenant = p(7);
+    let audiences = vec!["login".to_string()];
+    let scopes = vec!["read".to_string()];
+
+    let (shard_pid, _cert) = provision_auth_shard(
+        &setup,
+        auth_hub_pid,
+        tenant,
+        audiences.clone(),
+        scopes.clone(),
+        3600,
+    );
+
+    let now = now_secs();
+    let claims = DelegatedTokenClaims {
+        sub: p(9),
+        aud: audiences[0].clone(),
+        scopes,
+        iat: now,
+        exp: now + 60,
+        nonce: None,
+    };
+
+    let minted: Result<Result<DelegatedToken, Error>, Error> =
+        setup
+            .pic
+            .update_call(shard_pid, "auth_shard_mint_token", (claims,));
+
+    let err = minted
+        .expect("auth_shard_mint_token transport failed")
+        .expect_err("auth_shard_mint_token should fail without proof");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 fn should_run_certified(test_name: &str) -> bool {

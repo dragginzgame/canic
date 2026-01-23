@@ -40,7 +40,7 @@ impl XrcOps {
     ) -> Result<ExchangeRate, InternalError> {
         let response = CallOps::unbounded_wait(*EXCHANGE_RATE_CANISTER, "get_exchange_rate")
             .with_cycles(cycles)
-            .try_with_arg(req)?
+            .with_arg(req)?
             .execute()
             .await?;
 

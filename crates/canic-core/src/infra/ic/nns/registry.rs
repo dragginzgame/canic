@@ -43,7 +43,7 @@ impl NnsRegistryInfra {
         let request = GetSubnetForCanisterRequest { principal: pid };
 
         let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
-            .try_with_arg(request)?
+            .with_arg(request)?
             .execute()
             .await?
             .candid::<GetSubnetForCanisterResponse>()?;

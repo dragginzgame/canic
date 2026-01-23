@@ -62,3 +62,14 @@ pub mod __reexports {
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! assert_err_variant {
+    ($err:expr, $pat:pat $(if $guard:expr)? $(,)?) => {{
+        match $err {
+            $pat $(if $guard)? => {}
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }};
+}
