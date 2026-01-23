@@ -77,17 +77,17 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Return verified claims after full token verification.
+    /// Verify a delegated token and return verified contents.
     ///
-    /// Purely local verification; does not read certified data or require a
-    /// query context.
-    pub fn verify_token_claims(
+    /// This is intended for application-layer session construction.
+    /// It performs full verification and returns verified claims and cert.
+    pub fn verify_token_verified(
         token: &DelegatedToken,
         authority_pid: Principal,
         now_secs: u64,
-    ) -> Result<DelegatedTokenClaims, Error> {
+    ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
         DelegatedTokenOps::verify_token(token, authority_pid, now_secs)
-            .map(|verified| verified.claims)
+            .map(|verified| (verified.claims, verified.cert))
             .map_err(Self::map_delegation_error)
     }
 
@@ -138,6 +138,7 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)?;
 
         DelegationStateOps::set_proof_from_dto(proof);
+
         Ok(())
     }
 

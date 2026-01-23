@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.8] - 2026-01-23 - Delegated Auth API
+
+### 🔐 Auth
+
+- Exposed `DelegationApi::verify_token_verified` to return verified claims + cert for session construction.
+
+---
+
 ## [0.9.7] - 2026-01-23 - IC Call Cleanup
 
 ### ⚡ Optimisations
