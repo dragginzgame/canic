@@ -31,7 +31,7 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    DelegatedTokenValid,
+    Authenticated,
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -276,7 +276,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 if builtin_from_path_tail(&path).is_some() {
                     return syn::Error::new_spanned(
                         &path,
-                        "built-in predicates must use short paths like auth::delegated_token_valid()",
+                        "built-in predicates must use short paths like auth::authenticated() or authenticated()",
                     );
                 }
                 syn::Error::new_spanned(
@@ -316,6 +316,13 @@ fn builtin_from_path(path: &Path) -> Option<BuiltinPredicate> {
     if path.leading_colon.is_some() {
         return None;
     }
+    if path.segments.len() == 1 {
+        let last = path.segments.last()?.ident.to_string();
+        return match last.as_str() {
+            "authenticated" => Some(BuiltinPredicate::Authenticated),
+            _ => None,
+        };
+    }
     if path.segments.len() != 2 {
         return None;
     }
@@ -341,7 +348,7 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
             Some(BuiltinPredicate::CallerIsRegisteredToSubnet)
         }
         (Some("caller"), "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
-        (Some("auth"), "delegated_token_valid") => Some(BuiltinPredicate::DelegatedTokenValid),
+        (Some("auth"), "authenticated") => Some(BuiltinPredicate::Authenticated),
         (Some("env"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
         (Some("env"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,

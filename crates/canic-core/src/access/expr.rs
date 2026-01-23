@@ -75,7 +75,7 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    DelegatedTokenValid,
+    Authenticated,
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -206,8 +206,8 @@ pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
-    pub const fn delegated_token_valid() -> AccessExpr {
-        builtin(BuiltinPredicate::DelegatedTokenValid)
+    pub const fn authenticated() -> AccessExpr {
+        builtin(BuiltinPredicate::Authenticated)
     }
 }
 
@@ -304,7 +304,7 @@ async fn eval_builtin(pred: &BuiltinPredicate, ctx: &AccessContext) -> Result<()
             access::auth::is_registered_to_subnet(ctx.caller).await
         }
         BuiltinPredicate::CallerIsWhitelisted => access::auth::is_whitelisted(ctx.caller).await,
-        BuiltinPredicate::DelegatedTokenValid => {
+        BuiltinPredicate::Authenticated => {
             let verified = access::auth::delegated_token_verified(ctx.caller).await?;
             DelegationMetrics::record_authority(verified.cert.signer_pid);
             Ok(())
@@ -383,7 +383,7 @@ impl BuiltinPredicate {
             Self::CallerIsSameCanister => "caller_is_same_canister",
             Self::CallerIsRegisteredToSubnet => "caller_is_registered_to_subnet",
             Self::CallerIsWhitelisted => "caller_is_whitelisted",
-            Self::DelegatedTokenValid => "delegated_token_valid",
+            Self::Authenticated => "authenticated",
             Self::BuildIcOnly => "build_ic_only",
             Self::BuildLocalOnly => "build_local_only",
         }
@@ -401,7 +401,7 @@ impl BuiltinPredicate {
             | Self::CallerIsSameCanister
             | Self::CallerIsRegisteredToSubnet
             | Self::CallerIsWhitelisted
-            | Self::DelegatedTokenValid => AccessMetricKind::Auth,
+            | Self::Authenticated => AccessMetricKind::Auth,
         }
     }
 }

@@ -1,7 +1,7 @@
 #[derive(Clone, Copy, Debug)]
-pub struct DelegatedTokenValid;
+pub struct Authenticated;
 
 #[must_use]
-pub const fn delegated_token_valid() -> DelegatedTokenValid {
-    DelegatedTokenValid
+pub const fn authenticated() -> Authenticated {
+    Authenticated
 }

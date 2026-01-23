@@ -48,6 +48,7 @@ pub use canic_memory::{
 // Access predicates
 // -----------------------------------------------------------------------------
 pub mod access {
+    pub use crate::__internal::core::access::auth::authenticated;
     pub use crate::__internal::core::access::{AccessError, app, auth, env};
 }
 
