@@ -124,6 +124,7 @@ fn delegated_token_flow() {
         scopes,
         iat: now,
         exp: now + 60,
+        ext: None,
         nonce: None,
     };
 
@@ -180,6 +181,7 @@ fn delegated_token_requires_proof() {
         scopes,
         iat: now,
         exp: now + 60,
+        ext: None,
         nonce: None,
     };
 
