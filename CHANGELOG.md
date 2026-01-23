@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.9] - 2026-01-23 - Delegated Claims Extension
+
+### 🔐 Auth
+
+- Added optional `ext: Option<Vec<u8>>` to delegated token claims for application-specific data.
+
+---
+
 ## [0.9.8] - 2026-01-23 - Delegated Auth API
 
 ### 🔐 Auth

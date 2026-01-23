@@ -167,6 +167,25 @@ pub struct DelegatedTokenClaims {
     /// - <= DelegationCert.expires_at
     pub exp: u64,
 
+    /// Optional application-defined extension payload.
+    ///
+    /// SECURITY:
+    /// ---------
+    /// - This field is covered by the token signature.
+    /// - Canic does NOT interpret this field.
+    /// - Semantics are defined entirely by the application.
+    ///
+    /// INTENDED USE:
+    /// -------------
+    /// - Application identity (e.g. user_id)
+    /// - Role snapshots
+    /// - Authorization context
+    ///
+    /// This enables stateless application authentication across
+    /// arbitrary canisters without database lookups.
+    #[serde(default)]
+    pub ext: Option<Vec<u8>>,
+
     /// Optional nonce for replay protection or correlation.
     ///
     /// Semantics are intentionally undefined at this layer.
