@@ -7,18 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.9] - 2026-01-23 - Delegated Claims Extension
+## [0.9.10] - 2026-01-23
 
 ### 🔐 Auth
 
+- Renamed the delegated auth guard to `auth::authenticated()` and added a shortcut to it.
 - Added optional `ext: Option<Vec<u8>>` to delegated token claims for application-specific data.
-
----
-
-## [0.9.8] - 2026-01-23 - Delegated Auth API
-
-### 🔐 Auth
-
 - Exposed `DelegationApi::verify_token_verified` to return verified claims + cert for session construction.
 
 ---

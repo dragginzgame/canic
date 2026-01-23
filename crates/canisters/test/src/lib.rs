@@ -65,7 +65,7 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
 
 /// test_verify_delegated_token
 /// Verifies delegated tokens using the access guard.
-#[canic_update(requires(auth::delegated_token_valid()))]
+#[canic_update(requires(auth::authenticated()))]
 async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));

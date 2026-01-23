@@ -39,7 +39,7 @@ pub type Role = CanisterRole;
 /// - The delegated token MUST be the first candid argument.
 /// - Decoding failures result in access denial.
 /// - The caller argument is accepted for composability and is not inspected.
-pub async fn delegated_token_valid(_caller: Principal) -> Result<(), AccessError> {
+pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
     let _ = delegated_token_verified(_caller).await?;
     Ok(())
 }

@@ -396,8 +396,8 @@ fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }
-        BuiltinPredicate::DelegatedTokenValid => {
-            quote!(::canic::__internal::core::access::expr::auth::delegated_token_valid())
+        BuiltinPredicate::Authenticated => {
+            quote!(::canic::__internal::core::access::expr::auth::authenticated())
         }
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
