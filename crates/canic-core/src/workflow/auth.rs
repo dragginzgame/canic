@@ -21,7 +21,7 @@ use crate::{
     },
     log,
     log::Topic,
-    ops::{auth::DelegatedTokenOps, ic::call::CallOps, storage::auth::DelegationStateOps},
+    ops::{auth::DelegatedTokenOps, ic::call::CallOps},
     protocol,
     workflow::runtime::timer::{TimerId, TimerWorkflow},
 };
@@ -87,45 +87,29 @@ impl DelegationWorkflow {
     /// - Keeps cryptographic issuance separable from storage and policy
     ///
     /// Authority MUST be enforced by the caller.
-    pub fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+    fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
         DelegatedTokenOps::sign_delegation_cert(cert)
-    }
-
-    /// Issue and persist the delegation proof in stable state.
-    ///
-    /// Semantics:
-    /// - Any previously stored delegation proof is replaced
-    /// - All previously issued delegated tokens become invalid
-    ///
-    /// Intended usage:
-    /// - Initial delegation bootstrap
-    /// - Controlled, immediate rotation
-    ///
-    /// Authority MUST be enforced by the caller.
-    pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
-        let proof = Self::issue_delegation(cert)?;
-        DelegationStateOps::set_proof_from_dto(proof.clone());
-
-        Ok(proof)
     }
 
     // -------------------------------------------------------------------------
     // Provisioning
     // -------------------------------------------------------------------------
 
-    pub async fn provision(
+    pub(crate) async fn provision(
         request: DelegationProvisionRequest,
     ) -> Result<DelegationProvisionResponse, InternalError> {
         let proof = Self::issue_delegation(request.cert)?;
         let mut results = Vec::new();
 
         for target in request.signer_targets {
-            let result = push_proof(target, &proof, DelegationProvisionTargetKind::Signer).await;
+            let result =
+                Self::push_proof(target, &proof, DelegationProvisionTargetKind::Signer).await;
             results.push(result);
         }
 
         for target in request.verifier_targets {
-            let result = push_proof(target, &proof, DelegationProvisionTargetKind::Verifier).await;
+            let result =
+                Self::push_proof(target, &proof, DelegationProvisionTargetKind::Verifier).await;
             results.push(result);
         }
 
@@ -156,7 +140,7 @@ impl DelegationWorkflow {
     /// Returns:
     /// - true if rotation was started
     /// - false if a rotation task was already running
-    pub fn start_rotation(
+    pub(crate) fn start_rotation(
         interval: Duration,
         build_cert: Arc<dyn Fn() -> Result<DelegationCert, InternalError> + Send + Sync>,
         publish: Arc<dyn Fn(DelegationProof) -> Result<(), InternalError> + Send + Sync>,
@@ -190,7 +174,7 @@ impl DelegationWorkflow {
         )
     }
 
-    async fn push_proof(
+    pub(crate) async fn push_proof(
         target: Principal,
         proof: &DelegationProof,
         kind: DelegationProvisionTargetKind,
@@ -205,21 +189,21 @@ impl DelegationWorkflow {
         let call = match CallOps::unbounded_wait(target, method).with_arg(proof.clone()) {
             Ok(call) => call,
             Err(err) => {
-                return failure(target, kind, ErrorDto::from(err));
+                return Self::failure(target, kind, ErrorDto::from(err));
             }
         };
 
         let result = match call.execute().await {
             Ok(result) => result,
             Err(err) => {
-                return failure(target, kind, ErrorDto::from(err));
+                return Self::failure(target, kind, ErrorDto::from(err));
             }
         };
 
         let response: Result<(), ErrorDto> = match result.candid() {
             Ok(response) => response,
             Err(err) => {
-                return failure(target, kind, ErrorDto::from(err));
+                return Self::failure(target, kind, ErrorDto::from(err));
             }
         };
 
@@ -230,11 +214,11 @@ impl DelegationWorkflow {
                 status: DelegationProvisionStatus::Ok,
                 error: None,
             },
-            Err(err) => failure(target, kind, err),
+            Err(err) => Self::failure(target, kind, err),
         }
     }
 
-    fn failure(
+    const fn failure(
         target: Principal,
         kind: DelegationProvisionTargetKind,
         err: ErrorDto,
@@ -256,7 +240,7 @@ impl DelegationWorkflow {
     /// Returns:
     /// - true if a task was stopped
     /// - false if no rotation task was running
-    pub fn stop_rotation() -> bool {
+    pub(crate) fn stop_rotation() -> bool {
         TimerWorkflow::clear_guarded(&ROTATION_TIMER)
     }
 

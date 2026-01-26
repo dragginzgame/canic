@@ -54,7 +54,7 @@ use crate::dto::{error::Error, prelude::*};
 ///
 /// Anything not explicitly allowed here is forbidden.
 ///
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCert {
     /// Version of the delegation certificate format.
     ///
@@ -110,7 +110,7 @@ pub struct DelegationCert {
 /// - the root authority’s public key
 /// - a fixed domain separator
 ///
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProof {
     /// The delegated certificate describing signer authority.
     pub cert: DelegationCert,

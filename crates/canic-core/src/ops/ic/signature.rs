@@ -11,18 +11,6 @@ use crate::{
 pub struct SignatureOps;
 
 impl SignatureOps {
-    /// Prepare a canister signature (update-only).
-    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InternalError> {
-        SignatureInfra::prepare(domain, seed, message).map_err(IcOpsError::from)?;
-
-        Ok(())
-    }
-
-    #[must_use]
-    pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
-        SignatureInfra::get(domain, seed, message)
-    }
-
     pub fn sign(
         domain: &[u8],
         seed: &[u8],

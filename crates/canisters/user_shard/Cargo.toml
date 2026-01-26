@@ -1,5 +1,5 @@
 [package]
-name = "canister_auth_shard"
+name = "canister_user_shard"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

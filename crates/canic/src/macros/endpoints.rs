@@ -308,6 +308,22 @@ macro_rules! canic_endpoints_root {
             Ok(response)
         }
 
+        // canic_response_authenticated
+        // root's way to respond to a request that includes delegated auth
+        // has to come from a direct child canister
+        #[canic_update(
+            internal,
+            requires(caller::is_registered_to_subnet(), auth::authenticated())
+        )]
+        async fn canic_response_authenticated(
+            request: ::canic::dto::rpc::AuthenticatedRequest,
+        ) -> Result<::canic::dto::rpc::AuthenticatedResponse, ::canic::Error> {
+            let response =
+                $crate::__internal::core::api::rpc::RpcApi::response(request.request).await?;
+
+            Ok(response)
+        }
+
         // canic_canister_status
         // this can be called via root as root is the master controller
         #[canic_update(requires(caller::is_root(), caller::is_controller()))]
@@ -370,11 +386,22 @@ macro_rules! canic_endpoints_root {
             $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
 
-        #[canic_update(internal, requires(caller::is_root()))]
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_delegation_provision(
             request: ::canic::dto::auth::DelegationProvisionRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::provision(request).await
+        }
+
+        //
+        // SHARDING
+        //
+
+        #[canic_update(internal, requires(caller::is_root()))]
+        async fn canic_sharding_admin(
+            cmd: ::canic::dto::placement::sharding::ShardingAdminCommand,
+        ) -> Result<::canic::dto::placement::sharding::ShardingAdminResponse, ::canic::Error> {
+            $crate::__internal::core::api::placement::sharding::ShardingAdminApi::admin(cmd).await
         }
     };
 }

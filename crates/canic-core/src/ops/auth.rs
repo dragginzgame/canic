@@ -2,7 +2,13 @@ use crate::{
     InternalError, InternalErrorOrigin,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
     ops::{
-        config::ConfigOps, ic::signature::SignatureOps, prelude::*,
+        config::ConfigOps,
+        ic::signature::SignatureOps,
+        prelude::*,
+        runtime::metrics::auth::{
+            record_verifier_cert_expired, record_verifier_proof_mismatch,
+            record_verifier_proof_missing,
+        },
         storage::auth::DelegationStateOps,
     },
 };
@@ -110,33 +116,16 @@ pub struct DelegatedTokenOps;
 
 impl DelegatedTokenOps {
     // -------------------------------------------------------------------------
-    // Delegation cert issuance
+    // Delegation cert
     // -------------------------------------------------------------------------
-
-    pub fn prepare_delegation_cert(cert: &DelegationCert) -> Result<(), InternalError> {
-        let hash = cert_hash(cert)?;
-        SignatureOps::prepare(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?;
-        Ok(())
-    }
-
-    /// Retrieve a prepared delegation proof (query-only).
-    ///
-    /// Requires a data certificate in the current query context.
-    pub fn get_delegation_proof(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
-        let hash = cert_hash(&cert)?;
-        let sig = SignatureOps::get(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)
-            .ok_or(DelegatedTokenOpsError::CertSignatureUnavailable)?;
-
-        Ok(DelegationProof {
-            cert,
-            cert_sig: sig,
-        })
-    }
 
     /// Sign a delegation cert in one step.
     ///
     /// Returns an error when no data certificate is available for the signature.
-    pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+    // SAFETY: this function must only be called by provisioning or rotation workflows.
+    pub(crate) fn sign_delegation_cert(
+        cert: DelegationCert,
+    ) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
         let sig = SignatureOps::sign(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?
             .ok_or(DelegatedTokenOpsError::CertSignatureUnavailable)?;
@@ -401,6 +390,7 @@ fn verify_time_bounds(
     }
 
     if now_secs > cert.expires_at {
+        record_verifier_cert_expired();
         return Err(DelegatedTokenOpsError::CertExpired {
             expires_at: cert.expires_at,
         }
@@ -427,12 +417,15 @@ fn verify_time_bounds(
 }
 
 fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
-    let stored =
-        DelegationStateOps::proof_dto().ok_or_else(|| DelegatedTokenOpsError::ProofUnavailable)?;
+    let Some(stored) = DelegationStateOps::proof_dto() else {
+        record_verifier_proof_missing();
+        return Err(DelegatedTokenOpsError::ProofUnavailable.into());
+    };
 
     if proofs_equal(proof, &stored) {
         Ok(())
     } else {
+        record_verifier_proof_mismatch();
         Err(DelegatedTokenOpsError::ProofMismatch.into())
     }
 }

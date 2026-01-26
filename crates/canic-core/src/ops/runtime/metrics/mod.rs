@@ -1,4 +1,5 @@
 pub mod access;
+pub mod auth;
 pub mod delegation;
 pub mod endpoint;
 pub mod http;

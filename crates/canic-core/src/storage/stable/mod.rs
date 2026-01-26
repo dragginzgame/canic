@@ -16,10 +16,10 @@ pub mod state;
 ///
 
 pub const CANIC_MEMORY_MIN: u8 = 5;
-pub const CANIC_MEMORY_MAX: u8 = 40;
+pub const CANIC_MEMORY_MAX: u8 = 60;
 
 ///
-/// CANIC stable memory IDs (5–40)
+/// CANIC stable memory IDs
 ///
 /// ⚠️ PRE-FREEZE LAYOUT
 /// IDs may change until this layout is finalized.
@@ -44,11 +44,7 @@ pub mod memory {
     // =====================================================================
 
     // ---------------------------------------------------------------------
-    // Topology & discovery state (5–9)
-    //
-    // Ownership:
-    // - Canister topology
-    // - App / subnet directories
+    // Topology & discovery state (5–12)
     //
     // Expected growth: low
     // ---------------------------------------------------------------------
@@ -59,126 +55,110 @@ pub mod memory {
         pub const SUBNET_DIRECTORY_ID: u8 = 7;
         pub const APP_REGISTRY_ID: u8 = 8;
         pub const SUBNET_REGISTRY_ID: u8 = 9;
+
+        // Reserved: 10–12
     }
 
     // ---------------------------------------------------------------------
-    // Environment & configuration state (10)
-    //
-    // Ownership:
-    // - Deployment environment
-    // - Static configuration
+    // Environment & configuration state (13–15)
     //
     // Expected growth: very low
     // ---------------------------------------------------------------------
 
     pub mod env {
-        pub const ENV_ID: u8 = 10;
+        pub const ENV_ID: u8 = 13;
+
+        // Reserved: 14–15
     }
 
     // ---------------------------------------------------------------------
-    // Auth & signing state (11–14)
+    // Auth & signing state (16–25)
     //
-    // Ownership:
-    // - Delegated signing state
-    // - Authorization credentials
-    // - Future revocation / rotation metadata
-    //
-    // Expected growth: medium
+    // Expected growth: medium → high (structural, permanent)
     // ---------------------------------------------------------------------
 
     pub mod auth {
-        pub const DELEGATION_STATE_ID: u8 = 11;
+        pub const DELEGATION_STATE_ID: u8 = 16;
 
-        // Reserved: 12–14
+        // Reserved: 17–25
     }
 
     // ---------------------------------------------------------------------
-    // Observability & accounting (12–17)
-    //
-    // Ownership:
-    // - Cycles accounting
-    // - Logs
-    // - Metrics indices
+    // Observability & accounting (26–35)
     //
     // Expected growth: medium
     // ---------------------------------------------------------------------
 
     pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 12;
-        pub const LOG_INDEX_ID: u8 = 13;
-        pub const LOG_DATA_ID: u8 = 14;
+        pub const CYCLE_TRACKER_ID: u8 = 26;
+        pub const LOG_INDEX_ID: u8 = 27;
+        pub const LOG_DATA_ID: u8 = 28;
 
-        // Reserved: 15–17
+        // Reserved: 29–35
     }
 
     // ---------------------------------------------------------------------
-    // Intent & reservation state (18–25)
-    //
-    // Ownership:
-    // - Intent lifecycle (pending → committed / aborted)
-    // - Reservation & quota tracking
+    // Intent & reservation state (36–45)
     //
     // Expected growth: high
     // ---------------------------------------------------------------------
 
     pub mod intent {
-        pub const INTENT_META_ID: u8 = 18;
-        pub const INTENT_RECORDS_ID: u8 = 19;
-        pub const INTENT_TOTALS_ID: u8 = 20;
-        pub const INTENT_PENDING_ID: u8 = 21;
+        pub const INTENT_META_ID: u8 = 36;
+        pub const INTENT_RECORDS_ID: u8 = 37;
+        pub const INTENT_TOTALS_ID: u8 = 38;
+        pub const INTENT_PENDING_ID: u8 = 39;
 
-        // Reserved: 22–25
+        // Reserved: 40–45
     }
 
     // ---------------------------------------------------------------------
-    // Pool & capacity state (26–30)
-    //
-    // Ownership:
-    // - Canister pools
-    // - Capacity & availability tracking
+    // Pool & capacity state (46–48)
     //
     // Expected growth: medium
     // ---------------------------------------------------------------------
 
     pub mod pool {
-        pub const CANISTER_POOL_ID: u8 = 26;
+        pub const CANISTER_POOL_ID: u8 = 46;
 
-        // Reserved: 27–30
+        // Reserved: 47–48
     }
 
     // ---------------------------------------------------------------------
-    // Placement, scaling & sharding state (31–36)
-    //
-    // Ownership:
-    // - Placement decisions
-    // - Scaling registries
-    // - Sharding assignments
+    // Placement, scaling & sharding state (49–58)
     //
     // Expected growth: high
     // ---------------------------------------------------------------------
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 31;
-        pub const SHARDING_REGISTRY_ID: u8 = 32;
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 33;
+        pub const SCALING_REGISTRY_ID: u8 = 49;
+        pub const SHARDING_REGISTRY_ID: u8 = 50;
+        pub const SHARDING_ASSIGNMENT_ID: u8 = 51;
+        pub const SHARDING_LIFECYCLE_ID: u8 = 52;
+        pub const SHARDING_ACTIVE_SET_ID: u8 = 53;
+        pub const SHARDING_ROTATION_TARGETS_ID: u8 = 54;
 
-        // Reserved: 34–36
+        // Reserved for:
+        // - placement policies
+        // - shard health / liveness
+        // - rebalance / drain state
+        // - migration metadata
+        // 55–58
     }
 
     // ---------------------------------------------------------------------
-    // Application runtime state (37–40)
+    // Application / subnet runtime boundary (59–60)
     //
     // Ownership:
-    // - Mutable app / subnet runtime state
+    // - CANIC-controlled runtime state
+    // - Upper bound of CANIC ABI
     //
-    // Expected growth: high
+    // Expected growth: low
     // ---------------------------------------------------------------------
 
     pub mod state {
-        pub const APP_STATE_ID: u8 = 37;
-        pub const SUBNET_STATE_ID: u8 = 38;
-
-        // Reserved: 39–40
+        pub const APP_STATE_ID: u8 = 59;
+        pub const SUBNET_STATE_ID: u8 = 60;
     }
 }
 

@@ -7,7 +7,7 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_internal::canister::{APP, AUTH_HUB, SCALE_HUB, SHARD_HUB, TEST};
+use canic_internal::canister::{APP, SCALE_HUB, SHARD_HUB, TEST, USER_HUB};
 use canic_testkit::pic::pic;
 use std::{
     env, fs,
@@ -121,12 +121,12 @@ fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
 }
 
 fn app_directory_args() -> AppDirectoryArgs {
-    let roles = [AUTH_HUB, SCALE_HUB, SHARD_HUB];
+    let roles = [USER_HUB, SCALE_HUB, SHARD_HUB];
     AppDirectoryArgs(directory_entries(&roles, None, 10))
 }
 
 fn subnet_directory_args(canister_id: Principal) -> SubnetDirectoryArgs {
-    let roles = [APP, AUTH_HUB, SCALE_HUB, SHARD_HUB, TEST];
+    let roles = [APP, USER_HUB, SCALE_HUB, SHARD_HUB, TEST];
     let override_role = Some((TEST, canister_id));
     SubnetDirectoryArgs(directory_entries(&roles, override_role, 20))
 }

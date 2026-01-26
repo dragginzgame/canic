@@ -540,6 +540,9 @@ Rules:
 
 * Unit tests live next to code
 * Integration tests in `tests/`
+* Any test that creates/installs/upgrades canisters or exercises inter-canister calls **must** use PocketIC (integration tests), not unit tests.
+* Do not add `cfg(test)` stubs, test-only branches, or debug-only logic in production code to fake IC management behavior; use PocketIC instead.
+* If a unit test would panic due to `ic0` usage, it is misclassified and must be moved to PocketIC.
 * Dummy principals helper:
 
 ```rust

@@ -1,11 +1,11 @@
-use crate::dto::prelude::*;
+use crate::dto::{auth::DelegatedToken, prelude::*};
 
 ///
 /// Request
 /// Root-directed orchestration commands.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Request {
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
@@ -13,11 +13,21 @@ pub enum Request {
 }
 
 ///
+/// AuthenticatedRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct AuthenticatedRequest {
+    pub request: Request,
+    pub delegated_token: DelegatedToken,
+}
+
+///
 /// CreateCanisterRequest
 /// Payload for [`Request::CreateCanister`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
@@ -29,7 +39,7 @@ pub struct CreateCanisterRequest {
 /// Parent-location choices for a new canister
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum CreateCanisterParent {
     Root,
     /// Use the requesting canister as parent.
@@ -45,7 +55,7 @@ pub enum CreateCanisterParent {
 /// Payload for [`Request::UpgradeCanister`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
 }
@@ -55,7 +65,7 @@ pub struct UpgradeCanisterRequest {
 /// Payload for [`Request::Cycles`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CyclesRequest {
     pub cycles: u128,
 }
@@ -65,19 +75,21 @@ pub struct CyclesRequest {
 /// Response payloads produced by root for orchestration requests.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
     Cycles(CyclesResponse),
 }
 
+pub type AuthenticatedResponse = Response;
+
 ///
 /// CreateCanisterResponse
 /// Result of creating and installing a new canister.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
@@ -87,7 +99,7 @@ pub struct CreateCanisterResponse {
 /// Result of an upgrade request (currently empty, reserved for metadata)
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct UpgradeCanisterResponse {}
 
 ///
@@ -95,7 +107,7 @@ pub struct UpgradeCanisterResponse {}
 /// Result of transferring cycles to a child canister
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }

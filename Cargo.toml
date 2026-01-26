@@ -7,6 +7,7 @@ members = [
     "crates/canic-core/test-canisters/intent_authority",
     "crates/canic-core/test-canisters/intent_client",
     "crates/canic-core/test-canisters/intent_external",
+    "crates/canic-core/test-canisters/sharding_root_stub",
     "crates/canic-dsl",
     "crates/canic-dsl-macros",
     "crates/canic-internal",
@@ -14,8 +15,6 @@ members = [
     "crates/canic-testkit",
     "crates/canic-utils",
     "crates/canisters/app",
-    "crates/canisters/auth_hub",
-    "crates/canisters/auth_shard",
     "crates/canisters/blank",
     "crates/canisters/root",
     "crates/canisters/scale",
@@ -23,6 +22,8 @@ members = [
     "crates/canisters/shard",
     "crates/canisters/shard_hub",
     "crates/canisters/test",
+    "crates/canisters/user_hub",
+    "crates/canisters/user_shard",
 ]
 resolver = "2"
 

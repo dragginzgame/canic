@@ -19,7 +19,7 @@ use crate::{
         types::Principal,
     },
     config::Config,
-    dto::auth::DelegatedToken,
+    dto::{auth::DelegatedToken, rpc::AuthenticatedRequest},
     ids::CanisterRole,
     ops::{
         auth::{DelegatedTokenOps, VerifiedDelegatedToken},
@@ -36,7 +36,8 @@ pub type Role = CanisterRole;
 /// Verify a delegated token read from the ingress payload.
 ///
 /// Contract:
-/// - The delegated token MUST be the first candid argument.
+/// - The delegated token MUST be the first candid argument, or embedded in an
+///   `AuthenticatedRequest` as the single argument.
 /// - Decoding failures result in access denial.
 /// - The caller argument is accepted for composability and is not inspected.
 pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
@@ -202,11 +203,17 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
     }
 
     // Decode the FIRST candid argument as DelegatedToken.
-    Decode!(&bytes, DelegatedToken).map_err(|err| {
+    if let Ok(token) = Decode!(&bytes, DelegatedToken) {
+        return Ok(token);
+    }
+
+    let envelope = Decode!(&bytes, AuthenticatedRequest).map_err(|err| {
         AccessError::Denied(format!(
             "failed to decode delegated token as first argument: {err}"
         ))
-    })
+    })?;
+
+    Ok(envelope.delegated_token)
 }
 
 fn dependency_unavailable(detail: &str) -> AccessError {
