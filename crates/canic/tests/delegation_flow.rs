@@ -5,26 +5,25 @@ use canic::{
     api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
     dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+        auth::{
+            DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProvisionRequest,
+            DelegationProvisionResponse, DelegationProvisionStatus,
+        },
         error::ErrorCode,
     },
     ids::BuildNetwork,
     protocol,
 };
 use canic_internal::canister;
-use hex::encode as hex_encode;
-use ic_certification::{Certificate, HashTree, LookupResult};
 use root::harness::{RootSetup, setup_root};
-use serde::Deserialize;
-use serde_bytes::ByteBuf;
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
 #[test]
-fn delegation_issuance_flow() {
-    if !should_run_certified("delegation_issuance_flow") {
+fn delegation_provisioning_flow() {
+    if !should_run_certified("delegation_provisioning_flow") {
         return;
     }
 
@@ -36,19 +35,24 @@ fn delegation_issuance_flow() {
         .copied()
         .expect("auth_hub must exist in subnet directory");
 
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
+
     let tenant = p(7);
-    let (_shard_pid, cert) = provision_auth_shard(
-        &setup,
-        auth_hub_pid,
-        tenant,
-        vec!["login".to_string()],
-        vec!["read".to_string()],
-        3600_u64,
-    );
+    let shard_pid = create_auth_shard(&setup, auth_hub_pid, tenant);
 
-    let proof = issue_delegation_proof(&setup, auth_hub_pid, &cert);
+    let audiences = vec!["login".to_string()];
+    let scopes = vec!["read".to_string()];
+    let cert = build_cert(shard_pid, audiences.clone(), scopes.clone(), 3600_u64);
 
-    DelegationApi::verify_delegation_proof(&proof, setup.root_id)
+    let response = provision_delegation(&setup, cert.clone(), vec![shard_pid], vec![test_pid]);
+
+    assert_provisioned(&response);
+
+    DelegationApi::verify_delegation_proof(&response.proof, setup.root_id)
         .expect("delegation proof must verify");
 }
 
@@ -77,45 +81,12 @@ fn delegated_token_flow() {
     let audiences = vec!["login".to_string()];
     let scopes = vec!["read".to_string()];
 
-    let (shard_pid, cert) = provision_auth_shard(
-        &setup,
-        auth_hub_pid,
-        tenant,
-        audiences.clone(),
-        scopes.clone(),
-        3600_u64,
-    );
+    let shard_pid = create_auth_shard(&setup, auth_hub_pid, tenant);
+    let cert = build_cert(shard_pid, audiences.clone(), scopes.clone(), 3600_u64);
 
-    let proof = issue_delegation_proof(&setup, auth_hub_pid, &cert);
+    let response = provision_delegation(&setup, cert, vec![shard_pid], vec![test_pid]);
 
-    let finalized: Result<Result<(), Error>, Error> = setup.pic.update_call(
-        auth_hub_pid,
-        "finalize_auth_shard",
-        (shard_pid, proof.clone()),
-    );
-
-    match finalized {
-        Ok(Ok(())) => {}
-        Ok(Err(err)) => {
-            let debug = debug_delegation_signature(&proof, setup.root_id)
-                .unwrap_or_else(|| "signature debug unavailable".to_string());
-            panic!("finalize_auth_shard application failed: {err:?}\n{debug}");
-        }
-        Err(err) => {
-            panic!("finalize_auth_shard transport failed: {err:?}");
-        }
-    }
-
-    let set_proof: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
-        test_pid,
-        setup.root_id,
-        "test_set_delegation_proof",
-        (proof,),
-    );
-
-    set_proof
-        .expect("test_set_delegation_proof transport failed")
-        .expect("test_set_delegation_proof application failed");
+    assert_provisioned(&response);
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
@@ -140,11 +111,13 @@ fn delegated_token_flow() {
     let verify: Result<Result<(), Error>, Error> =
         setup
             .pic
-            .update_call(test_pid, "test_verify_delegated_token", (token,));
+            .update_call(test_pid, "test_verify_delegated_token", (token.clone(),));
 
     verify
         .expect("test_verify_delegated_token transport failed")
         .expect("test_verify_delegated_token application failed");
+
+    assert_eq!(token.proof, response.proof);
 }
 
 #[test]
@@ -165,14 +138,7 @@ fn delegated_token_requires_proof() {
     let audiences = vec!["login".to_string()];
     let scopes = vec!["read".to_string()];
 
-    let (shard_pid, _cert) = provision_auth_shard(
-        &setup,
-        auth_hub_pid,
-        tenant,
-        audiences.clone(),
-        scopes.clone(),
-        3600,
-    );
+    let shard_pid = create_auth_shard(&setup, auth_hub_pid, tenant);
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
@@ -205,102 +171,68 @@ fn should_run_certified(test_name: &str) -> bool {
     }
 }
 
-fn provision_auth_shard(
-    setup: &RootSetup,
-    auth_hub_pid: Principal,
-    tenant: Principal,
+fn create_auth_shard(setup: &RootSetup, auth_hub_pid: Principal, tenant: Principal) -> Principal {
+    let created: Result<Result<Principal, Error>, Error> =
+        setup
+            .pic
+            .update_call(auth_hub_pid, "create_auth_shard", (tenant,));
+
+    created
+        .expect("create_auth_shard transport failed")
+        .expect("create_auth_shard application failed")
+}
+
+fn build_cert(
+    signer_pid: Principal,
     audiences: Vec<String>,
     scopes: Vec<String>,
     ttl_secs: u64,
-) -> (Principal, DelegationCert) {
-    let provisioned: Result<Result<(Principal, DelegationCert), Error>, Error> =
-        setup.pic.update_call(
-            auth_hub_pid,
-            "provision_auth_shard",
-            (tenant, audiences, scopes, ttl_secs),
+) -> DelegationCert {
+    let issued_at = now_secs();
+    let expires_at = issued_at.saturating_add(ttl_secs);
+
+    DelegationCert {
+        v: 1,
+        signer_pid,
+        audiences,
+        scopes,
+        issued_at,
+        expires_at,
+    }
+}
+
+fn provision_delegation(
+    setup: &RootSetup,
+    cert: DelegationCert,
+    signer_targets: Vec<Principal>,
+    verifier_targets: Vec<Principal>,
+) -> DelegationProvisionResponse {
+    let request = DelegationProvisionRequest {
+        cert,
+        signer_targets,
+        verifier_targets,
+    };
+
+    let provisioned: Result<Result<DelegationProvisionResponse, Error>, Error> =
+        setup.pic.update_call_as(
+            setup.root_id,
+            setup.root_id,
+            protocol::CANIC_DELEGATION_PROVISION,
+            (request,),
         );
 
     provisioned
-        .expect("provision_auth_shard transport failed")
-        .expect("provision_auth_shard application failed")
+        .expect("canic_delegation_provision transport failed")
+        .expect("canic_delegation_provision application failed")
 }
 
-fn issue_delegation_proof(
-    setup: &RootSetup,
-    auth_hub_pid: Principal,
-    cert: &DelegationCert,
-) -> DelegationProof {
+fn assert_provisioned(response: &DelegationProvisionResponse) {
     assert!(
-        should_run_certified("issue_delegation_proof"),
-        "issue_delegation_proof requires certified runtime"
+        response
+            .results
+            .iter()
+            .all(|entry| entry.status == DelegationProvisionStatus::Ok),
+        "provisioning failed: {:?}",
+        response.results
     );
-
-    let mut proof = None;
-    let mut last_error = None;
-
-    for _ in 0..10 {
-        // Allow certified_data to be certified after prepare before requesting the signature.
-        setup.pic.certify_time();
-
-        let issued: Result<Result<DelegationProof, Error>, Error> = setup.pic.query_call_as(
-            setup.root_id,
-            auth_hub_pid,
-            protocol::CANIC_DELEGATION_GET,
-            (cert.clone(),),
-        );
-
-        match issued {
-            Ok(Ok(found)) => {
-                proof = Some(found);
-                break;
-            }
-            Ok(Err(err))
-                if err
-                    .message
-                    .contains("certified_data doesn't match sig tree digest") =>
-            {
-                last_error = Some(err);
-            }
-            Ok(Err(err)) => {
-                panic!("canic_delegation_get application failed: {err:?}");
-            }
-            Err(err) => {
-                panic!("canic_delegation_get transport failed: {err:?}");
-            }
-        }
-    }
-
-    proof.unwrap_or_else(|| {
-        panic!("canic_delegation_get retries exhausted: {last_error:?}");
-    })
-}
-
-#[derive(Deserialize)]
-struct CanisterSigDebug {
-    certificate: ByteBuf,
-    tree: HashTree,
-}
-
-fn debug_delegation_signature(proof: &DelegationProof, root_id: Principal) -> Option<String> {
-    let sig: CanisterSigDebug = serde_cbor::from_slice(&proof.cert_sig).ok()?;
-    let sig_digest = sig.tree.digest();
-
-    let cert: Certificate = serde_cbor::from_slice(sig.certificate.as_ref()).ok()?;
-    let cert_path = [b"canister", root_id.as_slice(), b"certified_data"];
-    let cert_data = match cert.tree.lookup_path(cert_path) {
-        LookupResult::Found(bytes) => Some(bytes.to_vec()),
-        other => {
-            return Some(format!(
-                "signature debug: sig_tree_digest=0x{}, certified_data_lookup={other:?}",
-                hex_encode(sig_digest.as_ref())
-            ));
-        }
-    };
-
-    let cert_data = cert_data?;
-    Some(format!(
-        "signature debug: sig_tree_digest=0x{}, cert_certified_data=0x{}",
-        hex_encode(sig_digest.as_ref()),
-        hex_encode(cert_data.as_slice())
-    ))
 }
