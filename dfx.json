@@ -15,7 +15,7 @@
             "dependencies": [
                 "app",
                 "blank",
-                "auth_hub",
+                "user_hub",
                 "scale_hub",
                 "shard_hub",
                 "test"
@@ -47,11 +47,11 @@
                 }
             ]
         },
-        "auth_hub": {
+        "user_hub": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/auth_hub/auth_hub.did",
-            "build": "bash -c 'scripts/app/build.sh auth_hub'",
-            "wasm": ".dfx/local/canisters/auth_hub/auth_hub.wasm",
+            "candid": ".dfx/local/canisters/user_hub/user_hub.did",
+            "build": "bash -c 'scripts/app/build.sh user_hub'",
+            "wasm": ".dfx/local/canisters/user_hub/user_hub.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [
@@ -60,14 +60,14 @@
                 }
             ],
             "dependencies": [
-                "auth_shard"
+                "user_shard"
             ]
         },
-        "auth_shard": {
+        "user_shard": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/auth_shard/auth_shard.did",
-            "build": "bash -c 'scripts/app/build.sh auth_shard'",
-            "wasm": ".dfx/local/canisters/auth_shard/auth_shard.wasm",
+            "candid": ".dfx/local/canisters/user_shard/user_shard.did",
+            "build": "bash -c 'scripts/app/build.sh user_shard'",
+            "wasm": ".dfx/local/canisters/user_shard/user_shard.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

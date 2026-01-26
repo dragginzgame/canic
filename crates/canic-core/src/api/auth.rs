@@ -5,7 +5,7 @@ use crate::{
         auth::{
             DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
             DelegationCert, DelegationProof, DelegationProvisionRequest,
-            DelegationProvisionResponse,
+            DelegationProvisionResponse, DelegationProvisionTargetKind,
         },
         error::Error,
     },
@@ -15,7 +15,11 @@ use crate::{
         config::ConfigOps,
         ic::IcOps,
         runtime::env::EnvOps,
-        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
+        runtime::metrics::auth::record_signer_mint_without_proof,
+        storage::{
+            auth::DelegationStateOps, placement::sharding_lifecycle::ShardingLifecycleOps,
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     workflow::auth::DelegationWorkflow,
 };
@@ -40,12 +44,6 @@ impl DelegationApi {
             }
             _ => Error::from(err),
         }
-    }
-
-    /// Sign a delegation cert.
-    pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, Error> {
-        validate_issuance_policy(&cert)?;
-        DelegatedTokenOps::sign_delegation_cert(cert).map_err(Self::map_delegation_error)
     }
 
     /// Full delegation proof verification (structure + signature).
@@ -97,16 +95,6 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        validate_issuance_policy(&cert)?;
-        DelegationWorkflow::issue_and_store(cert).map_err(Self::map_delegation_error)
-    }
-
     pub async fn provision(
         request: DelegationProvisionRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
@@ -149,7 +137,10 @@ impl DelegationApi {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
-        DelegationStateOps::proof_dto().ok_or_else(|| Error::not_found("delegation proof not set"))
+        DelegationStateOps::proof_dto().ok_or_else(|| {
+            record_signer_mint_without_proof();
+            Error::not_found("delegation proof not set")
+        })
     }
 }
 
@@ -212,7 +203,22 @@ impl DelegationAdminApi {
                 }
             }),
             Arc::new(|proof| {
-                DelegationStateOps::set_proof_from_dto(proof);
+                DelegationStateOps::set_proof_from_dto(proof.clone());
+
+                let targets = ShardingLifecycleOps::rotation_targets();
+                if !targets.is_empty() {
+                    IcOps::spawn(async move {
+                        for target in targets {
+                            let _ = DelegationWorkflow::push_proof(
+                                target,
+                                &proof,
+                                DelegationProvisionTargetKind::Signer,
+                            )
+                            .await;
+                        }
+                    });
+                }
+
                 Ok(())
             }),
         );

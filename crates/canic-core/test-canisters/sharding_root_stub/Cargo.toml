@@ -1,0 +1,11 @@
+[package]
+name = "sharding_root_stub"
+edition = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+canic = { workspace = true }

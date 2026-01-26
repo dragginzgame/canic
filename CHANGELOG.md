@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.11] - 2026-01-24
+
+### 🔐 Auth
+
+- Added auth rejection counters for delegated token failure paths (missing proof, proof mismatch, expired cert) and signer mint-without-proof.
+- Counters are emitted only on existing failure paths; auth behavior unchanged.
+- Collapsed test/dev auth canisters into `user_hub` + `user_shard` with root push-provisioning and proof-gated signing.
+
 ## [0.9.10] - 2026-01-23
 
 ### 🔐 Auth

@@ -62,6 +62,8 @@ pub mod __reexports {
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const CANIC_MEMORY_MIN: u8 = storage::stable::CANIC_MEMORY_MIN;
+pub const CANIC_MEMORY_MAX: u8 = storage::stable::CANIC_MEMORY_MAX;
 
 #[cfg(test)]
 #[macro_export]

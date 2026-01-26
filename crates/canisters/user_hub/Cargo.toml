@@ -1,5 +1,5 @@
 [package]
-name = "canister_auth_hub"
+name = "canister_user_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

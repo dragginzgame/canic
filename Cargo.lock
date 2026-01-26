@@ -345,26 +345,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_auth_hub"
-version = "0.9.10"
-dependencies = [
- "candid",
- "canic",
- "canic-internal",
- "ic-cdk",
-]
-
-[[package]]
-name = "canister_auth_shard"
-version = "0.9.10"
-dependencies = [
- "candid",
- "canic",
- "canic-internal",
- "ic-cdk",
-]
-
-[[package]]
 name = "canister_blank"
 version = "0.9.10"
 dependencies = [
@@ -433,6 +413,26 @@ dependencies = [
  "canic",
  "canic-internal",
  "canic-testkit",
+ "ic-cdk",
+]
+
+[[package]]
+name = "canister_user_hub"
+version = "0.9.10"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-internal",
+ "ic-cdk",
+]
+
+[[package]]
+name = "canister_user_shard"
+version = "0.9.10"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-internal",
  "ic-cdk",
 ]
 
@@ -2559,6 +2559,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "sharding_root_stub"
+version = "0.9.10"
+dependencies = [
+ "canic",
 ]
 
 [[package]]

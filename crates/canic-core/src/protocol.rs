@@ -7,12 +7,14 @@
 pub const CANIC_APP: &str = "canic_app";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_RESPONSE: &str = "canic_response";
+pub const CANIC_RESPONSE_AUTHENTICATED: &str = "canic_response_authenticated";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
 pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
+pub const CANIC_SHARDING_ADMIN: &str = "canic_sharding_admin";
 pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
 pub const CANIC_DELEGATION_PROVISION: &str = "canic_delegation_provision";
 pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";

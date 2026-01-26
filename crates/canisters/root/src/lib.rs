@@ -45,16 +45,16 @@ const APP_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/app/app
 const APP_WASM: &[u8] = &[];
 
 #[cfg(target_arch = "wasm32")]
-const AUTH_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/auth_hub/auth_hub.wasm.gz");
+const USER_HUB_WASM: &[u8] =
+    include_bytes!("../../../../.dfx/local/canisters/user_hub/user_hub.wasm.gz");
 #[cfg(not(target_arch = "wasm32"))]
-const AUTH_HUB_WASM: &[u8] = &[];
+const USER_HUB_WASM: &[u8] = &[];
 
 #[cfg(target_arch = "wasm32")]
-const AUTH_SHARD_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/auth_shard/auth_shard.wasm.gz");
+const USER_SHARD_WASM: &[u8] =
+    include_bytes!("../../../../.dfx/local/canisters/user_shard/user_shard.wasm.gz");
 #[cfg(not(target_arch = "wasm32"))]
-const AUTH_SHARD_WASM: &[u8] = &[];
+const USER_SHARD_WASM: &[u8] = &[];
 
 #[cfg(target_arch = "wasm32")]
 const BLANK_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz");
@@ -90,8 +90,8 @@ const TEST_WASM: &[u8] = &[];
 
 pub static WASMS: &[(CanisterRole, &[u8])] = &[
     (canister::APP, APP_WASM),
-    (canister::AUTH_HUB, AUTH_HUB_WASM),
-    (canister::AUTH_SHARD, AUTH_SHARD_WASM),
+    (canister::USER_HUB, USER_HUB_WASM),
+    (canister::USER_SHARD, USER_SHARD_WASM),
     (canister::BLANK, BLANK_WASM),
     (canister::SCALE_HUB, SCALE_HUB_WASM),
     (canister::SCALE, SCALE_WASM),

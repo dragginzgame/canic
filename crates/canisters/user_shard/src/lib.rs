@@ -1,0 +1,55 @@
+//!
+//! User shard canister that stores delegation proofs and mints delegated tokens.
+//!
+//! Test-only helper: this canister is intended for local/dev flows and is not
+//! a public-facing deployment target. Its endpoints may intentionally omit
+//! production-grade auth because they are exercised only in controlled tests.
+//!
+
+#![allow(clippy::unused_async)]
+
+use canic::{
+    Error,
+    api::auth::DelegationApi,
+    dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    prelude::*,
+};
+use canic_internal::canister::USER_SHARD;
+
+const TOKEN_VERSION: u16 = 1;
+
+//
+// CANIC
+//
+
+canic::start!(USER_SHARD);
+
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
+
+//
+// ENDPOINTS
+//
+
+/// user_shard_mint_token
+/// Mint a delegated token using the locally stored delegation proof.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
+#[canic_update]
+async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+    // Test-only guard: keep this endpoint out of production flows.
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
+    let proof = DelegationApi::require_proof()?;
+    DelegationApi::sign_token(TOKEN_VERSION, claims, proof)
+}
+
+#[canic_query(requires(authenticated()))]
+async fn hello() -> Result<(), Error> {
+    Ok(())
+}
+
+export_candid!();

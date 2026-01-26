@@ -6,7 +6,7 @@
 # Global Settings
 # ----------------------------------------------------------------
 controllers = []
-app_directory = ["auth_hub", "scale_hub", "shard_hub"]
+app_directory = ["user_hub", "scale_hub", "shard_hub"]
 
 [app]
 init_mode = "enabled"
@@ -34,8 +34,8 @@ icrc21 = true # Enable ICRC-21 capability
 #  PRIME SUBNET
 # ================================================================
 [subnets.prime]
-auto_create = ["app", "auth_hub", "scale_hub", "shard_hub", "test"]
-subnet_directory = ["app", "auth_hub", "scale_hub", "shard_hub", "test"]
+auto_create = ["app", "user_hub", "scale_hub", "shard_hub", "test"]
+subnet_directory = ["app", "user_hub", "scale_hub", "shard_hub", "test"]
 pool.minimum_size = 3
 
 # --- Root ---
@@ -46,20 +46,20 @@ kind = "root"
 [subnets.prime.canisters.app]
 kind = "node"
 
-# --- Auth Hub ---
-[subnets.prime.canisters.auth_hub]
+# --- User Hub ---
+[subnets.prime.canisters.user_hub]
 kind = "node"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-# --- Auth Hub Pools ---
-[subnets.prime.canisters.auth_hub.sharding.pools.auth_shards]
-canister_role = "auth_shard"
+# --- User Hub Pools ---
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-# --- Auth Shard ---
-[subnets.prime.canisters.auth_shard]
+# --- User Shard ---
+[subnets.prime.canisters.user_shard]
 kind = "shard"
 topup.threshold = "10T"
 topup.amount = "5T"

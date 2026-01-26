@@ -10,8 +10,8 @@ use ic_cdk::update;
 use std::cell::RefCell;
 
 const CAPACITY: u64 = 1;
-const CANIC_MEMORY_MIN: u8 = 5;
-const CANIC_MEMORY_MAX: u8 = 40;
+const CANIC_MEMORY_MIN: u8 = canic_core::CANIC_MEMORY_MIN;
+const CANIC_MEMORY_MAX: u8 = canic_core::CANIC_MEMORY_MAX;
 
 thread_local! {
     static EXTERNAL: RefCell<Option<Principal>> = const { RefCell::new(None) };

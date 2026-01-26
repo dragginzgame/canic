@@ -54,14 +54,14 @@ fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
     let expected_registry_roles = [
         CanisterRole::ROOT,
         canister::APP,
-        canister::AUTH_HUB,
+        canister::USER_HUB,
         canister::SCALE_HUB,
         canister::SHARD_HUB,
         canister::TEST,
     ];
     let expected_directory_roles = [
         canister::APP,
-        canister::AUTH_HUB,
+        canister::USER_HUB,
         canister::SCALE_HUB,
         canister::SHARD_HUB,
         canister::TEST,
