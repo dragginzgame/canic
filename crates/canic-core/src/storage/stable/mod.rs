@@ -21,10 +21,6 @@ pub const CANIC_MEMORY_MAX: u8 = 60;
 ///
 /// CANIC stable memory IDs
 ///
-/// ⚠️ PRE-FREEZE LAYOUT
-/// IDs may change until this layout is finalized.
-/// Once frozen, IDs are ABI-stable and MUST NOT be renumbered or reused.
-///
 /// Principles:
 /// - IDs are grouped by state authority
 /// - Each group owns a contiguous block

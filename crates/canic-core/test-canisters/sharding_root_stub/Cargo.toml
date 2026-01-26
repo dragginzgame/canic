@@ -8,4 +8,6 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+candid = { workspace = true }
 canic = { workspace = true }
+ic-cdk = { workspace = true }

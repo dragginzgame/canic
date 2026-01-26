@@ -80,8 +80,8 @@ crates/
 └─ canisters/               # Reference canisters
    ├─ root/                 # Root orchestrator
    ├─ app/                  # Example application
-   ├─ auth_hub/             # Auth shard coordinator
-   ├─ auth_shard/           # Delegated signing shard
+   ├─ user_hub/             # User signup + provisioning coordinator
+   ├─ user_shard/           # Delegated signing shard
    ├─ shard/                # Shard implementation
    ├─ shard_hub/            # Shard coordinator
    ├─ scale/                # Scaling worker

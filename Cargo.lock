@@ -2565,7 +2565,9 @@ dependencies = [
 name = "sharding_root_stub"
 version = "0.9.10"
 dependencies = [
+ "candid",
  "canic",
+ "ic-cdk",
 ]
 
 [[package]]
