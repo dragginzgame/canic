@@ -114,13 +114,13 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
         query_call(&pic, shard_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
-    let pool_entries: Vec<_> = registry
+    let pool_count = registry
         .0
         .into_iter()
         .filter(|entry| entry.entry.pool == POOL_NAME)
-        .collect();
+        .count();
 
-    assert_eq!(pool_entries.len(), 1);
+    assert_eq!(pool_count, 1);
 }
 
 fn shard_hub_init_args(root_pid: Principal) -> Vec<u8> {
