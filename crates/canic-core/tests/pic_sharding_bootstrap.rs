@@ -1,30 +1,35 @@
 use candid::{Principal, decode_one, encode_args};
-use canic_core::dto::{
-    abi::v1::CanisterInitPayload,
-    env::EnvBootstrapArgs,
-    error::Error,
-    placement::sharding::{ShardingRegistryResponse, ShardingTenantsResponse},
-    topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+use canic_core::{
+    dto::{
+        abi::v1::CanisterInitPayload,
+        env::EnvBootstrapArgs,
+        error::Error,
+        placement::sharding::{ShardingRegistryResponse, ShardingTenantsResponse},
+        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+    },
+    ids::{CanisterRole, SubnetRole},
 };
-use canic_core::ids::{CanisterRole, SubnetRole};
 use pocket_ic::PocketIcBuilder;
+use serde::de::DeserializeOwned;
 use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::Once,
 };
 
 const INSTALL_CYCLES: u128 = 2_000_000_000_000;
-const CANISTERS: [&str; 2] = ["sharding_root_stub", "shard_hub"];
+const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_shard_hub"];
 const POOL_NAME: &str = "shards";
+static BUILD_ONCE: Once = Once::new();
 
 #[test]
 fn sharding_bootstraps_first_shard_when_active_empty() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
+    build_canisters_once(&workspace_root);
 
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let shard_hub_wasm = read_wasm(&workspace_root, "shard_hub");
+    let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
 
     let pic = PocketIcBuilder::new().with_application_subnet().build();
 
@@ -72,10 +77,10 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
 #[test]
 fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
+    build_canisters_once(&workspace_root);
 
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let shard_hub_wasm = read_wasm(&workspace_root, "shard_hub");
+    let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
 
     let pic = PocketIcBuilder::new().with_application_subnet().build();
 
@@ -134,12 +139,12 @@ fn shard_hub_init_args(root_pid: Principal) -> Vec<u8> {
         subnet_directory: SubnetDirectoryArgs(Vec::new()),
     };
 
-    encode_args((payload, None)).expect("encode init args")
+    encode_args((payload, None::<Vec<u8>>)).expect("encode init args")
 }
 
 fn update_call<T, A>(pic: &pocket_ic::PocketIc, canister_id: Principal, method: &str, args: A) -> T
 where
-    T: candid::CandidType + candid::de::DeserializeOwned,
+    T: candid::CandidType + DeserializeOwned,
     A: candid::utils::ArgumentEncoder,
 {
     let payload = encode_args(args).expect("encode args");
@@ -152,7 +157,7 @@ where
 
 fn query_call<T, A>(pic: &pocket_ic::PocketIc, canister_id: Principal, method: &str, args: A) -> T
 where
-    T: candid::CandidType + candid::de::DeserializeOwned,
+    T: candid::CandidType + DeserializeOwned,
     A: candid::utils::ArgumentEncoder,
 {
     let payload = encode_args(args).expect("encode args");
@@ -163,21 +168,23 @@ where
     decode_one(&result).expect("decode response")
 }
 
-fn build_canisters(workspace_root: &PathBuf) {
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(workspace_root);
-    cmd.env("DFX_NETWORK", "local");
-    cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
-    for name in CANISTERS {
-        cmd.args(["-p", name]);
-    }
+fn build_canisters_once(workspace_root: &PathBuf) {
+    BUILD_ONCE.call_once(|| {
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(workspace_root);
+        cmd.env("DFX_NETWORK", "local");
+        cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
+        for name in CANISTER_PACKAGES {
+            cmd.args(["-p", name]);
+        }
 
-    let output = cmd.output().expect("failed to run cargo build");
-    assert!(
-        output.status.success(),
-        "cargo build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+        let output = cmd.output().expect("failed to run cargo build");
+        assert!(
+            output.status.success(),
+            "cargo build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    });
 }
 
 fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {

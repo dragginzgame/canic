@@ -10,6 +10,7 @@ use canic::{
             DelegationProvisionResponse, DelegationProvisionStatus,
         },
         error::ErrorCode,
+        rpc::{AuthenticatedRequest, CyclesRequest, Request, Response},
     },
     ids::BuildNetwork,
 };
@@ -26,6 +27,7 @@ fn delegation_provisioning_flow() {
         return;
     }
 
+    log_step("delegation_provisioning_flow: setup root");
     let setup = setup_root();
 
     let user_hub_pid = setup
@@ -40,6 +42,11 @@ fn delegation_provisioning_flow() {
         .copied()
         .expect("test canister must exist in subnet directory");
 
+    log_step(&format!(
+        "user_hub={user_hub_pid} test_canister={test_pid} root={}",
+        setup.root_id
+    ));
+
     let tenant = p(7);
     let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
 
@@ -47,10 +54,17 @@ fn delegation_provisioning_flow() {
     let scopes = vec!["read".to_string()];
     let cert = build_cert(shard_pid, audiences, scopes, 3600_u64);
 
+    log_step(&format!(
+        "provision signer={shard_pid} verifiers=[{test_pid}]"
+    ));
     let response =
         provision_delegation(&setup, user_hub_pid, cert, vec![shard_pid], vec![test_pid]);
 
     assert_provisioned(&response);
+    log_step(&format!(
+        "provisioned proof signer={}",
+        response.proof.cert.signer_pid
+    ));
 
     DelegationApi::verify_delegation_proof(&response.proof, setup.root_id)
         .expect("delegation proof must verify");
@@ -62,6 +76,7 @@ fn delegated_token_flow() {
         return;
     }
 
+    log_step("delegated_token_flow: setup root");
     let setup = setup_root();
 
     let user_hub_pid = setup
@@ -76,6 +91,11 @@ fn delegated_token_flow() {
         .copied()
         .expect("test canister must exist in subnet directory");
 
+    log_step(&format!(
+        "user_hub={user_hub_pid} test_canister={test_pid} root={}",
+        setup.root_id
+    ));
+
     let tenant = p(7);
     let audiences = vec!["login".to_string()];
     let scopes = vec!["read".to_string()];
@@ -83,6 +103,9 @@ fn delegated_token_flow() {
     let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
     let cert = build_cert(shard_pid, audiences.clone(), scopes.clone(), 3600_u64);
 
+    log_step(&format!(
+        "provision signer={shard_pid} verifiers=[{test_pid}]"
+    ));
     let response =
         provision_delegation(&setup, user_hub_pid, cert, vec![shard_pid], vec![test_pid]);
 
@@ -107,6 +130,10 @@ fn delegated_token_flow() {
     let token = minted
         .expect("user_shard_mint_token transport failed")
         .expect("user_shard_mint_token application failed");
+    log_step(&format!(
+        "minted token proof signer={}",
+        token.proof.cert.signer_pid
+    ));
 
     let verify: Result<Result<(), Error>, Error> =
         setup
@@ -121,11 +148,95 @@ fn delegated_token_flow() {
 }
 
 #[test]
+fn authenticated_rpc_flow() {
+    if !should_run_certified("authenticated_rpc_flow") {
+        return;
+    }
+
+    log_step("authenticated_rpc_flow: setup root");
+    let setup = setup_root();
+
+    let user_hub_pid = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in subnet directory");
+
+    let tenant = p(7);
+    let audiences = vec!["login".to_string()];
+    let scopes = vec!["read".to_string()];
+
+    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let cert = build_cert(shard_pid, audiences.clone(), scopes.clone(), 3600_u64);
+
+    log_step(&format!(
+        "provision signer={shard_pid} verifiers=[{}]",
+        setup.root_id
+    ));
+    let provisioned = provision_delegation(
+        &setup,
+        user_hub_pid,
+        cert,
+        vec![shard_pid],
+        vec![setup.root_id],
+    );
+
+    assert_provisioned(&provisioned);
+
+    let now = now_secs();
+    let claims = DelegatedTokenClaims {
+        sub: p(9),
+        aud: audiences[0].clone(),
+        scopes,
+        iat: now,
+        exp: now + 60,
+        ext: None,
+        nonce: None,
+    };
+
+    let minted: Result<Result<DelegatedToken, Error>, Error> =
+        setup
+            .pic
+            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+
+    let token = minted
+        .expect("user_shard_mint_token transport failed")
+        .expect("user_shard_mint_token application failed");
+
+    log_step(&format!(
+        "calling canic_response_authenticated via shard={shard_pid}"
+    ));
+    let request = AuthenticatedRequest {
+        request: Request::Cycles(CyclesRequest { cycles: 1 }),
+        delegated_token: token,
+    };
+
+    let response: Result<Result<Response, Error>, Error> = setup.pic.update_call_as(
+        setup.root_id,
+        shard_pid,
+        "canic_response_authenticated",
+        (request,),
+    );
+
+    let response = response
+        .expect("canic_response_authenticated transport failed")
+        .expect("canic_response_authenticated application failed");
+
+    match response {
+        Response::Cycles(cycles) => {
+            assert_eq!(cycles.cycles_transferred, 1);
+        }
+        other => panic!("unexpected response: {other:?}"),
+    }
+}
+
+#[test]
 fn delegated_token_requires_proof() {
     if !should_run_certified("delegated_token_requires_proof") {
         return;
     }
 
+    log_step("delegated_token_requires_proof: setup root");
     let setup = setup_root();
 
     let user_hub_pid = setup
@@ -162,24 +273,33 @@ fn delegated_token_requires_proof() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+fn log_step(step: &str) {
+    canic::cdk::println!("[delegation_flow] {step}");
+}
+
 fn should_run_certified(test_name: &str) -> bool {
     if NetworkApi::build_network() == Some(BuildNetwork::Ic) {
         true
     } else {
-        eprintln!("{test_name}: skipped (non-ic build)");
+        log_step(&format!("{test_name}: skipped (non-ic build)"));
         false
     }
 }
 
 fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Principal) -> Principal {
+    log_step(&format!(
+        "create_user_shard tenant={tenant} via hub={user_hub_pid}"
+    ));
     let created: Result<Result<Principal, Error>, Error> =
         setup
             .pic
             .update_call(user_hub_pid, "create_user_shard", (tenant,));
 
-    created
+    let pid = created
         .expect("create_user_shard transport failed")
-        .expect("create_user_shard application failed")
+        .expect("create_user_shard application failed");
+    log_step(&format!("user_shard created pid={pid}"));
+    pid
 }
 
 fn build_cert(
@@ -208,6 +328,9 @@ fn provision_delegation(
     signer_targets: Vec<Principal>,
     verifier_targets: Vec<Principal>,
 ) -> DelegationProvisionResponse {
+    log_step(&format!(
+        "provision request signer_targets={signer_targets:?} verifier_targets={verifier_targets:?}"
+    ));
     let request = DelegationProvisionRequest {
         cert,
         signer_targets,
@@ -218,9 +341,14 @@ fn provision_delegation(
         .pic
         .update_call(user_hub_pid, "provision_user_shard", (request,));
 
-    provisioned
+    let response = provisioned
         .expect("provision_user_shard transport failed")
-        .expect("provision_user_shard application failed")
+        .expect("provision_user_shard application failed");
+    log_step(&format!(
+        "provision response entries={}",
+        response.results.len()
+    ));
+    response
 }
 
 fn assert_provisioned(response: &DelegationProvisionResponse) {

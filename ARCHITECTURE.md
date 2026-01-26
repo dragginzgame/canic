@@ -48,22 +48,23 @@ endpoints/macros
 The delegation model is fixed and must remain consistent:
 
 * The root canister is the delegation authority and signs `DelegationCert`s.
-* `auth_hub` provisions `auth_shard` canisters via the sharding system.
-* `auth_hub` is not part of the trust graph; it only coordinates provisioning.
-* `auth_shard` stores a `DelegationProof` and mints delegated tokens locally.
+* `user_hub` initiates provisioning for `user_shard` canisters via the sharding system.
+* `user_hub` is not part of the trust graph; it only coordinates provisioning.
+* `user_shard` stores a `DelegationProof` and mints delegated tokens locally.
 * Token verification is local-only and validates against the stored proof.
+* Proofs are push-provisioned by root; no prepare/get flows exist.
 
 ## Certified Data and Delegation
 
-Delegation proofs are canister signatures. Issuance reads certified data when
-retrieving a prepared proof; verification is local-only and does not read
+Delegation proofs are canister signatures. Issuance requires certified data and
+must run in update context; verification is local-only and does not read
 certified data.
 
 Implications:
 
-* `prepare_delegation_cert` runs in update context.
-* `get_delegation_proof` is query-only and depends on an available data
-  certificate.
+* Delegation issuance runs in update context.
+* Issuance returns an unavailable-signature error when no data certificate is
+  present.
 * Delegated token verification does not require a query context.
 
 Test contract:
@@ -71,6 +72,14 @@ Test contract:
 * Structural and cryptographic verification are always testable locally.
 * Issuance returns an unavailable-signature error when no data certificate is
   present.
+
+## Authenticated RPC Boundary
+
+Delegated auth is explicit at the API boundary:
+
+* The request must carry a `DelegatedToken` (direct argument or `AuthenticatedRequest`).
+* Verification only occurs where `auth::authenticated()` is applied.
+* System/control-plane RPC continues to use unauthenticated `Request`/`Response`.
 
 ---
 

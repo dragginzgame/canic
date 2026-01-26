@@ -57,7 +57,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
   * `root/` orchestrator tying together shards, scaling, and pool flows.
   * `app/` – sample application canister used in integration flows.
-  * `auth_hub/`, `auth_shard/` – delegated signing pool (hub provisions shards).
+  * `user_hub/`, `user_shard/` – delegated signing pool (hub provisions shards).
   * `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   * `blank/` – minimal canister template.
