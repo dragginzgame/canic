@@ -14,8 +14,9 @@ pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
 pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
-pub const CANIC_DELEGATION_PREPARE: &str = "canic_delegation_prepare";
-pub const CANIC_DELEGATION_GET: &str = "canic_delegation_get";
+pub const CANIC_DELEGATION_PROVISION: &str = "canic_delegation_provision";
+pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";
+pub const CANIC_DELEGATION_SET_VERIFIER_PROOF: &str = "canic_delegation_set_verifier_proof";
 
 // Non-root sync endpoints.
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";

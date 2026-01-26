@@ -11,17 +11,14 @@
 use canic::{
     Error,
     api::{auth::DelegationApi, canister::placement::ShardingApi, env::EnvQuery, ic::Call},
-    cdk::{types::Principal, utils::time::now_secs},
-    dto::auth::{DelegationCert, DelegationProof},
+    cdk::types::Principal,
+    dto::auth::DelegationProof,
     prelude::*,
-    protocol,
 };
 use canic_internal::canister::AUTH_HUB;
 
 const POOL_NAME: &str = "auth_shards";
-const CERT_VERSION: u16 = 1;
 const AUTH_SHARD_SET_PROOF: &str = "auth_shard_set_proof";
-
 //
 // CANIC
 //
@@ -63,48 +60,6 @@ async fn plan_create_auth_shard(tenant: Principal) -> Result<String, Error> {
     Ok(format!("{plan:?}"))
 }
 
-/// provision_auth_shard
-/// Prepare a root-signed delegation cert and return it for query retrieval.
-///
-/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
-#[canic_update]
-async fn provision_auth_shard(
-    tenant: Principal,
-    audiences: Vec<String>,
-    scopes: Vec<String>,
-    ttl_secs: u64,
-) -> Result<(Principal, DelegationCert), Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
-    }
-
-    if ttl_secs == 0 {
-        return Err(Error::invalid("ttl_secs must be greater than zero"));
-    }
-
-    let shard_pid = ShardingApi::assign_to_pool(POOL_NAME, tenant.to_string()).await?;
-
-    let root_pid = EnvQuery::snapshot()
-        .root_pid
-        .ok_or_else(|| Error::internal("root pid unavailable"))?;
-
-    let issued_at = now_secs();
-    let expires_at = issued_at.saturating_add(ttl_secs);
-
-    let cert = DelegationCert {
-        v: CERT_VERSION,
-        signer_pid: shard_pid,
-        audiences,
-        scopes,
-        issued_at,
-        expires_at,
-    };
-
-    prepare_delegation(root_pid, cert.clone()).await?;
-
-    Ok((shard_pid, cert))
-}
-
 /// finalize_auth_shard
 /// Install a root-signed delegation proof on the shard.
 ///
@@ -125,17 +80,6 @@ async fn finalize_auth_shard(shard_pid: Principal, proof: DelegationProof) -> Re
 
     DelegationApi::verify_delegation_proof(&proof, root_pid)?;
     install_proof(shard_pid, proof).await
-}
-
-async fn prepare_delegation(root_pid: Principal, cert: DelegationCert) -> Result<(), Error> {
-    let response: Result<(), Error> =
-        Call::unbounded_wait(root_pid, protocol::CANIC_DELEGATION_PREPARE)
-            .with_arg(cert)?
-            .execute()
-            .await?
-            .candid()?;
-
-    response
 }
 
 async fn install_proof(shard_pid: Principal, proof: DelegationProof) -> Result<(), Error> {

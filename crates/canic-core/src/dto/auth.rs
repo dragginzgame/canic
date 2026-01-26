@@ -17,7 +17,7 @@
 //! Any change to these structures is **security-sensitive** and must be
 //! evaluated against the trust model below.
 
-use crate::dto::prelude::*;
+use crate::dto::{error::Error, prelude::*};
 
 /// ---------------------------------------------------------------------------
 /// Trust model summary
@@ -258,4 +258,49 @@ pub enum DelegationAdminResponse {
     RotationAlreadyRunning,
     RotationStopped,
     RotationNotRunning,
+}
+
+///
+/// DelegationProvisionRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationProvisionRequest {
+    pub cert: DelegationCert,
+    pub signer_targets: Vec<Principal>,
+    pub verifier_targets: Vec<Principal>,
+}
+
+///
+/// DelegationProvisionResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationProvisionResponse {
+    pub proof: DelegationProof,
+    pub results: Vec<DelegationProvisionTargetResponse>,
+}
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DelegationProvisionTargetKind {
+    Signer,
+    Verifier,
+}
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DelegationProvisionStatus {
+    Ok,
+    Failed,
+}
+
+///
+/// DelegationProvisionTargetResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationProvisionTargetResponse {
+    pub target: Principal,
+    pub kind: DelegationProvisionTargetKind,
+    pub status: DelegationProvisionStatus,
+    pub error: Option<Error>,
 }

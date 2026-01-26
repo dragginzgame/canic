@@ -1,16 +1,21 @@
 use crate::{
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     dto::{
         auth::{
             DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
-            DelegationCert, DelegationProof,
+            DelegationCert, DelegationProof, DelegationProvisionRequest,
+            DelegationProvisionResponse,
         },
         error::Error,
     },
     error::InternalErrorClass,
     ops::{
-        auth::DelegatedTokenOps, config::ConfigOps, ic::IcOps, runtime::env::EnvOps,
-        storage::auth::DelegationStateOps,
+        auth::DelegatedTokenOps,
+        config::ConfigOps,
+        ic::IcOps,
+        runtime::env::EnvOps,
+        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::auth::DelegationWorkflow,
 };
@@ -39,6 +44,7 @@ impl DelegationApi {
 
     /// Sign a delegation cert.
     pub fn sign_delegation_cert(cert: DelegationCert) -> Result<DelegationProof, Error> {
+        validate_issuance_policy(&cert)?;
         DelegatedTokenOps::sign_delegation_cert(cert).map_err(Self::map_delegation_error)
     }
 
@@ -91,33 +97,28 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    pub fn prepare_issue(cert: DelegationCert) -> Result<(), Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        // Update-only step for certified delegation signatures.
-        DelegationWorkflow::prepare_delegation(&cert).map_err(Self::map_delegation_error)
-    }
-
-    pub fn get_issue(cert: DelegationCert) -> Result<DelegationProof, Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        // Query-only step; requires a data certificate in the query context.
-        DelegationWorkflow::get_delegation(cert).map_err(Self::map_delegation_error)
-    }
-
     pub fn issue_and_store(cert: DelegationCert) -> Result<DelegationProof, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
+        validate_issuance_policy(&cert)?;
         DelegationWorkflow::issue_and_store(cert).map_err(Self::map_delegation_error)
+    }
+
+    pub async fn provision(
+        request: DelegationProvisionRequest,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        validate_issuance_policy(&request.cert)?;
+        DelegationWorkflow::provision(request)
+            .await
+            .map_err(Self::map_delegation_error)
     }
 
     pub fn store_proof(proof: DelegationProof) -> Result<(), Error> {
@@ -205,7 +206,9 @@ impl DelegationAdminApi {
                 let template = Arc::clone(&template);
                 move || {
                     let now_secs = IcOps::now_secs();
-                    Ok(build_rotation_cert(template.as_ref(), now_secs))
+                    let cert = build_rotation_cert(template.as_ref(), now_secs);
+                    validate_issuance_policy_internal(&cert)?;
+                    Ok(cert)
                 }
             }),
             Arc::new(|proof| {
@@ -221,6 +224,48 @@ impl DelegationAdminApi {
     pub async fn stop_rotation() -> Result<bool, Error> {
         Ok(DelegationWorkflow::stop_rotation())
     }
+}
+
+fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
+    if cert.expires_at <= cert.issued_at {
+        return Err(Error::invalid(
+            "delegation expires_at must be greater than issued_at",
+        ));
+    }
+
+    if cert.audiences.is_empty() {
+        return Err(Error::invalid("delegation audiences must not be empty"));
+    }
+
+    if cert.scopes.is_empty() {
+        return Err(Error::invalid("delegation scopes must not be empty"));
+    }
+
+    if cert.audiences.iter().any(String::is_empty) {
+        return Err(Error::invalid("delegation audience must not be empty"));
+    }
+
+    if cert.scopes.iter().any(String::is_empty) {
+        return Err(Error::invalid("delegation scope must not be empty"));
+    }
+
+    let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+    if cert.signer_pid == root_pid {
+        return Err(Error::invalid("delegation signer must not be root"));
+    }
+
+    let record = SubnetRegistryOps::get(cert.signer_pid)
+        .ok_or_else(|| Error::invalid("delegation signer must be registered to subnet"))?;
+    if record.role.is_root() {
+        return Err(Error::invalid("delegation signer role must not be root"));
+    }
+
+    Ok(())
+}
+
+fn validate_issuance_policy_internal(cert: &DelegationCert) -> Result<(), InternalError> {
+    validate_issuance_policy(cert)
+        .map_err(|err| InternalError::domain(InternalErrorOrigin::Domain, err.message))
 }
 
 ///

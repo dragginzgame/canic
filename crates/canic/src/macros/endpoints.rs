@@ -370,18 +370,11 @@ macro_rules! canic_endpoints_root {
             $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
 
-        #[canic_update(internal, requires(caller::is_child()))]
-        async fn canic_delegation_prepare(
-            cert: ::canic::dto::auth::DelegationCert,
-        ) -> Result<(), ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::prepare_issue(cert)
-        }
-
-        #[canic_query(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_delegation_get(
-            cert: ::canic::dto::auth::DelegationCert,
-        ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::get_issue(cert)
+        #[canic_update(internal, requires(caller::is_root()))]
+        async fn canic_delegation_provision(
+            request: ::canic::dto::auth::DelegationProvisionRequest,
+        ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::provision(request).await
         }
     };
 }
@@ -406,6 +399,31 @@ macro_rules! canic_endpoints_nonroot {
             snapshot: ::canic::dto::cascade::TopologySnapshotInput,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::cascade::CascadeApi::sync_topology(snapshot).await
+        }
+
+        //
+        // DELEGATION
+        //
+
+        #[canic_update(internal, requires(caller::is_root()))]
+        async fn canic_delegation_set_signer_proof(
+            proof: ::canic::dto::auth::DelegationProof,
+        ) -> Result<(), ::canic::Error> {
+            let self_pid = $crate::__internal::core::cdk::api::canister_self();
+            if proof.cert.signer_pid != self_pid {
+                return Err(::canic::Error::invalid(
+                    "delegation signer does not match canister",
+                ));
+            }
+
+            $crate::__internal::core::api::auth::DelegationApi::store_proof(proof)
+        }
+
+        #[canic_update(internal, requires(caller::is_root()))]
+        async fn canic_delegation_set_verifier_proof(
+            proof: ::canic::dto::auth::DelegationProof,
+        ) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::store_proof(proof)
         }
     };
 }
