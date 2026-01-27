@@ -27,3 +27,32 @@ pub struct ShardTenantAssignment {
     pub tenant: String,
     pub pid: Principal,
 }
+
+///
+/// ShardingPlanState
+/// Outcome variants of a shard plan.
+///
+
+#[derive(Clone, Debug)]
+pub enum ShardingPlanState {
+    AlreadyAssigned { pid: Principal },
+    UseExisting { pid: Principal },
+    CreateAllowed,
+    CreateBlocked { reason: CreateBlockedReason },
+}
+
+///
+/// CreateBlockedReason
+///
+
+#[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]
+pub enum CreateBlockedReason {
+    #[error("pool at capacity")]
+    PoolAtCapacity,
+
+    #[error("no free shard slots")]
+    NoFreeSlots,
+
+    #[error("{0}")]
+    PolicyViolation(String),
+}

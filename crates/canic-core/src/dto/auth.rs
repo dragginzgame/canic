@@ -281,6 +281,40 @@ pub struct DelegationProvisionResponse {
     pub results: Vec<DelegationProvisionTargetResponse>,
 }
 
+///
+/// DelegationStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationStatusResponse {
+    pub has_proof: bool,
+    pub proof: Option<DelegationProofStatus>,
+    pub rotation: DelegationRotationStatus,
+    pub rotation_targets: Vec<Principal>,
+}
+
+///
+/// DelegationProofStatus
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationProofStatus {
+    pub signer_pid: Principal,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
+
+///
+/// DelegationRotationStatus
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationRotationStatus {
+    pub active: bool,
+    pub interval_secs: Option<u64>,
+    pub last_rotation_at: Option<u64>,
+}
+
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationProvisionTargetKind {
     Signer,

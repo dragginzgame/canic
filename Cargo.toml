@@ -4,6 +4,8 @@ members = [
     "crates/canic",
     "crates/canic-cdk",
     "crates/canic-core",
+    "crates/canic-core/test-canisters/delegation_root_stub",
+    "crates/canic-core/test-canisters/delegation_signer_stub",
     "crates/canic-core/test-canisters/intent_authority",
     "crates/canic-core/test-canisters/intent_client",
     "crates/canic-core/test-canisters/intent_external",

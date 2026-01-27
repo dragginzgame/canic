@@ -1,3 +1,4 @@
+// Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 //! Test-only intent store wrappers for PocketIC canisters.
 
 use crate::{
@@ -49,9 +50,17 @@ impl IntentTestOps {
         quantity: u64,
         created_at: u64,
         ttl_secs: Option<u64>,
+        now_secs: u64,
     ) -> Result<IntentRecord, String> {
-        IntentStoreOps::try_reserve(intent_id, resource_key, quantity, created_at, ttl_secs)
-            .map_err(|e| e.to_string())
+        IntentStoreOps::try_reserve(
+            intent_id,
+            resource_key,
+            quantity,
+            created_at,
+            ttl_secs,
+            now_secs,
+        )
+        .map_err(|e| e.to_string())
     }
 
     pub fn commit_at(intent_id: IntentId, now: u64) -> Result<IntentRecord, String> {

@@ -179,13 +179,14 @@ requested={} max_in_flight={max_in_flight}",
         }
 
         let intent_id = IntentStoreOps::allocate_intent_id()?;
-        let created_at = IcOps::now_secs();
+        let created_at = now;
         let _ = IntentStoreOps::try_reserve(
             intent_id,
             resource_key.clone(),
             intent.quantity,
             created_at,
             intent.ttl_secs,
+            now,
         )?;
 
         match inner.execute().await {

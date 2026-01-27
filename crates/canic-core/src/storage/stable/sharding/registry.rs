@@ -14,6 +14,7 @@ use crate::{
 pub struct ShardingRegistryRecord {
     pub entries: Vec<(Principal, ShardEntryRecord)>,
 }
+
 ///
 /// ShardingRegistry
 ///

@@ -3,10 +3,10 @@ pub mod mapper;
 use crate::{
     InternalError,
     cdk::api::canister_self,
-    domain::policy::env::ValidatedEnv,
     ids::SubnetRole,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvRecord},
+    view::env::ValidatedEnv,
 };
 use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::mapper::EnvRecordMapper};
 use thiserror::Error as ThisError;

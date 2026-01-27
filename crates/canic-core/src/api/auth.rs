@@ -4,16 +4,20 @@ use crate::{
     dto::{
         auth::{
             DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
-            DelegationCert, DelegationProof, DelegationProvisionRequest,
-            DelegationProvisionResponse, DelegationProvisionTargetKind,
+            DelegationCert, DelegationProof, DelegationProofStatus, DelegationProvisionRequest,
+            DelegationProvisionResponse, DelegationProvisionTargetKind, DelegationRotationStatus,
+            DelegationStatusResponse,
         },
         error::Error,
     },
     error::InternalErrorClass,
+    log,
+    log::Topic,
     ops::{
         auth::DelegatedTokenOps,
         config::ConfigOps,
         ic::IcOps,
+        runtime::delegation::DelegationRuntimeOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::record_signer_mint_without_proof,
         storage::{
@@ -21,7 +25,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::auth::DelegationWorkflow,
+    workflow::auth::{DelegationPushOrigin, DelegationWorkflow},
 };
 use std::{sync::Arc, time::Duration};
 
@@ -95,6 +99,8 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
+    /// Delegation provisioning is explicit and operator-driven.
+    /// Root does not infer targets; callers must supply them.
     pub async fn provision(
         request: DelegationProvisionRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
@@ -103,13 +109,32 @@ impl DelegationApi {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "delegation provision requires root caller",
+            ));
+        }
+
         validate_issuance_policy(&request.cert)?;
+        log!(
+            Topic::Auth,
+            Info,
+            "delegation provision start signer={} signer_targets={:?} verifier_targets={:?}",
+            request.cert.signer_pid,
+            request.signer_targets,
+            request.verifier_targets
+        );
         DelegationWorkflow::provision(request)
             .await
             .map_err(Self::map_delegation_error)
     }
 
-    pub fn store_proof(proof: DelegationProof) -> Result<(), Error> {
+    pub fn store_proof(
+        proof: DelegationProof,
+        kind: DelegationProvisionTargetKind,
+    ) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
@@ -123,10 +148,36 @@ impl DelegationApi {
             ));
         }
 
-        DelegatedTokenOps::verify_delegation_proof(&proof, root_pid)
-            .map_err(Self::map_delegation_error)?;
+        if let Err(err) = DelegatedTokenOps::verify_delegation_proof(&proof, root_pid) {
+            let local = IcOps::canister_self();
+            log!(
+                Topic::Auth,
+                Warn,
+                "delegation proof rejected kind={:?} local={} signer={} issued_at={} expires_at={} error={}",
+                kind,
+                local,
+                proof.cert.signer_pid,
+                proof.cert.issued_at,
+                proof.cert.expires_at,
+                err
+            );
+            return Err(Self::map_delegation_error(err));
+        }
 
         DelegationStateOps::set_proof_from_dto(proof);
+        let local = IcOps::canister_self();
+        let stored = DelegationStateOps::proof_dto()
+            .ok_or_else(|| Error::invariant("delegation proof missing after store"))?;
+        log!(
+            Topic::Auth,
+            Info,
+            "delegation proof stored kind={:?} local={} signer={} issued_at={} expires_at={}",
+            kind,
+            local,
+            stored.cert.signer_pid,
+            stored.cert.issued_at,
+            stored.cert.expires_at
+        );
 
         Ok(())
     }
@@ -140,6 +191,32 @@ impl DelegationApi {
         DelegationStateOps::proof_dto().ok_or_else(|| {
             record_signer_mint_without_proof();
             Error::not_found("delegation proof not set")
+        })
+    }
+
+    /// Root-only internal status for delegated-auth observability.
+    ///
+    /// NOTE: per-target push status is not persisted; only rotation targets
+    /// and stored proof metadata are reported. Rotation state is runtime-only
+    /// and resets on upgrade.
+    pub fn status() -> Result<DelegationStatusResponse, Error> {
+        let proof = DelegationStateOps::proof_dto();
+        let rotation_state = DelegationRuntimeOps::rotation_state();
+        let rotation_targets = ShardingLifecycleOps::rotation_targets();
+
+        Ok(DelegationStatusResponse {
+            has_proof: proof.is_some(),
+            proof: proof.map(|proof| DelegationProofStatus {
+                signer_pid: proof.cert.signer_pid,
+                issued_at: proof.cert.issued_at,
+                expires_at: proof.cert.expires_at,
+            }),
+            rotation: DelegationRotationStatus {
+                active: rotation_state.active,
+                interval_secs: rotation_state.interval_secs,
+                last_rotation_at: rotation_state.last_rotation_at,
+            },
+            rotation_targets,
         })
     }
 }
@@ -176,6 +253,9 @@ impl DelegationAdminApi {
 
     #[allow(clippy::unused_async)]
     pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
+        // Delegation rotation is explicit and operator-driven.
+        // Root does not infer targets; pushes are best-effort and require
+        // reprovision if a canister misses an update.
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(DelegationApi::DELEGATED_TOKENS_DISABLED));
@@ -206,6 +286,15 @@ impl DelegationAdminApi {
                 DelegationStateOps::set_proof_from_dto(proof.clone());
 
                 let targets = ShardingLifecycleOps::rotation_targets();
+                log!(
+                    Topic::Auth,
+                    Info,
+                    "delegation rotation targets={:?} signer={} issued_at={} expires_at={}",
+                    targets,
+                    proof.cert.signer_pid,
+                    proof.cert.issued_at,
+                    proof.cert.expires_at
+                );
                 if !targets.is_empty() {
                     IcOps::spawn(async move {
                         for target in targets {
@@ -213,6 +302,7 @@ impl DelegationAdminApi {
                                 target,
                                 &proof,
                                 DelegationProvisionTargetKind::Signer,
+                                DelegationPushOrigin::Rotation,
                             )
                             .await;
                         }
@@ -222,6 +312,14 @@ impl DelegationAdminApi {
                 Ok(())
             }),
         );
+
+        if started {
+            log!(
+                Topic::Auth,
+                Info,
+                "delegation rotation started interval_secs={interval_secs}"
+            );
+        }
 
         Ok(started)
     }

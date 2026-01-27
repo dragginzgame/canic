@@ -37,9 +37,8 @@ impl NetworkInfra {
         dfx_network: Option<&'static str>,
     ) -> Option<BuildNetwork> {
         match dfx_network {
-            Some("local") => Some(BuildNetwork::Local),
+            Some("local") | None => Some(BuildNetwork::Local),
             Some("ic") => Some(BuildNetwork::Ic),
-
             _ => None,
         }
     }
@@ -79,6 +78,9 @@ mod tests {
 
     #[test]
     fn build_network_from_dfx_network_handles_missing() {
-        assert_eq!(NetworkInfra::build_network_from_dfx_network(None), None);
+        assert_eq!(
+            NetworkInfra::build_network_from_dfx_network(None),
+            Some(BuildNetwork::Local)
+        );
     }
 }

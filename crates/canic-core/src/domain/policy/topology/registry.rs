@@ -1,4 +1,4 @@
-use super::input::RegistryPolicyInput;
+use super::RegistryPolicyInput;
 use crate::{
     InternalError,
     cdk::candid::Principal,

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.12] - 2026-01-27 - Codex Auth Delegation Audit
+
+### 🧱 Architecture
+
+- Moved policy-input/output shapes into `view/` and updated ops/workflow/policy to use them.
+- Removed time reads from ops; workflows now pass timestamps into ops boundaries.
+
+### ⚙️ Lifecycle
+
+- Default `DFX_NETWORK` to `local` when unset to avoid init traps in local/dev.
+- Introduced an internal bootstrap readiness barrier (`canic_ready`) and moved readiness checks out of public view endpoints and app guards.
+
+### 🔐 Auth
+
+- Restrict delegation provisioning to root callers only.
+- Added root-only delegated-auth status query and rotation state tracking for observability.
+- Expanded delegated-auth logging across provisioning, rotation, proof storage, and verification failures.
+
+### 🧪 Testing
+
+- Added PocketIC coverage for root-only delegation provisioning and signer proof validation.
+- Delegation provisioning tests now use an isolated target dir and a minimal test config to avoid bootstrap drift.
+- Aligned test categorization comments and embedded-config usage across test harnesses and test canisters.
+- Embedded the delegation signer stub WASM into the root stub to keep topology cascades realistic under PocketIC.
+
+### 🧭 Docs
+
+- Relaxed storage-module rule to allow `serde`/proc-macro derives where needed.
+- Consolidated test configuration policy in `TESTING.md`, including annotation format and test-canister rules.
+
 ## [0.9.11] - 2026-01-26 - Delegated Authentication (last part)
 
 ### 🔐 Auth

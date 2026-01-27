@@ -25,7 +25,7 @@
 //! It provides a well-defined extension point should non-root canisters
 //! later require asynchronous local bootstrap behavior.
 
-use crate::{InternalError, workflow::prelude::*};
+use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
 
 ///
 /// Bootstrap workflow for non-root canisters during init.
@@ -51,6 +51,7 @@ use crate::{InternalError, workflow::prelude::*};
 pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
+    ReadyOps::mark_ready(super::ready_token());
 
     Ok(())
 }
@@ -78,5 +79,6 @@ pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalErr
         Info,
         "bootstrap (nonroot): post-upgrade complete"
     );
+    ReadyOps::mark_ready(super::ready_token());
     Ok(())
 }

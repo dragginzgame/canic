@@ -10,9 +10,10 @@ use crate::{
     cdk::types::BoundedString64,
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::PolicyError,
-    ids::CanisterRole,
 };
 use thiserror::Error as ThisError;
+
+pub use crate::view::placement::scaling::ScalingWorkerPlanEntry;
 
 ///
 /// ScalingPolicyError
@@ -34,15 +35,7 @@ impl From<ScalingPolicyError> for InternalError {
     }
 }
 
-///
-/// ScalingWorkerPlanEntry
-///
-
-#[derive(Clone, Debug)]
-pub struct ScalingWorkerPlanEntry {
-    pub pool: BoundedString64,
-    pub canister_role: CanisterRole,
-}
+// ScalingWorkerPlanEntry lives in view/placement/scaling.
 
 ///
 /// ScalingPlan

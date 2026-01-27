@@ -1,3 +1,5 @@
+// Category C - Artifact test (built wasm; no runtime config).
+
 use candid::{Principal, decode_one, encode_one};
 use pocket_ic::PocketIcBuilder;
 use std::{

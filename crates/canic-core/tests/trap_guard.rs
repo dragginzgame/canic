@@ -1,3 +1,5 @@
+// Category C - System-level artifact test (no embedded config).
+
 use std::{
     fs,
     path::{Path, PathBuf},

@@ -1,3 +1,5 @@
+// Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
+
 use crate::{
     ids::CanisterRole,
     ops::storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},

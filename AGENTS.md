@@ -121,9 +121,10 @@ used anywhere.
 
 ### Storage Modules (constraint)
 
-Storage-owned types must be std-only and avoid proc-macro dependencies. Apply
-this rule narrowly to storage-owned types only; do not modify non-storage
-types for consistency.
+Storage-owned types may use `serde` and other proc-macro derives when needed.
+Keep dependencies minimal and deterministic; avoid heavyweight runtime
+dependencies. Apply this rule narrowly to storage-owned types only; do not
+modify non-storage types for consistency.
 
 ### Non-Negotiable Invariants
 

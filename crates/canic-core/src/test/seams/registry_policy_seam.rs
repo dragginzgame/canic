@@ -1,3 +1,5 @@
+// Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
+
 use crate::{
     cdk::types::Cycles,
     config::schema::{CanisterConfig, CanisterKind, RandomnessConfig},

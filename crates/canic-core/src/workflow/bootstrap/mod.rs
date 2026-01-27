@@ -12,3 +12,10 @@
 
 pub mod nonroot;
 pub mod root;
+
+// Token used to restrict readiness transitions to bootstrap only.
+pub struct ReadyToken(());
+
+const fn ready_token() -> ReadyToken {
+    ReadyToken(())
+}

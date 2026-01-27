@@ -1,7 +1,6 @@
-pub mod input;
 pub mod registry;
 
-pub use input::{RegistryPolicyInput, TopologyPolicyInput};
+pub use crate::view::topology::{RegistryPolicyInput, TopologyPolicyInput};
 
 use crate::{InternalError, cdk::types::Principal, domain::policy::PolicyError, ids::CanisterRole};
 use std::collections::BTreeSet;

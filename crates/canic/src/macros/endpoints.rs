@@ -146,6 +146,12 @@ macro_rules! canic_endpoints {
         // STATE
         //
 
+        // Internal readiness barrier for bootstrap synchronization.
+        #[canic_query(internal)]
+        fn canic_ready() -> bool {
+            $crate::__internal::core::api::ready::ReadyApi::is_ready()
+        }
+
         #[canic_query]
         fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
@@ -386,11 +392,17 @@ macro_rules! canic_endpoints_root {
             $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
         }
 
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_provision(
             request: ::canic::dto::auth::DelegationProvisionRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::provision(request).await
+        }
+
+        #[canic_query(internal, requires(caller::is_root()))]
+        async fn canic_delegation_status()
+        -> Result<::canic::dto::auth::DelegationStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::status()
         }
 
         //
@@ -443,14 +455,20 @@ macro_rules! canic_endpoints_nonroot {
                 ));
             }
 
-            $crate::__internal::core::api::auth::DelegationApi::store_proof(proof)
+            $crate::__internal::core::api::auth::DelegationApi::store_proof(
+                proof,
+                ::canic::dto::auth::DelegationProvisionTargetKind::Signer,
+            )
         }
 
         #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_verifier_proof(
             proof: ::canic::dto::auth::DelegationProof,
         ) -> Result<(), ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::store_proof(proof)
+            $crate::__internal::core::api::auth::DelegationApi::store_proof(
+                proof,
+                ::canic::dto::auth::DelegationProvisionTargetKind::Verifier,
+            )
         }
     };
 }

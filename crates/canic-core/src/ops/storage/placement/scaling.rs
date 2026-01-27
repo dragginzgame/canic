@@ -1,8 +1,8 @@
 use crate::{
-    domain::policy::placement::scaling::ScalingWorkerPlanEntry,
     dto::placement::scaling::{ScalingRegistryEntry, ScalingRegistryResponse},
     ops::{placement::scaling::mapper::WorkerEntryRecordMapper, prelude::*},
     storage::stable::scaling::{ScalingRegistry, ScalingRegistryRecord, WorkerEntryRecord},
+    view::placement::scaling::ScalingWorkerPlanEntry,
 };
 
 ///
@@ -18,8 +18,8 @@ impl ScalingRegistryOps {
         ScalingRegistry::upsert(pid, entry);
     }
 
-    pub fn upsert_from_plan(pid: Principal, plan: ScalingWorkerPlanEntry) {
-        let entry = WorkerEntryRecordMapper::validated_to_record(plan);
+    pub fn upsert_from_plan(pid: Principal, plan: ScalingWorkerPlanEntry, created_at_secs: u64) {
+        let entry = WorkerEntryRecordMapper::validated_to_record(plan, created_at_secs);
         ScalingRegistry::upsert(pid, entry);
     }
 
