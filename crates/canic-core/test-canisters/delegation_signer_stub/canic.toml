@@ -1,0 +1,10 @@
+controllers = []
+app_directory = []
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"

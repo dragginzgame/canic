@@ -1,13 +1,15 @@
+// Category C - Artifact / deployment test (embedded config).
+// This test relies on embedded production config by design.
+
 use canic::{
     cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
-        topology::{DirectoryEntryResponse, SubnetRegistryEntry},
+        topology::DirectoryEntryResponse,
     },
     ids::CanisterRole,
     protocol,
 };
-use canic_internal::canister;
 use canic_testkit::pic::{Pic, pic};
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
@@ -42,6 +44,7 @@ pub fn setup_root() -> RootSetup {
     wait_for_bootstrap(&pic, root_id);
 
     let subnet_directory = fetch_subnet_directory(&pic, root_id);
+    wait_for_children_ready(&pic, &subnet_directory);
 
     RootSetup {
         pic,
@@ -51,49 +54,33 @@ pub fn setup_root() -> RootSetup {
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
-    let expected_registry_roles = [
-        CanisterRole::ROOT,
-        canister::APP,
-        canister::USER_HUB,
-        canister::SCALE_HUB,
-        canister::SHARD_HUB,
-        canister::TEST,
-    ];
-    let expected_directory_roles = [
-        canister::APP,
-        canister::USER_HUB,
-        canister::SCALE_HUB,
-        canister::SHARD_HUB,
-        canister::TEST,
-    ];
-
     for _ in 0..BOOTSTRAP_TICK_LIMIT {
         pic.tick();
-
-        let registry = fetch_registry(pic, root_id);
-        let registry_ready = expected_registry_roles
-            .iter()
-            .all(|role| registry.iter().any(|entry| &entry.role == role));
-
-        if registry_ready {
-            let subnet_directory = fetch_subnet_directory(pic, root_id);
-            let directory_ready = expected_directory_roles
-                .iter()
-                .all(|role| subnet_directory.contains_key(role));
-
-            if directory_ready {
-                return;
-            }
+        if fetch_ready(pic, root_id) {
+            return;
         }
     }
 
-    let registry = fetch_registry(pic, root_id);
-    let roles: Vec<CanisterRole> = registry.into_iter().map(|entry| entry.role).collect();
-    let directory = fetch_subnet_directory(pic, root_id);
-    let directory_roles: Vec<CanisterRole> = directory.into_keys().collect();
-    panic!(
-        "root bootstrap did not create required canisters after {BOOTSTRAP_TICK_LIMIT} ticks; registry roles: {roles:?}; subnet directory roles: {directory_roles:?}"
-    );
+    panic!("root bootstrap did not signal readiness after {BOOTSTRAP_TICK_LIMIT} ticks");
+}
+
+fn wait_for_children_ready(pic: &Pic, subnet_directory: &HashMap<CanisterRole, Principal>) {
+    let child_pids: Vec<Principal> = subnet_directory
+        .iter()
+        .filter(|(role, _)| !role.is_root())
+        .map(|(_, pid)| *pid)
+        .collect();
+
+    for _ in 0..BOOTSTRAP_TICK_LIMIT {
+        pic.tick();
+        let all_children_ready = child_pids.iter().all(|pid| fetch_ready(pic, *pid));
+
+        if all_children_ready {
+            return;
+        }
+    }
+
+    panic!("children did not become ready after {BOOTSTRAP_TICK_LIMIT} ticks");
 }
 
 /// Load the compiled root canister wasm.
@@ -119,14 +106,6 @@ fn load_root_wasm() -> Option<Vec<u8>> {
     None
 }
 
-fn fetch_registry(pic: &Pic, root_id: Principal) -> Vec<SubnetRegistryEntry> {
-    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry transport");
-
-    registry.expect("query registry application").0
-}
-
 /// Fetch the subnet directory from root as a role → principal map.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
     let page: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
@@ -146,4 +125,9 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
         .into_iter()
         .map(|entry| (entry.role, entry.pid))
         .collect()
+}
+
+fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
+    pic.query_call(canister_id, protocol::CANIC_READY, ())
+        .expect("query canic_ready")
 }

@@ -1,3 +1,6 @@
+// Category C - Artifact / deployment test (embedded config).
+// This test relies on embedded production config by design.
+
 use canic::{
     cdk::types::Principal,
     dto::{

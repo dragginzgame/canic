@@ -1,7 +1,9 @@
+pub mod delegation;
 pub mod env;
 pub mod log;
 pub mod memory;
 pub mod metrics;
+pub mod ready;
 pub mod timer;
 pub mod wasm;
 

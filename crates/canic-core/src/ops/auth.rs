@@ -3,6 +3,7 @@ use crate::{
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
     ops::{
         config::ConfigOps,
+        ic::IcOps,
         ic::signature::SignatureOps,
         prelude::*,
         runtime::metrics::auth::{
@@ -391,6 +392,16 @@ fn verify_time_bounds(
 
     if now_secs > cert.expires_at {
         record_verifier_cert_expired();
+        let local = IcOps::canister_self();
+        crate::log!(
+            crate::log::Topic::Auth,
+            Warn,
+            "delegation cert expired local={} signer={} now_secs={} expires_at={}",
+            local,
+            cert.signer_pid,
+            now_secs,
+            cert.expires_at
+        );
         return Err(DelegatedTokenOpsError::CertExpired {
             expires_at: cert.expires_at,
         }
@@ -419,6 +430,14 @@ fn verify_time_bounds(
 fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
     let Some(stored) = DelegationStateOps::proof_dto() else {
         record_verifier_proof_missing();
+        let local = IcOps::canister_self();
+        crate::log!(
+            crate::log::Topic::Auth,
+            Warn,
+            "delegation proof missing local={} signer={}",
+            local,
+            proof.cert.signer_pid
+        );
         return Err(DelegatedTokenOpsError::ProofUnavailable.into());
     };
 
@@ -426,6 +445,15 @@ fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
         Ok(())
     } else {
         record_verifier_proof_mismatch();
+        let local = IcOps::canister_self();
+        crate::log!(
+            crate::log::Topic::Auth,
+            Warn,
+            "delegation proof mismatch local={} signer={} stored_signer={}",
+            local,
+            proof.cert.signer_pid,
+            stored.cert.signer_pid
+        );
         Err(DelegatedTokenOpsError::ProofMismatch.into())
     }
 }

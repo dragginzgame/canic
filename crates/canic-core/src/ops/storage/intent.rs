@@ -3,7 +3,7 @@
 use crate::{
     InternalError,
     ids::IntentResourceKey,
-    ops::{ic::IcOps, storage::StorageOpsError},
+    ops::storage::StorageOpsError,
     storage::stable::intent::{
         INTENT_STORE_SCHEMA_VERSION, IntentId, IntentPendingEntryRecord, IntentRecord,
         IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
@@ -106,12 +106,12 @@ impl IntentStoreOps {
         quantity: u64,
         created_at: u64,
         ttl_secs: Option<u64>,
+        now_secs: u64,
     ) -> Result<IntentRecord, InternalError> {
         let meta = ensure_schema()?;
-        let now = IcOps::now_secs();
 
         if let Some(existing) = IntentStore::get_record(intent_id) {
-            if is_record_expired(now, &existing) {
+            if is_record_expired(now_secs, &existing) {
                 return Err(expired_err(intent_id, &existing).into());
             }
             ensure_compatible(&existing, &resource_key, quantity, ttl_secs)?;
@@ -492,7 +492,7 @@ mod tests {
         quantity: u64,
         ttl_secs: Option<u64>,
     ) -> Result<IntentRecord, InternalError> {
-        IntentStoreOps::try_reserve(intent_id, resource_key, quantity, CREATED_AT, ttl_secs)
+        IntentStoreOps::try_reserve(intent_id, resource_key, quantity, CREATED_AT, ttl_secs, NOW)
     }
 
     fn totals_at(key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {

@@ -1,0 +1,12 @@
+controllers = []
+app_directory = []
+
+[subnets.prime]
+auto_create = ["signer"]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.signer]
+kind = "worker"
+initial_cycles = "1T"

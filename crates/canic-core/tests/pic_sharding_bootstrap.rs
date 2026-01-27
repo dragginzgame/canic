@@ -1,3 +1,6 @@
+// Category C - Artifact / deployment test (embedded static config).
+// This test relies on embedded config by design (test stub).
+
 use candid::{Principal, decode_one, encode_args};
 use canic_core::{
     dto::{

@@ -1,7 +1,6 @@
 use crate::{
-    domain::policy::placement::scaling::ScalingWorkerPlanEntry,
-    dto::placement::scaling::WorkerEntry, ops::ic::IcOps,
-    storage::stable::scaling::WorkerEntryRecord,
+    dto::placement::scaling::WorkerEntry, storage::stable::scaling::WorkerEntryRecord,
+    view::placement::scaling::ScalingWorkerPlanEntry,
 };
 
 ///
@@ -12,11 +11,14 @@ pub struct WorkerEntryRecordMapper;
 
 impl WorkerEntryRecordMapper {
     #[must_use]
-    pub fn validated_to_record(plan: ScalingWorkerPlanEntry) -> WorkerEntryRecord {
+    pub fn validated_to_record(
+        plan: ScalingWorkerPlanEntry,
+        created_at_secs: u64,
+    ) -> WorkerEntryRecord {
         WorkerEntryRecord {
             pool: plan.pool,
             canister_role: plan.canister_role,
-            created_at_secs: IcOps::now_secs(),
+            created_at_secs,
         }
     }
 

@@ -17,6 +17,7 @@ pub mod icts;
 pub mod lifecycle;
 pub mod placement;
 pub mod pool;
+pub mod ready;
 pub mod rpc;
 pub mod state;
 pub mod timer;

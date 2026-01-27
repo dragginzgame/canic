@@ -120,8 +120,9 @@ impl PoolWorkflow {
 
         let intent_id = IntentStoreOps::allocate_intent_id()?;
         let intent_key = pool_import_intent_key(pid)?;
-        let created_at = IcOps::now_secs();
-        let _ = IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None)?;
+        let now_secs = IcOps::now_secs();
+        let created_at = now_secs;
+        let _ = IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None, now_secs)?;
 
         // Invariant: mark_pending_reset must remain synchronous and non-trapping.
         Self::mark_pending_reset(pid);

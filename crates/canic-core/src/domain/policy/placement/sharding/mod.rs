@@ -8,6 +8,8 @@ mod backfill;
 pub mod hrw;
 pub mod metrics;
 
+pub use crate::view::placement::sharding::{CreateBlockedReason, ShardingPlanState};
+
 use crate::{
     InternalError,
     cdk::candid::Principal,
@@ -20,7 +22,6 @@ use crate::{
     },
     view::placement::sharding::{ShardPlacement, ShardTenantAssignment},
 };
-use thiserror::Error as ThisError;
 
 ///
 /// ShardingPolicyError
@@ -83,34 +84,7 @@ pub struct ShardingPlan {
     pub total_used: u64,
 }
 
-///
-/// ShardingPlanState
-/// Outcome variants of a shard plan.
-///
-
-#[derive(Clone, Debug)]
-pub enum ShardingPlanState {
-    AlreadyAssigned { pid: Principal },
-    UseExisting { pid: Principal },
-    CreateAllowed,
-    CreateBlocked { reason: CreateBlockedReason },
-}
-
-///
-/// CreateBlockedReason
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
-pub enum CreateBlockedReason {
-    #[error("pool at capacity")]
-    PoolAtCapacity,
-
-    #[error("no free shard slots")]
-    NoFreeSlots,
-
-    #[error("{0}")]
-    PolicyViolation(String),
-}
+// ShardingPlanState and CreateBlockedReason live in view/placement/sharding.
 ///
 /// ShardingPolicy
 ///

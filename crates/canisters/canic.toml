@@ -49,8 +49,6 @@ kind = "node"
 # --- User Hub ---
 [subnets.prime.canisters.user_hub]
 kind = "node"
-topup.threshold = "10T"
-topup.amount = "5T"
 
 # --- User Hub Pools ---
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
@@ -61,8 +59,6 @@ policy.max_shards = 4
 # --- User Shard ---
 [subnets.prime.canisters.user_shard]
 kind = "shard"
-topup.threshold = "10T"
-topup.amount = "5T"
 
 # --- Blank ---
 [subnets.prime.canisters.blank]

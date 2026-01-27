@@ -13,6 +13,7 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, network::NetworkOps},
         runtime::env::EnvOps,
+        runtime::ready::ReadyOps,
         runtime::wasm::WasmOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
@@ -69,8 +70,7 @@ pub async fn bootstrap_init_root_canister() {
         }
     };
 
-    // ---------------- Phase 1: Registry ----------------
-    log!(Topic::Init, Info, "bootstrap phase: REGISTRY");
+    log!(Topic::Init, Info, "bootstrap (root:init) start");
 
     root_import_pool_from_config().await;
 
@@ -78,9 +78,6 @@ pub async fn bootstrap_init_root_canister() {
         log!(Topic::Init, Error, "registry phase failed: {err}");
         return;
     }
-
-    // ---------------- Phase 2: Materialize ----------------
-    log!(Topic::Init, Info, "bootstrap phase: MATERIALIZE");
 
     if let Err(err) = root_rebuild_directories_from_registry() {
         log!(
@@ -90,9 +87,6 @@ pub async fn bootstrap_init_root_canister() {
         );
         return;
     }
-
-    // ---------------- Phase 3: Validate ----------------
-    log!(Topic::Init, Info, "bootstrap phase: VALIDATE");
 
     let report = root_validate_state();
     if !report.ok {
@@ -105,8 +99,8 @@ pub async fn bootstrap_init_root_canister() {
         return;
     }
 
-    // ---------------- Phase 4: Completed ----------------
-    log!(Topic::Init, Info, "bootstrap phase: COMPLETED");
+    log!(Topic::Init, Info, "bootstrap (root:init) complete");
+    ReadyOps::mark_ready(super::ready_token());
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
@@ -122,19 +116,10 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
-    log!(
-        Topic::Init,
-        Info,
-        "bootstrap (root:upgrade) resolve subnet id"
-    );
     root_set_subnet_id().await;
-    log!(
-        Topic::Init,
-        Info,
-        "bootstrap (root:upgrade) import pool from config"
-    );
     root_import_pool_from_config().await;
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
+    ReadyOps::mark_ready(super::ready_token());
 }
 
 /// Resolve and persist the subnet identifier for the root canister.

@@ -1,9 +1,8 @@
 use crate::{
     cdk::candid::Principal,
-    domain::policy::placement::sharding::ShardingPlanState,
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
     storage::stable::sharding::{ShardEntryRecord, ShardKey},
-    view::placement::sharding::{ShardPlacement, ShardTenantAssignment},
+    view::placement::sharding::{ShardPlacement, ShardTenantAssignment, ShardingPlanState},
 };
 
 ///

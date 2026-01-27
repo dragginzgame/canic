@@ -11,7 +11,7 @@
 use canic::{
     Error,
     api::{auth::DelegationApi, env::EnvQuery},
-    dto::auth::{DelegatedToken, DelegationProof},
+    dto::auth::{DelegatedToken, DelegationProof, DelegationProvisionTargetKind},
     prelude::*,
 };
 use canic_internal::canister::TEST;
@@ -60,7 +60,7 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
     DelegationApi::verify_delegation_proof(&proof, root_pid)?;
-    DelegationApi::store_proof(proof)
+    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier)
 }
 
 /// test_verify_delegated_token

@@ -14,6 +14,7 @@ use crate::{
     domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
     ops::{
         config::ConfigOps,
+        ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
         storage::placement::scaling::ScalingRegistryOps,
     },
@@ -60,7 +61,8 @@ impl ScalingWorkflow {
                 .new_canister_pid;
 
         // 4. Register in memory
-        ScalingRegistryOps::upsert_from_plan(pid, entry_plan);
+        let created_at_secs = IcOps::now_secs();
+        ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
 
         Ok(pid)
     }

@@ -19,6 +19,7 @@ pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
 pub const CANIC_DELEGATION_PROVISION: &str = "canic_delegation_provision";
 pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";
 pub const CANIC_DELEGATION_SET_VERIFIER_PROOF: &str = "canic_delegation_set_verifier_proof";
+pub const CANIC_DELEGATION_STATUS: &str = "canic_delegation_status";
 
 // Non-root sync endpoints.
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
@@ -46,6 +47,7 @@ pub const CANIC_METRICS_ACCESS: &str = "canic_metrics_access";
 pub const CANIC_METRICS_DELEGATION: &str = "canic_metrics_delegation";
 pub const CANIC_METRICS_PERF: &str = "canic_metrics_perf";
 pub const CANIC_METRICS_ENDPOINT_HEALTH: &str = "canic_metrics_endpoint_health";
+pub const CANIC_READY: &str = "canic_ready";
 pub const CANIC_APP_STATE: &str = "canic_app_state";
 pub const CANIC_SUBNET_STATE: &str = "canic_subnet_state";
 pub const CANIC_APP_DIRECTORY: &str = "canic_app_directory";
