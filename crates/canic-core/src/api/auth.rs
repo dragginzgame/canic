@@ -5,8 +5,8 @@ use crate::{
         auth::{
             DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
             DelegationCert, DelegationProof, DelegationProofStatus, DelegationProvisionRequest,
-            DelegationProvisionResponse, DelegationProvisionTargetKind, DelegationRotationStatus,
-            DelegationStatusResponse,
+            DelegationProvisionResponse, DelegationProvisionTargetKind, DelegationRequest,
+            DelegationRotationStatus, DelegationStatusResponse,
         },
         error::Error,
     },
@@ -129,6 +129,62 @@ impl DelegationApi {
         DelegationWorkflow::provision(request)
             .await
             .map_err(Self::map_delegation_error)
+    }
+
+    /// Signer-initiated delegation request.
+    ///
+    /// Caller must match signer_pid and be registered to the subnet.
+    pub async fn request_delegation(
+        request: DelegationRequest,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        if root_pid != IcOps::canister_self() {
+            return Err(Error::forbidden("delegation request must target root"));
+        }
+
+        let caller = IcOps::msg_caller();
+        if caller != request.signer_pid {
+            return Err(Error::forbidden(
+                "delegation request signer must match caller",
+            ));
+        }
+
+        if request.ttl_secs == 0 {
+            return Err(Error::invalid(
+                "delegation ttl_secs must be greater than zero",
+            ));
+        }
+
+        let now_secs = IcOps::now_secs();
+        let cert = DelegationCert {
+            v: 1,
+            signer_pid: request.signer_pid,
+            audiences: request.audiences,
+            scopes: request.scopes,
+            issued_at: now_secs,
+            expires_at: now_secs.saturating_add(request.ttl_secs),
+        };
+
+        validate_issuance_policy(&cert)?;
+
+        let response = DelegationWorkflow::provision(DelegationProvisionRequest {
+            cert,
+            signer_targets: vec![caller],
+            verifier_targets: request.verifier_targets,
+        })
+        .await
+        .map_err(Self::map_delegation_error)?;
+
+        if request.include_root_verifier {
+            DelegationStateOps::set_proof_from_dto(response.proof.clone());
+        }
+
+        Ok(response)
     }
 
     pub fn store_proof(
@@ -367,7 +423,9 @@ fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
     Ok(())
 }
 
-fn validate_issuance_policy_internal(cert: &DelegationCert) -> Result<(), InternalError> {
+pub(crate) fn validate_issuance_policy_internal(
+    cert: &DelegationCert,
+) -> Result<(), InternalError> {
     validate_issuance_policy(cert)
         .map_err(|err| InternalError::domain(InternalErrorOrigin::Domain, err.message))
 }
