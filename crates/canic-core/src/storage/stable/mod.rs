@@ -130,16 +130,14 @@ pub mod memory {
         pub const SCALING_REGISTRY_ID: u8 = 49;
         pub const SHARDING_REGISTRY_ID: u8 = 50;
         pub const SHARDING_ASSIGNMENT_ID: u8 = 51;
-        pub const SHARDING_LIFECYCLE_ID: u8 = 52;
         pub const SHARDING_ACTIVE_SET_ID: u8 = 53;
-        pub const SHARDING_ROTATION_TARGETS_ID: u8 = 54;
 
         // Reserved for:
         // - placement policies
         // - shard health / liveness
         // - rebalance / drain state
         // - migration metadata
-        // 55–58
+        // 52, 54–58
     }
 
     // ---------------------------------------------------------------------

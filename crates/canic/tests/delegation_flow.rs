@@ -21,6 +21,9 @@ const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
+// Canonical signer-initiated delegation flow:
+// user_shard requests delegation from root (no admin provisioning).
+
 #[test]
 fn delegation_provisioning_flow() {
     if !should_run_certified("delegation_provisioning_flow") {

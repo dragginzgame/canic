@@ -1,5 +1,8 @@
 // Category C - Artifact / deployment test (embedded static config).
 // This test relies on embedded config by design (test stub).
+//
+// admin-only: not part of canonical delegation flow.
+// used for tests / tooling due to PocketIC limitations.
 
 use candid::{Principal, decode_one, encode_args};
 use canic_core::{
@@ -33,6 +36,7 @@ const INSTALL_CYCLES: u128 = 100_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 2] = ["delegation_root_stub", "delegation_signer_stub"];
 const BOOTSTRAP_TICK_LIMIT: usize = 40;
 const BOOTSTRAP_TIMEOUT_SECS: u64 = 20;
+const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 static ROOT_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 static SIGNER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
@@ -239,6 +243,10 @@ fn fetch_signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal 
 
 fn build_canisters_once(workspace_root: &PathBuf) {
     BUILD_ONCE.call_once(|| {
+        if prebuilt_wasm_dir().is_some() {
+            return;
+        }
+
         let target_dir = workspace_root
             .join("target")
             .join("pic_delegation_provision");
@@ -280,6 +288,10 @@ fn signer_wasm(workspace_root: &Path) -> Vec<u8> {
 }
 
 fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
+    if let Some(dir) = prebuilt_wasm_dir() {
+        return dir.join(format!("{crate_name}.wasm"));
+    }
+
     let target_dir =
         env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
 
@@ -287,6 +299,10 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
         .join("wasm32-unknown-unknown")
         .join("release")
         .join(format!("{crate_name}.wasm"))
+}
+
+fn prebuilt_wasm_dir() -> Option<PathBuf> {
+    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
 }
 
 fn workspace_root() -> PathBuf {

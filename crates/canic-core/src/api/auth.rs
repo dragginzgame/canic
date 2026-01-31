@@ -1,12 +1,10 @@
 use crate::{
-    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     dto::{
         auth::{
-            DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand, DelegationAdminResponse,
-            DelegationCert, DelegationProof, DelegationProofStatus, DelegationProvisionRequest,
-            DelegationProvisionResponse, DelegationProvisionTargetKind, DelegationRequest,
-            DelegationRotationStatus, DelegationStatusResponse,
+            DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+            DelegationProvisionRequest, DelegationProvisionResponse, DelegationProvisionTargetKind,
+            DelegationRequest,
         },
         error::Error,
     },
@@ -17,17 +15,12 @@ use crate::{
         auth::DelegatedTokenOps,
         config::ConfigOps,
         ic::IcOps,
-        runtime::delegation::DelegationRuntimeOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::record_signer_mint_without_proof,
-        storage::{
-            auth::DelegationStateOps, placement::sharding_lifecycle::ShardingLifecycleOps,
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::auth::{DelegationPushOrigin, DelegationWorkflow},
+    workflow::auth::DelegationWorkflow,
 };
-use std::{sync::Arc, time::Duration};
 
 ///
 /// DelegationApi
@@ -99,7 +92,11 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Delegation provisioning is explicit and operator-driven.
+    /// admin-only delegation provisioning (root-only escape hatch).
+    ///
+    /// Not part of canonical delegation flow.
+    /// Used for tests / tooling due to PocketIC limitations.
+    ///
     /// Root does not infer targets; callers must supply them.
     pub async fn provision(
         request: DelegationProvisionRequest,
@@ -131,7 +128,7 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Signer-initiated delegation request.
+    /// Canonical signer-initiated delegation request (user_shard -> root).
     ///
     /// Caller must match signer_pid and be registered to the subnet.
     pub async fn request_delegation(
@@ -249,141 +246,6 @@ impl DelegationApi {
             Error::not_found("delegation proof not set")
         })
     }
-
-    /// Root-only internal status for delegated-auth observability.
-    ///
-    /// NOTE: per-target push status is not persisted; only rotation targets
-    /// and stored proof metadata are reported. Rotation state is runtime-only
-    /// and resets on upgrade.
-    pub fn status() -> Result<DelegationStatusResponse, Error> {
-        let proof = DelegationStateOps::proof_dto();
-        let rotation_state = DelegationRuntimeOps::rotation_state();
-        let rotation_targets = ShardingLifecycleOps::rotation_targets();
-
-        Ok(DelegationStatusResponse {
-            has_proof: proof.is_some(),
-            proof: proof.map(|proof| DelegationProofStatus {
-                signer_pid: proof.cert.signer_pid,
-                issued_at: proof.cert.issued_at,
-                expires_at: proof.cert.expires_at,
-            }),
-            rotation: DelegationRotationStatus {
-                active: rotation_state.active,
-                interval_secs: rotation_state.interval_secs,
-                last_rotation_at: rotation_state.last_rotation_at,
-            },
-            rotation_targets,
-        })
-    }
-}
-
-///
-/// DelegationAdminApi
-///
-/// Admin façade for delegation rotation control.
-///
-
-pub struct DelegationAdminApi;
-
-impl DelegationAdminApi {
-    pub async fn admin(cmd: DelegationAdminCommand) -> Result<DelegationAdminResponse, Error> {
-        match cmd {
-            DelegationAdminCommand::StartRotation { interval_secs } => {
-                let started = Self::start_rotation(interval_secs).await?;
-                Ok(if started {
-                    DelegationAdminResponse::RotationStarted
-                } else {
-                    DelegationAdminResponse::RotationAlreadyRunning
-                })
-            }
-            DelegationAdminCommand::StopRotation => {
-                let stopped = Self::stop_rotation().await?;
-                Ok(if stopped {
-                    DelegationAdminResponse::RotationStopped
-                } else {
-                    DelegationAdminResponse::RotationNotRunning
-                })
-            }
-        }
-    }
-
-    #[allow(clippy::unused_async)]
-    pub async fn start_rotation(interval_secs: u64) -> Result<bool, Error> {
-        // Delegation rotation is explicit and operator-driven.
-        // Root does not infer targets; pushes are best-effort and require
-        // reprovision if a canister misses an update.
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(DelegationApi::DELEGATED_TOKENS_DISABLED));
-        }
-
-        if interval_secs == 0 {
-            return Err(Error::invalid(
-                "rotation interval must be greater than zero",
-            ));
-        }
-
-        let template = rotation_template()?;
-        let template = Arc::new(template);
-        let interval = Duration::from_secs(interval_secs);
-
-        let started = DelegationWorkflow::start_rotation(
-            interval,
-            Arc::new({
-                let template = Arc::clone(&template);
-                move || {
-                    let now_secs = IcOps::now_secs();
-                    let cert = build_rotation_cert(template.as_ref(), now_secs);
-                    validate_issuance_policy_internal(&cert)?;
-                    Ok(cert)
-                }
-            }),
-            Arc::new(|proof| {
-                DelegationStateOps::set_proof_from_dto(proof.clone());
-
-                let targets = ShardingLifecycleOps::rotation_targets();
-                log!(
-                    Topic::Auth,
-                    Info,
-                    "delegation rotation targets={:?} signer={} issued_at={} expires_at={}",
-                    targets,
-                    proof.cert.signer_pid,
-                    proof.cert.issued_at,
-                    proof.cert.expires_at
-                );
-                if !targets.is_empty() {
-                    IcOps::spawn(async move {
-                        for target in targets {
-                            let _ = DelegationWorkflow::push_proof(
-                                target,
-                                &proof,
-                                DelegationProvisionTargetKind::Signer,
-                                DelegationPushOrigin::Rotation,
-                            )
-                            .await;
-                        }
-                    });
-                }
-
-                Ok(())
-            }),
-        );
-
-        if started {
-            log!(
-                Topic::Auth,
-                Info,
-                "delegation rotation started interval_secs={interval_secs}"
-            );
-        }
-
-        Ok(started)
-    }
-
-    #[allow(clippy::unused_async)]
-    pub async fn stop_rotation() -> Result<bool, Error> {
-        Ok(DelegationWorkflow::stop_rotation())
-    }
 }
 
 fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
@@ -421,56 +283,4 @@ fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
     }
 
     Ok(())
-}
-
-pub(crate) fn validate_issuance_policy_internal(
-    cert: &DelegationCert,
-) -> Result<(), InternalError> {
-    validate_issuance_policy(cert)
-        .map_err(|err| InternalError::domain(InternalErrorOrigin::Domain, err.message))
-}
-
-///
-/// DelegationRotationTemplate
-///
-
-struct DelegationRotationTemplate {
-    v: u16,
-    signer_pid: Principal,
-    audiences: Vec<String>,
-    scopes: Vec<String>,
-    ttl_secs: u64,
-}
-
-fn rotation_template() -> Result<DelegationRotationTemplate, Error> {
-    let proof = DelegationStateOps::proof_dto()
-        .ok_or_else(|| Error::not_found("delegation proof not set"))?;
-    let cert = proof.cert;
-
-    if cert.expires_at <= cert.issued_at {
-        return Err(Error::invalid(
-            "delegation cert expires_at must be greater than issued_at",
-        ));
-    }
-
-    let ttl_secs = cert.expires_at - cert.issued_at;
-
-    Ok(DelegationRotationTemplate {
-        v: cert.v,
-        signer_pid: cert.signer_pid,
-        audiences: cert.audiences,
-        scopes: cert.scopes,
-        ttl_secs,
-    })
-}
-
-fn build_rotation_cert(template: &DelegationRotationTemplate, now_secs: u64) -> DelegationCert {
-    DelegationCert {
-        v: template.v,
-        signer_pid: template.signer_pid,
-        audiences: template.audiences.clone(),
-        scopes: template.scopes.clone(),
-        issued_at: now_secs,
-        expires_at: now_secs.saturating_add(template.ttl_secs),
-    }
 }

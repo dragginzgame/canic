@@ -20,6 +20,7 @@ use std::{
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
+const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -166,6 +167,10 @@ fn directory_entries(
 }
 
 fn build_canisters(workspace_root: &PathBuf) {
+    if prebuilt_wasm_dir().is_some() {
+        return;
+    }
+
     let mut cmd = Command::new("cargo");
     cmd.current_dir(workspace_root);
     cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
@@ -187,6 +192,10 @@ fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
 }
 
 fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
+    if let Some(dir) = prebuilt_wasm_dir() {
+        return dir.join(format!("{crate_name}.wasm"));
+    }
+
     let target_dir =
         env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
 
@@ -194,6 +203,10 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
         .join("wasm32-unknown-unknown")
         .join("debug")
         .join(format!("{crate_name}.wasm"))
+}
+
+fn prebuilt_wasm_dir() -> Option<PathBuf> {
+    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
 }
 
 fn workspace_root() -> PathBuf {

@@ -3,8 +3,7 @@ use crate::{
     dto::{
         error::Error,
         placement::sharding::{
-            ShardingAdminCommand, ShardingAdminResponse, ShardingPlanStateResponse,
-            ShardingRegistryResponse, ShardingTenantsResponse,
+            ShardingPlanStateResponse, ShardingRegistryResponse, ShardingTenantsResponse,
         },
     },
     workflow::placement::sharding::{ShardingWorkflow, query::ShardingQuery},
@@ -70,19 +69,5 @@ impl ShardingApi {
         tenant: impl AsRef<str>,
     ) -> Result<ShardingPlanStateResponse, Error> {
         ShardingWorkflow::plan_assign_to_pool(pool, tenant).map_err(Error::from)
-    }
-}
-
-///
-/// ShardingAdminApi
-///
-
-pub struct ShardingAdminApi;
-
-impl ShardingAdminApi {
-    pub async fn admin(cmd: ShardingAdminCommand) -> Result<ShardingAdminResponse, Error> {
-        ShardingWorkflow::handle_admin(cmd)
-            .await
-            .map_err(Error::from)
     }
 }

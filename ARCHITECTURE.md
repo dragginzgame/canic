@@ -48,11 +48,18 @@ endpoints/macros
 The delegation model is fixed and must remain consistent:
 
 * The root canister is the delegation authority and signs `DelegationCert`s.
-* `user_hub` initiates provisioning for `user_shard` canisters via the sharding system.
-* `user_hub` is not part of the trust graph; it only coordinates provisioning.
+* `user_shard` (signer) initiates delegation by calling root (`canic_request_delegation`).
+* `user_hub` performs shard placement only; it never participates in delegation.
 * `user_shard` stores a `DelegationProof` and mints delegated tokens locally.
 * Token verification is local-only and validates against the stored proof.
-* Proofs are push-provisioned by root; no prepare/get flows exist.
+* Root pushes proofs to signer/verifier targets in response to signer-initiated requests.
+* There is no prepare/get flow; delegation proofs are pushed by root after request.
+* Delegation authority is TTL-bounded and must be explicitly re-provisioned.
+* There is no background rotation.
+
+Admin-only provisioning (`canic_delegation_provision`) is **not part of the canonical
+delegation flow**. It exists as a test/tooling escape hatch (root-only) because
+PocketIC cannot exercise real canister signature flows.
 
 ## Certified Data and Delegation
 
@@ -80,6 +87,13 @@ Delegated auth is explicit at the API boundary:
 * The request must carry a `DelegatedToken` (direct argument or `AuthenticatedRequest`).
 * Verification only occurs where `auth::authenticated()` is applied.
 * System/control-plane RPC continues to use unauthenticated `Request`/`Response`.
+
+---
+
+## Sharding Lifecycle Invariant
+
+Shard lifecycle transitions are workflow-owned. There are no operator-driven
+or admin-triggered shard lifecycle transitions.
 
 ---
 

@@ -57,29 +57,3 @@ pub enum ShardingPlanStateResponse {
     /// Policy forbids creation of a new shard (e.g., capacity reached).
     CreateBlocked { reason: String },
 }
-
-///
-/// ShardingAdminCommand
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum ShardingAdminCommand {
-    RegisterShardCreated { pid: Principal },
-    MarkShardProvisioned { pid: Principal },
-    AdmitShardToHrw { pid: Principal },
-    RetireShard { pid: Principal },
-    RevokeShard { pid: Principal },
-}
-
-///
-/// ShardingAdminResponse
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum ShardingAdminResponse {
-    Registered { pid: Principal },
-    Provisioned { pid: Principal },
-    Admitted { pid: Principal },
-    Retired { pid: Principal },
-    Revoked { pid: Principal },
-}
