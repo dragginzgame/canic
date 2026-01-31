@@ -261,6 +261,20 @@ pub enum DelegationAdminResponse {
 }
 
 ///
+/// DelegationRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationRequest {
+    pub signer_pid: Principal,
+    pub audiences: Vec<String>,
+    pub scopes: Vec<String>,
+    pub ttl_secs: u64,
+    pub verifier_targets: Vec<Principal>,
+    pub include_root_verifier: bool,
+}
+
+///
 /// DelegationProvisionRequest
 ///
 

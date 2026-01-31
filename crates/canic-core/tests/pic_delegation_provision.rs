@@ -80,6 +80,7 @@ fn delegation_provision_requires_root_caller() {
         Err(err) => {
             // PocketIC update calls do not provide certified data,
             // so canister signatures may be unavailable.
+            // Canister signatures require certified data and cannot be produced in PocketIC update calls.
             // This test only enforces the root-caller gate under PocketIC.
             assert_eq!(err.code, ErrorCode::Internal);
         }

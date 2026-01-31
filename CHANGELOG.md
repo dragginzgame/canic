@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.13] - 2026-01-31 - Signer-Initiated Delegation Requests
+
+### 🔐 Auth
+
+- Added a root endpoint for signer-initiated delegation requests.
+- user_shard now requests delegation on mint when no proof is stored, then retries minting.
+- Root can store the verifier proof locally when requested to support `auth::authenticated()` endpoints.
+
+### 🧱 Architecture
+
+- Shard placement and delegated auth issuance are explicitly decoupled again (no provisioning-time delegation).
+
+### 🧪 Testing
+
+- Delegation flow tests now reflect signer-initiated delegation and root-based verification.
+
+---
+
 ## [0.9.12] - 2026-01-27 - Codex Auth Delegation Audit
 
 ### 🧱 Architecture

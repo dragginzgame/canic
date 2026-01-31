@@ -10,9 +10,13 @@
 
 use canic::{
     Error,
-    api::auth::DelegationApi,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    api::{auth::DelegationApi, env::EnvQuery, ic::Call},
+    dto::{
+        auth::{DelegatedToken, DelegatedTokenClaims, DelegationRequest},
+        error::ErrorCode,
+    },
     prelude::*,
+    protocol,
 };
 use canic_internal::canister::USER_SHARD;
 
@@ -43,7 +47,14 @@ async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<Delegated
         return Err(Error::forbidden("test-only canister"));
     }
 
-    let proof = DelegationApi::require_proof()?;
+    let proof = match DelegationApi::require_proof() {
+        Ok(proof) => proof,
+        Err(err) if err.code == ErrorCode::NotFound => {
+            request_delegation(&claims).await?;
+            DelegationApi::require_proof()?
+        }
+        Err(err) => return Err(err),
+    };
     DelegationApi::sign_token(TOKEN_VERSION, claims, proof)
 }
 
@@ -53,3 +64,34 @@ async fn hello(_token: DelegatedToken) -> Result<(), Error> {
 }
 
 export_candid!();
+
+async fn request_delegation(claims: &DelegatedTokenClaims) -> Result<(), Error> {
+    let root_pid = EnvQuery::snapshot()
+        .root_pid
+        .ok_or_else(|| Error::internal("root pid unavailable"))?;
+
+    let ttl_secs = claims.exp.saturating_sub(claims.iat);
+    if ttl_secs == 0 {
+        return Err(Error::invalid(
+            "delegation ttl_secs must be greater than zero",
+        ));
+    }
+
+    let request = DelegationRequest {
+        signer_pid: canic::cdk::api::canister_self(),
+        audiences: vec![claims.aud.clone()],
+        scopes: claims.scopes.clone(),
+        ttl_secs,
+        verifier_targets: Vec::new(),
+        include_root_verifier: true,
+    };
+
+    let response: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =
+        Call::unbounded_wait(root_pid, protocol::CANIC_REQUEST_DELEGATION)
+            .with_arg(request)?
+            .execute()
+            .await?
+            .candid()?;
+
+    response.map(|_| ())
+}

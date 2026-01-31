@@ -399,6 +399,13 @@ macro_rules! canic_endpoints_root {
             $crate::__internal::core::api::auth::DelegationApi::provision(request).await
         }
 
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_request_delegation(
+            request: ::canic::dto::auth::DelegationRequest,
+        ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
+        }
+
         #[canic_query(internal, requires(caller::is_root()))]
         async fn canic_delegation_status()
         -> Result<::canic::dto::auth::DelegationStatusResponse, ::canic::Error> {
