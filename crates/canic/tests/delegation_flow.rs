@@ -170,8 +170,7 @@ fn authenticated_rpc_flow() {
         .expect("user_shard_mint_token application failed");
 
     log_step(&format!(
-        "calling canic_response_authenticated via shard={}",
-        shard_pid
+        "calling canic_response_authenticated via shard={shard_pid}",
     ));
     let request = AuthenticatedRequest {
         request: Request::Cycles(CyclesRequest { cycles: 1 }),
