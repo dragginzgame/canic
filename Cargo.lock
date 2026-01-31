@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "async-trait",
  "candid",
@@ -279,11 +279,11 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.9.12"
+version = "0.9.13"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
@@ -293,14 +293,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "convert_case",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -444,9 +444,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.54"
+version = "1.2.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6354c81bbfd62d9cfa9cb3c773c2b7b2a3a482d569de977fd0e961f6e7c00583"
+checksum = "47b26a0954ae34af09b50f0de26458fa95369a0d478d8236d3f93082b219bd29"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -493,18 +493,18 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.54"
+version = "4.5.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6e6ff9dcd79cff5cd969a17a545d79e84ab086e444102a591e288a8aa3ce394"
+checksum = "a75ca66430e33a14957acc24c5077b503e7d374151b2b4b3a10c83b4ceb4be0e"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.5.54"
+version = "4.5.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa42cf4d2b7a41bc8f663a7cab4031ebafa1bf3875705bfaf8466dc60ab52c00"
+checksum = "793207c7fa6300a0608d1080b858e5fdbe713cdc1c8db9fb17777d8a13e63df0"
 dependencies = [
  "anstyle",
  "clap_lex",
@@ -703,7 +703,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -843,9 +843,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8591b0bcc8a98a64310a2fae1bb3e9b8564dd10e381e6e28010fde8e8e8568db"
+checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "flate2"
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic-core",
@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1590,7 +1590,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2582,7 +2582,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.9.12"
+version = "0.9.13"
 dependencies = [
  "candid",
  "canic",
@@ -3575,18 +3575,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.34"
+version = "0.8.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71ddd76bcebeed25db614f82bf31a9f4222d3fbba300e6fb6c00afa26cbd4d9d"
+checksum = "7456cf00f0685ad319c5b1693f291a650eaf345e941d082fc4e03df8a03996ac"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.34"
+version = "0.8.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8187381b52e32220d50b255276aa16a084ec0a9017a0ca2152a1f55c539758d"
+checksum = "1328722bbf2115db7e19d69ebcc15e795719e2d66b60827c6a69a117365e37a0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3655,6 +3655,6 @@ dependencies = [
 
 [[package]]
 name = "zmij"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02aae0f83f69aafc94776e879363e9771d7ecbffe2c7fbb6c14c5e00dfe88439"
+checksum = "1966f8ac2c1f76987d69a74d0e0f929241c10e78136434e3be70ff7f58f64214"
