@@ -428,6 +428,7 @@ mod tests {
         InternalErrorClass, InternalErrorOrigin,
         cdk::candid::Principal,
         config::Config,
+        dto::placement::sharding::ShardingPlanStateResponse,
         ids::CanisterRole,
         ops::storage::placement::{
             sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
@@ -551,5 +552,50 @@ mod tests {
                 || msg.contains("pool at capacity"),
             "unexpected error message: {msg}",
         );
+    }
+
+    #[test]
+    fn admit_shard_marks_active_set() {
+        Config::reset_for_tests();
+        init_config();
+        ShardingRegistryOps::clear_for_test();
+        ShardingLifecycleOps::clear_for_test();
+
+        let shard = p(1);
+        let role = CanisterRole::from("shard");
+        let created_at = 0;
+
+        ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
+        assert!(ShardingLifecycleOps::active_shards().is_empty());
+
+        ShardingWorkflow::admit_shard(shard);
+
+        let active = ShardingLifecycleOps::active_shards();
+        assert_eq!(active, vec![shard]);
+    }
+
+    #[test]
+    fn admission_required_for_routing() {
+        Config::reset_for_tests();
+        init_config();
+        ShardingRegistryOps::clear_for_test();
+        ShardingLifecycleOps::clear_for_test();
+
+        let shard = p(1);
+        let role = CanisterRole::from("shard");
+        let created_at = 0;
+
+        ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
+
+        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "tenant-x").unwrap();
+        assert!(
+            matches!(plan, ShardingPlanStateResponse::CreateAllowed),
+            "expected create-allowed when no shards are admitted"
+        );
+
+        ShardingWorkflow::admit_shard(shard);
+
+        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "tenant-x").unwrap();
+        assert_eq!(plan, ShardingPlanStateResponse::UseExisting { pid: shard });
     }
 }

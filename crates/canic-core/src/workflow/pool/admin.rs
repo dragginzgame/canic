@@ -7,6 +7,8 @@ use crate::{
 };
 
 ///
+/// PoolWorkflow
+///
 /// Entry point for pool admin commands.
 ///
 /// Responsibilities:
@@ -18,6 +20,7 @@ use crate::{
 /// - Scheduling
 /// - Pool mechanics
 ///
+
 impl PoolWorkflow {
     pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, InternalError> {
         match cmd {
