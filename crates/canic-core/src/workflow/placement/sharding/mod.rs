@@ -7,7 +7,6 @@
 //!
 //! This layer contains NO policy logic.
 
-pub mod admin;
 pub mod query;
 
 use crate::{
@@ -236,7 +235,7 @@ impl ShardingWorkflow {
                 })?;
 
                 let pid =
-                    ShardAllocator::allocate(pool, slot, canister_role, &policy, extra_arg).await?;
+                    Self::allocate_and_admit(pool, slot, canister_role, &policy, extra_arg).await?;
 
                 ShardingRegistryOps::assign(pool, tenant, pid)?;
 
@@ -322,10 +321,7 @@ impl ShardingWorkflow {
         let slot = HrwSelector::select_from_slots(pool, tenant, &free_slots)
             .ok_or_else(|| Self::no_active_shards_exhausted(pool, tenant))?;
 
-        let pid = ShardAllocator::allocate(pool, slot, canister_role, policy, extra_arg).await?;
-        Self::register_shard_created(pid)?;
-        Self::mark_shard_provisioned(pid)?;
-        Self::admit_shard_to_hrw(pid)?;
+        let _ = Self::allocate_and_admit(pool, slot, canister_role, policy, extra_arg).await?;
 
         Ok(())
     }
@@ -367,6 +363,25 @@ impl ShardingWorkflow {
         (0..max_shards)
             .filter(|slot| !occupied.contains(slot))
             .collect()
+    }
+
+    // Shard allocation is not sufficient for routability.
+    // A shard becomes routable only after explicit lifecycle admission
+    // performed by the sharding workflow.
+    async fn allocate_and_admit(
+        pool: &str,
+        slot: u32,
+        canister_role: &CanisterRole,
+        policy: &ShardPoolPolicy,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<Principal, InternalError> {
+        let pid = ShardAllocator::allocate(pool, slot, canister_role, policy, extra_arg).await?;
+        Self::admit_shard(pid);
+        Ok(pid)
+    }
+
+    fn admit_shard(pid: Principal) {
+        ShardingLifecycleOps::set_active(pid);
     }
 
     fn no_active_shards_exhausted(pool: &str, tenant: &str) -> InternalError {
@@ -413,7 +428,7 @@ mod tests {
         InternalErrorClass, InternalErrorOrigin,
         cdk::candid::Principal,
         config::Config,
-        ids::{CanisterRole, ShardLifecycleState},
+        ids::CanisterRole,
         ops::storage::placement::{
             sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
         },
@@ -429,7 +444,6 @@ mod tests {
     }
 
     fn activate(pid: Principal) {
-        ShardingLifecycleOps::set_state(pid, ShardLifecycleState::Active);
         ShardingLifecycleOps::set_active(pid);
     }
 

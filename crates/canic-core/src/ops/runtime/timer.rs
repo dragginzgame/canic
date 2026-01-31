@@ -171,7 +171,11 @@ impl TimerOps {
 
     /// Clear a guarded timer slot if present.
     /// Returns true when a timer was cleared.
+    ///
+    /// NOTE: guarded one-shot timers do not auto-clear their slot on completion.
+    /// Callers must clear the slot explicitly when the timer fires.
     #[must_use]
+    #[allow(dead_code)]
     pub fn clear_guarded(slot: &'static LocalKey<RefCell<Option<TimerId>>>) -> bool {
         slot.with_borrow_mut(|entry| {
             entry.take().is_some_and(|id| {

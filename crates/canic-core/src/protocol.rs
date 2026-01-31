@@ -14,13 +14,10 @@ pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
-pub const CANIC_SHARDING_ADMIN: &str = "canic_sharding_admin";
-pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
 pub const CANIC_DELEGATION_PROVISION: &str = "canic_delegation_provision";
 pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
 pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";
 pub const CANIC_DELEGATION_SET_VERIFIER_PROOF: &str = "canic_delegation_set_verifier_proof";
-pub const CANIC_DELEGATION_STATUS: &str = "canic_delegation_status";
 
 // Non-root sync endpoints.
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";

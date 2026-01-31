@@ -385,13 +385,8 @@ macro_rules! canic_endpoints_root {
         // DELEGATION
         //
 
-        #[canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_admin(
-            cmd: ::canic::dto::auth::DelegationAdminCommand,
-        ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationAdminApi::admin(cmd).await
-        }
-
+        // admin-only: not part of canonical delegation flow.
+        // used for tests / tooling due to PocketIC limitations.
         #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_provision(
             request: ::canic::dto::auth::DelegationProvisionRequest,
@@ -404,23 +399,6 @@ macro_rules! canic_endpoints_root {
             request: ::canic::dto::auth::DelegationRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
-        }
-
-        #[canic_query(internal, requires(caller::is_root()))]
-        async fn canic_delegation_status()
-        -> Result<::canic::dto::auth::DelegationStatusResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::status()
-        }
-
-        //
-        // SHARDING
-        //
-
-        #[canic_update(internal, requires(caller::is_root()))]
-        async fn canic_sharding_admin(
-            cmd: ::canic::dto::placement::sharding::ShardingAdminCommand,
-        ) -> Result<::canic::dto::placement::sharding::ShardingAdminResponse, ::canic::Error> {
-            $crate::__internal::core::api::placement::sharding::ShardingAdminApi::admin(cmd).await
         }
     };
 }

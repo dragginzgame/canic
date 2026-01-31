@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.14] - 2026-01-31 - Shard Lifecycle Cleanup
+
+### 🔐 Auth
+
+- Removed delegation rotation/admin/status surfaces; delegated auth is TTL-bounded and explicitly reprovisioned.
+
+### 🧱 Architecture
+
+- Shard allocation now admits the shard into lifecycle/HRW routing as part of the automated workflow.
+- Removed shard rotation targets and unused shard lifecycle state storage.
+
+### 🧭 Docs
+
+- Clarified hub vs shard delegation responsibilities in sample canister docs.
+- Clarified `pool` as the renamed config key from legacy `reserve`.
+- Documented delegation TTL-boundary and the absence of background rotation or operator-driven shard lifecycle transitions.
+- Documented guarded timer slot behavior and removed unused lifecycle timer cancellation.
+
+---
+
 ## [0.9.13] - 2026-01-31 - Signer-Initiated Delegation Requests
 
 ### 🔐 Auth

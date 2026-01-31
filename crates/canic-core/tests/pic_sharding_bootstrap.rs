@@ -24,6 +24,7 @@ use std::{
 const INSTALL_CYCLES: u128 = 2_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_shard_hub"];
 const POOL_NAME: &str = "shards";
+const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 
 #[test]
@@ -173,6 +174,10 @@ where
 
 fn build_canisters_once(workspace_root: &PathBuf) {
     BUILD_ONCE.call_once(|| {
+        if prebuilt_wasm_dir().is_some() {
+            return;
+        }
+
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root);
         cmd.env("DFX_NETWORK", "local");
@@ -196,6 +201,10 @@ fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
 }
 
 fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
+    if let Some(dir) = prebuilt_wasm_dir() {
+        return dir.join(format!("{crate_name}.wasm"));
+    }
+
     let target_dir =
         env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
 
@@ -203,6 +212,10 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
         .join("wasm32-unknown-unknown")
         .join("debug")
         .join(format!("{crate_name}.wasm"))
+}
+
+fn prebuilt_wasm_dir() -> Option<PathBuf> {
+    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
 }
 
 fn workspace_root() -> PathBuf {

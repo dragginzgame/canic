@@ -13,7 +13,6 @@ use canic::{
 use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
-use std::time::Duration;
 
 const INSTALL_CYCLES: u128 = 500 * TC;
 
@@ -97,22 +96,6 @@ impl Pic {
         wasm: Vec<u8>,
     ) -> Result<Principal, Error> {
         let init_bytes = install_args(role)?;
-
-        Ok(self.create_funded_and_install(wasm, init_bytes))
-    }
-
-    /// Install a canister with a custom directory snapshot (local-only helper).
-    ///
-    /// Use this when a test exercises directory-dependent auth/endpoints and
-    /// cannot rely on root to provide a snapshot.
-    pub fn create_and_install_canister_with_directories(
-        &self,
-        role: CanisterRole,
-        wasm: Vec<u8>,
-        app_directory: AppDirectoryArgs,
-        subnet_directory: SubnetDirectoryArgs,
-    ) -> Result<Principal, Error> {
-        let init_bytes = install_args_with_directories(role, app_directory, subnet_directory)?;
 
         Ok(self.create_funded_and_install(wasm, init_bytes))
     }
@@ -232,14 +215,6 @@ impl Pic {
             self.tick();
         }
     }
-
-    pub fn certify_time(&self) {
-        let now = self.0.get_time();
-        let next = now + Duration::from_secs(1);
-        self.0.set_time(next);
-        self.0.set_certified_time(next);
-        self.0.tick();
-    }
 }
 
 /// --------------------------------------
@@ -286,36 +261,4 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
 fn install_root_args() -> Result<Vec<u8>, Error> {
     encode_one(SubnetIdentity::Manual)
         .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
-}
-
-fn install_args_with_directories(
-    role: CanisterRole,
-    app_directory: AppDirectoryArgs,
-    subnet_directory: SubnetDirectoryArgs,
-) -> Result<Vec<u8>, Error> {
-    if role.is_root() {
-        // Root canister: runtime identity only.
-        // No fake principals. Runtime/bootstrap will resolve actual context.
-        encode_one(SubnetIdentity::Manual)
-            .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
-    } else {
-        // Non-root canister: pass structural context, not invented identities.
-        let env = EnvBootstrapArgs {
-            prime_root_pid: None,
-            subnet_role: None,
-            subnet_pid: None,
-            root_pid: None,
-            canister_role: Some(role),
-            parent_pid: None,
-        };
-
-        let payload = CanisterInitPayload {
-            env,
-            app_directory,
-            subnet_directory,
-        };
-
-        encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))
-    }
 }

@@ -128,9 +128,4 @@ impl TimerApi {
             true
         })
     }
-
-    /// Optional cancellation.
-    pub fn clear_lifecycle_timer(handle: TimerHandle) {
-        TimerWorkflow::clear(handle.0);
-    }
 }

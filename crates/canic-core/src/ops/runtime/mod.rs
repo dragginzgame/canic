@@ -1,4 +1,3 @@
-pub mod delegation;
 pub mod env;
 pub mod log;
 pub mod memory;

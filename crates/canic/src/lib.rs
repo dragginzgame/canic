@@ -101,7 +101,7 @@ pub mod api {
 
     /// Delegation workflow helpers
     pub mod auth {
-        pub use crate::__internal::core::api::auth::{DelegationAdminApi, DelegationApi};
+        pub use crate::__internal::core::api::auth::DelegationApi;
     }
 
     /// Environment queries
