@@ -41,6 +41,11 @@ pub type Role = CanisterRole;
 /// - Decoding failures result in access denial.
 /// - The caller argument is accepted for composability and is not inspected.
 pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
+    if is_local_dev_auth_enabled() {
+        // DEV ONLY: explicit local bypass to unblock dev when no delegation proofs exist.
+        return Ok(());
+    }
+
     let _ = delegated_token_verified(_caller).await?;
     Ok(())
 }
@@ -218,4 +223,13 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
 
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
+}
+
+fn is_local_dev_auth_enabled() -> bool {
+    // DEV ONLY: bypass auth guards only when explicitly enabled via env vars.
+    if std::env::var("DFX_NETWORK").ok().as_deref() == Some("local") {
+        return true;
+    }
+
+    std::env::var("CANIC_DEV_AUTH").ok().as_deref() == Some("1")
 }
