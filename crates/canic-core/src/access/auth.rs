@@ -41,11 +41,6 @@ pub type Role = CanisterRole;
 /// - Decoding failures result in access denial.
 /// - The caller argument is accepted for composability and is not inspected.
 pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
-    if is_local_dev_auth_enabled() {
-        // DEV ONLY: explicit local bypass to unblock dev when no delegation proofs exist.
-        return Ok(());
-    }
-
     let _ = delegated_token_verified(_caller).await?;
     Ok(())
 }
@@ -53,6 +48,11 @@ pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
 pub(crate) async fn delegated_token_verified(
     _caller: Principal,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
+    if is_local_dev_auth_enabled() {
+        // DEV ONLY: bypass auth guards only when explicitly enabled via env vars.
+        return Ok(VerifiedDelegatedToken::dev_bypass());
+    }
+
     let token = delegated_token_from_args()?;
 
     let authority_pid =
@@ -72,6 +72,7 @@ async fn verify_token(
 ) -> Result<VerifiedDelegatedToken, AccessError> {
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
+
     Ok(verified)
 }
 
@@ -226,11 +227,5 @@ fn dependency_unavailable(detail: &str) -> AccessError {
 }
 
 fn is_local_dev_auth_enabled() -> bool {
-    // DEV ONLY: bypass auth guards only when explicitly enabled via env vars.
-    // DFX_NETWORK is baked in at build time.
-    if option_env!("DFX_NETWORK") == Some("local") {
-        return true;
-    }
-
     std::env::var("CANIC_DEV_AUTH").ok().as_deref() == Some("1")
 }
