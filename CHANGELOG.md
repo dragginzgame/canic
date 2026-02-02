@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.16] - 2026-02-01 - Local Dev Auth Bypass
+
+### 🔐 Auth
+
+- DEV ONLY: allow `auth::authenticated()` to short-circuit when `DFX_NETWORK=local` or `CANIC_DEV_AUTH=1`, leaving production delegation verification unchanged.
+
+---
+
 ## [0.9.14] - 2026-01-31 - Shard Lifecycle Cleanup
 
 ### 🔐 Auth

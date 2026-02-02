@@ -227,7 +227,8 @@ fn dependency_unavailable(detail: &str) -> AccessError {
 
 fn is_local_dev_auth_enabled() -> bool {
     // DEV ONLY: bypass auth guards only when explicitly enabled via env vars.
-    if std::env::var("DFX_NETWORK").ok().as_deref() == Some("local") {
+    // DFX_NETWORK is baked in at build time.
+    if option_env!("DFX_NETWORK") == Some("local") {
         return true;
     }
 
