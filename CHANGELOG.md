@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.17] - 2026-02-02 - Local Dev Auth Bypass Fix
+
+### 🔐 Auth
+
+- DEV ONLY: move the local auth bypass into delegated token verification so all auth paths respect it; bypass only when `CANIC_DEV_AUTH=1`, returning an inert dev token without reading proofs.
+
+---
+
 ## [0.9.16] - 2026-02-01 - Local Dev Auth Bypass
 
 ### 🔐 Auth

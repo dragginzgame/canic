@@ -109,6 +109,31 @@ pub struct VerifiedDelegatedToken {
     pub cert: DelegationCert,
 }
 
+impl VerifiedDelegatedToken {
+    pub(crate) fn dev_bypass() -> Self {
+        // DEV ONLY: inert placeholder to mark local auth bypass, never a real authority.
+        Self {
+            claims: DelegatedTokenClaims {
+                sub: Principal::anonymous(),
+                aud: "CANIC_DEV_AUTH_BYPASS".to_string(),
+                scopes: Vec::new(),
+                iat: 0,
+                exp: 0,
+                ext: None,
+                nonce: None,
+            },
+            cert: DelegationCert {
+                v: 0,
+                signer_pid: Principal::anonymous(),
+                audiences: Vec::new(),
+                scopes: Vec::new(),
+                issued_at: 0,
+                expires_at: 0,
+            },
+        }
+    }
+}
+
 ///
 /// DelegatedTokenOps
 ///
