@@ -11,7 +11,7 @@
 
 use rand_chacha::{
     ChaCha20Rng,
-    rand_core::{RngCore, SeedableRng},
+    rand_core::{Rng, SeedableRng},
 };
 use std::cell::RefCell;
 use thiserror::Error as ThisError;
@@ -94,12 +94,12 @@ pub fn next_u16() -> Result<u16, RngError> {
 
 /// Produce a 32-bit random value from the shared RNG.
 pub fn next_u32() -> Result<u32, RngError> {
-    with_rng(RngCore::next_u32)
+    with_rng(Rng::next_u32)
 }
 
 /// Produce a 64-bit random value from the shared RNG.
 pub fn next_u64() -> Result<u64, RngError> {
-    with_rng(RngCore::next_u64)
+    with_rng(Rng::next_u64)
 }
 
 /// Produce a 128-bit random value from the shared RNG.
