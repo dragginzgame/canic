@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.17] - 2026-02-02 - Local Dev Auth Bypass Fix
+## [0.9.18] - 2026-02-04
+
+### 🔐 Auth
+
+- Enforce compile-time validation for `requires(authenticated())` endpoints to require a delegated token argument or a lone authenticated request.
+
+### 🧪 Testing
+
+- Added validation tests for authenticated argument rules.
+
+---
+
+## [0.9.17] - 2026-02-02
 
 ### 🔐 Auth
 
@@ -15,7 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.16] - 2026-02-01 - Local Dev Auth Bypass
+## [0.9.16] - 2026-02-01
 
 ### 🔐 Auth
 
