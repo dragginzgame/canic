@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
-## [0.9.19] - 2026-02-11
+## [0.9.20] - 2026-02-11
 
 ### 🔐 Auth
 
 - Fixed delegated-token ingress decoding for `requires(authenticated())` endpoints with multiple Candid arguments by decoding only argument 0 from `msg_arg_data()`.
+- Removed `CANIC_DEV_AUTH` auth bypass and now short-circuit `auth::authenticated()` when `DFX_NETWORK` is unset or `ic`.
+
+### 🪑 Env
+
+- Removed `CANIC_ALLOW_INCOMPLETE_ENV`; env bootstrap now always rejects missing required env fields.
 
 ---
 
