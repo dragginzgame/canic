@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### 🔐 Auth
 
 - Fixed delegated-token ingress decoding for `requires(authenticated())` endpoints with multiple Candid arguments by decoding only argument 0 from `msg_arg_data()`.
-- Removed `CANIC_DEV_AUTH` auth bypass and now short-circuit `auth::authenticated()` when `DFX_NETWORK` is unset or `ic`.
+- Removed `CANIC_DEV_AUTH` auth bypass and now short-circuit `auth::authenticated()` when `DFX_NETWORK` is unset or `local`.
 
 ### 🪑 Env
 
