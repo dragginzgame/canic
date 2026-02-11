@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.19] - 2026-02-11
+
+### 🔐 Auth
+
+- Fixed delegated-token ingress decoding for `requires(authenticated())` endpoints with multiple Candid arguments by decoding only argument 0 from `msg_arg_data()`.
+
+---
+
 ## [0.9.18] - 2026-02-04
 
 ### 🔐 Auth
