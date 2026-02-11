@@ -15,7 +15,7 @@ use crate::{
     access::AccessError,
     cdk::{
         api::{canister_self, is_controller as caller_is_controller, msg_arg_data},
-        candid::Decode,
+        candid::de::IDLDeserialize,
         types::Principal,
     },
     config::Config,
@@ -208,16 +208,24 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
         ));
     }
 
+    let mut token_decoder = IDLDeserialize::new(&bytes)
+        .map_err(|err| AccessError::Denied(format!("failed to decode ingress arguments: {err}")))?;
+
     // Decode the FIRST candid argument as DelegatedToken.
-    if let Ok(token) = Decode!(&bytes, DelegatedToken) {
+    if let Ok(token) = token_decoder.get_value::<DelegatedToken>() {
         return Ok(token);
     }
 
-    let envelope = Decode!(&bytes, AuthenticatedRequest).map_err(|err| {
-        AccessError::Denied(format!(
-            "failed to decode delegated token as first argument: {err}"
-        ))
-    })?;
+    let mut envelope_decoder = IDLDeserialize::new(&bytes)
+        .map_err(|err| AccessError::Denied(format!("failed to decode ingress arguments: {err}")))?;
+
+    let envelope = envelope_decoder
+        .get_value::<AuthenticatedRequest>()
+        .map_err(|err| {
+            AccessError::Denied(format!(
+                "failed to decode delegated token as first argument: {err}"
+            ))
+        })?;
 
     Ok(envelope.delegated_token)
 }
