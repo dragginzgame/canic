@@ -242,6 +242,10 @@ fn should_skip_delegated_auth_for(network: Option<&str>) -> bool {
     matches!(network, None | Some("local"))
 }
 
+///
+/// TESTS
+///
+
 #[cfg(test)]
 mod tests {
     use super::should_skip_delegated_auth_for;
