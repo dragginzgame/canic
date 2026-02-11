@@ -235,5 +235,22 @@ fn dependency_unavailable(detail: &str) -> AccessError {
 }
 
 fn should_skip_delegated_auth() -> bool {
-    matches!(option_env!("DFX_NETWORK"), None | Some("ic"))
+    should_skip_delegated_auth_for(option_env!("DFX_NETWORK"))
+}
+
+fn should_skip_delegated_auth_for(network: Option<&str>) -> bool {
+    matches!(network, None | Some("local"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_skip_delegated_auth_for;
+
+    #[test]
+    fn delegated_auth_bypass_matrix() {
+        assert!(should_skip_delegated_auth_for(Some("local")));
+        assert!(!should_skip_delegated_auth_for(Some("ic")));
+        assert!(should_skip_delegated_auth_for(None));
+        assert!(!should_skip_delegated_auth_for(Some("nope")));
+    }
 }
