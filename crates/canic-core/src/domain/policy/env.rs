@@ -30,17 +30,6 @@ pub enum EnvPolicyError {
     MissingEnvFields(String),
 }
 
-fn allow_incomplete_env() -> bool {
-    if cfg!(test) {
-        return true;
-    }
-
-    match option_env!("CANIC_ALLOW_INCOMPLETE_ENV") {
-        Some(value) => value == "1",
-        None => false,
-    }
-}
-
 pub fn validate_or_default(
     _network: BuildNetwork,
     raw_env: EnvInput,
@@ -65,56 +54,35 @@ pub fn validate_or_default(
         missing.push("parent_pid");
     }
 
-    if missing.is_empty() {
-        let prime_root_pid = raw_env
-            .prime_root_pid
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("prime_root_pid".to_string()))?;
-        let subnet_role = raw_env
-            .subnet_role
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_role".to_string()))?;
-        let subnet_pid = raw_env
-            .subnet_pid
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_pid".to_string()))?;
-        let root_pid = raw_env
-            .root_pid
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("root_pid".to_string()))?;
-        let canister_role = raw_env
-            .canister_role
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("canister_role".to_string()))?;
-        let parent_pid = raw_env
-            .parent_pid
-            .ok_or_else(|| EnvPolicyError::MissingEnvFields("parent_pid".to_string()))?;
-
-        return Ok(ValidatedEnv {
-            prime_root_pid,
-            subnet_role,
-            subnet_pid,
-            root_pid,
-            canister_role,
-            parent_pid,
-        });
-    }
-
-    if !allow_incomplete_env() {
+    if !missing.is_empty() {
         return Err(EnvPolicyError::MissingEnvFields(missing.join(", ")));
     }
 
-    let root_pid = raw_env
-        .root_pid
-        .unwrap_or_else(|| Principal::from_slice(&[0xBB; 29]));
+    let prime_root_pid = raw_env
+        .prime_root_pid
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("prime_root_pid".to_string()))?;
+    let subnet_role = raw_env
+        .subnet_role
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_role".to_string()))?;
     let subnet_pid = raw_env
         .subnet_pid
-        .unwrap_or_else(|| Principal::from_slice(&[0xAA; 29]));
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_pid".to_string()))?;
+    let root_pid = raw_env
+        .root_pid
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("root_pid".to_string()))?;
     let canister_role = raw_env
         .canister_role
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("canister_role".to_string()))?;
+    let parent_pid = raw_env
+        .parent_pid
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("parent_pid".to_string()))?;
 
     Ok(ValidatedEnv {
-        prime_root_pid: raw_env.prime_root_pid.unwrap_or(root_pid),
-        subnet_role: raw_env.subnet_role.unwrap_or(SubnetRole::PRIME),
+        prime_root_pid,
+        subnet_role,
         subnet_pid,
         root_pid,
         canister_role,
-        parent_pid: raw_env.parent_pid.unwrap_or(root_pid),
+        parent_pid,
     })
 }

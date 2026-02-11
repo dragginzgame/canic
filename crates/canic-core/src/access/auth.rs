@@ -48,8 +48,8 @@ pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
 pub(crate) async fn delegated_token_verified(
     _caller: Principal,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
-    if is_local_dev_auth_enabled() {
-        // DEV ONLY: bypass auth guards only when explicitly enabled via env vars.
+    if should_skip_delegated_auth() {
+        // Bypass delegated-token verification for configured build networks.
         return Ok(VerifiedDelegatedToken::dev_bypass());
     }
 
@@ -234,6 +234,6 @@ fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
 }
 
-fn is_local_dev_auth_enabled() -> bool {
-    std::env::var("CANIC_DEV_AUTH").ok().as_deref() == Some("1")
+fn should_skip_delegated_auth() -> bool {
+    matches!(option_env!("DFX_NETWORK"), None | Some("ic"))
 }
