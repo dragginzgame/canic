@@ -36,12 +36,11 @@ impl ShardingApi {
     }
 
     /// Return the shard for a partition_key, or an Error if unassigned.
-    pub fn require_partition_key_shard(
+    pub fn resolve_shard_for_key(
         pool: &str,
         partition_key: impl AsRef<str>,
     ) -> Result<Principal, Error> {
-        ShardingQuery::require_partition_key_shard(pool, partition_key.as_ref())
-            .map_err(Error::from)
+        ShardingQuery::resolve_shard_for_key(pool, partition_key.as_ref()).map_err(Error::from)
     }
 
     /// Return a view of the full sharding registry.
