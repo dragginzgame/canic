@@ -70,7 +70,7 @@ impl RegistryPolicyError {
 
 impl From<RegistryPolicyError> for InternalError {
     fn from(err: RegistryPolicyError) -> Self {
-        InternalError::public(PublicError::policy(err.code(), err.to_string()))
+        Self::public(PublicError::policy(err.code(), err.to_string()))
     }
 }
 

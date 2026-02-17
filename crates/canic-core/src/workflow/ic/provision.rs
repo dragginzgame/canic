@@ -327,7 +327,9 @@ async fn install_canister(
         .iter()
         .find(|entry| entry.pid == parent_pid)
         .map(|entry| entry.role.clone())
-        .ok_or_else(|| policy::topology::TopologyPolicyError::ParentNotFound(parent_pid))?;
+        .ok_or(policy::topology::TopologyPolicyError::ParentNotFound(
+            parent_pid,
+        ))?;
     let parent_cfg = ConfigOps::current_subnet_canister(&parent_role)?;
     policy::topology::registry::RegistryPolicy::can_register_role(
         role,

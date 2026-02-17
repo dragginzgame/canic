@@ -36,8 +36,8 @@ pub enum RpcOpsError {
 impl From<RpcOpsError> for InternalError {
     fn from(err: RpcOpsError) -> Self {
         match err {
-            RpcOpsError::RemoteRejected(err) => InternalError::public(err),
-            other => OpsError::from(other).into(),
+            RpcOpsError::RemoteRejected(err) => Self::public(err),
+            other @ RpcOpsError::RequestOps(_) => OpsError::from(other).into(),
         }
     }
 }
