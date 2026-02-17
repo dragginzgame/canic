@@ -556,6 +556,12 @@ Rules:
 * Prefer captured identifiers in format strings
 * Avoid mixing formatting styles
 
+### Imports
+
+* Keep `use` statements at the top of the file.
+* Do not add `use crate::...` imports in the middle of a file.
+* Group imports logically and keep them consolidated instead of scattering them across sections.
+
 ### Doc comments
 
 * Struct doc comments must be exactly:

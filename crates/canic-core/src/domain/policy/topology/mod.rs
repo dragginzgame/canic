@@ -45,7 +45,7 @@ pub enum TopologyPolicyError {
 impl From<TopologyPolicyError> for InternalError {
     fn from(err: TopologyPolicyError) -> Self {
         match err {
-            TopologyPolicyError::RegistryPolicy(err) => InternalError::from(err),
+            TopologyPolicyError::RegistryPolicy(err) => Self::from(err),
             other => PolicyError::from(other).into(),
         }
     }
