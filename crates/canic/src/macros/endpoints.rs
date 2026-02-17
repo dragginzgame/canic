@@ -223,11 +223,11 @@ macro_rules! canic_endpoints {
         }
 
         #[canic_query(requires(caller::is_controller()))]
-        async fn canic_sharding_tenants(
+        async fn canic_sharding_partition_keys(
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
-        ) -> Result<::canic::dto::placement::sharding::ShardingTenantsResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::tenants(&pool, shard_pid))
+        ) -> Result<::canic::dto::placement::sharding::ShardingPartitionKeysResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::partition_keys(&pool, shard_pid))
         }
 
         //

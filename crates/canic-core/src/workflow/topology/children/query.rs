@@ -24,27 +24,27 @@ impl CanisterChildrenQuery {
         paginate_vec(entries, page)
     }
 
-    /// Returns the per-parent node child for `role`, if present.
-    /// Valid only for kind = Node.
+    /// Returns the per-parent singleton child for `role`, if present.
+    /// Valid only for kind = Singleton.
     #[must_use]
-    pub fn get_node_child(role: &CanisterRole) -> Option<CanisterInfo> {
+    pub fn get_singleton_child(role: &CanisterRole) -> Option<CanisterInfo> {
         let kind = match ConfigOps::current_subnet_canister(role) {
             Ok(cfg) => cfg.kind,
             Err(err) => {
                 log!(
                     Topic::Topology,
                     Warn,
-                    "get_node_child({role}) skipped: config lookup failed ({err})"
+                    "get_singleton_child({role}) skipped: config lookup failed ({err})"
                 );
                 return None;
             }
         };
 
-        if kind != CanisterKind::Node {
+        if kind != CanisterKind::Singleton {
             log!(
                 Topic::Topology,
                 Error,
-                "get_node_child({role}) invalid for kind={kind:?}"
+                "get_singleton_child({role}) invalid for kind={kind:?}"
             );
             return None;
         }
@@ -55,7 +55,7 @@ impl CanisterChildrenQuery {
     }
 
     /// Returns all children with the given role.
-    /// Intended for worker or shard kinds.
+    /// Intended for replica, tenant, or shard kinds.
     #[must_use]
     pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterInfo> {
         CanisterChildrenOps::infos()

@@ -3,7 +3,7 @@ use crate::{
     dto::{
         error::Error,
         placement::sharding::{
-            ShardingPlanStateResponse, ShardingRegistryResponse, ShardingTenantsResponse,
+            ShardingPartitionKeysResponse, ShardingPlanStateResponse, ShardingRegistryResponse,
         },
     },
     workflow::placement::sharding::{ShardingWorkflow, query::ShardingQuery},
@@ -29,15 +29,19 @@ pub struct ShardingApi;
 impl ShardingApi {
     // ───────────────────────── Queries ─────────────────────────
 
-    /// Lookup the shard assigned to a tenant in a pool, if any.
+    /// Lookup the shard assigned to a partition_key in a pool, if any.
     #[must_use]
-    pub fn lookup_tenant(pool: &str, tenant: &str) -> Option<Principal> {
-        ShardingQuery::lookup_tenant(pool, tenant)
+    pub fn lookup_partition_key(pool: &str, partition_key: &str) -> Option<Principal> {
+        ShardingQuery::lookup_partition_key(pool, partition_key)
     }
 
-    /// Return the shard for a tenant, or an Error if unassigned.
-    pub fn require_tenant_shard(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
-        ShardingQuery::require_tenant_shard(pool, tenant.as_ref()).map_err(Error::from)
+    /// Return the shard for a partition_key, or an Error if unassigned.
+    pub fn require_partition_key_shard(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<Principal, Error> {
+        ShardingQuery::require_partition_key_shard(pool, partition_key.as_ref())
+            .map_err(Error::from)
     }
 
     /// Return a view of the full sharding registry.
@@ -46,19 +50,22 @@ impl ShardingApi {
         ShardingQuery::registry()
     }
 
-    /// Return all tenants currently assigned to a shard.
+    /// Return all partition_keys currently assigned to a shard.
     #[must_use]
-    pub fn tenants(pool: &str, shard: Principal) -> ShardingTenantsResponse {
-        ShardingQuery::tenants(pool, shard)
+    pub fn partition_keys(pool: &str, shard: Principal) -> ShardingPartitionKeysResponse {
+        ShardingQuery::partition_keys(pool, shard)
     }
 
     // ─────────────────────── Workflows ────────────────────────
 
-    /// Assign a tenant to a shard in the given pool.
+    /// Assign a partition_key to a shard in the given pool.
     ///
     /// This performs validation, selection, and persistence.
-    pub async fn assign_to_pool(pool: &str, tenant: impl AsRef<str>) -> Result<Principal, Error> {
-        ShardingWorkflow::assign_to_pool(pool, tenant)
+    pub async fn assign_to_pool(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<Principal, Error> {
+        ShardingWorkflow::assign_to_pool(pool, partition_key)
             .await
             .map_err(Error::from)
     }
@@ -66,8 +73,8 @@ impl ShardingApi {
     /// Perform a dry-run shard assignment and return the resulting plan.
     pub fn plan_assign_to_pool(
         pool: &str,
-        tenant: impl AsRef<str>,
+        partition_key: impl AsRef<str>,
     ) -> Result<ShardingPlanStateResponse, Error> {
-        ShardingWorkflow::plan_assign_to_pool(pool, tenant).map_err(Error::from)
+        ShardingWorkflow::plan_assign_to_pool(pool, partition_key).map_err(Error::from)
     }
 }

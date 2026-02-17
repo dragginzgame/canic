@@ -9,8 +9,8 @@ try features end-to-end without touching production code.
 - `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, imports child WASMs, and exposes root admin endpoints.
 - `app/` – minimal “application” canister used as a placeholder service.
 - `user_hub/` + `user_shard/` – delegated signing pool (hub does placement only; shard initiates delegation with root).
-- `shard_hub/` + `shard/` – sharding pool demo (assign principals to shard workers).
-- `scale_hub/` + `scale/` – scaling pool demo (spawn worker canisters under policy).
+- `shard_hub/` + `shard/` – sharding pool demo (assign principals to shard replicas).
+- `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `blank/` – minimal canister used for provisioning flows (create-canister requests).
 - `test/` – timer and update/query coverage used by `make test-canisters`.
 

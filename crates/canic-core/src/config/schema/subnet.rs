@@ -68,7 +68,7 @@ impl Validate for SubnetConfig {
             }
         }
 
-        // subnet_directory must reference node canisters
+        // subnet_directory must reference singleton canisters
         for role in &self.subnet_directory {
             validate_role_len(role, "subnet directory canister")?;
             let cfg = self.canisters.get(role).ok_or_else(|| {
@@ -77,9 +77,9 @@ impl Validate for SubnetConfig {
                 ))
             })?;
 
-            if cfg.kind != CanisterKind::Node {
+            if cfg.kind != CanisterKind::Singleton {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{role}' must have kind = \"node\"",
+                    "subnet directory canister '{role}' must have kind = \"singleton\"",
                 )));
             }
         }
@@ -172,11 +172,11 @@ impl CanisterConfig {
                 }
             }
 
-            CanisterKind::Node => {
-                // Nodes are the only canisters allowed to define scaling and/or sharding
+            CanisterKind::Singleton => {
+                // Singletons are the only canisters allowed to define scaling and/or sharding
             }
 
-            CanisterKind::Worker | CanisterKind::Shard => {
+            CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Tenant => {
                 if self.scaling.is_some() || self.sharding.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
                         "canister '{canister}' kind = \"{}\" cannot define scaling or sharding",
@@ -254,9 +254,9 @@ impl CanisterConfig {
             }
 
             let target = &all_roles[&pool.canister_role];
-            if target.kind != CanisterKind::Worker {
+            if target.kind != CanisterKind::Replica {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{role}' scaling pool '{pool_name}' references canister '{}' which is not kind = \"worker\"",
+                    "canister '{role}' scaling pool '{pool_name}' references canister '{}' which is not kind = \"replica\"",
                     pool.canister_role
                 )));
             }
@@ -283,9 +283,10 @@ impl CanisterConfig {
 #[serde(rename_all = "snake_case")]
 pub enum CanisterKind {
     Root,
-    Node,
-    Worker,
+    Singleton,
+    Replica,
     Shard,
+    Tenant,
 }
 
 ///
@@ -349,10 +350,10 @@ pub enum RandomnessSource {
 /// ScalingConfig
 /// (stateless, scaling)
 ///
-/// * Organizes canisters into **worker groups** (e.g. "oracle").
-/// * Workers are interchangeable and handle transient tasks (no tenant assignment).
+/// * Organizes canisters into **replica groups** (e.g. "oracle").
+/// * Replicas are interchangeable and handle transient tasks (no tenant assignment).
 /// * Scaling is about throughput, not capacity.
-/// * Hence: `WorkerManager → pools → WorkerSpec → WorkerPolicy`.
+/// * Hence: `ReplicaManager → pools → ReplicaSpec → ReplicaPolicy`.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -364,7 +365,7 @@ pub struct ScalingConfig {
 
 ///
 /// ScalePool
-/// One stateless worker group (e.g. "oracle").
+/// One stateless replica group (e.g. "oracle").
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -383,10 +384,10 @@ pub struct ScalePool {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ScalePoolPolicy {
-    /// Minimum number of worker canisters to keep alive
+    /// Minimum number of replica canisters to keep alive
     pub min_workers: u32,
 
-    /// Maximum number of worker canisters to allow
+    /// Maximum number of replica canisters to allow
     pub max_workers: u32,
 }
 
@@ -530,7 +531,7 @@ mod tests {
 
         subnet
             .validate()
-            .expect_err("expected missing worker role to fail");
+            .expect_err("expected missing replica role to fail");
     }
 
     #[test]
@@ -574,7 +575,7 @@ mod tests {
         let mut canisters = BTreeMap::new();
         canisters.insert(
             CanisterRole::from(long_role),
-            base_canister_config(CanisterKind::Node),
+            base_canister_config(CanisterKind::Singleton),
         );
 
         let subnet = SubnetConfig {
@@ -624,9 +625,9 @@ mod tests {
         let mut canisters = BTreeMap::new();
         let mut pools = BTreeMap::new();
         pools.insert(
-            "worker".into(),
+            "replica".into(),
             ScalePool {
-                canister_role: CanisterRole::from("worker"),
+                canister_role: CanisterRole::from("replica"),
                 policy: ScalePoolPolicy {
                     min_workers: 5,
                     max_workers: 3,
@@ -635,13 +636,13 @@ mod tests {
         );
 
         canisters.insert(
-            CanisterRole::from("worker"),
-            base_canister_config(CanisterKind::Node),
+            CanisterRole::from("replica"),
+            base_canister_config(CanisterKind::Replica),
         );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..base_canister_config(CanisterKind::Worker)
+            ..base_canister_config(CanisterKind::Singleton)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -663,19 +664,19 @@ mod tests {
         pools.insert(
             "a".repeat(NAME_MAX_BYTES + 1),
             ScalePool {
-                canister_role: CanisterRole::from("worker"),
+                canister_role: CanisterRole::from("replica"),
                 policy: ScalePoolPolicy::default(),
             },
         );
 
         canisters.insert(
-            CanisterRole::from("worker"),
-            base_canister_config(CanisterKind::Node),
+            CanisterRole::from("replica"),
+            base_canister_config(CanisterKind::Replica),
         );
 
         let manager_cfg = CanisterConfig {
             scaling: Some(ScalingConfig { pools }),
-            ..base_canister_config(CanisterKind::Worker)
+            ..base_canister_config(CanisterKind::Singleton)
         };
 
         canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -700,7 +701,7 @@ mod tests {
                 reseed_interval_secs: 0,
                 ..Default::default()
             },
-            ..base_canister_config(CanisterKind::Node)
+            ..base_canister_config(CanisterKind::Singleton)
         };
 
         canisters.insert(CanisterRole::from("app"), cfg);
@@ -739,7 +740,7 @@ mod tests {
             r#"
 [canisters.app]
 role = "app"
-kind = "node"
+kind = "singleton"
 "#,
         )
         .expect_err("expected explicit role to fail validation");
@@ -750,8 +751,8 @@ kind = "node"
         toml::from_str::<SubnetConfig>(
             r#"
 [canisters.app]
-kind = "node"
-type = "node"
+kind = "singleton"
+type = "singleton"
 "#,
         )
         .expect_err("expected explicit type to fail validation");
@@ -762,12 +763,51 @@ type = "node"
         toml::from_str::<SubnetConfig>(
             r#"
 [canisters.manager]
-kind = "node"
+kind = "singleton"
 
 [canisters.manager.sharding]
 role = "shard"
 "#,
         )
         .expect_err("expected explicit sharding role to fail validation");
+    }
+
+    #[test]
+    fn tenant_kind_parses() {
+        let subnet = toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.tenant_role]
+kind = "tenant"
+"#,
+        )
+        .expect("expected tenant kind to parse");
+
+        let cfg = subnet
+            .canisters
+            .get(&CanisterRole::from("tenant_role"))
+            .expect("tenant role config should exist");
+        assert_eq!(cfg.kind, CanisterKind::Tenant);
+    }
+
+    #[test]
+    fn legacy_node_kind_is_rejected() {
+        toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.app]
+kind = "node"
+"#,
+        )
+        .expect_err("expected legacy node kind to fail parsing");
+    }
+
+    #[test]
+    fn legacy_worker_kind_is_rejected() {
+        toml::from_str::<SubnetConfig>(
+            r#"
+[canisters.app]
+kind = "worker"
+"#,
+        )
+        .expect_err("expected legacy worker kind to fail parsing");
     }
 }

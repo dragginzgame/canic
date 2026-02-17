@@ -20,8 +20,8 @@ impl CanisterChildrenApi {
     }
 
     #[must_use]
-    pub fn get_node_child(role: &CanisterRole) -> Option<CanisterInfo> {
-        CanisterChildrenQuery::get_node_child(role)
+    pub fn get_singleton_child(role: &CanisterRole) -> Option<CanisterInfo> {
+        CanisterChildrenQuery::get_singleton_child(role)
     }
 
     #[must_use]

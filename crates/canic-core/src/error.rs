@@ -1,4 +1,5 @@
 use crate::access::AccessError;
+use crate::dto::error::Error as PublicError;
 use derive_more::Display;
 use thiserror::Error as ThisError;
 
@@ -22,6 +23,7 @@ pub(crate) struct InternalError {
     class: InternalErrorClass,
     origin: InternalErrorOrigin,
     message: String,
+    public_error: Option<PublicError>,
 }
 
 impl InternalError {
@@ -34,6 +36,16 @@ impl InternalError {
             class,
             origin,
             message: message.into(),
+            public_error: None,
+        }
+    }
+
+    pub fn public(err: PublicError) -> Self {
+        Self {
+            class: InternalErrorClass::Domain,
+            origin: InternalErrorOrigin::Domain,
+            message: err.message.clone(),
+            public_error: Some(err),
         }
     }
 
@@ -68,6 +80,11 @@ impl InternalError {
     #[must_use]
     pub const fn log_fields(&self) -> (InternalErrorClass, InternalErrorOrigin) {
         (self.class, self.origin)
+    }
+
+    #[must_use]
+    pub const fn public_error(&self) -> Option<&PublicError> {
+        self.public_error.as_ref()
     }
 }
 

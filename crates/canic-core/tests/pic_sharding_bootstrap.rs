@@ -7,7 +7,7 @@ use canic_core::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
         error::Error,
-        placement::sharding::{ShardingRegistryResponse, ShardingTenantsResponse},
+        placement::sharding::{ShardingPartitionKeysResponse, ShardingRegistryResponse},
         topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     },
     ids::{CanisterRole, SubnetRole},
@@ -50,9 +50,9 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
         None,
     );
 
-    let tenant = Principal::from_slice(&[10; 29]);
+    let partition_key = Principal::from_slice(&[10; 29]);
     let shard_pid: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (tenant,));
+        update_call(&pic, shard_hub_id, "register_principal", (partition_key,));
     let shard_pid = shard_pid.expect("register_principal failed");
 
     let registry: Result<ShardingRegistryResponse, Error> =
@@ -68,14 +68,14 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     assert_eq!(pool_entries.len(), 1);
     assert_eq!(pool_entries[0].pid, shard_pid);
 
-    let tenants: Result<ShardingTenantsResponse, Error> = query_call(
+    let partition_keys: Result<ShardingPartitionKeysResponse, Error> = query_call(
         &pic,
         shard_hub_id,
-        "canic_sharding_tenants",
+        "canic_sharding_partition_keys",
         (POOL_NAME.to_string(), shard_pid),
     );
-    let tenants = tenants.expect("tenants query failed");
-    assert_eq!(tenants.0, vec![tenant.to_string()]);
+    let partition_keys = partition_keys.expect("partition_keys query failed");
+    assert_eq!(partition_keys.0, vec![partition_key.to_string()]);
 }
 
 #[test]
@@ -101,16 +101,16 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
         None,
     );
 
-    let tenant_a = Principal::from_slice(&[10; 29]);
-    let tenant_b = Principal::from_slice(&[11; 29]);
+    let partition_key_a = Principal::from_slice(&[10; 29]);
+    let partition_key_b = Principal::from_slice(&[11; 29]);
 
     let first: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (tenant_a,));
-    let first = first.expect("register_principal tenant_a failed");
+        update_call(&pic, shard_hub_id, "register_principal", (partition_key_a,));
+    let first = first.expect("register_principal partition_key_a failed");
 
     let second: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (tenant_b,));
-    let second = second.expect("register_principal tenant_b failed");
+        update_call(&pic, shard_hub_id, "register_principal", (partition_key_b,));
+    let second = second.expect("register_principal partition_key_b failed");
 
     assert_eq!(first, second);
 

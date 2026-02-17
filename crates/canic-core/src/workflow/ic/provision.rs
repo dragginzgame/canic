@@ -322,11 +322,20 @@ async fn install_canister(
     let registry_data = SubnetRegistryOps::data();
     let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
     let canister_cfg = ConfigOps::current_subnet_canister(role)?;
+    let parent_role = registry_input
+        .entries
+        .iter()
+        .find(|entry| entry.pid == parent_pid)
+        .map(|entry| entry.role.clone())
+        .ok_or_else(|| policy::topology::TopologyPolicyError::ParentNotFound(parent_pid))?;
+    let parent_cfg = ConfigOps::current_subnet_canister(&parent_role)?;
     policy::topology::registry::RegistryPolicy::can_register_role(
         role,
         parent_pid,
         &registry_input,
         &canister_cfg,
+        &parent_role,
+        &parent_cfg,
     )
     .map_err(InternalError::from)?;
 

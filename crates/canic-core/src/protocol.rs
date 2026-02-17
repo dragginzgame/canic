@@ -54,7 +54,7 @@ pub const CANIC_CANISTER_CHILDREN: &str = "canic_canister_children";
 pub const CANIC_CYCLE_TRACKER: &str = "canic_cycle_tracker";
 pub const CANIC_SCALING_REGISTRY: &str = "canic_scaling_registry";
 pub const CANIC_SHARDING_REGISTRY: &str = "canic_sharding_registry";
-pub const CANIC_SHARDING_TENANTS: &str = "canic_sharding_tenants";
+pub const CANIC_SHARDING_PARTITION_KEYS: &str = "canic_sharding_partition_keys";
 
 // ICTS endpoints.
 pub const ICTS_NAME: &str = "icts_name";

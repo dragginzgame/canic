@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.21] - 2026-02-17
+
+### ⚠️ Breaking
+
+- Renamed `CanisterKind` variants: `Node` → `Singleton`, `Worker` → `Replica`, and added `Tenant`.
+- Removed legacy config strings `"node"` and `"worker"`; configs must now use `"singleton"` and `"replica"`.
+- Renamed sharding query endpoint `canic_sharding_tenants` to `canic_sharding_partition_keys`.
+
+### 🔧 Changed
+
+- Placement policy is now explicit: `Replica` requires `Singleton + scaling`, `Shard` requires `Singleton + sharding`, and `Tenant` requires a `Singleton` parent.
+- Policy and RPC failures now preserve structured error codes/messages instead of collapsing to generic internal errors.
+- Sharding identity naming now uses `partition_key` across DTOs, API, workflow, ops, and storage.
+
+### 🧭 Migration Notes
+
+- Update kind names and sharding endpoint names in configs and integrations.
+
+```text
+node   -> singleton
+worker -> replica
+canic_sharding_tenants -> canic_sharding_partition_keys
+```
+
+### 🧪 Testing
+
+- Updated seam and sharding tests for new kind names, new policy checks, and `partition_key` terminology.
+- Added coverage for duplicate `Singleton` rejection and allowed/blocked child creation paths for `Tenant`, `Replica`, and `Shard`.
+
+---
+
 ## [0.9.20] - 2026-02-11
 
 ### 🔐 Auth

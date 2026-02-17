@@ -35,8 +35,8 @@ pub enum ShardingRegistryOpsError {
         pid: Principal,
     },
 
-    #[error("tenant '{tenant}' is not assigned to any shard in pool '{pool}'")]
-    TenantNotAssigned { pool: String, tenant: String },
+    #[error("partition_key '{partition_key}' is not assigned to any shard in pool '{pool}'")]
+    PartitionKeyNotAssigned { pool: String, partition_key: String },
 }
 
 impl From<ShardingRegistryOpsError> for InternalError {
@@ -96,17 +96,20 @@ impl ShardingRegistryOps {
         ShardingRegistry::with(|core| core.get_entry(&pid))
     }
 
-    /// Returns the shard assigned to the given tenant (if any).
+    /// Returns the shard assigned to the given partition_key (if any).
     #[must_use]
-    pub fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
-        ShardingRegistry::tenant_shard(pool, tenant)
+    pub fn partition_key_shard(pool: &str, partition_key: &str) -> Option<Principal> {
+        ShardingRegistry::partition_key_shard(pool, partition_key)
     }
 
-    pub fn tenant_shard_required(pool: &str, tenant: &str) -> Result<Principal, InternalError> {
-        Self::tenant_shard(pool, tenant).ok_or_else(|| {
-            ShardingRegistryOpsError::TenantNotAssigned {
+    pub fn partition_key_shard_required(
+        pool: &str,
+        partition_key: &str,
+    ) -> Result<Principal, InternalError> {
+        Self::partition_key_shard(pool, partition_key).ok_or_else(|| {
+            ShardingRegistryOpsError::PartitionKeyNotAssigned {
                 pool: pool.to_string(),
-                tenant: tenant.to_string(),
+                partition_key: partition_key.to_string(),
             }
             .into()
         })
@@ -118,19 +121,19 @@ impl ShardingRegistryOps {
         ShardingRegistry::slot_for_shard(pool, shard)
     }
 
-    /// Lists all tenants currently assigned to the specified shard.
+    /// Lists all partition_keys currently assigned to the specified shard.
     #[must_use]
-    pub fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<String> {
-        ShardingRegistry::tenants_in_shard(pool, shard)
+    pub fn partition_keys_in_shard(pool: &str, shard: Principal) -> Vec<String> {
+        ShardingRegistry::partition_keys_in_shard(pool, shard)
     }
 
-    /// Assign (or reassign) a tenant to a shard.
+    /// Assign (or reassign) a partition_key to a shard.
     ///
     /// Storage responsibilities:
     /// - enforce referential integrity (target shard must exist)
     /// - enforce pool consistency (assignment pool must match shard entry pool)
     /// - maintain derived counters (`ShardEntryRecord.count`)
-    pub fn assign(pool: &str, tenant: &str, shard: Principal) -> Result<(), InternalError> {
+    pub fn assign(pool: &str, partition_key: &str, shard: Principal) -> Result<(), InternalError> {
         ShardingRegistry::with_mut(|core| {
             let mut entry = core
                 .get_entry(&shard)
@@ -145,10 +148,10 @@ impl ShardingRegistryOps {
                 .into());
             }
 
-            let key =
-                ShardKey::try_new(pool, tenant).map_err(ShardingRegistryOpsError::InvalidKey)?;
+            let key = ShardKey::try_new(pool, partition_key)
+                .map_err(ShardingRegistryOpsError::InvalidKey)?;
 
-            // If tenant is already assigned, decrement the old shard count.
+            // If partition_key is already assigned, decrement the old shard count.
             if let Some(current) = core.get_assignment(&key) {
                 if current == shard {
                     return Ok(());
@@ -214,7 +217,7 @@ mod tests {
         let created_at = 0;
 
         ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, created_at).unwrap();
-        ShardingRegistryOps::assign("poolA", "tenant1", shard_pid).unwrap();
+        ShardingRegistryOps::assign("poolA", "partition_key1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);
     }

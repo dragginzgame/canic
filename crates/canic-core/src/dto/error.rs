@@ -31,6 +31,11 @@ impl Error {
         Self::new(ErrorCode::Conflict, message.into())
     }
 
+    /// 409 – Policy violation with a stable policy-specific code.
+    pub fn policy(code: ErrorCode, message: impl Into<String>) -> Self {
+        Self::new(code, message.into())
+    }
+
     /// 403 – Authenticated caller is not permitted to perform this action.
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Forbidden, message.into())
@@ -90,6 +95,11 @@ pub enum ErrorCode {
     InvalidInput,
     InvariantViolation,
     NotFound,
+    PolicyReplicaRequiresSingletonWithScaling,
+    PolicyRoleAlreadyRegistered,
+    PolicyShardRequiresSingletonWithSharding,
+    PolicySingletonAlreadyRegisteredUnderParent,
+    PolicyTenantRequiresSingletonParent,
     ResourceExhausted,
     Unauthorized,
 }

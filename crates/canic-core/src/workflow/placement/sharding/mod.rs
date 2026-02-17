@@ -21,7 +21,7 @@ use crate::{
         config::ConfigOps,
         ic::IcOps,
         placement::sharding::mapper::{
-            ShardPlacementPolicyInputMapper, ShardTenantAssignmentPolicyInputMapper,
+            ShardPartitionKeyAssignmentPolicyInputMapper, ShardPlacementPolicyInputMapper,
             ShardingPlanStateResponseMapper,
         },
         rpc::request::{CreateCanisterParent, RequestOps},
@@ -112,33 +112,33 @@ impl ShardAllocator {
 
 ///
 /// ShardingWorkflow
-/// High-level orchestration flows for tenant assignment and rebalancing.
+/// High-level orchestration flows for partition_key assignment and rebalancing.
 ///
 
 pub struct ShardingWorkflow;
 
 impl ShardingWorkflow {
-    /// Assign a tenant to the given pool, creating a shard if necessary.
+    /// Assign a partition_key to the given pool, creating a shard if necessary.
     pub(crate) async fn assign_to_pool(
         pool: &str,
-        tenant: impl AsRef<str>,
+        partition_key: impl AsRef<str>,
     ) -> Result<Principal, InternalError> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
         Self::assign_with_policy(
             &pool_cfg.canister_role,
             pool,
-            tenant.as_ref(),
+            partition_key.as_ref(),
             pool_cfg.policy,
             None,
         )
         .await
     }
 
-    /// Assign a tenant according to policy and HRW selection.
+    /// Assign a partition_key according to policy and HRW selection.
     pub(crate) async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
-        tenant: &str,
+        partition_key: &str,
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
@@ -148,8 +148,14 @@ impl ShardingWorkflow {
 
         let mut active = ShardingLifecycleOps::active_shards();
         if active.is_empty() {
-            Self::bootstrap_empty_active(canister_role, pool, tenant, &policy, extra_arg.clone())
-                .await?;
+            Self::bootstrap_empty_active(
+                canister_role,
+                pool,
+                partition_key,
+                &policy,
+                extra_arg.clone(),
+            )
+            .await?;
             active = ShardingLifecycleOps::active_shards();
         }
 
@@ -175,7 +181,7 @@ impl ShardingWorkflow {
             .iter()
             .filter(|(_, pid)| active_set.contains(pid))
             .map(|(key, pid)| {
-                ShardTenantAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
             })
             .collect();
 
@@ -194,7 +200,7 @@ impl ShardingWorkflow {
         // Policy decision
         // ---------------------------------------------------------------------
 
-        let plan = ShardingPolicy::plan_assign(&state, tenant, None);
+        let plan = ShardingPolicy::plan_assign(&state, partition_key, None);
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
@@ -205,14 +211,14 @@ impl ShardingWorkflow {
                 log!(
                     Topic::Sharding,
                     Info,
-                    "📦 tenant={tenant} already shard={pid} pool={pool} slot={slot:?}"
+                    "📦 partition_key={partition_key} already shard={pid} pool={pool} slot={slot:?}"
                 );
 
                 Ok(pid)
             }
 
             ShardingPlanState::UseExisting { pid } => {
-                ShardingRegistryOps::assign(pool, tenant, pid)?;
+                ShardingRegistryOps::assign(pool, partition_key, pid)?;
 
                 let slot = plan
                     .target_slot
@@ -221,7 +227,7 @@ impl ShardingWorkflow {
                 log!(
                     Topic::Sharding,
                     Info,
-                    "📦 tenant={tenant} assigned shard={pid} pool={pool} slot={slot:?}"
+                    "📦 partition_key={partition_key} assigned shard={pid} pool={pool} slot={slot:?}"
                 );
 
                 Ok(pid)
@@ -237,32 +243,34 @@ impl ShardingWorkflow {
                 let pid =
                     Self::allocate_and_admit(pool, slot, canister_role, &policy, extra_arg).await?;
 
-                ShardingRegistryOps::assign(pool, tenant, pid)?;
+                ShardingRegistryOps::assign(pool, partition_key, pid)?;
 
                 log!(
                     Topic::Sharding,
                     Ok,
-                    "✨ tenant={tenant} created+assigned shard={pid} pool={pool} slot={slot}"
+                    "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
                 );
 
                 Ok(pid)
             }
 
-            ShardingPlanState::CreateBlocked { reason } => Err(Self::blocked(reason, pool, tenant)),
+            ShardingPlanState::CreateBlocked { reason } => {
+                Err(Self::blocked(reason, pool, partition_key))
+            }
         }
     }
 
-    /// Plan a tenant assignment without mutating state.
+    /// Plan a partition_key assignment without mutating state.
     pub(crate) fn plan_assign_to_pool(
         pool: &str,
-        tenant: impl AsRef<str>,
+        partition_key: impl AsRef<str>,
     ) -> Result<ShardingPlanStateResponse, InternalError> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
-        let tenant = tenant.as_ref();
+        let partition_key = partition_key.as_ref();
 
         let active = ShardingLifecycleOps::active_shards();
         if active.is_empty() {
-            Self::ensure_bootstrap_capacity(pool, tenant, &pool_cfg.policy)?;
+            Self::ensure_bootstrap_capacity(pool, partition_key, &pool_cfg.policy)?;
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
@@ -287,7 +295,7 @@ impl ShardingWorkflow {
             .iter()
             .filter(|(_, pid)| active_set.contains(pid))
             .map(|(key, pid)| {
-                ShardTenantAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
             })
             .collect();
 
@@ -299,7 +307,7 @@ impl ShardingWorkflow {
             assignments: &assignment_views,
         };
 
-        let plan = ShardingPolicy::plan_assign(&state, tenant, None);
+        let plan = ShardingPolicy::plan_assign(&state, partition_key, None);
 
         Ok(ShardingPlanStateResponseMapper::record_to_view(plan.state))
     }
@@ -308,18 +316,18 @@ impl ShardingWorkflow {
     async fn bootstrap_empty_active(
         canister_role: &CanisterRole,
         pool: &str,
-        tenant: &str,
+        partition_key: &str,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<(), InternalError> {
         let pool_entries = Self::pool_entry_views(pool);
         if pool_entries.len() as u32 >= policy.max_shards {
-            return Err(Self::no_active_shards_exhausted(pool, tenant));
+            return Err(Self::no_active_shards_exhausted(pool, partition_key));
         }
 
         let free_slots = Self::free_slots(policy.max_shards, &pool_entries);
-        let slot = HrwSelector::select_from_slots(pool, tenant, &free_slots)
-            .ok_or_else(|| Self::no_active_shards_exhausted(pool, tenant))?;
+        let slot = HrwSelector::select_from_slots(pool, partition_key, &free_slots)
+            .ok_or_else(|| Self::no_active_shards_exhausted(pool, partition_key))?;
 
         let _ = Self::allocate_and_admit(pool, slot, canister_role, policy, extra_arg).await?;
 
@@ -329,12 +337,12 @@ impl ShardingWorkflow {
     #[expect(clippy::cast_possible_truncation)]
     fn ensure_bootstrap_capacity(
         pool: &str,
-        tenant: &str,
+        partition_key: &str,
         policy: &ShardPoolPolicy,
     ) -> Result<(), InternalError> {
         let pool_entries = Self::pool_entry_views(pool);
         if pool_entries.len() as u32 >= policy.max_shards {
-            return Err(Self::no_active_shards_exhausted(pool, tenant));
+            return Err(Self::no_active_shards_exhausted(pool, partition_key));
         }
 
         Ok(())
@@ -384,20 +392,20 @@ impl ShardingWorkflow {
         ShardingLifecycleOps::set_active(pid);
     }
 
-    fn no_active_shards_exhausted(pool: &str, tenant: &str) -> InternalError {
+    fn no_active_shards_exhausted(pool: &str, partition_key: &str) -> InternalError {
         InternalError::domain(
             InternalErrorOrigin::Workflow,
             format!(
-                "no active shards in pool '{pool}' and max_shards exhausted; cannot assign tenant '{tenant}'"
+                "no active shards in pool '{pool}' and max_shards exhausted; cannot assign partition_key '{partition_key}'"
             ),
         )
     }
 
     /// Convert a policy block reason into an error.
-    fn blocked(reason: CreateBlockedReason, pool: &str, tenant: &str) -> InternalError {
+    fn blocked(reason: CreateBlockedReason, pool: &str, partition_key: &str) -> InternalError {
         ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
             reason,
-            tenant: tenant.to_string(),
+            partition_key: partition_key.to_string(),
             pool: pool.to_string(),
         })
         .into()
@@ -461,9 +469,13 @@ mod tests {
 
         ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
         activate(shard);
-        ShardingRegistryOps::assign("primary", "tenant-a", shard).unwrap();
+        ShardingRegistryOps::assign("primary", "partition_key-a", shard).unwrap();
 
-        let pid = block_on(ShardingWorkflow::assign_to_pool("primary", "tenant-a")).unwrap();
+        let pid = block_on(ShardingWorkflow::assign_to_pool(
+            "primary",
+            "partition_key-a",
+        ))
+        .unwrap();
 
         assert_eq!(pid, shard);
     }
@@ -482,11 +494,15 @@ mod tests {
         ShardingRegistryOps::create(shard, "primary", 0, &role, 2, created_at).unwrap();
         activate(shard);
 
-        let pid = block_on(ShardingWorkflow::assign_to_pool("primary", "tenant-x")).unwrap();
+        let pid = block_on(ShardingWorkflow::assign_to_pool(
+            "primary",
+            "partition_key-x",
+        ))
+        .unwrap();
 
         assert_eq!(pid, shard);
         assert_eq!(
-            ShardingRegistryOps::tenant_shard("primary", "tenant-x"),
+            ShardingRegistryOps::partition_key_shard("primary", "partition_key-x"),
             Some(shard)
         );
     }
@@ -507,7 +523,11 @@ mod tests {
         ShardingRegistryOps::create(shard_a, "primary", 0, &role, 1, created_at).unwrap();
         ShardingRegistryOps::create(shard_b, "primary", 1, &role, 1, created_at).unwrap();
 
-        let err = block_on(ShardingWorkflow::assign_to_pool("primary", "tenant-x")).unwrap_err();
+        let err = block_on(ShardingWorkflow::assign_to_pool(
+            "primary",
+            "partition_key-x",
+        ))
+        .unwrap_err();
 
         assert_eq!(err.class(), InternalErrorClass::Domain);
         assert_eq!(err.origin(), InternalErrorOrigin::Workflow);
@@ -587,7 +607,7 @@ mod tests {
 
         ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
 
-        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "tenant-x").unwrap();
+        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "partition_key-x").unwrap();
         assert!(
             matches!(plan, ShardingPlanStateResponse::CreateAllowed),
             "expected create-allowed when no shards are admitted"
@@ -595,7 +615,7 @@ mod tests {
 
         ShardingWorkflow::admit_shard(shard);
 
-        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "tenant-x").unwrap();
+        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "partition_key-x").unwrap();
         assert_eq!(plan, ShardingPlanStateResponse::UseExisting { pid: shard });
     }
 }

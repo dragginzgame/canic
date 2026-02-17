@@ -1,10 +1,10 @@
 //! HRW (Highest Random Weight) shard selection.
 //!
 //! Deterministic, stateless, and pure.
-//! Given a tenant and a set of shard principals, it selects
+//! Given a partition_key and a set of shard principals, it selects
 //! the shard with the highest weighted hash.
 //!
-//! Used by [`ShardAllocator`] or [`ShardingPolicy`] when assigning tenants.
+//! Used by [`ShardAllocator`] or [`ShardingPolicy`] when assigning partition_keys.
 
 use crate::{cdk::candid::Principal, utils::hash::hash_u64};
 
@@ -16,9 +16,9 @@ use crate::{cdk::candid::Principal, utils::hash::hash_u64};
 pub struct HrwSelector;
 
 impl HrwSelector {
-    /// Pick the shard with the highest HRW score for this tenant.
+    /// Pick the shard with the highest HRW score for this partition_key.
     #[must_use]
-    pub(crate) fn select(tenant: &str, shards: &[Principal]) -> Option<Principal> {
+    pub(crate) fn select(partition_key: &str, shards: &[Principal]) -> Option<Principal> {
         if shards.is_empty() {
             return None;
         }
@@ -27,7 +27,7 @@ impl HrwSelector {
         let mut best_shard = shards[0];
 
         for &shard in shards {
-            let score = Self::hrw_score(tenant, &shard);
+            let score = Self::hrw_score(partition_key, &shard);
             if score > best_score {
                 best_score = score;
                 best_shard = shard;
@@ -39,7 +39,7 @@ impl HrwSelector {
 
     /// Pick the highest-scoring slot from a provided list.
     #[must_use]
-    pub(crate) fn select_from_slots(pool: &str, tenant: &str, slots: &[u32]) -> Option<u32> {
+    pub(crate) fn select_from_slots(pool: &str, partition_key: &str, slots: &[u32]) -> Option<u32> {
         if slots.is_empty() {
             return None;
         }
@@ -48,7 +48,7 @@ impl HrwSelector {
         let mut best_slot = slots[0];
 
         for &slot in slots {
-            let score = Self::hrw_score_slot(pool, tenant, slot);
+            let score = Self::hrw_score_slot(pool, partition_key, slot);
             if score > best_score {
                 best_score = score;
                 best_slot = slot;
@@ -58,21 +58,21 @@ impl HrwSelector {
         Some(best_slot)
     }
 
-    /// Deterministic HRW score = hash(tenant || shard).
-    fn hrw_score(tenant: &str, shard: &Principal) -> u64 {
-        let mut bytes = Vec::with_capacity(tenant.len() + shard.as_slice().len());
-        bytes.extend_from_slice(tenant.as_bytes());
+    /// Deterministic HRW score = hash(partition_key || shard).
+    fn hrw_score(partition_key: &str, shard: &Principal) -> u64 {
+        let mut bytes = Vec::with_capacity(partition_key.len() + shard.as_slice().len());
+        bytes.extend_from_slice(partition_key.as_bytes());
         bytes.extend_from_slice(shard.as_slice());
 
         hash_u64(&bytes)
     }
 
-    fn hrw_score_slot(pool: &str, tenant: &str, slot: u32) -> u64 {
+    fn hrw_score_slot(pool: &str, partition_key: &str, slot: u32) -> u64 {
         let mut bytes =
-            Vec::with_capacity(pool.len() + tenant.len() + std::mem::size_of::<u32>() + 1);
+            Vec::with_capacity(pool.len() + partition_key.len() + std::mem::size_of::<u32>() + 1);
         bytes.extend_from_slice(pool.as_bytes());
         bytes.push(0xFF); // delimiter to avoid accidental overlaps
-        bytes.extend_from_slice(tenant.as_bytes());
+        bytes.extend_from_slice(partition_key.as_bytes());
         bytes.extend_from_slice(&slot.to_le_bytes());
 
         hash_u64(&bytes)
@@ -90,13 +90,13 @@ mod tests {
 
     #[test]
     fn selects_consistently() {
-        let tenant = "hello";
+        let partition_key = "hello";
         let shards = vec![
             Principal::from_text("aaaaa-aa").unwrap(),
             Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap(),
         ];
-        let s1 = HrwSelector::select(tenant, &shards).unwrap();
-        let s2 = HrwSelector::select(tenant, &shards).unwrap();
+        let s1 = HrwSelector::select(partition_key, &shards).unwrap();
+        let s2 = HrwSelector::select(partition_key, &shards).unwrap();
         assert_eq!(s1, s2);
     }
 }

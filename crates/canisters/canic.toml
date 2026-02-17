@@ -44,11 +44,11 @@ kind = "root"
 
 # --- App ---
 [subnets.prime.canisters.app]
-kind = "node"
+kind = "singleton"
 
 # --- User Hub ---
 [subnets.prime.canisters.user_hub]
-kind = "node"
+kind = "singleton"
 
 # --- User Hub Pools ---
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
@@ -62,11 +62,11 @@ kind = "shard"
 
 # --- Blank ---
 [subnets.prime.canisters.blank]
-kind = "worker"
+kind = "replica"
 
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
-kind = "node"
+kind = "singleton"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -77,11 +77,11 @@ policy.min_workers = 2
 
 # --- Scale ---
 [subnets.prime.canisters.scale]
-kind = "worker"
+kind = "replica"
 
 # --- Shard Hub ---
 [subnets.prime.canisters.shard_hub]
-kind = "node"
+kind = "singleton"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -100,7 +100,7 @@ topup.amount = "5T"
 
 # --- Test ---
 [subnets.prime.canisters.test]
-kind = "node"
+kind = "singleton"
 
 # ================================================================
 #  GENERAL SUBNET
@@ -109,4 +109,4 @@ kind = "node"
 
 # --- Blank Canister ---
 [subnets.general.canisters.blank]
-kind = "worker"
+kind = "replica"
