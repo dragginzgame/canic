@@ -25,7 +25,7 @@ impl ShardingQuery {
     }
 
     /// Return the shard assigned to a partition_key in a pool, or an error if unassigned.
-    pub fn require_partition_key_shard(
+    pub fn resolve_shard_for_key(
         pool: &str,
         partition_key: &str,
     ) -> Result<Principal, InternalError> {
