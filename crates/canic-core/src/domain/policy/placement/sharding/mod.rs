@@ -20,7 +20,7 @@ use crate::{
             backfill::plan_slot_backfill, hrw::HrwSelector, metrics::PoolMetrics,
         },
     },
-    view::placement::sharding::{ShardPlacement, ShardTenantAssignment},
+    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
 };
 
 ///
@@ -34,11 +34,11 @@ pub enum ShardingPolicyError {
     PoolNotFound(String),
 
     #[error(
-        "shard creation blocked: tenant '{tenant}' assignment blocked: {reason} in pool '{pool}'"
+        "shard creation blocked: partition_key '{partition_key}' assignment blocked: {reason} in pool '{pool}'"
     )]
     ShardCreationBlocked {
         reason: CreateBlockedReason,
-        tenant: String,
+        partition_key: String,
         pool: String,
     },
 
@@ -66,7 +66,7 @@ pub struct ShardingState<'a> {
     pub config: ShardPool,
     pub metrics: &'a PoolMetrics,
     pub entries: &'a [(Principal, ShardPlacement)],
-    pub assignments: &'a [ShardTenantAssignment], // tenants for *this pool only*
+    pub assignments: &'a [ShardPartitionKeyAssignment], // partition_keys for *this pool only*
 }
 
 ///
@@ -98,23 +98,23 @@ impl ShardingPolicy {
         metrics.active_count < policy.max_shards
     }
 
-    /// Lookup the shard assigned to a tenant, if any.
+    /// Lookup the shard assigned to a partition_key, if any.
     /// Invariant: `assignments` contains only entries for the active pool.
     #[must_use]
-    pub(crate) fn lookup_tenant(
-        tenant: &str,
-        assignments: &[ShardTenantAssignment],
+    pub(crate) fn lookup_partition_key(
+        partition_key: &str,
+        assignments: &[ShardPartitionKeyAssignment],
     ) -> Option<Principal> {
         assignments
             .iter()
-            .find(|assignment| assignment.tenant == tenant)
+            .find(|assignment| assignment.partition_key == partition_key)
             .map(|assignment| assignment.pid)
     }
 
     /// Perform a dry-run assignment plan.
     pub(crate) fn plan_assign(
         state: &ShardingState,
-        tenant: &str,
+        partition_key: &str,
         exclude_pid: Option<Principal>,
     ) -> ShardingPlan {
         let pool_cfg = state.config.clone();
@@ -123,8 +123,8 @@ impl ShardingPolicy {
 
         let slot_plan = plan_slot_backfill(state.pool, entries, pool_cfg.policy.max_shards);
 
-        if let Some(pid) =
-            Self::lookup_tenant(tenant, state.assignments).filter(|pid| exclude_pid != Some(*pid))
+        if let Some(pid) = Self::lookup_partition_key(partition_key, state.assignments)
+            .filter(|pid| exclude_pid != Some(*pid))
         {
             let slot = slot_plan.slots.get(&pid).copied();
 
@@ -142,7 +142,7 @@ impl ShardingPolicy {
             .map(|(pid, _)| *pid)
             .collect();
 
-        if let Some(target_pid) = HrwSelector::select(tenant, &shards_with_capacity) {
+        if let Some(target_pid) = HrwSelector::select(partition_key, &shards_with_capacity) {
             let slot = slot_plan.slots.get(&target_pid).copied();
 
             return Self::make_plan(
@@ -159,7 +159,8 @@ impl ShardingPolicy {
 
         // Slot selection is independent of create eligibility; we still compute a target slot
         // so callers can distinguish "no slots exist" from "policy forbids creating one".
-        let Some(target_slot) = HrwSelector::select_from_slots(state.pool, tenant, &free_slots)
+        let Some(target_slot) =
+            HrwSelector::select_from_slots(state.pool, partition_key, &free_slots)
         else {
             return Self::make_plan(
                 ShardingPlanState::CreateBlocked {

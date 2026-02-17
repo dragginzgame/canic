@@ -8,5 +8,5 @@ auto_create = ["signer"]
 kind = "root"
 
 [subnets.prime.canisters.signer]
-kind = "worker"
+kind = "singleton"
 initial_cycles = "1T"

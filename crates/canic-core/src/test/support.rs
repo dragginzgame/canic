@@ -35,7 +35,7 @@ pub fn init_sharding_test_config() {
     };
 
     let manager_cfg = CanisterConfig {
-        kind: CanisterKind::Node,
+        kind: CanisterKind::Singleton,
         initial_cycles: Cycles::new(5_000_000_000_000),
         topup: None,
         randomness: RandomnessConfig::default(),

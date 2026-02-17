@@ -19,12 +19,12 @@ impl ShardPlacement {
 }
 
 ///
-/// ShardTenantAssignment
+/// ShardPartitionKeyAssignment
 ///
 
 #[derive(Clone, Debug)]
-pub struct ShardTenantAssignment {
-    pub tenant: String,
+pub struct ShardPartitionKeyAssignment {
+    pub partition_key: String,
     pub pid: Principal,
 }
 

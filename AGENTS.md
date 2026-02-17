@@ -64,6 +64,41 @@ If code conflicts with this document, **the code is wrong**.
 
 ---
 
+### Changelog Rules
+
+* Keep the existing changelog structure and header format.
+* Use `## [x.y.z] - YYYY-MM-DD - Short Title` when a title is needed.
+* Smaller entries may omit the title segment and use `## [x.y.z] - YYYY-MM-DD`.
+* Changelog subsections are optional; include only sections relevant to the release.
+* Use this fixed emoji mapping for section headers:
+  * `Added=➕`
+  * `Changed=🔧`
+  * `Fixed=🩹`
+  * `Removed=🗑️`
+  * `Breaking=⚠️`
+  * `Migration Notes=🧭`
+  * `Summary=📝`
+  * `Cleanup=🧹`
+  * `Testing=🧪`
+* When updating the changelog, use the version specified by the user or the existing latest entry.
+* Do not create a new version header if the newest entry already exists; append to that entry.
+* Write in plain, industry-friendly language and lead with user impact.
+* Keep wording concise and junior-friendly; avoid jargon.
+* Keep bullets short (1–2 sentences), and use inline code for API/type names.
+* Prefer explaining why a change matters, not only what changed.
+* Include code examples only when they clarify behavior, migration, or usage.
+* Include at least one fenced block per changelog page when practical (for example usage, migration snippet, or binary spec).
+
+```md
+## [0.0.0] - 2026-02-17 - Example Title
+
+### 🔧 Changed
+
+- Updated `MyApi::call()` error handling so policy failures keep structured messages.
+```
+
+---
+
 ### API Stability
 
 * No stability guarantees yet.
@@ -590,7 +625,7 @@ Before merging:
 * [ ] `make fmt-check`
 * [ ] `make clippy`
 * [ ] `make test`
-* [ ] Update `CHANGELOG.md` if user-facing
+* [ ] Update `CHANGELOG.md` if user-facing (follow Changelog Rules)
 * [ ] Admin endpoints grouped under `*_admin`
 * [ ] Endpoints → workflow → policy → ops → model
 * [ ] DTOs are data-only

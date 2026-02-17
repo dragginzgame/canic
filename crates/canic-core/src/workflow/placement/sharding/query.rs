@@ -1,7 +1,7 @@
 use crate::{
     InternalError,
     dto::placement::sharding::{
-        ShardingRegistryEntry, ShardingRegistryResponse, ShardingTenantsResponse,
+        ShardingPartitionKeysResponse, ShardingRegistryEntry, ShardingRegistryResponse,
     },
     ops::{
         placement::sharding::mapper::ShardEntryMapper,
@@ -18,15 +18,18 @@ use crate::{
 pub struct ShardingQuery;
 
 impl ShardingQuery {
-    /// Lookup the shard assigned to a tenant in a pool, if any.
+    /// Lookup the shard assigned to a partition_key in a pool, if any.
     #[must_use]
-    pub fn lookup_tenant(pool: &str, tenant: &str) -> Option<Principal> {
-        ShardingRegistryOps::tenant_shard(pool, tenant)
+    pub fn lookup_partition_key(pool: &str, partition_key: &str) -> Option<Principal> {
+        ShardingRegistryOps::partition_key_shard(pool, partition_key)
     }
 
-    /// Return the shard assigned to a tenant in a pool, or an error if unassigned.
-    pub fn require_tenant_shard(pool: &str, tenant: &str) -> Result<Principal, InternalError> {
-        ShardingRegistryOps::tenant_shard_required(pool, tenant)
+    /// Return the shard assigned to a partition_key in a pool, or an error if unassigned.
+    pub fn require_partition_key_shard(
+        pool: &str,
+        partition_key: &str,
+    ) -> Result<Principal, InternalError> {
+        ShardingRegistryOps::partition_key_shard_required(pool, partition_key)
     }
 
     /// Return a view of the full sharding registry.
@@ -46,11 +49,11 @@ impl ShardingQuery {
         ShardingRegistryResponse(view)
     }
 
-    /// Return all tenants currently assigned to a shard.
+    /// Return all partition_keys currently assigned to a shard.
     #[must_use]
-    pub fn tenants(pool: &str, shard: Principal) -> ShardingTenantsResponse {
-        let tenants = ShardingRegistryOps::tenants_in_shard(pool, shard);
+    pub fn partition_keys(pool: &str, shard: Principal) -> ShardingPartitionKeysResponse {
+        let partition_keys = ShardingRegistryOps::partition_keys_in_shard(pool, shard);
 
-        ShardingTenantsResponse(tenants)
+        ShardingPartitionKeysResponse(partition_keys)
     }
 }

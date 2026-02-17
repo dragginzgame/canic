@@ -2,7 +2,7 @@ use crate::{
     cdk::candid::Principal,
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
     storage::stable::sharding::{ShardEntryRecord, ShardKey},
-    view::placement::sharding::{ShardPlacement, ShardTenantAssignment, ShardingPlanState},
+    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState},
 };
 
 ///
@@ -32,16 +32,16 @@ impl ShardPlacementPolicyInputMapper {
 }
 
 ///
-/// ShardTenantAssignmentPolicyInputMapper
+/// ShardPartitionKeyAssignmentPolicyInputMapper
 ///
 
-pub struct ShardTenantAssignmentPolicyInputMapper;
+pub struct ShardPartitionKeyAssignmentPolicyInputMapper;
 
-impl ShardTenantAssignmentPolicyInputMapper {
+impl ShardPartitionKeyAssignmentPolicyInputMapper {
     #[must_use]
-    pub fn record_to_policy_input(key: &ShardKey, pid: Principal) -> ShardTenantAssignment {
-        ShardTenantAssignment {
-            tenant: key.tenant.to_string(),
+    pub fn record_to_policy_input(key: &ShardKey, pid: Principal) -> ShardPartitionKeyAssignment {
+        ShardPartitionKeyAssignment {
+            partition_key: key.partition_key.to_string(),
             pid,
         }
     }

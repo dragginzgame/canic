@@ -18,11 +18,11 @@ pub struct ShardingRegistryEntry {
 pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
 
 ///
-/// ShardingTenantsResponse
+/// ShardingPartitionKeysResponse
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct ShardingTenantsResponse(pub Vec<String>);
+pub struct ShardingPartitionKeysResponse(pub Vec<String>);
 
 ///
 /// ShardEntry
@@ -45,10 +45,10 @@ pub struct ShardEntry {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ShardingPlanStateResponse {
-    /// Tenant already has a shard assigned.
+    /// Partition key already has a shard assigned.
     AlreadyAssigned { pid: Principal },
 
-    /// Tenant can be deterministically assigned to an existing shard (via HRW).
+    /// Partition key can be deterministically assigned to an existing shard (via HRW).
     UseExisting { pid: Principal },
 
     /// Policy allows creation of a new shard.

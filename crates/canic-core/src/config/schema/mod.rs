@@ -109,7 +109,7 @@ pub trait Validate {
 /// - A PRIME subnet MUST exist
 /// - Exactly one ROOT canister MUST exist globally
 /// - ROOT canister MUST be in the PRIME subnet
-/// - App directory canisters must be NODEs in PRIME
+/// - App directory canisters must be SINGLETONs in PRIME
 /// - Role names are length-limited
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -136,7 +136,7 @@ pub struct ConfigModel {
     pub app: AppConfig,
 
     /// Canister roles that participate in the application directory.
-    /// These must exist in the PRIME subnet and be NODE canisters.
+    /// These must exist in the PRIME subnet and be SINGLETON canisters.
     #[serde(default)]
     pub app_directory: BTreeSet<CanisterRole>,
 
@@ -227,7 +227,7 @@ impl Validate for ConfigModel {
             ));
         }
 
-        // App directory canisters must exist in PRIME and be NODEs
+        // App directory canisters must exist in PRIME and be SINGLETONs
         for canister_role in &self.app_directory {
             validate_canister_role_len(canister_role, "app directory canister")?;
 
@@ -237,9 +237,9 @@ impl Validate for ConfigModel {
                 ))
             })?;
 
-            if canister_cfg.kind != CanisterKind::Node {
+            if canister_cfg.kind != CanisterKind::Singleton {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_role}' must have kind = \"node\"",
+                    "app directory canister '{canister_role}' must have kind = \"singleton\"",
                 )));
             }
         }
@@ -464,7 +464,10 @@ mod tests {
         let mut cfg = ConfigModel::test_default();
         let mut canisters = BTreeMap::new();
 
-        canisters.insert(CanisterRole::ROOT, base_canister_config(CanisterKind::Node));
+        canisters.insert(
+            CanisterRole::ROOT,
+            base_canister_config(CanisterKind::Singleton),
+        );
 
         cfg.subnets.get_mut(&SubnetRole::PRIME).unwrap().canisters = canisters;
 

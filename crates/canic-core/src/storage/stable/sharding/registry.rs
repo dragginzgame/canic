@@ -18,7 +18,7 @@ pub struct ShardingRegistryRecord {
 ///
 /// ShardingRegistry
 ///
-/// Persistent memory interface for tracking shard entries and tenant → shard
+/// Persistent memory interface for tracking shard entries and partition_key → shard
 /// assignments. This layer is purely responsible for durable state and
 /// consistency enforcement — not for selection, policy, or orchestration.
 ///
@@ -72,21 +72,21 @@ impl ShardingRegistry {
         })
     }
 
-    /// Returns the shard assigned to the given tenant (if any).
+    /// Returns the shard assigned to the given partition_key (if any).
     #[must_use]
-    pub(crate) fn tenant_shard(pool: &str, tenant: &str) -> Option<Principal> {
-        let key = ShardKey::try_new(pool, tenant).ok()?;
+    pub(crate) fn partition_key_shard(pool: &str, partition_key: &str) -> Option<Principal> {
+        let key = ShardKey::try_new(pool, partition_key).ok()?;
         Self::with(|s| s.get_assignment(&key))
     }
 
-    /// Lists all tenants currently assigned to the specified shard.
+    /// Lists all partition_keys currently assigned to the specified shard.
     #[must_use]
-    pub(crate) fn tenants_in_shard(pool: &str, shard: Principal) -> Vec<String> {
+    pub(crate) fn partition_keys_in_shard(pool: &str, shard: Principal) -> Vec<String> {
         Self::with(|s| {
             s.all_assignments()
                 .into_iter()
                 .filter(|(k, v)| v == &shard && k.pool.as_ref() == pool)
-                .map(|(k, _)| k.tenant.to_string())
+                .map(|(k, _)| k.partition_key.to_string())
                 .collect()
         })
     }
@@ -95,7 +95,7 @@ impl ShardingRegistry {
     ///
     /// NOTE:
     /// - Assignments are intentionally excluded.
-    /// - Tenant → shard mappings are unbounded and must be queried explicitly.
+    /// - Partition key → shard mappings are unbounded and must be queried explicitly.
     #[must_use]
     pub(crate) fn export() -> ShardingRegistryRecord {
         ShardingRegistryRecord {

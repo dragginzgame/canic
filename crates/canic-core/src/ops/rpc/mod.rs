@@ -27,15 +27,18 @@ pub enum RpcOpsError {
     #[error(transparent)]
     RequestOps(#[from] RequestOpsError),
 
-    // Error is a wire-level contract only.
-    // It is erased at the ops boundary.
+    // Error is a wire-level contract.
+    // It is preserved through the ops boundary.
     #[error("rpc rejected: {0}")]
     RemoteRejected(Error),
 }
 
 impl From<RpcOpsError> for InternalError {
     fn from(err: RpcOpsError) -> Self {
-        OpsError::from(err).into()
+        match err {
+            RpcOpsError::RemoteRejected(err) => InternalError::public(err),
+            other => OpsError::from(other).into(),
+        }
     }
 }
 
@@ -62,7 +65,7 @@ impl RpcOps {
     /// call_rpc_result
     ///
     /// Calls a method that returns `Result<T, Error>` and
-    /// erases `Error` at the ops boundary.
+    /// preserves `Error` at the ops boundary.
     ///
     pub async fn call_rpc_result<T>(
         pid: Principal,

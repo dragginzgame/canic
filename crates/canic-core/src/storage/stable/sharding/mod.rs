@@ -31,22 +31,22 @@ eager_static! {
 
 ///
 /// ShardKey
-/// Composite key: (pool, tenant) → shard
+/// Composite key: (pool, partition_key) → shard
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ShardKey {
     pub pool: BoundedString64,
-    pub tenant: BoundedString128,
+    pub partition_key: BoundedString128,
 }
 
 impl ShardKey {
     pub const STORABLE_MAX_SIZE: u32 = 192;
 
-    pub(crate) fn try_new(pool: &str, tenant: &str) -> Result<Self, String> {
+    pub(crate) fn try_new(pool: &str, partition_key: &str) -> Result<Self, String> {
         Ok(Self {
             pool: pool.try_into()?,
-            tenant: tenant.try_into()?,
+            partition_key: partition_key.try_into()?,
         })
     }
 }
