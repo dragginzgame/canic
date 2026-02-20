@@ -135,6 +135,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
             "runtime network unavailable; set DFX_NETWORK=local|ic at build time".to_string(),
         )
     })?;
+    crate::log!(Topic::Init, Info, "build network: {network}");
     let validated = match validate_or_default(network, input) {
         Ok(validated) => validated,
         Err(EnvPolicyError::MissingEnvFields(missing)) => {
