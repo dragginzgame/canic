@@ -113,6 +113,15 @@ impl RootResponseWorkflow {
     async fn cycles_response(req: &CyclesRequest) -> Result<Response, InternalError> {
         EnvOps::require_root()?;
 
+        let available = MgmtOps::canister_cycle_balance().to_u128();
+        if req.cycles > available {
+            return Err(RpcWorkflowError::InsufficientRootCycles {
+                requested: req.cycles,
+                available,
+            }
+            .into());
+        }
+
         MgmtOps::deposit_cycles(IcOps::msg_caller(), req.cycles).await?;
 
         let cycles_transferred = req.cycles;

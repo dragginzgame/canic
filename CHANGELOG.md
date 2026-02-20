@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.24] - 2026-02-20
+
+### 🔧 Changed
+
+- Root cycle top-up RPC now checks available root balance before deposit and returns a clear insufficient-balance workflow error when funds are too low.
+- Fresh root init now waits for configured queued pool imports to finish before running `auto_create`, reducing reinstall races that created new canisters instead of reusing imported reserve canisters.
+
+```text
+Reinstall behavior now prefers pool reuse first, then creates only what is still missing.
+```
+
+---
+
 ## [0.9.23] - 2026-02-17
 
 ### ⚠️ Breaking
