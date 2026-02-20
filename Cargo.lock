@@ -40,9 +40,9 @@ checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "ar_archive_writer"
@@ -67,7 +67,7 @@ checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -157,9 +157,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.19.1"
+version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
+checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
 name = "byteorder"
@@ -205,12 +205,12 @@ dependencies = [
  "lazy_static",
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
 name = "canic"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "base32 0.5.1",
  "candid",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "async-trait",
  "candid",
@@ -279,28 +279,28 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.9.23"
+version = "0.9.24"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
 name = "canic-internal"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "convert_case 0.11.0",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -493,18 +493,18 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.59"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5caf74d17c3aec5495110c34cc3f78644bfa89af6c8993ed4de2790e49b6499"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.5.59"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "370daa45065b80218950227371916a1633217ae42b2715b2287b606dcd618e24"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstyle",
  "clap_lex",
@@ -690,7 +690,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -701,7 +701,7 @@ checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -712,7 +712,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -757,7 +757,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version",
- "syn 2.0.116",
+ "syn 2.0.117",
  "unicode-xid",
 ]
 
@@ -779,7 +779,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -943,7 +943,7 @@ checksum = "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1263,7 +1263,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic-core",
@@ -1625,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2066,7 +2066,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2299,7 +2299,7 @@ checksum = "d7ef12e84481ab4006cb942f8682bba28ece7270743e649442027c5db87df126"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2487,7 +2487,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2498,9 +2498,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "security-framework"
-version = "3.6.0"
+version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d17b898a6d6948c3a8ee4372c17cb384f90d2e6e912ef00895b14fd7ab54ec38"
+checksum = "b7f4bc775c73d9a02cde8bf7b2ec4c9d12743edf609006c7facc23998404cd1d"
 dependencies = [
  "bitflags",
  "core-foundation",
@@ -2511,9 +2511,9 @@ dependencies = [
 
 [[package]]
 name = "security-framework-sys"
-version = "2.16.0"
+version = "2.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "321c8673b092a9a42605034a9879d73cb79101ed5fd117bc9a597b89b4e9e61a"
+checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -2576,7 +2576,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2587,7 +2587,7 @@ checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2611,7 +2611,7 @@ checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2657,7 +2657,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "candid",
  "canic",
@@ -2773,7 +2773,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2795,9 +2795,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.116"
+version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3df424c70518695237746f84cede799c9c58fcb37450d7b23716568cc8bc69cb"
+checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2821,7 +2821,7 @@ checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2863,7 +2863,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2874,7 +2874,7 @@ checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2977,7 +2977,7 @@ checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3118,7 +3118,7 @@ checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3347,7 +3347,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
  "wasm-bindgen-shared",
 ]
 
@@ -3674,7 +3674,7 @@ dependencies = [
  "heck",
  "indexmap",
  "prettyplease",
- "syn 2.0.116",
+ "syn 2.0.117",
  "wasm-metadata",
  "wit-bindgen-core",
  "wit-component",
@@ -3690,7 +3690,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
  "wit-bindgen-core",
  "wit-bindgen-rust",
 ]
@@ -3769,7 +3769,7 @@ checksum = "b659052874eb698efe5b9e8cf382204678a0086ebf46982b79d6ca3182927e5d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
  "synstructure",
 ]
 
@@ -3790,7 +3790,7 @@ checksum = "4122cd3169e94605190e77839c9a40d40ed048d305bfdc146e7df40ab0f3e517"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3810,7 +3810,7 @@ checksum = "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
  "synstructure",
 ]
 
@@ -3850,7 +3850,7 @@ checksum = "eadce39539ca5cb3985590102671f2567e659fca9666581ad3411d59207951f3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
