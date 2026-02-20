@@ -92,6 +92,14 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
 
+    if requires_authenticated(&args.requires)
+        && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
+    {
+        // authenticated() decodes ingress arg0 directly; keep the function arg lint-clean.
+        let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
+        func.block.stmts.insert(0, keepalive);
+    }
+
     let cdk_attr = cdk_attr(kind, &args.forwarded);
     let dispatch_fn = dispatch(kind, wrapper_async);
 
@@ -410,6 +418,36 @@ fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
 
 fn exprs_have_app_state_predicate(exprs: &[AccessExprAst]) -> bool {
     exprs.iter().any(expr_has_app_state_predicate)
+}
+
+fn requires_authenticated(exprs: &[AccessExprAst]) -> bool {
+    exprs.iter().any(expr_has_authenticated_predicate)
+}
+
+fn expr_has_authenticated_predicate(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(expr_has_authenticated_predicate)
+        }
+        AccessExprAst::Not(expr) => expr_has_authenticated_predicate(expr),
+        AccessExprAst::Pred(pred) => match pred {
+            AccessPredicateAst::Builtin(builtin) => {
+                matches!(builtin, BuiltinPredicate::Authenticated)
+            }
+            AccessPredicateAst::Custom(_) => false,
+        },
+    }
+}
+
+fn first_typed_arg_ident(sig: &Signature) -> Option<syn::Ident> {
+    let first = sig.inputs.first()?;
+    let syn::FnArg::Typed(pat) = first else {
+        return None;
+    };
+    let syn::Pat::Ident(id) = &*pat.pat else {
+        return None;
+    };
+    Some(id.ident.clone())
 }
 
 fn expr_has_app_state_predicate(expr: &AccessExprAst) -> bool {
