@@ -24,6 +24,9 @@ pub enum RpcWorkflowError {
 
     #[error("canister {0}'s parent was not found")]
     ParentNotFound(Principal),
+
+    #[error("insufficient root cycles: requested={requested}, available={available}")]
+    InsufficientRootCycles { requested: u128, available: u128 },
 }
 
 impl From<RpcWorkflowError> for InternalError {

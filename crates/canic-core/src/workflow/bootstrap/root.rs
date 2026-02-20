@@ -72,7 +72,9 @@ pub async fn bootstrap_init_root_canister() {
 
     log!(Topic::Init, Info, "bootstrap (root:init) start");
 
-    root_import_pool_from_config().await;
+    // On fresh init, wait for configured pool imports before auto-create.
+    // This avoids creating new canisters while reserve imports are still pending.
+    root_import_pool_from_config(true).await;
 
     if let Err(err) = root_create_canisters().await {
         log!(Topic::Init, Error, "registry phase failed: {err}");
@@ -117,7 +119,8 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
     root_set_subnet_id().await;
-    root_import_pool_from_config().await;
+    // Keep post-upgrade non-blocking; queued imports continue in background.
+    root_import_pool_from_config(false).await;
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
     ReadyOps::mark_ready(super::ready_token());
 }
@@ -173,7 +176,7 @@ pub async fn root_set_subnet_id() {
 /// Import any statically configured pool canisters for this subnet.
 ///
 /// Failures are summarized so bootstrap can continue.
-pub async fn root_import_pool_from_config() {
+pub async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
         Err(err) => {
@@ -186,7 +189,7 @@ pub async fn root_import_pool_from_config() {
         }
     };
 
-    ensure_pool_imported(&data).await;
+    ensure_pool_imported(&data, wait_for_queued_imports).await;
 }
 
 /// ---------------------------------------------------------------------------
@@ -214,7 +217,7 @@ pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
 }
 
 #[expect(clippy::too_many_lines)]
-async fn ensure_pool_imported(data: &RootBootstrapContext) {
+async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_imports: bool) {
     let import_list = match data.network {
         Some(BuildNetwork::Local) => data.subnet_cfg.pool.import.local.clone(),
         Some(BuildNetwork::Ic) => data.subnet_cfg.pool.import.ic.clone(),
@@ -296,15 +299,32 @@ async fn ensure_pool_imported(data: &RootBootstrapContext) {
         .collect();
 
     if !queued_imports.is_empty() {
-        match PoolWorkflow::pool_import_queued_canisters(queued_imports).await {
-            Ok(result) => {
-                queued_added = result.added;
-                queued_requeued = result.requeued;
-                queued_skipped = result.skipped;
+        if wait_for_queued_imports {
+            for pid in queued_imports {
+                match PoolWorkflow::pool_import_canister(pid).await {
+                    Ok(()) => {
+                        if PoolOps::contains(&pid) {
+                            queued_added += 1;
+                        } else {
+                            queued_skipped += 1;
+                        }
+                    }
+                    Err(_) => {
+                        queued_failed += 1;
+                    }
+                }
             }
-            Err(err) => {
-                queued_failed = configured_queued - queued_already_present;
-                log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
+        } else {
+            match PoolWorkflow::pool_import_queued_canisters(queued_imports).await {
+                Ok(result) => {
+                    queued_added = result.added;
+                    queued_requeued = result.requeued;
+                    queued_skipped = result.skipped;
+                }
+                Err(err) => {
+                    queued_failed = configured_queued - queued_already_present;
+                    log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
+                }
             }
         }
     }
