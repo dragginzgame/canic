@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ---
 
+## [0.9.25] - 2026-02-20 - Network & Pool Logging
+
+### 🔧 Changed
+
+- Root init now logs the selected build network (`local` or `ic`) so pool import source selection (`import.local` vs `import.ic`) is visible during bootstrap.
+- Pool bootstrap logging now emits import policy context (`minimum_size`, resolved `import.initial`), candidate PID summaries, per-outcome import PID stats (imported/skipped/failed/present), and post-import pool status totals (`ready`, `pending_reset`, `failed`) with minimum-size warnings.
+
+---
+
 ## [0.9.24] - 2026-02-20
 
 ### 🔧 Changed
