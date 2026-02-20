@@ -59,7 +59,7 @@ async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<Delegated
 }
 
 #[canic_query(requires(authenticated()))]
-async fn hello(_token: DelegatedToken) -> Result<(), Error> {
+async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
