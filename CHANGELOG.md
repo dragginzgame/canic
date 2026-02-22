@@ -5,6 +5,12 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.26] - 2026-02-22 - Fixes for Toko
+
+### 🔧 Changed
+
+- SubnetRegistryApi is now exported via `canic::api::canister::registry::SubnetRegistryApi`
+
 ---
 
 ## [0.9.25] - 2026-02-20 - Network & Pool Logging

@@ -138,6 +138,12 @@ pub mod api {
             };
         }
 
+        pub mod registry {
+            pub use crate::__internal::core::api::topology::registry::{
+                AppRegistryApi, SubnetRegistryApi,
+            };
+        }
+
         pub mod placement {
             pub use crate::__internal::core::api::placement::{
                 scaling::ScalingApi, sharding::ShardingApi,
