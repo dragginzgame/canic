@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           mkdir -p .dfx/local/canisters
 
-          for canister in app auth blank scale scale_hub shard shard_hub test; do
+          for canister in app blank user_hub user_shard scale scale_hub shard shard_hub test; do
             cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
             mkdir -p ".dfx/local/canisters/${canister}"
             cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"
@@ -142,7 +142,7 @@ jobs:
           set -euo pipefail
           mkdir -p .dfx/local/canisters
 
-          for canister in app auth blank scale scale_hub shard shard_hub test; do
+          for canister in app blank user_hub user_shard scale scale_hub shard shard_hub test; do
             cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
             mkdir -p ".dfx/local/canisters/${canister}"
             cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"

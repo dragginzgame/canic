@@ -14,8 +14,12 @@ pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
-pub const CANIC_DELEGATION_PROVISION: &str = "canic_delegation_provision";
-pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
+pub const CANIC_DELEGATION_PROVISION_PREPARE: &str = "canic_delegation_provision_prepare";
+pub const CANIC_DELEGATION_PROVISION_GET: &str = "canic_delegation_provision_get";
+pub const CANIC_DELEGATION_PROVISION_FINALIZE: &str = "canic_delegation_provision_finalize";
+pub const CANIC_REQUEST_DELEGATION_PREPARE: &str = "canic_request_delegation_prepare";
+pub const CANIC_REQUEST_DELEGATION_GET: &str = "canic_request_delegation_get";
+pub const CANIC_REQUEST_DELEGATION_FINALIZE: &str = "canic_request_delegation_finalize";
 pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";
 pub const CANIC_DELEGATION_SET_VERIFIER_PROOF: &str = "canic_delegation_set_verifier_proof";
 

@@ -8,21 +8,32 @@
 //! occur elsewhere.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     dto::{
         auth::{
-            DelegationCert, DelegationProof, DelegationProvisionRequest,
-            DelegationProvisionResponse, DelegationProvisionStatus, DelegationProvisionTargetKind,
+            DelegationProof, DelegationProvisionRequest, DelegationProvisionResponse,
+            DelegationProvisionStatus, DelegationProvisionTargetKind,
             DelegationProvisionTargetResponse,
         },
         error::Error as ErrorDto,
     },
     log,
     log::Topic,
-    ops::{auth::DelegatedTokenOps, ic::call::CallOps},
+    ops::{
+        auth::DelegatedTokenOps,
+        ic::{IcOps, call::CallOps},
+        runtime::env::EnvOps,
+        storage::auth::DelegationStateOps,
+    },
     protocol,
 };
+use std::{cell::RefCell, collections::BTreeMap};
+
+thread_local! {
+    static PENDING_DELEGATION_PROVISIONS: RefCell<BTreeMap<Principal, PendingDelegationProvision>> =
+        RefCell::new(BTreeMap::new());
+}
 
 ///
 /// DelegationWorkflow
@@ -50,6 +61,12 @@ use crate::{
 
 pub struct DelegationWorkflow;
 
+#[derive(Clone, Debug)]
+struct PendingDelegationProvision {
+    request: DelegationProvisionRequest,
+    include_root_verifier: bool,
+}
+
 // -------------------------------------------------------------------------
 // Logging context
 // -------------------------------------------------------------------------
@@ -72,33 +89,47 @@ impl DelegationWorkflow {
     // Issuance
     // -------------------------------------------------------------------------
 
-    /// Issue a root-signed delegation proof for a delegated signer key.
-    ///
-    /// WHAT THIS DOES:
-    /// - Signs the provided DelegationCert using the root authority
-    /// - Produces a DelegationProof suitable for verification
-    ///
-    /// WHAT THIS DOES NOT DO:
-    /// - Persist the proof
-    /// - Validate cert contents
-    /// - Enforce caller authority
-    ///
-    /// WHY:
-    /// - Keeps cryptographic issuance separable from storage and policy
-    ///
-    /// Authority MUST be enforced by the caller.
-    fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
-        DelegatedTokenOps::sign_delegation_cert(cert)
+    pub(crate) fn provision_prepare(
+        request: DelegationProvisionRequest,
+        include_root_verifier: bool,
+    ) -> Result<(), InternalError> {
+        DelegatedTokenOps::prepare_delegation_cert_signature(&request.cert)?;
+
+        let caller = IcOps::msg_caller();
+        Self::set_pending(
+            caller,
+            PendingDelegationProvision {
+                request,
+                include_root_verifier,
+            },
+        );
+
+        Ok(())
     }
 
-    // -------------------------------------------------------------------------
-    // Provisioning
-    // -------------------------------------------------------------------------
+    pub(crate) fn provision_get() -> Result<DelegationProof, InternalError> {
+        let caller = IcOps::msg_caller();
+        let pending = Self::pending(caller).ok_or_else(|| Self::pending_missing(caller))?;
 
-    pub(crate) async fn provision(
-        request: DelegationProvisionRequest,
+        DelegatedTokenOps::get_delegation_cert_signature(pending.request.cert.clone())
+    }
+
+    pub(crate) async fn provision_finalize(
+        proof: DelegationProof,
     ) -> Result<DelegationProvisionResponse, InternalError> {
-        let proof = Self::issue_delegation(request.cert)?;
+        let caller = IcOps::msg_caller();
+        let pending = Self::pending(caller).ok_or_else(|| Self::pending_missing(caller))?;
+
+        if proof.cert != pending.request.cert {
+            return Err(InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                "delegation finalize proof cert does not match prepared request",
+            ));
+        }
+
+        let root_pid = EnvOps::root_pid()?;
+        DelegatedTokenOps::verify_delegation_proof(&proof, root_pid)?;
+
         log!(
             Topic::Auth,
             Info,
@@ -109,9 +140,9 @@ impl DelegationWorkflow {
         );
         let mut results = Vec::new();
 
-        for target in request.signer_targets {
+        for target in &pending.request.signer_targets {
             let result = Self::push_proof(
-                target,
+                *target,
                 &proof,
                 DelegationProvisionTargetKind::Signer,
                 DelegationPushOrigin::Provisioning,
@@ -120,9 +151,9 @@ impl DelegationWorkflow {
             results.push(result);
         }
 
-        for target in request.verifier_targets {
+        for target in &pending.request.verifier_targets {
             let result = Self::push_proof(
-                target,
+                *target,
                 &proof,
                 DelegationProvisionTargetKind::Verifier,
                 DelegationPushOrigin::Provisioning,
@@ -130,6 +161,12 @@ impl DelegationWorkflow {
             .await;
             results.push(result);
         }
+
+        if pending.include_root_verifier {
+            DelegationStateOps::set_proof_from_dto(proof.clone());
+        }
+
+        Self::clear_pending(caller);
 
         Ok(DelegationProvisionResponse { proof, results })
     }
@@ -241,5 +278,28 @@ impl DelegationWorkflow {
                 );
             }
         }
+    }
+
+    fn pending(caller: Principal) -> Option<PendingDelegationProvision> {
+        PENDING_DELEGATION_PROVISIONS.with_borrow(|pending| pending.get(&caller).cloned())
+    }
+
+    fn set_pending(caller: Principal, pending: PendingDelegationProvision) {
+        PENDING_DELEGATION_PROVISIONS.with_borrow_mut(|all| {
+            all.insert(caller, pending);
+        });
+    }
+
+    fn clear_pending(caller: Principal) {
+        PENDING_DELEGATION_PROVISIONS.with_borrow_mut(|all| {
+            all.remove(&caller);
+        });
+    }
+
+    fn pending_missing(caller: Principal) -> InternalError {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("no pending delegation provision for caller {caller}"),
+        )
     }
 }
