@@ -22,7 +22,7 @@ const TOKEN_VERSION: u16 = 1;
 
 thread_local! {
     static PENDING_TOKEN_ISSUANCE: RefCell<BTreeMap<Principal, PendingTokenIssuance>> =
-        RefCell::new(BTreeMap::new());
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 #[derive(Clone)]
