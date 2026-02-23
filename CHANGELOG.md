@@ -5,6 +5,13 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.31] - 2026-02-23
+
+- Bumped Rust to v1.93.1
+- Trying to fix CI so it doesn't give weird clippy errors
+
+---
+
 ## [0.9.29] - 2026-02-23 - Core-Owned Token Pending State
 
 ### 🔧 Changed

@@ -21,7 +21,12 @@ use canic::{
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, load_root_wasm_bytes, setup_root};
-use std::{path::PathBuf, process::Command, sync::Once};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Once,
+};
 
 static DFX_BUILD_ONCE: Once = Once::new();
 
@@ -459,8 +464,24 @@ fn ensure_local_artifacts_built() {
             .current_dir(&workspace_root)
             .env("DFX_NETWORK", "local")
             .args(["build", "--all"])
-            .output()
-            .expect("failed to run `dfx build --all`");
+            .output();
+
+        let output = match output {
+            Ok(output) => output,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                // CI runners may prebuild artifacts in a prior step without
+                // installing dfx in the test PATH.
+                if local_wasm_artifacts_present(&workspace_root) {
+                    log_step("dfx not found; using prebuilt local artifacts");
+                    return;
+                }
+
+                panic!(
+                    "failed to run `dfx build --all`: dfx not found and prebuilt local artifacts are missing"
+                );
+            }
+            Err(err) => panic!("failed to run `dfx build --all`: {err}"),
+        };
 
         assert!(
             output.status.success(),
@@ -468,4 +489,15 @@ fn ensure_local_artifacts_built() {
             String::from_utf8_lossy(&output.stderr)
         );
     });
+}
+
+fn local_wasm_artifacts_present(workspace_root: &Path) -> bool {
+    let required = [
+        ".dfx/local/canisters/root/root.wasm.gz",
+        ".dfx/local/canisters/test/test.wasm.gz",
+    ];
+
+    required
+        .iter()
+        .all(|relative| workspace_root.join(relative).exists())
 }
