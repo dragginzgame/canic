@@ -20,7 +20,7 @@ use crate::{
     infra::{InfraError, ic::IcInfraError},
 };
 use ic_canister_sig_creation::{
-    CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,
+    CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, parse_canister_sig_cbor,
     signature_map::{CanisterSigError, CanisterSigInputs, LABEL_SIG, SignatureMap},
 };
 use ic_signature_verification::verify_canister_sig;
@@ -99,7 +99,7 @@ impl SignatureInfra {
 
         // Commit new certified root
         SIGNATURES.with_borrow(|sigs| {
-            certified_data_set(hash_with_domain(LABEL_SIG, &sigs.root_hash()));
+            Self::set_certified_data_for_sig_root(&sigs.root_hash());
         });
 
         Ok(())
@@ -122,19 +122,6 @@ impl SignatureInfra {
             .map_err(Self::map_signature_map_error)?;
 
         Ok(signature)
-    }
-
-    ///
-    /// High-level convenience helper that combines [`prepare`] and [`get`]
-    /// in one call.
-    ///
-    /// This is a compatibility wrapper only. Production IC flows should split
-    /// update-time prepare from query-time get.
-    ///
-    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Vec<u8>, InfraError> {
-        Self::prepare(domain, seed, message)?;
-
-        Self::get(domain, seed, message)
     }
 
     ///
@@ -220,13 +207,21 @@ impl SignatureInfra {
     ///
     pub fn sync_certified_data() {
         SIGNATURES.with_borrow(|sigs| {
-            let tree = HashTree::Labeled(
-                LABEL_SIG,
-                Box::new(HashTree::Leaf(Cow::Owned(sigs.root_hash().to_vec()))),
-            );
-
-            certified_data_set(tree.reconstruct());
+            Self::set_certified_data_for_sig_root(&sigs.root_hash());
         });
+    }
+
+    fn set_certified_data_for_sig_root(sig_root_hash: &[u8]) {
+        certified_data_set(Self::certified_data_for_sig_root(sig_root_hash));
+    }
+
+    fn certified_data_for_sig_root(sig_root_hash: &[u8]) -> [u8; 32] {
+        let tree = HashTree::Labeled(
+            LABEL_SIG,
+            Box::new(HashTree::Leaf(Cow::Borrowed(sig_root_hash))),
+        );
+
+        tree.reconstruct()
     }
 }
 
@@ -257,7 +252,10 @@ mod tests {
         hasher.update(&preimage);
         let digest: [u8; 32] = hasher.finalize().into();
 
-        assert_eq!(digest, hash_with_domain(domain, message));
+        assert_eq!(
+            digest,
+            ic_canister_sig_creation::hash_with_domain(domain, message)
+        );
     }
 
     #[test]

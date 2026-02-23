@@ -10,17 +10,26 @@
 
 use canic::{
     Error,
-    api::{auth::DelegationApi, env::EnvQuery, ic::Call},
-    dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationRequest},
-        error::ErrorCode,
-    },
+    api::auth::DelegationApi,
+    cdk::types::Principal,
+    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof},
     prelude::*,
-    protocol,
 };
 use canic_internal::canister::USER_SHARD;
+use std::{cell::RefCell, collections::BTreeMap};
 
 const TOKEN_VERSION: u16 = 1;
+
+thread_local! {
+    static PENDING_TOKEN_ISSUANCE: RefCell<BTreeMap<Principal, PendingTokenIssuance>> =
+        RefCell::new(BTreeMap::new());
+}
+
+#[derive(Clone)]
+struct PendingTokenIssuance {
+    claims: DelegatedTokenClaims,
+    proof: DelegationProof,
+}
 
 //
 // CANIC
@@ -36,26 +45,43 @@ async fn canic_upgrade() {}
 // ENDPOINTS
 //
 
-/// user_shard_mint_token
-/// Mint a delegated token using the locally stored delegation proof.
+/// user_shard_issue_token_prepare
+/// Prepare delegated token issuance using the locally stored delegation proof.
 ///
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
-async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+async fn user_shard_issue_token_prepare(claims: DelegatedTokenClaims) -> Result<(), Error> {
     // Test-only guard: keep this endpoint out of production flows.
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));
     }
 
-    let proof = match DelegationApi::require_proof() {
-        Ok(proof) => proof,
-        Err(err) if err.code == ErrorCode::NotFound => {
-            request_delegation(&claims).await?;
-            DelegationApi::require_proof()?
-        }
-        Err(err) => return Err(err),
-    };
-    DelegationApi::sign_token(TOKEN_VERSION, claims, proof)
+    let proof = DelegationApi::require_proof()?;
+    DelegationApi::prepare_token_signature(TOKEN_VERSION, &claims, &proof)?;
+
+    let caller = msg_caller();
+    PENDING_TOKEN_ISSUANCE.with_borrow_mut(|pending| {
+        pending.insert(caller, PendingTokenIssuance { claims, proof });
+    });
+
+    Ok(())
+}
+
+/// user_shard_issue_token_get
+/// Retrieve the delegated token prepared by `user_shard_issue_token_prepare`.
+///
+/// Test-only: no public auth guarantees; intended for local/dev Canic tests.
+#[canic_query]
+fn user_shard_issue_token_get() -> Result<DelegatedToken, Error> {
+    if !cfg!(debug_assertions) {
+        return Err(Error::forbidden("test-only canister"));
+    }
+
+    let caller = msg_caller();
+    let pending = PENDING_TOKEN_ISSUANCE.with_borrow(|all| all.get(&caller).cloned());
+    let pending = pending.ok_or_else(|| Error::not_found("pending token issuance not found"))?;
+
+    DelegationApi::get_token_signature(TOKEN_VERSION, pending.claims, pending.proof)
 }
 
 #[canic_query(requires(authenticated()))]
@@ -64,34 +90,3 @@ async fn hello(token: DelegatedToken) -> Result<(), Error> {
 }
 
 export_candid!();
-
-async fn request_delegation(claims: &DelegatedTokenClaims) -> Result<(), Error> {
-    let root_pid = EnvQuery::snapshot()
-        .root_pid
-        .ok_or_else(|| Error::internal("root pid unavailable"))?;
-
-    let ttl_secs = claims.exp.saturating_sub(claims.iat);
-    if ttl_secs == 0 {
-        return Err(Error::invalid(
-            "delegation ttl_secs must be greater than zero",
-        ));
-    }
-
-    let request = DelegationRequest {
-        signer_pid: canic::cdk::api::canister_self(),
-        audiences: vec![claims.aud.clone()],
-        scopes: claims.scopes.clone(),
-        ttl_secs,
-        verifier_targets: Vec::new(),
-        include_root_verifier: true,
-    };
-
-    let response: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =
-        Call::unbounded_wait(root_pid, protocol::CANIC_REQUEST_DELEGATION)
-            .with_arg(request)?
-            .execute()
-            .await?
-            .candid()?;
-
-    response.map(|_| ())
-}

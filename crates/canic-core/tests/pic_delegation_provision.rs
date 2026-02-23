@@ -59,33 +59,55 @@ fn delegation_provision_requires_root_caller() {
     let request = provision_request(signer_pid);
 
     let non_root = Principal::from_slice(&[2; 29]);
-    let denied: Result<DelegationProvisionResponse, Error> = update_call_as(
+    let denied: Result<(), Error> = update_call_as(
         &pic,
         root_id,
         non_root,
-        "canic_delegation_provision",
+        protocol::CANIC_DELEGATION_PROVISION_PREPARE,
         (request.clone(),),
     );
     let denied = denied.expect_err("expected unauthorized provision");
     assert_eq!(denied.code, ErrorCode::Unauthorized);
 
-    let ok: Result<DelegationProvisionResponse, Error> = update_call_as(
+    let prepared: Result<(), Error> = update_call_as(
         &pic,
         root_id,
         root_id,
-        "canic_delegation_provision",
+        protocol::CANIC_DELEGATION_PROVISION_PREPARE,
         (request,),
     );
-    match ok {
+    prepared.expect("expected root prepare to succeed");
+
+    let proof: Result<DelegationProof, Error> = query_call_as(
+        &pic,
+        root_id,
+        root_id,
+        protocol::CANIC_DELEGATION_PROVISION_GET,
+        (),
+    );
+    let proof = match proof {
+        Ok(proof) => proof,
+        Err(err) => {
+            // PocketIC local does not provide certified-data signatures.
+            // Skip signature assertions there and only enforce auth gating.
+            assert_eq!(err.code, ErrorCode::Internal);
+            return;
+        }
+    };
+
+    let finalized: Result<DelegationProvisionResponse, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        protocol::CANIC_DELEGATION_PROVISION_FINALIZE,
+        (proof,),
+    );
+    match finalized {
         Ok(ok) => {
             assert_eq!(ok.proof.cert.signer_pid, signer_pid);
             assert!(ok.results.is_empty());
         }
         Err(err) => {
-            // PocketIC update calls do not provide certified data,
-            // so canister signatures may be unavailable.
-            // Canister signatures require certified data and cannot be produced in PocketIC update calls.
-            // This test only enforces the root-caller gate under PocketIC.
             assert_eq!(err.code, ErrorCode::Internal);
         }
     }
@@ -204,6 +226,25 @@ where
     let payload = encode_args(args).expect("encode args");
     let result = pic
         .query_call(canister_id, Principal::anonymous(), method, payload)
+        .expect("query_call failed");
+
+    decode_one(&result).expect("decode response")
+}
+
+fn query_call_as<T, A>(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    caller: Principal,
+    method: &str,
+    args: A,
+) -> T
+where
+    T: candid::CandidType + DeserializeOwned,
+    A: candid::utils::ArgumentEncoder,
+{
+    let payload = encode_args(args).expect("encode args");
+    let result = pic
+        .query_call(canister_id, caller, method, payload)
         .expect("query_call failed");
 
     decode_one(&result).expect("decode response")

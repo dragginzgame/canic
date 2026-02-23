@@ -31,6 +31,10 @@ pub struct RootSetup {
     pub subnet_directory: HashMap<CanisterRole, Principal>,
 }
 
+pub fn load_root_wasm_bytes() -> Vec<u8> {
+    load_root_wasm().expect("load root wasm")
+}
+
 /// Create a fresh PocketIC instance, install root, wait for bootstrap,
 /// and validate global invariants.
 pub fn setup_root() -> RootSetup {

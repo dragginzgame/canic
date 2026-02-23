@@ -264,7 +264,7 @@ struct ImmediateImportOutcome {
 }
 
 impl ImmediateImportOutcome {
-    fn new(configured: u64) -> Self {
+    const fn new(configured: u64) -> Self {
         Self {
             configured,
             imported: 0,
@@ -293,7 +293,7 @@ struct QueuedImportOutcome {
 }
 
 impl QueuedImportOutcome {
-    fn new(configured: u64) -> Self {
+    const fn new(configured: u64) -> Self {
         Self {
             configured,
             added: 0,

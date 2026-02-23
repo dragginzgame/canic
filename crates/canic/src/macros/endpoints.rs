@@ -388,17 +388,44 @@ macro_rules! canic_endpoints_root {
         // admin-only: not part of canonical delegation flow.
         // used for tests / tooling due to PocketIC limitations.
         #[canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_provision(
+        async fn canic_delegation_provision_prepare(
             request: ::canic::dto::auth::DelegationProvisionRequest,
+        ) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::provision_prepare(request)
+        }
+
+        #[canic_query(internal, requires(caller::is_root()))]
+        async fn canic_delegation_provision_get()
+        -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::provision_get()
+        }
+
+        #[canic_update(internal, requires(caller::is_root()))]
+        async fn canic_delegation_provision_finalize(
+            proof: ::canic::dto::auth::DelegationProof,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::provision(request).await
+            $crate::__internal::core::api::auth::DelegationApi::provision_finalize(proof).await
         }
 
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_request_delegation(
+        async fn canic_request_delegation_prepare(
             request: ::canic::dto::auth::DelegationRequest,
+        ) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::request_delegation_prepare(request)
+        }
+
+        #[canic_query(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_request_delegation_get()
+        -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::request_delegation_get()
+        }
+
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_request_delegation_finalize(
+            proof: ::canic::dto::auth::DelegationProof,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
+            $crate::__internal::core::api::auth::DelegationApi::request_delegation_finalize(proof)
+                .await
         }
     };
 }

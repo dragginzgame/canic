@@ -3,19 +3,24 @@
 
 mod root;
 
+use candid::encode_one;
 use canic::{
     Error,
     api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
     dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+        auth::{
+            DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+            DelegationProvisionRequest,
+        },
         error::ErrorCode,
         rpc::{AuthenticatedRequest, CyclesRequest, Request, Response},
     },
     ids::BuildNetwork,
+    protocol,
 };
 use canic_internal::canister;
-use root::harness::{RootSetup, setup_root};
+use root::harness::{RootSetup, load_root_wasm_bytes, setup_root};
 use std::{path::PathBuf, process::Command, sync::Once};
 
 static DFX_BUILD_ONCE: Once = Once::new();
@@ -24,8 +29,8 @@ const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
-// Canonical signer-initiated delegation flow:
-// user_shard requests delegation from root (no admin provisioning).
+// Canonical delegation flow:
+// root provision prepare/get/finalize, then signer token prepare/get.
 
 #[test]
 fn delegation_provisioning_flow() {
@@ -58,17 +63,48 @@ fn delegation_provisioning_flow() {
         nonce: None,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
-
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    provision_shard_delegation(&setup, shard_pid);
+    let token = issue_token_two_step(&setup, shard_pid, claims);
 
     DelegationApi::verify_delegation_proof(&token.proof, setup.root_id)
         .expect("delegation proof must verify");
+}
+
+#[test]
+fn delegation_provisioning_survives_root_upgrade() {
+    if !should_run_certified("delegation_provisioning_survives_root_upgrade") {
+        return;
+    }
+
+    log_step("delegation_provisioning_survives_root_upgrade: setup root");
+    let setup = setup_root();
+
+    let user_hub_pid = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in subnet directory");
+    let shard_pid = create_user_shard(&setup, user_hub_pid, p(7));
+
+    let proof_before = provision_shard_delegation(&setup, shard_pid);
+    DelegationApi::verify_delegation_proof(&proof_before, setup.root_id)
+        .expect("delegation proof before upgrade must verify");
+
+    let root_wasm = load_root_wasm_bytes();
+    setup
+        .pic
+        .upgrade_canister(
+            setup.root_id,
+            root_wasm,
+            encode_one(()).expect("encode upgrade args"),
+            None,
+        )
+        .expect("root upgrade should succeed");
+    wait_for_canister_ready(&setup, setup.root_id);
+
+    let proof_after = provision_shard_delegation(&setup, shard_pid);
+    DelegationApi::verify_delegation_proof(&proof_after, setup.root_id)
+        .expect("delegation proof after upgrade must verify");
 }
 
 #[test]
@@ -102,14 +138,8 @@ fn delegated_token_flow() {
         nonce: None,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
-
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    provision_shard_delegation(&setup, shard_pid);
+    let token = issue_token_two_step(&setup, shard_pid, claims);
     log_step(&format!(
         "minted token proof signer={}",
         token.proof.cert.signer_pid
@@ -166,14 +196,8 @@ fn authenticated_rpc_flow() {
         nonce: None,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
-
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    provision_shard_delegation(&setup, shard_pid);
+    let token = issue_token_two_step(&setup, shard_pid, claims);
 
     log_step(&format!(
         "calling canic_response_authenticated via shard={shard_pid}",
@@ -229,14 +253,16 @@ fn delegated_token_request_rejected_on_invalid_claims() {
         nonce: None,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    provision_shard_delegation(&setup, shard_pid);
+
+    let prepared: Result<Result<(), Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+            .update_call(shard_pid, "user_shard_issue_token_prepare", (claims,));
 
-    let err = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect_err("user_shard_mint_token should fail on invalid claims");
+    let err = prepared
+        .expect("user_shard_issue_token_prepare transport failed")
+        .expect_err("user_shard_issue_token_prepare should fail on invalid claims");
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
@@ -292,6 +318,21 @@ fn should_run_local(test_name: &str) -> bool {
     }
 }
 
+fn wait_for_canister_ready(setup: &RootSetup, canister_id: Principal) {
+    for _ in 0..120 {
+        setup.pic.tick();
+        let ready: bool = setup
+            .pic
+            .query_call(canister_id, protocol::CANIC_READY, ())
+            .expect("canic_ready query");
+        if ready {
+            return;
+        }
+    }
+
+    panic!("canister {canister_id} did not become ready after upgrade");
+}
+
 fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Principal) -> Principal {
     log_step(&format!(
         "create_user_shard tenant={tenant} via hub={user_hub_pid}"
@@ -306,6 +347,77 @@ fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Princip
         .expect("create_account application failed");
     log_step(&format!("user_shard created pid={pid}"));
     pid
+}
+
+fn provision_shard_delegation(setup: &RootSetup, shard_pid: Principal) -> DelegationProof {
+    let now = now_secs();
+    let request = DelegationProvisionRequest {
+        cert: DelegationCert {
+            v: 1,
+            signer_pid: shard_pid,
+            audiences: vec!["login".to_string()],
+            scopes: vec!["read".to_string()],
+            issued_at: now,
+            expires_at: now + 600,
+        },
+        signer_targets: vec![shard_pid],
+        verifier_targets: Vec::new(),
+    };
+
+    let prepared: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+        setup.root_id,
+        setup.root_id,
+        protocol::CANIC_DELEGATION_PROVISION_PREPARE,
+        (request,),
+    );
+    prepared
+        .expect("delegation provision prepare transport failed")
+        .expect("delegation provision prepare application failed");
+
+    let proof: Result<Result<DelegationProof, Error>, Error> = setup.pic.query_call_as(
+        setup.root_id,
+        setup.root_id,
+        protocol::CANIC_DELEGATION_PROVISION_GET,
+        (),
+    );
+    let proof = proof
+        .expect("delegation provision get transport failed")
+        .expect("delegation provision get application failed");
+
+    let finalized: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =
+        setup.pic.update_call_as(
+            setup.root_id,
+            setup.root_id,
+            protocol::CANIC_DELEGATION_PROVISION_FINALIZE,
+            (proof.clone(),),
+        );
+    finalized
+        .expect("delegation provision finalize transport failed")
+        .expect("delegation provision finalize application failed");
+
+    proof
+}
+
+fn issue_token_two_step(
+    setup: &RootSetup,
+    shard_pid: Principal,
+    claims: DelegatedTokenClaims,
+) -> DelegatedToken {
+    let prepared: Result<Result<(), Error>, Error> =
+        setup
+            .pic
+            .update_call(shard_pid, "user_shard_issue_token_prepare", (claims,));
+    prepared
+        .expect("user_shard_issue_token_prepare transport failed")
+        .expect("user_shard_issue_token_prepare application failed");
+
+    let token: Result<Result<DelegatedToken, Error>, Error> =
+        setup
+            .pic
+            .query_call(shard_pid, "user_shard_issue_token_get", ());
+    token
+        .expect("user_shard_issue_token_get transport failed")
+        .expect("user_shard_issue_token_get application failed")
 }
 
 fn bogus_delegated_token() -> DelegatedToken {

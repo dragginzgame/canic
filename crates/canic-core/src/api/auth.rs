@@ -82,15 +82,6 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    pub fn sign_token(
-        token_version: u16,
-        claims: DelegatedTokenClaims,
-        proof: DelegationProof,
-    ) -> Result<DelegatedToken, Error> {
-        DelegatedTokenOps::sign_token(token_version, claims, proof)
-            .map_err(Self::map_delegation_error)
-    }
-
     /// Full delegated token verification (structure + signature).
     ///
     /// Purely local verification; does not read certified data or require a
@@ -125,9 +116,7 @@ impl DelegationApi {
     /// Used for tests / tooling due to PocketIC limitations.
     ///
     /// Root does not infer targets; callers must supply them.
-    pub async fn provision(
-        request: DelegationProvisionRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
+    pub fn provision_prepare(request: DelegationProvisionRequest) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
@@ -145,12 +134,49 @@ impl DelegationApi {
         log!(
             Topic::Auth,
             Info,
-            "delegation provision start signer={} signer_targets={:?} verifier_targets={:?}",
+            "delegation provision prepare signer={} signer_targets={:?} verifier_targets={:?}",
             request.cert.signer_pid,
             request.signer_targets,
             request.verifier_targets
         );
-        DelegationWorkflow::provision(request)
+
+        DelegationWorkflow::provision_prepare(request, false).map_err(Self::map_delegation_error)
+    }
+
+    pub fn provision_get() -> Result<DelegationProof, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "delegation provision requires root caller",
+            ));
+        }
+
+        DelegationWorkflow::provision_get().map_err(Self::map_delegation_error)
+    }
+
+    pub async fn provision_finalize(
+        proof: DelegationProof,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "delegation provision requires root caller",
+            ));
+        }
+
+        DelegationWorkflow::provision_finalize(proof)
             .await
             .map_err(Self::map_delegation_error)
     }
@@ -158,9 +184,7 @@ impl DelegationApi {
     /// Canonical signer-initiated delegation request (user_shard -> root).
     ///
     /// Caller must match signer_pid and be registered to the subnet.
-    pub async fn request_delegation(
-        request: DelegationRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
+    pub fn request_delegation_prepare(request: DelegationRequest) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
@@ -196,19 +220,47 @@ impl DelegationApi {
 
         validate_issuance_policy(&cert)?;
 
-        let response = DelegationWorkflow::provision(DelegationProvisionRequest {
-            cert,
-            signer_targets: vec![caller],
-            verifier_targets: request.verifier_targets,
-        })
-        .await
-        .map_err(Self::map_delegation_error)?;
+        DelegationWorkflow::provision_prepare(
+            DelegationProvisionRequest {
+                cert,
+                signer_targets: vec![caller],
+                verifier_targets: request.verifier_targets,
+            },
+            request.include_root_verifier,
+        )
+        .map_err(Self::map_delegation_error)
+    }
 
-        if request.include_root_verifier {
-            DelegationStateOps::set_proof_from_dto(response.proof.clone());
+    pub fn request_delegation_get() -> Result<DelegationProof, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
-        Ok(response)
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        if root_pid != IcOps::canister_self() {
+            return Err(Error::forbidden("delegation request must target root"));
+        }
+
+        DelegationWorkflow::provision_get().map_err(Self::map_delegation_error)
+    }
+
+    pub async fn request_delegation_finalize(
+        proof: DelegationProof,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        if root_pid != IcOps::canister_self() {
+            return Err(Error::forbidden("delegation request must target root"));
+        }
+
+        DelegationWorkflow::provision_finalize(proof)
+            .await
+            .map_err(Self::map_delegation_error)
     }
 
     pub fn store_proof(

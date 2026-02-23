@@ -5,6 +5,38 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.28] - 2026-02-23 - Strict Two-Step Delegation Runtime
+
+### ⚠️ Breaking
+
+- Removed one-shot delegation provisioning endpoint `canic_delegation_provision`. Root callers must use `canic_delegation_provision_prepare` -> `canic_delegation_provision_get` -> `canic_delegation_provision_finalize`.
+- Removed one-shot signer delegation request endpoint `canic_request_delegation`. Signer callers must use `canic_request_delegation_prepare` -> `canic_request_delegation_get` -> `canic_request_delegation_finalize`.
+- Removed one-shot token issuance endpoint `user_shard_mint_token`. Signer callers must use `user_shard_issue_token_prepare` -> `user_shard_issue_token_get`.
+- Removed one-shot signing helpers from auth/signature APIs (`sign_*` wrappers in delegation/token signing paths), so update-time signing shortcuts are no longer available.
+
+### 🔧 Changed
+
+- Root delegation provisioning runtime is now strictly wired as update `prepare`, query `get`, update `finalize`, with pending requests tracked by caller.
+- Signer token issuance runtime is now strictly wired as update `prepare` and query `get`, with pending issuance payload tracked by caller.
+- Signature certified-data updates now use one shared labeled hash-tree reconstruction path in both `prepare()` and `sync_certified_data()`, preventing hash formula drift between normal runtime and upgrade sync.
+
+### 🩹 Fixed
+
+- Fixed certified-data hash mismatch risk between signature prepare and signature sync paths, which could produce invalid signature proofs after lifecycle transitions.
+- CI no longer references missing package `canister_auth`; workflow canister loops now target `canister_user_hub` and `canister_user_shard`.
+
+### 🧪 Testing
+
+- Added an upgrade regression in delegation flow to verify provisioning and proof validation both before and after root upgrade.
+- Updated delegation/token integration tests to validate the strict multi-call runtime paths and removed one-shot compatibility assertions.
+
+```text
+Root delegation:  update prepare -> query get -> update finalize
+Signer token:     update prepare -> query get
+```
+
+---
+
 ## [0.9.27] - 2026-02-23 - Bootstrap and Signing Hardening
 
 ### 🔧 Changed

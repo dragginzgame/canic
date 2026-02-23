@@ -166,19 +166,6 @@ impl DelegatedTokenOps {
         })
     }
 
-    /// Sign a delegation cert in one step.
-    ///
-    /// This helper exists for compatibility, but IC canister signatures require
-    /// update-time preparation and query-time retrieval.
-    // SAFETY: this function must only be called by provisioning or rotation workflows.
-    pub(crate) fn sign_delegation_cert(
-        cert: DelegationCert,
-    ) -> Result<DelegationProof, InternalError> {
-        Self::prepare_delegation_cert_signature(&cert)?;
-
-        Self::get_delegation_cert_signature(cert)
-    }
-
     /// Structural verification for a delegation proof.
     ///
     /// This phase is always testable and does not require certified data.
@@ -280,16 +267,6 @@ impl DelegatedTokenOps {
             proof,
             token_sig: signature,
         })
-    }
-
-    pub fn sign_token(
-        token_version: u16,
-        claims: DelegatedTokenClaims,
-        proof: DelegationProof,
-    ) -> Result<DelegatedToken, InternalError> {
-        Self::prepare_token_signature(token_version, &claims, &proof)?;
-
-        Self::get_token_signature(token_version, claims, proof)
     }
 
     // -------------------------------------------------------------------------
