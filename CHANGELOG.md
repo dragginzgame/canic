@@ -5,6 +5,19 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.9.29] - 2026-02-23 - Core-Owned Token Pending State
+
+### 🔧 Changed
+
+- Pending signer token issuance ownership moved into `canic-core` workflow state, so `user_shard` no longer keeps local pending issuance maps.
+- `user_shard_issue_token_prepare` and `user_shard_issue_token_get` now delegate to `DelegationApi::issue_token_prepare` and `DelegationApi::issue_token_get`, keeping shard endpoints thin and core-owned.
+
+```text
+Signer token flow: update prepare (store pending in canic-core) -> query get (consume pending)
+```
+
+---
+
 ## [0.9.28] - 2026-02-23 - Strict Two-Step Delegation Runtime
 
 ### ⚠️ Breaking

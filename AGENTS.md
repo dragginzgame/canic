@@ -80,8 +80,10 @@ If code conflicts with this document, **the code is wrong**.
   * `Summary=📝`
   * `Cleanup=🧹`
   * `Testing=🧪`
-* Before editing `CHANGELOG.md`, read the root `Cargo.toml` `[workspace.package].version` and use that as the target version unless the user explicitly requests a different one.
-* Do not edit changelog entries for versions that are already live/released. If the newest entry is already live, record changes under the next release version after the version bump.
+* Before editing `CHANGELOG.md`, read the root `Cargo.toml` `[workspace.package].version` and treat that version as current/live (frozen for changelog edits).
+* Never edit the changelog entry matching the current `Cargo.toml` version unless the user explicitly asks for an exception.
+* By default, write changes under the next release version (for example, current `0.9.28` -> changelog target `0.9.29`) unless the user explicitly requests a different version.
+* If the target version header already exists, append to it; do not create a duplicate header.
 * Write in plain, industry-friendly language and lead with user impact.
 * Keep wording concise and junior-friendly; avoid jargon.
 * Keep bullets short (1–2 sentences), and use inline code for API/type names.

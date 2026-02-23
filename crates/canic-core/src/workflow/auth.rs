@@ -12,8 +12,8 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            DelegationProof, DelegationProvisionRequest, DelegationProvisionResponse,
-            DelegationProvisionStatus, DelegationProvisionTargetKind,
+            DelegatedToken, DelegatedTokenClaims, DelegationProof, DelegationProvisionRequest,
+            DelegationProvisionResponse, DelegationProvisionStatus, DelegationProvisionTargetKind,
             DelegationProvisionTargetResponse,
         },
         error::Error as ErrorDto,
@@ -32,6 +32,8 @@ use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
     static PENDING_DELEGATION_PROVISIONS: RefCell<BTreeMap<Principal, PendingDelegationProvision>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static PENDING_TOKEN_ISSUANCES: RefCell<BTreeMap<Principal, PendingTokenIssuance>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -65,6 +67,13 @@ pub struct DelegationWorkflow;
 struct PendingDelegationProvision {
     request: DelegationProvisionRequest,
     include_root_verifier: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PendingTokenIssuance {
+    token_version: u16,
+    claims: DelegatedTokenClaims,
+    proof: DelegationProof,
 }
 
 // -------------------------------------------------------------------------
@@ -169,6 +178,34 @@ impl DelegationWorkflow {
         Self::clear_pending(caller);
 
         Ok(DelegationProvisionResponse { proof, results })
+    }
+
+    pub(crate) fn issue_token_prepare(
+        token_version: u16,
+        claims: DelegatedTokenClaims,
+        proof: DelegationProof,
+    ) -> Result<(), InternalError> {
+        DelegatedTokenOps::prepare_token_signature(token_version, &claims, &proof)?;
+
+        let caller = IcOps::msg_caller();
+        Self::set_pending_token_issuance(
+            caller,
+            PendingTokenIssuance {
+                token_version,
+                claims,
+                proof,
+            },
+        );
+
+        Ok(())
+    }
+
+    pub(crate) fn issue_token_get() -> Result<DelegatedToken, InternalError> {
+        let caller = IcOps::msg_caller();
+        let pending = Self::take_pending_token_issuance(caller)
+            .ok_or_else(|| Self::pending_token_missing(caller))?;
+
+        DelegatedTokenOps::get_token_signature(pending.token_version, pending.claims, pending.proof)
     }
 
     pub(crate) async fn push_proof(
@@ -296,10 +333,27 @@ impl DelegationWorkflow {
         });
     }
 
+    fn set_pending_token_issuance(caller: Principal, pending: PendingTokenIssuance) {
+        PENDING_TOKEN_ISSUANCES.with_borrow_mut(|all| {
+            all.insert(caller, pending);
+        });
+    }
+
+    fn take_pending_token_issuance(caller: Principal) -> Option<PendingTokenIssuance> {
+        PENDING_TOKEN_ISSUANCES.with_borrow_mut(|all| all.remove(&caller))
+    }
+
     fn pending_missing(caller: Principal) -> InternalError {
         InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("no pending delegation provision for caller {caller}"),
+        )
+    }
+
+    fn pending_token_missing(caller: Principal) -> InternalError {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("no pending token issuance for caller {caller}"),
         )
     }
 }
