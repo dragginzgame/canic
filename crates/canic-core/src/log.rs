@@ -123,10 +123,10 @@ macro_rules! log {
 pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level, message: &str) {
     let created_at = IcOps::now_secs();
 
-    if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
+    if let Err(_err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
         {
             #[cfg(debug_assertions)]
-            crate::cdk::println!("log append failed: {err}");
+            crate::cdk::println!("log append failed: {_err}");
         }
     }
 }
