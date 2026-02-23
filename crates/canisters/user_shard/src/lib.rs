@@ -11,25 +11,12 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof},
+    dto::auth::{DelegatedToken, DelegatedTokenClaims},
     prelude::*,
 };
 use canic_internal::canister::USER_SHARD;
-use std::{cell::RefCell, collections::BTreeMap};
 
 const TOKEN_VERSION: u16 = 1;
-
-thread_local! {
-    static PENDING_TOKEN_ISSUANCE: RefCell<BTreeMap<Principal, PendingTokenIssuance>> =
-        const { RefCell::new(BTreeMap::new()) };
-}
-
-#[derive(Clone)]
-struct PendingTokenIssuance {
-    claims: DelegatedTokenClaims,
-    proof: DelegationProof,
-}
 
 //
 // CANIC
@@ -56,15 +43,7 @@ async fn user_shard_issue_token_prepare(claims: DelegatedTokenClaims) -> Result<
         return Err(Error::forbidden("test-only canister"));
     }
 
-    let proof = DelegationApi::require_proof()?;
-    DelegationApi::prepare_token_signature(TOKEN_VERSION, &claims, &proof)?;
-
-    let caller = msg_caller();
-    PENDING_TOKEN_ISSUANCE.with_borrow_mut(|pending| {
-        pending.insert(caller, PendingTokenIssuance { claims, proof });
-    });
-
-    Ok(())
+    DelegationApi::issue_token_prepare(TOKEN_VERSION, claims)
 }
 
 /// user_shard_issue_token_get
@@ -77,11 +56,7 @@ fn user_shard_issue_token_get() -> Result<DelegatedToken, Error> {
         return Err(Error::forbidden("test-only canister"));
     }
 
-    let caller = msg_caller();
-    let pending = PENDING_TOKEN_ISSUANCE.with_borrow(|all| all.get(&caller).cloned());
-    let pending = pending.ok_or_else(|| Error::not_found("pending token issuance not found"))?;
-
-    DelegationApi::get_token_signature(TOKEN_VERSION, pending.claims, pending.proof)
+    DelegationApi::issue_token_get()
 }
 
 #[canic_query(requires(authenticated()))]

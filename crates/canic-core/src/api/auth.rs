@@ -82,6 +82,24 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
+    pub fn issue_token_prepare(
+        token_version: u16,
+        claims: DelegatedTokenClaims,
+    ) -> Result<(), Error> {
+        let proof = Self::require_proof()?;
+        DelegationWorkflow::issue_token_prepare(token_version, claims, proof)
+            .map_err(Self::map_delegation_error)
+    }
+
+    pub fn issue_token_get() -> Result<DelegatedToken, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        DelegationWorkflow::issue_token_get().map_err(Self::map_delegation_error)
+    }
+
     /// Full delegated token verification (structure + signature).
     ///
     /// Purely local verification; does not read certified data or require a
