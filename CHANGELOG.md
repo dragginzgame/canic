@@ -5,11 +5,10 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.9.26] - 2026-02-22 - Fixes for Toko
+## [0.9.27] - 2026-02-23 - Bootstrap and Signing Hardening
 
 ### 🔧 Changed
 
-- SubnetRegistryApi is now exported via `canic::api::canister::registry::SubnetRegistryApi`
 - Delegated signing now exposes an explicit 2-step flow in `DelegationApi` with `prepare_*` and `get_*` methods for cert and token signatures, so callers can align update/query behavior with IC certified-signature requirements.
 - Root bootstrap now resolves and sets subnet ID during `init` as well as `post_upgrade`, so fresh installs and upgrades follow the same environment enrichment path.
 - Root bootstrap now treats IC subnet-ID resolution failures as fatal and aborts bootstrap instead of continuing with partial topology state.
@@ -25,6 +24,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 DelegationApi::prepare_delegation_cert_signature(&cert)?;
 let proof = DelegationApi::get_delegation_cert_signature(cert)?;
 ```
+
+---
+
+## [0.9.26] - 2026-02-22 - Fixes for Toko
+
+### 🔧 Changed
+
+- SubnetRegistryApi is now exported via `canic::api::canister::registry::SubnetRegistryApi`
 
 ---
 
