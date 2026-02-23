@@ -5,7 +5,7 @@
 //! cross-canister orchestration, topology creation, and reconciliation.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     config::schema::SubnetConfig,
     dto::pool::CanisterPoolStatus,
     dto::validation::{ValidationIssue, ValidationReport},
@@ -91,6 +91,12 @@ pub async fn bootstrap_init_root_canister() {
         return;
     }
 
+    // Enrich env metadata in init the same way post-upgrade does.
+    if let Err(err) = root_set_subnet_id().await {
+        log!(Topic::Init, Error, "bootstrap (root:init) aborted: {err}");
+        return;
+    }
+
     let report = root_validate_state();
     if !report.ok {
         log!(
@@ -117,9 +123,24 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         return;
     }
 
+    let _guard = match TopologyGuard::try_enter() {
+        Ok(g) => g,
+        Err(err) => {
+            log!(Topic::Init, Info, "bootstrap (root:upgrade) skipped: {err}");
+            return;
+        }
+    };
+
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
-    root_set_subnet_id().await;
+    if let Err(err) = root_set_subnet_id().await {
+        log!(
+            Topic::Init,
+            Error,
+            "bootstrap (root:upgrade) aborted: {err}"
+        );
+        return;
+    }
     // Keep post-upgrade non-blocking; queued imports continue in background.
     root_import_pool_from_config(false).await;
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
@@ -133,20 +154,25 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 ///
 /// On local / test networks:
 /// - Falls back to `canister_self()` deterministically.
-pub async fn root_set_subnet_id() {
+pub async fn root_set_subnet_id() -> Result<(), InternalError> {
     let network = NetworkOps::build_network();
 
     match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
-            return;
+            log!(
+                Topic::Topology,
+                Info,
+                "subnet pid set from management lookup: {subnet_pid}"
+            );
+            return Ok(());
         }
 
         Ok(None) => {
             if network == Some(BuildNetwork::Ic) {
                 let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
                 log!(Topic::Topology, Error, "{msg}");
-                return;
+                return Err(InternalError::workflow(InternalErrorOrigin::Workflow, msg));
             }
         }
 
@@ -154,7 +180,7 @@ pub async fn root_set_subnet_id() {
             if network == Some(BuildNetwork::Ic) {
                 let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
                 log!(Topic::Topology, Error, "{msg}");
-                return;
+                return Err(InternalError::workflow(InternalErrorOrigin::Workflow, msg));
             }
         }
     }
@@ -168,6 +194,8 @@ pub async fn root_set_subnet_id() {
         Info,
         "try_get_current_subnet_pid unavailable; using self as subnet: {fallback}"
     );
+
+    Ok(())
 }
 
 /// ---------------------------------------------------------------------------
@@ -217,8 +245,127 @@ pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
     Ok(())
 }
 
-#[expect(clippy::too_many_lines)]
+struct PoolImportPlan {
+    import_list: Vec<Principal>,
+    initial_cfg: String,
+    initial_limit: usize,
+}
+
+struct ImmediateImportOutcome {
+    configured: u64,
+    imported: u64,
+    skipped: u64,
+    failed: u64,
+    already_present: u64,
+    imported_pids: Vec<Principal>,
+    skipped_pids: Vec<Principal>,
+    failed_pids: Vec<Principal>,
+    present_pids: Vec<Principal>,
+}
+
+impl ImmediateImportOutcome {
+    fn new(configured: u64) -> Self {
+        Self {
+            configured,
+            imported: 0,
+            skipped: 0,
+            failed: 0,
+            already_present: 0,
+            imported_pids: Vec::new(),
+            skipped_pids: Vec::new(),
+            failed_pids: Vec::new(),
+            present_pids: Vec::new(),
+        }
+    }
+}
+
+struct QueuedImportOutcome {
+    configured: u64,
+    added: u64,
+    requeued: u64,
+    skipped: u64,
+    failed: u64,
+    already_present: u64,
+    added_pids: Vec<Principal>,
+    skipped_pids: Vec<Principal>,
+    failed_pids: Vec<Principal>,
+    present_pids: Vec<Principal>,
+}
+
+impl QueuedImportOutcome {
+    fn new(configured: u64) -> Self {
+        Self {
+            configured,
+            added: 0,
+            requeued: 0,
+            skipped: 0,
+            failed: 0,
+            already_present: 0,
+            added_pids: Vec::new(),
+            skipped_pids: Vec::new(),
+            failed_pids: Vec::new(),
+            present_pids: Vec::new(),
+        }
+    }
+}
+
 async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_imports: bool) {
+    let Some(plan) = resolve_pool_import_plan(data) else {
+        return;
+    };
+
+    log!(
+        Topic::CanisterPool,
+        Info,
+        "pool import config: network={} minimum_size={} import.initial={} resolved_initial_limit={} wait_for_queued={}",
+        data.network.map_or("unknown", BuildNetwork::as_str),
+        data.subnet_cfg.pool.minimum_size,
+        plan.initial_cfg,
+        plan.initial_limit,
+        wait_for_queued_imports
+    );
+
+    if !plan.import_list.is_empty() {
+        log!(
+            Topic::CanisterPool,
+            Info,
+            "pool import candidates={} pids={}",
+            plan.import_list.len(),
+            summarize_principals(&plan.import_list, 12)
+        );
+    }
+
+    if plan.initial_limit == 0 && !data.subnet_cfg.auto_create.is_empty() {
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import initial=0 with auto_create enabled; canisters may be created before queued imports are ready"
+        );
+    }
+
+    if plan.import_list.is_empty() {
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import skipped: selected import list is empty for network={}",
+            data.network.map_or("unknown", BuildNetwork::as_str)
+        );
+        log_pool_stats("after-empty-import-skip", data.subnet_cfg.pool.minimum_size);
+        return;
+    }
+
+    let (initial, queued) = plan
+        .import_list
+        .split_at(plan.initial_limit.min(plan.import_list.len()));
+
+    let immediate = run_immediate_imports(initial).await;
+    let queued = run_queued_imports(queued, wait_for_queued_imports).await;
+
+    log_pool_import_summary(&immediate, &queued, wait_for_queued_imports);
+    log_pool_import_stats(wait_for_queued_imports, data.subnet_cfg.pool.minimum_size);
+}
+
+fn resolve_pool_import_plan(data: &RootBootstrapContext) -> Option<PoolImportPlan> {
     let initial_cfg = data
         .subnet_cfg
         .pool
@@ -235,7 +382,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
                 Warn,
                 "pool import skipped: build network not set"
             );
-            return;
+            return None;
         }
     };
 
@@ -248,102 +395,53 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             count as usize
         });
 
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool import config: network={} minimum_size={} import.initial={} resolved_initial_limit={} wait_for_queued={}",
-        data.network.map_or("unknown", BuildNetwork::as_str),
-        data.subnet_cfg.pool.minimum_size,
+    Some(PoolImportPlan {
+        import_list,
         initial_cfg,
         initial_limit,
-        wait_for_queued_imports
-    );
+    })
+}
 
-    if !import_list.is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Info,
-            "pool import candidates={} pids={}",
-            import_list.len(),
-            summarize_principals(&import_list, 12)
-        );
-    }
-
-    if initial_limit == 0 && !data.subnet_cfg.auto_create.is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool import initial=0 with auto_create enabled; canisters may be created before queued imports are ready"
-        );
-    }
-
-    if import_list.is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool import skipped: selected import list is empty for network={}",
-            data.network.map_or("unknown", BuildNetwork::as_str)
-        );
-        log_pool_stats("after-empty-import-skip", data.subnet_cfg.pool.minimum_size);
-        return;
-    }
-
-    let (initial, queued) = import_list.split_at(initial_limit.min(import_list.len()));
-    let configured_initial = initial.len() as u64;
-    let configured_queued = queued.len() as u64;
-
-    let mut imported = 0_u64;
-    let mut immediate_skipped = 0_u64;
-    let mut immediate_failed = 0_u64;
-    let mut immediate_already_present = 0_u64;
-
-    let mut queued_added = 0_u64;
-    let mut queued_requeued = 0_u64;
-    let mut queued_skipped = 0_u64;
-    let mut queued_failed = 0_u64;
-    let mut queued_already_present = 0_u64;
-
-    let mut immediate_imported_pids = Vec::new();
-    let mut immediate_skipped_pids = Vec::new();
-    let mut immediate_failed_pids = Vec::new();
-    let mut immediate_present_pids = Vec::new();
-
-    let mut queued_added_pids = Vec::new();
-    let mut queued_skipped_pids = Vec::new();
-    let mut queued_failed_pids = Vec::new();
-    let mut queued_present_pids = Vec::new();
+async fn run_immediate_imports(initial: &[Principal]) -> ImmediateImportOutcome {
+    let mut outcome = ImmediateImportOutcome::new(initial.len() as u64);
 
     for pid in initial {
         if PoolOps::contains(pid) {
-            immediate_already_present += 1;
-            immediate_present_pids.push(*pid);
+            outcome.already_present += 1;
+            outcome.present_pids.push(*pid);
             continue;
         }
 
-        match PoolWorkflow::pool_import_canister(*pid).await {
-            Ok(()) => {
-                if PoolOps::contains(pid) {
-                    imported += 1;
-                    immediate_imported_pids.push(*pid);
-                } else {
-                    immediate_skipped += 1;
-                    immediate_skipped_pids.push(*pid);
-                }
+        if matches!(PoolWorkflow::pool_import_canister(*pid).await, Ok(())) {
+            if PoolOps::contains(pid) {
+                outcome.imported += 1;
+                outcome.imported_pids.push(*pid);
+            } else {
+                outcome.skipped += 1;
+                outcome.skipped_pids.push(*pid);
             }
-            Err(_) => {
-                immediate_failed += 1;
-                immediate_failed_pids.push(*pid);
-            }
+        } else {
+            outcome.failed += 1;
+            outcome.failed_pids.push(*pid);
         }
     }
+
+    outcome
+}
+
+async fn run_queued_imports(
+    queued: &[Principal],
+    wait_for_queued_imports: bool,
+) -> QueuedImportOutcome {
+    let mut outcome = QueuedImportOutcome::new(queued.len() as u64);
 
     let queued_imports: Vec<Principal> = queued
         .iter()
         .copied()
         .filter(|pid| {
             if PoolOps::contains(pid) {
-                queued_already_present += 1;
-                queued_present_pids.push(*pid);
+                outcome.already_present += 1;
+                outcome.present_pids.push(*pid);
                 false
             } else {
                 true
@@ -351,101 +449,130 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         })
         .collect();
 
-    if !queued_imports.is_empty() {
-        if wait_for_queued_imports {
-            for pid in queued_imports {
-                match PoolWorkflow::pool_import_canister(pid).await {
-                    Ok(()) => {
-                        if PoolOps::contains(&pid) {
-                            queued_added += 1;
-                            queued_added_pids.push(pid);
-                        } else {
-                            queued_skipped += 1;
-                            queued_skipped_pids.push(pid);
-                        }
-                    }
-                    Err(_) => {
-                        queued_failed += 1;
-                        queued_failed_pids.push(pid);
-                    }
+    if queued_imports.is_empty() {
+        return outcome;
+    }
+
+    if wait_for_queued_imports {
+        for pid in queued_imports {
+            if matches!(PoolWorkflow::pool_import_canister(pid).await, Ok(())) {
+                if PoolOps::contains(&pid) {
+                    outcome.added += 1;
+                    outcome.added_pids.push(pid);
+                } else {
+                    outcome.skipped += 1;
+                    outcome.skipped_pids.push(pid);
                 }
-            }
-        } else {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued async candidates={} pids={}",
-                queued_imports.len(),
-                summarize_principals(&queued_imports, 12)
-            );
-            match PoolWorkflow::pool_import_queued_canisters(queued_imports).await {
-                Ok(result) => {
-                    queued_added = result.added;
-                    queued_requeued = result.requeued;
-                    queued_skipped = result.skipped;
-                }
-                Err(err) => {
-                    queued_failed = configured_queued - queued_already_present;
-                    log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
-                }
+            } else {
+                outcome.failed += 1;
+                outcome.failed_pids.push(pid);
             }
         }
+
+        return outcome;
     }
 
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import immediate summary: configured={}, imported={imported}, skipped={immediate_skipped}, failed={immediate_failed}, present={immediate_already_present}",
-        configured_initial
+        "pool import queued async candidates={} pids={}",
+        queued_imports.len(),
+        summarize_principals(&queued_imports, 12)
+    );
+
+    match PoolWorkflow::pool_import_queued_canisters(queued_imports).await {
+        Ok(result) => {
+            outcome.added = result.added;
+            outcome.requeued = result.requeued;
+            outcome.skipped = result.skipped;
+        }
+        Err(err) => {
+            outcome.failed = outcome.configured - outcome.already_present;
+            log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
+        }
+    }
+
+    outcome
+}
+
+fn log_pool_import_summary(
+    immediate: &ImmediateImportOutcome,
+    queued: &QueuedImportOutcome,
+    wait_for_queued_imports: bool,
+) {
+    log!(
+        Topic::CanisterPool,
+        Info,
+        "pool import immediate summary: configured={}, imported={}, skipped={}, failed={}, present={}",
+        immediate.configured,
+        immediate.imported,
+        immediate.skipped,
+        immediate.failed,
+        immediate.already_present
     );
     log!(
         Topic::CanisterPool,
         Info,
         "pool import immediate pids: imported={} skipped={} failed={} present={}",
-        summarize_principals(&immediate_imported_pids, 12),
-        summarize_principals(&immediate_skipped_pids, 12),
-        summarize_principals(&immediate_failed_pids, 12),
-        summarize_principals(&immediate_present_pids, 12),
+        summarize_principals(&immediate.imported_pids, 12),
+        summarize_principals(&immediate.skipped_pids, 12),
+        summarize_principals(&immediate.failed_pids, 12),
+        summarize_principals(&immediate.present_pids, 12),
     );
 
-    if configured_queued > 0 {
-        if queued_failed > 0 {
-            log!(
-                Topic::CanisterPool,
-                Warn,
-                "pool import queued summary: configured={}, failed={queued_failed}, present={queued_already_present}",
-                configured_queued
-            );
-        } else {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued summary: configured={}, added={queued_added}, requeued={queued_requeued}, skipped={queued_skipped}, present={queued_already_present}",
-                configured_queued
-            );
-        }
-
-        if wait_for_queued_imports {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued pids: added={} skipped={} failed={} present={}",
-                summarize_principals(&queued_added_pids, 12),
-                summarize_principals(&queued_skipped_pids, 12),
-                summarize_principals(&queued_failed_pids, 12),
-                summarize_principals(&queued_present_pids, 12),
-            );
-        } else {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued pids (best-effort): present={} (added/requeued/skipped resolved by scheduler)",
-                summarize_principals(&queued_present_pids, 12),
-            );
-        }
+    if queued.configured == 0 {
+        return;
     }
 
-    log_pool_stats("after-import", data.subnet_cfg.pool.minimum_size);
+    if queued.failed > 0 {
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import queued summary: configured={}, failed={}, present={}",
+            queued.configured,
+            queued.failed,
+            queued.already_present
+        );
+    } else {
+        log!(
+            Topic::CanisterPool,
+            Info,
+            "pool import queued summary: configured={}, added={}, requeued={}, skipped={}, present={}",
+            queued.configured,
+            queued.added,
+            queued.requeued,
+            queued.skipped,
+            queued.already_present
+        );
+    }
+
+    if wait_for_queued_imports {
+        log!(
+            Topic::CanisterPool,
+            Info,
+            "pool import queued pids: added={} skipped={} failed={} present={}",
+            summarize_principals(&queued.added_pids, 12),
+            summarize_principals(&queued.skipped_pids, 12),
+            summarize_principals(&queued.failed_pids, 12),
+            summarize_principals(&queued.present_pids, 12),
+        );
+    } else {
+        log!(
+            Topic::CanisterPool,
+            Info,
+            "pool import queued pids (best-effort): present={} (added/requeued/skipped resolved by scheduler)",
+            summarize_principals(&queued.present_pids, 12),
+        );
+    }
+}
+
+fn log_pool_import_stats(wait_for_queued_imports: bool, minimum_size: u8) {
+    let pool_stats_stage = if wait_for_queued_imports {
+        "after-import"
+    } else {
+        "after-import-dispatch"
+    };
+    log_pool_stats(pool_stats_stage, minimum_size);
 }
 
 async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), InternalError> {
@@ -546,6 +673,8 @@ fn check_directory(
                 });
             }
             Some(pids) if pids.len() > 1 => {
+                // Directory roles are config-constrained to singleton kinds.
+                // If this trips, registry state violated the singleton contract.
                 consistent = false;
                 issues.push(ValidationIssue {
                     code: "directory_role_duplicate_in_registry".to_string(),

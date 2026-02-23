@@ -11,11 +11,20 @@ use crate::{
 pub struct SignatureOps;
 
 impl SignatureOps {
-    pub fn sign(
-        domain: &[u8],
-        seed: &[u8],
-        message: &[u8],
-    ) -> Result<Option<Vec<u8>>, InternalError> {
+    pub fn prepare(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<(), InternalError> {
+        SignatureInfra::prepare(domain, seed, message).map_err(IcOpsError::from)?;
+
+        Ok(())
+    }
+
+    pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Vec<u8>, InternalError> {
+        let signature = SignatureInfra::get(domain, seed, message).map_err(IcOpsError::from)?;
+
+        Ok(signature)
+    }
+
+    #[expect(dead_code)]
+    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Vec<u8>, InternalError> {
         let signature = SignatureInfra::sign(domain, seed, message).map_err(IcOpsError::from)?;
 
         Ok(signature)

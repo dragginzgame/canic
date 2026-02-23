@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### 🔧 Changed
 
 - SubnetRegistryApi is now exported via `canic::api::canister::registry::SubnetRegistryApi`
+- Delegated signing now exposes an explicit 2-step flow in `DelegationApi` with `prepare_*` and `get_*` methods for cert and token signatures, so callers can align update/query behavior with IC certified-signature requirements.
+- Root bootstrap now resolves and sets subnet ID during `init` as well as `post_upgrade`, so fresh installs and upgrades follow the same environment enrichment path.
+- Root bootstrap now treats IC subnet-ID resolution failures as fatal and aborts bootstrap instead of continuing with partial topology state.
+- Root `post_upgrade` bootstrap now uses `TopologyGuard` the same way as `init`, preventing asymmetric concurrent topology mutation windows.
+- Pool import stats now use `after-import-dispatch` when queued imports are dispatched asynchronously, so logs no longer imply queued completion in non-blocking mode.
+- Root pool import orchestration was split into planning, immediate import, queued import, and summary/stat phases to keep behavior stable while making maintenance safer.
+
+### 🩹 Fixed
+
+- Canister-signature retrieval no longer swallows signature-map failures. `SignatureInfra::get` now returns explicit infra errors for missing data certificates and missing/expired prepared signatures, improving production diagnostics for delegation and token signing failures.
+
+```rust
+DelegationApi::prepare_delegation_cert_signature(&cert)?;
+let proof = DelegationApi::get_delegation_cert_signature(cert)?;
+```
 
 ---
 

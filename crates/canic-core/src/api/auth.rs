@@ -55,6 +55,33 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
+    pub fn prepare_delegation_cert_signature(cert: &DelegationCert) -> Result<(), Error> {
+        DelegatedTokenOps::prepare_delegation_cert_signature(cert)
+            .map_err(Self::map_delegation_error)
+    }
+
+    pub fn get_delegation_cert_signature(cert: DelegationCert) -> Result<DelegationProof, Error> {
+        DelegatedTokenOps::get_delegation_cert_signature(cert).map_err(Self::map_delegation_error)
+    }
+
+    pub fn prepare_token_signature(
+        token_version: u16,
+        claims: &DelegatedTokenClaims,
+        proof: &DelegationProof,
+    ) -> Result<(), Error> {
+        DelegatedTokenOps::prepare_token_signature(token_version, claims, proof)
+            .map_err(Self::map_delegation_error)
+    }
+
+    pub fn get_token_signature(
+        token_version: u16,
+        claims: DelegatedTokenClaims,
+        proof: DelegationProof,
+    ) -> Result<DelegatedToken, Error> {
+        DelegatedTokenOps::get_token_signature(token_version, claims, proof)
+            .map_err(Self::map_delegation_error)
+    }
+
     pub fn sign_token(
         token_version: u16,
         claims: DelegatedTokenClaims,
