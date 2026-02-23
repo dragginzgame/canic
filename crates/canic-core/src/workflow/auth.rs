@@ -32,7 +32,7 @@ use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
     static PENDING_DELEGATION_PROVISIONS: RefCell<BTreeMap<Principal, PendingDelegationProvision>> =
-        RefCell::new(BTreeMap::new());
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 ///
@@ -111,7 +111,7 @@ impl DelegationWorkflow {
         let caller = IcOps::msg_caller();
         let pending = Self::pending(caller).ok_or_else(|| Self::pending_missing(caller))?;
 
-        DelegatedTokenOps::get_delegation_cert_signature(pending.request.cert.clone())
+        DelegatedTokenOps::get_delegation_cert_signature(pending.request.cert)
     }
 
     pub(crate) async fn provision_finalize(
