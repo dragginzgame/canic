@@ -21,7 +21,7 @@ use crate::{
 };
 use ic_canister_sig_creation::{
     CanisterSigPublicKey, IC_ROOT_PUBLIC_KEY, hash_with_domain, parse_canister_sig_cbor,
-    signature_map::{CanisterSigInputs, LABEL_SIG, SignatureMap},
+    signature_map::{CanisterSigError, CanisterSigInputs, LABEL_SIG, SignatureMap},
 };
 use ic_signature_verification::verify_canister_sig;
 use std::{borrow::Cow, cell::RefCell};
@@ -48,8 +48,14 @@ pub enum SignatureInfraError {
     #[error("cannot parse signature: {reason}")]
     CannotParseSignature { reason: String },
 
+    #[error("data certificate unavailable; canister signatures can only be fetched in query calls")]
+    DataCertificateUnavailable,
+
     #[error("invalid signature: {reason}")]
     InvalidSignature { reason: String },
+
+    #[error("prepared signature unavailable (missing or expired)")]
+    PreparedSignatureUnavailable,
 
     #[error("signature preparation must be called from an update context")]
     UpdateContextRequired,
@@ -102,29 +108,33 @@ impl SignatureInfra {
     ///
     /// Retrieves a prepared canister signature as CBOR-encoded bytes.
     ///
-    /// Returns `None` if the signature has expired or was never prepared.
-    ///
-    /// This is intended for use in query calls.
-    ///
-    #[must_use]
-    pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Option<Vec<u8>> {
+    /// This is intended for use in query calls and returns an explicit error
+    /// if the data certificate is unavailable or no prepared signature exists.
+    pub fn get(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Vec<u8>, InfraError> {
         let sig_inputs = CanisterSigInputs {
             domain,
             seed,
             message,
         };
 
-        SIGNATURES.with_borrow(|sigs| sigs.get_signature_as_cbor(&sig_inputs, None).ok())
+        let signature = SIGNATURES
+            .with_borrow(|sigs| sigs.get_signature_as_cbor(&sig_inputs, None))
+            .map_err(Self::map_signature_map_error)?;
+
+        Ok(signature)
     }
 
     ///
     /// High-level convenience helper that combines [`prepare`] and [`get`]
-    /// in one call. Suitable for simple use-cases where you don’t split update/query.
+    /// in one call.
     ///
-    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Option<Vec<u8>>, InfraError> {
+    /// This is a compatibility wrapper only. Production IC flows should split
+    /// update-time prepare from query-time get.
+    ///
+    pub fn sign(domain: &[u8], seed: &[u8], message: &[u8]) -> Result<Vec<u8>, InfraError> {
         Self::prepare(domain, seed, message)?;
 
-        Ok(Self::get(domain, seed, message))
+        Self::get(domain, seed, message)
     }
 
     ///
@@ -186,6 +196,15 @@ impl SignatureInfra {
         }
 
         Err(SignatureInfraError::UpdateContextRequired.into())
+    }
+
+    fn map_signature_map_error(err: CanisterSigError) -> InfraError {
+        let mapped = match err {
+            CanisterSigError::NoCertificate => SignatureInfraError::DataCertificateUnavailable,
+            CanisterSigError::NoSignature => SignatureInfraError::PreparedSignatureUnavailable,
+        };
+
+        mapped.into()
     }
 
     ///

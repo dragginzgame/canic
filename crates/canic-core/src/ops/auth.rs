@@ -145,21 +145,38 @@ impl DelegatedTokenOps {
     // Delegation cert
     // -------------------------------------------------------------------------
 
-    /// Sign a delegation cert in one step.
-    ///
-    /// Returns an error when no data certificate is available for the signature.
-    // SAFETY: this function must only be called by provisioning or rotation workflows.
-    pub(crate) fn sign_delegation_cert(
+    pub(crate) fn prepare_delegation_cert_signature(
+        cert: &DelegationCert,
+    ) -> Result<(), InternalError> {
+        let hash = cert_hash(cert)?;
+        SignatureOps::prepare(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?;
+
+        Ok(())
+    }
+
+    pub(crate) fn get_delegation_cert_signature(
         cert: DelegationCert,
     ) -> Result<DelegationProof, InternalError> {
         let hash = cert_hash(&cert)?;
-        let sig = SignatureOps::sign(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?
-            .ok_or(DelegatedTokenOpsError::CertSignatureUnavailable)?;
+        let sig = SignatureOps::get(DELEGATION_CERT_DOMAIN, DELEGATION_CERT_SEED, &hash)?;
 
         Ok(DelegationProof {
             cert,
             cert_sig: sig,
         })
+    }
+
+    /// Sign a delegation cert in one step.
+    ///
+    /// This helper exists for compatibility, but IC canister signatures require
+    /// update-time preparation and query-time retrieval.
+    // SAFETY: this function must only be called by provisioning or rotation workflows.
+    pub(crate) fn sign_delegation_cert(
+        cert: DelegationCert,
+    ) -> Result<DelegationProof, InternalError> {
+        Self::prepare_delegation_cert_signature(&cert)?;
+
+        Self::get_delegation_cert_signature(cert)
     }
 
     /// Structural verification for a delegation proof.
@@ -233,7 +250,20 @@ impl DelegatedTokenOps {
     // Token signing
     // -------------------------------------------------------------------------
 
-    pub fn sign_token(
+    pub fn prepare_token_signature(
+        token_version: u16,
+        claims: &DelegatedTokenClaims,
+        proof: &DelegationProof,
+    ) -> Result<(), InternalError> {
+        validate_claims_against_cert(claims, &proof.cert)?;
+
+        let token_hash = token_signing_hash(token_version, claims, &proof.cert)?;
+        SignatureOps::prepare(DELEGATED_TOKEN_DOMAIN, DELEGATED_TOKEN_SEED, &token_hash)?;
+
+        Ok(())
+    }
+
+    pub fn get_token_signature(
         token_version: u16,
         claims: DelegatedTokenClaims,
         proof: DelegationProof,
@@ -242,8 +272,7 @@ impl DelegatedTokenOps {
 
         let token_hash = token_signing_hash(token_version, &claims, &proof.cert)?;
         let signature =
-            SignatureOps::sign(DELEGATED_TOKEN_DOMAIN, DELEGATED_TOKEN_SEED, &token_hash)?
-                .ok_or(DelegatedTokenOpsError::TokenSignatureUnavailable)?;
+            SignatureOps::get(DELEGATED_TOKEN_DOMAIN, DELEGATED_TOKEN_SEED, &token_hash)?;
 
         Ok(DelegatedToken {
             v: token_version,
@@ -251,6 +280,16 @@ impl DelegatedTokenOps {
             proof,
             token_sig: signature,
         })
+    }
+
+    pub fn sign_token(
+        token_version: u16,
+        claims: DelegatedTokenClaims,
+        proof: DelegationProof,
+    ) -> Result<DelegatedToken, InternalError> {
+        Self::prepare_token_signature(token_version, &claims, &proof)?;
+
+        Self::get_token_signature(token_version, claims, proof)
     }
 
     // -------------------------------------------------------------------------
