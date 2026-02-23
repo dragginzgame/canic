@@ -24,7 +24,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
 * ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
-* 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.92.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
+* 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.93.1, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
 ## 📁 Repository Layout
 
