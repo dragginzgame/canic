@@ -51,7 +51,7 @@ use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
 pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
-    ReadyOps::mark_ready(super::ready_token());
+    ReadyOps::mark_ready();
 
     Ok(())
 }
@@ -79,6 +79,7 @@ pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalErr
         Info,
         "bootstrap (nonroot): post-upgrade complete"
     );
-    ReadyOps::mark_ready(super::ready_token());
+    ReadyOps::mark_ready();
+
     Ok(())
 }

@@ -103,7 +103,7 @@ pub async fn bootstrap_init_root_canister() {
     }
 
     log!(Topic::Init, Info, "bootstrap (root:init) complete");
-    ReadyOps::mark_ready(super::ready_token());
+    ReadyOps::mark_ready();
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
@@ -123,7 +123,8 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     // Keep post-upgrade non-blocking; queued imports continue in background.
     root_import_pool_from_config(false).await;
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
-    ReadyOps::mark_ready(super::ready_token());
+
+    ReadyOps::mark_ready();
 }
 
 /// Resolve and persist the subnet identifier for the root canister.
