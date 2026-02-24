@@ -90,7 +90,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
     let Some(first) = sig.inputs.first() else {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
+            "authenticated(...) requires a first argument of type `DelegatedToken`",
         ));
     };
 
@@ -99,7 +99,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
         FnArg::Receiver(recv) => {
             return Err(syn::Error::new_spanned(
                 recv,
-                "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
+                "authenticated(...) requires a first argument of type `DelegatedToken`",
             ));
         }
     };
@@ -107,7 +107,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
     let Some(ident) = type_ident(first_ty) else {
         return Err(syn::Error::new_spanned(
             first_ty,
-            "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
+            "authenticated(...) requires a first argument of type `DelegatedToken`",
         ));
     };
 
@@ -117,7 +117,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
 
     Err(syn::Error::new_spanned(
         first_ty,
-        "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
+        "authenticated(...) requires a first argument of type `DelegatedToken`",
     ))
 }
 
@@ -141,7 +141,7 @@ mod tests {
             forwarded: Vec::new(),
             requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
                 BuiltinPredicate::Authenticated {
-                    required_scope: "scope:test".to_string(),
+                    required_scope: None,
                 },
             ))],
             requires_async: true,
@@ -156,7 +156,7 @@ mod tests {
         let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
-                .contains("authenticated(\"scope\") requires a first argument")
+                .contains("authenticated(...) requires a first argument")
         );
     }
 
@@ -176,7 +176,7 @@ mod tests {
         let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
-                .contains("authenticated(\"scope\") requires a first argument")
+                .contains("authenticated(...) requires a first argument")
         );
     }
 }
