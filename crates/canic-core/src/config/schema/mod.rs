@@ -357,6 +357,9 @@ pub struct DelegatedTokenConfig {
     #[serde(default = "default_delegated_tokens_enabled")]
     pub enabled: bool,
 
+    #[serde(default = "default_delegated_tokens_ecdsa_key_name")]
+    pub ecdsa_key_name: String,
+
     #[serde(default)]
     pub max_ttl_secs: Option<u64>,
 }
@@ -365,10 +368,15 @@ const fn default_delegated_tokens_enabled() -> bool {
     true
 }
 
+fn default_delegated_tokens_ecdsa_key_name() -> String {
+    "test_key_1".to_string()
+}
+
 impl Default for DelegatedTokenConfig {
     fn default() -> Self {
         Self {
             enabled: default_delegated_tokens_enabled(),
+            ecdsa_key_name: default_delegated_tokens_ecdsa_key_name(),
             max_ttl_secs: None,
         }
     }
@@ -376,6 +384,12 @@ impl Default for DelegatedTokenConfig {
 
 impl Validate for DelegatedTokenConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
+        if self.ecdsa_key_name.trim().is_empty() {
+            return Err(ConfigSchemaError::ValidationError(
+                "auth.delegated_tokens.ecdsa_key_name must not be empty".into(),
+            ));
+        }
+
         if let Some(max_ttl_secs) = self.max_ttl_secs
             && max_ttl_secs == 0
         {

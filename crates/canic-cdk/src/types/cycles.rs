@@ -83,7 +83,7 @@ impl Cycles {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(clippy::cast_precision_loss)]
 impl Display for Cycles {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // default format in TeraCycles
@@ -110,9 +110,9 @@ impl From<Cycles> for u128 {
 }
 
 // Human-input parser: "10K", "1.5T", etc.
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_sign_loss)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_precision_loss)]
+#[expect(clippy::cast_sign_loss)]
+#[expect(clippy::cast_possible_truncation)]
 impl FromStr for Cycles {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

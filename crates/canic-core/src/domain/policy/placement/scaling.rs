@@ -55,7 +55,6 @@ pub struct ScalingPlan {
 pub struct ScalingPolicy;
 
 impl ScalingPolicy {
-    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn plan_create_worker(
         pool: &str,
         worker_count: u32,

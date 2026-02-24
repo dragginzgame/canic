@@ -10,7 +10,6 @@ use canic::{
     dto::{
         auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
         error::ErrorCode,
-        rpc::{AuthenticatedRequest, CyclesRequest, Request, Response},
     },
     ids::BuildNetwork,
 };
@@ -46,16 +45,20 @@ fn delegation_provisioning_flow() {
 
     let tenant = p(7);
     let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
         sub: p(9),
-        aud: "login".to_string(),
-        scopes: vec!["read".to_string()],
+        shard_pid,
+        aud: vec![test_pid],
+        scopes: vec!["test:verify".to_string()],
         iat: now,
         exp: now + 60,
-        ext: None,
-        nonce: None,
     };
 
     let minted: Result<Result<DelegatedToken, Error>, Error> =
@@ -90,16 +93,21 @@ fn delegated_token_flow() {
 
     let tenant = p(7);
     let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
+    let caller = p(9);
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
-        sub: p(9),
-        aud: "login".to_string(),
-        scopes: vec!["read".to_string()],
+        sub: caller,
+        shard_pid,
+        aud: vec![test_pid],
+        scopes: vec!["test:verify".to_string()],
         iat: now,
         exp: now + 60,
-        ext: None,
-        nonce: None,
     };
 
     let minted: Result<Result<DelegatedToken, Error>, Error> =
@@ -111,30 +119,18 @@ fn delegated_token_flow() {
         .expect("user_shard_mint_token transport failed")
         .expect("user_shard_mint_token application failed");
     log_step(&format!(
-        "minted token proof signer={}",
-        token.proof.cert.signer_pid
+        "minted token proof shard={}",
+        token.proof.cert.shard_pid
     ));
 
-    let verify: Result<Result<Response, Error>, Error> = setup.pic.update_call_as(
-        setup.root_id,
-        shard_pid,
-        "canic_response_authenticated",
-        (AuthenticatedRequest {
-            request: Request::Cycles(CyclesRequest { cycles: 1 }),
-            delegated_token: token,
-        },),
-    );
+    let verify: Result<Result<(), Error>, Error> =
+        setup
+            .pic
+            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
 
-    let response = verify
-        .expect("canic_response_authenticated transport failed")
-        .expect("canic_response_authenticated application failed");
-
-    match response {
-        Response::Cycles(cycles) => {
-            assert_eq!(cycles.cycles_transferred, 1);
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    verify
+        .expect("test_verify_delegated_token transport failed")
+        .expect("test_verify_delegated_token application failed");
 }
 
 #[test]
@@ -151,19 +147,25 @@ fn authenticated_rpc_flow() {
         .get(&canister::USER_HUB)
         .copied()
         .expect("user_hub must exist in subnet directory");
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
 
     let tenant = p(7);
     let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let subject = p(9);
+    let mismatched_caller = p(10);
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
-        sub: p(9),
-        aud: "login".to_string(),
-        scopes: vec!["read".to_string()],
+        sub: subject,
+        shard_pid,
+        aud: vec![test_pid],
+        scopes: vec!["test:verify".to_string()],
         iat: now,
         exp: now + 60,
-        ext: None,
-        nonce: None,
     };
 
     let minted: Result<Result<DelegatedToken, Error>, Error> =
@@ -176,30 +178,19 @@ fn authenticated_rpc_flow() {
         .expect("user_shard_mint_token application failed");
 
     log_step(&format!(
-        "calling canic_response_authenticated via shard={shard_pid}",
+        "calling test_verify_delegated_token via test={test_pid}"
     ));
-    let request = AuthenticatedRequest {
-        request: Request::Cycles(CyclesRequest { cycles: 1 }),
-        delegated_token: token,
-    };
-
-    let response: Result<Result<Response, Error>, Error> = setup.pic.update_call_as(
-        setup.root_id,
-        shard_pid,
-        "canic_response_authenticated",
-        (request,),
+    let response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+        test_pid,
+        mismatched_caller,
+        "test_verify_delegated_token",
+        (token,),
     );
 
-    let response = response
-        .expect("canic_response_authenticated transport failed")
-        .expect("canic_response_authenticated application failed");
-
-    match response {
-        Response::Cycles(cycles) => {
-            assert_eq!(cycles.cycles_transferred, 1);
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    let err = response
+        .expect("test_verify_delegated_token transport failed")
+        .expect_err("test_verify_delegated_token should fail on subject mismatch");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
 }
 
 #[test]
@@ -221,12 +212,11 @@ fn delegated_token_request_rejected_on_invalid_claims() {
     let now = now_secs();
     let claims = DelegatedTokenClaims {
         sub: p(9),
-        aud: String::new(),
+        shard_pid,
+        aud: Vec::new(),
         scopes: Vec::new(),
         iat: now,
         exp: now + 60,
-        ext: None,
-        nonce: None,
     };
 
     let minted: Result<Result<DelegatedToken, Error>, Error> =
@@ -241,14 +231,14 @@ fn delegated_token_request_rejected_on_invalid_claims() {
 }
 
 #[test]
-fn authenticated_guard_is_bypassed_on_local_with_token_arg() {
-    if !should_run_local("authenticated_guard_is_bypassed_on_local_with_token_arg") {
+fn authenticated_guard_rejects_bogus_token_on_local() {
+    if !should_run_local("authenticated_guard_rejects_bogus_token_on_local") {
         return;
     }
 
     ensure_local_artifacts_built();
 
-    log_step("authenticated_guard_is_bypassed_on_local_with_token_arg: setup root");
+    log_step("authenticated_guard_rejects_bogus_token_on_local: setup root");
     let setup = setup_root();
 
     let test_pid = setup
@@ -257,17 +247,17 @@ fn authenticated_guard_is_bypassed_on_local_with_token_arg() {
         .copied()
         .expect("test canister must exist in subnet directory");
 
-    // Intentionally bogus token data: this should only pass when local auth
-    // bypass is active for `auth::authenticated()`.
+    // Intentionally bogus token data: local must reject this.
     let bogus = bogus_delegated_token();
     let verify: Result<Result<(), Error>, Error> =
         setup
             .pic
             .update_call(test_pid, "test_verify_delegated_token", (bogus,));
 
-    verify
+    let err = verify
         .expect("test_verify_delegated_token transport failed")
-        .expect("test_verify_delegated_token application failed");
+        .expect_err("test_verify_delegated_token should reject bogus token");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
 }
 
 fn log_step(step: &str) {
@@ -310,21 +300,19 @@ fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Princip
 
 fn bogus_delegated_token() -> DelegatedToken {
     DelegatedToken {
-        v: 1,
         claims: DelegatedTokenClaims {
             sub: p(31),
-            aud: "local-auth-bypass-test".to_string(),
+            shard_pid: p(30),
+            aud: vec![p(32)],
             scopes: vec!["read".to_string()],
             iat: 1,
             exp: 2,
-            ext: None,
-            nonce: None,
         },
         proof: DelegationProof {
             cert: DelegationCert {
-                v: 1,
-                signer_pid: p(30),
-                audiences: vec!["local-auth-bypass-test".to_string()],
+                root_pid: p(29),
+                shard_pid: p(30),
+                aud: vec![p(32)],
                 scopes: vec!["read".to_string()],
                 issued_at: 1,
                 expires_at: 2,

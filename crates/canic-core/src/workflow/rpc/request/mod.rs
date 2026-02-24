@@ -2,11 +2,8 @@ pub mod handler;
 
 use crate::{
     InternalError,
-    dto::rpc::{
-        AuthenticatedRequest, AuthenticatedResponse, CreateCanisterParent, CreateCanisterResponse,
-        UpgradeCanisterResponse,
-    },
-    ops::rpc::{RpcOps, request::RequestOps},
+    dto::rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
+    ops::rpc::request::RequestOps,
     workflow::{prelude::*, rpc::adapter::RpcAdapter},
 };
 
@@ -37,11 +34,5 @@ impl RpcRequestWorkflow {
         let response = RequestOps::upgrade_canister(canister_pid).await?;
 
         Ok(RpcAdapter::upgrade_canister_response_to_dto(response))
-    }
-
-    pub async fn authenticated_request(
-        request: AuthenticatedRequest,
-    ) -> Result<AuthenticatedResponse, InternalError> {
-        RpcOps::call_authenticated_response(request).await
     }
 }

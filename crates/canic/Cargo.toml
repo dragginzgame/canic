@@ -30,7 +30,6 @@ canic-core = { workspace = true }
 canic-internal = { path = "../canic-internal" }
 canic-testkit = { path = "../canic-testkit" }
 hex = { workspace = true }
-ic-certification = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_cbor = { workspace = true }

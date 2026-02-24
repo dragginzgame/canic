@@ -1,6 +1,7 @@
 pub mod mapper;
 
 use crate::{
+    cdk::types::Principal,
     dto::auth::DelegationProof,
     storage::stable::auth::{DelegationProofRecord, DelegationState},
 };
@@ -64,5 +65,23 @@ impl DelegationStateOps {
     /// Set the active delegation proof from a DTO.
     pub fn set_proof_from_dto(proof: DelegationProof) {
         Self::set_proof(DelegationProofRecordMapper::dto_to_record(proof));
+    }
+
+    #[must_use]
+    pub fn root_public_key() -> Option<Vec<u8>> {
+        DelegationState::get_root_public_key()
+    }
+
+    pub fn set_root_public_key(public_key_sec1: Vec<u8>) {
+        DelegationState::set_root_public_key(public_key_sec1);
+    }
+
+    #[must_use]
+    pub fn shard_public_key(shard_pid: Principal) -> Option<Vec<u8>> {
+        DelegationState::get_shard_public_key(shard_pid)
+    }
+
+    pub fn set_shard_public_key(shard_pid: Principal, public_key_sec1: Vec<u8>) {
+        DelegationState::set_shard_public_key(shard_pid, public_key_sec1);
     }
 }

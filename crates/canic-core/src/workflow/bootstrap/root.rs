@@ -320,20 +320,17 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             continue;
         }
 
-        match PoolWorkflow::pool_import_canister(*pid).await {
-            Ok(()) => {
-                if PoolOps::contains(pid) {
-                    imported += 1;
-                    immediate_imported_pids.push(*pid);
-                } else {
-                    immediate_skipped += 1;
-                    immediate_skipped_pids.push(*pid);
-                }
+        if matches!(PoolWorkflow::pool_import_canister(*pid).await, Ok(())) {
+            if PoolOps::contains(pid) {
+                imported += 1;
+                immediate_imported_pids.push(*pid);
+            } else {
+                immediate_skipped += 1;
+                immediate_skipped_pids.push(*pid);
             }
-            Err(_) => {
-                immediate_failed += 1;
-                immediate_failed_pids.push(*pid);
-            }
+        } else {
+            immediate_failed += 1;
+            immediate_failed_pids.push(*pid);
         }
     }
 
@@ -354,20 +351,17 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
     if !queued_imports.is_empty() {
         if wait_for_queued_imports {
             for pid in queued_imports {
-                match PoolWorkflow::pool_import_canister(pid).await {
-                    Ok(()) => {
-                        if PoolOps::contains(&pid) {
-                            queued_added += 1;
-                            queued_added_pids.push(pid);
-                        } else {
-                            queued_skipped += 1;
-                            queued_skipped_pids.push(pid);
-                        }
+                if matches!(PoolWorkflow::pool_import_canister(pid).await, Ok(())) {
+                    if PoolOps::contains(&pid) {
+                        queued_added += 1;
+                        queued_added_pids.push(pid);
+                    } else {
+                        queued_skipped += 1;
+                        queued_skipped_pids.push(pid);
                     }
-                    Err(_) => {
-                        queued_failed += 1;
-                        queued_failed_pids.push(pid);
-                    }
+                } else {
+                    queued_failed += 1;
+                    queued_failed_pids.push(pid);
                 }
             }
         } else {

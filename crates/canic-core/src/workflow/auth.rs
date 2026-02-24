@@ -87,8 +87,8 @@ impl DelegationWorkflow {
     /// - Keeps cryptographic issuance separable from storage and policy
     ///
     /// Authority MUST be enforced by the caller.
-    fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
-        DelegatedTokenOps::sign_delegation_cert(cert)
+    async fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+        DelegatedTokenOps::sign_delegation_cert(cert).await
     }
 
     // -------------------------------------------------------------------------
@@ -98,12 +98,12 @@ impl DelegationWorkflow {
     pub(crate) async fn provision(
         request: DelegationProvisionRequest,
     ) -> Result<DelegationProvisionResponse, InternalError> {
-        let proof = Self::issue_delegation(request.cert)?;
+        let proof = Self::issue_delegation(request.cert).await?;
         log!(
             Topic::Auth,
             Info,
-            "delegation provision issued proof signer={} issued_at={} expires_at={}",
-            proof.cert.signer_pid,
+            "delegation provision issued proof shard={} issued_at={} expires_at={}",
+            proof.cert.shard_pid,
             proof.cert.issued_at,
             proof.cert.expires_at
         );
@@ -143,11 +143,11 @@ impl DelegationWorkflow {
         log!(
             Topic::Auth,
             Info,
-            "delegation push attempt origin={} kind={:?} target={} signer={} issued_at={} expires_at={}",
+            "delegation push attempt origin={} kind={:?} target={} shard={} issued_at={} expires_at={}",
             origin.label(),
             kind,
             target,
-            proof.cert.signer_pid,
+            proof.cert.shard_pid,
             proof.cert.issued_at,
             proof.cert.expires_at
         );

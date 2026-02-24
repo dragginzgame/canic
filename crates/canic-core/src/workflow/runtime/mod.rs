@@ -12,7 +12,7 @@ use crate::{
     ids::SubnetRole,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, network::NetworkOps, signature::SignatureOps},
+        ic::{IcOps, network::NetworkOps},
         runtime::{
             env::EnvOps,
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
@@ -191,7 +191,6 @@ pub fn post_upgrade_root_canister() -> Result<(), InternalError> {
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
     log_memory_summary(&memory_summary);
-    SignatureOps::sync_certified_data();
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
@@ -282,7 +281,6 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) -> Result<(), 
         canister_role
     );
     log_memory_summary(&memory_summary);
-    SignatureOps::sync_certified_data();
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 

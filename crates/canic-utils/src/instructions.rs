@@ -2,7 +2,7 @@
 
 /// Format an instruction count using engineering suffixes (K/M/B/T).
 #[must_use]
-#[allow(clippy::cast_precision_loss)]
+#[expect(clippy::cast_precision_loss)]
 pub fn format_instructions(n: u64) -> String {
     const TABLE: &[(u64, &str)] = &[
         (1_000_000_000_000, "T"),

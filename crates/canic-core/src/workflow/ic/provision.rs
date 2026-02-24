@@ -304,7 +304,7 @@ async fn create_canister_with_configured_controllers(
 //
 
 /// Install WASM and initial state into a new canister.
-#[allow(clippy::cast_precision_loss)]
+#[expect(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,
     role: &CanisterRole,

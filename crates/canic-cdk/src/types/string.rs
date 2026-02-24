@@ -32,12 +32,12 @@ use std::{borrow::Cow, convert::TryFrom};
 )]
 pub struct BoundedString<const N: u32>(pub String);
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 impl<const N: u32> BoundedString<N> {
     pub fn try_new(s: impl Into<String>) -> Result<Self, String> {
         let s: String = s.into();
 
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(clippy::cast_possible_truncation)]
         if s.len() as u32 <= N {
             Ok(Self(s))
         } else {
@@ -82,7 +82,6 @@ impl<const N: u32> From<BoundedString<N>> for String {
 impl<const N: u32> TryFrom<String> for BoundedString<N> {
     type Error = String;
 
-    #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::try_new(value)
     }
@@ -91,7 +90,6 @@ impl<const N: u32> TryFrom<String> for BoundedString<N> {
 impl<const N: u32> TryFrom<&str> for BoundedString<N> {
     type Error = String;
 
-    #[allow(clippy::cast_possible_truncation)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_new(value)
     }

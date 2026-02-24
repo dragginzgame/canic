@@ -74,7 +74,7 @@ impl WasmOps {
     /// Import a static slice of (role, wasm bytes) at startup.
     ///
     /// Intended to be called during canister initialization.
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss)]
     pub fn import_static(wasms: &'static [(CanisterRole, &[u8])]) {
         for (role, bytes) in wasms {
             let wasm = WasmModule::new(bytes);

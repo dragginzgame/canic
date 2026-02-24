@@ -70,7 +70,7 @@ impl TimerWorkflow {
     ///
     /// NOTE: guarded one-shot timers do not auto-clear their slot on completion.
     /// Callers must clear the slot explicitly when the timer fires.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn clear_guarded(slot: &'static LocalKey<RefCell<Option<TimerId>>>) -> bool {
         TimerOps::clear_guarded(slot)
     }

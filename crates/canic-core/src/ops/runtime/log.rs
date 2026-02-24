@@ -142,7 +142,7 @@ const fn record_to_level(level: LogLevelRecord) -> Level {
     }
 }
 
-#[allow(clippy::single_option_map)]
+#[expect(clippy::single_option_map)]
 fn normalize_topic(topic: Option<&str>) -> Option<String> {
     topic.map(|t| t.to_string().to_case(Case::Snake))
 }

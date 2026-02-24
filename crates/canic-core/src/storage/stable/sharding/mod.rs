@@ -153,7 +153,7 @@ impl<M: Memory> ShardingCore<M> {
         self.assignments.insert(key, shard);
     }
 
-    #[allow(dead_code)] // Used by future rebalance / eviction workflows
+    #[expect(dead_code)] // Used by future rebalance / eviction workflows
     pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
         self.assignments.remove(key)
     }

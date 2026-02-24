@@ -10,7 +10,6 @@ pub mod ledger;
 pub mod mgmt;
 pub mod network;
 pub mod nns;
-pub mod signature;
 
 use crate::cdk::{
     call::{CallFailed, CandidDecodeFailed, Error as CallError},
@@ -35,9 +34,6 @@ pub enum IcInfraError {
 
     #[error(transparent)]
     NnsInfra(#[from] nns::NnsInfraError),
-
-    #[error(transparent)]
-    SignatureInfra(#[from] signature::SignatureInfraError),
 
     // candid catch-all errors
     #[error(transparent)]

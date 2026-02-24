@@ -290,7 +290,7 @@ impl IntentStoreOps {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
         let mut entries = Vec::new();
 

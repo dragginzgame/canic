@@ -55,12 +55,12 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    pub fn sign_token(
-        token_version: u16,
+    pub async fn sign_token(
         claims: DelegatedTokenClaims,
         proof: DelegationProof,
     ) -> Result<DelegatedToken, Error> {
-        DelegatedTokenOps::sign_token(token_version, claims, proof)
+        DelegatedTokenOps::sign_token(claims, proof)
+            .await
             .map_err(Self::map_delegation_error)
     }
 
@@ -73,7 +73,7 @@ impl DelegationApi {
         authority_pid: Principal,
         now_secs: u64,
     ) -> Result<(), Error> {
-        DelegatedTokenOps::verify_token(token, authority_pid, now_secs)
+        DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
             .map(|_| ())
             .map_err(Self::map_delegation_error)
     }
@@ -87,7 +87,7 @@ impl DelegationApi {
         authority_pid: Principal,
         now_secs: u64,
     ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
-        DelegatedTokenOps::verify_token(token, authority_pid, now_secs)
+        DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
             .map(|verified| (verified.claims, verified.cert))
             .map_err(Self::map_delegation_error)
     }
@@ -95,7 +95,6 @@ impl DelegationApi {
     /// admin-only delegation provisioning (root-only escape hatch).
     ///
     /// Not part of canonical delegation flow.
-    /// Used for tests / tooling due to PocketIC limitations.
     ///
     /// Root does not infer targets; callers must supply them.
     pub async fn provision(
@@ -118,8 +117,8 @@ impl DelegationApi {
         log!(
             Topic::Auth,
             Info,
-            "delegation provision start signer={} signer_targets={:?} verifier_targets={:?}",
-            request.cert.signer_pid,
+            "delegation provision start shard={} signer_targets={:?} verifier_targets={:?}",
+            request.cert.shard_pid,
             request.signer_targets,
             request.verifier_targets
         );
@@ -128,9 +127,9 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Canonical signer-initiated delegation request (user_shard -> root).
+    /// Canonical shard-initiated delegation request (user_shard -> root).
     ///
-    /// Caller must match signer_pid and be registered to the subnet.
+    /// Caller must match shard_pid and be registered to the subnet.
     pub async fn request_delegation(
         request: DelegationRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
@@ -145,9 +144,9 @@ impl DelegationApi {
         }
 
         let caller = IcOps::msg_caller();
-        if caller != request.signer_pid {
+        if caller != request.shard_pid {
             return Err(Error::forbidden(
-                "delegation request signer must match caller",
+                "delegation request shard_pid must match caller",
             ));
         }
 
@@ -159,12 +158,12 @@ impl DelegationApi {
 
         let now_secs = IcOps::now_secs();
         let cert = DelegationCert {
-            v: 1,
-            signer_pid: request.signer_pid,
-            audiences: request.audiences,
-            scopes: request.scopes,
+            root_pid,
+            shard_pid: request.shard_pid,
             issued_at: now_secs,
             expires_at: now_secs.saturating_add(request.ttl_secs),
+            scopes: request.scopes,
+            aud: request.aud,
         };
 
         validate_issuance_policy(&cert)?;
@@ -178,13 +177,16 @@ impl DelegationApi {
         .map_err(Self::map_delegation_error)?;
 
         if request.include_root_verifier {
+            DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert)
+                .await
+                .map_err(Self::map_delegation_error)?;
             DelegationStateOps::set_proof_from_dto(response.proof.clone());
         }
 
         Ok(response)
     }
 
-    pub fn store_proof(
+    pub async fn store_proof(
         proof: DelegationProof,
         kind: DelegationProvisionTargetKind,
     ) -> Result<(), Error> {
@@ -201,15 +203,18 @@ impl DelegationApi {
             ));
         }
 
+        DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
+            .await
+            .map_err(Self::map_delegation_error)?;
         if let Err(err) = DelegatedTokenOps::verify_delegation_proof(&proof, root_pid) {
             let local = IcOps::canister_self();
             log!(
                 Topic::Auth,
                 Warn,
-                "delegation proof rejected kind={:?} local={} signer={} issued_at={} expires_at={} error={}",
+                "delegation proof rejected kind={:?} local={} shard={} issued_at={} expires_at={} error={}",
                 kind,
                 local,
-                proof.cert.signer_pid,
+                proof.cert.shard_pid,
                 proof.cert.issued_at,
                 proof.cert.expires_at,
                 err
@@ -224,10 +229,10 @@ impl DelegationApi {
         log!(
             Topic::Auth,
             Info,
-            "delegation proof stored kind={:?} local={} signer={} issued_at={} expires_at={}",
+            "delegation proof stored kind={:?} local={} shard={} issued_at={} expires_at={}",
             kind,
             local,
-            stored.cert.signer_pid,
+            stored.cert.shard_pid,
             stored.cert.issued_at,
             stored.cert.expires_at
         );
@@ -255,16 +260,12 @@ fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
         ));
     }
 
-    if cert.audiences.is_empty() {
-        return Err(Error::invalid("delegation audiences must not be empty"));
+    if cert.aud.is_empty() {
+        return Err(Error::invalid("delegation aud must not be empty"));
     }
 
     if cert.scopes.is_empty() {
         return Err(Error::invalid("delegation scopes must not be empty"));
-    }
-
-    if cert.audiences.iter().any(String::is_empty) {
-        return Err(Error::invalid("delegation audience must not be empty"));
     }
 
     if cert.scopes.iter().any(String::is_empty) {
@@ -272,14 +273,18 @@ fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
     }
 
     let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-    if cert.signer_pid == root_pid {
-        return Err(Error::invalid("delegation signer must not be root"));
+    if cert.root_pid != root_pid {
+        return Err(Error::invalid("delegation root pid must match local root"));
     }
 
-    let record = SubnetRegistryOps::get(cert.signer_pid)
-        .ok_or_else(|| Error::invalid("delegation signer must be registered to subnet"))?;
+    if cert.shard_pid == root_pid {
+        return Err(Error::invalid("delegation shard must not be root"));
+    }
+
+    let record = SubnetRegistryOps::get(cert.shard_pid)
+        .ok_or_else(|| Error::invalid("delegation shard must be registered to subnet"))?;
     if record.role.is_root() {
-        return Err(Error::invalid("delegation signer role must not be root"));
+        return Err(Error::invalid("delegation shard role must not be root"));
     }
 
     Ok(())

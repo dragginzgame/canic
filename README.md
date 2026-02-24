@@ -20,6 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 🗺️ **Topology‑aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 * 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per‑node direct children, validate roots/cycles, and fail fast to avoid quadratic fan‑out.
 * 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
+* 🔏 **Delegated auth model** – root-anchored delegated token flow (`root -> shard -> user token`) with direct caller binding (`sub == caller`), explicit audience/scope checks, and local verification.
 * 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 * 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
@@ -140,6 +141,21 @@ Canic follows a strict layered design to keep boundaries stable and refactors ch
 
 ## Capabilities & Endpoints
 
+### Delegated Auth 🔐
+
+- Root canisters issue shard delegation certificates.
+- User shard canisters mint user-bound delegated tokens.
+- Verifier canisters validate tokens locally (no relay envelope mode).
+- Authenticated endpoints require:
+  - caller-subject binding (`token.claims.sub == caller`)
+  - explicit audience membership (`self in token.claims.aud`)
+  - required scope binding (`required_scope in token.claims.scopes`)
+  - token/cert expiry checks
+
+Reference contracts:
+- `docs/contracts/AUTH_DELEGATED_SIGNATURES.md`
+- `docs/contracts/ACCESS_ARCHITECTURE.md`
+
 ### Sharding 📦
 
 Sharding is configured via `canic.toml` and executed through the ops layer. The base endpoint bundle exposes a controller‑only registry query for operator visibility:
@@ -170,6 +186,8 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Test: `make test`
 * Build release WASMs: `make build`
 * Build example targets: `cargo build -p canic --examples`
+* Delegated auth PocketIC flow: `cargo test -p canic-core --test pic_delegation_provision -- --nocapture`
+* Strict crypto mode (fail if threshold keys are unavailable): `CANIC_REQUIRE_THRESHOLD_KEYS=1 cargo test -p canic-core --test pic_delegation_provision -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 
@@ -185,7 +203,7 @@ cargo run -p canic --example minimal_root
 
 ## Project Status & Contributing
 
-Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `CONTRIBUTING.md`, and the CI scripts under `scripts/ci/` for workflow expectations.
+Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `CONFIG.md`, and the CI scripts under `scripts/ci/` for workflow expectations.
 
 ## License
 

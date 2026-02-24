@@ -18,7 +18,7 @@ use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated}
 /// BuiltinPredicate
 ///
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
     AppAllowsUpdates,
     AppIsQueryable,
@@ -31,7 +31,7 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    Authenticated,
+    Authenticated { required_scope: String },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -216,6 +216,7 @@ fn parse_expr(expr: Expr) -> syn::Result<AccessExprAst> {
     }
 }
 
+#[expect(clippy::too_many_lines)]
 fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
     let path = match *call.func {
         Expr::Path(expr) => expr.path,
@@ -266,6 +267,49 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             )))
         }
         _ => {
+            if is_authenticated_path(&path) {
+                let scope_expr = args.next().ok_or_else(|| {
+                    syn::Error::new_spanned(
+                        &path,
+                        "authenticated(...) requires exactly one string literal scope argument",
+                    )
+                })?;
+                if args.next().is_some() {
+                    return Err(syn::Error::new_spanned(
+                        &path,
+                        "authenticated(...) requires exactly one string literal scope argument",
+                    ));
+                }
+                let scope = match scope_expr {
+                    Expr::Lit(expr_lit) => match &expr_lit.lit {
+                        syn::Lit::Str(scope_lit) => scope_lit.value(),
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                expr_lit,
+                                "authenticated(...) requires a string literal scope",
+                            ));
+                        }
+                    },
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            other,
+                            "authenticated(...) requires a string literal scope",
+                        ));
+                    }
+                };
+                if scope.trim().is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        &path,
+                        "authenticated(...) scope must not be empty",
+                    ));
+                }
+                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::Authenticated {
+                        required_scope: scope,
+                    },
+                )));
+            }
+
             if args.next().is_some() {
                 return Err(syn::Error::new_spanned(
                     &path,
@@ -273,10 +317,10 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 ));
             }
             let builtin = builtin_from_path(&path).ok_or_else(|| {
-                if builtin_from_path_tail(&path).is_some() {
+                if builtin_from_path_tail(&path).is_some() || is_authenticated_path(&path) {
                     return syn::Error::new_spanned(
                         &path,
-                        "built-in predicates must use short paths like auth::authenticated() or authenticated()",
+                        "built-in predicates must use short paths like auth::authenticated(\"scope\")",
                     );
                 }
                 syn::Error::new_spanned(
@@ -317,11 +361,7 @@ fn builtin_from_path(path: &Path) -> Option<BuiltinPredicate> {
         return None;
     }
     if path.segments.len() == 1 {
-        let last = path.segments.last()?.ident.to_string();
-        return match last.as_str() {
-            "authenticated" => Some(BuiltinPredicate::Authenticated),
-            _ => None,
-        };
+        return None;
     }
     if path.segments.len() != 2 {
         return None;
@@ -348,11 +388,35 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
             Some(BuiltinPredicate::CallerIsRegisteredToSubnet)
         }
         (Some("caller"), "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
-        (Some("auth"), "authenticated") => Some(BuiltinPredicate::Authenticated),
         (Some("env"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
         (Some("env"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,
     }
+}
+
+fn is_authenticated_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    if path.segments.len() == 1 {
+        return path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "authenticated");
+    }
+
+    if path.segments.len() != 2 {
+        return false;
+    }
+
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back();
+    let module = names.next_back();
+    matches!(
+        (module.as_deref(), last.as_deref()),
+        (Some("auth"), Some("authenticated"))
+    )
 }
 
 fn path_ident(path: &Path) -> syn::Result<&Ident> {

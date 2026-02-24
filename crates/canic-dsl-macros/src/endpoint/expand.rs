@@ -67,7 +67,7 @@ use syn::{GenericArgument, ItemFn, PathArguments, Signature, Type, visit::Visit}
 // ============================================================================
 //
 
-#[allow(clippy::default_trait_access)]
+#[expect(clippy::default_trait_access)]
 pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream2 {
     let attrs = func.attrs.clone();
     let orig_sig = func.sig.clone();
@@ -95,7 +95,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     if requires_authenticated(&args.requires)
         && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
     {
-        // authenticated() decodes ingress arg0 directly; keep the function arg lint-clean.
+        // authenticated("scope") decodes ingress arg0 directly; keep the function arg lint-clean.
         let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
         func.block.stmts.insert(0, keepalive);
     }
@@ -361,7 +361,7 @@ fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
             quote!(::canic::__internal::core::access::expr::AccessExpr::Not(Box::new(#inner)))
         }
         AccessExprAst::Pred(pred) => match pred {
-            AccessPredicateAst::Builtin(builtin) => expr_from_builtin(*builtin),
+            AccessPredicateAst::Builtin(builtin) => expr_from_builtin(builtin),
             AccessPredicateAst::Custom(expr) => {
                 quote!(::canic::__internal::core::access::expr::custom(#expr))
             }
@@ -369,7 +369,7 @@ fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
     }
 }
 
-fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
+fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
     match pred {
         BuiltinPredicate::AppAllowsUpdates => {
             quote!(::canic::__internal::core::access::expr::app::allows_updates())
@@ -404,8 +404,8 @@ fn expr_from_builtin(pred: BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }
-        BuiltinPredicate::Authenticated => {
-            quote!(::canic::__internal::core::access::expr::auth::authenticated())
+        BuiltinPredicate::Authenticated { required_scope } => {
+            quote!(::canic::__internal::core::access::expr::auth::authenticated(#required_scope))
         }
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
@@ -432,7 +432,7 @@ fn expr_has_authenticated_predicate(expr: &AccessExprAst) -> bool {
         AccessExprAst::Not(expr) => expr_has_authenticated_predicate(expr),
         AccessExprAst::Pred(pred) => match pred {
             AccessPredicateAst::Builtin(builtin) => {
-                matches!(builtin, BuiltinPredicate::Authenticated)
+                matches!(builtin, BuiltinPredicate::Authenticated { .. })
             }
             AccessPredicateAst::Custom(_) => false,
         },
@@ -457,13 +457,13 @@ fn expr_has_app_state_predicate(expr: &AccessExprAst) -> bool {
         }
         AccessExprAst::Not(expr) => expr_has_app_state_predicate(expr),
         AccessExprAst::Pred(pred) => match pred {
-            AccessPredicateAst::Builtin(builtin) => builtin_is_app_state(*builtin),
+            AccessPredicateAst::Builtin(builtin) => builtin_is_app_state(builtin),
             AccessPredicateAst::Custom(tokens) => custom_has_app_state_is(tokens),
         },
     }
 }
 
-const fn builtin_is_app_state(pred: BuiltinPredicate) -> bool {
+const fn builtin_is_app_state(pred: &BuiltinPredicate) -> bool {
     matches!(
         pred,
         BuiltinPredicate::AppAllowsUpdates | BuiltinPredicate::AppIsQueryable

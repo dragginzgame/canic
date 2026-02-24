@@ -26,7 +26,7 @@ impl SubnetStateOps {
         SubnetStateInputMapper::record_to_view(SubnetState::export())
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn import(data: SubnetStateRecord) {
         SubnetState::import(data);
     }

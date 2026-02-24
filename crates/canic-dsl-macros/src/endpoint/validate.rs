@@ -77,7 +77,9 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
             exprs.iter().any(access_expr_contains_authenticated)
         }
         AccessExprAst::Not(expr) => access_expr_contains_authenticated(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated)) => true,
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
+            ..
+        })) => true,
         AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
             false
         }
@@ -88,8 +90,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
     let Some(first) = sig.inputs.first() else {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "authenticated() requires a first argument of type `DelegatedToken` \
-            (or `AuthenticatedRequest` as the only argument)",
+            "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
         ));
     };
 
@@ -98,8 +99,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
         FnArg::Receiver(recv) => {
             return Err(syn::Error::new_spanned(
                 recv,
-                "authenticated() requires a first argument of type `DelegatedToken` \
-                (or `AuthenticatedRequest` as the only argument)",
+                "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
             ));
         }
     };
@@ -107,8 +107,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
     let Some(ident) = type_ident(first_ty) else {
         return Err(syn::Error::new_spanned(
             first_ty,
-            "authenticated() requires a first argument of type `DelegatedToken` \
-            (or `AuthenticatedRequest` as the only argument)",
+            "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
         ));
     };
 
@@ -116,25 +115,9 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
         return Ok(());
     }
 
-    if ident == "AuthenticatedRequest" {
-        let typed_count = sig
-            .inputs
-            .iter()
-            .filter(|arg| matches!(arg, FnArg::Typed(_)))
-            .count();
-        if typed_count == 1 {
-            return Ok(());
-        }
-        return Err(syn::Error::new_spanned(
-            first_ty,
-            "authenticated() with `AuthenticatedRequest` requires it to be the only argument",
-        ));
-    }
-
     Err(syn::Error::new_spanned(
         first_ty,
-        "authenticated() requires a first argument of type `DelegatedToken` \
-        (or `AuthenticatedRequest` as the only argument)",
+        "authenticated(\"scope\") requires a first argument of type `DelegatedToken`",
     ))
 }
 
@@ -157,7 +140,9 @@ mod tests {
         ParsedArgs {
             forwarded: Vec::new(),
             requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::Authenticated,
+                BuiltinPredicate::Authenticated {
+                    required_scope: "scope:test".to_string(),
+                },
             ))],
             requires_async: true,
             requires_fallible: true,
@@ -171,7 +156,7 @@ mod tests {
         let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
-                .contains("authenticated() requires a first argument")
+                .contains("authenticated(\"scope\") requires a first argument")
         );
     }
 
@@ -184,30 +169,6 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_accepts_authenticated_request_only_arg() {
-        let sig: Signature = syn::parse_quote!(
-            async fn hello(
-                request: ::canic::dto::rpc::AuthenticatedRequest
-            ) -> Result<(), ::canic::Error>
-        );
-        validate(parsed_authenticated(), &sig, true).expect("authenticated request ok");
-    }
-
-    #[test]
-    fn authenticated_rejects_authenticated_request_with_extra_args() {
-        let sig: Signature = syn::parse_quote!(
-            async fn hello(
-                request: ::canic::dto::rpc::AuthenticatedRequest,
-                extra: u64
-            ) -> Result<(), ::canic::Error>
-        );
-        let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
-        assert!(err.to_string().contains(
-            "authenticated() with `AuthenticatedRequest` requires it to be the only argument"
-        ));
-    }
-
-    #[test]
     fn authenticated_rejects_wrong_first_arg_type() {
         let sig: Signature = syn::parse_quote!(
             async fn hello(user: ::canic::cdk::candid::Principal) -> Result<(), ::canic::Error>
@@ -215,7 +176,7 @@ mod tests {
         let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
-                .contains("authenticated() requires a first argument")
+                .contains("authenticated(\"scope\") requires a first argument")
         );
     }
 }

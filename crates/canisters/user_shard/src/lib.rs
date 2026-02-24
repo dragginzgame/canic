@@ -20,8 +20,6 @@ use canic::{
 };
 use canic_internal::canister::USER_SHARD;
 
-const TOKEN_VERSION: u16 = 1;
-
 //
 // CANIC
 //
@@ -55,10 +53,10 @@ async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<Delegated
         }
         Err(err) => return Err(err),
     };
-    DelegationApi::sign_token(TOKEN_VERSION, claims, proof)
+    DelegationApi::sign_token(claims, proof).await
 }
 
-#[canic_query(requires(authenticated()))]
+#[canic_query(requires(authenticated("auth:verify")))]
 async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
@@ -78,9 +76,9 @@ async fn request_delegation(claims: &DelegatedTokenClaims) -> Result<(), Error> 
     }
 
     let request = DelegationRequest {
-        signer_pid: canic::cdk::api::canister_self(),
-        audiences: vec![claims.aud.clone()],
+        shard_pid: canic::cdk::api::canister_self(),
         scopes: claims.scopes.clone(),
+        aud: claims.aud.clone(),
         ttl_secs,
         verifier_targets: Vec::new(),
         include_root_verifier: true,

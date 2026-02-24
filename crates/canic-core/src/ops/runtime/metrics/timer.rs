@@ -76,7 +76,7 @@ pub struct TimerMetrics;
 
 impl TimerMetrics {
     /// Convert a `Duration` to milliseconds, saturating at `u64::MAX`.
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     fn delay_ms(delay: Duration) -> u64 {
         delay.as_millis().min(u128::from(u64::MAX)) as u64
     }

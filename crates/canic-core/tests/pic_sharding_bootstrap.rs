@@ -178,8 +178,10 @@ fn build_canisters_once(workspace_root: &PathBuf) {
             return;
         }
 
+        let target_dir = test_target_dir(workspace_root);
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root);
+        cmd.env("CARGO_TARGET_DIR", &target_dir);
         cmd.env("DFX_NETWORK", "local");
         cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
         for name in CANISTER_PACKAGES {
@@ -205,8 +207,7 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
         return dir.join(format!("{crate_name}.wasm"));
     }
 
-    let target_dir =
-        env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
+    let target_dir = test_target_dir(workspace_root);
 
     target_dir
         .join("wasm32-unknown-unknown")
@@ -216,6 +217,10 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
 
 fn prebuilt_wasm_dir() -> Option<PathBuf> {
     env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
+}
+
+fn test_target_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("target").join("pic-wasm")
 }
 
 fn workspace_root() -> PathBuf {
