@@ -32,7 +32,6 @@ pub enum ConfigError {
     #[error("config has already been initialized")]
     AlreadyInitialized,
 
-    #[allow(unused)] // wasm cfg
     #[error("config has not been initialized")]
     NotInitialized,
 

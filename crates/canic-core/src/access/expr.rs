@@ -75,7 +75,7 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    Authenticated,
+    Authenticated { required_scope: &'static str },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -206,12 +206,11 @@ pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
-    pub const fn authenticated() -> AccessExpr {
-        builtin(BuiltinPredicate::Authenticated)
+    pub const fn authenticated(required_scope: &'static str) -> AccessExpr {
+        builtin(BuiltinPredicate::Authenticated { required_scope })
     }
 }
 
-#[allow(clippy::future_not_send)]
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
     match eval_access_inner(expr, ctx).await {
         Ok(()) => Ok(()),
@@ -304,9 +303,10 @@ async fn eval_builtin(pred: &BuiltinPredicate, ctx: &AccessContext) -> Result<()
             access::auth::is_registered_to_subnet(ctx.caller).await
         }
         BuiltinPredicate::CallerIsWhitelisted => access::auth::is_whitelisted(ctx.caller).await,
-        BuiltinPredicate::Authenticated => {
-            let verified = access::auth::delegated_token_verified(ctx.caller).await?;
-            DelegationMetrics::record_authority(verified.cert.signer_pid);
+        BuiltinPredicate::Authenticated { required_scope } => {
+            let verified =
+                access::auth::delegated_token_verified(ctx.caller, required_scope).await?;
+            DelegationMetrics::record_authority(verified.cert.shard_pid);
             Ok(())
         }
         BuiltinPredicate::BuildIcOnly => access::env::build_network_ic(),
@@ -383,7 +383,7 @@ impl BuiltinPredicate {
             Self::CallerIsSameCanister => "caller_is_same_canister",
             Self::CallerIsRegisteredToSubnet => "caller_is_registered_to_subnet",
             Self::CallerIsWhitelisted => "caller_is_whitelisted",
-            Self::Authenticated => "authenticated",
+            Self::Authenticated { .. } => "authenticated",
             Self::BuildIcOnly => "build_ic_only",
             Self::BuildLocalOnly => "build_local_only",
         }
@@ -401,7 +401,7 @@ impl BuiltinPredicate {
             | Self::CallerIsSameCanister
             | Self::CallerIsRegisteredToSubnet
             | Self::CallerIsWhitelisted
-            | Self::Authenticated => AccessMetricKind::Auth,
+            | Self::Authenticated { .. } => AccessMetricKind::Auth,
         }
     }
 }

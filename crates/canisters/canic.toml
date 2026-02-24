@@ -15,6 +15,7 @@ init_mode = "enabled"
 [auth.delegated_tokens]
 # Root-signed delegated token auth (cert -> proof -> token).
 enabled = true
+ecdsa_key_name = "test_key_1"
 
 
 # ----------------------------------------------------------------

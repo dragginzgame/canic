@@ -1,5 +1,7 @@
+use std::env;
+
 fn main() {
-    let network = std::env::var("DFX_NETWORK").unwrap_or_else(|_| {
+    let network = env::var("DFX_NETWORK").unwrap_or_else(|_| {
         // Explicit, intentional default for local development.
         "local".to_string()
     });

@@ -34,7 +34,7 @@ impl ScalingRegistryOps {
     }
 
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     pub fn count_by_pool(pool: &str) -> u32 {
         Self::find_by_pool(pool).len() as u32
     }

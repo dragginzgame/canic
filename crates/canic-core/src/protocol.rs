@@ -7,7 +7,6 @@
 pub const CANIC_APP: &str = "canic_app";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_RESPONSE: &str = "canic_response";
-pub const CANIC_RESPONSE_AUTHENTICATED: &str = "canic_response_authenticated";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
 pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";

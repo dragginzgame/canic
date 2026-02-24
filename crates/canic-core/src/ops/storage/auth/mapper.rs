@@ -15,12 +15,12 @@ impl DelegationProofRecordMapper {
         // TODO: keep record schema and DTO fields in sync; mapping lives in ops.
         DelegationProofRecord {
             cert: DelegationCertRecord {
-                v: proof.cert.v,
-                signer_pid: proof.cert.signer_pid,
-                audiences: proof.cert.audiences,
-                scopes: proof.cert.scopes,
+                root_pid: proof.cert.root_pid,
+                shard_pid: proof.cert.shard_pid,
                 issued_at: proof.cert.issued_at,
                 expires_at: proof.cert.expires_at,
+                scopes: proof.cert.scopes,
+                aud: proof.cert.aud,
             },
             cert_sig: proof.cert_sig,
         }
@@ -31,12 +31,12 @@ impl DelegationProofRecordMapper {
         // TODO: keep record schema and DTO fields in sync; mapping lives in ops.
         DelegationProof {
             cert: DelegationCert {
-                v: record.cert.v,
-                signer_pid: record.cert.signer_pid,
-                audiences: record.cert.audiences,
-                scopes: record.cert.scopes,
+                root_pid: record.cert.root_pid,
+                shard_pid: record.cert.shard_pid,
                 issued_at: record.cert.issued_at,
                 expires_at: record.cert.expires_at,
+                scopes: record.cert.scopes,
+                aud: record.cert.aud,
             },
             cert_sig: record.cert_sig,
         }

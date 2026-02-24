@@ -16,15 +16,12 @@
 /// - consumers benefit from a curated, intentional subset of the IC SDK.
 ///
 pub use candid;
-pub use ic_canister_sig_creation as canister_sig_creation;
-#[allow(deprecated)] // call is flagged as deprecated but functions inside arent
+#[expect(deprecated)] // call is flagged as deprecated but functions inside arent
 pub use ic_cdk::{
     api, call, eprintln, export_candid, futures, init, management_canister as mgmt, post_upgrade,
     println, query, trap, update,
 };
 pub use ic_cdk_timers as timers;
-pub use ic_certified_map as certified_map;
-pub use ic_signature_verification as signature_verification;
 pub use icrc_ledger_types;
 
 pub mod env;

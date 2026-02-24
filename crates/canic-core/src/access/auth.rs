@@ -19,7 +19,7 @@ use crate::{
         types::Principal,
     },
     config::Config,
-    dto::{auth::DelegatedToken, rpc::AuthenticatedRequest},
+    dto::auth::DelegatedToken,
     ids::CanisterRole,
     ops::{
         auth::{DelegatedTokenOps, VerifiedDelegatedToken},
@@ -36,42 +36,67 @@ pub type Role = CanisterRole;
 /// Verify a delegated token read from the ingress payload.
 ///
 /// Contract:
-/// - The delegated token MUST be the first candid argument, or embedded in an
-///   `AuthenticatedRequest` as the single argument.
+/// - The delegated token MUST be the first candid argument.
 /// - Decoding failures result in access denial.
-/// - The caller argument is accepted for composability and is not inspected.
-pub async fn authenticated(_caller: Principal) -> Result<(), AccessError> {
-    let _ = delegated_token_verified(_caller).await?;
+/// - The caller principal MUST match token subject.
+pub async fn authenticated(caller: Principal, required_scope: &str) -> Result<(), AccessError> {
+    let _ = delegated_token_verified(caller, required_scope).await?;
     Ok(())
 }
 
 pub(crate) async fn delegated_token_verified(
-    _caller: Principal,
+    caller: Principal,
+    required_scope: &str,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
-    if should_skip_delegated_auth() {
-        // Bypass delegated-token verification for configured build networks.
-        return Ok(VerifiedDelegatedToken::dev_bypass());
-    }
-
     let token = delegated_token_from_args()?;
 
     let authority_pid =
         EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
 
     let now_secs = IcOps::now_secs();
+    let self_pid = IcOps::canister_self();
 
-    verify_token(token, authority_pid, now_secs).await
+    verify_token(
+        token,
+        caller,
+        authority_pid,
+        now_secs,
+        self_pid,
+        required_scope,
+    )
+    .await
 }
 
 /// Verify a delegated token against the configured authority.
 #[allow(clippy::unused_async)]
 async fn verify_token(
     token: DelegatedToken,
+    caller: Principal,
     authority_pid: Principal,
     now_secs: u64,
+    self_pid: Principal,
+    required_scope: &str,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
-    let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs)
+    let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
+
+    if verified.claims.sub != caller {
+        return Err(AccessError::Denied(format!(
+            "delegated token subject '{}' does not match caller '{}'",
+            verified.claims.sub, caller
+        )));
+    }
+
+    if !verified
+        .claims
+        .scopes
+        .iter()
+        .any(|scope| scope == required_scope)
+    {
+        return Err(AccessError::Denied(format!(
+            "delegated token missing required scope '{required_scope}'",
+        )));
+    }
 
     Ok(verified)
 }
@@ -82,7 +107,7 @@ async fn verify_token(
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
     if caller_is_controller(&caller) {
         Ok(())
@@ -208,53 +233,16 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
         ));
     }
 
-    let mut token_decoder = IDLDeserialize::new(&bytes)
+    let mut decoder = IDLDeserialize::new(&bytes)
         .map_err(|err| AccessError::Denied(format!("failed to decode ingress arguments: {err}")))?;
 
-    // Decode the FIRST candid argument as DelegatedToken.
-    if let Ok(token) = token_decoder.get_value::<DelegatedToken>() {
-        return Ok(token);
-    }
-
-    let mut envelope_decoder = IDLDeserialize::new(&bytes)
-        .map_err(|err| AccessError::Denied(format!("failed to decode ingress arguments: {err}")))?;
-
-    let envelope = envelope_decoder
-        .get_value::<AuthenticatedRequest>()
-        .map_err(|err| {
-            AccessError::Denied(format!(
-                "failed to decode delegated token as first argument: {err}"
-            ))
-        })?;
-
-    Ok(envelope.delegated_token)
+    decoder.get_value::<DelegatedToken>().map_err(|err| {
+        AccessError::Denied(format!(
+            "failed to decode delegated token as first argument: {err}"
+        ))
+    })
 }
 
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
-}
-
-fn should_skip_delegated_auth() -> bool {
-    should_skip_delegated_auth_for(option_env!("DFX_NETWORK"))
-}
-
-fn should_skip_delegated_auth_for(network: Option<&str>) -> bool {
-    matches!(network, None | Some("local"))
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::should_skip_delegated_auth_for;
-
-    #[test]
-    fn delegated_auth_bypass_matrix() {
-        assert!(should_skip_delegated_auth_for(Some("local")));
-        assert!(!should_skip_delegated_auth_for(Some("ic")));
-        assert!(should_skip_delegated_auth_for(None));
-        assert!(!should_skip_delegated_auth_for(Some("nope")));
-    }
 }

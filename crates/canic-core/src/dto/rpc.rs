@@ -1,4 +1,4 @@
-use crate::dto::{auth::DelegatedToken, prelude::*};
+use crate::dto::prelude::*;
 
 ///
 /// Request
@@ -10,16 +10,6 @@ pub enum Request {
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
     Cycles(CyclesRequest),
-}
-
-///
-/// AuthenticatedRequest
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AuthenticatedRequest {
-    pub request: Request,
-    pub delegated_token: DelegatedToken,
 }
 
 ///
@@ -81,8 +71,6 @@ pub enum Response {
     UpgradeCanister(UpgradeCanisterResponse),
     Cycles(CyclesResponse),
 }
-
-pub type AuthenticatedResponse = Response;
 
 ///
 /// CreateCanisterResponse

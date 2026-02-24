@@ -3,8 +3,8 @@ use crate::{
     dto::{
         error::Error,
         rpc::{
-            AuthenticatedRequest, AuthenticatedResponse, CreateCanisterParent,
-            CreateCanisterResponse, Request, Response, UpgradeCanisterResponse,
+            CreateCanisterParent, CreateCanisterResponse, Request, Response,
+            UpgradeCanisterResponse,
         },
     },
     ids::CanisterRole,
@@ -50,14 +50,6 @@ impl RpcApi {
         canister_pid: Principal,
     ) -> Result<UpgradeCanisterResponse, Error> {
         RpcRequestWorkflow::upgrade_canister_request(canister_pid)
-            .await
-            .map_err(Error::from)
-    }
-
-    pub async fn authenticated_response(
-        request: AuthenticatedRequest,
-    ) -> Result<AuthenticatedResponse, Error> {
-        RpcRequestWorkflow::authenticated_request(request)
             .await
             .map_err(Error::from)
     }

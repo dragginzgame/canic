@@ -2,15 +2,14 @@
 // This test relies on embedded config by design (test stub).
 //
 // admin-only: not part of canonical delegation flow.
-// used for tests / tooling due to PocketIC limitations.
 
 use candid::{Principal, decode_one, encode_args};
 use canic_core::{
     dto::{
         abi::v1::CanisterInitPayload,
         auth::{
-            DelegationCert, DelegationProof, DelegationProvisionRequest,
-            DelegationProvisionResponse,
+            DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+            DelegationProvisionRequest, DelegationProvisionResponse,
         },
         env::EnvBootstrapArgs,
         error::{Error, ErrorCode},
@@ -37,6 +36,7 @@ const CANISTER_PACKAGES: [&str; 2] = ["delegation_root_stub", "delegation_signer
 const BOOTSTRAP_TICK_LIMIT: usize = 40;
 const BOOTSTRAP_TIMEOUT_SECS: u64 = 20;
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
+const REQUIRE_THRESHOLD_KEYS_ENV: &str = "CANIC_REQUIRE_THRESHOLD_KEYS";
 static BUILD_ONCE: Once = Once::new();
 static ROOT_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 static SIGNER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
@@ -55,8 +55,8 @@ fn delegation_provision_requires_root_caller() {
     pic.install_canister(root_id, root_wasm, root_init_args(), None);
 
     wait_for_ready(&pic, root_id);
-    let signer_pid = fetch_signer_pid(&pic, root_id);
-    let request = provision_request(signer_pid);
+    let shard_pid = fetch_shard_pid(&pic, root_id);
+    let request = provision_request(root_id, shard_pid);
 
     let non_root = Principal::from_slice(&[2; 29]);
     let denied: Result<DelegationProvisionResponse, Error> = update_call_as(
@@ -76,23 +76,25 @@ fn delegation_provision_requires_root_caller() {
         "canic_delegation_provision",
         (request,),
     );
-    match ok {
-        Ok(ok) => {
-            assert_eq!(ok.proof.cert.signer_pid, signer_pid);
-            assert!(ok.results.is_empty());
+    let ok = match ok {
+        Ok(ok) => ok,
+        Err(err) if threshold_key_unavailable(&err) => {
+            assert!(
+                !require_threshold_keys(),
+                "threshold key unavailable while {REQUIRE_THRESHOLD_KEYS_ENV}=1: {}",
+                err.message
+            );
+            eprintln!("skipping root provision success assertion: {}", err.message);
+            return;
         }
-        Err(err) => {
-            // PocketIC update calls do not provide certified data,
-            // so canister signatures may be unavailable.
-            // Canister signatures require certified data and cannot be produced in PocketIC update calls.
-            // This test only enforces the root-caller gate under PocketIC.
-            assert_eq!(err.code, ErrorCode::Internal);
-        }
-    }
+        Err(err) => panic!("expected root caller provision to succeed: {err:?}"),
+    };
+    assert_eq!(ok.proof.cert.shard_pid, shard_pid);
+    assert!(ok.results.is_empty());
 }
 
 #[test]
-fn signer_proof_rejects_mismatched_signer_pid() {
+fn signer_proof_rejects_mismatched_shard_pid() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
 
@@ -121,11 +123,266 @@ fn signer_proof_rejects_mismatched_signer_pid() {
     assert_eq!(denied.code, ErrorCode::InvalidInput);
 }
 
-fn provision_request(signer_pid: Principal) -> DelegationProvisionRequest {
+#[test]
+fn delegated_token_flow_enforces_subject_binding() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+
+    let root_wasm = root_wasm(&workspace_root);
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.install_canister(root_id, root_wasm, root_init_args(), None);
+    wait_for_ready(&pic, root_id);
+
+    let signer_id = fetch_shard_pid(&pic, root_id);
+    let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let scope = "test:verify".to_string();
+
+    let provision = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_id,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: now_secs + 600,
+            scopes: vec![scope.clone()],
+            aud: vec![signer_id],
+        },
+        signer_targets: vec![signer_id],
+        verifier_targets: Vec::new(),
+    };
+
+    if provision_or_skip(&pic, root_id, provision, "delegated token flow").is_none() {
+        return;
+    }
+
+    let caller = p(9);
+    let claims = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_id,
+        scopes: vec![scope],
+        aud: vec![signer_id],
+        iat: now_secs,
+        exp: now_secs + 300,
+    };
+
+    let minted: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_id,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims,),
+    );
+    let token = minted.expect("expected token mint to succeed");
+
+    let ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        caller,
+        "signer_verify_token",
+        (token.clone(),),
+    );
+    ok.expect("expected matching caller verification to succeed");
+
+    let mismatch: Result<(), Error> =
+        update_call_as(&pic, signer_id, p(10), "signer_verify_token", (token,));
+    let mismatch = mismatch.expect_err("expected subject mismatch to fail");
+    assert_eq!(mismatch.code, ErrorCode::Unauthorized);
+}
+
+#[test]
+fn delegated_token_rejects_expired_certificate() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+
+    let root_wasm = root_wasm(&workspace_root);
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.install_canister(root_id, root_wasm, root_init_args(), None);
+    wait_for_ready(&pic, root_id);
+
+    let signer_id = fetch_shard_pid(&pic, root_id);
+    let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let scope = "test:verify".to_string();
+    let cert_exp = now_secs + 2;
+
+    let provision = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_id,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: cert_exp,
+            scopes: vec![scope.clone()],
+            aud: vec![signer_id],
+        },
+        signer_targets: vec![signer_id],
+        verifier_targets: Vec::new(),
+    };
+    if provision_or_skip(&pic, root_id, provision, "expired certificate flow").is_none() {
+        return;
+    }
+
+    let caller = p(11);
+    let claims = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_id,
+        scopes: vec![scope],
+        aud: vec![signer_id],
+        iat: now_secs,
+        exp: cert_exp,
+    };
+
+    let minted: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_id,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims,),
+    );
+    let token = minted.expect("expected token mint to succeed");
+
+    let ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        caller,
+        "signer_verify_token",
+        (token.clone(),),
+    );
+    ok.expect("expected verification to succeed before expiry");
+
+    pic.advance_time(Duration::from_secs(3));
+    pic.tick();
+
+    let expired: Result<(), Error> =
+        update_call_as(&pic, signer_id, caller, "signer_verify_token", (token,));
+    let expired = expired.expect_err("expected verification to fail after expiry");
+    assert_eq!(expired.code, ErrorCode::Unauthorized);
+}
+
+#[test]
+fn delegated_token_rejects_cross_shard_token_reuse() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+
+    let root_wasm = root_wasm(&workspace_root);
+    let shard_wasm = signer_wasm(&workspace_root);
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.install_canister(root_id, root_wasm, root_init_args(), None);
+    wait_for_ready(&pic, root_id);
+
+    let signer_a = fetch_shard_pid(&pic, root_id);
+
+    let signer_b = pic.create_canister();
+    pic.add_cycles(signer_b, INSTALL_CYCLES);
+    pic.install_canister(signer_b, shard_wasm, shard_init_args(root_id), None);
+
+    let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let scope = "test:verify".to_string();
+
+    let provision_a = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_a,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: now_secs + 600,
+            scopes: vec![scope.clone()],
+            aud: vec![signer_a, signer_b],
+        },
+        signer_targets: vec![signer_a],
+        verifier_targets: Vec::new(),
+    };
+    if provision_or_skip(
+        &pic,
+        root_id,
+        provision_a,
+        "cross-shard signer A provisioning",
+    )
+    .is_none()
+    {
+        return;
+    }
+
+    let provision_b = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_b,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: now_secs + 600,
+            scopes: vec![scope.clone()],
+            aud: vec![signer_b],
+        },
+        signer_targets: vec![signer_b],
+        verifier_targets: Vec::new(),
+    };
+    let Some(provisioned_b) = provision_or_skip(
+        &pic,
+        root_id,
+        provision_b,
+        "cross-shard signer B provisioning",
+    ) else {
+        return;
+    };
+
+    let caller = p(12);
+    let claims_a = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_a,
+        scopes: vec![scope],
+        aud: vec![signer_a, signer_b],
+        iat: now_secs,
+        exp: now_secs + 300,
+    };
+
+    let minted: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_a,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims_a,),
+    );
+    let token_a = minted.expect("expected signer A token mint to succeed");
+
+    let ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_a,
+        caller,
+        "signer_verify_token",
+        (token_a.clone(),),
+    );
+    ok.expect("expected signer A verification to succeed");
+
+    let cross_shard: Result<(), Error> = update_call_as(
+        &pic,
+        signer_b,
+        caller,
+        "signer_verify_token",
+        (token_a.clone(),),
+    );
+    let cross_shard = cross_shard.expect_err("expected signer A token to fail on signer B");
+    assert_eq!(cross_shard.code, ErrorCode::Unauthorized);
+
+    let mut remapped = token_a;
+    remapped.proof = provisioned_b.proof;
+    remapped.claims.shard_pid = signer_b;
+    remapped.claims.aud = vec![signer_b];
+
+    let wrong_key: Result<(), Error> =
+        update_call_as(&pic, signer_b, caller, "signer_verify_token", (remapped,));
+    let wrong_key = wrong_key.expect_err("expected remapped token to fail signature verification");
+    assert_eq!(wrong_key.code, ErrorCode::Unauthorized);
+}
+
+fn provision_request(root_pid: Principal, shard_pid: Principal) -> DelegationProvisionRequest {
     let cert = DelegationCert {
-        v: 1,
-        signer_pid,
-        audiences: vec!["app".to_string()],
+        root_pid,
+        shard_pid,
+        aud: vec![Principal::from_slice(&[1; 29])],
         scopes: vec!["scope".to_string()],
         issued_at: 100,
         expires_at: 200,
@@ -163,9 +420,9 @@ fn shard_init_args(root_pid: Principal) -> Vec<u8> {
 
 fn mismatched_signer_proof() -> DelegationProof {
     let cert = DelegationCert {
-        v: 1,
-        signer_pid: Principal::from_slice(&[99; 29]),
-        audiences: vec!["app".to_string()],
+        root_pid: Principal::from_slice(&[9; 29]),
+        shard_pid: Principal::from_slice(&[99; 29]),
+        aud: vec![Principal::from_slice(&[1; 29])],
         scopes: vec!["scope".to_string()],
         issued_at: 100,
         expires_at: 200,
@@ -175,6 +432,10 @@ fn mismatched_signer_proof() -> DelegationProof {
         cert,
         cert_sig: vec![1, 2, 3],
     }
+}
+
+const fn p(id: u8) -> Principal {
+    Principal::from_slice(&[id; 29])
 }
 
 fn update_call_as<T, A>(
@@ -229,7 +490,7 @@ fn fetch_ready(pic: &pocket_ic::PocketIc, canister_id: Principal) -> bool {
     query_call(pic, canister_id, protocol::CANIC_READY, ())
 }
 
-fn fetch_signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+fn fetch_shard_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
     let registry: Result<SubnetRegistryResponse, Error> =
         query_call(pic, root_id, protocol::CANIC_SUBNET_REGISTRY, ());
     let entries = registry.expect("query subnet registry application").0;
@@ -303,6 +564,50 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
 
 fn prebuilt_wasm_dir() -> Option<PathBuf> {
     env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
+}
+
+fn threshold_key_unavailable(err: &Error) -> bool {
+    err.message.contains("Requested unknown threshold key")
+        || err.message.contains("existing keys: []")
+}
+
+fn provision_or_skip(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    request: DelegationProvisionRequest,
+    context: &str,
+) -> Option<DelegationProvisionResponse> {
+    let result: Result<DelegationProvisionResponse, Error> = update_call_as(
+        pic,
+        root_id,
+        root_id,
+        "canic_delegation_provision",
+        (request,),
+    );
+
+    match result {
+        Ok(response) => Some(response),
+        Err(err) if threshold_key_unavailable(&err) => {
+            assert!(
+                !require_threshold_keys(),
+                "threshold key unavailable while {REQUIRE_THRESHOLD_KEYS_ENV}=1: {}",
+                err.message
+            );
+            eprintln!("skipping {context}: {}", err.message);
+            None
+        }
+        Err(err) => panic!("expected root caller provision to succeed ({context}): {err:?}"),
+    }
+}
+
+fn require_threshold_keys() -> bool {
+    env::var(REQUIRE_THRESHOLD_KEYS_ENV)
+        .map(|value| {
+            value.eq_ignore_ascii_case("1")
+                || value.eq_ignore_ascii_case("true")
+                || value.eq_ignore_ascii_case("yes")
+        })
+        .unwrap_or(false)
 }
 
 fn workspace_root() -> PathBuf {

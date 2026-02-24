@@ -40,7 +40,7 @@ pub fn pic() -> Pic {
 ///
 pub struct PicBuilder(PocketIcBuilder);
 
-#[allow(clippy::new_without_default)]
+#[expect(clippy::new_without_default)]
 impl PicBuilder {
     /// Start a new PicBuilder with sensible defaults.
     #[must_use]

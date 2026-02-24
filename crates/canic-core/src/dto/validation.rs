@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// ValidationReport
 ///
 
-#[allow(clippy::struct_excessive_bools)]
+#[expect(clippy::struct_excessive_bools)]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ValidationReport {
     pub ok: bool,

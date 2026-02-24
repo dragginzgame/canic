@@ -88,6 +88,14 @@ jobs:
             echo "misuse of 'view' detected in function names"
             exit 1
           fi
+      - name: Forbidden crypto API guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rg -n "sign_with_ecdsa|verify_ecdsa|ecdsa_public_key" crates; then
+            echo "forbidden ECDSA API detected"
+            exit 1
+          fi
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
@@ -95,6 +103,45 @@ jobs:
         run: cargo build -p canic --examples --locked
       - name: Build examples (ic feature)
         run: cargo build -p canic --examples --features ic --locked
+
+  delegated-crypto:
+    if: (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && vars.CANIC_REQUIRE_THRESHOLD_KEYS == '1'
+    runs-on: ubuntu-latest
+    env:
+      CANIC_REQUIRE_THRESHOLD_KEYS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: 1.92.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Cache PocketIC server
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pocket-ic-server-12.0.0
+          key: pocket-ic-12.0.0-${{ runner.os }}
+      - name: Install PocketIC server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          VERSION="12.0.0"
+          DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
+          BIN="$DIR/pocket-ic"
+          mkdir -p "$DIR"
+
+          if [ ! -x "$BIN" ]; then
+            curl -L \
+              -o "$BIN.gz" \
+              "https://github.com/dfinity/pocketic/releases/download/$VERSION/pocket-ic-x86_64-linux.gz"
+            gunzip -f "$BIN.gz"
+            chmod +x "$BIN"
+          fi
+
+          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Run strict delegated crypto test
+        run: cargo test -p canic-core --test pic_delegation_provision --locked -- --nocapture --test-threads=1
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -153,6 +200,14 @@ jobs:
           mkdir -p .dfx/local/canisters/root
           cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
+      - name: Forbidden crypto API guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rg -n "sign_with_ecdsa|verify_ecdsa|ecdsa_public_key" crates; then
+            echo "forbidden ECDSA API detected"
+            exit 1
+          fi
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1

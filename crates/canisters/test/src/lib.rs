@@ -55,17 +55,16 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
         return Err(Error::forbidden("test-only canister"));
     }
 
-    let root_pid = EnvQuery::snapshot()
+    let _root_pid = EnvQuery::snapshot()
         .root_pid
         .ok_or_else(|| Error::internal("root pid unavailable"))?;
 
-    DelegationApi::verify_delegation_proof(&proof, root_pid)?;
-    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier)
+    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier).await
 }
 
 /// test_verify_delegated_token
 /// Verifies delegated tokens using the access guard.
-#[canic_update(requires(auth::authenticated()))]
+#[canic_update(requires(auth::authenticated("test:verify")))]
 async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));

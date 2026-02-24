@@ -48,7 +48,6 @@ pub struct UpgradeFlags {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[allow(dead_code)]
 pub enum LogVisibility {
     Controllers,
     Public,
@@ -272,7 +271,7 @@ impl MgmtOps {
         };
         SystemMetrics::increment(metric_kind);
 
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss)]
         let bytes_kb = wasm.len() as f64 / 1_000.0;
         log!(
             Topic::CanisterLifecycle,
@@ -294,7 +293,7 @@ impl MgmtOps {
 
         SystemMetrics::increment(SystemMetricKind::UpgradeCode);
 
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss)]
         let bytes_kb = wasm.len() as f64 / 1_000.0;
         log!(
             Topic::CanisterLifecycle,

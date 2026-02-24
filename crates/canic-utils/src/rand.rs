@@ -87,7 +87,7 @@ pub fn next_u8() -> Result<u8, RngError> {
 }
 
 /// Produce a 16-bit random value from the shared RNG.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn next_u16() -> Result<u16, RngError> {
     with_rng(|rand| rand.next_u32() as u16)
 }

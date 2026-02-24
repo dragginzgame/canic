@@ -5,6 +5,46 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.0] - 2026-02-24 - WIP Direct Delegated Token Model
+
+### ⚠️ Breaking
+
+- Delegated auth now requires explicit endpoint scopes via `authenticated("scope")`; `authenticated()` without a scope is no longer accepted.
+- Relay-style authenticated RPC envelope support was removed in favor of direct token verification at each endpoint.
+- Auth DTOs were reshaped to principal-based audiences and explicit shard/root binding (`root_pid`, `shard_pid`, `aud: Vec<Principal>`).
+
+### 🔧 Changed
+
+- Delegated token verification now enforces subject binding (`token.sub == caller`) and explicit audience binding (`self_pid ∈ token.aud`) before authorization.
+- Certificate verification now enforces root authority binding (`cert.root_pid == env.root_pid`) in addition to signature checks.
+- User shard token issuance now uses a single atomic sign path and delegation requests now carry shard-scoped audience principals.
+- Environment import now treats `root_pid` as write-once: once initialized, later imports must keep the same root principal.
+
+```rust
+#[canic_update(requires(auth::authenticated("test:verify")))]
+async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+```
+
+### 🗑️ Removed
+
+- Removed `AuthenticatedRequest` / authenticated relay endpoint flow (`canic_response_authenticated`) and related RPC plumbing.
+- Removed local delegated-auth bypass path; delegated token checks are no longer skipped on local builds.
+
+### 🧹 Cleanup
+
+- Removed `SignatureInfra` compile-time source scanning from `canic-core/build.rs`; the build script now only validates `DFX_NETWORK`.
+- Delegated signing remains single-step and root/shard-scoped; legacy `prepare/get` flows are no longer part of the auth path.
+- CI now includes grep guards to fail builds if forbidden ECDSA APIs reappear (`sign_with_ecdsa`, `verify_ecdsa`, `ecdsa_public_key`).
+
+### 🧪 Testing
+
+- Updated delegated auth integration coverage to direct endpoint calls and added subject-mismatch denial cases.
+- Updated macro validation tests for scoped `authenticated("scope")` predicates.
+
+---
+
 ## [0.9.26] - 2026-02-22 - Fixes for Toko
 
 ### 🔧 Changed

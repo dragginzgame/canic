@@ -40,6 +40,12 @@ pub enum EnvOpsError {
 
     #[error("operation cannot be called from the root canister")]
     IsRoot,
+
+    #[error("root_pid is immutable once initialized (existing {existing}, incoming {incoming})")]
+    RootPidImmutable {
+        existing: Principal,
+        incoming: Principal,
+    },
 }
 
 impl From<EnvOpsError> for InternalError {
@@ -172,6 +178,13 @@ impl EnvOps {
             return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
         }
 
+        // `root_pid` is write-once: first initialization may set it, but any
+        // subsequent import must preserve the same root authority.
+        let incoming_root_pid = data
+            .root_pid
+            .ok_or_else(|| EnvOpsError::MissingFields("root_pid".to_string()))?;
+        ensure_root_pid_immutable(Env::get_root_pid(), incoming_root_pid)?;
+
         Env::import(data);
 
         Ok(())
@@ -267,4 +280,87 @@ fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     }
 
     missing
+}
+
+fn ensure_root_pid_immutable(
+    existing: Option<Principal>,
+    incoming: Principal,
+) -> Result<(), EnvOpsError> {
+    if let Some(existing) = existing
+        && existing != incoming
+    {
+        return Err(EnvOpsError::RootPidImmutable { existing, incoming });
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ids::{CanisterRole, SubnetRole},
+        storage::stable::env::Env,
+        test::seams,
+    };
+
+    struct EnvRestore(EnvRecord);
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            Env::import(self.0.clone());
+        }
+    }
+
+    fn env_record(root_pid: Principal) -> EnvRecord {
+        EnvRecord {
+            prime_root_pid: Some(root_pid),
+            subnet_role: Some(SubnetRole::PRIME),
+            subnet_pid: Some(root_pid),
+            root_pid: Some(root_pid),
+            canister_role: Some(CanisterRole::ROOT),
+            parent_pid: Some(root_pid),
+        }
+    }
+
+    #[test]
+    fn root_pid_immutable_allows_first_set() {
+        assert!(ensure_root_pid_immutable(None, seams::p(1)).is_ok());
+    }
+
+    #[test]
+    fn root_pid_immutable_rejects_change() {
+        let existing = seams::p(1);
+        let incoming = seams::p(2);
+        let err = ensure_root_pid_immutable(Some(existing), incoming)
+            .expect_err("root pid change must be rejected");
+
+        match err {
+            EnvOpsError::RootPidImmutable {
+                existing: got_existing,
+                incoming: got_incoming,
+            } => {
+                assert_eq!(got_existing, existing);
+                assert_eq!(got_incoming, incoming);
+            }
+            other => panic!("unexpected env error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn import_rejects_root_pid_change_after_initialization() {
+        let _guard = seams::lock();
+        let original = Env::export();
+        let _restore = EnvRestore(original);
+
+        let initial_root = seams::p(11);
+        EnvOps::import(env_record(initial_root)).expect("initial import should succeed");
+
+        let changed_root = seams::p(12);
+        let result = EnvOps::import(env_record(changed_root));
+        assert!(result.is_err(), "changing root pid must fail");
+
+        let snapshot = EnvOps::snapshot();
+        assert_eq!(snapshot.root_pid, Some(initial_root));
+    }
 }

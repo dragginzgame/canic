@@ -2,10 +2,7 @@ pub mod request;
 
 use crate::{
     InternalError,
-    dto::{
-        error::Error,
-        rpc::{AuthenticatedRequest, Response as DtoResponse},
-    },
+    dto::error::Error,
     ops::{
         OpsError,
         ic::call::{CallOps, CallResult},
@@ -107,26 +104,5 @@ impl RpcOps {
         let response = R::try_from_response(call_res)?;
 
         Ok(response)
-    }
-
-    ///
-    /// call_authenticated_response
-    ///
-    /// Executes a protocol-level RPC via AuthenticatedRequest/Response.
-    ///
-    pub async fn call_authenticated_response(
-        request: AuthenticatedRequest,
-    ) -> Result<DtoResponse, InternalError> {
-        let root_pid = EnvOps::root_pid()?;
-
-        let call: CallResult =
-            CallOps::unbounded_wait(root_pid, protocol::CANIC_RESPONSE_AUTHENTICATED)
-                .with_arg(request)?
-                .execute()
-                .await?;
-
-        let call_res: Result<DtoResponse, Error> = call.candid::<Result<DtoResponse, Error>>()?;
-
-        Ok(call_res.map_err(RpcOpsError::RemoteRejected)?)
     }
 }

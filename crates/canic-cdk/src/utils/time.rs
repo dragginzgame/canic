@@ -21,28 +21,28 @@ fn time_nanos() -> u128 {
 
 /// Returns the current UNIX epoch time in seconds.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn now_secs() -> u64 {
     (time_nanos() / 1_000_000_000) as u64
 }
 
 /// Returns the current UNIX epoch time in milliseconds.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn now_millis() -> u64 {
     (time_nanos() / 1_000_000) as u64
 }
 
 /// Returns the current UNIX epoch time in microseconds.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn now_micros() -> u64 {
     (time_nanos() / 1_000) as u64
 }
 
 /// Returns the current UNIX epoch time in nanoseconds.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn now_nanos() -> u64 {
     time_nanos() as u64
 }

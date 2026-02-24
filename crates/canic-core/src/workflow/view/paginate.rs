@@ -16,7 +16,7 @@ pub fn clamp_page_request(request: PageRequest) -> PageRequest {
 }
 
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 pub fn paginate_vec<T>(items: Vec<T>, request: PageRequest) -> Page<T> {
     let request = clamp_page_request(request);
     let total = items.len() as u64;

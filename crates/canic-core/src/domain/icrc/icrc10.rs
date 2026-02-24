@@ -48,10 +48,8 @@ pub enum Icrc10Standard {
 /// Used by macro-generated endpoints in downstream crates.
 ///
 
-#[allow(dead_code)]
 pub struct Icrc10Registry;
 
-#[allow(dead_code)]
 impl Icrc10Registry {
     fn enabled_standards() -> Vec<Icrc10Standard> {
         let mut supported = vec![Icrc10Standard::Icrc10];
