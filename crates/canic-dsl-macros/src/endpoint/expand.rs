@@ -95,7 +95,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     if requires_authenticated(&args.requires)
         && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
     {
-        // authenticated("scope") decodes ingress arg0 directly; keep the function arg lint-clean.
+        // authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
         let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
         func.block.stmts.insert(0, keepalive);
     }
@@ -404,9 +404,18 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }
-        BuiltinPredicate::Authenticated { required_scope } => {
-            quote!(::canic::__internal::core::access::expr::auth::authenticated(#required_scope))
-        }
+        BuiltinPredicate::Authenticated { required_scope } => match required_scope {
+            Some(required_scope) => {
+                quote!(::canic::__internal::core::access::expr::auth::authenticated(::core::option::Option::Some(#required_scope)))
+            }
+            None => {
+                quote!(
+                    ::canic::__internal::core::access::expr::auth::authenticated(
+                        ::core::option::Option::None
+                    )
+                )
+            }
+        },
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }

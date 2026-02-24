@@ -39,14 +39,17 @@ pub type Role = CanisterRole;
 /// - The delegated token MUST be the first candid argument.
 /// - Decoding failures result in access denial.
 /// - The caller principal MUST match token subject.
-pub async fn authenticated(caller: Principal, required_scope: &str) -> Result<(), AccessError> {
+pub async fn authenticated(
+    caller: Principal,
+    required_scope: Option<&str>,
+) -> Result<(), AccessError> {
     let _ = delegated_token_verified(caller, required_scope).await?;
     Ok(())
 }
 
 pub(crate) async fn delegated_token_verified(
     caller: Principal,
-    required_scope: &str,
+    required_scope: Option<&str>,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
     let token = delegated_token_from_args()?;
 
@@ -75,7 +78,7 @@ async fn verify_token(
     authority_pid: Principal,
     now_secs: u64,
     self_pid: Principal,
-    required_scope: &str,
+    _required_scope: Option<&str>,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
@@ -84,17 +87,6 @@ async fn verify_token(
         return Err(AccessError::Denied(format!(
             "delegated token subject '{}' does not match caller '{}'",
             verified.claims.sub, caller
-        )));
-    }
-
-    if !verified
-        .claims
-        .scopes
-        .iter()
-        .any(|scope| scope == required_scope)
-    {
-        return Err(AccessError::Denied(format!(
-            "delegated token missing required scope '{required_scope}'",
         )));
     }
 

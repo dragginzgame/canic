@@ -5,11 +5,19 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.1] - 2026-02-24
+
+### 🔧 Changed
+
+- `authenticated()` now supports optional scope syntax (`authenticated()` and `authenticated("scope")`).
+- Runtime auth currently ignores scope values; delegated verification still enforces signature, root binding, audience, expiry, and `sub == caller`.
+
+---
+
 ## [0.10.0] - 2026-02-24 - WIP Direct Delegated Token Model
 
 ### ⚠️ Breaking
 
-- Delegated auth now requires explicit endpoint scopes via `authenticated("scope")`; `authenticated()` without a scope is no longer accepted.
 - Relay-style authenticated RPC envelope support was removed in favor of direct token verification at each endpoint.
 - Auth DTOs were reshaped to principal-based audiences and explicit shard/root binding (`root_pid`, `shard_pid`, `aud: Vec<Principal>`).
 
@@ -41,7 +49,7 @@ async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error>
 ### 🧪 Testing
 
 - Updated delegated auth integration coverage to direct endpoint calls and added subject-mismatch denial cases.
-- Updated macro validation tests for scoped `authenticated("scope")` predicates.
+- Updated macro validation tests for `authenticated(...)` predicates with optional scope syntax.
 
 ---
 

@@ -75,7 +75,9 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    Authenticated { required_scope: &'static str },
+    Authenticated {
+        required_scope: Option<&'static str>,
+    },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -206,7 +208,7 @@ pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
-    pub const fn authenticated(required_scope: &'static str) -> AccessExpr {
+    pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
         builtin(BuiltinPredicate::Authenticated { required_scope })
     }
 }
@@ -305,7 +307,7 @@ async fn eval_builtin(pred: &BuiltinPredicate, ctx: &AccessContext) -> Result<()
         BuiltinPredicate::CallerIsWhitelisted => access::auth::is_whitelisted(ctx.caller).await,
         BuiltinPredicate::Authenticated { required_scope } => {
             let verified =
-                access::auth::delegated_token_verified(ctx.caller, required_scope).await?;
+                access::auth::delegated_token_verified(ctx.caller, *required_scope).await?;
             DelegationMetrics::record_authority(verified.cert.shard_pid);
             Ok(())
         }
