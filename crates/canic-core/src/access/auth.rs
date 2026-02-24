@@ -10,6 +10,9 @@
 //! - Delegated tokens are only valid if their proof matches the currently stored delegation proof.
 //! - Delegation rotation invalidates all previously issued delegated tokens.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
+//! - Endpoint scope strings are parsed at this layer for compatibility, but
+//!   scope authorization is intentionally deferred to the 0.11 root capability
+//!   policy layer.
 
 use crate::{
     access::AccessError,
@@ -78,19 +81,29 @@ async fn verify_token(
     authority_pid: Principal,
     now_secs: u64,
     self_pid: Principal,
-    _required_scope: Option<&str>,
+    required_scope: Option<&str>,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
 
-    if verified.claims.sub != caller {
-        return Err(AccessError::Denied(format!(
-            "delegated token subject '{}' does not match caller '{}'",
-            verified.claims.sub, caller
-        )));
-    }
+    // Scope enforcement is intentionally deferred to the 0.11 root capability
+    // policy layer. Keep this explicit to avoid implying scope authorization
+    // is performed here.
+    if let Some(_scope) = required_scope {}
+
+    enforce_subject_binding(verified.claims.sub, caller)?;
 
     Ok(verified)
+}
+
+fn enforce_subject_binding(sub: Principal, caller: Principal) -> Result<(), AccessError> {
+    if sub != caller {
+        Err(AccessError::Denied(format!(
+            "delegated token subject '{sub}' does not match caller '{caller}'"
+        )))
+    } else {
+        Ok(())
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -237,4 +250,28 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
 
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn subject_binding_allows_matching_subject_and_caller() {
+        let sub = p(1);
+        let caller = p(1);
+        assert!(enforce_subject_binding(sub, caller).is_ok());
+    }
+
+    #[test]
+    fn subject_binding_rejects_mismatched_subject_and_caller() {
+        let sub = p(1);
+        let caller = p(2);
+        let err = enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
+        assert!(err.to_string().contains("does not match caller"));
+    }
 }
