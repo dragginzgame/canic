@@ -5,6 +5,24 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.3] - 2026-02-25 - HTTP Raw Responses & Leaner Wasm Builds
+
+### ⚠️ Breaking
+
+- `HttpApi::get()` and `HttpApi::get_with_label()` now return `HttpRequestResult` (raw bytes) instead of deserializing JSON into `T`.
+
+### 🔧 Changed
+
+- HTTP ops/workflow no longer perform an extra JSON decode pass after outcalls; they validate status and return the raw body.
+- `scripts/app/build.sh` now defaults to release builds so local canister wasm artifacts stay smaller by default. Use `RELEASE=0` to force debug.
+- Added a wasm-size-oriented workspace `release` profile (`opt-level = "z"`, `lto = true`, `codegen-units = 1`, `strip = "symbols"`, `panic = "abort"`).
+
+### 🗑️ Removed
+
+- Removed `serde_json` from the HTTP outcall decode path and dependency surface.
+
+---
+
 ## [0.10.2] - 2026-02-25 - Memory Bootstrap Ordering & Guards
 
 ### 🩹 Fixed

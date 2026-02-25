@@ -12,7 +12,6 @@ use crate::{
 };
 use candid::Nat;
 use num_traits::cast::ToPrimitive;
-use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 
 ///
@@ -93,9 +92,6 @@ pub enum HttpOpsError {
 
     #[error(transparent)]
     Infra(#[from] InfraError),
-
-    #[error(transparent)]
-    HttpDecode(#[from] serde_json::Error),
 }
 
 impl From<HttpOpsError> for InternalError {
@@ -115,20 +111,20 @@ impl HttpOps {
     // High-level helpers
     // -------------------------------------------------------------------------
 
-    /// Perform an HTTP GET request and deserialize the JSON response.
-    pub async fn get<T: DeserializeOwned>(
+    /// Perform an HTTP GET request and return the raw response.
+    pub async fn get(
         url: &str,
         headers: &[(&str, &str)],
-    ) -> Result<T, InternalError> {
+    ) -> Result<HttpRequestResult, InternalError> {
         Self::get_with_label(url, headers, None).await
     }
 
     /// Same as `get`, with an optional metrics label.
-    pub async fn get_with_label<T: DeserializeOwned>(
+    pub async fn get_with_label(
         url: &str,
         headers: &[(&str, &str)],
         label: Option<&str>,
-    ) -> Result<T, InternalError> {
+    ) -> Result<HttpRequestResult, InternalError> {
         let args = HttpRequestArgs {
             url: url.to_string(),
             method: HttpMethod::Get,
@@ -144,7 +140,7 @@ impl HttpOps {
             return Err(HttpOpsError::HttpStatus(status).into());
         }
 
-        serde_json::from_slice(&res.body).map_err(|err| HttpOpsError::HttpDecode(err).into())
+        Ok(res)
     }
 
     // -------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 pub mod adapter;
 
 use crate::{InternalError, dto::http, ops::ic::http::HttpOps};
-use serde::de::DeserializeOwned;
 
 ///
 /// HttpWorkflow
@@ -10,21 +9,23 @@ use serde::de::DeserializeOwned;
 pub struct HttpWorkflow;
 
 impl HttpWorkflow {
-    /// Perform a GET request and deserialize a JSON response.
-    pub async fn get<T: DeserializeOwned>(
+    /// Perform a GET request and return the raw response.
+    pub async fn get(
         url: &str,
         headers: &[(&str, &str)],
-    ) -> Result<T, InternalError> {
-        HttpOps::get(url, headers).await
+    ) -> Result<http::HttpRequestResult, InternalError> {
+        let res = HttpOps::get(url, headers).await?;
+        Ok(adapter::HttpAdapter::result_to_dto(res))
     }
 
     /// Same as `get`, with an explicit metrics label.
-    pub async fn get_with_label<T: DeserializeOwned>(
+    pub async fn get_with_label(
         url: &str,
         headers: &[(&str, &str)],
         label: &str,
-    ) -> Result<T, InternalError> {
-        HttpOps::get_with_label(url, headers, Some(label)).await
+    ) -> Result<http::HttpRequestResult, InternalError> {
+        let res = HttpOps::get_with_label(url, headers, Some(label)).await?;
+        Ok(adapter::HttpAdapter::result_to_dto(res))
     }
 
     pub async fn get_raw(
