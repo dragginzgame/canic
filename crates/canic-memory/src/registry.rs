@@ -90,6 +90,11 @@ conflicts with crate '{new_crate}' [{new_start}-{new_end}]"
 
     #[error("memory id {id} is outside reserved ranges for crate '{crate_name}'")]
     IdOutOfRange { crate_name: String, id: u8 },
+
+    #[error(
+        "memory id {id} is reserved for stable-structures internals and cannot be used by application code"
+    )]
+    ReservedInternalId { id: u8 },
 }
 
 //
@@ -118,6 +123,7 @@ impl MemoryRegistry {
         if start > end {
             return Err(MemoryRegistryError::InvalidRange { start, end });
         }
+        validate_range_excludes_reserved_internal_id(start, end)?;
 
         let range = MemoryRange { start, end };
 
@@ -154,6 +160,7 @@ impl MemoryRegistry {
 
     /// Register a memory ID.
     pub fn register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
+        validate_non_internal_id(id)?;
         validate_registration_range(crate_name, id)?;
 
         REGISTRY.with_borrow(|reg| {
@@ -239,18 +246,33 @@ impl MemoryRegistry {
 // Deferred registration helpers (used before runtime init)
 //
 
-pub fn defer_reserve_range(crate_name: &str, start: u8, end: u8) {
+pub fn defer_reserve_range(
+    crate_name: &str,
+    start: u8,
+    end: u8,
+) -> Result<(), MemoryRegistryError> {
+    if start > end {
+        return Err(MemoryRegistryError::InvalidRange { start, end });
+    }
+    validate_range_excludes_reserved_internal_id(start, end)?;
+
     // Queue range reservations for runtime init to apply deterministically.
     PENDING_RANGES.with_borrow_mut(|ranges| {
         ranges.push((crate_name.to_string(), start, end));
     });
+
+    Ok(())
 }
 
-pub fn defer_register(id: u8, crate_name: &str, label: &str) {
+pub fn defer_register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
+    validate_non_internal_id(id)?;
+
     // Queue ID registrations for runtime init to apply after ranges are reserved.
     PENDING_REGISTRATIONS.with_borrow_mut(|regs| {
         regs.push((id, crate_name.to_string(), label.to_string()));
     });
+
+    Ok(())
 }
 
 #[must_use]
@@ -281,6 +303,27 @@ pub fn reset_for_tests() {
 
 const fn ranges_overlap(a: MemoryRange, b: MemoryRange) -> bool {
     a.start <= b.end && b.start <= a.end
+}
+
+const INTERNAL_RESERVED_MEMORY_ID: u8 = u8::MAX;
+
+fn validate_non_internal_id(id: u8) -> Result<(), MemoryRegistryError> {
+    if id == INTERNAL_RESERVED_MEMORY_ID {
+        return Err(MemoryRegistryError::ReservedInternalId { id });
+    }
+    Ok(())
+}
+
+fn validate_range_excludes_reserved_internal_id(
+    start: u8,
+    end: u8,
+) -> Result<(), MemoryRegistryError> {
+    if start <= INTERNAL_RESERVED_MEMORY_ID && INTERNAL_RESERVED_MEMORY_ID <= end {
+        return Err(MemoryRegistryError::ReservedInternalId {
+            id: INTERNAL_RESERVED_MEMORY_ID,
+        });
+    }
+    Ok(())
 }
 
 fn validate_registration_range(crate_name: &str, id: u8) -> Result<(), MemoryRegistryError> {
@@ -379,5 +422,54 @@ mod tests {
         assert_eq!(snapshots.len(), 2);
         assert_eq!(snapshots[0].entries.len(), 1);
         assert_eq!(snapshots[1].entries.len(), 1);
+    }
+
+    #[test]
+    fn rejects_internal_reserved_id_on_register() {
+        reset_for_tests();
+
+        MemoryRegistry::reserve_range("crate_a", 1, 254).expect("reserve range");
+        let err = MemoryRegistry::register(u8::MAX, "crate_a", "slot")
+            .expect_err("reserved id should be rejected");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::ReservedInternalId { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_internal_reserved_id_on_range_reservation() {
+        reset_for_tests();
+
+        let err = MemoryRegistry::reserve_range("crate_a", 250, u8::MAX)
+            .expect_err("reserved internal id must not be reservable");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::ReservedInternalId { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_internal_reserved_id_on_deferred_register() {
+        reset_for_tests();
+
+        let err = defer_register(u8::MAX, "crate_a", "slot")
+            .expect_err("reserved id should fail before init");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::ReservedInternalId { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_internal_reserved_id_on_deferred_range_reservation() {
+        reset_for_tests();
+
+        let err = defer_reserve_range("crate_a", 240, u8::MAX)
+            .expect_err("reserved id should fail before init");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::ReservedInternalId { .. }
+        ));
     }
 }

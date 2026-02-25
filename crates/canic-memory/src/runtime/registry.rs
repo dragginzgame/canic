@@ -138,8 +138,8 @@ mod tests {
     #[test]
     fn init_applies_initial_and_pending() {
         reset_for_tests();
-        defer_reserve_range("crate_b", 5, 6);
-        defer_register(5, "crate_b", "B5");
+        defer_reserve_range("crate_b", 5, 6).expect("defer range");
+        defer_register(5, "crate_b", "B5").expect("defer register");
 
         let summary =
             MemoryRegistryRuntime::init(Some(("crate_a", 1, 3))).expect("init should succeed");
@@ -161,8 +161,8 @@ mod tests {
     #[test]
     fn init_returns_error_on_conflict() {
         reset_for_tests();
-        defer_reserve_range("crate_a", 1, 3);
-        defer_reserve_range("crate_b", 3, 4);
+        defer_reserve_range("crate_a", 1, 3).expect("defer range A");
+        defer_reserve_range("crate_b", 3, 4).expect("defer range B");
 
         let err = MemoryRegistryRuntime::init(None).unwrap_err();
         assert!(matches!(err, MemoryRegistryError::Overlap { .. }));
@@ -173,8 +173,8 @@ mod tests {
         reset_for_tests();
 
         MemoryRegistryRuntime::init(Some(("core", 1, 10))).expect("init should succeed");
-        defer_reserve_range("late", 20, 30);
-        defer_register(22, "late", "late_slot");
+        defer_reserve_range("late", 20, 30).expect("defer late range");
+        defer_register(22, "late", "late_slot").expect("defer late register");
 
         MemoryRegistryRuntime::commit_pending_if_initialized()
             .expect("late pending commit should succeed");
