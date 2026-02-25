@@ -4,6 +4,7 @@
 //! execute query and update handlers with consistent instrumentation.
 //!
 //! Responsibilities:
+//! - Ensure runtime memory bootstrap readiness at endpoint boundary
 //! - Enter and exit endpoint performance tracking
 //! - Invoke the supplied handler closure
 //! - Preserve synchronous vs asynchronous execution semantics
@@ -28,8 +29,18 @@ pub mod icrc21;
 use crate::{ids::EndpointCall, perf};
 use std::future::Future;
 
+fn ensure_memory_bootstrap() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Err(err) = crate::ops::runtime::memory::MemoryRegistryOps::ensure_bootstrap() {
+            panic!("runtime memory bootstrap failed before endpoint dispatch: {err}");
+        }
+    }
+}
+
 /// Dispatch a synchronous query endpoint.
 pub fn dispatch_query<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
+    ensure_memory_bootstrap();
     perf::enter_endpoint();
     let res = f();
     perf::exit_endpoint(call);
@@ -42,6 +53,7 @@ pub async fn dispatch_query_async<R, F>(call: EndpointCall, f: impl FnOnce() -> 
 where
     F: Future<Output = R>,
 {
+    ensure_memory_bootstrap();
     perf::enter_endpoint();
     let res = f().await;
     perf::exit_endpoint(call);
@@ -51,6 +63,7 @@ where
 
 /// Dispatch a synchronous update endpoint.
 pub fn dispatch_update<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
+    ensure_memory_bootstrap();
     perf::enter_endpoint();
     let res = f();
     perf::exit_endpoint(call);
@@ -63,6 +76,7 @@ pub async fn dispatch_update_async<R, F>(call: EndpointCall, f: impl FnOnce() ->
 where
     F: Future<Output = R>,
 {
+    ensure_memory_bootstrap();
     perf::enter_endpoint();
     let res = f().await;
     perf::exit_endpoint(call);

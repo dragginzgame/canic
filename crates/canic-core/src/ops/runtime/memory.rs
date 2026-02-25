@@ -99,6 +99,23 @@ impl MemoryRegistryOps {
         Ok(MemoryRegistryInitSummary::from_raw(summary))
     }
 
+    #[cfg(target_arch = "wasm32")]
+    #[must_use]
+    pub fn is_initialized() -> bool {
+        MemoryRegistryRuntime::is_initialized()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn ensure_bootstrap() -> Result<(), InternalError> {
+        Self::init_eager_tls();
+        if Self::is_initialized() {
+            return Ok(());
+        }
+
+        let _ = Self::init_registry()?;
+        Ok(())
+    }
+
     #[must_use]
     pub fn snapshot_entries() -> Vec<MemoryRegistryEntry> {
         MemoryRegistryRuntime::snapshot_entries()

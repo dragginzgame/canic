@@ -110,6 +110,20 @@ impl MemoryRegistryRuntime {
     pub fn get(id: u8) -> Option<MemoryRegistryEntry> {
         MemoryRegistry::get(id)
     }
+
+    /// Apply any newly deferred registrations/ranges after runtime init.
+    ///
+    /// This is a no-op until initialization has completed. Once initialized,
+    /// this drains pending range/ID registrations so lazily touched statics can
+    /// become visible during the same request.
+    pub fn commit_pending_if_initialized() -> Result<(), MemoryRegistryError> {
+        if !Self::is_initialized() || crate::runtime::is_eager_tls_initializing() {
+            return Ok(());
+        }
+
+        let _ = Self::init(None)?;
+        Ok(())
+    }
 }
 
 ///
@@ -152,5 +166,21 @@ mod tests {
 
         let err = MemoryRegistryRuntime::init(None).unwrap_err();
         assert!(matches!(err, MemoryRegistryError::Overlap { .. }));
+    }
+
+    #[test]
+    fn commit_pending_after_init_applies_late_deferred_items() {
+        reset_for_tests();
+
+        MemoryRegistryRuntime::init(Some(("core", 1, 10))).expect("init should succeed");
+        defer_reserve_range("late", 20, 30);
+        defer_register(22, "late", "late_slot");
+
+        MemoryRegistryRuntime::commit_pending_if_initialized()
+            .expect("late pending commit should succeed");
+
+        let entry = MemoryRegistryRuntime::get(22).expect("late entry should be registered");
+        assert_eq!(entry.crate_name, "late");
+        assert_eq!(entry.label, "late_slot");
     }
 }

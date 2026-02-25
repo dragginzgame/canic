@@ -18,6 +18,8 @@ macro_rules! ic_memory {
 
         // Enqueue this memory ID registration for deferred validation.
         $crate::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label));
+        $crate::runtime::registry::MemoryRegistryRuntime::commit_pending_if_initialized()
+            .expect("late memory id registration commit failed");
 
         // Return the stable memory handle immediately for further wrapping.
         $crate::manager::MEMORY_MANAGER
@@ -36,5 +38,7 @@ macro_rules! ic_memory_range {
         // `init_eager_tls()`. This guarantees the reservation is made
         // before any memory IDs from this range are registered.
         $crate::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
+        $crate::runtime::registry::MemoryRegistryRuntime::commit_pending_if_initialized()
+            .expect("late memory range registration commit failed");
     }};
 }

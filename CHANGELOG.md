@@ -5,11 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.10.4] - 2026-02-25 - HTTP Raw Responses & Leaner Wasm Builds
+## [0.10.5] - 2026-02-25 - HTTP Raw Responses & Leaner Wasm Builds
 
 ### ⚠️ Breaking
 
 - `HttpApi::get()` and `HttpApi::get_with_label()` now return `HttpRequestResult` (raw bytes) instead of deserializing JSON into `T`.
+
+### 🩹 Fixed
+
+- Fixed a deferred memory-registration race where first-touch stable-memory reads could run before late registrations were committed, causing missing reserved-range errors in downstream stores (for example IcyDB commit-marker lookups).
+- Endpoint dispatch now enforces runtime memory bootstrap on wasm before handler execution, reducing bad-path risk when lifecycle wiring is custom or incomplete.
 
 ### 🔧 Changed
 
@@ -22,6 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### 🗑️ Removed
 
 - Removed `serde_json` from the HTTP outcall decode path and dependency surface.
+- Removed unused workspace dependency entries for `futures` and `ic-management-canister-types`.
 
 ---
 
