@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - HTTP ops/workflow no longer perform an extra JSON decode pass after outcalls; they validate status and return the raw body.
 - `scripts/app/build.sh` now defaults to release builds so local canister wasm artifacts stay smaller by default. Use `RELEASE=0` to force debug.
+- `make test-canisters` now explicitly uses `RELEASE=0 dfx build --all` so test-only endpoints guarded by `cfg!(debug_assertions)` continue to behave as expected in local smoke tests.
+- Integration tests that shell out to `dfx build --all` now force `RELEASE=0` to keep root hierarchy and delegation test flows consistent with debug-gated test endpoints.
 - Added a wasm-size-oriented workspace `release` profile (`opt-level = "z"`, `lto = true`, `codegen-units = 1`, `strip = "symbols"`, `panic = "abort"`).
 
 ### 🗑️ Removed

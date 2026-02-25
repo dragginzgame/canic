@@ -11,7 +11,7 @@ use canic::{
     protocol,
 };
 use canic_testkit::pic::{Pic, pic};
-use std::{collections::HashMap, env, fs, io, path::PathBuf};
+use std::{collections::HashMap, env, fs, io, path::PathBuf, process::Command, sync::Once};
 
 /// Environment variable override for providing a pre-built root canister wasm.
 const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
@@ -19,6 +19,7 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
+static DFX_BUILD_ONCE: Once = Once::new();
 
 ///
 /// RootSetup
@@ -34,6 +35,7 @@ pub struct RootSetup {
 /// Create a fresh PocketIC instance, install root, wait for bootstrap,
 /// and validate global invariants.
 pub fn setup_root() -> RootSetup {
+    ensure_local_artifacts_built();
     let root_wasm = load_root_wasm().expect("load root wasm");
 
     let pic = pic();
@@ -51,6 +53,30 @@ pub fn setup_root() -> RootSetup {
         root_id,
         subnet_directory,
     }
+}
+
+fn ensure_local_artifacts_built() {
+    DFX_BUILD_ONCE.call_once(|| {
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .map(PathBuf::from)
+            .expect("workspace root");
+
+        let output = Command::new("dfx")
+            .current_dir(&workspace_root)
+            .env("DFX_NETWORK", "local")
+            .env("RELEASE", "0")
+            .args(["build", "--all"])
+            .output()
+            .expect("failed to run `dfx build --all`");
+
+        assert!(
+            output.status.success(),
+            "dfx build --all failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    });
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
