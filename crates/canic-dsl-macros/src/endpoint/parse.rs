@@ -19,6 +19,12 @@ use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated}
 ///
 
 #[derive(Clone, Debug)]
+pub enum AuthScopeArg {
+    Literal(String),
+    Expr(TokenStream2),
+}
+
+#[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
     AppAllowsUpdates,
     AppIsQueryable,
@@ -31,7 +37,9 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    Authenticated { required_scope: Option<String> },
+    Authenticated {
+        required_scope: Option<AuthScopeArg>,
+    },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -267,6 +275,13 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             )))
         }
         _ => {
+            if is_legacy_authenticated_path(&path) {
+                return Err(syn::Error::new_spanned(
+                    &path,
+                    "use is_authenticated(...) instead of authenticated(...)",
+                ));
+            }
+
             if is_authenticated_path(&path) {
                 let required_scope = match args.next() {
                     None => None,
@@ -274,32 +289,36 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                         if args.next().is_some() {
                             return Err(syn::Error::new_spanned(
                                 &path,
-                                "authenticated(...) accepts zero arguments or one string literal scope",
+                                "is_authenticated(...) accepts zero arguments or one string literal/path scope",
                             ));
                         }
                         let scope = match scope_expr {
                             Expr::Lit(expr_lit) => match &expr_lit.lit {
-                                syn::Lit::Str(scope_lit) => scope_lit.value(),
+                                syn::Lit::Str(scope_lit) => {
+                                    let value = scope_lit.value();
+                                    if value.trim().is_empty() {
+                                        return Err(syn::Error::new_spanned(
+                                            &path,
+                                            "is_authenticated(...) scope must not be empty",
+                                        ));
+                                    }
+                                    AuthScopeArg::Literal(value)
+                                }
                                 _ => {
                                     return Err(syn::Error::new_spanned(
                                         expr_lit,
-                                        "authenticated(...) scope must be a string literal",
+                                        "is_authenticated(...) scope must be a string literal or path constant",
                                     ));
                                 }
                             },
+                            Expr::Path(expr_path) => AuthScopeArg::Expr(quote::quote!(#expr_path)),
                             other => {
                                 return Err(syn::Error::new_spanned(
                                     other,
-                                    "authenticated(...) scope must be a string literal",
+                                    "is_authenticated(...) scope must be a string literal or path constant",
                                 ));
                             }
                         };
-                        if scope.trim().is_empty() {
-                            return Err(syn::Error::new_spanned(
-                                &path,
-                                "authenticated(...) scope must not be empty",
-                            ));
-                        }
                         Some(scope)
                     }
                 };
@@ -318,7 +337,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 if builtin_from_path_tail(&path).is_some() || is_authenticated_path(&path) {
                     return syn::Error::new_spanned(
                         &path,
-                        "built-in predicates must use short paths like auth::authenticated()",
+                        "built-in predicates must use short paths like auth::is_authenticated()",
                     );
                 }
                 syn::Error::new_spanned(
@@ -401,6 +420,31 @@ fn is_authenticated_path(path: &Path) -> bool {
         return path
             .segments
             .last()
+            .is_some_and(|seg| seg.ident == "is_authenticated");
+    }
+
+    if path.segments.len() != 2 {
+        return false;
+    }
+
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back();
+    let module = names.next_back();
+    matches!(
+        (module.as_deref(), last.as_deref()),
+        (Some("auth"), Some("is_authenticated"))
+    )
+}
+
+fn is_legacy_authenticated_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    if path.segments.len() == 1 {
+        return path
+            .segments
+            .last()
             .is_some_and(|seg| seg.ident == "authenticated");
     }
 
@@ -439,8 +483,8 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn authenticated_allows_no_scope_argument() {
-        let parsed = parse_args(quote!(requires(auth::authenticated()))).expect("parse args");
+    fn is_authenticated_allows_no_scope_argument() {
+        let parsed = parse_args(quote!(requires(auth::is_authenticated()))).expect("parse args");
         let AccessExprAst::All(exprs) = &parsed.requires[0] else {
             panic!("expected requires(all)");
         };
@@ -454,9 +498,9 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_allows_string_scope_argument() {
+    fn is_authenticated_allows_string_scope_argument() {
         let parsed =
-            parse_args(quote!(requires(auth::authenticated("scope:test")))).expect("parse args");
+            parse_args(quote!(requires(auth::is_authenticated("scope:test")))).expect("parse args");
         let AccessExprAst::All(exprs) = &parsed.requires[0] else {
             panic!("expected requires(all)");
         };
@@ -466,16 +510,46 @@ mod tests {
         else {
             panic!("expected authenticated predicate");
         };
-        assert_eq!(required_scope.as_deref(), Some("scope:test"));
+        let Some(AuthScopeArg::Literal(required_scope)) = required_scope else {
+            panic!("expected literal scope");
+        };
+        assert_eq!(required_scope, "scope:test");
     }
 
     #[test]
-    fn authenticated_rejects_multiple_arguments() {
-        let err = parse_args(quote!(requires(auth::authenticated("a", "b"))))
-            .expect_err("authenticated with two args must fail");
+    fn is_authenticated_allows_path_scope_argument() {
+        let parsed =
+            parse_args(quote!(requires(auth::is_authenticated(cap::VERIFY)))).expect("parse args");
+        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+            panic!("expected requires(all)");
+        };
+        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
+            required_scope,
+        })) = &exprs[0]
+        else {
+            panic!("expected authenticated predicate");
+        };
+        let Some(AuthScopeArg::Expr(required_scope)) = required_scope else {
+            panic!("expected expr scope");
+        };
+        assert_eq!(required_scope.to_string(), "cap :: VERIFY");
+    }
+
+    #[test]
+    fn is_authenticated_rejects_multiple_arguments() {
+        let err = parse_args(quote!(requires(auth::is_authenticated("a", "b"))))
+            .expect_err("is_authenticated with two args must fail");
+        assert!(err.to_string().contains(
+            "is_authenticated(...) accepts zero arguments or one string literal/path scope"
+        ));
+    }
+
+    #[test]
+    fn authenticated_rejected_with_guidance() {
+        let err = parse_args(quote!(requires(auth::authenticated()))).expect_err("must reject");
         assert!(
             err.to_string()
-                .contains("authenticated(...) accepts zero arguments or one string literal scope")
+                .contains("use is_authenticated(...) instead of authenticated(...)")
         );
     }
 }

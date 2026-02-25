@@ -14,10 +14,8 @@ categories = { workspace = true }
 publish = true
 
 [dependencies]
-candid = { workspace = true }
 convert_case = { workspace = true }
 derive_more = { workspace = true }
-hex = { workspace = true }
 rand_chacha = { workspace = true }
 thiserror = { workspace = true }
 xxhash-rust = { workspace = true }

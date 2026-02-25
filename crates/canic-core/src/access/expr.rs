@@ -211,6 +211,11 @@ pub mod auth {
     pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
         builtin(BuiltinPredicate::Authenticated { required_scope })
     }
+
+    #[must_use]
+    pub const fn is_authenticated() -> AccessExpr {
+        authenticated(None)
+    }
 }
 
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {

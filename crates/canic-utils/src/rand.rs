@@ -75,12 +75,6 @@ pub fn random_bytes(size: usize) -> Result<Vec<u8>, RngError> {
     Ok(buf)
 }
 
-/// Produce hex-encoded random bytes using the shared RNG.
-pub fn random_hex(size: usize) -> Result<String, RngError> {
-    let bytes = random_bytes(size)?;
-    Ok(hex::encode(bytes))
-}
-
 /// Produce an 8-bit random value (derived from `next_u16`).
 pub fn next_u8() -> Result<u8, RngError> {
     Ok((next_u16()? & 0xFF) as u8)
@@ -165,14 +159,6 @@ mod tests {
         });
 
         assert!(matches!(random_bytes(8), Err(RngError::NotInitialized)));
-    }
-
-    #[test]
-    fn test_random_hex_length() {
-        seed_from([9; 32]);
-
-        let value = random_hex(6).expect("seeded RNG");
-        assert_eq!(value.len(), 12);
     }
 
     // Sanity check only: ensures bits vary across samples.

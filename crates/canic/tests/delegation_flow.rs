@@ -11,7 +11,7 @@ use canic::{
         auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
         error::ErrorCode,
     },
-    ids::BuildNetwork,
+    ids::{BuildNetwork, cap},
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, setup_root};
@@ -56,7 +56,7 @@ fn delegation_provisioning_flow() {
         sub: p(9),
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -105,7 +105,7 @@ fn delegated_token_flow() {
         sub: caller,
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -163,7 +163,7 @@ fn authenticated_rpc_flow() {
         sub: subject,
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -304,7 +304,7 @@ fn bogus_delegated_token() -> DelegatedToken {
             sub: p(31),
             shard_pid: p(30),
             aud: vec![p(32)],
-            scopes: vec!["read".to_string()],
+            scopes: vec![cap::READ.to_string()],
             iat: 1,
             exp: 2,
         },
@@ -313,7 +313,7 @@ fn bogus_delegated_token() -> DelegatedToken {
                 root_pid: p(29),
                 shard_pid: p(30),
                 aud: vec![p(32)],
-                scopes: vec!["read".to_string()],
+                scopes: vec![cap::READ.to_string()],
                 issued_at: 1,
                 expires_at: 2,
             },

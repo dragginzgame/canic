@@ -16,7 +16,6 @@ let digest = hash::hash_u64(b"tenant-123");      // fast sharding key
 rand::seed_from([7; 32]);                        // tests only; use raw_rand in canisters
 let sample = rand::next_u64().expect("seeded RNG");
 let bytes = rand::random_bytes(16).expect("seeded RNG");
-let hex = rand::random_hex(16).expect("seeded RNG");
 let short = format::ellipsize_middle("abcdef0123456789", 10, 4, 4);
 let pretty = instructions::format_instructions(12_345_678);
 ```

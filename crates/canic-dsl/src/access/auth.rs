@@ -4,6 +4,6 @@ pub struct Authenticated {
 }
 
 #[must_use]
-pub const fn authenticated(required_scope: Option<&'static str>) -> Authenticated {
+pub const fn is_authenticated(required_scope: Option<&'static str>) -> Authenticated {
     Authenticated { required_scope }
 }

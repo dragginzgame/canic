@@ -11,7 +11,6 @@ use crate::{
     },
 };
 use candid::Nat;
-use num_traits::cast::ToPrimitive;
 use thiserror::Error as ThisError;
 
 ///
@@ -134,7 +133,7 @@ impl HttpOps {
         };
 
         let res = Self::perform_request(args, label).await?;
-        let status = res.status.0.to_u32().unwrap_or(u32::MAX);
+        let status = u32::try_from(&res.status.0).unwrap_or(u32::MAX);
 
         if !(200..300).contains(&status) {
             return Err(HttpOpsError::HttpStatus(status).into());

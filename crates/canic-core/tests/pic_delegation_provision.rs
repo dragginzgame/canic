@@ -18,7 +18,7 @@ use canic_core::{
             AppDirectoryArgs, SubnetDirectoryArgs, SubnetRegistryEntry, SubnetRegistryResponse,
         },
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetRole, cap},
     protocol,
 };
 use pocket_ic::PocketIcBuilder;
@@ -138,7 +138,7 @@ fn delegated_token_flow_enforces_subject_binding() {
 
     let signer_id = fetch_shard_pid(&pic, root_id);
     let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
-    let scope = "test:verify".to_string();
+    let scope = cap::VERIFY.to_string();
 
     let provision = DelegationProvisionRequest {
         cert: DelegationCert {
@@ -192,6 +192,168 @@ fn delegated_token_flow_enforces_subject_binding() {
 }
 
 #[test]
+fn delegated_token_flow_enforces_required_scope() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+
+    let root_wasm = root_wasm(&workspace_root);
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.install_canister(root_id, root_wasm, root_init_args(), None);
+    wait_for_ready(&pic, root_id);
+
+    let signer_id = fetch_shard_pid(&pic, root_id);
+    let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let required_scope = cap::VERIFY.to_string();
+    let extra_scope = cap::READ.to_string();
+
+    let provision = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_id,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: now_secs + 600,
+            scopes: vec![required_scope.clone(), extra_scope.clone()],
+            aud: vec![signer_id],
+        },
+        signer_targets: vec![signer_id],
+        verifier_targets: Vec::new(),
+    };
+    if provision_or_skip(&pic, root_id, provision, "required scope flow").is_none() {
+        return;
+    }
+
+    let caller = p(13);
+
+    let claims_with_required_scope = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_id,
+        scopes: vec![required_scope],
+        aud: vec![signer_id],
+        iat: now_secs,
+        exp: now_secs + 300,
+    };
+
+    let token_with_required_scope: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_id,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims_with_required_scope,),
+    );
+    let token_with_required_scope =
+        token_with_required_scope.expect("expected token with required scope to mint");
+
+    let allow: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        caller,
+        "signer_verify_token",
+        (token_with_required_scope,),
+    );
+    allow.expect("expected verification to succeed when required scope is present");
+
+    let claims_missing_required_scope = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_id,
+        scopes: vec![extra_scope],
+        aud: vec![signer_id],
+        iat: now_secs,
+        exp: now_secs + 300,
+    };
+
+    let token_missing_required_scope: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_id,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims_missing_required_scope,),
+    );
+    let token_missing_required_scope =
+        token_missing_required_scope.expect("expected token without required scope to mint");
+
+    let deny: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        caller,
+        "signer_verify_token",
+        (token_missing_required_scope,),
+    );
+    let deny = deny.expect_err("expected verification to fail when required scope is missing");
+    assert_eq!(deny.code, ErrorCode::Unauthorized);
+}
+
+#[test]
+fn delegated_token_flow_allows_unscoped_auth_guard() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+
+    let root_wasm = root_wasm(&workspace_root);
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.install_canister(root_id, root_wasm, root_init_args(), None);
+    wait_for_ready(&pic, root_id);
+
+    let signer_id = fetch_shard_pid(&pic, root_id);
+    let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let scope = cap::READ.to_string();
+
+    let provision = DelegationProvisionRequest {
+        cert: DelegationCert {
+            root_pid: root_id,
+            shard_pid: signer_id,
+            issued_at: now_secs.saturating_sub(5),
+            expires_at: now_secs + 600,
+            scopes: vec![scope.clone()],
+            aud: vec![signer_id],
+        },
+        signer_targets: vec![signer_id],
+        verifier_targets: Vec::new(),
+    };
+    if provision_or_skip(&pic, root_id, provision, "unscoped guard flow").is_none() {
+        return;
+    }
+
+    let caller = p(14);
+    let claims = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid: signer_id,
+        scopes: vec![scope],
+        aud: vec![signer_id],
+        iat: now_secs,
+        exp: now_secs + 300,
+    };
+
+    let token: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        signer_id,
+        Principal::anonymous(),
+        "signer_mint_token",
+        (claims,),
+    );
+    let token = token.expect("expected token mint to succeed");
+
+    let unscoped_ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        caller,
+        "signer_verify_token_any",
+        (token.clone(),),
+    );
+    unscoped_ok.expect("expected unscoped is_authenticated() guard to allow token");
+
+    let scoped_deny: Result<(), Error> =
+        update_call_as(&pic, signer_id, caller, "signer_verify_token", (token,));
+    let scoped_deny =
+        scoped_deny.expect_err("expected scoped is_authenticated(\"verify\") to deny token");
+    assert_eq!(scoped_deny.code, ErrorCode::Unauthorized);
+}
+
+#[test]
 fn delegated_token_rejects_expired_certificate() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
@@ -206,7 +368,7 @@ fn delegated_token_rejects_expired_certificate() {
 
     let signer_id = fetch_shard_pid(&pic, root_id);
     let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
-    let scope = "test:verify".to_string();
+    let scope = cap::VERIFY.to_string();
     let cert_exp = now_secs + 2;
 
     let provision = DelegationProvisionRequest {
@@ -283,7 +445,7 @@ fn delegated_token_rejects_cross_shard_token_reuse() {
     pic.install_canister(signer_b, shard_wasm, shard_init_args(root_id), None);
 
     let now_secs = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
-    let scope = "test:verify".to_string();
+    let scope = cap::VERIFY.to_string();
 
     let provision_a = DelegationProvisionRequest {
         cert: DelegationCert {
@@ -383,7 +545,7 @@ fn provision_request(root_pid: Principal, shard_pid: Principal) -> DelegationPro
         root_pid,
         shard_pid,
         aud: vec![Principal::from_slice(&[1; 29])],
-        scopes: vec!["scope".to_string()],
+        scopes: vec![cap::READ.to_string()],
         issued_at: 100,
         expires_at: 200,
     };
@@ -423,7 +585,7 @@ fn mismatched_signer_proof() -> DelegationProof {
         root_pid: Principal::from_slice(&[9; 29]),
         shard_pid: Principal::from_slice(&[99; 29]),
         aud: vec![Principal::from_slice(&[1; 29])],
-        scopes: vec!["scope".to_string()],
+        scopes: vec![cap::READ.to_string()],
         issued_at: 100,
         expires_at: 200,
     };

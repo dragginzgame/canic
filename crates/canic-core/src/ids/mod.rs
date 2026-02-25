@@ -10,6 +10,8 @@
 //! - Storage-backed types
 
 mod canister;
+pub mod capability;
+pub use capability as cap;
 mod endpoint;
 mod intent;
 mod metrics;

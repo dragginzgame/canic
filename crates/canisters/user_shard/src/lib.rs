@@ -15,6 +15,7 @@ use canic::{
         auth::{DelegatedToken, DelegatedTokenClaims, DelegationRequest},
         error::ErrorCode,
     },
+    ids::cap,
     prelude::*,
     protocol,
 };
@@ -56,7 +57,7 @@ async fn user_shard_mint_token(claims: DelegatedTokenClaims) -> Result<Delegated
     DelegationApi::sign_token(claims, proof).await
 }
 
-#[canic_query(requires(authenticated("auth:verify")))]
+#[canic_query(requires(auth::is_authenticated(cap::VERIFY)))]
 async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }

@@ -6,6 +6,7 @@ use canic::{
     Error,
     api::auth::DelegationApi,
     dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    ids::cap,
     prelude::*,
 };
 use canic_internal::canister::USER_SHARD;
@@ -22,8 +23,13 @@ async fn signer_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToke
     DelegationApi::sign_token(claims, proof).await
 }
 
-#[canic_update(requires(auth::authenticated("test:verify")))]
+#[canic_update(requires(auth::is_authenticated(cap::VERIFY)))]
 async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update(requires(auth::is_authenticated()))]
+async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
