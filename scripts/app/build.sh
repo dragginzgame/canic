@@ -21,12 +21,13 @@ CAN=$1
 mkdir -p "$ROOT/.dfx/local/canisters/$CAN"
 WASM_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm"
 
-# Support release builds via env RELEASE=1 (defaults to debug)
-PROFILE_FLAG=""
-PROFILE_DIR="debug"
-if [ "${RELEASE:-0}" = "1" ]; then
-    PROFILE_FLAG="--release"
-    PROFILE_DIR="release"
+# Build in release mode by default to keep wasm artifacts small.
+# Set RELEASE=0 to force a debug build.
+PROFILE_FLAG="--release"
+PROFILE_DIR="release"
+if [ "${RELEASE:-1}" = "0" ]; then
+    PROFILE_FLAG=""
+    PROFILE_DIR="debug"
 fi
 
 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG

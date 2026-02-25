@@ -5,7 +5,6 @@ use crate::{
     },
     workflow::http::HttpWorkflow,
 };
-use serde::de::DeserializeOwned;
 
 ///
 /// HttpApi
@@ -17,19 +16,19 @@ use serde::de::DeserializeOwned;
 pub struct HttpApi;
 
 impl HttpApi {
-    /// Perform a GET request and deserialize a JSON response.
-    /// Returns an error on non-2xx status codes or JSON decode failures.
-    pub async fn get<T: DeserializeOwned>(url: &str, headers: &[(&str, &str)]) -> Result<T, Error> {
+    /// Perform a GET request and return the raw response.
+    /// Returns an error on non-2xx status codes.
+    pub async fn get(url: &str, headers: &[(&str, &str)]) -> Result<HttpRequestResult, Error> {
         HttpWorkflow::get(url, headers).await.map_err(Error::from)
     }
 
     /// Same as `get`, with an explicit metrics label.
-    /// Returns an error on non-2xx status codes or JSON decode failures.
-    pub async fn get_with_label<T: DeserializeOwned>(
+    /// Returns an error on non-2xx status codes.
+    pub async fn get_with_label(
         url: &str,
         headers: &[(&str, &str)],
         label: &str,
-    ) -> Result<T, Error> {
+    ) -> Result<HttpRequestResult, Error> {
         HttpWorkflow::get_with_label(url, headers, label)
             .await
             .map_err(Error::from)
