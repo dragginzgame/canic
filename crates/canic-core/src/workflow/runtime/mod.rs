@@ -81,6 +81,16 @@ fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
     }
 }
 
+fn init_post_upgrade_memory_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
+    MemoryRegistryOps::init_eager_tls();
+    MemoryRegistryOps::init_registry().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("memory init failed: {err}"),
+        )
+    })
+}
+
 ///
 /// init_root_canister
 /// Bootstraps the root canister runtime and environment.
@@ -179,15 +189,9 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
 /// post_upgrade_root_canister
 ///
 
-pub fn post_upgrade_root_canister() -> Result<(), InternalError> {
-    // --- Phase 1: Init base systems ---
-    MemoryRegistryOps::init_eager_tls();
-    let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("memory init failed: {err}"),
-        )
-    })?;
+pub fn post_upgrade_root_canister_after_memory_init(
+    memory_summary: MemoryRegistryInitSummary,
+) -> Result<(), InternalError> {
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
     log_memory_summary(&memory_summary);
@@ -264,15 +268,10 @@ pub fn init_nonroot_canister(
 /// post_upgrade_nonroot_canister
 ///
 
-pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) -> Result<(), InternalError> {
-    // --- Phase 1: Init base systems ---
-    MemoryRegistryOps::init_eager_tls();
-    let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("memory init failed: {err}"),
-        )
-    })?;
+pub fn post_upgrade_nonroot_canister_after_memory_init(
+    canister_role: CanisterRole,
+    memory_summary: MemoryRegistryInitSummary,
+) {
     crate::log::set_ready();
     crate::log!(
         Topic::Init,
@@ -286,6 +285,8 @@ pub fn post_upgrade_nonroot_canister(canister_role: CanisterRole) -> Result<(), 
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all();
+}
 
-    Ok(())
+pub fn init_memory_registry_post_upgrade() -> Result<MemoryRegistryInitSummary, InternalError> {
+    init_post_upgrade_memory_registry()
 }

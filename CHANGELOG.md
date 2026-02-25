@@ -5,6 +5,28 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.2] - 2026-02-25 - Memory Bootstrap Ordering & Guards
+
+### 🩹 Fixed
+
+- Post-upgrade lifecycle now initializes memory bootstrap first, then restores env context, so upgrade paths no longer depend on implicit stable-memory behavior.
+- `EnvOps::restore_root()` and `EnvOps::restore_role()` now fail fast when memory registry bootstrap was not completed, making ordering errors explicit.
+- `intent_authority` test canister now initializes memory on both `init` and `post_upgrade`, and defensively before the first update read path.
+
+### 🔧 Changed
+
+- Added runtime memory-bootstrap readiness tracking in `MemoryRegistryRuntime` via `is_initialized()`.
+- `ic_memory!` now enforces a wasm runtime guard so stable-memory slots are only accessed during eager TLS bootstrap or after registry initialization.
+
+```rust
+// post_upgrade ordering
+init_eager_tls();
+MemoryRegistryRuntime::init(...)?;
+EnvOps::restore_role(...)?;
+```
+
+---
+
 ## [0.10.1] - 2026-02-24
 
 ### 🔧 Changed

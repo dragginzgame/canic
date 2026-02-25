@@ -35,6 +35,11 @@ pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
         );
     }
 
+    let memory_summary = match workflow::runtime::init_memory_registry_post_upgrade() {
+        Ok(summary) => summary,
+        Err(err) => lifecycle_trap(LifecyclePhase::PostUpgrade, err),
+    };
+
     // Restore root environment context
     if let Err(err) = EnvOps::restore_root() {
         lifecycle_trap(
@@ -42,7 +47,9 @@ pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
             format!("env restore failed (root upgrade): {err}"),
         );
     }
-    if let Err(err) = workflow::runtime::post_upgrade_root_canister() {
+    if let Err(err) =
+        workflow::runtime::post_upgrade_root_canister_after_memory_init(memory_summary)
+    {
         lifecycle_trap(LifecyclePhase::PostUpgrade, err);
     }
 
@@ -68,6 +75,11 @@ pub fn post_upgrade_nonroot_canister(role: CanisterRole, config_str: &str, confi
         );
     }
 
+    let memory_summary = match workflow::runtime::init_memory_registry_post_upgrade() {
+        Ok(summary) => summary,
+        Err(err) => lifecycle_trap(LifecyclePhase::PostUpgrade, err),
+    };
+
     // Restore role context (env data already persisted)
     if let Err(err) = EnvOps::restore_role(role.clone()) {
         lifecycle_trap(
@@ -75,9 +87,7 @@ pub fn post_upgrade_nonroot_canister(role: CanisterRole, config_str: &str, confi
             format!("env restore failed (nonroot upgrade): {err}"),
         );
     }
-    if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister(role) {
-        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
-    }
+    workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(role, memory_summary);
 
     // Delegate to async bootstrap workflow
     TimerOps::set(

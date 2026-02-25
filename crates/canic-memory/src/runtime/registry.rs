@@ -2,6 +2,11 @@ use crate::registry::{
     MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
     MemoryRegistryError, drain_pending_ranges, drain_pending_registrations,
 };
+use std::cell::Cell;
+
+thread_local! {
+    static MEMORY_REGISTRY_INITIALIZED: Cell<bool> = const { Cell::new(false) };
+}
 
 ///
 /// MemoryRegistryInitSummary
@@ -62,10 +67,18 @@ impl MemoryRegistryRuntime {
             MemoryRegistry::register(id, &crate_name, &label)?;
         }
 
-        Ok(MemoryRegistryInitSummary {
+        let summary = MemoryRegistryInitSummary {
             ranges: MemoryRegistry::export_ranges(),
             entries: MemoryRegistry::export(),
-        })
+        };
+        MEMORY_REGISTRY_INITIALIZED.with(|ready| ready.set(true));
+
+        Ok(summary)
+    }
+
+    #[must_use]
+    pub fn is_initialized() -> bool {
+        MEMORY_REGISTRY_INITIALIZED.with(Cell::get)
     }
 
     /// Snapshot all registry entries.
