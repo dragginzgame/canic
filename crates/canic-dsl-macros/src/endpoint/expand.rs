@@ -54,7 +54,7 @@
 
 use crate::endpoint::{
     EndpointKind,
-    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate},
+    parse::{AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate},
     validate::ValidatedArgs,
 };
 use proc_macro2::TokenStream as TokenStream2;
@@ -95,7 +95,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     if requires_authenticated(&args.requires)
         && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
     {
-        // authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
+        // is_authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
         let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
         func.block.stmts.insert(0, keepalive);
     }
@@ -404,18 +404,18 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }
-        BuiltinPredicate::Authenticated { required_scope } => match required_scope {
-            Some(required_scope) => {
-                quote!(::canic::__internal::core::access::expr::auth::authenticated(::core::option::Option::Some(#required_scope)))
-            }
-            None => {
-                quote!(
-                    ::canic::__internal::core::access::expr::auth::authenticated(
-                        ::core::option::Option::None
-                    )
-                )
-            }
-        },
+        BuiltinPredicate::Authenticated { required_scope } => {
+            let required_scope = match required_scope {
+                Some(AuthScopeArg::Literal(required_scope)) => {
+                    quote!(::core::option::Option::Some(#required_scope))
+                }
+                Some(AuthScopeArg::Expr(required_scope)) => {
+                    quote!(::core::option::Option::Some(#required_scope))
+                }
+                None => quote!(::core::option::Option::None),
+            };
+            quote!(::canic::__internal::core::access::expr::auth::authenticated(#required_scope))
+        }
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }

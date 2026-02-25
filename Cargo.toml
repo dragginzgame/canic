@@ -56,17 +56,14 @@ canic-memory = { version = "0.10.5", path = "crates/canic-memory" }
 canic-testkit = { version = "0.10.5", path = "crates/canic-testkit" }
 canic-utils = { version = "0.10.5", path = "crates/canic-utils" }
 convert_case = "0.11"
-crc32fast = "1.5"
 criterion = "0.8"
 ctor = "0.6"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
-hex = "0.4"
 ic-cdk = "0.19.0"
 ic-cdk-timers = "1.0"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.12"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
-num-traits = "0.2"
 pocket-ic = "12.0"
 proc-macro2 = "1.0"
 quote = "1.0"

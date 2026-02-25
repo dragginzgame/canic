@@ -3,7 +3,6 @@ use crate::{
     structures::{Storable, storable::Bound},
 };
 use derive_more::{Add, AddAssign, Sub, SubAssign};
-use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
     borrow::Cow,
@@ -55,7 +54,7 @@ impl Cycles {
 
     #[must_use]
     pub fn to_u64(&self) -> u64 {
-        self.0.to_u64().unwrap_or(u64::MAX)
+        u64::try_from(self.0).unwrap_or(u64::MAX)
     }
 
     #[must_use]
@@ -93,7 +92,7 @@ impl Display for Cycles {
 
 impl From<Nat> for Cycles {
     fn from(n: Nat) -> Self {
-        Self(n.0.to_u128().unwrap_or(0))
+        Self(u128::try_from(n.0).unwrap_or(0))
     }
 }
 

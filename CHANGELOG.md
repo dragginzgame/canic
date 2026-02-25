@@ -5,6 +5,56 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.11.0] - 2026-02-25 - Capabilities Arc: Kickoff & Cleanup
+
+NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are at
+
+### 📝 Summary
+
+- `0.11.x` starts the capabilities-focused design arc. This first slice lands an `Account` correctness/alignment fix, introduces broad capability scope constants, trims dependency surface, and removes an unused random-hex helper.
+
+### ⚠️ Breaking
+
+- `authenticated("scope")` (now `is_authenticated("scope")`) enforces required-scope presence. Tokens lacking the scope are now rejected.
+- Legacy `authenticated(...)` macro usage is no longer accepted; use `is_authenticated(...)`.
+
+### 🩹 Fixed
+
+- `canic-cdk::types::Account` now uses `icrc-ledger-types` (`Icrc1Account`) for textual encoding/decoding, so `Display`/`FromStr` behavior stays aligned with the ICRC-1 reference model and avoids drift in checksum/subaccount formatting.
+
+### 🔧 Changed
+
+- Replaced `Nat`/cycle numeric downcasts with standard-library `TryFrom` conversions in HTTP/cycles paths while preserving existing overflow fallback behavior.
+- Added shared capability scope constants in `canic::ids::cap` (`READ`, `WRITE`, `VERIFY`, `ADMIN`) and updated `is_authenticated(...)` macro parsing to accept either string literals or path constants (for example `cap::VERIFY`).
+
+### 🗑️ Removed
+
+- Removed `canic-utils::rand::random_hex()` (it was unused in this repository). Use `random_bytes()` and encode at the call site when needed.
+- Removed now-unused dependencies from the workspace and crate manifests: `base32`, `crc32fast`, `hex`, and `num-traits`.
+
+### 🧪 Testing
+
+- Added PocketIC coverage for scope-gated delegated auth (`is_authenticated("scope")`) with explicit allow/deny cases for required-scope presence.
+- Added PocketIC coverage for unscoped delegated auth guards (`is_authenticated()`) with a scoped-vs-unscoped endpoint behavior check.
+- Added macro parser coverage for constant-path scope arguments (`is_authenticated(cap::VERIFY)`).
+- ECDSA provisioning tests skip when threshold keys are unavailable (existing behavior).
+
+```rust
+use canic::ids::cap;
+
+#[canic_query(requires(auth::is_authenticated()))]
+fn profile_read(token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update(requires(auth::is_authenticated(cap::VERIFY)))]
+async fn profile_verify(token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+```
+
+---
+
 ## [0.10.5] - 2026-02-25 - HTTP Raw Responses & Leaner Wasm Builds
 
 ### ⚠️ Breaking

@@ -3,4 +3,4 @@ pub mod auth;
 pub mod caller;
 pub mod env;
 
-pub use auth::authenticated;
+pub use auth::is_authenticated;

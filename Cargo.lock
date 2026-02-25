@@ -106,12 +106,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
 
 [[package]]
-name = "base32"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
-
-[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,7 +221,6 @@ dependencies = [
  "canic-memory",
  "canic-testkit",
  "canic-utils",
- "hex",
  "ic-cdk",
  "serde",
  "serde_bytes",
@@ -238,16 +231,12 @@ dependencies = [
 name = "canic-cdk"
 version = "0.10.5"
 dependencies = [
- "base32 0.5.1",
  "candid",
- "crc32fast",
  "derive_more",
- "hex",
  "ic-cdk",
  "ic-cdk-timers",
  "ic-stable-structures 0.7.2",
  "icrc-ledger-types",
- "num-traits",
  "serde",
  "serde_bytes",
  "sha2",
@@ -267,7 +256,6 @@ dependencies = [
  "derive_more",
  "futures",
  "k256",
- "num-traits",
  "pocket-ic",
  "remain",
  "serde",
@@ -325,10 +313,8 @@ dependencies = [
 name = "canic-utils"
 version = "0.10.5"
 dependencies = [
- "candid",
  "convert_case 0.11.0",
  "derive_more",
- "hex",
  "rand_chacha 0.10.0",
  "thiserror 2.0.18",
  "xxhash-rust",
@@ -1436,7 +1422,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aafb78e620b2cc2b000cd745c0504dfb23a828acc3dd6f1baef208cd6c471e32"
 dependencies = [
- "base32 0.4.0",
+ "base32",
  "candid",
  "crc32fast",
  "hex",

@@ -10,9 +10,7 @@
 //! - Delegated tokens are only valid if their proof matches the currently stored delegation proof.
 //! - Delegation rotation invalidates all previously issued delegated tokens.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
-//! - Endpoint scope strings are parsed at this layer for compatibility, but
-//!   scope authorization is intentionally deferred to the 0.11 root capability
-//!   policy layer.
+//! - Endpoint-required scopes are enforced against delegated token claims.
 
 use crate::{
     access::AccessError,
@@ -86,23 +84,36 @@ async fn verify_token(
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
 
-    // Scope enforcement is intentionally deferred to the 0.11 root capability
-    // policy layer. Keep this explicit to avoid implying scope authorization
-    // is performed here.
-    if let Some(_scope) = required_scope {}
-
     enforce_subject_binding(verified.claims.sub, caller)?;
+    enforce_required_scope(required_scope, &verified.claims.scopes)?;
 
     Ok(verified)
 }
 
 fn enforce_subject_binding(sub: Principal, caller: Principal) -> Result<(), AccessError> {
-    if sub != caller {
+    if sub == caller {
+        Ok(())
+    } else {
         Err(AccessError::Denied(format!(
             "delegated token subject '{sub}' does not match caller '{caller}'"
         )))
-    } else {
+    }
+}
+
+fn enforce_required_scope(
+    required_scope: Option<&str>,
+    token_scopes: &[String],
+) -> Result<(), AccessError> {
+    let Some(required_scope) = required_scope else {
+        return Ok(());
+    };
+
+    if token_scopes.iter().any(|scope| scope == required_scope) {
         Ok(())
+    } else {
+        Err(AccessError::Denied(format!(
+            "delegated token missing required scope '{required_scope}'"
+        )))
     }
 }
 
@@ -255,6 +266,7 @@ fn dependency_unavailable(detail: &str) -> AccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::cap;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -273,5 +285,24 @@ mod tests {
         let caller = p(2);
         let err = enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
         assert!(err.to_string().contains("does not match caller"));
+    }
+
+    #[test]
+    fn required_scope_allows_when_scope_present() {
+        let scopes = vec![cap::READ.to_string(), cap::VERIFY.to_string()];
+        assert!(enforce_required_scope(Some(cap::VERIFY), &scopes).is_ok());
+    }
+
+    #[test]
+    fn required_scope_rejects_when_scope_missing() {
+        let scopes = vec![cap::READ.to_string()];
+        let err = enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
+        assert!(err.to_string().contains("missing required scope"));
+    }
+
+    #[test]
+    fn required_scope_none_is_allowed() {
+        let scopes = vec![cap::READ.to_string()];
+        assert!(enforce_required_scope(None, &scopes).is_ok());
     }
 }

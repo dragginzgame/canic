@@ -1,4 +1,4 @@
-use crate::icrc_ledger_types::icrc1::account::Account as IcrcAccount;
+use crate::icrc_ledger_types::icrc1::account::Account as Icrc1Account;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -47,17 +47,8 @@ impl Account {
 
 impl Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-1/TextualEncoding.md#textual-encoding-of-icrc-1-accounts
-        match &self.subaccount {
-            None => write!(f, "{}", self.owner),
-            Some(subaccount) if subaccount == &[0; 32] => write!(f, "{}", self.owner),
-            Some(subaccount) => {
-                let checksum = full_account_checksum(self.owner.as_slice(), subaccount.as_slice());
-                let hex_subaccount = hex::encode(subaccount.as_slice());
-                let hex_subaccount = hex_subaccount.trim_start_matches('0');
-                write!(f, "{}-{}.{}", self.owner, checksum, hex_subaccount)
-            }
-        }
+        let icrc = Icrc1Account::from(self);
+        Display::fmt(&icrc, f)
     }
 }
 
@@ -67,7 +58,7 @@ impl FromStr for Account {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let acc = IcrcAccount::from_str(s).map_err(|e| e.to_string())?;
+        let acc = Icrc1Account::from_str(s).map_err(|e| e.to_string())?;
 
         Ok(Self::new(acc.owner, acc.subaccount))
     }
@@ -76,6 +67,24 @@ impl FromStr for Account {
 impl PartialEq for Account {
     fn eq(&self, other: &Self) -> bool {
         self.owner == other.owner && self.effective_subaccount() == other.effective_subaccount()
+    }
+}
+
+impl From<Account> for Icrc1Account {
+    fn from(a: Account) -> Self {
+        Self {
+            owner: a.owner,
+            subaccount: a.subaccount,
+        }
+    }
+}
+
+impl From<&Account> for Icrc1Account {
+    fn from(a: &Account) -> Self {
+        Self {
+            owner: a.owner,
+            subaccount: a.subaccount,
+        }
     }
 }
 
@@ -107,35 +116,5 @@ impl Ord for Account {
 impl PartialOrd for Account {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-// make your internal code public, dfinity!
-fn full_account_checksum(owner: &[u8], subaccount: &[u8]) -> String {
-    let mut crc32hasher = crc32fast::Hasher::new();
-    crc32hasher.update(owner);
-    crc32hasher.update(subaccount);
-    let checksum = crc32hasher.finalize().to_be_bytes();
-
-    base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &checksum).to_lowercase()
-}
-
-///
-/// TESTS
-///
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn subaccount_checksum_matches_reference() {
-        // Values lifted from icrc-ledger-types, base32(crc32(owner + subaccount)) of
-        // 0x01 bytes (owner) plus 0x02 bytes (subaccount).
-        let owner = [0x01; 29];
-        let subaccount = [0x02; 32];
-
-        let checksum = full_account_checksum(owner.as_slice(), subaccount.as_slice());
-        assert_eq!(checksum, "izgikni");
     }
 }
