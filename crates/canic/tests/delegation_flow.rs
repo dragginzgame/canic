@@ -334,6 +334,7 @@ fn ensure_local_artifacts_built() {
         let output = Command::new("dfx")
             .current_dir(&workspace_root)
             .env("DFX_NETWORK", "local")
+            .env("RELEASE", "0")
             .args(["build", "--all"])
             .output()
             .expect("failed to run `dfx build --all`");

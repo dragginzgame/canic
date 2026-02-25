@@ -153,7 +153,7 @@ test-unit:
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \
 		( dfx canister create --all -qq ); \
-		( dfx build --all ); \
+		( RELEASE=0 dfx build --all ); \
 		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
 		( dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
 		( root_pid="$$(dfx canister id root)"; \
