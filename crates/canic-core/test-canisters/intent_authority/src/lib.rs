@@ -24,8 +24,16 @@ fn init(external: Principal) {
     EXTERNAL.with(|cell| *cell.borrow_mut() = Some(external));
 }
 
+#[ic_cdk::post_upgrade]
+fn post_upgrade() {
+    init_memory();
+    ic_cdk::println!("intent_authority: post_upgrade memory initialized");
+}
+
 #[update]
 async fn buy(qty: u64) -> Result<(), String> {
+    // Idempotent bootstrap guard for custom test canister wiring.
+    init_memory();
     ic_cdk::println!("intent_authority: buy start qty={qty}");
 
     let external = external_principal()?;

@@ -1,6 +1,6 @@
 pub mod registry;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 // -----------------------------------------------------------------------------
 // CANIC_EAGER_TLS
@@ -22,6 +22,7 @@ thread_local! {
     static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
         RefCell::new(Vec::new())
     };
+    static CANIC_EAGER_TLS_RUNNING: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Run all deferred TLS initializers and clear the registry.
@@ -38,6 +39,17 @@ thread_local! {
 /// heartbeat, etc.) so that thread-local caches are in a fully-initialized state
 /// before the canister performs memory-dependent work.
 pub fn init_eager_tls() {
+    struct RunningGuard;
+
+    impl Drop for RunningGuard {
+        fn drop(&mut self) {
+            CANIC_EAGER_TLS_RUNNING.with(|running| running.set(false));
+        }
+    }
+
+    CANIC_EAGER_TLS_RUNNING.with(|running| running.set(true));
+    let _running_guard = RunningGuard;
+
     let funcs = CANIC_EAGER_TLS.with(|v| {
         let mut v = v.borrow_mut();
         std::mem::take(&mut *v)
@@ -51,6 +63,26 @@ pub fn init_eager_tls() {
     for f in funcs {
         f();
     }
+}
+
+#[must_use]
+pub fn is_eager_tls_initializing() -> bool {
+    CANIC_EAGER_TLS_RUNNING.with(Cell::get)
+}
+
+#[must_use]
+pub fn is_memory_bootstrap_ready() -> bool {
+    is_eager_tls_initializing() || registry::MemoryRegistryRuntime::is_initialized()
+}
+
+pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
+    if is_memory_bootstrap_ready() {
+        return;
+    }
+
+    panic!(
+        "stable memory slot '{label}' (id {id}) accessed before memory bootstrap; call init_eager_tls() and MemoryRegistryRuntime::init(...) first"
+    );
 }
 
 /// Register a TLS initializer function for eager execution.

@@ -81,7 +81,7 @@ serde_json = "1.0"
 sha2 = "0.10"
 syn = "2.0"
 thiserror = "2.0"
-toml = "0.9"
+toml = "1.0"
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # shared clippy rules

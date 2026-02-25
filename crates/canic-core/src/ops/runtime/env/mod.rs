@@ -9,6 +9,7 @@ use crate::{
     view::env::ValidatedEnv,
 };
 use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::mapper::EnvRecordMapper};
+use canic_memory::runtime::registry::MemoryRegistryRuntime;
 use thiserror::Error as ThisError;
 
 ///
@@ -46,6 +47,9 @@ pub enum EnvOpsError {
         existing: Principal,
         incoming: Principal,
     },
+
+    #[error("memory registry must be initialized before env restore")]
+    MemoryRegistryNotInitialized,
 }
 
 impl From<EnvOpsError> for InternalError {
@@ -207,6 +211,8 @@ impl EnvOps {
     ///
     /// Root identity and subnet metadata must already be present.
     pub fn restore_root() -> Result<(), InternalError> {
+        Self::assert_memory_registry_initialized()?;
+
         // Ensure environment was initialized before upgrade
         Self::assert_initialized()?;
 
@@ -220,6 +226,8 @@ impl EnvOps {
     /// Environment data is expected to already exist in stable memory.
     /// Failure indicates a programmer error or corrupted state.
     pub fn restore_role(role: CanisterRole) -> Result<(), InternalError> {
+        Self::assert_memory_registry_initialized()?;
+
         // Ensure environment was initialized before upgrade
         Self::assert_initialized()?;
 
@@ -253,6 +261,20 @@ impl EnvOps {
             Ok(())
         } else {
             Err(EnvOpsError::MissingFields(missing.join(", ")).into())
+        }
+    }
+
+    fn assert_memory_registry_initialized() -> Result<(), InternalError> {
+        let initialized = MemoryRegistryRuntime::is_initialized();
+        debug_assert!(
+            initialized,
+            "memory registry must be initialized before env restore"
+        );
+
+        if initialized {
+            Ok(())
+        } else {
+            Err(EnvOpsError::MemoryRegistryNotInitialized.into())
         }
     }
 }

@@ -8,6 +8,10 @@
 #[macro_export]
 macro_rules! ic_memory {
     ($label:path, $id:expr) => {{
+        if cfg!(target_arch = "wasm32") {
+            $crate::runtime::assert_memory_bootstrap_ready(stringify!($label), $id);
+        }
+
         // Force the compiler to resolve the type. This causes a compile-time error
         // if `$label` does not exist or is not a valid local type.
         let _type_check: Option<$label> = None;
