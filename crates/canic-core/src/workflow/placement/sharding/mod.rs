@@ -25,6 +25,7 @@ use crate::{
             ShardingPlanStateResponseMapper,
         },
         rpc::request::{CreateCanisterParent, RequestOps},
+        storage::children::CanisterChildrenOps,
         storage::placement::{
             sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
         },
@@ -160,12 +161,13 @@ impl ShardingWorkflow {
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
+        let routable_active = Self::routable_active_set(&active_set);
 
         let registry = ShardingRegistryOps::export();
         let entry_views: Vec<_> = registry
             .entries
             .iter()
-            .filter(|(pid, _)| active_set.contains(pid))
+            .filter(|(pid, _)| routable_active.contains(pid))
             .map(|(pid, entry)| {
                 ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
             })
@@ -179,7 +181,7 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .filter(|(_, pid)| active_set.contains(pid))
+            .filter(|(_, pid)| routable_active.contains(pid))
             .map(|(key, pid)| {
                 ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
             })
@@ -274,12 +276,13 @@ impl ShardingWorkflow {
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
+        let routable_active = Self::routable_active_set(&active_set);
 
         let registry = ShardingRegistryOps::export();
         let entry_views: Vec<_> = registry
             .entries
             .iter()
-            .filter(|(pid, _)| active_set.contains(pid))
+            .filter(|(pid, _)| routable_active.contains(pid))
             .map(|(pid, entry)| {
                 ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
             })
@@ -293,7 +296,7 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .filter(|(_, pid)| active_set.contains(pid))
+            .filter(|(_, pid)| routable_active.contains(pid))
             .map(|(key, pid)| {
                 ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
             })
@@ -350,13 +353,28 @@ impl ShardingWorkflow {
 
     fn pool_entry_views(pool: &str) -> Vec<(Principal, ShardPlacement)> {
         let registry = ShardingRegistryOps::export();
+        let direct_children = Self::direct_child_pid_set();
         registry
             .entries
             .iter()
+            .filter(|(pid, _)| direct_children.contains(pid))
             .map(|(pid, entry)| {
                 ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
             })
             .filter(|(_, entry)| entry.pool.as_str() == pool)
+            .collect()
+    }
+
+    fn routable_active_set(active: &BTreeSet<Principal>) -> BTreeSet<Principal> {
+        let direct_children = Self::direct_child_pid_set();
+        active.intersection(&direct_children).copied().collect()
+    }
+
+    fn direct_child_pid_set() -> BTreeSet<Principal> {
+        CanisterChildrenOps::data()
+            .entries
+            .into_iter()
+            .map(|(pid, _)| pid)
             .collect()
     }
 
@@ -438,8 +456,9 @@ mod tests {
         config::Config,
         dto::placement::sharding::ShardingPlanStateResponse,
         ids::CanisterRole,
-        ops::storage::placement::{
-            sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
+        ops::storage::{
+            children::CanisterChildrenOps,
+            placement::{sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps},
         },
     };
     use futures::executor::block_on;
@@ -456,6 +475,17 @@ mod tests {
         ShardingLifecycleOps::set_active(pid);
     }
 
+    fn seed_direct_children(pids: &[Principal]) {
+        let parent = p(250);
+        let role = CanisterRole::from("shard");
+        let entries = pids
+            .iter()
+            .copied()
+            .map(|pid| (pid, role.clone()))
+            .collect();
+        CanisterChildrenOps::import_direct_children(parent, entries);
+    }
+
     #[test]
     fn assign_returns_existing_when_already_assigned() {
         Config::reset_for_tests();
@@ -467,6 +497,7 @@ mod tests {
         let role = CanisterRole::from("shard");
         let created_at = 0;
 
+        seed_direct_children(&[shard]);
         ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
         activate(shard);
         ShardingRegistryOps::assign("primary", "partition_key-a", shard).unwrap();
@@ -491,6 +522,7 @@ mod tests {
         let role = CanisterRole::from("shard");
         let created_at = 0;
 
+        seed_direct_children(&[shard]);
         ShardingRegistryOps::create(shard, "primary", 0, &role, 2, created_at).unwrap();
         activate(shard);
 
@@ -520,6 +552,7 @@ mod tests {
         let shard_b = p(2);
         let created_at = 0;
 
+        seed_direct_children(&[shard_a, shard_b]);
         ShardingRegistryOps::create(shard_a, "primary", 0, &role, 1, created_at).unwrap();
         ShardingRegistryOps::create(shard_b, "primary", 1, &role, 1, created_at).unwrap();
 
@@ -552,6 +585,7 @@ mod tests {
         let shard_b = p(2);
         let created_at = 0;
 
+        seed_direct_children(&[shard_a, shard_b]);
         ShardingRegistryOps::create(shard_a, "primary", 0, &role, 1, created_at).unwrap();
         ShardingRegistryOps::create(shard_b, "primary", 1, &role, 1, created_at).unwrap();
         activate(shard_a);
@@ -605,6 +639,7 @@ mod tests {
         let role = CanisterRole::from("shard");
         let created_at = 0;
 
+        seed_direct_children(&[shard]);
         ShardingRegistryOps::create(shard, "primary", 0, &role, 1, created_at).unwrap();
 
         let plan = ShardingWorkflow::plan_assign_to_pool("primary", "partition_key-x").unwrap();
@@ -617,5 +652,25 @@ mod tests {
 
         let plan = ShardingWorkflow::plan_assign_to_pool("primary", "partition_key-x").unwrap();
         assert_eq!(plan, ShardingPlanStateResponse::UseExisting { pid: shard });
+    }
+
+    #[test]
+    fn plan_ignores_non_child_assigned_shard() {
+        Config::reset_for_tests();
+        init_config();
+        ShardingRegistryOps::clear_for_test();
+        ShardingLifecycleOps::clear_for_test();
+        seed_direct_children(&[]);
+
+        let stale = p(200);
+        let role = CanisterRole::from("shard");
+        let created_at = 0;
+
+        ShardingRegistryOps::create(stale, "primary", 0, &role, 1, created_at).unwrap();
+        activate(stale);
+        ShardingRegistryOps::assign("primary", "partition_key-stale", stale).unwrap();
+
+        let plan = ShardingWorkflow::plan_assign_to_pool("primary", "partition_key-stale").unwrap();
+        assert_eq!(plan, ShardingPlanStateResponse::CreateAllowed);
     }
 }

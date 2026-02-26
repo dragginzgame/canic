@@ -212,17 +212,18 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 /// Require that the caller is registered with the expected canister role.
 #[allow(clippy::unused_async)]
 pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
-    let record = SubnetRegistryOps::get(caller).ok_or_else(|| {
-        AccessError::Denied(format!(
-            "caller '{caller}' is not registered on the subnet registry"
-        ))
-    })?;
+    if !EnvOps::is_root() {
+        return Err(non_root_subnet_registry_predicate_denial());
+    }
+
+    let record =
+        SubnetRegistryOps::get(caller).ok_or_else(|| caller_not_registered_denial(caller))?;
 
     if record.role == role {
         Ok(())
     } else {
         Err(AccessError::Denied(format!(
-            "caller '{caller}' does not have role '{role}'"
+            "authentication error: caller '{caller}' does not have role '{role}'"
         )))
     }
 }
@@ -231,12 +232,14 @@ pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> 
 /// Require that the caller is registered as a canister on this subnet.
 #[allow(clippy::unused_async)]
 pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
+    if !EnvOps::is_root() {
+        return Err(non_root_subnet_registry_predicate_denial());
+    }
+
     if SubnetRegistryOps::is_registered(caller) {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not registered on the subnet registry"
-        )))
+        Err(caller_not_registered_denial(caller))
     }
 }
 
@@ -261,6 +264,25 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
 
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
+}
+
+fn non_root_subnet_registry_predicate_denial() -> AccessError {
+    AccessError::Denied(
+        "authentication error: illegal access to subnet registry predicate from non-root canister"
+            .to_string(),
+    )
+}
+
+fn caller_not_registered_denial(caller: Principal) -> AccessError {
+    let root = EnvOps::root_pid()
+        .map(|pid| pid.to_string())
+        .unwrap_or_else(|_| "unavailable".to_string());
+    let registry_count = SubnetRegistryOps::data().entries.len();
+    AccessError::Denied(format!(
+        "authentication error: caller '{caller}' is not registered on the subnet registry \
+         (root='{root}', registry_entries={registry_count}); verify caller root routing and \
+         canic_subnet_registry state"
+    ))
 }
 
 #[cfg(test)]
