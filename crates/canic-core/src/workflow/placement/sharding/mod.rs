@@ -357,7 +357,7 @@ impl ShardingWorkflow {
         registry
             .entries
             .iter()
-            .filter(|(pid, _)| direct_children.contains(pid))
+            .filter(|(pid, _)| direct_children.is_empty() || direct_children.contains(pid))
             .map(|(pid, entry)| {
                 ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
             })
@@ -367,6 +367,10 @@ impl ShardingWorkflow {
 
     fn routable_active_set(active: &BTreeSet<Principal>) -> BTreeSet<Principal> {
         let direct_children = Self::direct_child_pid_set();
+        if direct_children.is_empty() {
+            return active.clone();
+        }
+
         active.intersection(&direct_children).copied().collect()
     }
 
@@ -661,7 +665,7 @@ mod tests {
         init_config();
         ShardingRegistryOps::clear_for_test();
         ShardingLifecycleOps::clear_for_test();
-        seed_direct_children(&[]);
+        seed_direct_children(&[p(201)]);
 
         let stale = p(200);
         let role = CanisterRole::from("shard");
