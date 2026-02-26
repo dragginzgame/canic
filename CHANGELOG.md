@@ -21,11 +21,14 @@ NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are a
 ### 🩹 Fixed
 
 - `canic-cdk::types::Account` now uses `icrc-ledger-types` (`Icrc1Account`) for textual encoding/decoding, so `Display`/`FromStr` behavior stays aligned with the ICRC-1 reference model and avoids drift in checksum/subaccount formatting.
+- Sharding assignment now ignores active shard IDs that are not direct children in the local topology cache, so stale shard picks no longer route into root auth denials during canister-create flows.
 
 ### 🔧 Changed
 
 - Replaced `Nat`/cycle numeric downcasts with standard-library `TryFrom` conversions in HTTP/cycles paths while preserving existing overflow fallback behavior.
 - Added shared capability scope constants in `canic::ids::cap` (`READ`, `WRITE`, `VERIFY`, `ADMIN`) and updated `is_authenticated(...)` macro parsing to accept either string literals or path constants (for example `cap::VERIFY`).
+- Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
+- Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
 
 ### 🗑️ Removed
 
@@ -38,6 +41,7 @@ NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are a
 - Added PocketIC coverage for unscoped delegated auth guards (`is_authenticated()`) with a scoped-vs-unscoped endpoint behavior check.
 - Added macro parser coverage for constant-path scope arguments (`is_authenticated(cap::VERIFY)`).
 - ECDSA provisioning tests skip when threshold keys are unavailable (existing behavior).
+- Added sharding workflow regression coverage for stale/non-child assignments (`plan_ignores_non_child_assigned_shard`) to ensure routing only targets locally routable child shards.
 
 ```rust
 use canic::ids::cap;
