@@ -307,18 +307,18 @@ const fn ranges_overlap(a: MemoryRange, b: MemoryRange) -> bool {
 
 const INTERNAL_RESERVED_MEMORY_ID: u8 = u8::MAX;
 
-fn validate_non_internal_id(id: u8) -> Result<(), MemoryRegistryError> {
+const fn validate_non_internal_id(id: u8) -> Result<(), MemoryRegistryError> {
     if id == INTERNAL_RESERVED_MEMORY_ID {
         return Err(MemoryRegistryError::ReservedInternalId { id });
     }
     Ok(())
 }
 
-fn validate_range_excludes_reserved_internal_id(
-    start: u8,
+const fn validate_range_excludes_reserved_internal_id(
+    _start: u8,
     end: u8,
 ) -> Result<(), MemoryRegistryError> {
-    if start <= INTERNAL_RESERVED_MEMORY_ID && INTERNAL_RESERVED_MEMORY_ID <= end {
+    if end == INTERNAL_RESERVED_MEMORY_ID {
         return Err(MemoryRegistryError::ReservedInternalId {
             id: INTERNAL_RESERVED_MEMORY_ID,
         });

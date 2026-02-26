@@ -5,6 +5,27 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.10.6] - 2026-02-26 - Auth Diagnostics & Shard Routing Guard
+
+### 🩹 Fixed
+
+- Sharding assignment now ignores active shard IDs that are not direct children in the local topology cache, so stale shard picks no longer route into root auth denials during canister-create flows.
+
+### 🔧 Changed
+
+- Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
+- Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
+
+### 🧪 Testing
+
+- Added sharding workflow regression coverage for stale/non-child assignments (`plan_ignores_non_child_assigned_shard`) to ensure routing only targets locally routable child shards.
+
+```text
+Denied callers now include root/registry context for faster triage.
+```
+
+---
+
 ## [0.10.5] - 2026-02-25 - HTTP Raw Responses & Leaner Wasm Builds
 
 ### ⚠️ Breaking
