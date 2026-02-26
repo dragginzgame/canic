@@ -5,7 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.10.6] - 2026-02-26 - Auth Diagnostics & Shard Routing Guard
+## [0.10.7] - 2026-02-26 - Auth Diagnostics & Shard Routing Guard
 
 ### 🩹 Fixed
 
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
 - Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
+- `#[canic_update]` / `#[canic_query]` macro validation now rejects `requires(caller::is_registered_to_subnet())` on non-`internal` endpoints at compile time, preventing accidental downstream misuse.
 
 ### 🧪 Testing
 
