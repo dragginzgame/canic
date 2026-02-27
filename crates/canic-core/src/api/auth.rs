@@ -3,24 +3,26 @@ use crate::{
     dto::{
         auth::{
             DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
-            DelegationProvisionRequest, DelegationProvisionResponse, DelegationProvisionTargetKind,
-            DelegationRequest,
+            DelegationProvisionResponse, DelegationProvisionTargetKind, DelegationRequest,
         },
         error::Error,
+        rpc::{
+            Request as RootCapabilityRequest, Response as RootCapabilityResponse,
+            RootRequestMetadata,
+        },
     },
     error::InternalErrorClass,
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOps,
-        config::ConfigOps,
-        ic::IcOps,
-        runtime::env::EnvOps,
+        auth::DelegatedTokenOps, config::ConfigOps, ic::IcOps, runtime::env::EnvOps,
         runtime::metrics::auth::record_signer_mint_without_proof,
-        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
+        storage::auth::DelegationStateOps,
     },
-    workflow::auth::DelegationWorkflow,
+    workflow::rpc::request::handler::RootResponseWorkflow,
 };
+use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 ///
 /// DelegationApi
@@ -29,6 +31,9 @@ use crate::{
 ///
 
 pub struct DelegationApi;
+
+const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
+static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
 impl DelegationApi {
     const DELEGATED_TOKENS_DISABLED: &str =
@@ -92,98 +97,24 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// admin-only delegation provisioning (root-only escape hatch).
-    ///
-    /// Not part of canonical delegation flow.
-    ///
-    /// Root does not infer targets; callers must supply them.
-    pub async fn provision(
-        request: DelegationProvisionRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let caller = IcOps::msg_caller();
-        if caller != root_pid {
-            return Err(Error::forbidden(
-                "delegation provision requires root caller",
-            ));
-        }
-
-        validate_issuance_policy(&request.cert)?;
-        log!(
-            Topic::Auth,
-            Info,
-            "delegation provision start shard={} signer_targets={:?} verifier_targets={:?}",
-            request.cert.shard_pid,
-            request.signer_targets,
-            request.verifier_targets
-        );
-        DelegationWorkflow::provision(request)
-            .await
-            .map_err(Self::map_delegation_error)
-    }
-
     /// Canonical shard-initiated delegation request (user_shard -> root).
     ///
     /// Caller must match shard_pid and be registered to the subnet.
     pub async fn request_delegation(
         request: DelegationRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        if root_pid != IcOps::canister_self() {
-            return Err(Error::forbidden("delegation request must target root"));
-        }
-
-        let caller = IcOps::msg_caller();
-        if caller != request.shard_pid {
-            return Err(Error::forbidden(
-                "delegation request shard_pid must match caller",
-            ));
-        }
-
-        if request.ttl_secs == 0 {
-            return Err(Error::invalid(
-                "delegation ttl_secs must be greater than zero",
-            ));
-        }
-
-        let now_secs = IcOps::now_secs();
-        let cert = DelegationCert {
-            root_pid,
-            shard_pid: request.shard_pid,
-            issued_at: now_secs,
-            expires_at: now_secs.saturating_add(request.ttl_secs),
-            scopes: request.scopes,
-            aud: request.aud,
-        };
-
-        validate_issuance_policy(&cert)?;
-
-        let response = DelegationWorkflow::provision(DelegationProvisionRequest {
-            cert,
-            signer_targets: vec![caller],
-            verifier_targets: request.verifier_targets,
-        })
-        .await
-        .map_err(Self::map_delegation_error)?;
-
-        if request.include_root_verifier {
-            DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert)
+        let request = with_root_request_metadata(request);
+        let response =
+            RootResponseWorkflow::response(RootCapabilityRequest::IssueDelegation(request))
                 .await
                 .map_err(Self::map_delegation_error)?;
-            DelegationStateOps::set_proof_from_dto(response.proof.clone());
-        }
 
-        Ok(response)
+        match response {
+            RootCapabilityResponse::DelegationIssued(response) => Ok(response),
+            _ => Err(Error::internal(
+                "invalid root response type for delegation request",
+            )),
+        }
     }
 
     pub async fn store_proof(
@@ -253,39 +184,38 @@ impl DelegationApi {
     }
 }
 
-fn validate_issuance_policy(cert: &DelegationCert) -> Result<(), Error> {
-    if cert.expires_at <= cert.issued_at {
-        return Err(Error::invalid(
-            "delegation expires_at must be greater than issued_at",
-        ));
+fn with_root_request_metadata(mut request: DelegationRequest) -> DelegationRequest {
+    if request.metadata.is_none() {
+        request.metadata = Some(new_request_metadata());
+    }
+    request
+}
+
+fn new_request_metadata() -> RootRequestMetadata {
+    RootRequestMetadata {
+        request_id: generate_request_id(),
+        ttl_seconds: DEFAULT_ROOT_REQUEST_TTL_SECONDS,
+    }
+}
+
+fn generate_request_id() -> [u8; 32] {
+    if let Ok(bytes) = crate::utils::rand::random_bytes(32)
+        && bytes.len() == 32
+    {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&bytes);
+        return out;
     }
 
-    if cert.aud.is_empty() {
-        return Err(Error::invalid("delegation aud must not be empty"));
-    }
+    let nonce = ROOT_REQUEST_NONCE.fetch_add(1, Ordering::Relaxed);
+    let now = IcOps::now_secs();
+    let caller = IcOps::msg_caller();
+    let canister = IcOps::canister_self();
 
-    if cert.scopes.is_empty() {
-        return Err(Error::invalid("delegation scopes must not be empty"));
-    }
-
-    if cert.scopes.iter().any(String::is_empty) {
-        return Err(Error::invalid("delegation scope must not be empty"));
-    }
-
-    let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-    if cert.root_pid != root_pid {
-        return Err(Error::invalid("delegation root pid must match local root"));
-    }
-
-    if cert.shard_pid == root_pid {
-        return Err(Error::invalid("delegation shard must not be root"));
-    }
-
-    let record = SubnetRegistryOps::get(cert.shard_pid)
-        .ok_or_else(|| Error::invalid("delegation shard must be registered to subnet"))?;
-    if record.role.is_root() {
-        return Err(Error::invalid("delegation shard role must not be root"));
-    }
-
-    Ok(())
+    let mut hasher = Sha256::new();
+    hasher.update(now.to_be_bytes());
+    hasher.update(nonce.to_be_bytes());
+    hasher.update(caller.as_slice());
+    hasher.update(canister.as_slice());
+    hasher.finalize().into()
 }

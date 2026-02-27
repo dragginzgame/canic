@@ -94,7 +94,7 @@ For macro usage such as `authenticated("scope")`:
 
 - [ ] At least one test presents a valid token for user A with caller B and expects rejection.
 - [ ] That test fails if subject binding is removed.
-- [ ] `crates/canic-core/tests/pic_delegation_provision.rs` includes the mismatch case and is part of CI auth-flow coverage.
+- [ ] A delegation integration test that exercises canonical dispatcher flow is part of CI auth-flow coverage.
 
 If missing, add it.
 

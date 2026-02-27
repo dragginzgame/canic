@@ -75,6 +75,23 @@ pub struct DelegationMetricEntry {
 }
 
 ///
+/// RootCapabilityMetricEntry
+///
+/// Snapshot entry keyed by root capability + dispatcher event.
+///
+/// Semantics:
+/// - `capability` is the internal root capability discriminant.
+/// - `event` is the dispatcher-envelope event type.
+/// - `count` is the cumulative counter for this tuple.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct RootCapabilityMetricEntry {
+    pub capability: String,
+    pub event: String,
+    pub count: u64,
+}
+
+///
 /// EndpointAttemptMetricEntry
 ///
 /// Snapshot entry for endpoint execution lifecycle metrics.

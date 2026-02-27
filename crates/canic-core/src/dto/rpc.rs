@@ -1,4 +1,7 @@
-use crate::dto::prelude::*;
+use crate::dto::{
+    auth::{DelegationProvisionResponse, DelegationRequest},
+    prelude::*,
+};
 
 ///
 /// Request
@@ -10,6 +13,42 @@ pub enum Request {
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
     Cycles(CyclesRequest),
+    IssueDelegation(DelegationRequest),
+}
+
+///
+/// RootCapabilityRequest
+/// DTO-facing capability envelope used by root dispatch internals.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub enum RootCapabilityRequest {
+    ProvisionCanister(CreateCanisterRequest),
+    UpgradeCanister(UpgradeCanisterRequest),
+    MintCycles(CyclesRequest),
+    IssueDelegation(DelegationRequest),
+}
+
+impl From<Request> for RootCapabilityRequest {
+    fn from(value: Request) -> Self {
+        match value {
+            Request::CreateCanister(req) => Self::ProvisionCanister(req),
+            Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
+            Request::Cycles(req) => Self::MintCycles(req),
+            Request::IssueDelegation(req) => Self::IssueDelegation(req),
+        }
+    }
+}
+
+///
+/// RootRequestMetadata
+/// Replay and idempotency metadata for mutating root requests.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootRequestMetadata {
+    pub request_id: [u8; 32],
+    pub ttl_seconds: u64,
 }
 
 ///
@@ -22,6 +61,8 @@ pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
     pub extra_arg: Option<Vec<u8>>,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 ///
@@ -48,6 +89,8 @@ pub enum CreateCanisterParent {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 ///
@@ -58,6 +101,8 @@ pub struct UpgradeCanisterRequest {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CyclesRequest {
     pub cycles: u128,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 ///
@@ -70,6 +115,7 @@ pub enum Response {
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
     Cycles(CyclesResponse),
+    DelegationIssued(DelegationProvisionResponse),
 }
 
 ///

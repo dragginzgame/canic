@@ -5,6 +5,7 @@ pub mod endpoint;
 pub mod http;
 pub mod icc;
 pub mod mapper;
+pub mod root_capability;
 pub mod system;
 pub mod timer;
 
@@ -14,6 +15,7 @@ use {
     endpoint::{EndpointHealthSnapshot, EndpointMetrics},
     http::{HttpMetrics, HttpMetricsSnapshot},
     icc::{IccMetrics, IccMetricsSnapshot},
+    root_capability::{RootCapabilityMetrics, RootCapabilityMetricsSnapshot},
     system::{SystemMetrics, SystemMetricsSnapshot},
     timer::{TimerMetrics, TimerMetricsSnapshot},
 };
@@ -59,6 +61,11 @@ impl MetricsOps {
     #[must_use]
     pub fn icc_snapshot() -> IccMetricsSnapshot {
         IccMetrics::snapshot()
+    }
+
+    #[must_use]
+    pub fn root_capability_snapshot() -> RootCapabilityMetricsSnapshot {
+        RootCapabilityMetrics::snapshot()
     }
 
     #[must_use]
