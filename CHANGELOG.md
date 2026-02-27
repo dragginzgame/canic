@@ -29,6 +29,7 @@ NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are a
 - Added shared capability scope constants in `canic::ids::cap` (`READ`, `WRITE`, `VERIFY`, `ADMIN`) and updated `is_authenticated(...)` macro parsing to accept either string literals or path constants (for example `cap::VERIFY`).
 - Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
 - Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
+- Macro validation now rejects `requires(caller::is_registered_to_subnet())` on non-`internal` endpoints at compile time, preventing downstream misuse of root-only subnet-registry checks.
 
 ### 🗑️ Removed
 

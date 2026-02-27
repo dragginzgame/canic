@@ -11,6 +11,7 @@ use syn::{FnArg, Signature, Type};
 /// - async requirements
 /// - fallible return requirements
 /// - authenticated predicate argument shape
+/// - internal-only predicate usage
 ///
 /// It does NOT interpret access semantics beyond structural checks.
 ///
@@ -43,6 +44,13 @@ pub fn validate(
 
     if requires_authenticated(&parsed.requires) {
         validate_authenticated_args(sig)?;
+    }
+
+    if !parsed.internal && contains_registered_to_subnet(&parsed.requires) {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "caller::is_registered_to_subnet() is internal-only; mark the endpoint as `internal` or use caller::is_parent()/caller::is_child()/caller::is_root()",
+        ));
     }
 
     Ok(ValidatedArgs {
@@ -80,6 +88,27 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
         AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
             ..
         })) => true,
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
+            false
+        }
+    }
+}
+
+fn contains_registered_to_subnet(requires: &[AccessExprAst]) -> bool {
+    requires
+        .iter()
+        .any(access_expr_contains_registered_to_subnet)
+}
+
+fn access_expr_contains_registered_to_subnet(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(access_expr_contains_registered_to_subnet)
+        }
+        AccessExprAst::Not(expr) => access_expr_contains_registered_to_subnet(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerIsRegisteredToSubnet,
+        )) => true,
         AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
             false
         }
@@ -150,6 +179,23 @@ mod tests {
         }
     }
 
+    fn parsed_registered_to_subnet(internal: bool) -> ParsedArgs {
+        ParsedArgs {
+            forwarded: Vec::new(),
+            requires: vec![AccessExprAst::Any(vec![
+                AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::CallerIsController,
+                )),
+                AccessExprAst::Not(Box::new(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::CallerIsRegisteredToSubnet,
+                )))),
+            ])],
+            requires_async: true,
+            requires_fallible: true,
+            internal,
+        }
+    }
+
     #[test]
     fn authenticated_requires_first_argument() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
@@ -178,5 +224,21 @@ mod tests {
             err.to_string()
                 .contains("is_authenticated(...) requires a first argument")
         );
+    }
+
+    #[test]
+    fn registered_to_subnet_requires_internal_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        let err = validate(parsed_registered_to_subnet(false), &sig, true).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("caller::is_registered_to_subnet() is internal-only")
+        );
+    }
+
+    #[test]
+    fn registered_to_subnet_is_allowed_for_internal_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        validate(parsed_registered_to_subnet(true), &sig, true).expect("internal predicate ok");
     }
 }

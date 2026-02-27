@@ -21,7 +21,8 @@ use std::{
     sync::Once,
 };
 
-const INSTALL_CYCLES: u128 = 2_000_000_000_000;
+const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
+const SHARD_HUB_INSTALL_CYCLES: u128 = 20_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_shard_hub"];
 const POOL_NAME: &str = "shards";
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
@@ -38,11 +39,11 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     let pic = PocketIcBuilder::new().with_application_subnet().build();
 
     let root_id = pic.create_canister();
-    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
 
     let shard_hub_id = pic.create_canister();
-    pic.add_cycles(shard_hub_id, INSTALL_CYCLES);
+    pic.add_cycles(shard_hub_id, SHARD_HUB_INSTALL_CYCLES);
     pic.install_canister(
         shard_hub_id,
         shard_hub_wasm,
@@ -89,11 +90,11 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let pic = PocketIcBuilder::new().with_application_subnet().build();
 
     let root_id = pic.create_canister();
-    pic.add_cycles(root_id, INSTALL_CYCLES);
+    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
 
     let shard_hub_id = pic.create_canister();
-    pic.add_cycles(shard_hub_id, INSTALL_CYCLES);
+    pic.add_cycles(shard_hub_id, SHARD_HUB_INSTALL_CYCLES);
     pic.install_canister(
         shard_hub_id,
         shard_hub_wasm,
