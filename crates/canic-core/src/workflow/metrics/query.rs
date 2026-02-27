@@ -2,7 +2,7 @@ use crate::{
     dto::{
         metrics::{
             AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry,
-            IccMetricEntry, SystemMetricEntry, TimerMetricEntry,
+            IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
@@ -12,8 +12,8 @@ use crate::{
             MetricsOps,
             mapper::{
                 AccessMetricEntryMapper, DelegationMetricEntryMapper, EndpointHealthMapper,
-                HttpMetricEntryMapper, IccMetricEntryMapper, SystemMetricEntryMapper,
-                TimerMetricEntryMapper,
+                HttpMetricEntryMapper, IccMetricEntryMapper, RootCapabilityMetricEntryMapper,
+                SystemMetricEntryMapper, TimerMetricEntryMapper,
             },
         },
     },
@@ -102,6 +102,20 @@ impl MetricsQuery {
         let mut entries = DelegationMetricEntryMapper::record_to_view(snapshot.entries);
 
         entries.sort_by(|a, b| a.authority.as_slice().cmp(b.authority.as_slice()));
+
+        paginate_vec(entries, page)
+    }
+
+    #[must_use]
+    pub fn root_capability_page(page: PageRequest) -> Page<RootCapabilityMetricEntry> {
+        let snapshot = MetricsOps::root_capability_snapshot();
+        let mut entries = RootCapabilityMetricEntryMapper::record_to_view(snapshot.entries);
+
+        entries.sort_by(|a, b| {
+            a.capability
+                .cmp(&b.capability)
+                .then_with(|| a.event.cmp(&b.event))
+        });
 
         paginate_vec(entries, page)
     }

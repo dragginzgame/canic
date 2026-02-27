@@ -5,9 +5,7 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.11.0] - 2026-02-25 - Capabilities Arc: Kickoff & Cleanup
-
-NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are at
+## [0.11.0] - 2026-02-27 - Capabilities Arc: Kickoff & Cleanup
 
 ### 📝 Summary
 
@@ -30,9 +28,15 @@ NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are a
 - Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
 - Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
 - Macro validation now rejects `requires(caller::is_registered_to_subnet())` on non-`internal` endpoints at compile time, preventing downstream misuse of root-only subnet-registry checks.
+- Root privileged mutation handling is now centralized under a capability dispatcher (`Provision`, `Upgrade`, `MintCycles`, `IssueDelegation`) with per-capability policy checks at one ingress envelope.
+- Replay protection is now enforced for mutating root capabilities with deterministic canonical payload hashing and strict slot conflict rules (`same digest -> cached`, `different digest -> conflict`).
+- Replay slot identity is now scoped by `(caller, subnet, request_id)` and capability discriminant binding is enforced through canonical envelope digesting.
+- Replay expiry handling now checks existing slot state before purge sweeps, so expired/conflict outcomes are explicit and never silently resurrected.
+- Root capability metrics now emit centralized dispatcher-envelope events (`Authorized`, `Denied`, replay outcomes, execution outcomes) keyed by capability.
 
 ### 🗑️ Removed
 
+- Removed internal root endpoint `canic_delegation_provision`; delegation issuance now goes through the capability dispatcher path (`canic_request_delegation` -> `root:issue_delegation`) only.
 - Removed `canic-utils::rand::random_hex()` (it was unused in this repository). Use `random_bytes()` and encode at the call site when needed.
 - Removed now-unused dependencies from the workspace and crate manifests: `base32`, `crc32fast`, `hex`, and `num-traits`.
 
@@ -41,8 +45,12 @@ NOTE : Tests wont run, so when they pass push 0.11.0 and find out where we are a
 - Added PocketIC coverage for scope-gated delegated auth (`is_authenticated("scope")`) with explicit allow/deny cases for required-scope presence.
 - Added PocketIC coverage for unscoped delegated auth guards (`is_authenticated()`) with a scoped-vs-unscoped endpoint behavior check.
 - Added macro parser coverage for constant-path scope arguments (`is_authenticated(cap::VERIFY)`).
-- ECDSA provisioning tests skip when threshold keys are unavailable (existing behavior).
+- Root replay delegation tests use explicit threshold-key gating: default mode allows guarded skip when keys are unavailable, and `CANIC_REQUIRE_THRESHOLD_KEYS=1` enforces fail-fast for keys-required runs.
 - Added sharding workflow regression coverage for stale/non-child assignments (`plan_ignores_non_child_assigned_shard`) to ensure routing only targets locally routable child shards.
+- Added PocketIC root replay coverage for cross-variant conflicts, mutated-payload conflicts, identical-request caching, TTL-bound rejects, and expiry rejects.
+- Added PocketIC coverage for unauthorized root capability requests and per-capability policy denials at dispatcher boundaries.
+- Added delegation replay assertions for signature-stable cached responses and no-commit-on-execution-error behavior.
+- Removed legacy `pic_delegation_provision` coverage and moved strict delegated-crypto CI to dispatcher-path replay delegation (`root_replay` non-skip) only.
 
 ```rust
 use canic::ids::cap;

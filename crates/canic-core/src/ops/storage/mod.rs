@@ -6,6 +6,7 @@ pub mod intent;
 pub mod placement;
 pub mod pool;
 pub mod registry;
+pub mod replay;
 pub mod state;
 
 use crate::{InternalError, ops::OpsError};

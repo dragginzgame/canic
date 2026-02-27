@@ -274,9 +274,7 @@ fn non_root_subnet_registry_predicate_denial() -> AccessError {
 }
 
 fn caller_not_registered_denial(caller: Principal) -> AccessError {
-    let root = EnvOps::root_pid()
-        .map(|pid| pid.to_string())
-        .unwrap_or_else(|_| "unavailable".to_string());
+    let root = EnvOps::root_pid().map_or_else(|_| "unavailable".to_string(), |pid| pid.to_string());
     let registry_count = SubnetRegistryOps::data().entries.len();
     AccessError::Denied(format!(
         "authentication error: caller '{caller}' is not registered on the subnet registry \

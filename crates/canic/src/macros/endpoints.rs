@@ -123,6 +123,13 @@ macro_rules! canic_endpoints {
             Ok($crate::__internal::core::api::metrics::MetricsQuery::delegation_page(page))
         }
 
+        #[canic_query]
+        fn canic_metrics_root_capability(
+            page: ::canic::dto::page::PageRequest,
+        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::RootCapabilityMetricEntry>, ::canic::Error> {
+            Ok($crate::__internal::core::api::metrics::MetricsQuery::root_capability_page(page))
+        }
+
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(
@@ -368,14 +375,6 @@ macro_rules! canic_endpoints_root {
         //
         // DELEGATION
         //
-
-        // admin-only: not part of canonical delegation flow.
-        #[canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_provision(
-            request: ::canic::dto::auth::DelegationProvisionRequest,
-        ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::provision(request).await
-        }
 
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_delegation(

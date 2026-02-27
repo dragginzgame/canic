@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::metrics::{
         AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry, IccMetricEntry,
-        SystemMetricEntry, TimerMetricEntry,
+        RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
@@ -10,6 +10,7 @@ use crate::{
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
+        root_capability::{RootCapabilityMetricEvent, RootCapabilityMetricKey},
         timer::{TimerMetricKey, TimerMode},
     },
 };
@@ -153,6 +154,27 @@ impl DelegationMetricEntryMapper {
     ) -> Vec<DelegationMetricEntry> {
         raw.into_iter()
             .map(|(authority, count)| DelegationMetricEntry { authority, count })
+            .collect()
+    }
+}
+
+///
+/// RootCapabilityMetricEntryMapper
+///
+
+pub struct RootCapabilityMetricEntryMapper;
+
+impl RootCapabilityMetricEntryMapper {
+    #[must_use]
+    pub fn record_to_view(
+        raw: impl IntoIterator<Item = (RootCapabilityMetricKey, RootCapabilityMetricEvent, u64)>,
+    ) -> Vec<RootCapabilityMetricEntry> {
+        raw.into_iter()
+            .map(|(capability, event, count)| RootCapabilityMetricEntry {
+                capability: capability.metric_label().to_string(),
+                event: event.metric_label().to_string(),
+                count,
+            })
             .collect()
     }
 }

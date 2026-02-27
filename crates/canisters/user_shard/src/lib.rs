@@ -83,6 +83,7 @@ async fn request_delegation(claims: &DelegatedTokenClaims) -> Result<(), Error> 
         ttl_secs,
         verifier_targets: Vec::new(),
         include_root_verifier: true,
+        metadata: None,
     };
 
     let response: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =

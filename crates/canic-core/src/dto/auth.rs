@@ -1,4 +1,4 @@
-use crate::dto::{error::Error, prelude::*};
+use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 
 ///
 /// DelegationCert
@@ -61,6 +61,8 @@ pub struct DelegationRequest {
     pub ttl_secs: u64,
     pub verifier_targets: Vec<Principal>,
     pub include_root_verifier: bool,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 // admin-only: not part of canonical delegation flow.
