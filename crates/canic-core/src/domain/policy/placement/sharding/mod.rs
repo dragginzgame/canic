@@ -30,8 +30,13 @@ use crate::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingPolicyError {
-    #[error("shard pool not found: {0}")]
-    PoolNotFound(String),
+    #[error(
+        "unknown shard pool '{requested}': not found in current canister sharding config; configured pools: {available}"
+    )]
+    PoolNotFound {
+        requested: String,
+        available: String,
+    },
 
     #[error(
         "shard creation blocked: partition_key '{partition_key}' assignment blocked: {reason} in pool '{pool}'"
