@@ -437,12 +437,22 @@ impl ShardingWorkflow {
     fn get_shard_pool_cfg(pool: &str) -> Result<ShardPool, InternalError> {
         let cfg = ConfigOps::current_canister()?;
         let sharding = cfg.sharding.ok_or(ShardingPolicyError::ShardingDisabled)?;
+        let available = if sharding.pools.is_empty() {
+            "<none>".to_string()
+        } else {
+            let mut names: Vec<_> = sharding.pools.keys().cloned().collect();
+            names.sort_unstable();
+            names.join(", ")
+        };
 
         sharding
             .pools
             .get(pool)
             .cloned()
-            .ok_or_else(|| ShardingPolicyError::PoolNotFound(pool.to_string()))
+            .ok_or_else(|| ShardingPolicyError::PoolNotFound {
+                requested: pool.to_string(),
+                available: available.clone(),
+            })
             .map_err(InternalError::from)
     }
 }
