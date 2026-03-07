@@ -11,15 +11,23 @@ use canic::{
     protocol,
 };
 use canic_testkit::pic::{Pic, pic};
-use std::{collections::HashMap, env, fs, io, path::PathBuf, process::Command, sync::Once};
+use std::{
+    collections::HashMap,
+    env, fs, io,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::{Mutex, MutexGuard, Once},
+};
 
 /// Environment variable override for providing a pre-built root canister wasm.
 const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
+const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 static DFX_BUILD_ONCE: Once = Once::new();
+static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
 /// RootSetup
@@ -30,11 +38,18 @@ pub struct RootSetup {
     pub pic: Pic,
     pub root_id: Principal,
     pub subnet_directory: HashMap<CanisterRole, Principal>,
+    _serial_guard: MutexGuard<'static, ()>,
 }
 
 /// Create a fresh PocketIC instance, install root, wait for bootstrap,
 /// and validate global invariants.
 pub fn setup_root() -> RootSetup {
+    // Each setup spins up a full PocketIC topology; serialize to avoid
+    // exhausting local temp storage under parallel test execution.
+    let serial_guard = ROOT_SETUP_SERIAL
+        .lock()
+        .expect("root setup serial mutex poisoned");
+
     ensure_local_artifacts_built();
     let root_wasm = load_root_wasm().expect("load root wasm");
 
@@ -52,31 +67,76 @@ pub fn setup_root() -> RootSetup {
         pic,
         root_id,
         subnet_directory,
+        _serial_guard: serial_guard,
     }
 }
 
 fn ensure_local_artifacts_built() {
     DFX_BUILD_ONCE.call_once(|| {
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| p.parent())
-            .map(PathBuf::from)
-            .expect("workspace root");
+        let workspace_root = workspace_root();
 
-        let output = Command::new("dfx")
-            .current_dir(&workspace_root)
-            .env("DFX_NETWORK", "local")
-            .env("RELEASE", "0")
-            .args(["build", "--all"])
-            .output()
-            .expect("failed to run `dfx build --all`");
+        // `make test` already builds canisters before `cargo test`; avoid redundant
+        // `dfx build --all` work unless artifacts are missing.
+        if local_artifacts_ready(&workspace_root) {
+            return;
+        }
 
+        let output = run_dfx_build_with_lock(&workspace_root);
         assert!(
             output.status.success(),
             "dfx build --all failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     });
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .map(PathBuf::from)
+        .expect("workspace root")
+}
+
+fn local_artifacts_ready(workspace_root: &Path) -> bool {
+    let root_wasm = workspace_root.join(".dfx/local/canisters/root/root.wasm.gz");
+    match fs::metadata(root_wasm) {
+        Ok(meta) => meta.is_file() && meta.len() > 0,
+        Err(_) => false,
+    }
+}
+
+fn run_dfx_build_with_lock(workspace_root: &Path) -> std::process::Output {
+    let lock_file = workspace_root.join(DFX_BUILD_LOCK_RELATIVE);
+    if let Some(parent) = lock_file.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    // Use a file lock so multiple integration-test binaries do not race on
+    // `.dfx` artifacts and Cargo's shared target directories.
+    match Command::new("flock")
+        .current_dir(workspace_root)
+        .arg(lock_file.as_os_str())
+        .arg("dfx")
+        .env("DFX_NETWORK", "local")
+        .env("RELEASE", "0")
+        .args(["build", "--all"])
+        .output()
+    {
+        Ok(output) => output,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => run_dfx_build(workspace_root),
+        Err(err) => panic!("failed to run `flock` for `dfx build --all`: {err}"),
+    }
+}
+
+fn run_dfx_build(workspace_root: &Path) -> std::process::Output {
+    Command::new("dfx")
+        .current_dir(workspace_root)
+        .env("DFX_NETWORK", "local")
+        .env("RELEASE", "0")
+        .args(["build", "--all"])
+        .output()
+        .expect("failed to run `dfx build --all`")
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {

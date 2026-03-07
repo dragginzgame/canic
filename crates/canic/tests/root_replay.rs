@@ -247,7 +247,7 @@ fn delegation_issuance_routes_through_dispatcher_non_skip_path() {
 #[test]
 fn replay_rejects_cross_variant_same_request_id() {
     let setup = setup_root();
-    let test_pid = setup
+    let caller = setup
         .subnet_directory
         .get(&canister::TEST)
         .copied()
@@ -255,30 +255,38 @@ fn replay_rejects_cross_variant_same_request_id() {
 
     let metadata = metadata([11u8; 32], 120);
 
-    let first = Request::UpgradeCanister(UpgradeCanisterRequest {
-        canister_pid: test_pid,
-        metadata: Some(metadata),
-    });
-    let first = root_response_as(&setup, setup.root_id, first).expect("first request must succeed");
-    match first {
-        Response::UpgradeCanister(_) => {}
-        other => panic!("expected upgrade response, got: {other:?}"),
-    }
-
-    let second = Request::Cycles(CyclesRequest {
+    let first = Request::Cycles(CyclesRequest {
         cycles: 1_000_000,
         metadata: Some(metadata),
     });
-    let err = root_response_as(&setup, setup.root_id, second)
+    let first = root_response_as(&setup, caller, first).expect("first request must succeed");
+    match first {
+        Response::Cycles(response) => assert_eq!(response.cycles_transferred, 1_000_000),
+        other => panic!("expected cycles response, got: {other:?}"),
+    }
+
+    let second = Request::IssueDelegation(DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:call".to_string()],
+        aud: vec![setup.root_id],
+        ttl_secs: 60,
+        verifier_targets: vec![],
+        include_root_verifier: false,
+        metadata: Some(metadata),
+    });
+    let err = root_response_as(&setup, caller, second)
         .expect_err("cross-variant replay must be rejected");
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
-        metric_count(&metrics, "MintCycles", "ReplayDuplicateConflict"),
+        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateConflict"),
         1
     );
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 0);
+    assert_eq!(
+        metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
+        0
+    );
 }
 
 #[test]
