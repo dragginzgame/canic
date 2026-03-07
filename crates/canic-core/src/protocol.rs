@@ -6,8 +6,8 @@
 // Root-only endpoints.
 pub const CANIC_APP: &str = "canic_app";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
-pub const CANIC_RESPONSE: &str = "canic_response";
 pub const CANIC_RESPONSE_ATTESTED: &str = "canic_response_attested";
+pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
 pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";

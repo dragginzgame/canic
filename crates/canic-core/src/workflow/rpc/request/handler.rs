@@ -77,6 +77,12 @@ enum ReplayDecision {
     Pending(ReplayPending),
 }
 
+#[derive(Clone, Copy, Debug)]
+enum AuthorizationPipelineOrder {
+    AuthorizeThenReplay,
+    ReplayThenAuthorize,
+}
+
 ///
 /// RootCapability
 ///
@@ -105,14 +111,25 @@ impl RootCapability {
 impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request and produce a [`Response`].
     pub async fn response(req: Request) -> Result<Response, InternalError> {
+        Self::response_with_pipeline(req, AuthorizationPipelineOrder::AuthorizeThenReplay).await
+    }
+
+    /// Handle a root-bound orchestration request using replay-before-policy
+    /// ordering for capability-envelope execution.
+    pub async fn response_replay_first(req: Request) -> Result<Response, InternalError> {
+        Self::response_with_pipeline(req, AuthorizationPipelineOrder::ReplayThenAuthorize).await
+    }
+
+    async fn response_with_pipeline(
+        req: Request,
+        order: AuthorizationPipelineOrder,
+    ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         let capability_req = RootCapabilityRequest::from(req);
         let capability = Self::map_request(capability_req);
         let capability_key = capability.metric_key();
 
-        Self::authorize(&ctx, &capability)?;
-
-        let replay = Self::check_replay(&ctx, &capability)?;
+        let replay = Self::preflight(&ctx, &capability, order)?;
         if let ReplayDecision::Cached(response) = replay {
             return Ok(response);
         }
@@ -146,6 +163,27 @@ impl RootResponseWorkflow {
         RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ExecutionSuccess);
 
         Ok(response)
+    }
+
+    fn preflight(
+        ctx: &RootContext,
+        capability: &RootCapability,
+        order: AuthorizationPipelineOrder,
+    ) -> Result<ReplayDecision, InternalError> {
+        match order {
+            AuthorizationPipelineOrder::AuthorizeThenReplay => {
+                Self::authorize(ctx, capability)?;
+                Self::check_replay(ctx, capability)
+            }
+            AuthorizationPipelineOrder::ReplayThenAuthorize => {
+                let replay = Self::check_replay(ctx, capability)?;
+                if let ReplayDecision::Cached(_) = &replay {
+                    return Ok(replay);
+                }
+                Self::authorize(ctx, capability)?;
+                Ok(replay)
+            }
+        }
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {
@@ -902,6 +940,62 @@ mod tests {
         });
 
         RootResponseWorkflow::authorize(&ctx, &capability).expect("must authorize");
+    }
+
+    #[test]
+    fn preflight_authorize_then_replay_denies_before_replay_validation() {
+        RootReplayOps::reset_for_tests();
+
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(9),
+            is_root_env: false,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::MintCycles(CyclesRequest {
+            cycles: 42,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::preflight(
+            &ctx,
+            &capability,
+            AuthorizationPipelineOrder::AuthorizeThenReplay,
+        )
+        .expect_err("authorize-then-replay should deny before replay validation");
+        assert!(
+            err.to_string().contains("root"),
+            "expected root denial first, got: {err}"
+        );
+    }
+
+    #[test]
+    fn preflight_replay_then_authorize_validates_replay_before_policy() {
+        RootReplayOps::reset_for_tests();
+
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(9),
+            is_root_env: false,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::MintCycles(CyclesRequest {
+            cycles: 42,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::preflight(
+            &ctx,
+            &capability,
+            AuthorizationPipelineOrder::ReplayThenAuthorize,
+        )
+        .expect_err("replay-then-authorize should validate replay first");
+        assert!(
+            err.to_string().contains("missing replay metadata"),
+            "expected replay metadata error first, got: {err}"
+        );
     }
 
     #[test]

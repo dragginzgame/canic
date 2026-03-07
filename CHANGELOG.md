@@ -5,6 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.13.x] - 2026-03-07 - Distributed Capability Invocation
+
+- `0.13.0` starts distributed capability invocation with service-scoped capability envelopes, explicit proof models, standardized replay/hash-binding rules for cross-canister authorization, and a default cycle-tracker cadence of 60 minutes.
+
+See detailed breakdown:
+[docs/changelog/0.13.md](docs/changelog/0.13.md)
+
+---
+
 ## [0.12.x] - 2026-03-07 - Root Role Attestation Framework
 
 - `0.12.0` adds root-signed role attestations and an attested root dispatch path, so services can authorize callers by signed proof instead of full directory sync.
@@ -1067,47 +1076,24 @@ NETWORK=local|mainnet|staging to DFX_NETWORK=local|ic and fail fast if missing/i
 - Scaling now uses plan_create_worker so there aren't two parallel paths for checking if a worker can be spawned
 - lots of work going through the codebase and moving state and memory into model
 
-## [0.2.24] - 2025-11-10
-- added a test/ module that's gated by cfg(test) for pocket-ic helpers
+## [0.2.x] - 2025-11-10 - PRIME Subnet and Topology Foundations
 
-## [0.2.21] - 2025-10-24
-- fixed config validation, now its finding nested invalid canister roles
+- `0.2.0` introduced prime-subnet topology foundations, including `SubnetRole`, `Env` identity context, and synchronized state+directory snapshots.
+- `0.2.1` shipped early stabilization fixes after the initial topology rollout.
+- `0.2.2` removed legacy delegation flow and added `ops::signature` for canister-signature creation/verification.
+- `0.2.3` moved app/subnet directory projections to `SubnetCanisterRegistry` and included directory state in canister init payloads.
+- `0.2.6` continued layer cleanup by splitting memory/ops responsibilities and moving reserve config to per-subnet settings.
+- `0.2.7` moved `xxhash` utilities into `canic` for shared sharding usage.
+- `0.2.9` strengthened recursive config validation, including invalid subnet-directory detection.
+- `0.2.10` switched sharding structures to string-based IDs and standardized scaling placement on HRW.
+- `0.2.17` removed the `icrc-ledger-types` dependency in favor of a local implementation.
+- `0.2.21` fixed nested canister-role validation so invalid deep config is detected correctly.
+- `0.2.24` added `cfg(test)`-gated PocketIC helper support under `test/`.
 
-## [0.2.17] - 2025-10-20
-- removed icrc-ledger-types and implemented it manually
+See detailed breakdown:
+[docs/changelog/0.2.md](docs/changelog/0.2.md)
 
-## [0.2.10] - 2025-10-20
-- made the Sharding data structures use String not Principal so they're more flexible
-- updated scaling to use HRW algo always, removed a lot of unused code that won't make sense going forward
-
-## [0.2.9] - 2025-10-18
-- gave config a better recursive validation.  Also now checking for invalid subnet directory entries
-
-## [0.2.7] - 2025-10-16
-- moved xxhash functions to canic as mimic can import them, and we also need them for sharding
-
-## [0.2.6] - 2025-10-16
-- moved more of the memory:: logic to Ops, and split things like CycleTracker vs. CycleTrackerOps
-- moved the CanisterReserve config to be on a per-subnet basis
-
-## [0.2.3] - 2025-10-15
-- app_directory and subnet_directory are now calculated from the SubnetCanisterRegistry
-- directories are now part of CanisterInitPayload, with the Env struct, sent to a canister as its created
-
-## [0.2.2] - 2025-10-13
-- removed all the delegation code
-- added in ops::signature, a wrapper around creating and verifying canister signatures
-
-## [0.2.1] - 2025-10-13
-- bug fixes as expected
-
-## [0.2.0] - 2025-10-13 - PRIME Subnet
-- Added the SubnetRole, so we can have a Prime Subnet and others
-- Added an Env cell so each canister remembers its root, subnet, parent, and type IDs.
-- Split topology storage into dedicated directory modules and updated the ops helpers to use them.
-- AppDirectory is now an App-level canister directory
-- SyncBundle will sync both states and directories now
-- Tons of little code improvements, especially splitting memory:: and ops::
+---
 
 ## [0.1.7] - 2025-10-08
 - with dfx 0.30.2 now the subnet's pid can be read, and stored in the root's SubnetContext

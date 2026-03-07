@@ -7,7 +7,10 @@ use canic::{
     Error,
     cdk::types::Principal,
     dto::{
-        auth::DelegationRequest,
+        capability::{
+            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+        },
         error::ErrorCode,
         metrics::RootCapabilityMetricEntry,
         page::{Page, PageRequest},
@@ -16,11 +19,11 @@ use canic::{
             RootRequestMetadata, UpgradeCanisterRequest,
         },
     },
-    ids::cap,
     protocol,
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, setup_root};
+use std::convert::TryFrom;
 use std::time::Duration;
 
 #[test]
@@ -48,13 +51,13 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             cycles: 1_000_000,
             metadata: Some(metadata([32u8; 32], 120)),
         }),
-        Request::IssueDelegation(DelegationRequest {
-            shard_pid: test_pid,
-            scopes: vec![cap::VERIFY.to_string()],
-            aud: vec![test_pid],
+        Request::IssueRoleAttestation(canic::dto::auth::RoleAttestationRequest {
+            subject: unauthorized,
+            role: canister::TEST,
+            subnet_id: None,
+            audience: Some(setup.root_id),
             ttl_secs: 60,
-            verifier_targets: Vec::new(),
-            include_root_verifier: false,
+            epoch: 0,
             metadata: Some(metadata([33u8; 32], 120)),
         }),
     ];
@@ -92,31 +95,27 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
     });
     let err = root_response_as(&setup, caller, request)
         .expect_err("non-parent caller must be denied by upgrade policy");
-    assert_eq!(err.code, ErrorCode::Internal);
+    assert_eq!(err.code, ErrorCode::Forbidden);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "Upgrade", "Denied"), 1);
+    assert_eq!(metric_count(&metrics, "Upgrade", "ProofRejected"), 1);
+    assert_eq!(metric_count(&metrics, "Upgrade", "Denied"), 0);
     assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 0);
     assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 0);
 }
 
 #[test]
-fn delegation_policy_denies_caller_shard_mismatch() {
+fn structural_proof_denies_unsupported_issue_delegation_capability() {
     let setup = setup_root();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
-    let mismatched_shard = setup
-        .subnet_directory
-        .get(&canister::SCALE_HUB)
-        .copied()
-        .expect("scale_hub canister must exist");
 
-    let request = Request::IssueDelegation(DelegationRequest {
-        shard_pid: mismatched_shard,
-        scopes: vec![cap::VERIFY.to_string()],
+    let request = Request::IssueDelegation(canic::dto::auth::DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:verify".to_string()],
         aud: vec![caller],
         ttl_secs: 60,
         verifier_targets: Vec::new(),
@@ -124,12 +123,18 @@ fn delegation_policy_denies_caller_shard_mismatch() {
         metadata: Some(metadata([35u8; 32], 120)),
     });
     let err = root_response_as(&setup, caller, request)
-        .expect_err("mismatched shard_pid must be denied by delegation policy");
-    assert_eq!(err.code, ErrorCode::Internal);
+        .expect_err("unsupported structural capability must fail closed");
+    assert_eq!(err.code, ErrorCode::Forbidden);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "IssueDelegation", "Denied"), 1);
-    assert_eq!(metric_count(&metrics, "IssueDelegation", "Authorized"), 0);
+    assert_eq!(
+        metric_count(&metrics, "IssueDelegation", "ProofRejected"),
+        1
+    );
+    assert_eq!(
+        metric_count(&metrics, "IssueDelegation", "ReplayAccepted"),
+        0
+    );
     assert_eq!(
         metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
         0
@@ -137,7 +142,7 @@ fn delegation_policy_denies_caller_shard_mismatch() {
 }
 
 #[test]
-fn provisioning_routes_through_dispatcher_and_replay_cache() {
+fn cycles_routes_through_dispatcher_and_replay_cache() {
     let setup = setup_root();
     let caller = setup
         .subnet_directory
@@ -145,106 +150,94 @@ fn provisioning_routes_through_dispatcher_and_replay_cache() {
         .copied()
         .expect("scale_hub canister must exist");
 
-    let request = Request::CreateCanister(CreateCanisterRequest {
-        canister_role: canister::SCALE,
-        parent: CreateCanisterParent::ThisCanister,
-        extra_arg: None,
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1_111_000,
         metadata: Some(metadata([36u8; 32], 120)),
     });
 
-    let first = root_response_as(&setup, caller, request.clone())
-        .expect("first provisioning request must succeed");
-    let first_pid = match first {
-        Response::CreateCanister(response) => response.new_canister_pid,
+    let first = root_response_as(&setup, caller, request.clone()).expect("first cycles call works");
+    let first_cycles = match first {
+        Response::Cycles(response) => response.cycles_transferred,
         other => panic!("expected create canister response, got: {other:?}"),
     };
 
     let second = root_response_as(&setup, caller, request)
         .expect("identical provisioning replay must cache");
-    let second_pid = match second {
-        Response::CreateCanister(response) => response.new_canister_pid,
+    let second_cycles = match second {
+        Response::Cycles(response) => response.cycles_transferred,
         other => panic!("expected create canister response, got: {other:?}"),
     };
-    assert_eq!(first_pid, second_pid);
+    assert_eq!(first_cycles, second_cycles);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "Provision", "Authorized"), 2);
-    assert_eq!(metric_count(&metrics, "Provision", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "MintCycles", "Authorized"), 1);
+    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
     assert_eq!(
-        metric_count(&metrics, "Provision", "ReplayDuplicateSame"),
+        metric_count(&metrics, "MintCycles", "ReplayDuplicateSame"),
         1
     );
-    assert_eq!(metric_count(&metrics, "Provision", "ExecutionSuccess"), 1);
+    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 1);
 }
 
 #[test]
-fn delegation_issuance_routes_through_dispatcher_non_skip_path() {
+fn upgrade_routes_through_dispatcher_non_skip_path() {
     let setup = setup_root();
-    let caller = setup
+    let caller = setup.root_id;
+    let target = setup
         .subnet_directory
         .get(&canister::TEST)
         .copied()
-        .expect("test canister must exist");
+        .expect("test canister exists");
 
-    let request = DelegationRequest {
-        shard_pid: caller,
-        scopes: vec![cap::VERIFY.to_string()],
-        aud: vec![caller],
-        ttl_secs: 60,
-        verifier_targets: Vec::new(),
-        include_root_verifier: false,
+    let request = UpgradeCanisterRequest {
+        canister_pid: target,
         metadata: Some(metadata([37u8; 32], 120)),
     };
 
-    let first = match root_response_as(&setup, caller, Request::IssueDelegation(request.clone())) {
+    let first = match root_response_as(&setup, caller, Request::UpgradeCanister(request.clone())) {
         Ok(response) => response,
-        Err(err) if is_threshold_key_unavailable(&err) => {
-            eprintln!(
-                "skipping non-skip delegation dispatcher assertions: threshold key unavailable: {}",
-                err.message
+        Err(err) if is_canister_status_decode_failure(&err) => {
+            let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
+                .expect_err("failed upgrade path must not be replay-cached");
+            assert!(
+                is_canister_status_decode_failure(&second),
+                "expected decode failure on retried upgrade, got: {second:?}"
             );
+
+            let metrics = root_capability_metrics(&setup);
+            assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 2);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ReplayAccepted"), 2);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 0);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionError"), 2);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 0);
             return;
         }
-        Err(err) => panic!("delegation issuance through dispatcher must succeed: {err:?}"),
+        Err(err) => panic!("upgrade through dispatcher must succeed: {err:?}"),
     };
     let first = match first {
-        Response::DelegationIssued(response) => response,
-        other => panic!("expected delegation response, got: {other:?}"),
+        Response::UpgradeCanister(response) => response,
+        other => panic!("expected upgrade response, got: {other:?}"),
     };
-    assert!(!first.proof.cert_sig.is_empty());
 
-    let second = root_response_as(&setup, caller, Request::IssueDelegation(request))
+    let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
         .expect("identical delegation replay must return cached response");
     let second = match second {
-        Response::DelegationIssued(response) => response,
-        other => panic!("expected delegation response, got: {other:?}"),
+        Response::UpgradeCanister(response) => response,
+        other => panic!("expected upgrade response, got: {other:?}"),
     };
-    assert_eq!(first.proof.cert_sig, second.proof.cert_sig);
+    let _ = (first, second);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "IssueDelegation", "Authorized"), 2);
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayAccepted"),
-        1
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateSame"),
-        1
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
-        1
-    );
+    assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 1);
+    assert_eq!(metric_count(&metrics, "Upgrade", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 1);
+    assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 1);
 }
 
 #[test]
 fn replay_rejects_cross_variant_same_request_id() {
     let setup = setup_root();
-    let caller = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist");
+    let caller = setup.root_id;
 
     let metadata = metadata([11u8; 32], 120);
 
@@ -258,13 +251,12 @@ fn replay_rejects_cross_variant_same_request_id() {
         other => panic!("expected cycles response, got: {other:?}"),
     }
 
-    let second = Request::IssueDelegation(DelegationRequest {
-        shard_pid: caller,
-        scopes: vec!["rpc:call".to_string()],
-        aud: vec![setup.root_id],
-        ttl_secs: 60,
-        verifier_targets: vec![],
-        include_root_verifier: false,
+    let second = Request::UpgradeCanister(UpgradeCanisterRequest {
+        canister_pid: setup
+            .subnet_directory
+            .get(&canister::APP)
+            .copied()
+            .expect("app canister exists"),
         metadata: Some(metadata),
     });
     let err = root_response_as(&setup, caller, second)
@@ -273,13 +265,10 @@ fn replay_rejects_cross_variant_same_request_id() {
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateConflict"),
+        metric_count(&metrics, "Upgrade", "ReplayDuplicateConflict"),
         1
     );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
-        0
-    );
+    assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 0);
 }
 
 #[test]
@@ -415,86 +404,103 @@ fn replay_rejects_expired_request() {
 }
 
 #[test]
-fn delegation_replay_returns_same_signature_and_rejects_conflict() {
+fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
+    let setup = setup_root();
+    let caller = setup.root_id;
+    let app = setup
+        .subnet_directory
+        .get(&canister::APP)
+        .copied()
+        .expect("app canister exists");
+    let test = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister exists");
+
+    let metadata = metadata([16u8; 32], 120);
+    let request = UpgradeCanisterRequest {
+        canister_pid: app,
+        metadata: Some(metadata),
+    };
+
+    let first = match root_response_as(&setup, caller, Request::UpgradeCanister(request.clone())) {
+        Ok(response) => response,
+        Err(err) if is_canister_status_decode_failure(&err) => {
+            let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
+                .expect_err("failed upgrade request must not be replay-cached");
+            assert!(
+                is_canister_status_decode_failure(&second),
+                "expected decode failure on identical retry, got: {second:?}"
+            );
+
+            let conflict = UpgradeCanisterRequest {
+                canister_pid: test,
+                metadata: Some(metadata),
+            };
+            let third = root_response_as(&setup, caller, Request::UpgradeCanister(conflict))
+                .expect_err("failed upgrade replay entry must not trigger conflict path");
+            assert!(
+                is_canister_status_decode_failure(&third),
+                "expected decode failure on conflict-shape request, got: {third:?}"
+            );
+
+            let metrics = root_capability_metrics(&setup);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 0);
+            assert_eq!(
+                metric_count(&metrics, "Upgrade", "ReplayDuplicateConflict"),
+                0
+            );
+            assert_eq!(metric_count(&metrics, "Upgrade", "ReplayAccepted"), 3);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionError"), 3);
+            assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 0);
+            return;
+        }
+        Err(err) => panic!("first upgrade request must succeed: {err:?}"),
+    };
+    let first = match first {
+        Response::UpgradeCanister(response) => response,
+        other => panic!("expected upgrade response, got: {other:?}"),
+    };
+
+    let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
+        .expect("identical upgrade replay must return cached response");
+    let second = match second {
+        Response::UpgradeCanister(response) => response,
+        other => panic!("expected upgrade response, got: {other:?}"),
+    };
+    let _ = (first, second);
+
+    let conflict = UpgradeCanisterRequest {
+        canister_pid: test,
+        metadata: Some(metadata),
+    };
+    let err = root_response_as(&setup, caller, Request::UpgradeCanister(conflict))
+        .expect_err("upgrade replay conflict must reject");
+    assert_eq!(err.code, ErrorCode::Internal);
+
+    let metrics = root_capability_metrics(&setup);
+    assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 1);
+    assert_eq!(
+        metric_count(&metrics, "Upgrade", "ReplayDuplicateConflict"),
+        1
+    );
+    assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 1);
+}
+
+#[test]
+fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
     let setup = setup_root();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
         .copied()
-        .expect("test canister must exist");
-
-    let metadata = metadata([16u8; 32], 120);
-    let request = DelegationRequest {
-        shard_pid: caller,
-        scopes: vec![cap::VERIFY.to_string()],
-        aud: vec![caller],
-        ttl_secs: 60,
-        verifier_targets: Vec::new(),
-        include_root_verifier: false,
-        metadata: Some(metadata),
-    };
-
-    let first = match root_response_as(&setup, caller, Request::IssueDelegation(request.clone())) {
-        Ok(response) => response,
-        Err(err) if is_threshold_key_unavailable(&err) => {
-            eprintln!(
-                "skipping delegation replay assertions: threshold key unavailable: {}",
-                err.message
-            );
-            return;
-        }
-        Err(err) => panic!("first delegation request must succeed: {err:?}"),
-    };
-    let first = match first {
-        Response::DelegationIssued(response) => response,
-        other => panic!("expected delegation response, got: {other:?}"),
-    };
-
-    let second = root_response_as(&setup, caller, Request::IssueDelegation(request))
-        .expect("identical delegation replay must return cached response");
-    let second = match second {
-        Response::DelegationIssued(response) => response,
-        other => panic!("expected delegation response, got: {other:?}"),
-    };
-    assert_eq!(first.proof.cert_sig, second.proof.cert_sig);
-
-    let conflict = DelegationRequest {
-        shard_pid: caller,
-        scopes: vec![cap::VERIFY.to_string(), cap::READ.to_string()],
-        aud: vec![caller],
-        ttl_secs: 60,
-        verifier_targets: Vec::new(),
-        include_root_verifier: false,
-        metadata: Some(metadata),
-    };
-    let err = root_response_as(&setup, caller, Request::IssueDelegation(conflict))
-        .expect_err("delegation replay conflict must reject");
-    assert_eq!(err.code, ErrorCode::Internal);
-
-    let metrics = root_capability_metrics(&setup);
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateSame"),
-        1
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateConflict"),
-        1
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
-        1
-    );
-}
-
-#[test]
-fn delegation_execution_error_does_not_commit_replay_entry() {
-    let setup = setup_root();
-    let caller = setup.root_id;
+        .expect("test canister exists");
     let metadata = metadata([17u8; 32], 120);
 
-    let invalid = DelegationRequest {
+    let invalid = canic::dto::auth::DelegationRequest {
         shard_pid: caller,
-        scopes: vec![cap::VERIFY.to_string()],
+        scopes: vec!["rpc:verify".to_string()],
         aud: vec![caller],
         ttl_secs: 60,
         verifier_targets: Vec::new(),
@@ -503,28 +509,24 @@ fn delegation_execution_error_does_not_commit_replay_entry() {
     };
 
     let first = root_response_as(&setup, caller, Request::IssueDelegation(invalid.clone()))
-        .expect_err("invalid delegation request must fail");
-    assert_eq!(first.code, ErrorCode::Internal);
+        .expect_err("unsupported structural delegation request must fail");
+    assert_eq!(first.code, ErrorCode::Forbidden);
 
     let second = root_response_as(&setup, caller, Request::IssueDelegation(invalid))
-        .expect_err("failed delegation replay must not be committed");
-    assert_eq!(second.code, ErrorCode::Internal);
+        .expect_err("unsupported structural replay must not be committed");
+    assert_eq!(second.code, ErrorCode::Forbidden);
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
+        metric_count(&metrics, "IssueDelegation", "ProofRejected"),
+        2
+    );
+    assert_eq!(
         metric_count(&metrics, "IssueDelegation", "ReplayAccepted"),
-        2
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionError"),
-        2
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateSame"),
         0
     );
     assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayDuplicateConflict"),
+        metric_count(&metrics, "IssueDelegation", "ExecutionError"),
         0
     );
 }
@@ -534,11 +536,29 @@ fn root_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
-    let result: Result<Result<Response, Error>, Error> =
-        setup
-            .pic
-            .update_call_as(setup.root_id, caller, protocol::CANIC_RESPONSE, (request,));
-    result.expect("root response transport call failed")
+    let (request_id, nonce, ttl_seconds) = capability_metadata_from_request(&request);
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::Structural,
+        metadata: CapabilityRequestMetadata {
+            request_id,
+            nonce,
+            issued_at: root_now_secs(setup),
+            ttl_seconds,
+        },
+    };
+
+    let result: Result<Result<RootCapabilityResponseV1, Error>, Error> = setup.pic.update_call_as(
+        setup.root_id,
+        caller,
+        protocol::CANIC_RESPONSE_CAPABILITY_V1,
+        (envelope,),
+    );
+    result
+        .expect("root response transport call failed")
+        .map(|response| response.response)
 }
 
 fn root_capability_metrics(setup: &RootSetup) -> Vec<RootCapabilityMetricEntry> {
@@ -565,9 +585,40 @@ fn metric_count(entries: &[RootCapabilityMetricEntry], capability: &str, event: 
         .sum()
 }
 
-fn is_threshold_key_unavailable(err: &Error) -> bool {
-    err.message.contains("Requested unknown threshold key")
-        || err.message.contains("existing keys: []")
+fn root_now_secs(setup: &RootSetup) -> u64 {
+    let now: Result<u64, Error> = setup
+        .pic
+        .query_call(setup.root_id, protocol::CANIC_TIME, ())
+        .expect("canic_time transport query failed");
+    now.expect("canic_time application query failed") / 1_000_000_000
+}
+
+fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u32) {
+    let metadata = match request {
+        Request::CreateCanister(req) => req.metadata,
+        Request::UpgradeCanister(req) => req.metadata,
+        Request::Cycles(req) => req.metadata,
+        Request::IssueDelegation(req) => req.metadata,
+        Request::IssueRoleAttestation(req) => req.metadata,
+    };
+
+    match metadata {
+        Some(meta) => {
+            let mut request_id = [0u8; 16];
+            request_id.copy_from_slice(&meta.request_id[..16]);
+            let mut nonce = [0u8; 16];
+            nonce.copy_from_slice(&meta.request_id[16..]);
+            let ttl_seconds =
+                u32::try_from(meta.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl bounded");
+            (request_id, nonce, ttl_seconds)
+        }
+        None => ([0u8; 16], [0u8; 16], 60),
+    }
+}
+
+fn is_canister_status_decode_failure(err: &Error) -> bool {
+    err.message.contains("CanisterStatusResult")
+        && err.message.contains("candid decode failed for type")
 }
 
 const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {

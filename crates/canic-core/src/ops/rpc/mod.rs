@@ -1,9 +1,14 @@
 pub mod request;
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     dto::{
         auth::{RoleAttestationRequest, SignedRoleAttestation},
+        capability::{
+            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+            PROOF_VERSION_V1, RoleAttestationProof, RootCapabilityEnvelopeV1,
+            RootCapabilityResponseV1,
+        },
         error::Error,
         rpc::RootRequestMetadata,
     },
@@ -20,6 +25,7 @@ use crate::{
     },
     protocol,
 };
+use candid::encode_one;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -68,7 +74,10 @@ pub trait Rpc {
 pub struct RpcOps;
 
 const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_SECONDS: u64 = 300;
+const DEFAULT_CAPABILITY_METADATA_TTL_SECONDS: u32 = 300;
+const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 static ROOT_ATTESTATION_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
+static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
 
 impl RpcOps {
     ///
@@ -106,7 +115,8 @@ impl RpcOps {
         let root_pid = EnvOps::root_pid()?;
         let request = rpc.into_request();
         let attestation = Self::request_root_response_attestation(root_pid).await?;
-        let call_res = Self::call_root_response_attested(root_pid, request, attestation).await?;
+        let call_res =
+            Self::call_root_response_capability_v1(root_pid, request, attestation).await?;
 
         let response = R::try_from_response(call_res)?;
 
@@ -138,18 +148,153 @@ impl RpcOps {
         Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request).await
     }
 
-    async fn call_root_response_attested(
+    async fn call_root_response_capability_v1(
         root_pid: Principal,
         request: Request,
         attestation: SignedRoleAttestation,
     ) -> Result<Response, InternalError> {
-        let call: CallResult = CallOps::unbounded_wait(root_pid, protocol::CANIC_RESPONSE_ATTESTED)
-            .with_args((request, attestation, 0u64))?
-            .execute()
-            .await?;
+        let dto_request: crate::dto::rpc::Request = request.clone().into();
+        let capability_hash = root_capability_hash(root_pid, &dto_request)?;
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: dto_request,
+            proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+                proof_version: PROOF_VERSION_V1,
+                capability_hash,
+                attestation,
+            }),
+            metadata: capability_metadata_from_request(&request),
+        };
 
-        call.candid::<Result<Response, Error>>()?
-            .map_err(|err| RpcOpsError::RemoteRejected(err).into())
+        let response: RootCapabilityResponseV1 =
+            Self::call_rpc_result(root_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
+                .await?;
+        Ok(response.response.into())
+    }
+}
+
+fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetadata {
+    let metadata = request_metadata(request);
+    let request_id = metadata.map_or([0u8; 16], |m| {
+        let mut out = [0u8; 16];
+        out.copy_from_slice(&m.request_id[..16]);
+        out
+    });
+    let ttl_seconds = metadata.map_or(DEFAULT_CAPABILITY_METADATA_TTL_SECONDS, |m| {
+        u32::try_from(m.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl_seconds bounded to u32")
+    });
+
+    CapabilityRequestMetadata {
+        request_id,
+        nonce: generate_capability_nonce(),
+        issued_at: IcOps::now_secs(),
+        ttl_seconds,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct CapabilitySourceMetadata {
+    request_id: [u8; 32],
+    ttl_seconds: u64,
+}
+
+fn request_metadata(request: &Request) -> Option<CapabilitySourceMetadata> {
+    match request {
+        Request::CreateCanister(req) => req.metadata.map(|m| CapabilitySourceMetadata {
+            request_id: m.request_id,
+            ttl_seconds: m.ttl_seconds,
+        }),
+        Request::UpgradeCanister(req) => req.metadata.map(|m| CapabilitySourceMetadata {
+            request_id: m.request_id,
+            ttl_seconds: m.ttl_seconds,
+        }),
+        Request::Cycles(req) => req.metadata.map(|m| CapabilitySourceMetadata {
+            request_id: m.request_id,
+            ttl_seconds: m.ttl_seconds,
+        }),
+        Request::IssueDelegation(req) => req.metadata.map(|m| CapabilitySourceMetadata {
+            request_id: m.request_id,
+            ttl_seconds: m.ttl_seconds,
+        }),
+        Request::IssueRoleAttestation(req) => req.metadata.map(|m| CapabilitySourceMetadata {
+            request_id: m.request_id,
+            ttl_seconds: m.ttl_seconds,
+        }),
+    }
+}
+
+fn generate_capability_nonce() -> [u8; 16] {
+    if let Ok(bytes) = crate::utils::rand::random_bytes(16)
+        && bytes.len() == 16
+    {
+        let mut out = [0u8; 16];
+        out.copy_from_slice(&bytes);
+        return out;
+    }
+
+    let nonce = ROOT_CAPABILITY_METADATA_NONCE.fetch_add(1, Ordering::Relaxed);
+    let now = IcOps::now_secs();
+    let caller = IcOps::msg_caller();
+    let canister = IcOps::canister_self();
+
+    let mut hasher = Sha256::new();
+    hasher.update(now.to_be_bytes());
+    hasher.update(nonce.to_be_bytes());
+    hasher.update(caller.as_slice());
+    hasher.update(canister.as_slice());
+    let digest: [u8; 32] = hasher.finalize().into();
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&digest[..16]);
+    out
+}
+
+fn root_capability_hash(
+    target_canister: Principal,
+    capability: &crate::dto::rpc::Request,
+) -> Result<[u8; 32], InternalError> {
+    let canonical = strip_dto_request_metadata(capability.clone());
+    let payload = encode_one(&(
+        target_canister,
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        canonical,
+    ))
+    .map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("failed to encode capability payload: {err}"),
+        )
+    })?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(CAPABILITY_HASH_DOMAIN_V1);
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
+}
+
+fn strip_dto_request_metadata(request: crate::dto::rpc::Request) -> crate::dto::rpc::Request {
+    match request {
+        crate::dto::rpc::Request::CreateCanister(mut req) => {
+            req.metadata = None;
+            crate::dto::rpc::Request::CreateCanister(req)
+        }
+        crate::dto::rpc::Request::UpgradeCanister(mut req) => {
+            req.metadata = None;
+            crate::dto::rpc::Request::UpgradeCanister(req)
+        }
+        crate::dto::rpc::Request::Cycles(mut req) => {
+            req.metadata = None;
+            crate::dto::rpc::Request::Cycles(req)
+        }
+        crate::dto::rpc::Request::IssueDelegation(mut req) => {
+            req.metadata = None;
+            crate::dto::rpc::Request::IssueDelegation(req)
+        }
+        crate::dto::rpc::Request::IssueRoleAttestation(mut req) => {
+            req.metadata = None;
+            crate::dto::rpc::Request::IssueRoleAttestation(req)
+        }
     }
 }
 

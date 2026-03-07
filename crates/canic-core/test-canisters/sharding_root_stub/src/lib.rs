@@ -8,6 +8,7 @@ use canic::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, RoleAttestation,
         RoleAttestationRequest, SignedRoleAttestation,
     },
+    dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
         CreateCanisterResponse, CyclesResponse, Request, Response, UpgradeCanisterResponse,
     },
@@ -20,17 +21,20 @@ const STUB_ATTESTATION_KEY_ID: u32 = 1;
 fn init() {}
 
 #[cdk::update]
-async fn canic_response(request: Request) -> Result<Response, Error> {
-    handle_request(request).await
-}
-
-#[cdk::update]
 async fn canic_response_attested(
     request: Request,
     _attestation: SignedRoleAttestation,
     _min_accepted_epoch: u64,
 ) -> Result<Response, Error> {
     handle_request(request).await
+}
+
+#[cdk::update]
+async fn canic_response_capability_v1(
+    envelope: RootCapabilityEnvelopeV1,
+) -> Result<RootCapabilityResponseV1, Error> {
+    let response = handle_request(envelope.capability).await?;
+    Ok(RootCapabilityResponseV1 { response })
 }
 
 #[cdk::update]
