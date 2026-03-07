@@ -57,6 +57,30 @@
 
 Interpretation: **Moderate-low risk**, improved from `5.80` due hub flattening.
 
+## Rerun Context (0.13.3 Closeout)
+
+- Date (UTC): `2026-03-07 22:38:13Z`
+- Branch: `eleven`
+- Commit: `02ac3107`
+- Worktree: `dirty` (changelog-only edits)
+- Trigger: user-requested rerun before closing `0.13.x`
+- Scope: unchanged (`crates/canic-core/src/**`)
+
+## Rerun Delta (Post-Decomposition -> 0.13.3 Closeout)
+
+| Metric | Post-Decomposition | 0.13.3 Closeout | Delta |
+| ---- | ----: | ----: | ----: |
+| Files >= 600 LOC | 7 | 7 | 0 |
+| `workflow/rpc/request/handler/mod.rs` LOC | 218 | 218 | 0 |
+| `ops/auth/mod.rs` LOC | 76 | 76 | 0 |
+| `api/rpc/mod.rs` LOC | 62 | 62 | 0 |
+| `Request::` decision-site proxy | 94 | 94 | 0 |
+| `DelegatedTokenOpsError::` decision-site proxy | 62 | 62 | 0 |
+
+Rerun verdict:
+- No material velocity drift since the prior rerun; gravity-well and shock-radius conclusions are unchanged.
+- Velocity Risk Index remains **4.50/10**.
+
 ## STEP 0 — Baseline Capture
 
 | Metric | Previous | Current | Delta |
@@ -202,7 +226,7 @@ Interpretation: **Moderate risk**; architecture still moves, but proof/replay/au
 
 ## Final Output
 
-1. Velocity Risk Index (latest rerun): **4.50/10** (initial same-day run: `5.80/10`).
+1. Velocity Risk Index (latest rerun, `0.13.3` closeout): **4.50/10** (initial same-day run: `5.80/10`).
 2. Revised CAF trend is down, but ELS remains low (`0.30..0.40`).
 3. Boundary leakage is stable, with one persistent workflow direct-storage crossing.
 4. Gravity growth concentration on control-plane hubs was reduced by decomposition (`api/rpc/mod.rs`, `workflow/rpc/request/handler/mod.rs`, `ops/auth/mod.rs`).

@@ -1,6 +1,6 @@
 use super::*;
 use crate::InternalErrorOrigin;
-use crate::ops::auth::DelegatedTokenOpsError;
+use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
 use futures::executor::block_on;
 use std::cell::Cell;
 
@@ -35,7 +35,7 @@ fn verify_role_attestation_with_single_refresh_retries_once_on_unknown_key() {
             let attempt = verify_calls.get();
             verify_calls.set(attempt + 1);
             if attempt == 0 {
-                Err(DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 7 })
+                Err(DelegationValidationError::AttestationUnknownKeyId { key_id: 7 }.into())
             } else {
                 Ok(())
             }
@@ -59,7 +59,7 @@ fn verify_role_attestation_with_single_refresh_fails_closed_on_refresh_error() {
     let result = block_on(verify_flow::verify_role_attestation_with_single_refresh(
         || {
             verify_calls.set(verify_calls.get() + 1);
-            Err(DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 9 })
+            Err(DelegationValidationError::AttestationUnknownKeyId { key_id: 9 }.into())
         },
         || {
             refresh_calls.set(refresh_calls.get() + 1);
@@ -72,7 +72,10 @@ fn verify_role_attestation_with_single_refresh_fails_closed_on_refresh_error() {
 
     match result {
         Err(verify_flow::RoleAttestationVerifyFlowError::Refresh {
-            trigger: DelegatedTokenOpsError::AttestationUnknownKeyId { key_id },
+            trigger:
+                DelegatedTokenOpsError::Validation(DelegationValidationError::AttestationUnknownKeyId {
+                    key_id,
+                }),
             ..
         }) => assert_eq!(key_id, 9),
         other => panic!("expected refresh failure for unknown key, got: {other:?}"),
@@ -94,10 +97,11 @@ fn verify_role_attestation_with_single_refresh_does_not_refresh_on_non_unknown_e
     let result = block_on(verify_flow::verify_role_attestation_with_single_refresh(
         || {
             verify_calls.set(verify_calls.get() + 1);
-            Err(DelegatedTokenOpsError::AttestationEpochRejected {
+            Err(DelegationExpiryError::AttestationEpochRejected {
                 epoch: 1,
                 min_accepted_epoch: 2,
-            })
+            }
+            .into())
         },
         || {
             refresh_calls.set(refresh_calls.get() + 1);
@@ -107,10 +111,10 @@ fn verify_role_attestation_with_single_refresh_does_not_refresh_on_non_unknown_e
 
     match result {
         Err(verify_flow::RoleAttestationVerifyFlowError::Initial(
-            DelegatedTokenOpsError::AttestationEpochRejected {
+            DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationEpochRejected {
                 epoch,
                 min_accepted_epoch,
-            },
+            }),
         )) => {
             assert_eq!(epoch, 1);
             assert_eq!(min_accepted_epoch, 2);
@@ -132,9 +136,9 @@ fn verify_role_attestation_with_single_refresh_only_attempts_one_refresh() {
             let attempt = verify_calls.get();
             verify_calls.set(attempt + 1);
             if attempt == 0 {
-                Err(DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 5 })
+                Err(DelegationValidationError::AttestationUnknownKeyId { key_id: 5 }.into())
             } else {
-                Err(DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 6 })
+                Err(DelegationValidationError::AttestationUnknownKeyId { key_id: 6 }.into())
             }
         },
         || {
@@ -145,7 +149,9 @@ fn verify_role_attestation_with_single_refresh_only_attempts_one_refresh() {
 
     match result {
         Err(verify_flow::RoleAttestationVerifyFlowError::PostRefresh(
-            DelegatedTokenOpsError::AttestationUnknownKeyId { key_id },
+            DelegatedTokenOpsError::Validation(
+                DelegationValidationError::AttestationUnknownKeyId { key_id },
+            ),
         )) => assert_eq!(key_id, 6),
         other => panic!("expected post-refresh unknown-key rejection, got: {other:?}"),
     }

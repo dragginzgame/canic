@@ -1,15 +1,17 @@
 #[cfg(test)]
 use crate::dto::auth::RoleAttestation;
+#[cfg(test)]
+use crate::storage::stable::replay::ReplaySlotKey;
 use crate::{
     InternalError,
     cdk::types::Principal,
     dto::rpc::{Request, Response, RootCapabilityRequest},
     ops::{
         ic::IcOps,
+        replay::guard::ReplayPending,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricEvent, RootCapabilityMetrics},
     },
-    storage::stable::replay::ReplaySlotKey,
 };
 
 mod authorize;
@@ -23,8 +25,6 @@ const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
 const MAX_ROOT_TTL_SECONDS: u64 = 300;
 const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
-const LEGACY_REPLAY_SLOT_KEY_DOMAIN: &[u8] = b"root-replay-slot-key:v1";
-const LEGACY_REPLAY_NONCE: [u8; 16] = [0u8; 16];
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
 
 ///
@@ -44,20 +44,6 @@ struct RootContext {
     is_root_env: bool,
     subnet_id: Principal,
     now: u64,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ReplayPending {
-    slot_key: ReplaySlotKey,
-    payload_hash: [u8; 32],
-    issued_at: u64,
-    expires_at: u64,
-}
-
-#[derive(Debug)]
-enum ReplayDecision {
-    Cached(Response),
-    Pending(ReplayPending),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -87,10 +73,7 @@ impl RootResponseWorkflow {
         let capability = Self::map_request(capability_req);
         let capability_key = capability.metric_key();
 
-        let replay = Self::preflight(&ctx, &capability, order)?;
-        if let ReplayDecision::Cached(response) = replay {
-            return Ok(response);
-        }
+        let pending = Self::preflight(&ctx, &capability, order)?;
 
         let response = match Self::execute_root_capability(&ctx, capability).await {
             Ok(response) => response,
@@ -100,15 +83,6 @@ impl RootResponseWorkflow {
                     RootCapabilityMetricEvent::ExecutionError,
                 );
                 return Err(err);
-            }
-        };
-        let pending = match replay {
-            ReplayDecision::Pending(pending) => pending,
-            ReplayDecision::Cached(_) => {
-                return Err(InternalError::invariant(
-                    crate::InternalErrorOrigin::Workflow,
-                    "replay state inconsistency: cached response reached commit path".to_string(),
-                ));
             }
         };
         if let Err(err) = Self::commit_replay(pending, &response) {
@@ -127,7 +101,7 @@ impl RootResponseWorkflow {
         ctx: &RootContext,
         capability: &RootCapability,
         order: AuthorizationPipelineOrder,
-    ) -> Result<ReplayDecision, InternalError> {
+    ) -> Result<ReplayPending, InternalError> {
         match order {
             AuthorizationPipelineOrder::AuthorizeThenReplay => {
                 Self::authorize(ctx, capability)?;
@@ -135,9 +109,6 @@ impl RootResponseWorkflow {
             }
             AuthorizationPipelineOrder::ReplayThenAuthorize => {
                 let replay = Self::check_replay(ctx, capability)?;
-                if let ReplayDecision::Cached(_) = &replay {
-                    return Ok(replay);
-                }
                 Self::authorize(ctx, capability)?;
                 Ok(replay)
             }
@@ -174,7 +145,7 @@ impl RootResponseWorkflow {
     fn check_replay(
         ctx: &RootContext,
         capability: &RootCapability,
-    ) -> Result<ReplayDecision, InternalError> {
+    ) -> Result<ReplayPending, InternalError> {
         replay::check_replay(ctx, capability)
     }
 

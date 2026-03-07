@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{DelegationCert, DelegationProof},
     ops::{
-        auth::DelegatedTokenOpsError,
+        auth::DelegationValidationError,
         ic::{IcOps, ecdsa::EcdsaOps},
     },
 };
@@ -16,7 +16,7 @@ impl DelegatedTokenOps {
     ) -> Result<DelegationProof, InternalError> {
         let local = IcOps::canister_self();
         if cert.root_pid != local {
-            return Err(DelegatedTokenOpsError::InvalidRootAuthority {
+            return Err(DelegationValidationError::InvalidRootAuthority {
                 expected: local,
                 found: cert.root_pid,
             }
@@ -51,7 +51,7 @@ impl DelegatedTokenOps {
         expected_root: Option<Principal>,
     ) -> Result<(), InternalError> {
         if proof.cert.expires_at <= proof.cert.issued_at {
-            return Err(DelegatedTokenOpsError::CertInvalidWindow {
+            return Err(DelegationValidationError::CertInvalidWindow {
                 issued_at: proof.cert.issued_at,
                 expires_at: proof.cert.expires_at,
             }
@@ -61,7 +61,7 @@ impl DelegatedTokenOps {
         if let Some(expected) = expected_root
             && proof.cert.root_pid != expected
         {
-            return Err(DelegatedTokenOpsError::InvalidRootAuthority {
+            return Err(DelegationValidationError::InvalidRootAuthority {
                 expected,
                 found: proof.cert.root_pid,
             }

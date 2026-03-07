@@ -4,7 +4,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOpsError,
+        auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError},
         runtime::metrics::auth::{
             record_attestation_epoch_rejected, record_attestation_unknown_key_id,
             record_attestation_verify_failed,
@@ -34,7 +34,11 @@ where
 {
     match verify() {
         Ok(()) => Ok(()),
-        Err(err @ DelegatedTokenOpsError::AttestationUnknownKeyId { .. }) => {
+        Err(
+            err @ DelegatedTokenOpsError::Validation(
+                DelegationValidationError::AttestationUnknownKeyId { .. },
+            ),
+        ) => {
             refresh()
                 .await
                 .map_err(|source| RoleAttestationVerifyFlowError::Refresh {
@@ -58,10 +62,14 @@ pub(super) fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>)
 pub(super) fn record_attestation_verifier_rejection(err: &DelegatedTokenOpsError) {
     record_attestation_verify_failed();
     match err {
-        DelegatedTokenOpsError::AttestationUnknownKeyId { .. } => {
+        DelegatedTokenOpsError::Validation(
+            DelegationValidationError::AttestationUnknownKeyId { .. },
+        ) => {
             record_attestation_unknown_key_id();
         }
-        DelegatedTokenOpsError::AttestationEpochRejected { .. } => {
+        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationEpochRejected {
+            ..
+        }) => {
             record_attestation_epoch_rejected();
         }
         _ => {}
