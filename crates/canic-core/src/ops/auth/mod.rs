@@ -15,7 +15,10 @@ mod keys;
 mod token;
 mod types;
 mod verify;
-pub use error::DelegatedTokenOpsError;
+pub use error::{
+    DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError, DelegationSignatureError,
+    DelegationValidationError,
+};
 pub use types::VerifiedDelegatedToken;
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";

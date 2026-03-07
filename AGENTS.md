@@ -589,11 +589,28 @@ Rules:
   * `///`
   * (blank line)
   * then the `struct` definition
+* Struct comment blocks must appear as a standalone 3-line doc block with surrounding spacing:
+  * keep a blank line before the first `///` when context allows
+  * keep a blank line after the last `///` before `pub struct ...`
+  * canonical example:
+```rust
+///
+/// ConfigApi
+///
+
+pub struct ConfigApi;
+```
 * Prefer a blank line after any multi-line `///` doc comment block before the item it documents (in addition to the struct-specific rule above).
 * Keep comments directly adjacent
 * Use section banners for structure
+* Every function must include a concise 1–2 line intent comment directly above it.
+  * Public functions should prefer `///` docs.
+  * Private/internal functions may use `//` intent comments.
+* Break complex function bodies into explicit phases with short header comments (for example validation, mapping, execution, commit).
+* For non-trivial blocks, add phase comments that explain purpose/invariants, not line-by-line narration.
 * Large groups of related functions must be separated with a header divider like:
   * `// --- Removal --------------------------------------------------------`
+* Related function families should be grouped under consistent banner headers (for example `Validation`, `Mapping`, `Execution`, `Cleanup`).
 
 ---
 

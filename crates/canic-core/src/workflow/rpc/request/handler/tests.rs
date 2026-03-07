@@ -493,13 +493,11 @@ fn check_replay_reads_legacy_slot_key_for_compatibility() {
         },
     );
 
-    let replay = RootResponseWorkflow::check_replay(&ctx, &capability).expect("legacy replay hit");
-    match replay {
-        ReplayDecision::Cached(Response::Cycles(cached)) => {
-            assert_eq!(cached.cycles_transferred, 77);
-        }
-        _ => panic!("expected cached cycles response"),
-    }
+    let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must reject");
+    assert!(
+        err.to_string().contains("duplicate replay request"),
+        "expected duplicate replay rejection, got: {err}"
+    );
 }
 
 #[test]
@@ -606,7 +604,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
 }
 
 #[test]
-fn check_replay_returns_cached_for_identical_payload() {
+fn check_replay_rejects_duplicate_same_payload() {
     RootReplayOps::reset_for_tests();
 
     let ctx = RootContext {
@@ -621,24 +619,18 @@ fn check_replay_returns_cached_for_identical_payload() {
         metadata: Some(meta(7, 60)),
     });
 
-    let first = RootResponseWorkflow::check_replay(&ctx, &capability).expect("first replay");
-    let pending = match first {
-        ReplayDecision::Pending(pending) => pending,
-        ReplayDecision::Cached(_) => panic!("first request must not be cached"),
-    };
+    let pending = RootResponseWorkflow::check_replay(&ctx, &capability).expect("first replay");
 
     let response = Response::Cycles(CyclesResponse {
         cycles_transferred: 77,
     });
     RootResponseWorkflow::commit_replay(pending, &response).expect("commit");
 
-    let second = RootResponseWorkflow::check_replay(&ctx, &capability).expect("second replay");
-    match second {
-        ReplayDecision::Cached(Response::Cycles(cached)) => {
-            assert_eq!(cached.cycles_transferred, 77);
-        }
-        _ => panic!("expected cached cycles response"),
-    }
+    let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must reject");
+    assert!(
+        err.to_string().contains("duplicate replay request"),
+        "expected duplicate replay rejection, got: {err}"
+    );
 }
 
 #[test]
@@ -661,11 +653,7 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
         metadata: Some(meta(8, 60)),
     });
 
-    let first = RootResponseWorkflow::check_replay(&ctx, &base).expect("first replay");
-    let pending = match first {
-        ReplayDecision::Pending(pending) => pending,
-        ReplayDecision::Cached(_) => panic!("first request must not be cached"),
-    };
+    let pending = RootResponseWorkflow::check_replay(&ctx, &base).expect("first replay");
     RootResponseWorkflow::commit_replay(
         pending,
         &Response::Cycles(CyclesResponse {

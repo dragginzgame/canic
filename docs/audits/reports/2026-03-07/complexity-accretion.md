@@ -68,6 +68,31 @@ Rerun hub-pressure condition (`LOC > 600` and `domain_count >= 3`):
 
 Interpretation: **Moderate risk**, improved from `6.55` after removing monolithic hub concentration.
 
+## Rerun Context (0.13.3 Closeout)
+
+- Date (UTC): `2026-03-07 22:38:13Z`
+- Branch: `eleven`
+- Commit: `02ac3107`
+- Worktree: `dirty` (changelog-only edits)
+- Trigger: user-requested rerun before closing `0.13.x`
+- Scope: unchanged (`crates/canic-core/src/**`)
+
+## Rerun Delta (Post-Decomposition -> 0.13.3 Closeout)
+
+| Metric | Post-Decomposition | 0.13.3 Closeout | Delta |
+| ---- | ----: | ----: | ----: |
+| Runtime files in scope | 316 | 319 | +3 |
+| Runtime LOC | 31848 | 31870 | +22 |
+| Files >= 600 LOC | 7 | 7 | 0 |
+| Capability mentions (`capability`) | 323 | 323 | 0 |
+| `workflow/rpc/request/handler/mod.rs` | 218 | 218 | 0 |
+| `ops/auth/mod.rs` | 76 | 76 | 0 |
+| `api/rpc/mod.rs` | 62 | 62 | 0 |
+
+Rerun verdict:
+- No material complexity drift since the prior rerun; control-plane hub-pressure reduction remains intact.
+- Complexity Risk Index remains **5.36/10**.
+
 ## STEP 0 — Baseline Capture
 
 | Metric | Previous | Current | Delta |
@@ -189,7 +214,7 @@ Interpretation: **High end of Moderate (near High)**.
 
 ## Required Summary
 
-1. Overall Complexity Risk Index (latest rerun): **5.36/10** (initial same-day run: `6.55/10`).
+1. Overall Complexity Risk Index (latest rerun, `0.13.3` closeout): **5.36/10** (initial same-day run: `6.55/10`).
 2. Fastest growing concept families: capability envelope/proof path and replay-coupled auth validation.
 3. Highest branch multipliers: `DelegatedTokenOpsError` (2232), `Request` (470), `BuiltinPredicate` (420), `RootCapabilityMetricEvent` (312).
 4. Flow multiplication risks: capability proof mode combined with replay and policy axes drives `response_capability_v1` theoretical space to 120.

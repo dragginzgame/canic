@@ -7,7 +7,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKey, AttestationKeyStatus},
     ops::{
-        auth::DelegatedTokenOpsError, config::ConfigOps, ic::ecdsa::EcdsaOps,
+        auth::DelegationValidationError, config::ConfigOps, ic::ecdsa::EcdsaOps,
         storage::auth::DelegationStateOps,
     },
 };
@@ -28,7 +28,7 @@ pub(super) fn attestation_keys_sorted() -> Vec<AttestationKey> {
 pub(super) fn delegated_tokens_key_name() -> Result<String, InternalError> {
     let cfg = ConfigOps::delegated_tokens_config()?;
     if cfg.ecdsa_key_name.trim().is_empty() {
-        return Err(DelegatedTokenOpsError::EcdsaKeyNameMissing.into());
+        return Err(DelegationValidationError::EcdsaKeyNameMissing.into());
     }
 
     Ok(cfg.ecdsa_key_name)
@@ -37,7 +37,7 @@ pub(super) fn delegated_tokens_key_name() -> Result<String, InternalError> {
 pub(super) fn attestation_key_name() -> Result<String, InternalError> {
     let cfg = ConfigOps::role_attestation_config()?;
     if cfg.ecdsa_key_name.trim().is_empty() {
-        return Err(DelegatedTokenOpsError::AttestationKeyNameMissing.into());
+        return Err(DelegationValidationError::AttestationKeyNameMissing.into());
     }
 
     Ok(cfg.ecdsa_key_name)

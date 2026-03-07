@@ -1,126 +1,115 @@
 use super::{
-    LEGACY_REPLAY_NONCE, LEGACY_REPLAY_SLOT_KEY_DOMAIN, MAX_ROOT_REPLAY_ENTRIES,
-    MAX_ROOT_TTL_SECONDS, REPLAY_PAYLOAD_HASH_DOMAIN, REPLAY_PURGE_SCAN_LIMIT, ReplayDecision,
-    ReplayPending, RootCapability, RootContext,
+    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_TTL_SECONDS, REPLAY_PAYLOAD_HASH_DOMAIN,
+    REPLAY_PURGE_SCAN_LIMIT, RootCapability, RootContext,
 };
 use crate::{
     InternalError,
-    cdk::types::Principal,
     dto::rpc::{Response, RootCapabilityRequest},
     ops::{
+        replay::{
+            guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            slot as replay_slot,
+        },
         runtime::metrics::root_capability::{
             RootCapabilityMetricEvent, RootCapabilityMetricKey, RootCapabilityMetrics,
         },
-        storage::replay::{ReplayService, RootReplayOps},
     },
-    storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
+    storage::stable::replay::RootReplayRecord,
     workflow::rpc::RpcWorkflowError,
 };
-use candid::{decode_one, encode_one};
+#[cfg(test)]
+use crate::{
+    cdk::types::Principal, ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey,
+};
+use candid::encode_one;
 use sha2::{Digest, Sha256};
 
+/// check_replay
+///
+/// Run replay guard and convert pure replay outcomes into workflow results.
 pub(super) fn check_replay(
     ctx: &RootContext,
     capability: &RootCapability,
-) -> Result<ReplayDecision, InternalError> {
+) -> Result<ReplayPending, InternalError> {
     let capability_key = capability.metric_key();
-
     let metadata = capability
         .metadata()
         .ok_or_else(|| RpcWorkflowError::MissingReplayMetadata(capability.capability_name()))?;
-
-    if metadata.ttl_seconds == 0 || metadata.ttl_seconds > MAX_ROOT_TTL_SECONDS {
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayTtlExceeded);
-        return Err(RpcWorkflowError::InvalidReplayTtl {
-            ttl_seconds: metadata.ttl_seconds,
-            max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
-        }
-        .into());
-    }
-
     let payload_hash = capability.payload_hash()?;
-    let slot_key = replay_slot_key(ctx.caller, ctx.self_pid, metadata.request_id);
-    let legacy_slot_key = replay_slot_key_legacy(ctx.caller, ctx.subnet_id, metadata.request_id);
 
-    if let Some(existing) = RootReplayOps::get(slot_key) {
-        return resolve_existing_replay(
-            capability.capability_name(),
-            capability_key,
-            ctx.now,
-            payload_hash,
-            existing,
-        );
+    let decision =
+        replay::evaluate_root_replay(ctx, metadata.request_id, metadata.ttl_seconds, payload_hash)
+            .map_err(|err| map_replay_guard_error(capability_key, err))?;
+
+    match decision {
+        ReplayDecision::Fresh(pending) => {
+            RootCapabilityMetrics::record(
+                capability_key,
+                RootCapabilityMetricEvent::ReplayAccepted,
+            );
+            Ok(pending)
+        }
+        ReplayDecision::DuplicateSame => {
+            RootCapabilityMetrics::record(
+                capability_key,
+                RootCapabilityMetricEvent::ReplayDuplicateSame,
+            );
+            Err(RpcWorkflowError::ReplayDuplicateSame(capability.capability_name()).into())
+        }
+        ReplayDecision::DuplicateConflict => {
+            RootCapabilityMetrics::record(
+                capability_key,
+                RootCapabilityMetricEvent::ReplayDuplicateConflict,
+            );
+            Err(RpcWorkflowError::ReplayConflict(capability.capability_name()).into())
+        }
+        ReplayDecision::Expired => {
+            RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayExpired);
+            Err(RpcWorkflowError::ReplayExpired(capability.capability_name()).into())
+        }
     }
-
-    // Compatibility path for 0.11-era keys during replay key migration.
-    if legacy_slot_key != slot_key
-        && let Some(existing) = RootReplayOps::get(legacy_slot_key)
-    {
-        return resolve_existing_replay(
-            capability.capability_name(),
-            capability_key,
-            ctx.now,
-            payload_hash,
-            existing,
-        );
-    }
-
-    let _ = RootReplayOps::purge_expired(ctx.now, REPLAY_PURGE_SCAN_LIMIT);
-
-    let issued_at = ctx.now;
-    let expires_at = issued_at.saturating_add(metadata.ttl_seconds);
-    RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayAccepted);
-
-    Ok(ReplayDecision::Pending(ReplayPending {
-        slot_key,
-        payload_hash,
-        issued_at,
-        expires_at,
-    }))
 }
 
-pub(super) fn resolve_existing_replay(
-    capability_name: &'static str,
+/// map_replay_guard_error
+///
+/// Convert guard-level infra errors into workflow replay failures.
+fn map_replay_guard_error(
     capability_key: RootCapabilityMetricKey,
-    now: u64,
-    payload_hash: [u8; 32],
-    existing: RootReplayRecord,
-) -> Result<ReplayDecision, InternalError> {
-    if now > existing.expires_at {
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayExpired);
-        return Err(RpcWorkflowError::ReplayExpired(capability_name).into());
+    err: ReplayGuardError,
+) -> InternalError {
+    match err {
+        ReplayGuardError::InvalidTtl {
+            ttl_seconds,
+            max_ttl_seconds,
+        } => {
+            RootCapabilityMetrics::record(
+                capability_key,
+                RootCapabilityMetricEvent::ReplayTtlExceeded,
+            );
+            RpcWorkflowError::InvalidReplayTtl {
+                ttl_seconds,
+                max_ttl_seconds,
+            }
+            .into()
+        }
     }
-
-    if existing.payload_hash != payload_hash {
-        RootCapabilityMetrics::record(
-            capability_key,
-            RootCapabilityMetricEvent::ReplayDuplicateConflict,
-        );
-        return Err(RpcWorkflowError::ReplayConflict(capability_name).into());
-    }
-
-    let response = decode_one::<Response>(&existing.response_candid)
-        .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
-    RootCapabilityMetrics::record(
-        capability_key,
-        RootCapabilityMetricEvent::ReplayDuplicateSame,
-    );
-
-    Ok(ReplayDecision::Cached(response))
 }
 
+/// commit_replay
+///
+/// Persist a replay record after successful capability execution.
 pub(super) fn commit_replay(
     pending: ReplayPending,
     response: &Response,
 ) -> Result<(), InternalError> {
-    if RootReplayOps::len() >= MAX_ROOT_REPLAY_ENTRIES {
+    if replay_slot::root_slot_len() >= MAX_ROOT_REPLAY_ENTRIES {
         return Err(RpcWorkflowError::ReplayStoreCapacityReached(MAX_ROOT_REPLAY_ENTRIES).into());
     }
 
     let response_candid = encode_one(response)
         .map_err(|err| RpcWorkflowError::ReplayEncodeFailed(err.to_string()))?;
 
-    RootReplayOps::upsert(
+    replay_slot::upsert_root_slot(
         pending.slot_key,
         RootReplayRecord {
             payload_hash: pending.payload_hash,
@@ -133,6 +122,9 @@ pub(super) fn commit_replay(
     Ok(())
 }
 
+/// hash_capability_payload
+///
+/// Compute replay payload hash for canonical capability request bytes.
 pub(super) fn hash_capability_payload(
     payload: &RootCapabilityRequest,
 ) -> Result<[u8; 32], InternalError> {
@@ -142,34 +134,33 @@ pub(super) fn hash_capability_payload(
     Ok(hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes))
 }
 
+/// replay_slot_key
+///
+/// Build current root replay slot key (test helper passthrough).
+#[cfg(test)]
 pub(super) fn replay_slot_key(
     caller: Principal,
     target_canister: Principal,
     request_id: [u8; 32],
 ) -> ReplaySlotKey {
-    RootReplayOps::slot_key(
-        caller,
-        target_canister,
-        ReplayService::Root,
-        &request_id,
-        LEGACY_REPLAY_NONCE,
-    )
+    replay_key::root_slot_key(caller, target_canister, request_id)
 }
 
+/// replay_slot_key_legacy
+///
+/// Build legacy root replay slot key (test helper passthrough).
+#[cfg(test)]
 pub(super) fn replay_slot_key_legacy(
     caller: Principal,
     subnet_id: Principal,
     request_id: [u8; 32],
 ) -> ReplaySlotKey {
-    let mut hasher = Sha256::new();
-    hasher.update((LEGACY_REPLAY_SLOT_KEY_DOMAIN.len() as u64).to_be_bytes());
-    hasher.update(LEGACY_REPLAY_SLOT_KEY_DOMAIN);
-    hasher.update(caller.as_slice());
-    hasher.update(subnet_id.as_slice());
-    hasher.update(request_id);
-    ReplaySlotKey(hasher.finalize().into())
+    replay_key::legacy_root_slot_key(caller, subnet_id, request_id)
 }
 
+/// hash_domain_separated
+///
+/// Build deterministic domain-separated hash values for replay payloads.
 pub(super) fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update((domain.len() as u64).to_be_bytes());
@@ -177,4 +168,30 @@ pub(super) fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     hasher.update((payload.len() as u64).to_be_bytes());
     hasher.update(payload);
     hasher.finalize().into()
+}
+
+mod replay {
+    use super::*;
+
+    /// evaluate_root_replay
+    ///
+    /// Call the ops replay guard with workflow root replay context.
+    pub(super) fn evaluate_root_replay(
+        ctx: &RootContext,
+        request_id: [u8; 32],
+        ttl_seconds: u64,
+        payload_hash: [u8; 32],
+    ) -> Result<ReplayDecision, ReplayGuardError> {
+        crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
+            caller: ctx.caller,
+            target_canister: ctx.self_pid,
+            subnet_id: ctx.subnet_id,
+            request_id,
+            ttl_seconds,
+            payload_hash,
+            now: ctx.now,
+            max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
+            purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
+        })
+    }
 }

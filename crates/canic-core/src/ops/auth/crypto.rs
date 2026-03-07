@@ -2,7 +2,7 @@ use super::{CERT_SIGNING_DOMAIN, ROLE_ATTESTATION_SIGNING_DOMAIN, TOKEN_SIGNING_
 use crate::{
     InternalError,
     dto::auth::{DelegatedTokenClaims, DelegationCert, RoleAttestation},
-    ops::{auth::DelegatedTokenOpsError, prelude::*},
+    ops::{auth::DelegationValidationError, prelude::*},
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -18,7 +18,7 @@ pub(super) fn encode_candid<T: CandidType>(
     value: &T,
 ) -> Result<Vec<u8>, InternalError> {
     encode_one(value).map_err(|err| {
-        DelegatedTokenOpsError::EncodeFailed {
+        DelegationValidationError::EncodeFailed {
             context,
             source: err,
         }

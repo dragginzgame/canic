@@ -6,7 +6,10 @@ use crate::{
         RoleAttestation,
     },
     ops::{
-        auth::DelegatedTokenOpsError,
+        auth::{
+            DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError,
+            DelegationSignatureError, DelegationValidationError,
+        },
         ic::{IcOps, ecdsa::EcdsaOps},
         runtime::metrics::auth::{
             record_verifier_cert_expired, record_verifier_proof_mismatch,
@@ -26,21 +29,21 @@ enum SignatureKind {
 fn map_signature_error(err: InternalError, kind: SignatureKind) -> InternalError {
     match kind {
         SignatureKind::Delegation => {
-            DelegatedTokenOpsError::CertSignatureInvalid(err.to_string()).into()
+            DelegationSignatureError::CertSignatureInvalid(err.to_string()).into()
         }
         SignatureKind::Token => {
-            DelegatedTokenOpsError::TokenSignatureInvalid(err.to_string()).into()
+            DelegationSignatureError::TokenSignatureInvalid(err.to_string()).into()
         }
     }
 }
 
 pub(super) fn verify_delegation_signature(proof: &DelegationProof) -> Result<(), InternalError> {
     if proof.cert_sig.is_empty() {
-        return Err(DelegatedTokenOpsError::CertSignatureUnavailable.into());
+        return Err(DelegationSignatureError::CertSignatureUnavailable.into());
     }
 
     let root_public_key = DelegationStateOps::root_public_key()
-        .ok_or(DelegatedTokenOpsError::RootPublicKeyUnavailable)?;
+        .ok_or(DelegationSignatureError::RootPublicKeyUnavailable)?;
     let hash = crypto::cert_hash(&proof.cert)?;
     EcdsaOps::verify_signature(&root_public_key, hash, &proof.cert_sig)
         .map_err(|err| map_signature_error(err, SignatureKind::Delegation))?;
@@ -50,11 +53,11 @@ pub(super) fn verify_delegation_signature(proof: &DelegationProof) -> Result<(),
 
 pub(super) fn verify_token_sig(token: &DelegatedToken) -> Result<(), InternalError> {
     if token.token_sig.is_empty() {
-        return Err(DelegatedTokenOpsError::TokenSignatureUnavailable.into());
+        return Err(DelegationSignatureError::TokenSignatureUnavailable.into());
     }
 
     let shard_public_key = DelegationStateOps::shard_public_key(token.proof.cert.shard_pid).ok_or(
-        DelegatedTokenOpsError::ShardPublicKeyUnavailable {
+        DelegationSignatureError::ShardPublicKeyUnavailable {
             shard_pid: token.proof.cert.shard_pid,
         },
     )?;
@@ -72,15 +75,15 @@ pub(super) fn verify_time_bounds(
     now_secs: u64,
 ) -> Result<(), InternalError> {
     if claims.exp < claims.iat {
-        return Err(DelegatedTokenOpsError::TokenExpiryBeforeIssued.into());
+        return Err(DelegationExpiryError::TokenExpiryBeforeIssued.into());
     }
 
     if now_secs < claims.iat {
-        return Err(DelegatedTokenOpsError::TokenNotYetValid { iat: claims.iat }.into());
+        return Err(DelegationExpiryError::TokenNotYetValid { iat: claims.iat }.into());
     }
 
     if now_secs > claims.exp {
-        return Err(DelegatedTokenOpsError::TokenExpired { exp: claims.exp }.into());
+        return Err(DelegationExpiryError::TokenExpired { exp: claims.exp }.into());
     }
 
     if now_secs > cert.expires_at {
@@ -95,14 +98,14 @@ pub(super) fn verify_time_bounds(
             now_secs,
             cert.expires_at
         );
-        return Err(DelegatedTokenOpsError::CertExpired {
+        return Err(DelegationExpiryError::CertExpired {
             expires_at: cert.expires_at,
         }
         .into());
     }
 
     if claims.iat < cert.issued_at {
-        return Err(DelegatedTokenOpsError::TokenIssuedBeforeDelegation {
+        return Err(DelegationExpiryError::TokenIssuedBeforeDelegation {
             token_iat: claims.iat,
             cert_iat: cert.issued_at,
         }
@@ -110,7 +113,7 @@ pub(super) fn verify_time_bounds(
     }
 
     if claims.exp > cert.expires_at {
-        return Err(DelegatedTokenOpsError::TokenOutlivesDelegation {
+        return Err(DelegationExpiryError::TokenOutlivesDelegation {
             token_exp: claims.exp,
             cert_exp: cert.expires_at,
         }
@@ -131,7 +134,7 @@ pub(super) fn verify_current_proof(proof: &DelegationProof) -> Result<(), Intern
             local,
             proof.cert.shard_pid
         );
-        return Err(DelegatedTokenOpsError::ProofUnavailable.into());
+        return Err(DelegationValidationError::ProofUnavailable.into());
     };
 
     if proofs_equal(proof, &stored) {
@@ -147,7 +150,7 @@ pub(super) fn verify_current_proof(proof: &DelegationProof) -> Result<(), Intern
             proof.cert.shard_pid,
             stored.cert.shard_pid
         );
-        Err(DelegatedTokenOpsError::ProofMismatch.into())
+        Err(DelegationValidationError::ProofMismatch.into())
     }
 }
 
@@ -170,7 +173,7 @@ pub(super) fn verify_max_ttl(
 ) -> Result<(), InternalError> {
     let ttl_secs = token.claims.exp - token.claims.iat;
     if ttl_secs > max_ttl_secs {
-        return Err(DelegatedTokenOpsError::TokenTtlExceeded {
+        return Err(DelegationExpiryError::TokenTtlExceeded {
             ttl_secs,
             max_ttl_secs,
         }
@@ -187,7 +190,7 @@ pub(super) fn verify_self_audience(
     if claims.aud.contains(&self_pid) {
         Ok(())
     } else {
-        Err(DelegatedTokenOpsError::SelfAudienceMissing { self_pid }.into())
+        Err(DelegationScopeError::SelfAudienceMissing { self_pid }.into())
     }
 }
 
@@ -196,7 +199,7 @@ pub(super) fn validate_claims_against_cert(
     cert: &DelegationCert,
 ) -> Result<(), InternalError> {
     if claims.shard_pid != cert.shard_pid {
-        return Err(DelegatedTokenOpsError::ShardPidMismatch {
+        return Err(DelegationScopeError::ShardPidMismatch {
             expected: cert.shard_pid,
             found: claims.shard_pid,
         }
@@ -205,13 +208,13 @@ pub(super) fn validate_claims_against_cert(
 
     for aud in &claims.aud {
         if !cert.aud.iter().any(|allowed| allowed == aud) {
-            return Err(DelegatedTokenOpsError::AudienceNotAllowed { aud: *aud }.into());
+            return Err(DelegationScopeError::AudienceNotAllowed { aud: *aud }.into());
         }
     }
 
     for scope in &claims.scopes {
         if !cert.scopes.iter().any(|allowed| allowed == scope) {
-            return Err(DelegatedTokenOpsError::ScopeNotAllowed {
+            return Err(DelegationScopeError::ScopeNotAllowed {
                 scope: scope.clone(),
             }
             .into());
@@ -230,71 +233,78 @@ pub(super) fn verify_role_attestation_claims(
     min_accepted_epoch: u64,
 ) -> Result<(), DelegatedTokenOpsError> {
     if payload.subject != caller {
-        return Err(DelegatedTokenOpsError::AttestationSubjectMismatch {
+        return Err(DelegationScopeError::AttestationSubjectMismatch {
             expected: caller,
             found: payload.subject,
-        });
+        }
+        .into());
     }
 
     if now_secs > payload.expires_at {
-        return Err(DelegatedTokenOpsError::AttestationExpired {
+        return Err(DelegationExpiryError::AttestationExpired {
             expires_at: payload.expires_at,
             now_secs,
-        });
+        }
+        .into());
     }
 
     if let Some(audience) = payload.audience
         && audience != self_pid
     {
-        return Err(DelegatedTokenOpsError::AttestationAudienceMismatch {
+        return Err(DelegationScopeError::AttestationAudienceMismatch {
             expected: self_pid,
             found: audience,
-        });
+        }
+        .into());
     }
 
     if let Some(attestation_subnet) = payload.subnet_id {
         let verifier_subnet =
-            verifier_subnet.ok_or(DelegatedTokenOpsError::AttestationSubnetUnavailable)?;
+            verifier_subnet.ok_or(DelegationValidationError::AttestationSubnetUnavailable)?;
         if attestation_subnet != verifier_subnet {
-            return Err(DelegatedTokenOpsError::AttestationSubnetMismatch {
+            return Err(DelegationScopeError::AttestationSubnetMismatch {
                 expected: verifier_subnet,
                 found: attestation_subnet,
-            });
+            }
+            .into());
         }
     }
 
     if payload.epoch < min_accepted_epoch {
-        return Err(DelegatedTokenOpsError::AttestationEpochRejected {
+        return Err(DelegationExpiryError::AttestationEpochRejected {
             epoch: payload.epoch,
             min_accepted_epoch,
-        });
+        }
+        .into());
     }
 
     Ok(())
 }
 
-pub(super) const fn verify_attestation_key_validity(
+pub(super) fn verify_attestation_key_validity(
     key: &AttestationKey,
     now_secs: u64,
 ) -> Result<(), DelegatedTokenOpsError> {
     if let Some(valid_from) = key.valid_from
         && now_secs < valid_from
     {
-        return Err(DelegatedTokenOpsError::AttestationKeyNotYetValid {
+        return Err(DelegationExpiryError::AttestationKeyNotYetValid {
             key_id: key.key_id,
             valid_from,
             now_secs,
-        });
+        }
+        .into());
     }
 
     if let Some(valid_until) = key.valid_until
         && now_secs > valid_until
     {
-        return Err(DelegatedTokenOpsError::AttestationKeyExpired {
+        return Err(DelegationExpiryError::AttestationKeyExpired {
             key_id: key.key_id,
             valid_until,
             now_secs,
-        });
+        }
+        .into());
     }
 
     Ok(())

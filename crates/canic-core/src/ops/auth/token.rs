@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof},
     ops::{
-        auth::{DelegatedTokenOpsError, VerifiedDelegatedToken},
+        auth::{DelegationScopeError, DelegationValidationError, VerifiedDelegatedToken},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
     },
@@ -19,7 +19,7 @@ impl DelegatedTokenOps {
 
         let local = IcOps::canister_self();
         if claims.shard_pid != local {
-            return Err(DelegatedTokenOpsError::ShardPidMismatch {
+            return Err(DelegationScopeError::ShardPidMismatch {
                 expected: local,
                 found: claims.shard_pid,
             }
@@ -51,7 +51,7 @@ impl DelegatedTokenOps {
     ) -> Result<VerifiedDelegatedToken, InternalError> {
         let cfg = ConfigOps::delegated_tokens_config()?;
         if !cfg.enabled {
-            return Err(DelegatedTokenOpsError::DelegatedTokenAuthDisabled.into());
+            return Err(DelegationValidationError::DelegatedTokenAuthDisabled.into());
         }
 
         Self::verify_token_structure(token, authority_pid, now_secs, self_pid)?;

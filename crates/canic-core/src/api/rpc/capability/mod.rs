@@ -24,6 +24,7 @@ mod grant;
 mod hash;
 mod proof;
 mod replay;
+mod verifier;
 
 #[cfg(test)]
 mod tests;
@@ -102,7 +103,9 @@ async fn verify_root_capability_proof(
     capability_version: u16,
     proof: &CapabilityProof,
 ) -> Result<(), Error> {
-    proof::verify_root_capability_proof(capability, capability_version, proof).await
+    verifier::verify_root_capability_proof(capability, capability_version, proof)
+        .await
+        .map(|_| ())
 }
 
 #[cfg(test)]

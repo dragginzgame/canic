@@ -54,7 +54,7 @@ fn verify_role_attestation_claims_rejects_subject_mismatch() {
         .expect_err("subject mismatch must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationSubjectMismatch { .. }
+        DelegatedTokenOpsError::Scope(DelegationScopeError::AttestationSubjectMismatch { .. })
     ));
 }
 
@@ -65,7 +65,7 @@ fn verify_role_attestation_claims_rejects_audience_mismatch() {
         .expect_err("audience mismatch must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationAudienceMismatch { .. }
+        DelegatedTokenOpsError::Scope(DelegationScopeError::AttestationAudienceMismatch { .. })
     ));
 }
 
@@ -76,7 +76,7 @@ fn verify_role_attestation_claims_rejects_subnet_mismatch() {
         .expect_err("subnet mismatch must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationSubnetMismatch { .. }
+        DelegatedTokenOpsError::Scope(DelegationScopeError::AttestationSubnetMismatch { .. })
     ));
 }
 
@@ -87,7 +87,7 @@ fn verify_role_attestation_claims_rejects_missing_verifier_subnet() {
         .expect_err("missing verifier subnet must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationSubnetUnavailable
+        DelegatedTokenOpsError::Validation(DelegationValidationError::AttestationSubnetUnavailable)
     ));
 }
 
@@ -98,7 +98,7 @@ fn verify_role_attestation_claims_rejects_expired_payload() {
         .expect_err("expired payload must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationExpired { .. }
+        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationExpired { .. })
     ));
 }
 
@@ -109,7 +109,7 @@ fn verify_role_attestation_claims_rejects_epoch_floor() {
         .expect_err("epoch floor must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationEpochRejected { .. }
+        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationEpochRejected { .. })
     ));
 }
 
@@ -131,7 +131,9 @@ fn verify_role_attestation_cached_rejects_empty_signature() {
     .expect_err("empty signature must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationSignatureUnavailable
+        DelegatedTokenOpsError::Signature(
+            DelegationSignatureError::AttestationSignatureUnavailable
+        )
     ));
 }
 
@@ -162,7 +164,10 @@ fn verify_role_attestation_cached_rejects_key_not_yet_valid() {
     .expect_err("not-yet-valid key must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationKeyNotYetValid { key_id: 50, .. }
+        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationKeyNotYetValid {
+            key_id: 50,
+            ..
+        })
     ));
 }
 
@@ -193,7 +198,10 @@ fn verify_role_attestation_cached_rejects_expired_key() {
     .expect_err("expired key must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationKeyExpired { key_id: 51, .. }
+        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationKeyExpired {
+            key_id: 51,
+            ..
+        })
     ));
 }
 
@@ -223,7 +231,9 @@ fn verify_role_attestation_cached_resolves_public_key_by_key_id() {
     .expect_err("missing key_id must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 2 }
+        DelegatedTokenOpsError::Validation(DelegationValidationError::AttestationUnknownKeyId {
+            key_id: 2
+        })
     ));
 }
 
@@ -254,7 +264,7 @@ fn verify_role_attestation_cached_checks_signature_for_resolved_key_id() {
     .expect_err("invalid signature must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationSignatureInvalid(_)
+        DelegatedTokenOpsError::Signature(DelegationSignatureError::AttestationSignatureInvalid(_))
     ));
 }
 
@@ -374,6 +384,8 @@ fn verify_role_attestation_cached_rejects_unknown_key_id() {
     .expect_err("unknown key_id must fail");
     assert!(matches!(
         err,
-        DelegatedTokenOpsError::AttestationUnknownKeyId { key_id: 99 }
+        DelegatedTokenOpsError::Validation(DelegationValidationError::AttestationUnknownKeyId {
+            key_id: 99
+        })
     ));
 }

@@ -43,11 +43,13 @@ pub enum RpcWorkflowError {
     #[error("replay conflict for capability '{0}': request_id reused with different payload")]
     ReplayConflict(&'static str),
 
+    #[error(
+        "duplicate replay request for capability '{0}': request_id reused with identical payload"
+    )]
+    ReplayDuplicateSame(&'static str),
+
     #[error("replay cache encode failed: {0}")]
     ReplayEncodeFailed(String),
-
-    #[error("replay cache decode failed: {0}")]
-    ReplayDecodeFailed(String),
 
     #[error("replay store capacity reached ({0})")]
     ReplayStoreCapacityReached(usize),

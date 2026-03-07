@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKeySet, RoleAttestation, SignedRoleAttestation},
     ops::{
-        auth::DelegatedTokenOpsError,
+        auth::{DelegatedTokenOpsError, DelegationSignatureError, DelegationValidationError},
         ic::{IcOps, ecdsa::EcdsaOps},
         storage::auth::DelegationStateOps,
     },
@@ -55,21 +55,23 @@ impl DelegatedTokenOps {
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, DelegatedTokenOpsError> {
         if attestation.signature.is_empty() {
-            return Err(DelegatedTokenOpsError::AttestationSignatureUnavailable);
+            return Err(DelegationSignatureError::AttestationSignatureUnavailable.into());
         }
 
         let key = DelegationStateOps::attestation_public_key(attestation.key_id).ok_or(
-            DelegatedTokenOpsError::AttestationUnknownKeyId {
+            DelegationValidationError::AttestationUnknownKeyId {
                 key_id: attestation.key_id,
             },
         )?;
         verify::verify_attestation_key_validity(&key, now_secs)?;
 
         let public_key = key.public_key;
-        let hash = crypto::role_attestation_hash(&attestation.payload)
-            .map_err(|err| DelegatedTokenOpsError::AttestationSignatureInvalid(err.to_string()))?;
-        EcdsaOps::verify_signature(&public_key, hash, &attestation.signature)
-            .map_err(|err| DelegatedTokenOpsError::AttestationSignatureInvalid(err.to_string()))?;
+        let hash = crypto::role_attestation_hash(&attestation.payload).map_err(|err| {
+            DelegationSignatureError::AttestationSignatureInvalid(err.to_string())
+        })?;
+        EcdsaOps::verify_signature(&public_key, hash, &attestation.signature).map_err(|err| {
+            DelegationSignatureError::AttestationSignatureInvalid(err.to_string())
+        })?;
 
         verify::verify_role_attestation_claims(
             &attestation.payload,

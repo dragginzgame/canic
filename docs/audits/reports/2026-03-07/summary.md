@@ -6,12 +6,12 @@
   - Definition: `docs/audits/recurring/complexity-accretion.md`
   - Branch: `eleven`
   - Initial commit: `d0b8d415`
-  - Latest rerun commit: `bca4da37`
+  - Latest rerun commit: `02ac3107`
 - Audit run: `velocity-preservation`
   - Definition: `docs/audits/recurring/velocity-preservation.md`
   - Branch: `eleven`
   - Initial commit: `d0b8d415`
-  - Latest rerun commit: `bca4da37`
+  - Latest rerun commit: `02ac3107`
 
 ## Risk Index Summary
 
@@ -55,6 +55,7 @@
 - Complexity trend: control-plane concentration dropped, but auth/capability decision axes still dominate entropy.
 - Velocity trend: gravity-well risk improved after decomposition; enum shock and decision density remain the main drag vectors.
 - Refactor-noise verdict: rerun reflects structural reduction in hub pressure, not transient code motion.
+- Current rerun (0.13.3 closeout): no material risk-index drift from the previous rerun (`5.36` complexity, `4.50` velocity).
 
 ## Report Files
 
