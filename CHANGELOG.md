@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.13.x] - 2026-03-07 - Distributed Capability Invocation
 
 - `0.13.0` starts distributed capability invocation with service-scoped capability envelopes, explicit proof models, standardized replay/hash-binding rules for cross-canister authorization, and a default cycle-tracker cadence of 60 minutes.
-- `0.13.1` sets up the control-plane decomposition pass to reduce hub pressure by splitting capability boundary validation, replay orchestration, and delegated-auth verification into smaller ownership units.
+- `0.13.1` delivers the control-plane decomposition pass, splitting `api/rpc`, `workflow/rpc/request/handler`, and `ops/auth` into smaller module-owned units while preserving capability/auth behavior.
 
 See detailed breakdown:
 [docs/changelog/0.13.md](docs/changelog/0.13.md)

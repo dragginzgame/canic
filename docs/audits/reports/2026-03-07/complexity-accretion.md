@@ -13,6 +13,61 @@
 - Baseline source: `v0.12.0` snapshot (no prior recurring run file for this audit)
 - Measurement note: `switch_sites` uses a mechanical proxy (`EnumName::` decision-site references); this overcounts constructor-style references but is stable for trend comparison.
 
+## Rerun Context (Post-Decomposition)
+
+- Date (UTC): `2026-03-07 22:09:26Z`
+- Branch: `eleven`
+- Commit: `bca4da37`
+- Worktree: `dirty`
+- Trigger: extraction-only 0.13.1 control-plane decomposition pass
+- Scope: unchanged (`crates/canic-core/src/**`)
+- Note: this rerun supersedes the initial same-day index for release tracking.
+
+## Rerun Delta (Initial Run -> Post-Decomposition)
+
+| Metric | Initial Run | Post-Decomposition | Delta |
+| ---- | ----: | ----: | ----: |
+| Runtime files in scope | 290 | 316 | +26 |
+| Runtime LOC | 31504 | 31848 | +344 |
+| Files >= 600 LOC | 9 | 7 | -2 |
+| Capability mentions (`capability`) | 274 | 323 | +49 |
+| Primary control-plane hub (`workflow/rpc/request/handler`) | 1581 LOC (`handler.rs`) | 218 LOC (`handler/mod.rs`) | -1363 |
+| Primary control-plane hub (`ops/auth`) | 1253 LOC (`auth.rs`) | 76 LOC (`auth/mod.rs`) | -1177 |
+| Primary control-plane hub (`api/rpc`) | 900 LOC (`api/rpc.rs`) | 62 LOC (`api/rpc/mod.rs`) | -838 |
+
+Control-plane decomposition evidence:
+- `workflow/rpc/request/handler/` now split into `authorize.rs`, `replay.rs`, `execute.rs`, `capability.rs`, `delegation.rs` with a thin `mod.rs`.
+- `ops/auth/` now split into `delegation.rs`, `token.rs`, `attestation.rs`, `verify.rs`, `keys.rs`, `crypto.rs`, `error.rs`, `types.rs` with a thin `mod.rs`.
+- `api/rpc/` now split into `mod.rs` + `capability/` submodules (`envelope`, `proof`, `grant`, `replay`, `hash`).
+
+## Rerun Step — Cognitive Load Recheck
+
+| Module/Operation | LOC or Call Depth | Domain Count | Initial | Delta | Risk |
+| ---- | ----: | ----: | ----: | ----: | ---- |
+| `workflow/rpc/request/handler/mod.rs` | 218 LOC | 2 | 1581 | -1363 | Low |
+| `ops/auth/mod.rs` | 76 LOC | 1 | 1253 | -1177 | Low |
+| `api/rpc/mod.rs` | 62 LOC | 2 | 900 | -838 | Low |
+| `api/rpc/capability/mod.rs` | 200 LOC | 3 | N/A | N/A | Medium |
+| `response_capability_v1` call chain | depth ~6 | 4 | ~6 | 0 | Medium-high |
+| `issue_delegation` call chain | depth ~7 | 5 | ~7 | 0 | Medium-high |
+
+Rerun hub-pressure condition (`LOC > 600` and `domain_count >= 3`):
+- No longer triggered by the three control-plane hubs identified in the initial run.
+
+## Rerun Step — Complexity Risk Index
+
+| Area | Score (1-10) | Weight | Weighted Score |
+| ---- | ----: | ----: | ----: |
+| Variant explosion risk | 7 | 2 | 14 |
+| Branching pressure trend | 6 | 2 | 12 |
+| Flow multiplicity | 6 | 2 | 12 |
+| Cross-layer spread | 5 | 3 | 15 |
+| Hub pressure + call depth | 3 | 2 | 6 |
+
+`overall_index = 59 / 11 = 5.36`
+
+Interpretation: **Moderate risk**, improved from `6.55` after removing monolithic hub concentration.
+
 ## STEP 0 — Baseline Capture
 
 | Metric | Previous | Current | Delta |
@@ -134,10 +189,10 @@ Interpretation: **High end of Moderate (near High)**.
 
 ## Required Summary
 
-1. Overall Complexity Risk Index: **6.55/10**.
+1. Overall Complexity Risk Index (latest rerun): **5.36/10** (initial same-day run: `6.55/10`).
 2. Fastest growing concept families: capability envelope/proof path and replay-coupled auth validation.
 3. Highest branch multipliers: `DelegatedTokenOpsError` (2232), `Request` (470), `BuiltinPredicate` (420), `RootCapabilityMetricEvent` (312).
 4. Flow multiplication risks: capability proof mode combined with replay and policy axes drives `response_capability_v1` theoretical space to 120.
 5. Cross-layer spread risks: role-attestation and error-origin mapping both span `>=4` semantic layers.
-6. Hub pressure warnings: `workflow/rpc/request/handler.rs`, `ops/auth.rs`, and `api/rpc.rs` are all high-pressure hubs.
-7. Refactor-transient vs true-entropy: this run is primarily **true entropy growth**, not transient refactor noise.
+6. Hub pressure warnings from the initial run were resolved by decomposition (`handler/mod.rs`, `ops/auth/mod.rs`, `api/rpc/mod.rs` are all below 600 LOC).
+7. Refactor-transient vs true-entropy: rerun shows **structural concentration reduction** without reducing capability/auth decision-surface complexity.

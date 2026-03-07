@@ -13,6 +13,50 @@
 - Slice window used: `v0.10.7..v0.11.1`, `v0.11.1..v0.12.0`, `v0.12.0..v0.13.0`
 - Measurement note: shock/decision-site metrics use mechanical `EnumName::` reference counting for stable trend comparisons.
 
+## Rerun Context (Post-Decomposition)
+
+- Date (UTC): `2026-03-07 22:09:26Z`
+- Branch: `eleven`
+- Commit: `bca4da37`
+- Worktree: `dirty`
+- Trigger: extraction-only 0.13.1 hub decomposition to reduce control-plane gravity wells.
+- Scope: unchanged (`crates/canic-core/src/**`)
+- Note: this rerun supersedes the initial same-day velocity index for release tracking.
+
+## Rerun Delta (Initial Run -> Post-Decomposition)
+
+| Metric | Initial Run | Post-Decomposition | Delta |
+| ---- | ----: | ----: | ----: |
+| Files >= 600 LOC | 9 | 7 | -2 |
+| Control-plane hub (`workflow/rpc/request/handler`) | 1581 LOC | 218 LOC (`mod.rs`) | -1363 |
+| Control-plane hub (`ops/auth`) | 1253 LOC | 76 LOC (`mod.rs`) | -1177 |
+| Control-plane hub (`api/rpc`) | 900 LOC | 62 LOC (`mod.rs`) | -838 |
+| Gravity-well escalation condition on control plane | Triggered | Cleared | Improved |
+
+## Rerun Step — Gravity Well Recheck
+
+| Module | LOC | LOC Delta vs Initial | Fan-In Proxy | Domains | Risk |
+| ---- | ----: | ----: | ----: | ----: | ---- |
+| `workflow/rpc/request/handler/mod.rs` | 218 | -1363 | 3 (`RootResponseWorkflow`) | 2 | Low |
+| `api/rpc/mod.rs` | 62 | -838 | 3 (`RpcApi`) | 2 | Low |
+| `api/rpc/capability/mod.rs` | 200 | N/A (new split target) | 4 (`RootCapabilityMetrics`) | 3 | Medium |
+| `ops/auth/mod.rs` | 76 | -1177 | 6 (`DelegatedTokenOps`) | 1 | Low |
+| `ops/rpc/mod.rs` | 328 | N/A | 4 (`RequestOps`) | 3 | Medium |
+
+## Rerun Step — Velocity Risk Index
+
+| Area | Score | Weight | Weighted Score |
+| ---- | ----: | ----: | ----: |
+| enum shock radius | 7 | 3 | 21 |
+| CAF trend | 4 | 2 | 8 |
+| cross-layer leakage | 3 | 2 | 6 |
+| gravity-well growth | 3 | 2 | 6 |
+| edit blast radius | 4 | 1 | 4 |
+
+`overall_index = 45 / 10 = 4.50`
+
+Interpretation: **Moderate-low risk**, improved from `5.80` due hub flattening.
+
 ## STEP 0 — Baseline Capture
 
 | Metric | Previous | Current | Delta |
@@ -158,13 +202,13 @@ Interpretation: **Moderate risk**; architecture still moves, but proof/replay/au
 
 ## Final Output
 
-1. Velocity Risk Index: **5.80/10**.
+1. Velocity Risk Index (latest rerun): **4.50/10** (initial same-day run: `5.80/10`).
 2. Revised CAF trend is down, but ELS remains low (`0.30..0.40`).
 3. Boundary leakage is stable, with one persistent workflow direct-storage crossing.
-4. Gravity growth concentrates in `api/rpc.rs` and `workflow/rpc/request/handler.rs`.
+4. Gravity growth concentration on control-plane hubs was reduced by decomposition (`api/rpc/mod.rs`, `workflow/rpc/request/handler/mod.rs`, `ops/auth/mod.rs`).
 5. Highest shock radius remains `DelegatedTokenOpsError` (`2232`).
 6. Blast radius is moderate (`avg 18.7`, `p95 27`, slice-sampled).
 7. Independence pressure remains high outside `dto`.
 8. Independent-axis growth is highest in the capability envelope path.
 9. Decision surface expansion is strongest for `Request` and new capability enums.
-10. Most signal is true drag, not refactor noise.
+10. Most remaining signal is decision-surface density (enum shock), not control-plane module accretion.
