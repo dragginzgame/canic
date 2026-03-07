@@ -30,7 +30,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.92.0"
+rust-version = "1.94.0"
 edition = "2024"
 version = "0.11.0"
 license = "MIT"
@@ -59,7 +59,8 @@ convert_case = "0.11"
 criterion = "0.8"
 ctor = "0.6"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
-ic-cdk = "0.19.0"
+ic-cdk = "0.20.0"
+ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.12"

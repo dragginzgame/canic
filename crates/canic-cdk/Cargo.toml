@@ -17,6 +17,7 @@ publish = true
 candid = { workspace = true }
 derive_more = { workspace = true }
 ic-cdk = { workspace = true }
+ic-cdk-management-canister = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic-stable-structures = { workspace = true }
 icrc-ledger-types = { workspace = true }

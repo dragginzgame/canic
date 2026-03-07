@@ -16,11 +16,10 @@
 /// - consumers benefit from a curated, intentional subset of the IC SDK.
 ///
 pub use candid;
-#[expect(deprecated)] // call is flagged as deprecated but functions inside arent
 pub use ic_cdk::{
-    api, call, eprintln, export_candid, futures, init, management_canister as mgmt, post_upgrade,
-    println, query, trap, update,
+    api, call, eprintln, export_candid, futures, init, post_upgrade, println, query, trap, update,
 };
+pub use ic_cdk_management_canister as mgmt;
 pub use ic_cdk_timers as timers;
 pub use icrc_ledger_types;
 
