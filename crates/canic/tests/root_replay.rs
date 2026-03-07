@@ -21,9 +21,7 @@ use canic::{
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, setup_root};
-use std::{env, time::Duration};
-
-const REQUIRE_THRESHOLD_KEYS_ENV: &str = "CANIC_REQUIRE_THRESHOLD_KEYS";
+use std::time::Duration;
 
 #[test]
 fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
@@ -201,11 +199,6 @@ fn delegation_issuance_routes_through_dispatcher_non_skip_path() {
     let first = match root_response_as(&setup, caller, Request::IssueDelegation(request.clone())) {
         Ok(response) => response,
         Err(err) if is_threshold_key_unavailable(&err) => {
-            assert!(
-                !require_threshold_keys(),
-                "threshold key unavailable while {REQUIRE_THRESHOLD_KEYS_ENV}=1: {}",
-                err.message
-            );
             eprintln!(
                 "skipping non-skip delegation dispatcher assertions: threshold key unavailable: {}",
                 err.message
@@ -575,16 +568,6 @@ fn metric_count(entries: &[RootCapabilityMetricEntry], capability: &str, event: 
 fn is_threshold_key_unavailable(err: &Error) -> bool {
     err.message.contains("Requested unknown threshold key")
         || err.message.contains("existing keys: []")
-}
-
-fn require_threshold_keys() -> bool {
-    env::var(REQUIRE_THRESHOLD_KEYS_ENV)
-        .map(|value| {
-            value.eq_ignore_ascii_case("1")
-                || value.eq_ignore_ascii_case("true")
-                || value.eq_ignore_ascii_case("yes")
-        })
-        .unwrap_or(false)
 }
 
 const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {

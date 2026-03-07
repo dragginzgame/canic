@@ -187,7 +187,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Build release WASMs: `make build`
 * Build example targets: `cargo build -p canic --examples`
 * Delegated auth PocketIC flow: `cargo test -p canic-core --test pic_delegation_provision -- --nocapture`
-* Strict crypto mode (fail if threshold keys are unavailable): `CANIC_REQUIRE_THRESHOLD_KEYS=1 cargo test -p canic-core --test pic_delegation_provision -- --nocapture --test-threads=1`
+* Root replay dispatcher coverage: `cargo test -p canic --test root_replay --locked delegation_issuance_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

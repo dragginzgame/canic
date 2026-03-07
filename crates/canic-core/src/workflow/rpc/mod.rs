@@ -83,6 +83,41 @@ pub enum RpcWorkflowError {
 
     #[error("delegation shard_pid must not equal root pid")]
     DelegationShardCannotBeRoot,
+
+    #[error("role attestation subject {subject} must match caller {caller}")]
+    RoleAttestationSubjectMismatch {
+        caller: Principal,
+        subject: Principal,
+    },
+
+    #[error("role attestation subject {subject} is not registered in subnet registry")]
+    RoleAttestationSubjectNotRegistered { subject: Principal },
+
+    #[error(
+        "role attestation role mismatch for subject {subject}: requested {requested}, registered {registered}"
+    )]
+    RoleAttestationRoleMismatch {
+        subject: Principal,
+        requested: CanisterRole,
+        registered: CanisterRole,
+    },
+
+    #[error(
+        "role attestation subnet mismatch for subject {subject}: requested {requested}, local {local}"
+    )]
+    RoleAttestationSubnetMismatch {
+        subject: Principal,
+        requested: Principal,
+        local: Principal,
+    },
+
+    #[error("role attestation audience is required for inter-service authorization")]
+    RoleAttestationAudienceRequired,
+
+    #[error(
+        "role attestation ttl_secs must satisfy 0 < ttl_secs <= {max_ttl_secs} (got {ttl_secs})"
+    )]
+    RoleAttestationInvalidTtl { ttl_secs: u64, max_ttl_secs: u64 },
 }
 
 impl From<RpcWorkflowError> for InternalError {

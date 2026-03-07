@@ -3,6 +3,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegationCert, DelegationProvisionRequest, DelegationProvisionResponse, DelegationRequest,
+        RoleAttestation, RoleAttestationRequest,
     },
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
@@ -38,6 +39,7 @@ use sha2::{Digest, Sha256};
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
 const MAX_ROOT_TTL_SECONDS: u64 = 300;
+const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
 const LEGACY_REPLAY_SLOT_KEY_DOMAIN: &[u8] = b"root-replay-slot-key:v1";
 const LEGACY_REPLAY_NONCE: [u8; 16] = [0u8; 16];
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
@@ -85,6 +87,7 @@ enum RootCapability {
     Upgrade(UpgradeCanisterRequest),
     MintCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
+    IssueRoleAttestation(RoleAttestationRequest),
 }
 
 impl RootCapability {
@@ -94,6 +97,7 @@ impl RootCapability {
             Self::Upgrade(_) => "Upgrade",
             Self::MintCycles(_) => "MintCycles",
             Self::IssueDelegation(_) => "IssueDelegation",
+            Self::IssueRoleAttestation(_) => "IssueRoleAttestation",
         }
     }
 }
@@ -162,6 +166,9 @@ impl RootResponseWorkflow {
             RootCapabilityRequest::UpgradeCanister(req) => RootCapability::Upgrade(req),
             RootCapabilityRequest::MintCycles(req) => RootCapability::MintCycles(req),
             RootCapabilityRequest::IssueDelegation(req) => RootCapability::IssueDelegation(req),
+            RootCapabilityRequest::IssueRoleAttestation(req) => {
+                RootCapability::IssueRoleAttestation(req)
+            }
         }
     }
 
@@ -181,6 +188,9 @@ impl RootResponseWorkflow {
             RootCapability::Upgrade(req) => Self::authorize_upgrade(ctx, req),
             RootCapability::MintCycles(req) => Self::authorize_mint_cycles(ctx, req),
             RootCapability::IssueDelegation(req) => Self::authorize_issue_delegation(ctx, req),
+            RootCapability::IssueRoleAttestation(req) => {
+                Self::authorize_issue_role_attestation(ctx, req)
+            }
         };
 
         match &decision {
@@ -280,6 +290,60 @@ impl RootResponseWorkflow {
         Ok(())
     }
 
+    fn authorize_issue_role_attestation(
+        ctx: &RootContext,
+        req: &RoleAttestationRequest,
+    ) -> Result<(), InternalError> {
+        if req.subject != ctx.caller {
+            return Err(RpcWorkflowError::RoleAttestationSubjectMismatch {
+                caller: ctx.caller,
+                subject: req.subject,
+            }
+            .into());
+        }
+
+        let registered = SubnetRegistryOps::get(req.subject).ok_or(
+            RpcWorkflowError::RoleAttestationSubjectNotRegistered {
+                subject: req.subject,
+            },
+        )?;
+
+        if registered.role != req.role {
+            return Err(RpcWorkflowError::RoleAttestationRoleMismatch {
+                subject: req.subject,
+                requested: req.role.clone(),
+                registered: registered.role,
+            }
+            .into());
+        }
+
+        if let Some(requested_subnet) = req.subnet_id
+            && requested_subnet != ctx.subnet_id
+        {
+            return Err(RpcWorkflowError::RoleAttestationSubnetMismatch {
+                subject: req.subject,
+                requested: requested_subnet,
+                local: ctx.subnet_id,
+            }
+            .into());
+        }
+
+        if req.audience.is_none() {
+            return Err(RpcWorkflowError::RoleAttestationAudienceRequired.into());
+        }
+
+        let max_ttl_secs = Self::max_role_attestation_ttl_seconds();
+        if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
+            return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
+                ttl_secs: req.ttl_secs,
+                max_ttl_secs,
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
     async fn execute_root_capability(
         ctx: &RootContext,
         capability: RootCapability,
@@ -291,6 +355,9 @@ impl RootResponseWorkflow {
             RootCapability::Upgrade(req) => Self::execute_upgrade(&req).await,
             RootCapability::MintCycles(req) => Self::execute_mint_cycles(ctx, &req).await,
             RootCapability::IssueDelegation(req) => Self::execute_issue_delegation(ctx, &req).await,
+            RootCapability::IssueRoleAttestation(req) => {
+                Self::execute_issue_role_attestation(ctx, &req).await
+            }
         };
 
         if let Err(err) = &result {
@@ -510,6 +577,64 @@ impl RootResponseWorkflow {
 
         Ok(Response::DelegationIssued(response))
     }
+
+    async fn execute_issue_role_attestation(
+        ctx: &RootContext,
+        req: &RoleAttestationRequest,
+    ) -> Result<Response, InternalError> {
+        let payload = Self::build_role_attestation(ctx, req)?;
+        let signed = DelegatedTokenOps::sign_role_attestation(payload).await?;
+        log!(
+            Topic::Auth,
+            Info,
+            "role attestation issued subject={} role={} audience={:?} subnet={:?} issued_at={} expires_at={} epoch={}",
+            signed.payload.subject,
+            signed.payload.role,
+            signed.payload.audience,
+            signed.payload.subnet_id,
+            signed.payload.issued_at,
+            signed.payload.expires_at,
+            signed.payload.epoch
+        );
+        Ok(Response::RoleAttestationIssued(signed))
+    }
+
+    fn build_role_attestation(
+        ctx: &RootContext,
+        req: &RoleAttestationRequest,
+    ) -> Result<RoleAttestation, InternalError> {
+        let max_ttl_secs = Self::max_role_attestation_ttl_seconds();
+        if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
+            return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
+                ttl_secs: req.ttl_secs,
+                max_ttl_secs,
+            }
+            .into());
+        }
+
+        let expires_at = ctx.now.checked_add(req.ttl_secs).ok_or({
+            RpcWorkflowError::RoleAttestationInvalidTtl {
+                ttl_secs: req.ttl_secs,
+                max_ttl_secs,
+            }
+        })?;
+
+        Ok(RoleAttestation {
+            subject: req.subject,
+            role: req.role.clone(),
+            subnet_id: req.subnet_id,
+            audience: req.audience,
+            issued_at: ctx.now,
+            expires_at,
+            epoch: req.epoch,
+        })
+    }
+
+    fn max_role_attestation_ttl_seconds() -> u64 {
+        ConfigOps::role_attestation_config()
+            .map(|cfg| cfg.max_ttl_secs)
+            .unwrap_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS)
+    }
 }
 
 impl RootCapability {
@@ -519,6 +644,7 @@ impl RootCapability {
             Self::Upgrade(req) => req.metadata,
             Self::MintCycles(req) => req.metadata,
             Self::IssueDelegation(req) => req.metadata,
+            Self::IssueRoleAttestation(req) => req.metadata,
         }
     }
 
@@ -528,6 +654,7 @@ impl RootCapability {
             Self::Upgrade(_) => RootCapabilityMetricKey::Upgrade,
             Self::MintCycles(_) => RootCapabilityMetricKey::MintCycles,
             Self::IssueDelegation(_) => RootCapabilityMetricKey::IssueDelegation,
+            Self::IssueRoleAttestation(_) => RootCapabilityMetricKey::IssueRoleAttestation,
         }
     }
 
@@ -552,6 +679,11 @@ impl RootCapability {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
                 RootCapabilityRequest::IssueDelegation(canonical)
+            }
+            Self::IssueRoleAttestation(req) => {
+                let mut canonical = req.clone();
+                canonical.metadata = None;
+                RootCapabilityRequest::IssueRoleAttestation(canonical)
             }
         };
 
@@ -642,7 +774,7 @@ mod tests {
     use crate::{
         cdk::types::Principal,
         dto::{
-            auth::DelegationRequest,
+            auth::{DelegationRequest, RoleAttestationRequest},
             rpc::{
                 CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RootRequestMetadata,
                 UpgradeCanisterRequest,
@@ -715,6 +847,22 @@ mod tests {
     }
 
     #[test]
+    fn map_request_maps_issue_role_attestation() {
+        let req = RootCapabilityRequest::IssueRoleAttestation(RoleAttestationRequest {
+            subject: p(2),
+            role: CanisterRole::new("test"),
+            subnet_id: Some(p(7)),
+            audience: Some(p(8)),
+            ttl_secs: 120,
+            epoch: 1,
+            metadata: None,
+        });
+
+        let mapped = RootResponseWorkflow::map_request(req);
+        assert_eq!(mapped.capability_name(), "IssueRoleAttestation");
+    }
+
+    #[test]
     fn authorize_denies_non_root_context() {
         let ctx = RootContext {
             caller: p(1),
@@ -754,6 +902,210 @@ mod tests {
         });
 
         RootResponseWorkflow::authorize(&ctx, &capability).expect("must authorize");
+    }
+
+    #[test]
+    fn authorize_rejects_role_attestation_when_subject_mismatches_caller() {
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject: p(3),
+            role: CanisterRole::new("test"),
+            subnet_id: None,
+            audience: None,
+            ttl_secs: 60,
+            epoch: 0,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+        assert!(
+            err.to_string().contains("must match caller"),
+            "expected subject/caller mismatch error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn authorize_rejects_role_attestation_when_subject_not_registered() {
+        let subject = p(41);
+        let ctx = RootContext {
+            caller: subject,
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject,
+            role: CanisterRole::new("test"),
+            subnet_id: None,
+            audience: Some(p(8)),
+            ttl_secs: 60,
+            epoch: 0,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+        assert!(
+            err.to_string().contains("not registered"),
+            "expected subject not registered error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn authorize_rejects_role_attestation_when_requested_role_differs_from_registry() {
+        let subject = p(42);
+        SubnetRegistryOps::register_root(subject, 1);
+
+        let ctx = RootContext {
+            caller: subject,
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject,
+            role: CanisterRole::new("test"),
+            subnet_id: None,
+            audience: Some(p(8)),
+            ttl_secs: 60,
+            epoch: 0,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+        assert!(
+            err.to_string().contains("role mismatch"),
+            "expected role mismatch error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn authorize_rejects_role_attestation_when_audience_missing() {
+        let subject = p(43);
+        SubnetRegistryOps::register_root(subject, 1);
+
+        let ctx = RootContext {
+            caller: subject,
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject,
+            role: CanisterRole::ROOT,
+            subnet_id: None,
+            audience: None,
+            ttl_secs: 60,
+            epoch: 0,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+        assert!(
+            err.to_string().contains("audience is required"),
+            "expected audience-required error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn authorize_rejects_role_attestation_when_subnet_mismatch() {
+        let subject = p(44);
+        SubnetRegistryOps::register_root(subject, 1);
+
+        let ctx = RootContext {
+            caller: subject,
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 5,
+        };
+        let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject,
+            role: CanisterRole::ROOT,
+            subnet_id: Some(p(7)),
+            audience: Some(p(8)),
+            ttl_secs: 60,
+            epoch: 0,
+            metadata: None,
+        });
+
+        let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+        assert!(
+            err.to_string().contains("subnet mismatch"),
+            "expected subnet mismatch error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn build_role_attestation_uses_root_generated_time_window() {
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 1_000,
+        };
+        let req = RoleAttestationRequest {
+            subject: p(1),
+            role: CanisterRole::new("test"),
+            subnet_id: Some(p(7)),
+            audience: Some(p(8)),
+            ttl_secs: 120,
+            epoch: 5,
+            metadata: None,
+        };
+
+        let payload = RootResponseWorkflow::build_role_attestation(&ctx, &req).expect("payload");
+        assert_eq!(payload.subject, req.subject);
+        assert_eq!(payload.role, req.role);
+        assert_eq!(payload.subnet_id, req.subnet_id);
+        assert_eq!(payload.audience, req.audience);
+        assert_eq!(payload.issued_at, 1_000);
+        assert_eq!(payload.expires_at, 1_120);
+        assert_eq!(payload.epoch, 5);
+    }
+
+    #[test]
+    fn build_role_attestation_rejects_invalid_ttl() {
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(9),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 1_000,
+        };
+        let mut req = RoleAttestationRequest {
+            subject: p(1),
+            role: CanisterRole::new("test"),
+            subnet_id: Some(p(7)),
+            audience: Some(p(8)),
+            ttl_secs: 0,
+            epoch: 5,
+            metadata: None,
+        };
+
+        let zero_ttl =
+            RootResponseWorkflow::build_role_attestation(&ctx, &req).expect_err("must reject");
+        assert!(
+            zero_ttl.to_string().contains("ttl_secs"),
+            "expected ttl error for zero ttl, got: {zero_ttl}"
+        );
+
+        req.ttl_secs = DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS + 1;
+        let too_large =
+            RootResponseWorkflow::build_role_attestation(&ctx, &req).expect_err("must reject");
+        assert!(
+            too_large.to_string().contains("ttl_secs"),
+            "expected ttl error for too-large ttl, got: {too_large}"
+        );
     }
 
     #[test]

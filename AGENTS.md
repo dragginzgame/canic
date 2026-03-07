@@ -66,11 +66,24 @@ If code conflicts with this document, **the code is wrong**.
 
 ### Changelog Rules
 
-* Keep the existing changelog structure and header format.
-* Use `## [x.y.z] - YYYY-MM-DD - Short Title` when a title is needed.
-* Smaller entries may omit the title segment and use `## [x.y.z] - YYYY-MM-DD`.
-* Changelog subsections are optional; include only sections relevant to the release.
-* Use this fixed emoji mapping for section headers:
+* Follow `docs/governance/changelog.md` as the authoritative changelog policy.
+* Root `CHANGELOG.md` must use **minor-line headers**, not per-patch headers:
+  * `## [x.y.x] - YYYY-MM-DD - Short Title`
+* Root `CHANGELOG.md` entries must be concise and junior-friendly:
+  * one short bullet per patch release in that minor line
+  * no deep internal implementation detail
+  * include a detailed-notes link block:
+    * `See detailed breakdown:`
+    * `[docs/changelog/x.y.md](docs/changelog/x.y.md)`
+* Detailed notes must live in:
+  * `docs/changelog/x.y.md`
+  * with one section per patch: `## x.y.z - YYYY-MM-DD - Short Title`
+  * and `---` separators between patch sections.
+* When adding a new patch in an existing minor line:
+  * append a new patch bullet to the existing root `x.y.x` section
+  * append/update the matching patch section in `docs/changelog/x.y.md`
+  * do not create a new root per-patch header.
+* Use this fixed emoji mapping for section headers (primarily in detailed notes):
   * `Added=➕`
   * `Changed=🔧`
   * `Fixed=🩹`
@@ -80,21 +93,21 @@ If code conflicts with this document, **the code is wrong**.
   * `Summary=📝`
   * `Cleanup=🧹`
   * `Testing=🧪`
-* When updating the changelog, use the version specified by the user or the existing latest entry.
-* Do not create a new version header if the newest entry already exists; append to that entry.
+  * `Audit=📊`
+  * `Governance=🥾`
+  * `Documentation=📚`
 * Write in plain, industry-friendly language and lead with user impact.
-* Keep wording concise and junior-friendly; avoid jargon.
-* Keep bullets short (1–2 sentences), and use inline code for API/type names.
+* Keep bullets short (1–2 sentences) and use inline code for API/type names when relevant.
 * Prefer explaining why a change matters, not only what changed.
-* Include code examples only when they clarify behavior, migration, or usage.
-* Include at least one fenced block per changelog page when practical (for example usage, migration snippet, or binary spec).
+* Include fenced examples only when they materially clarify behavior, migration, or usage.
 
 ```md
-## [0.0.0] - 2026-02-17 - Example Title
+## [0.45.x] - 2026-03-07 - Example Minor Line
 
-### 🔧 Changed
+- `0.45.0` starts the example minor line with concise, high-level behavior changes.
 
-- Updated `MyApi::call()` error handling so policy failures keep structured messages.
+See detailed breakdown:
+[docs/changelog/0.45.md](docs/changelog/0.45.md)
 ```
 
 ---

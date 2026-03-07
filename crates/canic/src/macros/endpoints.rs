@@ -321,6 +321,25 @@ macro_rules! canic_endpoints_root {
             Ok(response)
         }
 
+        // canic_response_attested
+        // Attestation-authenticated variant of root request dispatch.
+        // This path runs in parallel with `canic_response` for phased rollout.
+        #[canic_update(internal)]
+        async fn canic_response_attested(
+            request: ::canic::dto::rpc::Request,
+            attestation: ::canic::dto::auth::SignedRoleAttestation,
+            min_accepted_epoch: u64,
+        ) -> Result<::canic::dto::rpc::Response, ::canic::Error> {
+            let response = $crate::__internal::core::api::rpc::RpcApi::response_attested(
+                request,
+                attestation,
+                min_accepted_epoch,
+            )
+            .await?;
+
+            Ok(response)
+        }
+
         // canic_canister_status
         // this can be called via root as root is the master controller
         #[canic_update(requires(caller::is_root(), caller::is_controller()))]
@@ -381,6 +400,20 @@ macro_rules! canic_endpoints_root {
             request: ::canic::dto::auth::DelegationRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
+        }
+
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_request_role_attestation(
+            request: ::canic::dto::auth::RoleAttestationRequest,
+        ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::request_role_attestation(request)
+                .await
+        }
+
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_attestation_key_set()
+        -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
         }
     };
 }

@@ -1,6 +1,9 @@
 use crate::{
     InternalError, InternalErrorOrigin,
-    dto::auth::{DelegationProvisionResponse, DelegationRequest},
+    dto::auth::{
+        DelegationProvisionResponse, DelegationRequest, RoleAttestationRequest,
+        SignedRoleAttestation,
+    },
     infra::InfraError,
     ops::{
         ic::IcOps,
@@ -38,6 +41,7 @@ pub enum Request {
     UpgradeCanister(UpgradeCanisterRequest),
     Cycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
+    IssueRoleAttestation(RoleAttestationRequest),
 }
 
 ///
@@ -116,6 +120,7 @@ pub enum Response {
     UpgradeCanister(UpgradeCanisterResponse),
     Cycles(CyclesResponse),
     DelegationIssued(DelegationProvisionResponse),
+    RoleAttestationIssued(SignedRoleAttestation),
 }
 
 ///

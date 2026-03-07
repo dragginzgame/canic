@@ -1,6 +1,7 @@
 use crate::{
     cdk::{candid::CandidType, types::Principal},
     dto::{
+        auth::SignedRoleAttestation,
         error::Error,
         rpc::{
             CreateCanisterParent, CreateCanisterResponse, Request, Response,
@@ -55,6 +56,18 @@ impl RpcApi {
     }
 
     pub async fn response(request: Request) -> Result<Response, Error> {
+        RootResponseWorkflow::response(request)
+            .await
+            .map_err(Error::from)
+    }
+
+    pub async fn response_attested(
+        request: Request,
+        attestation: SignedRoleAttestation,
+        min_accepted_epoch: u64,
+    ) -> Result<Response, Error> {
+        crate::api::auth::DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch)
+            .await?;
         RootResponseWorkflow::response(request)
             .await
             .map_err(Error::from)

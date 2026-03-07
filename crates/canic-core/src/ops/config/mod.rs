@@ -3,8 +3,8 @@ use crate::{
     config::{
         Config, ConfigError, ConfigModel,
         schema::{
-            AppInitMode, CanisterConfig, DelegatedTokenConfig, LogConfig, ScalingConfig,
-            SubnetConfig,
+            AppInitMode, CanisterConfig, DelegatedTokenConfig, LogConfig, RoleAttestationConfig,
+            ScalingConfig, SubnetConfig,
         },
     },
     ids::SubnetRole,
@@ -103,6 +103,10 @@ impl ConfigOps {
 
     pub(crate) fn delegated_tokens_config() -> Result<DelegatedTokenConfig, InternalError> {
         Ok(Config::get()?.auth.delegated_tokens.clone())
+    }
+
+    pub(crate) fn role_attestation_config() -> Result<RoleAttestationConfig, InternalError> {
+        Ok(Config::get()?.auth.role_attestation.clone())
     }
 
     pub(crate) fn app_init_mode() -> Result<AppMode, InternalError> {
