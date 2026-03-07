@@ -309,25 +309,6 @@ macro_rules! canic_endpoints_root {
             Ok(res)
         }
 
-        // canic_response_attested
-        // Attestation-authenticated variant of root request dispatch.
-        // This path remains for compatibility while capability envelopes roll out.
-        #[canic_update(internal)]
-        async fn canic_response_attested(
-            request: ::canic::dto::rpc::Request,
-            attestation: ::canic::dto::auth::SignedRoleAttestation,
-            min_accepted_epoch: u64,
-        ) -> Result<::canic::dto::rpc::Response, ::canic::Error> {
-            let response = $crate::__internal::core::api::rpc::RpcApi::response_attested(
-                request,
-                attestation,
-                min_accepted_epoch,
-            )
-            .await?;
-
-            Ok(response)
-        }
-
         // canic_response_capability_v1
         // Versioned capability-envelope endpoint for 0.13 rollout.
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]

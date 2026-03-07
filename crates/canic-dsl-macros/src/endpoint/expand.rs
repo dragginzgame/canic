@@ -404,18 +404,23 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }
-        BuiltinPredicate::Authenticated { required_scope } => {
-            let required_scope = match required_scope {
-                Some(AuthScopeArg::Literal(required_scope)) => {
-                    quote!(::core::option::Option::Some(#required_scope))
-                }
-                Some(AuthScopeArg::Expr(required_scope)) => {
-                    quote!(::core::option::Option::Some(#required_scope))
-                }
-                None => quote!(::core::option::Option::None),
-            };
-            quote!(::canic::__internal::core::access::expr::auth::authenticated(#required_scope))
-        }
+        BuiltinPredicate::Authenticated { required_scope } => match required_scope {
+            Some(AuthScopeArg::Literal(required_scope)) => quote!(
+                ::canic::__internal::core::access::expr::auth::is_authenticated_with_scope(
+                    #required_scope
+                )
+            ),
+            Some(AuthScopeArg::Expr(required_scope)) => quote!(
+                ::canic::__internal::core::access::expr::auth::is_authenticated_with_scope(
+                    #required_scope
+                )
+            ),
+            None => quote!(
+                ::canic::__internal::core::access::expr::auth::is_authenticated(
+                    ::core::option::Option::None
+                )
+            ),
+        },
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }

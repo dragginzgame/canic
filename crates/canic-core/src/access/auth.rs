@@ -34,20 +34,6 @@ const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 
 pub type Role = CanisterRole;
 
-/// Verify a delegated token read from the ingress payload.
-///
-/// Contract:
-/// - The delegated token MUST be the first candid argument.
-/// - Decoding failures result in access denial.
-/// - The caller principal MUST match token subject.
-pub async fn authenticated(
-    caller: Principal,
-    required_scope: Option<&str>,
-) -> Result<(), AccessError> {
-    let _ = delegated_token_verified(caller, required_scope).await?;
-    Ok(())
-}
-
 pub(crate) async fn delegated_token_verified(
     caller: Principal,
     required_scope: Option<&str>,

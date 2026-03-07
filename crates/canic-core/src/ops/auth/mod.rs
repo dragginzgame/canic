@@ -1,25 +1,21 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::auth::{
-        AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
-        DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
-        SignedRoleAttestation,
+        AttestationKey, AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationCert,
+        DelegationProof, RoleAttestation, SignedRoleAttestation,
     },
     ops::{
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
         prelude::*,
-        runtime::metrics::auth::{
-            record_verifier_cert_expired, record_verifier_proof_mismatch,
-            record_verifier_proof_missing,
-        },
         storage::auth::DelegationStateOps,
     },
 };
-use candid::encode_one;
-use sha2::{Digest, Sha256};
-use std::cmp::Reverse;
 use thiserror::Error as ThisError;
+
+mod crypto;
+mod keys;
+mod verify;
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";
 const ROOT_PATH_SEGMENT: &[u8] = b"root";
@@ -294,17 +290,7 @@ impl DelegatedTokenOps {
 
     /// Cryptographic verification for a delegation proof.
     fn verify_delegation_signature(proof: &DelegationProof) -> Result<(), InternalError> {
-        if proof.cert_sig.is_empty() {
-            return Err(DelegatedTokenOpsError::CertSignatureUnavailable.into());
-        }
-
-        let root_public_key = DelegationStateOps::root_public_key()
-            .ok_or(DelegatedTokenOpsError::RootPublicKeyUnavailable)?;
-        let hash = cert_hash(&proof.cert)?;
-        EcdsaOps::verify_signature(&root_public_key, hash, &proof.cert_sig)
-            .map_err(|err| map_signature_error(err, SignatureKind::Delegation))?;
-
-        Ok(())
+        verify::verify_delegation_signature(proof)
     }
 
     /// Full delegation proof verification (structure + signature).
@@ -448,111 +434,22 @@ const fn verify_attestation_key_validity(
     key: &AttestationKey,
     now_secs: u64,
 ) -> Result<(), DelegatedTokenOpsError> {
-    if let Some(valid_from) = key.valid_from
-        && now_secs < valid_from
-    {
-        return Err(DelegatedTokenOpsError::AttestationKeyNotYetValid {
-            key_id: key.key_id,
-            valid_from,
-            now_secs,
-        });
-    }
-
-    if let Some(valid_until) = key.valid_until
-        && now_secs > valid_until
-    {
-        return Err(DelegatedTokenOpsError::AttestationKeyExpired {
-            key_id: key.key_id,
-            valid_until,
-            now_secs,
-        });
-    }
-
-    Ok(())
-}
-
-// -------------------------------------------------------------------------
-// Internal helpers
-// -------------------------------------------------------------------------
-
-#[derive(CandidType, Serialize)]
-struct TokenSigningPayload {
-    cert_hash: Vec<u8>,
-    claims: DelegatedTokenClaims,
-}
-
-fn encode_candid<T: CandidType>(
-    context: &'static str,
-    value: &T,
-) -> Result<Vec<u8>, InternalError> {
-    encode_one(value).map_err(|err| {
-        DelegatedTokenOpsError::EncodeFailed {
-            context,
-            source: err,
-        }
-        .into()
-    })
+    verify::verify_attestation_key_validity(key, now_secs)
 }
 
 fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], InternalError> {
-    let payload = encode_candid("delegation cert", cert)?;
-    Ok(hash_domain_separated(CERT_SIGNING_DOMAIN, &payload))
+    crypto::cert_hash(cert)
 }
 
 fn token_signing_hash(
     claims: &DelegatedTokenClaims,
     cert: &DelegationCert,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = TokenSigningPayload {
-        cert_hash: cert_hash(cert)?.to_vec(),
-        claims: claims.clone(),
-    };
-
-    let encoded = encode_candid("token signing payload", &payload)?;
-    Ok(hash_domain_separated(TOKEN_SIGNING_DOMAIN, &encoded))
-}
-
-fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update((domain.len() as u64).to_be_bytes());
-    hasher.update(domain);
-    hasher.update((payload.len() as u64).to_be_bytes());
-    hasher.update(payload);
-    hasher.finalize().into()
-}
-
-enum SignatureKind {
-    Delegation,
-    Token,
-}
-
-fn map_signature_error(err: InternalError, kind: SignatureKind) -> InternalError {
-    match kind {
-        SignatureKind::Delegation => {
-            DelegatedTokenOpsError::CertSignatureInvalid(err.to_string()).into()
-        }
-        SignatureKind::Token => {
-            DelegatedTokenOpsError::TokenSignatureInvalid(err.to_string()).into()
-        }
-    }
+    crypto::token_signing_hash(claims, cert)
 }
 
 fn verify_token_sig(token: &DelegatedToken) -> Result<(), InternalError> {
-    if token.token_sig.is_empty() {
-        return Err(DelegatedTokenOpsError::TokenSignatureUnavailable.into());
-    }
-
-    let shard_public_key = DelegationStateOps::shard_public_key(token.proof.cert.shard_pid).ok_or(
-        DelegatedTokenOpsError::ShardPublicKeyUnavailable {
-            shard_pid: token.proof.cert.shard_pid,
-        },
-    )?;
-
-    let token_hash = token_signing_hash(&token.claims, &token.proof.cert)?;
-    EcdsaOps::verify_signature(&shard_public_key, token_hash, &token.token_sig)
-        .map_err(|err| map_signature_error(err, SignatureKind::Token))?;
-
-    Ok(())
+    verify::verify_token_sig(token)
 }
 
 fn verify_time_bounds(
@@ -560,151 +457,29 @@ fn verify_time_bounds(
     cert: &DelegationCert,
     now_secs: u64,
 ) -> Result<(), InternalError> {
-    if claims.exp < claims.iat {
-        return Err(DelegatedTokenOpsError::TokenExpiryBeforeIssued.into());
-    }
-
-    if now_secs < claims.iat {
-        return Err(DelegatedTokenOpsError::TokenNotYetValid { iat: claims.iat }.into());
-    }
-
-    if now_secs > claims.exp {
-        return Err(DelegatedTokenOpsError::TokenExpired { exp: claims.exp }.into());
-    }
-
-    if now_secs > cert.expires_at {
-        record_verifier_cert_expired();
-        let local = IcOps::canister_self();
-        crate::log!(
-            crate::log::Topic::Auth,
-            Warn,
-            "delegation cert expired local={} shard={} now_secs={} expires_at={}",
-            local,
-            cert.shard_pid,
-            now_secs,
-            cert.expires_at
-        );
-        return Err(DelegatedTokenOpsError::CertExpired {
-            expires_at: cert.expires_at,
-        }
-        .into());
-    }
-
-    if claims.iat < cert.issued_at {
-        return Err(DelegatedTokenOpsError::TokenIssuedBeforeDelegation {
-            token_iat: claims.iat,
-            cert_iat: cert.issued_at,
-        }
-        .into());
-    }
-
-    if claims.exp > cert.expires_at {
-        return Err(DelegatedTokenOpsError::TokenOutlivesDelegation {
-            token_exp: claims.exp,
-            cert_exp: cert.expires_at,
-        }
-        .into());
-    }
-
-    Ok(())
+    verify::verify_time_bounds(claims, cert, now_secs)
 }
 
 fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
-    let Some(stored) = DelegationStateOps::proof_dto() else {
-        record_verifier_proof_missing();
-        let local = IcOps::canister_self();
-        crate::log!(
-            crate::log::Topic::Auth,
-            Warn,
-            "delegation proof missing local={} shard={}",
-            local,
-            proof.cert.shard_pid
-        );
-        return Err(DelegatedTokenOpsError::ProofUnavailable.into());
-    };
-
-    if proofs_equal(proof, &stored) {
-        Ok(())
-    } else {
-        record_verifier_proof_mismatch();
-        let local = IcOps::canister_self();
-        crate::log!(
-            crate::log::Topic::Auth,
-            Warn,
-            "delegation proof mismatch local={} shard={} stored_shard={}",
-            local,
-            proof.cert.shard_pid,
-            stored.cert.shard_pid
-        );
-        Err(DelegatedTokenOpsError::ProofMismatch.into())
-    }
-}
-
-fn proofs_equal(a: &DelegationProof, b: &DelegationProof) -> bool {
-    let a_cert = &a.cert;
-    let b_cert = &b.cert;
-
-    a_cert.root_pid == b_cert.root_pid
-        && a_cert.shard_pid == b_cert.shard_pid
-        && a_cert.issued_at == b_cert.issued_at
-        && a_cert.expires_at == b_cert.expires_at
-        && a_cert.scopes == b_cert.scopes
-        && a_cert.aud == b_cert.aud
-        && a.cert_sig == b.cert_sig
+    verify::verify_current_proof(proof)
 }
 
 fn verify_max_ttl(token: &DelegatedToken, max_ttl_secs: u64) -> Result<(), InternalError> {
-    let ttl_secs = token.claims.exp - token.claims.iat;
-    if ttl_secs > max_ttl_secs {
-        return Err(DelegatedTokenOpsError::TokenTtlExceeded {
-            ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
-
-    Ok(())
+    verify::verify_max_ttl(token, max_ttl_secs)
 }
 
 fn verify_self_audience(
     claims: &DelegatedTokenClaims,
     self_pid: Principal,
 ) -> Result<(), InternalError> {
-    if claims.aud.contains(&self_pid) {
-        Ok(())
-    } else {
-        Err(DelegatedTokenOpsError::SelfAudienceMissing { self_pid }.into())
-    }
+    verify::verify_self_audience(claims, self_pid)
 }
 
 fn validate_claims_against_cert(
     claims: &DelegatedTokenClaims,
     cert: &DelegationCert,
 ) -> Result<(), InternalError> {
-    if claims.shard_pid != cert.shard_pid {
-        return Err(DelegatedTokenOpsError::ShardPidMismatch {
-            expected: cert.shard_pid,
-            found: claims.shard_pid,
-        }
-        .into());
-    }
-
-    for aud in &claims.aud {
-        if !cert.aud.iter().any(|allowed| allowed == aud) {
-            return Err(DelegatedTokenOpsError::AudienceNotAllowed { aud: *aud }.into());
-        }
-    }
-
-    for scope in &claims.scopes {
-        if !cert.scopes.iter().any(|allowed| allowed == scope) {
-            return Err(DelegatedTokenOpsError::ScopeNotAllowed {
-                scope: scope.clone(),
-            }
-            .into());
-        }
-    }
-
-    Ok(())
+    verify::validate_claims_against_cert(claims, cert)
 }
 
 fn verify_role_attestation_claims(
@@ -715,106 +490,42 @@ fn verify_role_attestation_claims(
     now_secs: u64,
     min_accepted_epoch: u64,
 ) -> Result<(), DelegatedTokenOpsError> {
-    if payload.subject != caller {
-        return Err(DelegatedTokenOpsError::AttestationSubjectMismatch {
-            expected: caller,
-            found: payload.subject,
-        });
-    }
-
-    if now_secs > payload.expires_at {
-        return Err(DelegatedTokenOpsError::AttestationExpired {
-            expires_at: payload.expires_at,
-            now_secs,
-        });
-    }
-
-    if let Some(audience) = payload.audience
-        && audience != self_pid
-    {
-        return Err(DelegatedTokenOpsError::AttestationAudienceMismatch {
-            expected: self_pid,
-            found: audience,
-        });
-    }
-
-    if let Some(attestation_subnet) = payload.subnet_id {
-        let verifier_subnet =
-            verifier_subnet.ok_or(DelegatedTokenOpsError::AttestationSubnetUnavailable)?;
-        if attestation_subnet != verifier_subnet {
-            return Err(DelegatedTokenOpsError::AttestationSubnetMismatch {
-                expected: verifier_subnet,
-                found: attestation_subnet,
-            });
-        }
-    }
-
-    if payload.epoch < min_accepted_epoch {
-        return Err(DelegatedTokenOpsError::AttestationEpochRejected {
-            epoch: payload.epoch,
-            min_accepted_epoch,
-        });
-    }
-
-    Ok(())
+    verify::verify_role_attestation_claims(
+        payload,
+        caller,
+        self_pid,
+        verifier_subnet,
+        now_secs,
+        min_accepted_epoch,
+    )
 }
 
 fn attestation_keys_sorted() -> Vec<AttestationKey> {
-    let mut keys = DelegationStateOps::attestation_keys();
-    keys.sort_by_key(|entry| {
-        let status_rank = match entry.status {
-            AttestationKeyStatus::Current => 0u8,
-            AttestationKeyStatus::Previous => 1u8,
-        };
-        (status_rank, Reverse(entry.key_id))
-    });
-    keys
+    keys::attestation_keys_sorted()
 }
 
 fn delegated_tokens_key_name() -> Result<String, InternalError> {
-    let cfg = ConfigOps::delegated_tokens_config()?;
-    if cfg.ecdsa_key_name.trim().is_empty() {
-        return Err(DelegatedTokenOpsError::EcdsaKeyNameMissing.into());
-    }
-
-    Ok(cfg.ecdsa_key_name)
+    keys::delegated_tokens_key_name()
 }
 
 fn attestation_key_name() -> Result<String, InternalError> {
-    let cfg = ConfigOps::role_attestation_config()?;
-    if cfg.ecdsa_key_name.trim().is_empty() {
-        return Err(DelegatedTokenOpsError::AttestationKeyNameMissing.into());
-    }
-
-    Ok(cfg.ecdsa_key_name)
+    keys::attestation_key_name()
 }
 
 fn root_derivation_path() -> Vec<Vec<u8>> {
-    vec![DERIVATION_NAMESPACE.to_vec(), ROOT_PATH_SEGMENT.to_vec()]
+    keys::root_derivation_path()
 }
 
 fn shard_derivation_path(shard_pid: Principal) -> Vec<Vec<u8>> {
-    vec![
-        DERIVATION_NAMESPACE.to_vec(),
-        SHARD_PATH_SEGMENT.to_vec(),
-        shard_pid.as_slice().to_vec(),
-    ]
+    keys::shard_derivation_path(shard_pid)
 }
 
 fn attestation_derivation_path() -> Vec<Vec<u8>> {
-    vec![
-        DERIVATION_NAMESPACE.to_vec(),
-        ATTESTATION_PATH_SEGMENT.to_vec(),
-        ROOT_PATH_SEGMENT.to_vec(),
-    ]
+    keys::attestation_derivation_path()
 }
 
 fn role_attestation_hash(attestation: &RoleAttestation) -> Result<[u8; 32], InternalError> {
-    let payload = encode_candid("role attestation", attestation)?;
-    let mut hasher = Sha256::new();
-    hasher.update(ROLE_ATTESTATION_SIGNING_DOMAIN);
-    hasher.update(payload);
-    Ok(hasher.finalize().into())
+    crypto::role_attestation_hash(attestation)
 }
 
 async fn ensure_attestation_key_cached(
@@ -822,53 +533,27 @@ async fn ensure_attestation_key_cached(
     root_pid: Principal,
     now_secs: u64,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::attestation_public_key_sec1(ROLE_ATTESTATION_KEY_ID_V1).is_some() {
-        return Ok(());
-    }
-
-    let public_key =
-        EcdsaOps::public_key_sec1(key_name, attestation_derivation_path(), root_pid).await?;
-    DelegationStateOps::upsert_attestation_key(AttestationKey {
-        key_id: ROLE_ATTESTATION_KEY_ID_V1,
-        public_key,
-        status: AttestationKeyStatus::Current,
-        valid_from: Some(now_secs),
-        valid_until: None,
-    });
-
-    Ok(())
+    keys::ensure_attestation_key_cached(key_name, root_pid, now_secs).await
 }
 
 async fn ensure_root_public_key_cached(
     key_name: &str,
     root_pid: Principal,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::root_public_key().is_some() {
-        return Ok(());
-    }
-
-    let root_pk = EcdsaOps::public_key_sec1(key_name, root_derivation_path(), root_pid).await?;
-    DelegationStateOps::set_root_public_key(root_pk);
-    Ok(())
+    keys::ensure_root_public_key_cached(key_name, root_pid).await
 }
 
 async fn ensure_shard_public_key_cached(
     key_name: &str,
     shard_pid: Principal,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::shard_public_key(shard_pid).is_some() {
-        return Ok(());
-    }
-
-    let shard_pk =
-        EcdsaOps::public_key_sec1(key_name, shard_derivation_path(shard_pid), shard_pid).await?;
-    DelegationStateOps::set_shard_public_key(shard_pid, shard_pk);
-    Ok(())
+    keys::ensure_shard_public_key_cached(key_name, shard_pid).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::auth::AttestationKeyStatus;
     use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
     fn p(id: u8) -> Principal {

@@ -1,40 +1,27 @@
+#[cfg(test)]
+use crate::dto::auth::RoleAttestation;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{
-        DelegationCert, DelegationProvisionRequest, DelegationProvisionResponse, DelegationRequest,
-        RoleAttestation, RoleAttestationRequest,
-    },
+    dto::auth::{DelegationCert, DelegationRequest, RoleAttestationRequest},
     dto::rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
-        CyclesResponse, Request, Response, RootCapabilityRequest, RootRequestMetadata,
-        UpgradeCanisterRequest, UpgradeCanisterResponse,
+        CreateCanisterRequest, CyclesRequest, Request, Response, RootCapabilityRequest,
+        RootRequestMetadata, UpgradeCanisterRequest,
     },
     ops::{
-        auth::DelegatedTokenOps,
-        config::ConfigOps,
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::IcOps,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{
             RootCapabilityMetricEvent, RootCapabilityMetricKey, RootCapabilityMetrics,
         },
-        storage::{
-            auth::DelegationStateOps,
-            directory::subnet::SubnetDirectoryOps,
-            registry::subnet::SubnetRegistryOps,
-            replay::{ReplayService, RootReplayOps},
-        },
     },
-    storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
-    workflow::{
-        auth::DelegationWorkflow,
-        canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
-        prelude::*,
-        rpc::RpcWorkflowError,
-    },
+    storage::stable::replay::ReplaySlotKey,
+    workflow::rpc::RpcWorkflowError,
 };
-use candid::{decode_one, encode_one};
-use sha2::{Digest, Sha256};
+
+mod authorize;
+mod execute;
+mod replay;
 
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
@@ -211,467 +198,33 @@ impl RootResponseWorkflow {
     }
 
     fn authorize(ctx: &RootContext, capability: &RootCapability) -> Result<(), InternalError> {
-        if !ctx.is_root_env {
-            RootCapabilityMetrics::record(
-                capability.metric_key(),
-                RootCapabilityMetricEvent::Denied,
-            );
-            return EnvOps::require_root();
-        }
-
-        let capability_key = capability.metric_key();
-        let capability_name = capability.capability_name();
-        let decision = match capability {
-            RootCapability::Provision(_req) => Ok(()),
-            RootCapability::Upgrade(req) => Self::authorize_upgrade(ctx, req),
-            RootCapability::MintCycles(req) => Self::authorize_mint_cycles(ctx, req),
-            RootCapability::IssueDelegation(req) => Self::authorize_issue_delegation(ctx, req),
-            RootCapability::IssueRoleAttestation(req) => {
-                Self::authorize_issue_role_attestation(ctx, req)
-            }
-        };
-
-        match &decision {
-            Ok(()) => {
-                RootCapabilityMetrics::record(
-                    capability_key,
-                    RootCapabilityMetricEvent::Authorized,
-                );
-                log!(
-                    Topic::Rpc,
-                    Info,
-                    "root capability authorized (capability={capability_name}, caller={}, subnet={}, now={})",
-                    ctx.caller,
-                    ctx.subnet_id,
-                    ctx.now
-                );
-            }
-            Err(err) => {
-                RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::Denied);
-                log!(
-                    Topic::Rpc,
-                    Warn,
-                    "root capability denied (capability={capability_name}, caller={}, subnet={}, now={}): {err}",
-                    ctx.caller,
-                    ctx.subnet_id,
-                    ctx.now
-                );
-            }
-        }
-
-        decision
-    }
-
-    fn authorize_upgrade(
-        ctx: &RootContext,
-        req: &UpgradeCanisterRequest,
-    ) -> Result<(), InternalError> {
-        let registry_entry = SubnetRegistryOps::get(req.canister_pid)
-            .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
-
-        if registry_entry.parent_pid != Some(ctx.caller) {
-            return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
-        }
-
-        Ok(())
-    }
-
-    fn authorize_mint_cycles(_ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
-        let available = MgmtOps::canister_cycle_balance().to_u128();
-        if req.cycles > available {
-            return Err(RpcWorkflowError::InsufficientRootCycles {
-                requested: req.cycles,
-                available,
-            }
-            .into());
-        }
-
-        Ok(())
-    }
-
-    fn authorize_issue_delegation(
-        ctx: &RootContext,
-        req: &DelegationRequest,
-    ) -> Result<(), InternalError> {
-        let cfg = ConfigOps::delegated_tokens_config()?;
-        if !cfg.enabled {
-            return Err(RpcWorkflowError::DelegatedTokensDisabled.into());
-        }
-
-        let root_pid = EnvOps::root_pid()?;
-        if root_pid != IcOps::canister_self() {
-            return Err(RpcWorkflowError::DelegationMustTargetRoot.into());
-        }
-
-        if ctx.caller != req.shard_pid {
-            return Err(
-                RpcWorkflowError::DelegationCallerShardMismatch(ctx.caller, req.shard_pid).into(),
-            );
-        }
-
-        if req.ttl_secs == 0 {
-            return Err(RpcWorkflowError::DelegationInvalidTtl(req.ttl_secs).into());
-        }
-
-        if req.aud.is_empty() {
-            return Err(RpcWorkflowError::DelegationAudienceEmpty.into());
-        }
-
-        if req.scopes.is_empty() {
-            return Err(RpcWorkflowError::DelegationScopesEmpty.into());
-        }
-
-        if req.scopes.iter().any(String::is_empty) {
-            return Err(RpcWorkflowError::DelegationScopeEmpty.into());
-        }
-
-        Ok(())
-    }
-
-    fn authorize_issue_role_attestation(
-        ctx: &RootContext,
-        req: &RoleAttestationRequest,
-    ) -> Result<(), InternalError> {
-        if req.subject != ctx.caller {
-            return Err(RpcWorkflowError::RoleAttestationSubjectMismatch {
-                caller: ctx.caller,
-                subject: req.subject,
-            }
-            .into());
-        }
-
-        let registered = SubnetRegistryOps::get(req.subject).ok_or(
-            RpcWorkflowError::RoleAttestationSubjectNotRegistered {
-                subject: req.subject,
-            },
-        )?;
-
-        if registered.role != req.role {
-            return Err(RpcWorkflowError::RoleAttestationRoleMismatch {
-                subject: req.subject,
-                requested: req.role.clone(),
-                registered: registered.role,
-            }
-            .into());
-        }
-
-        if let Some(requested_subnet) = req.subnet_id
-            && requested_subnet != ctx.subnet_id
-        {
-            return Err(RpcWorkflowError::RoleAttestationSubnetMismatch {
-                subject: req.subject,
-                requested: requested_subnet,
-                local: ctx.subnet_id,
-            }
-            .into());
-        }
-
-        if req.audience.is_none() {
-            return Err(RpcWorkflowError::RoleAttestationAudienceRequired.into());
-        }
-
-        let max_ttl_secs = Self::max_role_attestation_ttl_seconds();
-        if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-            return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs: req.ttl_secs,
-                max_ttl_secs,
-            }
-            .into());
-        }
-
-        Ok(())
+        authorize::authorize(ctx, capability)
     }
 
     async fn execute_root_capability(
         ctx: &RootContext,
         capability: RootCapability,
     ) -> Result<Response, InternalError> {
-        let capability_name = capability.capability_name();
-
-        let result = match capability {
-            RootCapability::Provision(req) => Self::execute_provision(ctx, &req).await,
-            RootCapability::Upgrade(req) => Self::execute_upgrade(&req).await,
-            RootCapability::MintCycles(req) => Self::execute_mint_cycles(ctx, &req).await,
-            RootCapability::IssueDelegation(req) => Self::execute_issue_delegation(ctx, &req).await,
-            RootCapability::IssueRoleAttestation(req) => {
-                Self::execute_issue_role_attestation(ctx, &req).await
-            }
-        };
-
-        if let Err(err) = &result {
-            log!(
-                Topic::Rpc,
-                Warn,
-                "execute_root_capability failed (capability={capability_name}, caller={}, subnet={}, now={}): {err}",
-                ctx.caller,
-                ctx.subnet_id,
-                ctx.now
-            );
-        }
-
-        result
+        execute::execute_root_capability(ctx, capability).await
     }
 
     fn check_replay(
         ctx: &RootContext,
         capability: &RootCapability,
     ) -> Result<ReplayDecision, InternalError> {
-        let capability_key = capability.metric_key();
-
-        let metadata = capability
-            .metadata()
-            .ok_or_else(|| RpcWorkflowError::MissingReplayMetadata(capability.capability_name()))?;
-
-        if metadata.ttl_seconds == 0 || metadata.ttl_seconds > MAX_ROOT_TTL_SECONDS {
-            RootCapabilityMetrics::record(
-                capability_key,
-                RootCapabilityMetricEvent::ReplayTtlExceeded,
-            );
-            return Err(RpcWorkflowError::InvalidReplayTtl {
-                ttl_seconds: metadata.ttl_seconds,
-                max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
-            }
-            .into());
-        }
-
-        let payload_hash = capability.payload_hash()?;
-        let slot_key = replay_slot_key(ctx.caller, ctx.self_pid, metadata.request_id);
-        let legacy_slot_key =
-            replay_slot_key_legacy(ctx.caller, ctx.subnet_id, metadata.request_id);
-
-        if let Some(existing) = RootReplayOps::get(slot_key) {
-            return Self::resolve_existing_replay(
-                capability.capability_name(),
-                capability_key,
-                ctx.now,
-                payload_hash,
-                existing,
-            );
-        }
-
-        // Compatibility path for 0.11-era keys during replay key migration.
-        if legacy_slot_key != slot_key
-            && let Some(existing) = RootReplayOps::get(legacy_slot_key)
-        {
-            return Self::resolve_existing_replay(
-                capability.capability_name(),
-                capability_key,
-                ctx.now,
-                payload_hash,
-                existing,
-            );
-        }
-
-        let _ = RootReplayOps::purge_expired(ctx.now, REPLAY_PURGE_SCAN_LIMIT);
-
-        let issued_at = ctx.now;
-        let expires_at = issued_at.saturating_add(metadata.ttl_seconds);
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayAccepted);
-
-        Ok(ReplayDecision::Pending(ReplayPending {
-            slot_key,
-            payload_hash,
-            issued_at,
-            expires_at,
-        }))
-    }
-
-    fn resolve_existing_replay(
-        capability_name: &'static str,
-        capability_key: RootCapabilityMetricKey,
-        now: u64,
-        payload_hash: [u8; 32],
-        existing: RootReplayRecord,
-    ) -> Result<ReplayDecision, InternalError> {
-        if now > existing.expires_at {
-            RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayExpired);
-            // Do not resurrect expired entries.
-            return Err(RpcWorkflowError::ReplayExpired(capability_name).into());
-        }
-
-        if existing.payload_hash != payload_hash {
-            RootCapabilityMetrics::record(
-                capability_key,
-                RootCapabilityMetricEvent::ReplayDuplicateConflict,
-            );
-            return Err(RpcWorkflowError::ReplayConflict(capability_name).into());
-        }
-
-        let response = decode_one::<Response>(&existing.response_candid)
-            .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
-        RootCapabilityMetrics::record(
-            capability_key,
-            RootCapabilityMetricEvent::ReplayDuplicateSame,
-        );
-
-        Ok(ReplayDecision::Cached(response))
+        replay::check_replay(ctx, capability)
     }
 
     fn commit_replay(pending: ReplayPending, response: &Response) -> Result<(), InternalError> {
-        if RootReplayOps::len() >= MAX_ROOT_REPLAY_ENTRIES {
-            return Err(
-                RpcWorkflowError::ReplayStoreCapacityReached(MAX_ROOT_REPLAY_ENTRIES).into(),
-            );
-        }
-
-        let response_candid = encode_one(response)
-            .map_err(|err| RpcWorkflowError::ReplayEncodeFailed(err.to_string()))?;
-
-        RootReplayOps::upsert(
-            pending.slot_key,
-            RootReplayRecord {
-                payload_hash: pending.payload_hash,
-                issued_at: pending.issued_at,
-                expires_at: pending.expires_at,
-                response_candid,
-            },
-        );
-
-        Ok(())
+        replay::commit_replay(pending, response)
     }
 
-    async fn execute_provision(
-        ctx: &RootContext,
-        req: &CreateCanisterRequest,
-    ) -> Result<Response, InternalError> {
-        // Look up parent
-        let parent_pid = match &req.parent {
-            CreateCanisterParent::Canister(pid) => *pid,
-            CreateCanisterParent::Root => IcOps::canister_self(),
-            CreateCanisterParent::ThisCanister => ctx.caller,
-
-            CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(ctx.caller)
-                .ok_or(RpcWorkflowError::ParentNotFound(ctx.caller))?,
-
-            CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
-                .ok_or_else(|| RpcWorkflowError::CanisterRoleNotFound(role.clone()))?,
-        };
-
-        let event = CanisterLifecycleEvent::Create {
-            role: req.canister_role.clone(),
-            parent: parent_pid,
-            extra_arg: req.extra_arg.clone(),
-        };
-
-        let lifecycle_result = CanisterLifecycleWorkflow::apply(event).await?;
-        let new_canister_pid = lifecycle_result
-            .new_canister_pid
-            .ok_or(RpcWorkflowError::MissingNewCanisterPid)?;
-
-        Ok(Response::CreateCanister(CreateCanisterResponse {
-            new_canister_pid,
-        }))
-    }
-
-    async fn execute_upgrade(req: &UpgradeCanisterRequest) -> Result<Response, InternalError> {
-        let event = CanisterLifecycleEvent::Upgrade {
-            pid: req.canister_pid,
-        };
-
-        CanisterLifecycleWorkflow::apply(event).await?;
-
-        Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
-    }
-
-    async fn execute_mint_cycles(
-        ctx: &RootContext,
-        req: &CyclesRequest,
-    ) -> Result<Response, InternalError> {
-        MgmtOps::deposit_cycles(ctx.caller, req.cycles).await?;
-
-        let cycles_transferred = req.cycles;
-
-        Ok(Response::Cycles(CyclesResponse { cycles_transferred }))
-    }
-
-    async fn execute_issue_delegation(
-        ctx: &RootContext,
-        req: &DelegationRequest,
-    ) -> Result<Response, InternalError> {
-        let root_pid = EnvOps::root_pid()?;
-        let cert = DelegationCert {
-            root_pid,
-            shard_pid: req.shard_pid,
-            issued_at: ctx.now,
-            expires_at: ctx.now.saturating_add(req.ttl_secs),
-            scopes: req.scopes.clone(),
-            aud: req.aud.clone(),
-        };
-
-        validate_delegation_cert_policy(&cert)?;
-
-        let response: DelegationProvisionResponse =
-            DelegationWorkflow::provision(DelegationProvisionRequest {
-                cert,
-                signer_targets: vec![ctx.caller],
-                verifier_targets: req.verifier_targets.clone(),
-            })
-            .await?;
-
-        if req.include_root_verifier {
-            DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert).await?;
-            DelegationStateOps::set_proof_from_dto(response.proof.clone());
-        }
-
-        Ok(Response::DelegationIssued(response))
-    }
-
-    async fn execute_issue_role_attestation(
-        ctx: &RootContext,
-        req: &RoleAttestationRequest,
-    ) -> Result<Response, InternalError> {
-        let payload = Self::build_role_attestation(ctx, req)?;
-        let signed = DelegatedTokenOps::sign_role_attestation(payload).await?;
-        log!(
-            Topic::Auth,
-            Info,
-            "role attestation issued subject={} role={} audience={:?} subnet={:?} issued_at={} expires_at={} epoch={}",
-            signed.payload.subject,
-            signed.payload.role,
-            signed.payload.audience,
-            signed.payload.subnet_id,
-            signed.payload.issued_at,
-            signed.payload.expires_at,
-            signed.payload.epoch
-        );
-        Ok(Response::RoleAttestationIssued(signed))
-    }
-
+    #[cfg(test)]
     fn build_role_attestation(
         ctx: &RootContext,
         req: &RoleAttestationRequest,
     ) -> Result<RoleAttestation, InternalError> {
-        let max_ttl_secs = Self::max_role_attestation_ttl_seconds();
-        if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-            return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs: req.ttl_secs,
-                max_ttl_secs,
-            }
-            .into());
-        }
-
-        let expires_at = ctx.now.checked_add(req.ttl_secs).ok_or({
-            RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs: req.ttl_secs,
-                max_ttl_secs,
-            }
-        })?;
-
-        Ok(RoleAttestation {
-            subject: req.subject,
-            role: req.role.clone(),
-            subnet_id: req.subnet_id,
-            audience: req.audience,
-            issued_at: ctx.now,
-            expires_at,
-            epoch: req.epoch,
-        })
-    }
-
-    fn max_role_attestation_ttl_seconds() -> u64 {
-        ConfigOps::role_attestation_config()
-            .map(|cfg| cfg.max_ttl_secs)
-            .unwrap_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS)
+        execute::build_role_attestation(ctx, req)
     }
 }
 
@@ -730,47 +283,30 @@ impl RootCapability {
 }
 
 fn hash_capability_payload(payload: &RootCapabilityRequest) -> Result<[u8; 32], InternalError> {
-    let bytes = encode_one(payload).map_err(|err| {
-        RpcWorkflowError::ReplayEncodeFailed(format!("canonical payload encode failed: {err}"))
-    })?;
-    Ok(hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes))
+    replay::hash_capability_payload(payload)
 }
 
+#[cfg(test)]
 fn replay_slot_key(
     caller: Principal,
     target_canister: Principal,
     request_id: [u8; 32],
 ) -> ReplaySlotKey {
-    RootReplayOps::slot_key(
-        caller,
-        target_canister,
-        ReplayService::Root,
-        &request_id,
-        LEGACY_REPLAY_NONCE,
-    )
+    replay::replay_slot_key(caller, target_canister, request_id)
 }
 
+#[cfg(test)]
 fn replay_slot_key_legacy(
     caller: Principal,
     subnet_id: Principal,
     request_id: [u8; 32],
 ) -> ReplaySlotKey {
-    let mut hasher = Sha256::new();
-    hasher.update((LEGACY_REPLAY_SLOT_KEY_DOMAIN.len() as u64).to_be_bytes());
-    hasher.update(LEGACY_REPLAY_SLOT_KEY_DOMAIN);
-    hasher.update(caller.as_slice());
-    hasher.update(subnet_id.as_slice());
-    hasher.update(request_id);
-    ReplaySlotKey(hasher.finalize().into())
+    replay::replay_slot_key_legacy(caller, subnet_id, request_id)
 }
 
+#[cfg(test)]
 fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update((domain.len() as u64).to_be_bytes());
-    hasher.update(domain);
-    hasher.update((payload.len() as u64).to_be_bytes());
-    hasher.update(payload);
-    hasher.finalize().into()
+    replay::hash_domain_separated(domain, payload)
 }
 
 fn validate_delegation_cert_policy(cert: &DelegationCert) -> Result<(), InternalError> {
@@ -814,13 +350,16 @@ mod tests {
         dto::{
             auth::{DelegationRequest, RoleAttestationRequest},
             rpc::{
-                CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RootRequestMetadata,
-                UpgradeCanisterRequest,
+                CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
+                RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
             },
         },
         ids::CanisterRole,
-        ops::storage::replay::RootReplayOps,
+        ops::storage::{registry::subnet::SubnetRegistryOps, replay::RootReplayOps},
+        storage::stable::replay::RootReplayRecord,
     };
+    use candid::encode_one;
+    use sha2::{Digest, Sha256};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
