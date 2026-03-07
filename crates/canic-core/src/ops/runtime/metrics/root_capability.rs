@@ -15,6 +15,7 @@ pub enum RootCapabilityMetricKey {
     Upgrade,
     MintCycles,
     IssueDelegation,
+    IssueRoleAttestation,
 }
 
 impl RootCapabilityMetricKey {
@@ -25,6 +26,7 @@ impl RootCapabilityMetricKey {
             Self::Upgrade => "Upgrade",
             Self::MintCycles => "MintCycles",
             Self::IssueDelegation => "IssueDelegation",
+            Self::IssueRoleAttestation => "IssueRoleAttestation",
         }
     }
 }

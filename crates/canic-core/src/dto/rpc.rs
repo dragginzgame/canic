@@ -1,5 +1,8 @@
 use crate::dto::{
-    auth::{DelegationProvisionResponse, DelegationRequest},
+    auth::{
+        DelegationProvisionResponse, DelegationRequest, RoleAttestationRequest,
+        SignedRoleAttestation,
+    },
     prelude::*,
 };
 
@@ -14,6 +17,7 @@ pub enum Request {
     UpgradeCanister(UpgradeCanisterRequest),
     Cycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
+    IssueRoleAttestation(RoleAttestationRequest),
 }
 
 ///
@@ -27,6 +31,7 @@ pub enum RootCapabilityRequest {
     UpgradeCanister(UpgradeCanisterRequest),
     MintCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
+    IssueRoleAttestation(RoleAttestationRequest),
 }
 
 impl From<Request> for RootCapabilityRequest {
@@ -36,6 +41,7 @@ impl From<Request> for RootCapabilityRequest {
             Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
             Request::Cycles(req) => Self::MintCycles(req),
             Request::IssueDelegation(req) => Self::IssueDelegation(req),
+            Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
         }
     }
 }
@@ -116,6 +122,7 @@ pub enum Response {
     UpgradeCanister(UpgradeCanisterResponse),
     Cycles(CyclesResponse),
     DelegationIssued(DelegationProvisionResponse),
+    RoleAttestationIssued(SignedRoleAttestation),
 }
 
 ///

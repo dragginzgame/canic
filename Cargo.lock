@@ -721,6 +721,8 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "k256",
+ "sha2",
 ]
 
 [[package]]

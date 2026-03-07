@@ -332,11 +332,15 @@ pub enum AppInitMode {
 pub struct AuthConfig {
     #[serde(default)]
     pub delegated_tokens: DelegatedTokenConfig,
+
+    #[serde(default)]
+    pub role_attestation: RoleAttestationConfig,
 }
 
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        self.delegated_tokens.validate()
+        self.delegated_tokens.validate()?;
+        self.role_attestation.validate()
     }
 }
 
@@ -397,6 +401,70 @@ impl Validate for DelegatedTokenConfig {
                 "auth.delegated_tokens.max_ttl_secs must be greater than zero".into(),
             ));
         }
+        Ok(())
+    }
+}
+
+///
+/// RoleAttestationConfig
+///
+/// Controls root-signed role attestation issuance/verification defaults.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoleAttestationConfig {
+    #[serde(default = "default_role_attestation_ecdsa_key_name")]
+    pub ecdsa_key_name: String,
+
+    #[serde(default = "default_role_attestation_max_ttl_secs")]
+    pub max_ttl_secs: u64,
+
+    #[serde(default)]
+    pub min_accepted_epoch_by_role: BTreeMap<String, u64>,
+}
+
+fn default_role_attestation_ecdsa_key_name() -> String {
+    "test_key_1".to_string()
+}
+
+const fn default_role_attestation_max_ttl_secs() -> u64 {
+    900
+}
+
+impl Default for RoleAttestationConfig {
+    fn default() -> Self {
+        Self {
+            ecdsa_key_name: default_role_attestation_ecdsa_key_name(),
+            max_ttl_secs: default_role_attestation_max_ttl_secs(),
+            min_accepted_epoch_by_role: BTreeMap::new(),
+        }
+    }
+}
+
+impl Validate for RoleAttestationConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        if self.ecdsa_key_name.trim().is_empty() {
+            return Err(ConfigSchemaError::ValidationError(
+                "auth.role_attestation.ecdsa_key_name must not be empty".into(),
+            ));
+        }
+
+        if self.max_ttl_secs == 0 {
+            return Err(ConfigSchemaError::ValidationError(
+                "auth.role_attestation.max_ttl_secs must be greater than zero".into(),
+            ));
+        }
+
+        for role in self.min_accepted_epoch_by_role.keys() {
+            if role.trim().is_empty() {
+                return Err(ConfigSchemaError::ValidationError(
+                    "auth.role_attestation.min_accepted_epoch_by_role keys must not be empty"
+                        .into(),
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -513,6 +581,26 @@ mod tests {
         cfg.auth.delegated_tokens.max_ttl_secs = Some(0);
 
         cfg.validate().expect_err("expected zero ttl to fail");
+    }
+
+    #[test]
+    fn role_attestation_max_ttl_zero_is_invalid() {
+        let mut cfg = ConfigModel::test_default();
+        cfg.auth.role_attestation.max_ttl_secs = 0;
+
+        cfg.validate().expect_err("expected zero ttl to fail");
+    }
+
+    #[test]
+    fn role_attestation_empty_min_epoch_role_key_is_invalid() {
+        let mut cfg = ConfigModel::test_default();
+        cfg.auth
+            .role_attestation
+            .min_accepted_epoch_by_role
+            .insert("   ".to_string(), 1);
+
+        cfg.validate()
+            .expect_err("expected empty min epoch role key to fail");
     }
 
     #[test]
