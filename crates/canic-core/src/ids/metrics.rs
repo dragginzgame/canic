@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 ///
 /// AccessMetricKind
+///
 /// Enumerates the access predicate kind that rejected the call.
 /// Access metrics are emitted only on denial.
 /// Custom predicates report AccessMetricKind::Custom.
