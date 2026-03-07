@@ -5,26 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.11.0] - 2026-02-27 - Capabilities Arc: Kickoff & Cleanup
+## [0.11.1] - 2026-03-07 - Root Capability Replay & Dispatcher Hardening
 
 ### 📝 Summary
 
-- `0.11.x` starts the capabilities-focused design arc. This first slice lands an `Account` correctness/alignment fix, introduces broad capability scope constants, trims dependency surface, and removes an unused random-hex helper.
-
-### ⚠️ Breaking
-
-- `authenticated("scope")` (now `is_authenticated("scope")`) enforces required-scope presence. Tokens lacking the scope are now rejected.
-- Legacy `authenticated(...)` macro usage is no longer accepted; use `is_authenticated(...)`.
+- `0.11.1` hardens root capability dispatch/replay behavior and improves subnet-registry auth diagnostics to make failure triage faster in PocketIC and local runs.
 
 ### 🩹 Fixed
 
-- `canic-cdk::types::Account` now uses `icrc-ledger-types` (`Icrc1Account`) for textual encoding/decoding, so `Display`/`FromStr` behavior stays aligned with the ICRC-1 reference model and avoids drift in checksum/subaccount formatting.
 - Sharding assignment now ignores active shard IDs that are not direct children in the local topology cache, so stale shard picks no longer route into root auth denials during canister-create flows.
 
 ### 🔧 Changed
 
-- Replaced `Nat`/cycle numeric downcasts with standard-library `TryFrom` conversions in HTTP/cycles paths while preserving existing overflow fallback behavior.
-- Added shared capability scope constants in `canic::ids::cap` (`READ`, `WRITE`, `VERIFY`, `ADMIN`) and updated `is_authenticated(...)` macro parsing to accept either string literals or path constants (for example `cap::VERIFY`).
 - Subnet-registry access denials now explicitly identify authentication failures and include root/registry diagnostic context (`root`, registry entry count, and `canic_subnet_registry` hint) to speed up field triage.
 - Subnet-registry predicates (`caller::is_registered_to_subnet`, `caller::has_role`) now fail fast on non-root canisters with a dedicated authentication error instead of a generic registry-missing denial.
 - Macro validation now rejects `requires(caller::is_registered_to_subnet())` on non-`internal` endpoints at compile time, preventing downstream misuse of root-only subnet-registry checks.
@@ -37,6 +29,46 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### 🗑️ Removed
 
 - Removed internal root endpoint `canic_delegation_provision`; delegation issuance now goes through the capability dispatcher path (`canic_request_delegation` -> `root:issue_delegation`) only.
+
+### 🧪 Testing
+
+- Root replay delegation tests use explicit threshold-key gating: default mode allows guarded skip when keys are unavailable, and `CANIC_REQUIRE_THRESHOLD_KEYS=1` enforces fail-fast for keys-required runs.
+- Added sharding workflow regression coverage for stale/non-child assignments (`plan_ignores_non_child_assigned_shard`) to ensure routing only targets locally routable child shards.
+- Added PocketIC root replay coverage for cross-variant conflicts, mutated-payload conflicts, identical-request caching, TTL-bound rejects, and expiry rejects.
+- Added PocketIC coverage for unauthorized root capability requests and per-capability policy denials at dispatcher boundaries.
+- Added delegation replay assertions for signature-stable cached responses and no-commit-on-execution-error behavior.
+- Removed legacy `pic_delegation_provision` coverage and moved strict delegated-crypto CI to dispatcher-path replay delegation (`root_replay` non-skip) only.
+
+```text
+Replay behavior:
+same canonical payload digest -> cached response
+different canonical payload digest -> replay conflict
+```
+
+---
+
+## [0.11.0] - 2026-02-27 - Capabilities Arc: Kickoff & Cleanup
+
+### 📝 Summary
+
+- `0.11.0` starts the capabilities-focused design arc with scope-aware auth guards, account-model alignment, safer numeric conversion paths, and dependency cleanup.
+
+### ⚠️ Breaking
+
+- `authenticated("scope")` (now `is_authenticated("scope")`) enforces required-scope presence. Tokens lacking the scope are now rejected.
+- Legacy `authenticated(...)` macro usage is no longer accepted; use `is_authenticated(...)`.
+
+### 🩹 Fixed
+
+- `canic-cdk::types::Account` now uses `icrc-ledger-types` (`Icrc1Account`) for textual encoding/decoding, so `Display`/`FromStr` behavior stays aligned with the ICRC-1 reference model and avoids drift in checksum/subaccount formatting.
+
+### 🔧 Changed
+
+- Replaced `Nat`/cycle numeric downcasts with standard-library `TryFrom` conversions in HTTP/cycles paths while preserving existing overflow fallback behavior.
+- Added shared capability scope constants in `canic::ids::cap` (`READ`, `WRITE`, `VERIFY`, `ADMIN`) and updated `is_authenticated(...)` macro parsing to accept either string literals or path constants (for example `cap::VERIFY`).
+
+### 🗑️ Removed
+
 - Removed `canic-utils::rand::random_hex()` (it was unused in this repository). Use `random_bytes()` and encode at the call site when needed.
 - Removed now-unused dependencies from the workspace and crate manifests: `base32`, `crc32fast`, `hex`, and `num-traits`.
 
@@ -45,12 +77,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Added PocketIC coverage for scope-gated delegated auth (`is_authenticated("scope")`) with explicit allow/deny cases for required-scope presence.
 - Added PocketIC coverage for unscoped delegated auth guards (`is_authenticated()`) with a scoped-vs-unscoped endpoint behavior check.
 - Added macro parser coverage for constant-path scope arguments (`is_authenticated(cap::VERIFY)`).
-- Root replay delegation tests use explicit threshold-key gating: default mode allows guarded skip when keys are unavailable, and `CANIC_REQUIRE_THRESHOLD_KEYS=1` enforces fail-fast for keys-required runs.
-- Added sharding workflow regression coverage for stale/non-child assignments (`plan_ignores_non_child_assigned_shard`) to ensure routing only targets locally routable child shards.
-- Added PocketIC root replay coverage for cross-variant conflicts, mutated-payload conflicts, identical-request caching, TTL-bound rejects, and expiry rejects.
-- Added PocketIC coverage for unauthorized root capability requests and per-capability policy denials at dispatcher boundaries.
-- Added delegation replay assertions for signature-stable cached responses and no-commit-on-execution-error behavior.
-- Removed legacy `pic_delegation_provision` coverage and moved strict delegated-crypto CI to dispatcher-path replay delegation (`root_replay` non-skip) only.
 
 ```rust
 use canic::ids::cap;

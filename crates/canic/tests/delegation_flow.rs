@@ -15,9 +15,6 @@ use canic::{
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, setup_root};
-use std::{path::PathBuf, process::Command, sync::Once};
-
-static DFX_BUILD_ONCE: Once = Once::new();
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -236,8 +233,6 @@ fn authenticated_guard_rejects_bogus_token_on_local() {
         return;
     }
 
-    ensure_local_artifacts_built();
-
     log_step("authenticated_guard_rejects_bogus_token_on_local: setup root");
     let setup = setup_root();
 
@@ -321,28 +316,4 @@ fn bogus_delegated_token() -> DelegatedToken {
         },
         token_sig: vec![0],
     }
-}
-
-fn ensure_local_artifacts_built() {
-    DFX_BUILD_ONCE.call_once(|| {
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| p.parent())
-            .map(PathBuf::from)
-            .expect("workspace root");
-
-        let output = Command::new("dfx")
-            .current_dir(&workspace_root)
-            .env("DFX_NETWORK", "local")
-            .env("RELEASE", "0")
-            .args(["build", "--all"])
-            .output()
-            .expect("failed to run `dfx build --all`");
-
-        assert!(
-            output.status.success(),
-            "dfx build --all failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    });
 }

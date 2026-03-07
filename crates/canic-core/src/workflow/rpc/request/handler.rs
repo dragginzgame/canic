@@ -18,8 +18,10 @@ use crate::{
             RootCapabilityMetricEvent, RootCapabilityMetricKey, RootCapabilityMetrics,
         },
         storage::{
-            auth::DelegationStateOps, directory::subnet::SubnetDirectoryOps,
-            registry::subnet::SubnetRegistryOps, replay::RootReplayOps,
+            auth::DelegationStateOps,
+            directory::subnet::SubnetDirectoryOps,
+            registry::subnet::SubnetRegistryOps,
+            replay::{ReplayService, RootReplayOps},
         },
     },
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
@@ -36,7 +38,8 @@ use sha2::{Digest, Sha256};
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
 const MAX_ROOT_TTL_SECONDS: u64 = 300;
-const REPLAY_SLOT_KEY_DOMAIN: &[u8] = b"root-replay-slot-key:v1";
+const LEGACY_REPLAY_SLOT_KEY_DOMAIN: &[u8] = b"root-replay-slot-key:v1";
+const LEGACY_REPLAY_NONCE: [u8; 16] = [0u8; 16];
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
 
 ///
@@ -52,6 +55,7 @@ pub struct RootResponseWorkflow;
 #[derive(Clone, Copy, Debug)]
 struct RootContext {
     caller: Principal,
+    self_pid: Principal,
     is_root_env: bool,
     subnet_id: Principal,
     now: u64,
@@ -145,6 +149,7 @@ impl RootResponseWorkflow {
 
         Ok(RootContext {
             caller: IcOps::msg_caller(),
+            self_pid: IcOps::canister_self(),
             is_root_env: EnvOps::is_root(),
             subnet_id: EnvOps::subnet_pid()?,
             now: IcOps::now_secs(),
@@ -325,34 +330,31 @@ impl RootResponseWorkflow {
         }
 
         let payload_hash = capability.payload_hash()?;
-        let slot_key = replay_slot_key(ctx.caller, ctx.subnet_id, metadata.request_id);
+        let slot_key = replay_slot_key(ctx.caller, ctx.self_pid, metadata.request_id);
+        let legacy_slot_key =
+            replay_slot_key_legacy(ctx.caller, ctx.subnet_id, metadata.request_id);
 
         if let Some(existing) = RootReplayOps::get(slot_key) {
-            if ctx.now > existing.expires_at {
-                RootCapabilityMetrics::record(
-                    capability_key,
-                    RootCapabilityMetricEvent::ReplayExpired,
-                );
-                // Do not resurrect expired entries.
-                return Err(RpcWorkflowError::ReplayExpired(capability.capability_name()).into());
-            }
-
-            if existing.payload_hash != payload_hash {
-                RootCapabilityMetrics::record(
-                    capability_key,
-                    RootCapabilityMetricEvent::ReplayDuplicateConflict,
-                );
-                return Err(RpcWorkflowError::ReplayConflict(capability.capability_name()).into());
-            }
-
-            let response = decode_one::<Response>(&existing.response_candid)
-                .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
-            RootCapabilityMetrics::record(
+            return Self::resolve_existing_replay(
+                capability.capability_name(),
                 capability_key,
-                RootCapabilityMetricEvent::ReplayDuplicateSame,
+                ctx.now,
+                payload_hash,
+                existing,
             );
+        }
 
-            return Ok(ReplayDecision::Cached(response));
+        // Compatibility path for 0.11-era keys during replay key migration.
+        if legacy_slot_key != slot_key
+            && let Some(existing) = RootReplayOps::get(legacy_slot_key)
+        {
+            return Self::resolve_existing_replay(
+                capability.capability_name(),
+                capability_key,
+                ctx.now,
+                payload_hash,
+                existing,
+            );
         }
 
         let _ = RootReplayOps::purge_expired(ctx.now, REPLAY_PURGE_SCAN_LIMIT);
@@ -367,6 +369,37 @@ impl RootResponseWorkflow {
             issued_at,
             expires_at,
         }))
+    }
+
+    fn resolve_existing_replay(
+        capability_name: &'static str,
+        capability_key: RootCapabilityMetricKey,
+        now: u64,
+        payload_hash: [u8; 32],
+        existing: RootReplayRecord,
+    ) -> Result<ReplayDecision, InternalError> {
+        if now > existing.expires_at {
+            RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ReplayExpired);
+            // Do not resurrect expired entries.
+            return Err(RpcWorkflowError::ReplayExpired(capability_name).into());
+        }
+
+        if existing.payload_hash != payload_hash {
+            RootCapabilityMetrics::record(
+                capability_key,
+                RootCapabilityMetricEvent::ReplayDuplicateConflict,
+            );
+            return Err(RpcWorkflowError::ReplayConflict(capability_name).into());
+        }
+
+        let response = decode_one::<Response>(&existing.response_candid)
+            .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
+        RootCapabilityMetrics::record(
+            capability_key,
+            RootCapabilityMetricEvent::ReplayDuplicateSame,
+        );
+
+        Ok(ReplayDecision::Cached(response))
     }
 
     fn commit_replay(pending: ReplayPending, response: &Response) -> Result<(), InternalError> {
@@ -533,10 +566,28 @@ fn hash_capability_payload(payload: &RootCapabilityRequest) -> Result<[u8; 32], 
     Ok(hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes))
 }
 
-fn replay_slot_key(caller: Principal, subnet_id: Principal, request_id: [u8; 32]) -> ReplaySlotKey {
+fn replay_slot_key(
+    caller: Principal,
+    target_canister: Principal,
+    request_id: [u8; 32],
+) -> ReplaySlotKey {
+    RootReplayOps::slot_key(
+        caller,
+        target_canister,
+        ReplayService::Root,
+        &request_id,
+        LEGACY_REPLAY_NONCE,
+    )
+}
+
+fn replay_slot_key_legacy(
+    caller: Principal,
+    subnet_id: Principal,
+    request_id: [u8; 32],
+) -> ReplaySlotKey {
     let mut hasher = Sha256::new();
-    hasher.update((REPLAY_SLOT_KEY_DOMAIN.len() as u64).to_be_bytes());
-    hasher.update(REPLAY_SLOT_KEY_DOMAIN);
+    hasher.update((LEGACY_REPLAY_SLOT_KEY_DOMAIN.len() as u64).to_be_bytes());
+    hasher.update(LEGACY_REPLAY_SLOT_KEY_DOMAIN);
     hasher.update(caller.as_slice());
     hasher.update(subnet_id.as_slice());
     hasher.update(request_id);
@@ -667,6 +718,7 @@ mod tests {
     fn authorize_denies_non_root_context() {
         let ctx = RootContext {
             caller: p(1),
+            self_pid: p(9),
             is_root_env: false,
             subnet_id: p(2),
             now: 5,
@@ -689,6 +741,7 @@ mod tests {
     fn authorize_allows_provision_in_root_context() {
         let ctx = RootContext {
             caller: p(1),
+            self_pid: p(9),
             is_root_env: true,
             subnet_id: p(2),
             now: 5,
@@ -746,7 +799,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_slot_key_binds_caller_subnet_and_request_id() {
+    fn replay_slot_key_binds_caller_target_and_request_id() {
         let request_id = [9u8; 32];
         let key = replay_slot_key(p(1), p(2), request_id);
 
@@ -758,7 +811,7 @@ mod tests {
         assert_ne!(
             key,
             replay_slot_key(p(1), p(4), request_id),
-            "subnet must affect replay key"
+            "target must affect replay key"
         );
         assert_ne!(
             key,
@@ -768,11 +821,56 @@ mod tests {
     }
 
     #[test]
+    fn check_replay_reads_legacy_slot_key_for_compatibility() {
+        RootReplayOps::reset_for_tests();
+
+        let ctx = RootContext {
+            caller: p(1),
+            self_pid: p(42),
+            is_root_env: true,
+            subnet_id: p(2),
+            now: 1_000,
+        };
+        let capability = RootCapability::MintCycles(CyclesRequest {
+            cycles: 77,
+            metadata: Some(meta(7, 60)),
+        });
+        let payload_hash = capability.payload_hash().expect("hash");
+        let request_id = capability.metadata().expect("metadata").request_id;
+        let legacy_key = replay_slot_key_legacy(ctx.caller, ctx.subnet_id, request_id);
+
+        let response = Response::Cycles(CyclesResponse {
+            cycles_transferred: 77,
+        });
+        let response_candid = encode_one(&response).expect("encode");
+
+        RootReplayOps::upsert(
+            legacy_key,
+            RootReplayRecord {
+                payload_hash,
+                issued_at: 900,
+                expires_at: 1_200,
+                response_candid,
+            },
+        );
+
+        let replay =
+            RootResponseWorkflow::check_replay(&ctx, &capability).expect("legacy replay hit");
+        match replay {
+            ReplayDecision::Cached(Response::Cycles(cached)) => {
+                assert_eq!(cached.cycles_transferred, 77);
+            }
+            _ => panic!("expected cached cycles response"),
+        }
+    }
+
+    #[test]
     fn check_replay_rejects_invalid_ttl() {
         RootReplayOps::reset_for_tests();
 
         let ctx = RootContext {
             caller: p(1),
+            self_pid: p(42),
             is_root_env: true,
             subnet_id: p(2),
             now: 1_000,
@@ -805,6 +903,7 @@ mod tests {
 
         let ctx = RootContext {
             caller: p(7),
+            self_pid: p(55),
             is_root_env: true,
             subnet_id: p(8),
             now: 10_000,
@@ -815,7 +914,7 @@ mod tests {
         });
         let payload_hash = capability.payload_hash().expect("hash");
         let request_id = capability.metadata().expect("metadata").request_id;
-        let target_key = replay_slot_key(ctx.caller, ctx.subnet_id, request_id);
+        let target_key = replay_slot_key(ctx.caller, ctx.self_pid, request_id);
         let response_candid = encode_one(Response::Cycles(CyclesResponse {
             cycles_transferred: 500,
         }))
@@ -874,6 +973,7 @@ mod tests {
 
         let ctx = RootContext {
             caller: p(1),
+            self_pid: p(42),
             is_root_env: true,
             subnet_id: p(2),
             now: 1_000,
@@ -909,6 +1009,7 @@ mod tests {
 
         let ctx = RootContext {
             caller: p(3),
+            self_pid: p(42),
             is_root_env: true,
             subnet_id: p(4),
             now: 2_000,
