@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `0.13.1` delivers the control-plane decomposition pass, splitting `api/rpc`, `workflow/rpc/request/handler`, and `ops/auth` into smaller module-owned units while preserving capability/auth behavior.
 - `0.13.2` continues the extraction pass by converting additional control-plane files to directory modules and moving request/auth helpers behind thinner facades.
 - `0.13.3` completes a follow-on auth/control-plane split pass, applies the directory-module (`mod.rs`) layout rule, and refreshes recurring complexity/velocity audit baselines.
+- `0.13.4` consolidates proof/replay/auth control-plane internals with pluggable capability verifiers, extracted replay guards, fail-fast duplicate replay handling, and layered delegated-auth error taxonomy.
 
 See detailed breakdown:
 [docs/changelog/0.13.md](docs/changelog/0.13.md)
