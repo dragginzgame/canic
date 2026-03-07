@@ -1,19 +1,14 @@
 use crate::{
-    cdk::{candid::CandidType, types::Principal},
+    cdk::types::Principal,
     dto::{
-        auth::SignedRoleAttestation,
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             DelegatedGrant, DelegatedGrantProof, PROOF_VERSION_V1, RootCapabilityEnvelopeV1,
             RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{
-            CreateCanisterParent, CreateCanisterResponse, Request, Response, RootRequestMetadata,
-            UpgradeCanisterResponse,
-        },
+        rpc::{Request, RootRequestMetadata},
     },
-    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -23,7 +18,7 @@ use crate::{
         },
         storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::rpc::request::{RpcRequestWorkflow, handler::RootResponseWorkflow},
+    workflow::rpc::request::handler::RootResponseWorkflow,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -34,122 +29,59 @@ const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_SECONDS: u64 = 30;
 const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
 
-///
-/// RpcApi
-///
-/// Public, user-callable wrappers for Canic’s internal RPC workflows.
-///
-/// These functions:
-/// - form part of the **public API surface**
-/// - are safe to call from downstream canister `lib.rs` code
-/// - return [`Error`] suitable for IC boundaries
-///
-/// Internally, they delegate to workflow-level RPC implementations,
-/// preserving the layering:
-///
-///   user canister -> api -> workflow -> ops -> infra
-///
-/// Workflow returns internal [`InternalError`]; conversion to [`Error`]
-/// happens exclusively at this API boundary.
-///
+pub(super) async fn response_capability_v1(
+    envelope: RootCapabilityEnvelopeV1,
+) -> Result<RootCapabilityResponseV1, Error> {
+    let RootCapabilityEnvelopeV1 {
+        service,
+        capability_version,
+        capability,
+        proof,
+        metadata,
+    } = envelope;
 
-pub struct RpcApi;
-
-impl RpcApi {
-    pub async fn create_canister_request<A>(
-        canister_role: &CanisterRole,
-        parent: CreateCanisterParent,
-        extra: Option<A>,
-    ) -> Result<CreateCanisterResponse, Error>
-    where
-        A: CandidType + Send + Sync,
-    {
-        RpcRequestWorkflow::create_canister_request(canister_role, parent, extra)
-            .await
-            .map_err(Error::from)
-    }
-
-    pub async fn upgrade_canister_request(
-        canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, Error> {
-        RpcRequestWorkflow::upgrade_canister_request(canister_pid)
-            .await
-            .map_err(Error::from)
-    }
-
-    pub async fn response_attested(
-        request: Request,
-        attestation: SignedRoleAttestation,
-        min_accepted_epoch: u64,
-    ) -> Result<Response, Error> {
-        crate::api::auth::DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch)
-            .await?;
-        RootResponseWorkflow::response(request)
-            .await
-            .map_err(Error::from)
-    }
-
-    pub async fn response_capability_v1(
-        envelope: RootCapabilityEnvelopeV1,
-    ) -> Result<RootCapabilityResponseV1, Error> {
-        let RootCapabilityEnvelopeV1 {
+    let capability_key = root_capability_metric_key(&capability);
+    if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
+        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::EnvelopeRejected);
+        log!(
+            Topic::Rpc,
+            Warn,
+            "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
+            root_capability_family(&capability),
+            IcOps::msg_caller(),
             service,
             capability_version,
-            capability,
-            proof,
-            metadata,
-        } = envelope;
-
-        let capability_key = root_capability_metric_key(&capability);
-        if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
-            RootCapabilityMetrics::record(
-                capability_key,
-                RootCapabilityMetricEvent::EnvelopeRejected,
-            );
-            log!(
-                Topic::Rpc,
-                Warn,
-                "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-                root_capability_family(&capability),
-                IcOps::msg_caller(),
-                service,
-                capability_version,
-                capability_proof_mode_label(&proof),
-                err
-            );
-            return Err(err);
-        }
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::EnvelopeValidated);
-
-        if let Err(err) =
-            verify_root_capability_proof(&capability, capability_version, &proof).await
-        {
-            RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofRejected);
-            log!(
-                Topic::Rpc,
-                Warn,
-                "root capability proof rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-                root_capability_family(&capability),
-                IcOps::msg_caller(),
-                service,
-                capability_version,
-                capability_proof_mode_label(&proof),
-                err
-            );
-            return Err(err);
-        }
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofVerified);
-
-        let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
-
-        let capability = with_root_request_metadata(capability, replay_metadata);
-
-        let response = RootResponseWorkflow::response_replay_first(capability)
-            .await
-            .map_err(Error::from)?;
-
-        Ok(RootCapabilityResponseV1 { response })
+            capability_proof_mode_label(&proof),
+            err
+        );
+        return Err(err);
     }
+    RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::EnvelopeValidated);
+
+    if let Err(err) = verify_root_capability_proof(&capability, capability_version, &proof).await {
+        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofRejected);
+        log!(
+            Topic::Rpc,
+            Warn,
+            "root capability proof rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
+            root_capability_family(&capability),
+            IcOps::msg_caller(),
+            service,
+            capability_version,
+            capability_proof_mode_label(&proof),
+            err
+        );
+        return Err(err);
+    }
+    RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofVerified);
+
+    let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
+    let capability = with_root_request_metadata(capability, replay_metadata);
+    let response = RootResponseWorkflow::response_replay_first(capability)
+        .await
+        .map_err(Error::from)?;
+
+    Ok(RootCapabilityResponseV1 { response })
 }
 
 fn validate_root_capability_envelope(
@@ -519,6 +451,10 @@ fn replay_request_id(request_id: [u8; 16], nonce: [u8; 16]) -> [u8; 32] {
     hasher.update(nonce);
     hasher.finalize().into()
 }
+
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

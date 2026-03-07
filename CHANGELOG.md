@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.13.x] - 2026-03-07 - Distributed Capability Invocation
 
 - `0.13.0` starts distributed capability invocation with service-scoped capability envelopes, explicit proof models, standardized replay/hash-binding rules for cross-canister authorization, and a default cycle-tracker cadence of 60 minutes.
+- `0.13.1` sets up the control-plane decomposition pass to reduce hub pressure by splitting capability boundary validation, replay orchestration, and delegated-auth verification into smaller ownership units.
 
 See detailed breakdown:
 [docs/changelog/0.13.md](docs/changelog/0.13.md)
@@ -1095,17 +1096,12 @@ See detailed breakdown:
 
 ---
 
-## [0.1.7] - 2025-10-08
-- with dfx 0.30.2 now the subnet's pid can be read, and stored in the root's SubnetContext
+## [0.1.x] - 2025-10-08 - Initial Publish and Early Runtime Foundations
 
-## [0.1.4] - 2025-10-07
-- added ops::delegation::sync_session_with_source to stop repeated code in toko
-- added debug! macro that always does Log::Debug and has a conditional first argument
+- `0.1.0` published `canic` to crates.io after the final rename from `icu`.
+- `0.1.3` refreshed documentation, including a README rewrite and cleanup of outdated docs.
+- `0.1.4` added delegation sync helpers and a more ergonomic `debug!` logging macro.
+- `0.1.7` added subnet PID capture support with `dfx 0.30.2` for root subnet context tracking.
 
-## [0.1.3] - 2025-10-05
-- new logo and README.  Got Codex to check all the documentation to make sure it's more up-to-date.
-- removed a load of outdated documentation
-
-## [0.1.0] - 2025-10-04 - Published!
-- renamed to canic (like mechanic) because icu was taken by a unicode library on crates.io
-- publishing to crates.io.  I wouldn't use it in its current form though muhaha!  Lots more to come.
+See detailed breakdown:
+[docs/changelog/0.1.md](docs/changelog/0.1.md)

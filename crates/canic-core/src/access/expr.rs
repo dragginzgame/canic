@@ -208,13 +208,13 @@ pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
-    pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
+    pub const fn is_authenticated(required_scope: Option<&'static str>) -> AccessExpr {
         builtin(BuiltinPredicate::Authenticated { required_scope })
     }
 
     #[must_use]
-    pub const fn is_authenticated() -> AccessExpr {
-        authenticated(None)
+    pub const fn is_authenticated_with_scope(required_scope: &'static str) -> AccessExpr {
+        is_authenticated(Some(required_scope))
     }
 }
 

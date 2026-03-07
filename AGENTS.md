@@ -575,6 +575,12 @@ Rules:
 * Do not add `use crate::...` imports in the middle of a file.
 * Group imports logically and keep them consolidated instead of scattering them across sections.
 
+### Module layout
+
+* Use directory modules with `mod.rs` for module roots (for example `foo/mod.rs`), not flat `foo.rs` roots.
+* Never keep both `foo.rs` and `foo/` for the same module name at the same level.
+* When expanding a module, move it to `foo/mod.rs` and keep all of its files under `foo/`.
+
 ### Doc comments
 
 * Struct doc comments must be exactly:
