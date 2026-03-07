@@ -37,6 +37,10 @@ impl RootCapabilityMetricKey {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum RootCapabilityMetricEvent {
+    EnvelopeRejected,
+    EnvelopeValidated,
+    ProofRejected,
+    ProofVerified,
     Authorized,
     Denied,
     ReplayAccepted,
@@ -52,6 +56,10 @@ impl RootCapabilityMetricEvent {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::EnvelopeRejected => "EnvelopeRejected",
+            Self::EnvelopeValidated => "EnvelopeValidated",
+            Self::ProofRejected => "ProofRejected",
+            Self::ProofVerified => "ProofVerified",
             Self::Authorized => "Authorized",
             Self::Denied => "Denied",
             Self::ReplayAccepted => "ReplayAccepted",

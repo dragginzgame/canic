@@ -3,12 +3,20 @@
 
 use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic_core::dto::{
-    auth::{AttestationKeyStatus, SignedRoleAttestation},
+    auth::{AttestationKeyStatus, RoleAttestationRequest, SignedRoleAttestation},
+    capability::{
+        CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+        DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope, PROOF_VERSION_V1,
+        RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+    },
     error::{Error, ErrorCode},
+    rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
 };
+use canic_core::ids::CanisterRole;
 use pocket_ic::PocketIcBuilder;
 use serde::de::DeserializeOwned;
+use sha2::{Digest, Sha256};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -154,6 +162,39 @@ fn role_attestation_verify_rejects_audience_mismatch() {
 }
 
 #[test]
+fn role_attestation_verify_rejects_epoch_floor() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+
+    let verified: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_verify_role_attestation",
+        (issued, 1u64),
+    );
+    let err = verified.expect_err("verification must fail when epoch floor is higher");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("epoch"),
+        "expected epoch rejection, got: {err:?}"
+    );
+}
+
+#[test]
 fn role_attestation_verify_handles_rotated_key_grace_window() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
@@ -252,6 +293,541 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     verify_current_after_grace.expect("current key should verify after grace");
 }
 
+#[test]
+fn capability_endpoint_role_attestation_proof_happy_path() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 1, 9, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let response = response.expect("capability endpoint call failed");
+    match response.response {
+        Response::Cycles(res) => assert_eq!(res.cycles_transferred, 1),
+        other => panic!("expected cycles response, got: {other:?}"),
+    }
+}
+
+#[test]
+fn capability_endpoint_rejects_expired_role_attestation() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (1u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+    pic.advance_time(Duration::from_secs(2));
+    pic.tick();
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 2, 8, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("expired attestation must fail");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("expired"),
+        "expected expired attestation error, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_rejects_audience_mismatch() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let wrong_audience = Principal::from_slice(&[9; 29]);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(wrong_audience), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 3, 7, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("audience mismatch must fail");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("audience mismatch"),
+        "expected audience mismatch error, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::IssueRoleAttestation(RoleAttestationRequest {
+        subject: Principal::anonymous(),
+        role: CanisterRole::ROOT,
+        subnet_id: None,
+        audience: Some(root_id),
+        ttl_secs: 60,
+        epoch: 0,
+        metadata: None,
+    });
+
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 4, 6, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("policy subject mismatch must fail");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("must match caller"),
+        "expected subject mismatch policy error, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::IssueRoleAttestation(RoleAttestationRequest {
+        subject: root_id,
+        role: CanisterRole::ROOT,
+        subnet_id: None,
+        audience: None,
+        ttl_secs: 60,
+        epoch: 0,
+        metadata: None,
+    });
+
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 5, 5, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("missing audience policy must fail");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("audience is required"),
+        "expected audience-required policy error, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_rejects_tampered_signature() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let mut issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+    if let Some(first) = issued.signature.first_mut() {
+        *first ^= 0x01;
+    }
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 6, 4, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("tampered attestation signature must fail");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("signature"),
+        "expected signature error, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_allows_structural_cycles_for_registered_caller() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued_at = issued
+        .expect("attestation issuance failed")
+        .payload
+        .issued_at;
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::Structural,
+        metadata: capability_metadata(issued_at, 7, 3, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let response = response.expect("structural cycles proof should succeed");
+    match response.response {
+        Response::Cycles(res) => assert_eq!(res.cycles_transferred, 1),
+        other => panic!("expected cycles response, got: {other:?}"),
+    }
+}
+
+#[test]
+fn capability_endpoint_rejects_structural_for_unsupported_capability() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued_at = issued
+        .expect("attestation issuance failed")
+        .payload
+        .issued_at;
+
+    let request = Request::IssueRoleAttestation(RoleAttestationRequest {
+        subject: root_id,
+        role: CanisterRole::ROOT,
+        subnet_id: None,
+        audience: Some(root_id),
+        ttl_secs: 60,
+        epoch: 0,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::Structural,
+        metadata: capability_metadata(issued_at, 7, 3, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("unsupported structural capability must fail closed");
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("only supported"),
+        "expected structural capability-scope rejection, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_rejects_delegated_grant_scope_mismatch() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued_at = issued
+        .expect("attestation issuance failed")
+        .payload
+        .issued_at;
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let capability_hash = root_capability_hash(root_id, &request);
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::DelegatedGrant(DelegatedGrantProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash,
+            grant: DelegatedGrant {
+                issuer: root_id,
+                subject: root_id,
+                audience: vec![root_id],
+                scope: DelegatedGrantScope {
+                    service: CapabilityService::Root,
+                    capability_family: "root".to_string(),
+                },
+                capability_hash,
+                quota: 1,
+                issued_at,
+                expires_at: issued_at.saturating_add(60),
+                epoch: 0,
+            },
+            grant_sig: vec![1, 2, 3],
+            key_id: 1,
+        }),
+        metadata: capability_metadata(issued_at, 8, 2, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("delegated grant scope mismatch must fail closed");
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("capability_family"),
+        "expected delegated-grant scope rejection, got: {err:?}"
+    );
+}
+
+#[test]
+fn capability_endpoint_rejects_capability_hash_mismatch() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: [0u8; 32],
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 9, 1, 60),
+    };
+
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err = response.expect_err("hash mismatch must fail closed");
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message.contains("capability_hash"),
+        "expected capability_hash mismatch error, got: {err:?}"
+    );
+}
+
 fn install_root_canister(pic: &pocket_ic::PocketIc, wasm: Vec<u8>) -> Principal {
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -281,6 +857,62 @@ where
         .expect("update_call failed");
 
     decode_one(&result).expect("decode response")
+}
+
+fn root_capability_hash(target_canister: Principal, capability: &Request) -> [u8; 32] {
+    const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
+    let canonical = strip_request_metadata(capability.clone());
+
+    let payload = encode_one(&(
+        target_canister,
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        canonical,
+    ))
+    .expect("encode capability payload");
+    let mut hasher = Sha256::new();
+    hasher.update(CAPABILITY_HASH_DOMAIN_V1);
+    hasher.update(payload);
+    hasher.finalize().into()
+}
+
+fn strip_request_metadata(request: Request) -> Request {
+    match request {
+        Request::CreateCanister(mut req) => {
+            req.metadata = None;
+            Request::CreateCanister(req)
+        }
+        Request::UpgradeCanister(mut req) => {
+            req.metadata = None;
+            Request::UpgradeCanister(req)
+        }
+        Request::Cycles(mut req) => {
+            req.metadata = None;
+            Request::Cycles(req)
+        }
+        Request::IssueDelegation(mut req) => {
+            req.metadata = None;
+            Request::IssueDelegation(req)
+        }
+        Request::IssueRoleAttestation(mut req) => {
+            req.metadata = None;
+            Request::IssueRoleAttestation(req)
+        }
+    }
+}
+
+const fn capability_metadata(
+    issued_at: u64,
+    request_id_seed: u8,
+    nonce_seed: u8,
+    ttl_seconds: u32,
+) -> CapabilityRequestMetadata {
+    CapabilityRequestMetadata {
+        request_id: [request_id_seed; 16],
+        nonce: [nonce_seed; 16],
+        issued_at,
+        ttl_seconds,
+    }
 }
 
 fn build_canisters_once(workspace_root: &PathBuf) {

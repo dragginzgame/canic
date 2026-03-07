@@ -8,8 +8,8 @@ use std::time::Duration;
 /// Shared initial delay for workflow timers to allow init work to settle.
 pub const WORKFLOW_INIT_DELAY: Duration = Duration::from_secs(10);
 
-/// Shared cadence for cycle tracking (10 minutes).
-pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_secs(60 * 10);
+/// Shared cadence for cycle tracking (60 minutes).
+pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
 /// Shared cadence for log retention (10 minutes).
 pub const WORKFLOW_LOG_RETENTION_INTERVAL: Duration = Duration::from_secs(60 * 10);
