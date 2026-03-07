@@ -1,4 +1,4 @@
-use super::{RootCapability, RootContext, authorize, validate_delegation_cert_policy};
+use super::{RootCapability, RootContext, authorize, delegation};
 use crate::{
     InternalError,
     dto::auth::{
@@ -122,7 +122,7 @@ async fn execute_issue_delegation(
         aud: req.aud.clone(),
     };
 
-    validate_delegation_cert_policy(&cert)?;
+    delegation::validate_delegation_cert_policy(&cert)?;
 
     let response: DelegationProvisionResponse =
         DelegationWorkflow::provision(DelegationProvisionRequest {
