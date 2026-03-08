@@ -1,128 +1,49 @@
-use crate::{
-    dto::auth::{
-        DelegationProvisionResponse, DelegationRequest, RoleAttestationRequest,
-        SignedRoleAttestation,
-    },
-    ops::prelude::*,
-};
-
-///
 /// Request
-/// Root-directed orchestration commands (ops-local).
 ///
+/// Ops-local alias for the canonical RPC request DTO.
+pub type Request = crate::dto::rpc::Request;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum Request {
-    CreateCanister(CreateCanisterRequest),
-    UpgradeCanister(UpgradeCanisterRequest),
-    Cycles(CyclesRequest),
-    IssueDelegation(DelegationRequest),
-    IssueRoleAttestation(RoleAttestationRequest),
-}
-
-///
 /// RootRequestMetadata
-/// Replay and idempotency metadata for mutating root requests.
 ///
+/// Ops-local alias for replay/idempotency request metadata.
+pub type RootRequestMetadata = crate::dto::rpc::RootRequestMetadata;
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootRequestMetadata {
-    pub request_id: [u8; 32],
-    pub ttl_seconds: u64,
-}
-
-///
 /// CreateCanisterRequest
-/// Payload for [`Request::CreateCanister`]
 ///
+/// Ops-local alias for canister-provision request payload.
+pub type CreateCanisterRequest = crate::dto::rpc::CreateCanisterRequest;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CreateCanisterRequest {
-    pub canister_role: CanisterRole,
-    pub parent: CreateCanisterParent,
-    pub extra_arg: Option<Vec<u8>>,
-    #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
-}
-
-///
 /// CreateCanisterParent
-/// Parent-location choices for a new canister
 ///
+/// Ops-local alias for parent-placement selector.
+pub type CreateCanisterParent = crate::dto::rpc::CreateCanisterParent;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum CreateCanisterParent {
-    Root,
-    /// Use the requesting canister as parent.
-    ThisCanister,
-    /// Use the requesting canister's parent (creates a sibling).
-    Parent,
-    Canister(Principal),
-    Directory(CanisterRole),
-}
-
-///
 /// UpgradeCanisterRequest
-/// Payload for [`Request::UpgradeCanister`]
 ///
+/// Ops-local alias for canister-upgrade request payload.
+pub type UpgradeCanisterRequest = crate::dto::rpc::UpgradeCanisterRequest;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct UpgradeCanisterRequest {
-    pub canister_pid: Principal,
-    #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
-}
-
-///
 /// CyclesRequest
-/// Payload for [`Request::Cycles`]
 ///
+/// Ops-local alias for cycles request payload.
+pub type CyclesRequest = crate::dto::rpc::CyclesRequest;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CyclesRequest {
-    pub cycles: u128,
-    #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
-}
-
-///
 /// Response
-/// Response payloads produced by root for orchestration requests (ops-local).
 ///
+/// Ops-local alias for canonical RPC response DTO.
+pub type Response = crate::dto::rpc::Response;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub enum Response {
-    CreateCanister(CreateCanisterResponse),
-    UpgradeCanister(UpgradeCanisterResponse),
-    Cycles(CyclesResponse),
-    DelegationIssued(DelegationProvisionResponse),
-    RoleAttestationIssued(SignedRoleAttestation),
-}
-
-///
 /// CreateCanisterResponse
-/// Result of creating and installing a new canister.
 ///
+/// Ops-local alias for canister-provision response payload.
+pub type CreateCanisterResponse = crate::dto::rpc::CreateCanisterResponse;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CreateCanisterResponse {
-    pub new_canister_pid: Principal,
-}
-
-///
 /// UpgradeCanisterResponse
-/// Result of an upgrade request (currently empty, reserved for metadata)
 ///
+/// Ops-local alias for canister-upgrade response payload.
+pub type UpgradeCanisterResponse = crate::dto::rpc::UpgradeCanisterResponse;
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct UpgradeCanisterResponse {}
-
-///
 /// CyclesResponse
-/// Result of transferring cycles to a child canister
 ///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CyclesResponse {
-    pub cycles_transferred: u128,
-}
+/// Ops-local alias for cycles response payload.
+pub type CyclesResponse = crate::dto::rpc::CyclesResponse;

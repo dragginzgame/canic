@@ -84,7 +84,7 @@ impl Rpc for CreateCanisterRpc {
     type Response = CreateCanisterResponse;
 
     fn into_request(self) -> Request {
-        Request::CreateCanister(CreateCanisterRequest {
+        Request::create_canister(CreateCanisterRequest {
             canister_role: self.canister_role,
             parent: self.parent,
             extra_arg: self.extra_arg,
@@ -113,7 +113,7 @@ impl Rpc for UpgradeCanisterRpc {
     type Response = UpgradeCanisterResponse;
 
     fn into_request(self) -> Request {
-        Request::UpgradeCanister(UpgradeCanisterRequest {
+        Request::upgrade_canister(UpgradeCanisterRequest {
             canister_pid: self.canister_pid,
             metadata: self.metadata,
         })
@@ -140,7 +140,7 @@ impl Rpc for CyclesRpc {
     type Response = CyclesResponse;
 
     fn into_request(self) -> Request {
-        Request::Cycles(CyclesRequest {
+        Request::cycles(CyclesRequest {
             cycles: self.cycles,
             metadata: self.metadata,
         })

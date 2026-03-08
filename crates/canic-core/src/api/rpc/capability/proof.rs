@@ -1,6 +1,9 @@
 use crate::{
     cdk::types::Principal,
-    dto::{error::Error, rpc::Request},
+    dto::{
+        error::Error,
+        rpc::{Request, RequestFamily},
+    },
     ops::{ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
 };
 
@@ -16,23 +19,25 @@ pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), E
         ));
     }
 
-    match capability {
-        Request::Cycles(_) => Ok(()),
-        Request::UpgradeCanister(req) => {
-            let target = SubnetRegistryOps::get(req.canister_pid).ok_or_else(|| {
-                Error::forbidden("structural proof requires registered upgrade target")
-            })?;
-            if target.parent_pid != Some(caller) {
-                return Err(Error::forbidden(
-                    "structural proof requires upgrade target to be a direct child of caller",
-                ));
-            }
-            Ok(())
-        }
-        _ => Err(Error::forbidden(
-            "structural proof is only supported for root cycles and upgrade capabilities",
-        )),
+    if capability.family() == RequestFamily::MintCycles {
+        return Ok(());
     }
+
+    if let Some(request) = capability.upgrade_request() {
+        let target = SubnetRegistryOps::get(request.canister_pid).ok_or_else(|| {
+            Error::forbidden("structural proof requires registered upgrade target")
+        })?;
+        if target.parent_pid != Some(caller) {
+            return Err(Error::forbidden(
+                "structural proof requires upgrade target to be a direct child of caller",
+            ));
+        }
+        return Ok(());
+    }
+
+    Err(Error::forbidden(
+        "structural proof is only supported for root cycles and upgrade capabilities",
+    ))
 }
 
 /// verify_capability_hash_binding

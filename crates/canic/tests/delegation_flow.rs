@@ -174,6 +174,17 @@ fn authenticated_rpc_flow() {
         .expect("user_shard_mint_token transport failed")
         .expect("user_shard_mint_token application failed");
 
+    // Establish that the token is otherwise valid in the same request pipeline.
+    let ok_response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+        test_pid,
+        subject,
+        "test_verify_delegated_token",
+        (token.clone(),),
+    );
+    ok_response
+        .expect("test_verify_delegated_token transport failed for subject caller")
+        .expect("test_verify_delegated_token should succeed for subject caller");
+
     log_step(&format!(
         "calling test_verify_delegated_token via test={test_pid}"
     ));
@@ -188,6 +199,10 @@ fn authenticated_rpc_flow() {
         .expect("test_verify_delegated_token transport failed")
         .expect_err("test_verify_delegated_token should fail on subject mismatch");
     assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("does not match caller"),
+        "expected caller-subject binding rejection, got: {err:?}"
+    );
 }
 
 #[test]
