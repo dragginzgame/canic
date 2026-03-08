@@ -34,6 +34,41 @@ const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 
 pub type Role = CanisterRole;
 
+///
+/// CallerBoundToken
+///
+/// Verified delegated token that has passed caller-subject binding.
+struct CallerBoundToken {
+    verified: VerifiedDelegatedToken,
+}
+
+impl CallerBoundToken {
+    /// bind_to_caller
+    ///
+    /// Enforce subject binding and return a caller-bound token wrapper.
+    fn bind_to_caller(
+        verified: VerifiedDelegatedToken,
+        caller: Principal,
+    ) -> Result<Self, AccessError> {
+        enforce_subject_binding(verified.claims.sub, caller)?;
+        Ok(Self { verified })
+    }
+
+    /// scopes
+    ///
+    /// Borrow token scopes after caller binding has been enforced.
+    fn scopes(&self) -> &[String] {
+        &self.verified.claims.scopes
+    }
+
+    /// into_verified
+    ///
+    /// Unwrap the verified delegated token for downstream consumers.
+    fn into_verified(self) -> VerifiedDelegatedToken {
+        self.verified
+    }
+}
+
 pub(crate) async fn delegated_token_verified(
     caller: Principal,
     required_scope: Option<&str>,
@@ -58,7 +93,7 @@ pub(crate) async fn delegated_token_verified(
 }
 
 /// Verify a delegated token against the configured authority.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 async fn verify_token(
     token: DelegatedToken,
     caller: Principal,
@@ -70,10 +105,10 @@ async fn verify_token(
     let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
         .map_err(|err| AccessError::Denied(err.to_string()))?;
 
-    enforce_subject_binding(verified.claims.sub, caller)?;
-    enforce_required_scope(required_scope, &verified.claims.scopes)?;
+    let caller_bound = CallerBoundToken::bind_to_caller(verified, caller)?;
+    enforce_required_scope(required_scope, caller_bound.scopes())?;
 
-    Ok(verified)
+    Ok(caller_bound.into_verified())
 }
 
 fn enforce_subject_binding(sub: Principal, caller: Principal) -> Result<(), AccessError> {
@@ -122,7 +157,7 @@ pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
 
 /// Require that the caller appears in the active whitelist (IC deployments).
 /// No-op on local builds; enforces whitelist on IC.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
     let cfg = Config::try_get().ok_or_else(|| dependency_unavailable("config not initialized"))?;
 
@@ -136,7 +171,7 @@ pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is a direct child of the current canister.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_child(caller: Principal) -> Result<(), AccessError> {
     if CanisterChildrenOps::contains_pid(&caller) {
         Ok(())
@@ -148,7 +183,7 @@ pub async fn is_child(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is the configured parent canister.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
     let snapshot = EnvOps::snapshot();
     let parent_pid = snapshot
@@ -165,7 +200,7 @@ pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller equals the configured root canister.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
     let root_pid =
         EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
@@ -180,7 +215,7 @@ pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is the currently executing canister.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     if caller == canister_self() {
         Ok(())
@@ -196,7 +231,7 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 // -----------------------------------------------------------------------------
 
 /// Require that the caller is registered with the expected canister role.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
     if !EnvOps::is_root() {
         return Err(non_root_subnet_registry_predicate_denial());
@@ -216,7 +251,7 @@ pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> 
 
 /// Ensure the caller matches the app directory entry recorded for `role`.
 /// Require that the caller is registered as a canister on this subnet.
-#[allow(clippy::unused_async)]
+#[expect(clippy::unused_async)]
 pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
     if !EnvOps::is_root() {
         return Err(non_root_subnet_registry_predicate_denial());

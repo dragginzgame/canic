@@ -153,7 +153,7 @@ impl RpcOps {
         request: Request,
         attestation: SignedRoleAttestation,
     ) -> Result<Response, InternalError> {
-        let dto_request: crate::dto::rpc::Request = request.clone().into();
+        let dto_request: crate::dto::rpc::Request = request.clone();
         let capability_hash = root_capability_hash(root_pid, &dto_request)?;
         let envelope = RootCapabilityEnvelopeV1 {
             service: CapabilityService::Root,
@@ -170,7 +170,8 @@ impl RpcOps {
         let response: RootCapabilityResponseV1 =
             Self::call_rpc_result(root_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
                 .await?;
-        Ok(response.response.into())
+
+        Ok(response.response)
     }
 }
 
@@ -200,28 +201,10 @@ struct CapabilitySourceMetadata {
 }
 
 fn request_metadata(request: &Request) -> Option<CapabilitySourceMetadata> {
-    match request {
-        Request::CreateCanister(req) => req.metadata.map(|m| CapabilitySourceMetadata {
-            request_id: m.request_id,
-            ttl_seconds: m.ttl_seconds,
-        }),
-        Request::UpgradeCanister(req) => req.metadata.map(|m| CapabilitySourceMetadata {
-            request_id: m.request_id,
-            ttl_seconds: m.ttl_seconds,
-        }),
-        Request::Cycles(req) => req.metadata.map(|m| CapabilitySourceMetadata {
-            request_id: m.request_id,
-            ttl_seconds: m.ttl_seconds,
-        }),
-        Request::IssueDelegation(req) => req.metadata.map(|m| CapabilitySourceMetadata {
-            request_id: m.request_id,
-            ttl_seconds: m.ttl_seconds,
-        }),
-        Request::IssueRoleAttestation(req) => req.metadata.map(|m| CapabilitySourceMetadata {
-            request_id: m.request_id,
-            ttl_seconds: m.ttl_seconds,
-        }),
-    }
+    request.metadata().map(|m| CapabilitySourceMetadata {
+        request_id: m.request_id,
+        ttl_seconds: m.ttl_seconds,
+    })
 }
 
 fn generate_capability_nonce() -> [u8; 16] {
@@ -253,7 +236,7 @@ fn root_capability_hash(
     target_canister: Principal,
     capability: &crate::dto::rpc::Request,
 ) -> Result<[u8; 32], InternalError> {
-    let canonical = strip_dto_request_metadata(capability.clone());
+    let canonical = capability.clone().without_metadata();
     let payload = encode_one(&(
         target_canister,
         CapabilityService::Root,
@@ -271,31 +254,6 @@ fn root_capability_hash(
     hasher.update(CAPABILITY_HASH_DOMAIN_V1);
     hasher.update(payload);
     Ok(hasher.finalize().into())
-}
-
-fn strip_dto_request_metadata(request: crate::dto::rpc::Request) -> crate::dto::rpc::Request {
-    match request {
-        crate::dto::rpc::Request::CreateCanister(mut req) => {
-            req.metadata = None;
-            crate::dto::rpc::Request::CreateCanister(req)
-        }
-        crate::dto::rpc::Request::UpgradeCanister(mut req) => {
-            req.metadata = None;
-            crate::dto::rpc::Request::UpgradeCanister(req)
-        }
-        crate::dto::rpc::Request::Cycles(mut req) => {
-            req.metadata = None;
-            crate::dto::rpc::Request::Cycles(req)
-        }
-        crate::dto::rpc::Request::IssueDelegation(mut req) => {
-            req.metadata = None;
-            crate::dto::rpc::Request::IssueDelegation(req)
-        }
-        crate::dto::rpc::Request::IssueRoleAttestation(mut req) => {
-            req.metadata = None;
-            crate::dto::rpc::Request::IssueRoleAttestation(req)
-        }
-    }
 }
 
 fn new_root_attestation_request_metadata() -> RootRequestMetadata {

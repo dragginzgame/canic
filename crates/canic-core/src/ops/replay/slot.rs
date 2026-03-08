@@ -1,4 +1,5 @@
 use crate::{
+    ops::replay::guard::ReplayPending,
     ops::storage::replay::RootReplayOps,
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
 };
@@ -14,8 +15,24 @@ pub fn get_root_slot(key: ReplaySlotKey) -> Option<RootReplayRecord> {
 /// upsert_root_slot
 ///
 /// Insert or replace a replay record in the root replay store.
+#[cfg(test)]
 pub fn upsert_root_slot(key: ReplaySlotKey, record: RootReplayRecord) {
     RootReplayOps::upsert(key, record);
+}
+
+/// commit_root_slot
+///
+/// Persist a fresh replay reservation using the canonical root replay schema.
+pub fn commit_root_slot(pending: ReplayPending, response_candid: Vec<u8>) {
+    RootReplayOps::upsert(
+        pending.slot_key,
+        RootReplayRecord {
+            payload_hash: pending.payload_hash,
+            issued_at: pending.issued_at,
+            expires_at: pending.expires_at,
+            response_candid,
+        },
+    );
 }
 
 /// root_slot_len

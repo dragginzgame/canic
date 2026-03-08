@@ -578,11 +578,35 @@ fn root_capability_metrics(setup: &RootSetup) -> Vec<RootCapabilityMetricEntry> 
 }
 
 fn metric_count(entries: &[RootCapabilityMetricEntry], capability: &str, event: &str) -> u64 {
+    let (event_type, outcome) = legacy_event_parts(event);
     entries
         .iter()
-        .filter(|entry| entry.capability == capability && entry.event == event)
+        .filter(|entry| {
+            entry.capability == capability
+                && entry.event_type == event_type
+                && entry.outcome == outcome
+        })
         .map(|entry| entry.count)
         .sum()
+}
+
+fn legacy_event_parts(event: &str) -> (&'static str, &'static str) {
+    match event {
+        "EnvelopeRejected" => ("Envelope", "Rejected"),
+        "EnvelopeValidated" => ("Envelope", "Accepted"),
+        "ProofRejected" => ("Proof", "Rejected"),
+        "ProofVerified" => ("Proof", "Accepted"),
+        "Authorized" => ("Authorization", "Accepted"),
+        "Denied" => ("Authorization", "Denied"),
+        "ReplayAccepted" => ("Replay", "Accepted"),
+        "ReplayDuplicateSame" => ("Replay", "DuplicateSame"),
+        "ReplayDuplicateConflict" => ("Replay", "DuplicateConflict"),
+        "ReplayExpired" => ("Replay", "Expired"),
+        "ReplayTtlExceeded" => ("Replay", "TtlExceeded"),
+        "ExecutionSuccess" => ("Execution", "Success"),
+        "ExecutionError" => ("Execution", "Error"),
+        other => panic!("unexpected legacy root capability metric event: {other}"),
+    }
 }
 
 fn root_now_secs(setup: &RootSetup) -> u64 {

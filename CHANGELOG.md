@@ -5,13 +5,23 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.14.x] - 2026-03-08 - Next Minor Line
+
+- `0.14.0` opens the next minor line; patch notes will be added as `0.14.x` changes are finalized.
+
+See detailed breakdown:
+[docs/changelog/0.14.md](docs/changelog/0.14.md)
+
+---
+
 ## [0.13.x] - 2026-03-07 - Distributed Capability Invocation
 
-- `0.13.0` starts distributed capability invocation with service-scoped capability envelopes, explicit proof models, standardized replay/hash-binding rules for cross-canister authorization, and a default cycle-tracker cadence of 60 minutes.
-- `0.13.1` delivers the control-plane decomposition pass, splitting `api/rpc`, `workflow/rpc/request/handler`, and `ops/auth` into smaller module-owned units while preserving capability/auth behavior.
-- `0.13.2` continues the extraction pass by converting additional control-plane files to directory modules and moving request/auth helpers behind thinner facades.
-- `0.13.3` completes a follow-on auth/control-plane split pass, applies the directory-module (`mod.rs`) layout rule, and refreshes recurring complexity/velocity audit baselines.
-- `0.13.4` consolidates proof/replay/auth control-plane internals with pluggable capability verifiers, extracted replay guards, fail-fast duplicate replay handling, and layered delegated-auth error taxonomy.
+- `0.13.0` introduced signed capability envelopes for cross-canister root calls, with built-in replay protection and capability hashing to prevent request reuse/tampering.
+- `0.13.1` split large RPC/auth workflow files into smaller modules, making the control plane easier to read and change without altering behavior.
+- `0.13.2` continued the module split and moved request/auth helpers behind cleaner facades, reducing coupling between high-traffic code paths.
+- `0.13.3` finished the auth/control-plane extraction, standardized directory modules with `mod.rs`, and refreshed complexity/velocity audit baselines.
+- `0.13.4` simplified proof, replay, and auth internals with pluggable verifiers, a dedicated replay guard path, faster duplicate rejection, and clearer delegated-auth error grouping.
+- `0.13.5` further reduced branching pressure by moving replay commit fully into ops, switching built-in access predicates to evaluator-based dispatch, and replacing monolithic root capability metric events with structured `event_type`/`outcome`/`proof_mode` metrics.
 
 See detailed breakdown:
 [docs/changelog/0.13.md](docs/changelog/0.13.md)

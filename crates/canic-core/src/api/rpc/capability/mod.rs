@@ -6,14 +6,15 @@ use crate::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{Request, RootRequestMetadata},
+        rpc::{Request, RequestFamily, RootRequestMetadata},
     },
     log,
     log::Topic,
     ops::{
         ic::IcOps,
         runtime::metrics::root_capability::{
-            RootCapabilityMetricEvent, RootCapabilityMetricKey, RootCapabilityMetrics,
+            RootCapabilityMetricEventType, RootCapabilityMetricKey, RootCapabilityMetricOutcome,
+            RootCapabilityMetricProofMode, RootCapabilityMetrics,
         },
     },
     workflow::rpc::request::handler::RootResponseWorkflow,
@@ -47,8 +48,14 @@ pub(super) async fn response_capability_v1(
     } = envelope;
 
     let capability_key = root_capability_metric_key(&capability);
+    let proof_mode = capability_proof_mode_metric_key(&proof);
     if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::EnvelopeRejected);
+        RootCapabilityMetrics::record_metric(
+            capability_key,
+            RootCapabilityMetricEventType::Envelope,
+            RootCapabilityMetricOutcome::Rejected,
+            proof_mode,
+        );
         log!(
             Topic::Rpc,
             Warn,
@@ -62,10 +69,20 @@ pub(super) async fn response_capability_v1(
         );
         return Err(err);
     }
-    RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::EnvelopeValidated);
+    RootCapabilityMetrics::record_metric(
+        capability_key,
+        RootCapabilityMetricEventType::Envelope,
+        RootCapabilityMetricOutcome::Accepted,
+        proof_mode,
+    );
 
     if let Err(err) = verify_root_capability_proof(&capability, capability_version, &proof).await {
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofRejected);
+        RootCapabilityMetrics::record_metric(
+            capability_key,
+            RootCapabilityMetricEventType::Proof,
+            RootCapabilityMetricOutcome::Rejected,
+            proof_mode,
+        );
         log!(
             Topic::Rpc,
             Warn,
@@ -79,7 +96,12 @@ pub(super) async fn response_capability_v1(
         );
         return Err(err);
     }
-    RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ProofVerified);
+    RootCapabilityMetrics::record_metric(
+        capability_key,
+        RootCapabilityMetricEventType::Proof,
+        RootCapabilityMetricOutcome::Accepted,
+        proof_mode,
+    );
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
     let capability = with_root_request_metadata(capability, replay_metadata);
@@ -124,12 +146,12 @@ fn verify_capability_hash_binding(
 }
 
 const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetricKey {
-    match capability {
-        Request::CreateCanister(_) => RootCapabilityMetricKey::Provision,
-        Request::UpgradeCanister(_) => RootCapabilityMetricKey::Upgrade,
-        Request::Cycles(_) => RootCapabilityMetricKey::MintCycles,
-        Request::IssueDelegation(_) => RootCapabilityMetricKey::IssueDelegation,
-        Request::IssueRoleAttestation(_) => RootCapabilityMetricKey::IssueRoleAttestation,
+    match capability.family() {
+        RequestFamily::Provision => RootCapabilityMetricKey::Provision,
+        RequestFamily::Upgrade => RootCapabilityMetricKey::Upgrade,
+        RequestFamily::MintCycles => RootCapabilityMetricKey::MintCycles,
+        RequestFamily::IssueDelegation => RootCapabilityMetricKey::IssueDelegation,
+        RequestFamily::IssueRoleAttestation => RootCapabilityMetricKey::IssueRoleAttestation,
     }
 }
 
@@ -138,6 +160,16 @@ const fn capability_proof_mode_label(proof: &CapabilityProof) -> &'static str {
         CapabilityProof::Structural => "Structural",
         CapabilityProof::RoleAttestation(_) => "RoleAttestation",
         CapabilityProof::DelegatedGrant(_) => "DelegatedGrant",
+    }
+}
+
+const fn capability_proof_mode_metric_key(
+    proof: &CapabilityProof,
+) -> RootCapabilityMetricProofMode {
+    match proof {
+        CapabilityProof::Structural => RootCapabilityMetricProofMode::Structural,
+        CapabilityProof::RoleAttestation(_) => RootCapabilityMetricProofMode::RoleAttestation,
+        CapabilityProof::DelegatedGrant(_) => RootCapabilityMetricProofMode::DelegatedGrant,
     }
 }
 
@@ -191,7 +223,7 @@ fn root_capability_hash(
     hash::root_capability_hash(target_canister, capability_version, capability)
 }
 
-fn with_root_request_metadata(request: Request, metadata: RootRequestMetadata) -> Request {
+const fn with_root_request_metadata(request: Request, metadata: RootRequestMetadata) -> Request {
     replay::with_root_request_metadata(request, metadata)
 }
 

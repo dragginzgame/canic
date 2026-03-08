@@ -10,7 +10,10 @@ use crate::{
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
-        root_capability::{RootCapabilityMetricEvent, RootCapabilityMetricKey},
+        root_capability::{
+            RootCapabilityMetricEventType, RootCapabilityMetricKey, RootCapabilityMetricOutcome,
+            RootCapabilityMetricProofMode,
+        },
         timer::{TimerMetricKey, TimerMode},
     },
 };
@@ -167,14 +170,26 @@ pub struct RootCapabilityMetricEntryMapper;
 impl RootCapabilityMetricEntryMapper {
     #[must_use]
     pub fn record_to_view(
-        raw: impl IntoIterator<Item = (RootCapabilityMetricKey, RootCapabilityMetricEvent, u64)>,
+        raw: impl IntoIterator<
+            Item = (
+                RootCapabilityMetricKey,
+                RootCapabilityMetricEventType,
+                RootCapabilityMetricOutcome,
+                RootCapabilityMetricProofMode,
+                u64,
+            ),
+        >,
     ) -> Vec<RootCapabilityMetricEntry> {
         raw.into_iter()
-            .map(|(capability, event, count)| RootCapabilityMetricEntry {
-                capability: capability.metric_label().to_string(),
-                event: event.metric_label().to_string(),
-                count,
-            })
+            .map(
+                |(capability, event_type, outcome, proof_mode, count)| RootCapabilityMetricEntry {
+                    capability: capability.metric_label().to_string(),
+                    event_type: event_type.metric_label().to_string(),
+                    outcome: outcome.metric_label().to_string(),
+                    proof_mode: proof_mode.metric_label().to_string(),
+                    count,
+                },
+            )
             .collect()
     }
 }

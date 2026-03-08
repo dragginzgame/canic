@@ -5,12 +5,14 @@ use crate::storage::stable::replay::ReplaySlotKey;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::{Request, Response, RootCapabilityRequest},
+    dto::rpc::{Request, Response, RootCapabilityCommand},
     ops::{
         ic::IcOps,
         replay::guard::ReplayPending,
         runtime::env::EnvOps,
-        runtime::metrics::root_capability::{RootCapabilityMetricEvent, RootCapabilityMetrics},
+        runtime::metrics::root_capability::{
+            RootCapabilityMetricEventType, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+        },
     },
 };
 
@@ -69,7 +71,7 @@ impl RootResponseWorkflow {
         order: AuthorizationPipelineOrder,
     ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
-        let capability_req = RootCapabilityRequest::from(req);
+        let capability_req = RootCapabilityCommand::from(req);
         let capability = Self::map_request(capability_req);
         let capability_key = capability.metric_key();
 
@@ -80,7 +82,8 @@ impl RootResponseWorkflow {
             Err(err) => {
                 RootCapabilityMetrics::record(
                     capability_key,
-                    RootCapabilityMetricEvent::ExecutionError,
+                    RootCapabilityMetricEventType::Execution,
+                    RootCapabilityMetricOutcome::Error,
                 );
                 return Err(err);
             }
@@ -88,11 +91,16 @@ impl RootResponseWorkflow {
         if let Err(err) = Self::commit_replay(pending, &response) {
             RootCapabilityMetrics::record(
                 capability_key,
-                RootCapabilityMetricEvent::ExecutionError,
+                RootCapabilityMetricEventType::Execution,
+                RootCapabilityMetricOutcome::Error,
             );
             return Err(err);
         }
-        RootCapabilityMetrics::record(capability_key, RootCapabilityMetricEvent::ExecutionSuccess);
+        RootCapabilityMetrics::record(
+            capability_key,
+            RootCapabilityMetricEventType::Execution,
+            RootCapabilityMetricOutcome::Success,
+        );
 
         Ok(response)
     }
@@ -127,7 +135,7 @@ impl RootResponseWorkflow {
         })
     }
 
-    fn map_request(req: RootCapabilityRequest) -> RootCapability {
+    fn map_request(req: RootCapabilityCommand) -> RootCapability {
         capability::map_request(req)
     }
 

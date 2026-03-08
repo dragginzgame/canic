@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static ROOT_CAPABILITY_METRICS: RefCell<HashMap<(RootCapabilityMetricKey, RootCapabilityMetricEvent), u64>> =
+    static ROOT_CAPABILITY_METRICS: RefCell<HashMap<RootCapabilityMetricTuple, u64>> =
         RefCell::new(HashMap::new());
 }
 
@@ -32,46 +32,99 @@ impl RootCapabilityMetricKey {
 }
 
 ///
-/// RootCapabilityMetricEvent
+/// RootCapabilityMetricEventType
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum RootCapabilityMetricEvent {
-    EnvelopeRejected,
-    EnvelopeValidated,
-    ProofRejected,
-    ProofVerified,
-    Authorized,
-    Denied,
-    ReplayAccepted,
-    ReplayDuplicateSame,
-    ReplayDuplicateConflict,
-    ReplayExpired,
-    ReplayTtlExceeded,
-    ExecutionSuccess,
-    ExecutionError,
+pub enum RootCapabilityMetricEventType {
+    Envelope,
+    Proof,
+    Authorization,
+    Replay,
+    Execution,
 }
 
-impl RootCapabilityMetricEvent {
+impl RootCapabilityMetricEventType {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::EnvelopeRejected => "EnvelopeRejected",
-            Self::EnvelopeValidated => "EnvelopeValidated",
-            Self::ProofRejected => "ProofRejected",
-            Self::ProofVerified => "ProofVerified",
-            Self::Authorized => "Authorized",
-            Self::Denied => "Denied",
-            Self::ReplayAccepted => "ReplayAccepted",
-            Self::ReplayDuplicateSame => "ReplayDuplicateSame",
-            Self::ReplayDuplicateConflict => "ReplayDuplicateConflict",
-            Self::ReplayExpired => "ReplayExpired",
-            Self::ReplayTtlExceeded => "ReplayTtlExceeded",
-            Self::ExecutionSuccess => "ExecutionSuccess",
-            Self::ExecutionError => "ExecutionError",
+            Self::Envelope => "Envelope",
+            Self::Proof => "Proof",
+            Self::Authorization => "Authorization",
+            Self::Replay => "Replay",
+            Self::Execution => "Execution",
         }
     }
 }
+
+///
+/// RootCapabilityMetricOutcome
+///
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum RootCapabilityMetricOutcome {
+    Accepted,
+    Rejected,
+    Denied,
+    DuplicateSame,
+    DuplicateConflict,
+    Expired,
+    TtlExceeded,
+    Success,
+    Error,
+}
+
+impl RootCapabilityMetricOutcome {
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Accepted => "Accepted",
+            Self::Rejected => "Rejected",
+            Self::Denied => "Denied",
+            Self::DuplicateSame => "DuplicateSame",
+            Self::DuplicateConflict => "DuplicateConflict",
+            Self::Expired => "Expired",
+            Self::TtlExceeded => "TtlExceeded",
+            Self::Success => "Success",
+            Self::Error => "Error",
+        }
+    }
+}
+
+///
+/// RootCapabilityMetricProofMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum RootCapabilityMetricProofMode {
+    Unspecified,
+    Structural,
+    RoleAttestation,
+    DelegatedGrant,
+}
+
+impl RootCapabilityMetricProofMode {
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Unspecified => "Unspecified",
+            Self::Structural => "Structural",
+            Self::RoleAttestation => "RoleAttestation",
+            Self::DelegatedGrant => "DelegatedGrant",
+        }
+    }
+}
+
+///
+/// RootCapabilityMetricTuple
+///
+
+pub type RootCapabilityMetricTuple = (
+    RootCapabilityMetricKey,
+    RootCapabilityMetricEventType,
+    RootCapabilityMetricOutcome,
+    RootCapabilityMetricProofMode,
+);
 
 ///
 /// RootCapabilityMetricsSnapshot
@@ -79,7 +132,13 @@ impl RootCapabilityMetricEvent {
 
 #[derive(Clone, Debug)]
 pub struct RootCapabilityMetricsSnapshot {
-    pub entries: Vec<(RootCapabilityMetricKey, RootCapabilityMetricEvent, u64)>,
+    pub entries: Vec<(
+        RootCapabilityMetricKey,
+        RootCapabilityMetricEventType,
+        RootCapabilityMetricOutcome,
+        RootCapabilityMetricProofMode,
+        u64,
+    )>,
 }
 
 ///
@@ -89,11 +148,37 @@ pub struct RootCapabilityMetricsSnapshot {
 pub struct RootCapabilityMetrics;
 
 impl RootCapabilityMetrics {
-    pub fn record(capability: RootCapabilityMetricKey, event: RootCapabilityMetricEvent) {
+    /// record_metric
+    ///
+    /// Record a root capability metric point using event type, outcome, and proof mode dimensions.
+    pub fn record_metric(
+        capability: RootCapabilityMetricKey,
+        event_type: RootCapabilityMetricEventType,
+        outcome: RootCapabilityMetricOutcome,
+        proof_mode: RootCapabilityMetricProofMode,
+    ) {
         ROOT_CAPABILITY_METRICS.with_borrow_mut(|counts| {
-            let entry = counts.entry((capability, event)).or_insert(0);
+            let entry = counts
+                .entry((capability, event_type, outcome, proof_mode))
+                .or_insert(0);
             *entry = entry.saturating_add(1);
         });
+    }
+
+    /// record
+    ///
+    /// Record a root capability metric point for event types without proof-mode context.
+    pub fn record(
+        capability: RootCapabilityMetricKey,
+        event_type: RootCapabilityMetricEventType,
+        outcome: RootCapabilityMetricOutcome,
+    ) {
+        Self::record_metric(
+            capability,
+            event_type,
+            outcome,
+            RootCapabilityMetricProofMode::Unspecified,
+        );
     }
 
     #[must_use]
@@ -101,7 +186,9 @@ impl RootCapabilityMetrics {
         let entries = ROOT_CAPABILITY_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
-            .map(|((capability, event), count)| (capability, event, count))
+            .map(|((capability, event_type, outcome, proof_mode), count)| {
+                (capability, event_type, outcome, proof_mode, count)
+            })
             .collect();
 
         RootCapabilityMetricsSnapshot { entries }
@@ -122,11 +209,13 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn snapshot_map() -> HashMap<(RootCapabilityMetricKey, RootCapabilityMetricEvent), u64> {
+    fn snapshot_map() -> HashMap<RootCapabilityMetricTuple, u64> {
         RootCapabilityMetrics::snapshot()
             .entries
             .into_iter()
-            .map(|(capability, event, count)| ((capability, event), count))
+            .map(|(capability, event_type, outcome, proof_mode, count)| {
+                ((capability, event_type, outcome, proof_mode), count)
+            })
             .collect()
     }
 
@@ -144,59 +233,88 @@ mod tests {
 
         RootCapabilityMetrics::record(
             RootCapabilityMetricKey::Provision,
-            RootCapabilityMetricEvent::Authorized,
+            RootCapabilityMetricEventType::Authorization,
+            RootCapabilityMetricOutcome::Accepted,
         );
         RootCapabilityMetrics::record(
             RootCapabilityMetricKey::Provision,
-            RootCapabilityMetricEvent::Authorized,
+            RootCapabilityMetricEventType::Authorization,
+            RootCapabilityMetricOutcome::Accepted,
         );
 
         let map = snapshot_map();
         assert_eq!(
             map.get(&(
                 RootCapabilityMetricKey::Provision,
-                RootCapabilityMetricEvent::Authorized
+                RootCapabilityMetricEventType::Authorization,
+                RootCapabilityMetricOutcome::Accepted,
+                RootCapabilityMetricProofMode::Unspecified,
             )),
             Some(&2)
         );
     }
 
     #[test]
-    fn metrics_are_partitioned_by_capability_and_event() {
+    fn metrics_are_partitioned_by_capability_event_and_proof_mode() {
         RootCapabilityMetrics::reset();
 
         RootCapabilityMetrics::record(
             RootCapabilityMetricKey::Provision,
-            RootCapabilityMetricEvent::Authorized,
+            RootCapabilityMetricEventType::Authorization,
+            RootCapabilityMetricOutcome::Accepted,
         );
         RootCapabilityMetrics::record(
             RootCapabilityMetricKey::Provision,
-            RootCapabilityMetricEvent::Denied,
+            RootCapabilityMetricEventType::Authorization,
+            RootCapabilityMetricOutcome::Denied,
         );
-        RootCapabilityMetrics::record(
-            RootCapabilityMetricKey::IssueDelegation,
-            RootCapabilityMetricEvent::Denied,
+        RootCapabilityMetrics::record_metric(
+            RootCapabilityMetricKey::Provision,
+            RootCapabilityMetricEventType::Proof,
+            RootCapabilityMetricOutcome::Accepted,
+            RootCapabilityMetricProofMode::RoleAttestation,
+        );
+        RootCapabilityMetrics::record_metric(
+            RootCapabilityMetricKey::Provision,
+            RootCapabilityMetricEventType::Proof,
+            RootCapabilityMetricOutcome::Accepted,
+            RootCapabilityMetricProofMode::DelegatedGrant,
         );
 
         let map = snapshot_map();
         assert_eq!(
             map.get(&(
                 RootCapabilityMetricKey::Provision,
-                RootCapabilityMetricEvent::Authorized
+                RootCapabilityMetricEventType::Authorization,
+                RootCapabilityMetricOutcome::Accepted,
+                RootCapabilityMetricProofMode::Unspecified,
             )),
             Some(&1)
         );
         assert_eq!(
             map.get(&(
                 RootCapabilityMetricKey::Provision,
-                RootCapabilityMetricEvent::Denied
+                RootCapabilityMetricEventType::Authorization,
+                RootCapabilityMetricOutcome::Denied,
+                RootCapabilityMetricProofMode::Unspecified,
             )),
             Some(&1)
         );
         assert_eq!(
             map.get(&(
-                RootCapabilityMetricKey::IssueDelegation,
-                RootCapabilityMetricEvent::Denied
+                RootCapabilityMetricKey::Provision,
+                RootCapabilityMetricEventType::Proof,
+                RootCapabilityMetricOutcome::Accepted,
+                RootCapabilityMetricProofMode::RoleAttestation,
+            )),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&(
+                RootCapabilityMetricKey::Provision,
+                RootCapabilityMetricEventType::Proof,
+                RootCapabilityMetricOutcome::Accepted,
+                RootCapabilityMetricProofMode::DelegatedGrant,
             )),
             Some(&1)
         );

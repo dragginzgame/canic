@@ -5,32 +5,11 @@ use crate::dto::{
 };
 use sha2::{Digest, Sha256};
 
-pub(super) fn with_root_request_metadata(
+pub(super) const fn with_root_request_metadata(
     request: Request,
     metadata: RootRequestMetadata,
 ) -> Request {
-    match request {
-        Request::CreateCanister(mut req) => {
-            req.metadata = Some(metadata);
-            Request::CreateCanister(req)
-        }
-        Request::UpgradeCanister(mut req) => {
-            req.metadata = Some(metadata);
-            Request::UpgradeCanister(req)
-        }
-        Request::Cycles(mut req) => {
-            req.metadata = Some(metadata);
-            Request::Cycles(req)
-        }
-        Request::IssueDelegation(mut req) => {
-            req.metadata = Some(metadata);
-            Request::IssueDelegation(req)
-        }
-        Request::IssueRoleAttestation(mut req) => {
-            req.metadata = Some(metadata);
-            Request::IssueRoleAttestation(req)
-        }
-    }
+    request.with_metadata(metadata)
 }
 
 pub(super) fn project_replay_metadata(

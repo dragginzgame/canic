@@ -114,7 +114,9 @@ impl MetricsQuery {
         entries.sort_by(|a, b| {
             a.capability
                 .cmp(&b.capability)
-                .then_with(|| a.event.cmp(&b.event))
+                .then_with(|| a.event_type.cmp(&b.event_type))
+                .then_with(|| a.outcome.cmp(&b.outcome))
+                .then_with(|| a.proof_mode.cmp(&b.proof_mode))
         });
 
         paginate_vec(entries, page)

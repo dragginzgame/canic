@@ -115,13 +115,7 @@ pub(super) fn verify_root_delegated_grant_signature(
 }
 
 pub(super) const fn root_capability_family(capability: &Request) -> &'static str {
-    match capability {
-        Request::CreateCanister(_) => "Provision",
-        Request::UpgradeCanister(_) => "Upgrade",
-        Request::Cycles(_) => "MintCycles",
-        Request::IssueDelegation(_) => "IssueDelegation",
-        Request::IssueRoleAttestation(_) => "IssueRoleAttestation",
-    }
+    capability.family().label()
 }
 
 pub(super) fn delegated_grant_hash(grant: &DelegatedGrant) -> Result<[u8; 32], Error> {

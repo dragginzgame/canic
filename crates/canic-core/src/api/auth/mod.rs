@@ -7,7 +7,7 @@ use crate::{
             DelegationRequest, RoleAttestationRequest, SignedRoleAttestation,
         },
         error::Error,
-        rpc::{Request as RootCapabilityRequest, Response as RootCapabilityResponse},
+        rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
     log,
@@ -107,10 +107,9 @@ impl DelegationApi {
         request: DelegationRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
         let request = metadata::with_root_request_metadata(request);
-        let response =
-            RootResponseWorkflow::response(RootCapabilityRequest::IssueDelegation(request))
-                .await
-                .map_err(Self::map_delegation_error)?;
+        let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
+            .await
+            .map_err(Self::map_delegation_error)?;
 
         match response {
             RootCapabilityResponse::DelegationIssued(response) => Ok(response),
@@ -124,10 +123,9 @@ impl DelegationApi {
         request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
         let request = metadata::with_root_attestation_request_metadata(request);
-        let response =
-            RootResponseWorkflow::response(RootCapabilityRequest::IssueRoleAttestation(request))
-                .await
-                .map_err(Self::map_delegation_error)?;
+        let response = RootResponseWorkflow::response(RootRequest::issue_role_attestation(request))
+            .await
+            .map_err(Self::map_delegation_error)?;
 
         match response {
             RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),

@@ -2,7 +2,7 @@ use crate::{
     InternalError,
     dto::auth::{DelegationRequest, RoleAttestationRequest},
     dto::rpc::{
-        CreateCanisterRequest, CyclesRequest, RootCapabilityRequest, RootRequestMetadata,
+        CreateCanisterRequest, CyclesRequest, RootCapabilityCommand, RootRequestMetadata,
         UpgradeCanisterRequest,
     },
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
@@ -53,27 +53,27 @@ impl RootCapability {
             Self::Provision(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityRequest::ProvisionCanister(canonical)
+                RootCapabilityCommand::ProvisionCanister(canonical)
             }
             Self::Upgrade(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityRequest::UpgradeCanister(canonical)
+                RootCapabilityCommand::UpgradeCanister(canonical)
             }
             Self::MintCycles(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityRequest::MintCycles(canonical)
+                RootCapabilityCommand::MintCycles(canonical)
             }
             Self::IssueDelegation(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityRequest::IssueDelegation(canonical)
+                RootCapabilityCommand::IssueDelegation(canonical)
             }
             Self::IssueRoleAttestation(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityRequest::IssueRoleAttestation(canonical)
+                RootCapabilityCommand::IssueRoleAttestation(canonical)
             }
         };
 
@@ -81,13 +81,13 @@ impl RootCapability {
     }
 }
 
-pub(super) fn map_request(req: RootCapabilityRequest) -> RootCapability {
+pub(super) fn map_request(req: RootCapabilityCommand) -> RootCapability {
     match req {
-        RootCapabilityRequest::ProvisionCanister(req) => RootCapability::Provision(req),
-        RootCapabilityRequest::UpgradeCanister(req) => RootCapability::Upgrade(req),
-        RootCapabilityRequest::MintCycles(req) => RootCapability::MintCycles(req),
-        RootCapabilityRequest::IssueDelegation(req) => RootCapability::IssueDelegation(req),
-        RootCapabilityRequest::IssueRoleAttestation(req) => {
+        RootCapabilityCommand::ProvisionCanister(req) => RootCapability::Provision(req),
+        RootCapabilityCommand::UpgradeCanister(req) => RootCapability::Upgrade(req),
+        RootCapabilityCommand::MintCycles(req) => RootCapability::MintCycles(req),
+        RootCapabilityCommand::IssueDelegation(req) => RootCapability::IssueDelegation(req),
+        RootCapabilityCommand::IssueRoleAttestation(req) => {
             RootCapability::IssueRoleAttestation(req)
         }
     }

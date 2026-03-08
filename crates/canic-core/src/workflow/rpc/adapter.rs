@@ -23,6 +23,7 @@ impl RpcAdapter {
     }
 
     #[must_use]
+    #[expect(clippy::unnecessary_struct_initialization)]
     pub const fn create_canister_response_to_dto(
         res: ops::CreateCanisterResponse,
     ) -> dto::CreateCanisterResponse {
