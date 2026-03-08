@@ -11,7 +11,7 @@ use crate::{
     },
     ids::CanisterRole,
     ops::storage::{registry::subnet::SubnetRegistryOps, replay::RootReplayOps},
-    storage::stable::replay::RootReplayRecord,
+    storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -441,21 +441,21 @@ fn payload_hash_includes_capability_variant_discriminant() {
 #[test]
 fn replay_slot_key_binds_caller_target_and_request_id() {
     let request_id = [9u8; 32];
-    let key = replay_slot_key(p(1), p(2), request_id);
+    let key = replay::replay_slot_key(p(1), p(2), request_id);
 
     assert_ne!(
         key,
-        replay_slot_key(p(3), p(2), request_id),
+        replay::replay_slot_key(p(3), p(2), request_id),
         "caller must affect replay key"
     );
     assert_ne!(
         key,
-        replay_slot_key(p(1), p(4), request_id),
+        replay::replay_slot_key(p(1), p(4), request_id),
         "target must affect replay key"
     );
     assert_ne!(
         key,
-        replay_slot_key(p(1), p(2), [8u8; 32]),
+        replay::replay_slot_key(p(1), p(2), [8u8; 32]),
         "request_id must affect replay key"
     );
 }
@@ -477,7 +477,7 @@ fn check_replay_reads_legacy_slot_key_for_compatibility() {
     });
     let payload_hash = capability.payload_hash().expect("hash");
     let request_id = capability.metadata().expect("metadata").request_id;
-    let legacy_key = replay_slot_key_legacy(ctx.caller, ctx.subnet_id, request_id);
+    let legacy_key = replay::replay_slot_key_legacy(ctx.caller, ctx.subnet_id, request_id);
 
     let response = Response::Cycles(CyclesResponse {
         cycles_transferred: 77,
@@ -551,7 +551,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
     });
     let payload_hash = capability.payload_hash().expect("hash");
     let request_id = capability.metadata().expect("metadata").request_id;
-    let target_key = replay_slot_key(ctx.caller, ctx.self_pid, request_id);
+    let target_key = replay::replay_slot_key(ctx.caller, ctx.self_pid, request_id);
     let response_candid = encode_one(Response::Cycles(CyclesResponse {
         cycles_transferred: 500,
     }))

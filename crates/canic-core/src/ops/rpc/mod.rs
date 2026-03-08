@@ -295,6 +295,7 @@ mod tests {
     use crate::dto::rpc::{CyclesRequest, RootRequestMetadata};
 
     #[test]
+    #[expect(clippy::cast_possible_truncation)]
     fn capability_metadata_from_request_uses_request_id_prefix_and_ttl_clamp() {
         crate::utils::rand::seed_from([7u8; 32]);
 

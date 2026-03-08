@@ -5,10 +5,10 @@
 - Audit run: `layer-violations`
 - Definition: `docs/audits/recurring/layer-violations.md`
 - Auditor: `codex`
-- Date (UTC): `2026-03-08 00:07:33Z`
+- Date (UTC): `2026-03-08 17:08:39Z`
 - Branch: `eleven`
-- Commit: `c968b20d`
-- Worktree: `dirty` (active `0.13.x` refactor + docs updates)
+- Commit: `c98bb574`
+- Worktree: `dirty`
 - Scope: `crates/canic-core/src/{api,workflow,domain,ops,storage}`
 
 ## Checklist

@@ -336,6 +336,35 @@ fn replay_rejects_duplicate_same_for_identical_request() {
 }
 
 #[test]
+fn cycles_rejects_when_requested_above_root_balance() {
+    let setup = setup_root();
+    let caller = setup
+        .subnet_directory
+        .get(&canister::SCALE_HUB)
+        .copied()
+        .expect("scale_hub canister must exist");
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: u128::MAX,
+        metadata: Some(metadata([18u8; 32], 120)),
+    });
+
+    let err = root_response_as(&setup, caller, request)
+        .expect_err("cycles above available root balance must reject");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("insufficient root cycles"),
+        "expected insufficient root cycles error, got: {err:?}"
+    );
+
+    let metrics = root_capability_metrics(&setup);
+    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "MintCycles", "Denied"), 1);
+    assert_eq!(metric_count(&metrics, "MintCycles", "Authorized"), 0);
+    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 0);
+}
+
+#[test]
 fn replay_rejects_ttl_above_max() {
     let setup = setup_root();
     let caller = setup

@@ -1,7 +1,5 @@
 #[cfg(test)]
 use crate::dto::auth::RoleAttestation;
-#[cfg(test)]
-use crate::storage::stable::replay::ReplaySlotKey;
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -11,7 +9,7 @@ use crate::{
         replay::guard::ReplayPending,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{
-            RootCapabilityMetricEventType, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+            RootCapabilityExecutionOutcome, RootCapabilityMetrics,
         },
     },
 };
@@ -80,26 +78,23 @@ impl RootResponseWorkflow {
         let response = match Self::execute_root_capability(&ctx, capability).await {
             Ok(response) => response,
             Err(err) => {
-                RootCapabilityMetrics::record(
+                RootCapabilityMetrics::record_execution(
                     capability_key,
-                    RootCapabilityMetricEventType::Execution,
-                    RootCapabilityMetricOutcome::Error,
+                    RootCapabilityExecutionOutcome::Error,
                 );
                 return Err(err);
             }
         };
         if let Err(err) = Self::commit_replay(pending, &response) {
-            RootCapabilityMetrics::record(
+            RootCapabilityMetrics::record_execution(
                 capability_key,
-                RootCapabilityMetricEventType::Execution,
-                RootCapabilityMetricOutcome::Error,
+                RootCapabilityExecutionOutcome::Error,
             );
             return Err(err);
         }
-        RootCapabilityMetrics::record(
+        RootCapabilityMetrics::record_execution(
             capability_key,
-            RootCapabilityMetricEventType::Execution,
-            RootCapabilityMetricOutcome::Success,
+            RootCapabilityExecutionOutcome::Success,
         );
 
         Ok(response)
@@ -168,24 +163,6 @@ impl RootResponseWorkflow {
     ) -> Result<RoleAttestation, InternalError> {
         execute::build_role_attestation(ctx, req)
     }
-}
-
-#[cfg(test)]
-fn replay_slot_key(
-    caller: Principal,
-    target_canister: Principal,
-    request_id: [u8; 32],
-) -> ReplaySlotKey {
-    replay::replay_slot_key(caller, target_canister, request_id)
-}
-
-#[cfg(test)]
-fn replay_slot_key_legacy(
-    caller: Principal,
-    subnet_id: Principal,
-    request_id: [u8; 32],
-) -> ReplaySlotKey {
-    replay::replay_slot_key_legacy(caller, subnet_id, request_id)
 }
 
 #[cfg(test)]

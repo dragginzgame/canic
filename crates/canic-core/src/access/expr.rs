@@ -64,20 +64,47 @@ pub enum AccessPredicate {
 
 #[derive(Clone, Copy, Debug)]
 pub enum BuiltinPredicate {
-    AppAllowsUpdates,
-    AppIsQueryable,
-    SelfIsPrimeSubnet,
-    SelfIsPrimeRoot,
-    CallerIsController,
-    CallerIsParent,
-    CallerIsChild,
-    CallerIsRoot,
-    CallerIsSameCanister,
-    CallerIsRegisteredToSubnet,
-    CallerIsWhitelisted,
+    App(AppPredicate),
+    Caller(CallerPredicate),
+    Environment(EnvironmentPredicate),
     Authenticated {
         required_scope: Option<&'static str>,
     },
+}
+
+///
+/// AppPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum AppPredicate {
+    AllowsUpdates,
+    IsQueryable,
+}
+
+///
+/// CallerPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum CallerPredicate {
+    IsController,
+    IsParent,
+    IsChild,
+    IsRoot,
+    IsSameCanister,
+    IsRegisteredToSubnet,
+    IsWhitelisted,
+}
+
+///
+/// EnvironmentPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum EnvironmentPredicate {
+    SelfIsPrimeSubnet,
+    SelfIsPrimeRoot,
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -128,79 +155,89 @@ where
 }
 
 pub mod app {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, AppPredicate, BuiltinPredicate, builtin};
 
     #[must_use]
     pub const fn allows_updates() -> AccessExpr {
-        builtin(BuiltinPredicate::AppAllowsUpdates)
+        builtin(BuiltinPredicate::App(AppPredicate::AllowsUpdates))
     }
 
     #[must_use]
     pub const fn is_queryable() -> AccessExpr {
-        builtin(BuiltinPredicate::AppIsQueryable)
+        builtin(BuiltinPredicate::App(AppPredicate::IsQueryable))
     }
 }
 
 pub mod caller {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, BuiltinPredicate, CallerPredicate, builtin};
 
     #[must_use]
     pub const fn is_controller() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsController)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsController))
     }
 
     #[must_use]
     pub const fn is_parent() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsParent)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsParent))
     }
 
     #[must_use]
     pub const fn is_child() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsChild)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsChild))
     }
 
     #[must_use]
     pub const fn is_root() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsRoot)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsRoot))
     }
 
     #[must_use]
     pub const fn is_same_canister() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsSameCanister)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsSameCanister))
     }
 
     #[must_use]
     pub const fn is_registered_to_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsRegisteredToSubnet)
+        builtin(BuiltinPredicate::Caller(
+            CallerPredicate::IsRegisteredToSubnet,
+        ))
     }
 
     #[must_use]
     pub const fn is_whitelisted() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsWhitelisted)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted))
     }
 }
 
 pub mod env {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, BuiltinPredicate, EnvironmentPredicate, builtin};
 
     #[must_use]
     pub const fn is_prime_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::SelfIsPrimeSubnet)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::SelfIsPrimeSubnet,
+        ))
     }
 
     #[must_use]
     pub const fn is_prime_root() -> AccessExpr {
-        builtin(BuiltinPredicate::SelfIsPrimeRoot)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::SelfIsPrimeRoot,
+        ))
     }
 
     #[must_use]
     pub const fn build_ic_only() -> AccessExpr {
-        builtin(BuiltinPredicate::BuildIcOnly)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::BuildIcOnly,
+        ))
     }
 
     #[must_use]
     pub const fn build_local_only() -> AccessExpr {
-        builtin(BuiltinPredicate::BuildLocalOnly)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::BuildLocalOnly,
+        ))
     }
 }
 
@@ -240,8 +277,10 @@ pub fn eval_default_app_guard(
         Ok(()) => Ok(()),
         Err(err) => {
             let predicate = match guard {
-                DefaultAppGuard::AllowsUpdates => BuiltinPredicate::AppAllowsUpdates,
-                DefaultAppGuard::IsQueryable => BuiltinPredicate::AppIsQueryable,
+                DefaultAppGuard::AllowsUpdates => {
+                    BuiltinPredicate::App(AppPredicate::AllowsUpdates)
+                }
+                DefaultAppGuard::IsQueryable => BuiltinPredicate::App(AppPredicate::IsQueryable),
             };
             Err(record_access_failure(
                 ctx,
@@ -384,18 +423,51 @@ impl BuiltinPredicate {
     /// Resolve the evaluator implementation responsible for this builtin variant.
     fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
         match self {
-            Self::AppAllowsUpdates => &APP_ALLOWS_UPDATES_EVALUATOR,
-            Self::AppIsQueryable => &APP_IS_QUERYABLE_EVALUATOR,
+            Self::App(pred) => pred.evaluator(),
+            Self::Caller(pred) => pred.evaluator(),
+            Self::Environment(pred) => pred.evaluator(),
+            Self::Authenticated { .. } => &AUTHENTICATED_EVALUATOR,
+        }
+    }
+}
+
+impl AppPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for app-mode predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::AllowsUpdates => &APP_ALLOWS_UPDATES_EVALUATOR,
+            Self::IsQueryable => &APP_IS_QUERYABLE_EVALUATOR,
+        }
+    }
+}
+
+impl CallerPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for caller predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::IsController => &CALLER_IS_CONTROLLER_EVALUATOR,
+            Self::IsParent => &CALLER_IS_PARENT_EVALUATOR,
+            Self::IsChild => &CALLER_IS_CHILD_EVALUATOR,
+            Self::IsRoot => &CALLER_IS_ROOT_EVALUATOR,
+            Self::IsSameCanister => &CALLER_IS_SAME_CANISTER_EVALUATOR,
+            Self::IsRegisteredToSubnet => &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR,
+            Self::IsWhitelisted => &CALLER_IS_WHITELISTED_EVALUATOR,
+        }
+    }
+}
+
+impl EnvironmentPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for environment predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
             Self::SelfIsPrimeSubnet => &SELF_IS_PRIME_SUBNET_EVALUATOR,
             Self::SelfIsPrimeRoot => &SELF_IS_PRIME_ROOT_EVALUATOR,
-            Self::CallerIsController => &CALLER_IS_CONTROLLER_EVALUATOR,
-            Self::CallerIsParent => &CALLER_IS_PARENT_EVALUATOR,
-            Self::CallerIsChild => &CALLER_IS_CHILD_EVALUATOR,
-            Self::CallerIsRoot => &CALLER_IS_ROOT_EVALUATOR,
-            Self::CallerIsSameCanister => &CALLER_IS_SAME_CANISTER_EVALUATOR,
-            Self::CallerIsRegisteredToSubnet => &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR,
-            Self::CallerIsWhitelisted => &CALLER_IS_WHITELISTED_EVALUATOR,
-            Self::Authenticated { .. } => &AUTHENTICATED_EVALUATOR,
             Self::BuildIcOnly => &BUILD_IC_ONLY_EVALUATOR,
             Self::BuildLocalOnly => &BUILD_LOCAL_ONLY_EVALUATOR,
         }

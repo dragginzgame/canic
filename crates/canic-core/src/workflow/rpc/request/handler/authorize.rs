@@ -10,7 +10,7 @@ use crate::{
         ic::{IcOps, mgmt::MgmtOps},
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{
-            RootCapabilityMetricEventType, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+            RootCapabilityAuthorizationOutcome, RootCapabilityMetrics,
         },
         storage::registry::subnet::SubnetRegistryOps,
     },
@@ -22,10 +22,9 @@ pub(super) fn authorize(
     capability: &RootCapability,
 ) -> Result<(), InternalError> {
     if !ctx.is_root_env {
-        RootCapabilityMetrics::record(
+        RootCapabilityMetrics::record_authorization(
             capability.metric_key(),
-            RootCapabilityMetricEventType::Authorization,
-            RootCapabilityMetricOutcome::Denied,
+            RootCapabilityAuthorizationOutcome::Denied,
         );
         return EnvOps::require_root();
     }
@@ -42,10 +41,9 @@ pub(super) fn authorize(
 
     match &decision {
         Ok(()) => {
-            RootCapabilityMetrics::record(
+            RootCapabilityMetrics::record_authorization(
                 capability_key,
-                RootCapabilityMetricEventType::Authorization,
-                RootCapabilityMetricOutcome::Accepted,
+                RootCapabilityAuthorizationOutcome::Accepted,
             );
             log!(
                 Topic::Rpc,
@@ -57,10 +55,9 @@ pub(super) fn authorize(
             );
         }
         Err(err) => {
-            RootCapabilityMetrics::record(
+            RootCapabilityMetrics::record_authorization(
                 capability_key,
-                RootCapabilityMetricEventType::Authorization,
-                RootCapabilityMetricOutcome::Denied,
+                RootCapabilityAuthorizationOutcome::Denied,
             );
             log!(
                 Topic::Rpc,
