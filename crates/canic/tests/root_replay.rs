@@ -142,7 +142,7 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
 }
 
 #[test]
-fn cycles_routes_through_dispatcher_and_replay_cache() {
+fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     let setup = setup_root();
     let caller = setup
         .subnet_directory
@@ -156,18 +156,14 @@ fn cycles_routes_through_dispatcher_and_replay_cache() {
     });
 
     let first = root_response_as(&setup, caller, request.clone()).expect("first cycles call works");
-    let first_cycles = match first {
+    match first {
         Response::Cycles(response) => response.cycles_transferred,
         other => panic!("expected create canister response, got: {other:?}"),
     };
 
-    let second = root_response_as(&setup, caller, request)
-        .expect("identical provisioning replay must cache");
-    let second_cycles = match second {
-        Response::Cycles(response) => response.cycles_transferred,
-        other => panic!("expected create canister response, got: {other:?}"),
-    };
-    assert_eq!(first_cycles, second_cycles);
+    let err = root_response_as(&setup, caller, request)
+        .expect_err("identical provisioning replay must reject duplicate same");
+    assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(metric_count(&metrics, "MintCycles", "Authorized"), 1);
@@ -219,13 +215,10 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
         other => panic!("expected upgrade response, got: {other:?}"),
     };
 
-    let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
-        .expect("identical delegation replay must return cached response");
-    let second = match second {
-        Response::UpgradeCanister(response) => response,
-        other => panic!("expected upgrade response, got: {other:?}"),
-    };
-    let _ = (first, second);
+    let err = root_response_as(&setup, caller, Request::UpgradeCanister(request))
+        .expect_err("identical upgrade replay must reject duplicate same");
+    assert_eq!(err.code, ErrorCode::Internal);
+    let _ = first;
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 1);
@@ -309,7 +302,7 @@ fn replay_rejects_same_variant_mutated_payload() {
 }
 
 #[test]
-fn replay_returns_cached_response_for_identical_request() {
+fn replay_rejects_duplicate_same_for_identical_request() {
     let setup = setup_root();
     let caller = setup
         .subnet_directory
@@ -325,18 +318,13 @@ fn replay_returns_cached_response_for_identical_request() {
 
     let first =
         root_response_as(&setup, caller, request.clone()).expect("first request must succeed");
-    let second =
-        root_response_as(&setup, caller, request).expect("identical replay must return cached");
-
-    let first_cycles = match first {
+    match first {
         Response::Cycles(response) => response.cycles_transferred,
         other => panic!("expected cycles response, got: {other:?}"),
     };
-    let second_cycles = match second {
-        Response::Cycles(response) => response.cycles_transferred,
-        other => panic!("expected cycles response, got: {other:?}"),
-    };
-    assert_eq!(first_cycles, second_cycles);
+    let err =
+        root_response_as(&setup, caller, request).expect_err("identical replay must be rejected");
+    assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
@@ -404,7 +392,7 @@ fn replay_rejects_expired_request() {
 }
 
 #[test]
-fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
+fn upgrade_replay_rejects_duplicate_same_and_conflict() {
     let setup = setup_root();
     let caller = setup.root_id;
     let app = setup
@@ -464,12 +452,9 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
     };
 
     let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
-        .expect("identical upgrade replay must return cached response");
-    let second = match second {
-        Response::UpgradeCanister(response) => response,
-        other => panic!("expected upgrade response, got: {other:?}"),
-    };
-    let _ = (first, second);
+        .expect_err("identical upgrade replay must reject duplicate same");
+    assert_eq!(second.code, ErrorCode::Internal);
+    let _ = first;
 
     let conflict = UpgradeCanisterRequest {
         canister_pid: test,

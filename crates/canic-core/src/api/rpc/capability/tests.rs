@@ -222,6 +222,21 @@ fn validate_root_capability_envelope_rejects_role_attestation_proof_version_mism
 }
 
 #[test]
+fn validate_root_capability_envelope_rejects_delegated_grant_proof_version_mismatch() {
+    let request = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    proof.proof_version = PROOF_VERSION_V1 + 1;
+
+    let err = validate_root_capability_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &CapabilityProof::DelegatedGrant(proof),
+    )
+    .expect_err("unsupported delegated grant proof version must fail");
+    assert!(err.message.contains("proof_version"));
+}
+
+#[test]
 fn verify_capability_hash_binding_rejects_mismatch() {
     let err =
         verify_capability_hash_binding(p(1), CAPABILITY_VERSION_V1, &sample_request(10), [0u8; 32])
@@ -317,6 +332,36 @@ fn verify_root_delegated_grant_claims_rejects_subject_mismatch() {
 }
 
 #[test]
+fn verify_root_delegated_grant_claims_rejects_issuer_mismatch() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.issuer = p(9);
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("issuer mismatch must fail");
+    assert!(err.message.contains("issuer"));
+}
+
+#[test]
+fn verify_root_delegated_grant_claims_rejects_audience_mismatch() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.audience = vec![p(99)];
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("audience mismatch must fail");
+    assert!(err.message.contains("audience"));
+}
+
+#[test]
 fn verify_root_delegated_grant_claims_rejects_scope_family_mismatch() {
     let now_secs = 100;
     let caller = p(2);
@@ -329,6 +374,53 @@ fn verify_root_delegated_grant_claims_rejects_scope_family_mismatch() {
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("scope family mismatch must fail");
     assert!(err.message.contains("capability_family"));
+}
+
+#[test]
+fn verify_root_delegated_grant_claims_rejects_zero_quota() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.quota = 0;
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("zero quota must fail");
+    assert!(err.message.contains("quota"));
+}
+
+#[test]
+fn verify_root_delegated_grant_claims_rejects_not_yet_valid_window() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.issued_at = now_secs + 10;
+    proof.grant.expires_at = now_secs + 20;
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("not-yet-valid grant must fail");
+    assert!(err.message.contains("not valid yet"));
+}
+
+#[test]
+fn verify_root_delegated_grant_claims_rejects_expired_window() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.issued_at = now_secs - 20;
+    proof.grant.expires_at = now_secs - 10;
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("expired grant must fail");
+    assert!(err.message.contains("expired"));
 }
 
 #[test]

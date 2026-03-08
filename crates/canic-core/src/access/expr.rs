@@ -821,6 +821,7 @@ mod tests {
         access,
         ids::{EndpointCall, EndpointCallKind, EndpointId},
         storage::stable::env::{Env, EnvRecord},
+        storage::stable::state::app::{AppMode, AppState, AppStateRecord},
         test::seams,
     };
 
@@ -829,6 +830,14 @@ mod tests {
     impl Drop for EnvRestore {
         fn drop(&mut self) {
             Env::import(self.0.clone());
+        }
+    }
+
+    struct AppRestore(AppStateRecord);
+
+    impl Drop for AppRestore {
+        fn drop(&mut self) {
+            AppState::import(self.0);
         }
     }
 
@@ -863,6 +872,68 @@ mod tests {
         let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
         let auth_other = futures::executor::block_on(access::auth::is_parent(other));
         assert_eq!(expr_other.is_ok(), auth_other.is_ok());
+    }
+
+    #[test]
+    fn app_allows_updates_matches_access_app_guard() {
+        let _guard = seams::lock();
+        let original = AppState::export();
+        let _restore = AppRestore(original);
+        let expr = app::allows_updates();
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
+            AppState::import(AppStateRecord { mode });
+            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let direct_result = access::app::guard_app_update();
+            assert_eq!(
+                expr_result.is_ok(),
+                direct_result.is_ok(),
+                "app::allows_updates parity mismatch for mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn app_is_queryable_matches_access_app_guard() {
+        let _guard = seams::lock();
+        let original = AppState::export();
+        let _restore = AppRestore(original);
+        let expr = app::is_queryable();
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
+            AppState::import(AppStateRecord { mode });
+            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let direct_result = access::app::guard_app_query();
+            assert_eq!(
+                expr_result.is_ok(),
+                direct_result.is_ok(),
+                "app::is_queryable parity mismatch for mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_network_predicates_match_env_access_checks() {
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        let expr_local = futures::executor::block_on(eval_access(&env::build_local_only(), &ctx));
+        let direct_local = access::env::build_network_local();
+        assert_eq!(expr_local.is_ok(), direct_local.is_ok());
+
+        let expr_ic = futures::executor::block_on(eval_access(&env::build_ic_only(), &ctx));
+        let direct_ic = access::env::build_network_ic();
+        assert_eq!(expr_ic.is_ok(), direct_ic.is_ok());
     }
 
     fn test_call() -> EndpointCall {

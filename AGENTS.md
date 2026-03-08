@@ -99,6 +99,9 @@ If code conflicts with this document, **the code is wrong**.
 * Write in plain, industry-friendly language and lead with user impact.
 * Keep bullets short (1–2 sentences) and use inline code for API/type names when relevant.
 * Prefer explaining why a change matters, not only what changed.
+* When a minor version has a change that benefits from a code example, include one short fenced example for that minor version in both:
+  * root `CHANGELOG.md` (inside the matching `x.y.x` minor section)
+  * `docs/changelog/x.y.md` (inside the matching minor file)
 * Include fenced examples only when they materially clarify behavior, migration, or usage.
 
 ```md

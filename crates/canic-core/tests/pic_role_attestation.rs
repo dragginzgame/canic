@@ -502,6 +502,91 @@ fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
 }
 
 #[test]
+fn capability_endpoint_policy_denial_is_not_replay_cached() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::IssueRoleAttestation(RoleAttestationRequest {
+        subject: Principal::anonymous(),
+        role: CanisterRole::ROOT,
+        subnet_id: None,
+        audience: Some(root_id),
+        ttl_secs: 60,
+        epoch: 0,
+        metadata: None,
+    });
+
+    let envelope_a = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued.clone(),
+        }),
+        metadata: capability_metadata(issued_at, 4, 66, 60),
+    };
+    let envelope_b = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 4, 66, 60),
+    };
+
+    let first: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope_a,),
+    );
+    let second: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope_b,),
+    );
+
+    let first_err = first.expect_err("first policy denial must fail");
+    let second_err = second.expect_err("second policy denial must fail");
+    assert_eq!(first_err.code, ErrorCode::Internal);
+    assert_eq!(second_err.code, ErrorCode::Internal);
+    assert!(
+        first_err.message.contains("must match caller"),
+        "expected policy denial on first request, got: {first_err:?}"
+    );
+    assert!(
+        second_err.message.contains("must match caller"),
+        "expected policy denial on second request, got: {second_err:?}"
+    );
+    assert!(
+        !second_err.message.contains("duplicate replay request"),
+        "policy denial should not be replay-cached, got: {second_err:?}"
+    );
+}
+
+#[test]
 fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);

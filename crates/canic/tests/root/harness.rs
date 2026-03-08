@@ -48,7 +48,7 @@ pub fn setup_root() -> RootSetup {
     // exhausting local temp storage under parallel test execution.
     let serial_guard = ROOT_SETUP_SERIAL
         .lock()
-        .expect("root setup serial mutex poisoned");
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     ensure_local_artifacts_built();
     let root_wasm = load_root_wasm().expect("load root wasm");

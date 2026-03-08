@@ -284,3 +284,55 @@ fn generate_root_attestation_request_id() -> [u8; 32] {
     hasher.update(canister.as_slice());
     hasher.finalize().into()
 }
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dto::rpc::{CyclesRequest, RootRequestMetadata};
+
+    #[test]
+    fn capability_metadata_from_request_uses_request_id_prefix_and_ttl_clamp() {
+        crate::utils::rand::seed_from([7u8; 32]);
+
+        let request_id = std::array::from_fn(|i| i as u8);
+        let request = Request::cycles(CyclesRequest {
+            cycles: 1,
+            metadata: Some(RootRequestMetadata {
+                request_id,
+                ttl_seconds: u64::MAX,
+            }),
+        });
+
+        let metadata = capability_metadata_from_request(&request);
+        let expected_prefix: [u8; 16] = request_id[..16]
+            .try_into()
+            .expect("request_id prefix must be 16 bytes");
+        assert_eq!(metadata.request_id, expected_prefix);
+        assert_eq!(metadata.ttl_seconds, u32::MAX);
+        assert!(
+            metadata.issued_at > 1_700_000_000,
+            "issued_at should be host-time seconds in tests"
+        );
+    }
+
+    #[test]
+    fn capability_metadata_from_request_defaults_when_missing() {
+        crate::utils::rand::seed_from([9u8; 32]);
+
+        let request = Request::cycles(CyclesRequest {
+            cycles: 1,
+            metadata: None,
+        });
+
+        let metadata = capability_metadata_from_request(&request);
+        assert_eq!(metadata.request_id, [0u8; 16]);
+        assert_eq!(
+            metadata.ttl_seconds,
+            DEFAULT_CAPABILITY_METADATA_TTL_SECONDS
+        );
+    }
+}

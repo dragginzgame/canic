@@ -138,6 +138,44 @@ fn verify_role_attestation_cached_rejects_empty_signature() {
 }
 
 #[test]
+fn verify_role_attestation_cached_reports_signature_error_before_subject_check() {
+    let signed = SignedRoleAttestation {
+        payload: sample_attestation(1),
+        signature: Vec::new(),
+        key_id: 1,
+    };
+
+    let err =
+        DelegatedTokenOps::verify_role_attestation_cached(&signed, p(9), p(3), Some(p(2)), 150, 0)
+            .expect_err("empty signature must fail before subject comparison");
+    assert!(matches!(
+        err,
+        DelegatedTokenOpsError::Signature(
+            DelegationSignatureError::AttestationSignatureUnavailable
+        )
+    ));
+}
+
+#[test]
+fn verify_role_attestation_cached_reports_unknown_key_before_subject_check() {
+    let signed = SignedRoleAttestation {
+        payload: sample_attestation(1),
+        signature: vec![1],
+        key_id: 404,
+    };
+
+    let err =
+        DelegatedTokenOps::verify_role_attestation_cached(&signed, p(9), p(3), Some(p(2)), 150, 0)
+            .expect_err("unknown key must fail before subject comparison");
+    assert!(matches!(
+        err,
+        DelegatedTokenOpsError::Validation(DelegationValidationError::AttestationUnknownKeyId {
+            key_id: 404
+        })
+    ));
+}
+
+#[test]
 fn verify_role_attestation_cached_rejects_key_not_yet_valid() {
     let key_id = 50;
     DelegationStateOps::upsert_attestation_key(AttestationKey {
