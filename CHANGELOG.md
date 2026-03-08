@@ -22,6 +22,12 @@ See detailed breakdown:
 - `0.13.3` finished the auth/control-plane extraction, standardized directory modules with `mod.rs`, and refreshed complexity/velocity audit baselines.
 - `0.13.4` simplified proof, replay, and auth internals with pluggable verifiers, a dedicated replay guard path, faster duplicate rejection, and clearer delegated-auth error grouping.
 - `0.13.5` further reduced branching pressure by moving replay commit fully into ops, switching built-in access predicates to evaluator-based dispatch, and replacing monolithic root capability metric events with structured `event_type`/`outcome`/`proof_mode` metrics.
+- `0.13.6` expanded auth/replay/capability test coverage and aligned root replay integration tests with current duplicate handling, while making the shared root test harness recover cleanly after a failed test.
+
+```text
+same request_id + same payload -> ReplayDuplicateSame (rejected)
+same request_id + different payload -> ReplayDuplicateConflict (rejected)
+```
 
 See detailed breakdown:
 [docs/changelog/0.13.md](docs/changelog/0.13.md)
