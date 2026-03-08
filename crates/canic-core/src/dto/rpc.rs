@@ -293,3 +293,114 @@ pub struct UpgradeCanisterResponse {}
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn metadata(id: u8) -> RootRequestMetadata {
+        RootRequestMetadata {
+            request_id: [id; 32],
+            ttl_seconds: 60,
+        }
+    }
+
+    fn requests_with_no_metadata() -> Vec<Request> {
+        vec![
+            Request::create_canister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("app"),
+                parent: CreateCanisterParent::Root,
+                extra_arg: None,
+                metadata: None,
+            }),
+            Request::upgrade_canister(UpgradeCanisterRequest {
+                canister_pid: p(2),
+                metadata: None,
+            }),
+            Request::cycles(CyclesRequest {
+                cycles: 100,
+                metadata: None,
+            }),
+            Request::issue_delegation(DelegationRequest {
+                shard_pid: p(3),
+                scopes: vec!["rpc:verify".to_string()],
+                aud: vec![p(4)],
+                ttl_secs: 60,
+                verifier_targets: vec![],
+                include_root_verifier: false,
+                metadata: None,
+            }),
+            Request::issue_role_attestation(RoleAttestationRequest {
+                subject: p(5),
+                role: CanisterRole::new("test"),
+                subnet_id: None,
+                audience: Some(p(6)),
+                ttl_secs: 60,
+                epoch: 0,
+                metadata: None,
+            }),
+        ]
+    }
+
+    #[test]
+    fn request_family_matches_all_variants() {
+        let families: Vec<RequestFamily> = requests_with_no_metadata()
+            .iter()
+            .map(Request::family)
+            .collect();
+        assert_eq!(
+            families,
+            vec![
+                RequestFamily::Provision,
+                RequestFamily::Upgrade,
+                RequestFamily::MintCycles,
+                RequestFamily::IssueDelegation,
+                RequestFamily::IssueRoleAttestation,
+            ]
+        );
+    }
+
+    #[test]
+    fn with_metadata_and_without_metadata_cover_all_variants() {
+        let replay_meta = metadata(7);
+
+        for request in requests_with_no_metadata() {
+            let with_meta = request.clone().with_metadata(replay_meta);
+            assert_eq!(
+                with_meta.metadata(),
+                Some(replay_meta),
+                "with_metadata must set metadata for every request variant"
+            );
+
+            let without_meta = with_meta.without_metadata();
+            assert_eq!(
+                without_meta.metadata(),
+                None,
+                "without_metadata must strip metadata for every request variant"
+            );
+        }
+    }
+
+    #[test]
+    fn upgrade_request_is_only_available_for_upgrade_variant() {
+        let upgrade = Request::upgrade_canister(UpgradeCanisterRequest {
+            canister_pid: p(9),
+            metadata: Some(metadata(9)),
+        });
+        assert!(upgrade.upgrade_request().is_some());
+
+        for request in requests_with_no_metadata() {
+            if !matches!(request, Request::UpgradeCanister(_)) {
+                assert!(request.upgrade_request().is_none());
+            }
+        }
+    }
+}

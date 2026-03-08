@@ -222,4 +222,38 @@ mod tests {
         let decision = evaluate_root_replay(input).expect("decision");
         assert_eq!(decision, ReplayDecision::Expired);
     }
+
+    #[test]
+    fn evaluate_root_replay_rejects_zero_ttl() {
+        RootReplayOps::reset_for_tests();
+
+        let mut input = base_input();
+        input.ttl_seconds = 0;
+
+        let err = evaluate_root_replay(input).expect_err("zero ttl must fail");
+        assert_eq!(
+            err,
+            ReplayGuardError::InvalidTtl {
+                ttl_seconds: 0,
+                max_ttl_seconds: input.max_ttl_seconds,
+            }
+        );
+    }
+
+    #[test]
+    fn evaluate_root_replay_rejects_ttl_above_max() {
+        RootReplayOps::reset_for_tests();
+
+        let mut input = base_input();
+        input.ttl_seconds = input.max_ttl_seconds + 1;
+
+        let err = evaluate_root_replay(input).expect_err("ttl above max must fail");
+        assert_eq!(
+            err,
+            ReplayGuardError::InvalidTtl {
+                ttl_seconds: input.ttl_seconds,
+                max_ttl_seconds: input.max_ttl_seconds,
+            }
+        );
+    }
 }
