@@ -5,12 +5,16 @@
 - Audit run: `velocity-preservation`
 - Definition: `docs/audits/recurring/velocity-preservation.md`
 - Auditor: `codex`
-- Date (UTC): `2026-03-08 00:32:47Z`
+- Date (UTC): `2026-03-08 19:22:56Z`
 - Branch: `eleven`
-- Commit: `c968b20d`
-- Worktree: `dirty` (active `0.13.x` refactor + docs updates)
+- Commit: `c98bb574`
+- Worktree: `dirty`
 - Scope: `crates/canic-core/src/**`
 - Previous baseline: `docs/audits/reports/2026-03-07/velocity-preservation.md` (latest rerun `02ac3107`)
+
+Rerun note:
+- Boundary and replay/auth hot paths were re-scanned in this pass after enum-surface decomposition.
+- `BuiltinPredicate` and root-capability outcome shock rows were refreshed from current code.
 
 ## STEP 0 — Baseline Capture
 
@@ -82,9 +86,9 @@ Escalation condition:
 | `dto::rpc::Request` | 5 | 18 | 4 | 4.50 | 4 | 90.00 | Medium |
 | `dto::rpc::Response` | 5 | 31 | 9 | 3.44 | 4 | 68.89 | Medium |
 | `dto::capability::CapabilityProof` | 3 | 15 | 5 | 3.00 | 3 | 27.00 | Medium |
-| `access::expr::BuiltinPredicate` | 14 | 16 | 1 | 16.00 | 1 | 224.00 | Medium |
+| `access::expr::BuiltinPredicate` | 4 | 16 | 1 | 16.00 | 1 | 64.00 | Low |
 | `RootCapabilityMetricEventType` | 5 | 26 | 5 | 5.20 | 3 | 78.00 | Medium |
-| `RootCapabilityMetricOutcome` | 9 | 26 | 5 | 5.20 | 3 | 140.40 | Medium |
+| `RootCapabilityMetricOutcome` | 9 | 24 | 1 | 24.00 | 1 | 216.00 | Medium |
 | `RootCapabilityMetricProofMode` | 4 | 11 | 2 | 5.50 | 2 | 44.00 | Low |
 | `DelegatedTokenOpsError` | 4 | 22 | 4 | 5.50 | 2 | 44.00 | Low |
 
@@ -131,7 +135,7 @@ Method note:
 | `CapabilityProof` | 15 | 13 | +2 | Medium-high |
 | `CapabilityService` | 11 | 11 | 0 | Medium |
 | `RootCapabilityMetricEventType` | 26 | 24 | +2 | Medium |
-| `RootCapabilityMetricOutcome` | 26 | 0 | +26 | Medium |
+| `RootCapabilityMetricOutcome` | 24 | 0 | +24 | Medium |
 | `RootCapabilityMetricProofMode` | 11 | 0 | +11 | Low |
 | `DelegatedTokenOpsError` | 22 | 62 | -40 | Low |
 
@@ -142,7 +146,7 @@ Method note:
 | New `ops/replay/*` files | Up file count | Structural improvement | Replay ownership moved down-stack |
 | Top-level auth shock radius reduced | Down sharply | Non-transient | Sustainable velocity gain |
 | `Request` decision surface reduced (`94 -> 18`) | Down sharply | Non-transient | Major velocity drag reduced |
-| `BuiltinPredicate` evaluation surface reduced (`30 -> 16`) | Down sharply | Non-transient | DSL hotspot drag reduced |
+| `BuiltinPredicate` top-level variant surface reduced (`14 -> 4`) | Down sharply | Non-transient | DSL hotspot drag reduced |
 | Root capability metrics split into axis enums (`event_type`/`outcome`/`proof_mode`) | Mixed (`+` axis types, `-` single-enum pressure) | Non-transient | Future metric growth no longer requires monolithic event enum expansion |
 
 ## STEP 11 — Velocity Risk Index
@@ -162,6 +166,7 @@ Interpretation: **Low-moderate risk**, improved from `4.50` and from earlier sam
 ## Final Output
 
 1. Velocity Risk Index (2026-03-08 rerun): **2.80/10**.
-2. Remaining top velocity drag is no longer `Request`; highest current shock multipliers are `RootCapabilityMetricOutcome` and `BuiltinPredicate`.
-3. Cross-layer leakage count is now zero for runtime paths.
-4. Auth error taxonomy split materially lowered top-level enum shock.
+2. At run time, remaining top velocity drag was no longer `Request`; highest current shock multipliers are `RootCapabilityMetricOutcome` and delegated validation/expiry enums.
+3. `BuiltinPredicate` now has materially lower shock pressure after grouped-sub-enum decomposition (`14 -> 4` variants; shock radius `224.00 -> 64.00`).
+4. Cross-layer leakage count is now zero for runtime paths.
+5. Auth error taxonomy split materially lowered top-level enum shock.

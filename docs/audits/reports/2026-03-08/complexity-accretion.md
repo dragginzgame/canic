@@ -5,12 +5,16 @@
 - Audit run: `complexity-accretion`
 - Definition: `docs/audits/recurring/complexity-accretion.md`
 - Auditor: `codex`
-- Date (UTC): `2026-03-08 00:32:47Z`
+- Date (UTC): `2026-03-08 19:22:56Z`
 - Branch: `eleven`
-- Commit: `c968b20d`
-- Worktree: `dirty` (active `0.13.x` refactor + docs updates)
+- Commit: `c98bb574`
+- Worktree: `dirty`
 - Scope: `crates/canic-core/src/**`
 - Previous baseline: `docs/audits/reports/2026-03-07/complexity-accretion.md` (latest rerun `02ac3107`)
+
+Rerun note:
+- High-risk capability/replay/auth files were re-scanned in this pass after enum-surface decomposition.
+- `BuiltinPredicate` and root-capability outcome multipliers were refreshed from current code.
 
 ## STEP 0 — Baseline Capture
 
@@ -32,10 +36,10 @@
 | `dto::rpc::Response` | 5 | 41 | 205 | RPC response contract | Yes | Medium |
 | `dto::capability::CapabilityProof` | 3 | 15 | 45 | capability auth mode | Yes | High |
 | `dto::capability::CapabilityService` | 5 | 11 | 55 | service routing | Yes | Medium |
-| `access::expr::BuiltinPredicate` | 14 | 16 | 224 | guard/auth/environment | Yes | Medium |
+| `access::expr::BuiltinPredicate` | 4 | 16 | 64 | guard/auth/environment | Yes | Low |
 | `workflow::...::RootCapability` | 5 | 34 | 170 | root capability dispatch | Yes | High |
 | `RootCapabilityMetricEventType` | 5 | 26 | 130 | replay/auth/exec observability axis (type) | Yes | Medium |
-| `RootCapabilityMetricOutcome` | 9 | 26 | 234 | replay/auth/exec observability axis (outcome) | Yes | Medium |
+| `RootCapabilityMetricOutcome` | 9 | 24 | 216 | replay/auth/exec observability axis (outcome) | Yes | Medium |
 | `RootCapabilityMetricProofMode` | 4 | 11 | 44 | replay/auth/exec observability axis (proof mode) | Yes | Low |
 | `DelegatedTokenOpsError` | 4 | 22 | 88 | top-level auth envelope | No | Low |
 | `DelegationValidationError` | 10 | 22 | 220 | validation/auth correctness | Yes | Medium |
@@ -109,15 +113,15 @@ Hub-pressure condition (`LOC > 600` and `domain_count >= 3`):
 
 | Area | Score (1-10) | Weight | Weighted Score |
 | ---- | ----: | ----: | ----: |
-| Variant explosion risk | 3 | 2 | 6 |
+| Variant explosion risk | 2 | 2 | 4 |
 | Branching pressure trend | 3 | 2 | 6 |
 | Flow multiplicity | 5 | 2 | 10 |
 | Cross-layer spread | 4 | 3 | 12 |
 | Hub pressure + call depth | 4 | 2 | 8 |
 
-`overall_index = 42 / 11 = 3.82`
+`overall_index = 40 / 11 = 3.64`
 
-Interpretation: **Moderate-low risk**, improved from the prior 5.36 baseline and earlier same-day reruns (`4.55`, `4.18`, `4.00`) after request, predicate, and metric-axis decomposition.
+Interpretation: **Low-moderate risk**, improved from the prior 5.36 baseline and earlier same-day reruns (`4.55`, `4.18`, `4.00`, `3.82`) after request, predicate, and metric-axis decomposition.
 
 ## STEP 8 — Refactor Noise Filter
 
@@ -126,14 +130,15 @@ Interpretation: **Moderate-low risk**, improved from the prior 5.36 baseline and
 | Runtime LOC +504 | Up | Mostly structural extraction with targeted behavior tightening | Not entropy-only growth |
 | Top-level auth multiplier collapse (`2232 -> 88`) | Down sharply | Non-transient | True complexity reduction |
 | `Request::` decision sites (`94 -> 18`) | Down sharply | Non-transient | Material complexity reduction |
-| `BuiltinPredicate::` sites (`30 -> 16`) | Down sharply | Non-transient | DSL hotspot pressure reduced |
+| `BuiltinPredicate::` top-level variant surface (`14 -> 4`) with grouped sub-enums | Down sharply | Non-transient | DSL hotspot pressure reduced |
 | `RootCapabilityMetricEvent` split into type/outcome/proof-mode | Down in single-enum growth pressure | Non-transient | Observability axis decoupled from feature-linear enum growth |
 | Workflow replay now pure-decision intake | Down in branching | Non-transient | Cross-layer coupling reduced |
 
 ## Required Summary
 
-1. Overall Complexity Risk Index (2026-03-08 rerun): **3.82/10** (prior rerun: `5.36/10`; earlier same-day reruns: `4.55/10`, `4.18/10`, `4.00/10`).
-2. Highest remaining branch multipliers: `RootCapabilityMetricOutcome` (234), `BuiltinPredicate` (224), `DelegationValidationError` (220).
-3. Largest reduction: delegated auth error surface moved from a monolithic top-level multiplier to layered domain enums.
-4. Request decision surface dropped materially (`94 -> 18`), with runtime non-dto variant branching for `Request` now at `0`.
-5. Prior workflow replay storage coupling is now resolved; replay record construction is owned by `ops/replay::commit_root_replay`.
+1. Overall Complexity Risk Index (2026-03-08 rerun): **3.64/10** (prior rerun: `5.36/10`; earlier same-day reruns: `4.55/10`, `4.18/10`, `4.00/10`, `3.82/10`).
+2. Highest branch multipliers in this rerun are `DelegationValidationError` (220), `RootCapabilityMetricOutcome` (216), and `DelegationExpiryError` (198).
+3. `BuiltinPredicate` pressure dropped materially after grouped-sub-enum decomposition (`14 -> 4` variants; multiplier `224 -> 64`).
+4. Largest reduction remains delegated auth error surface moving from monolithic top-level multiplier to layered domain enums.
+5. Request decision surface remains materially reduced (`94 -> 18`), with runtime non-dto variant branching for `Request` at `0`.
+6. Prior workflow replay storage coupling remains resolved; replay record construction is owned by `ops/replay::commit_root_replay`.

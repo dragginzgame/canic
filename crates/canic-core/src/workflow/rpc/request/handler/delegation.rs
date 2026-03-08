@@ -146,7 +146,7 @@ mod tests {
         });
 
         let mut cert = sample_cert(root_pid);
-        cert.scopes = vec!["".to_string()];
+        cert.scopes = vec![String::new()];
 
         let err = validate_delegation_cert_policy(&cert).expect_err("empty scope value must fail");
         assert!(err.to_string().contains("must not contain empty strings"));

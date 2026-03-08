@@ -13,8 +13,8 @@ use crate::{
     ops::{
         ic::IcOps,
         runtime::metrics::root_capability::{
-            RootCapabilityMetricEventType, RootCapabilityMetricKey, RootCapabilityMetricOutcome,
-            RootCapabilityMetricProofMode, RootCapabilityMetrics,
+            RootCapabilityEnvelopeOutcome, RootCapabilityMetricKey, RootCapabilityMetricProofMode,
+            RootCapabilityMetrics, RootCapabilityProofOutcome,
         },
     },
     workflow::rpc::request::handler::RootResponseWorkflow,
@@ -50,10 +50,9 @@ pub(super) async fn response_capability_v1(
     let capability_key = root_capability_metric_key(&capability);
     let proof_mode = capability_proof_mode_metric_key(&proof);
     if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
-        RootCapabilityMetrics::record_metric(
+        RootCapabilityMetrics::record_envelope(
             capability_key,
-            RootCapabilityMetricEventType::Envelope,
-            RootCapabilityMetricOutcome::Rejected,
+            RootCapabilityEnvelopeOutcome::Rejected,
             proof_mode,
         );
         log!(
@@ -69,18 +68,16 @@ pub(super) async fn response_capability_v1(
         );
         return Err(err);
     }
-    RootCapabilityMetrics::record_metric(
+    RootCapabilityMetrics::record_envelope(
         capability_key,
-        RootCapabilityMetricEventType::Envelope,
-        RootCapabilityMetricOutcome::Accepted,
+        RootCapabilityEnvelopeOutcome::Accepted,
         proof_mode,
     );
 
     if let Err(err) = verify_root_capability_proof(&capability, capability_version, &proof).await {
-        RootCapabilityMetrics::record_metric(
+        RootCapabilityMetrics::record_proof(
             capability_key,
-            RootCapabilityMetricEventType::Proof,
-            RootCapabilityMetricOutcome::Rejected,
+            RootCapabilityProofOutcome::Rejected,
             proof_mode,
         );
         log!(
@@ -96,10 +93,9 @@ pub(super) async fn response_capability_v1(
         );
         return Err(err);
     }
-    RootCapabilityMetrics::record_metric(
+    RootCapabilityMetrics::record_proof(
         capability_key,
-        RootCapabilityMetricEventType::Proof,
-        RootCapabilityMetricOutcome::Accepted,
+        RootCapabilityProofOutcome::Accepted,
         proof_mode,
     );
 

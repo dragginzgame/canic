@@ -26,6 +26,7 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
+const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
 static DFX_BUILD_ONCE: Once = Once::new();
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -48,27 +49,47 @@ pub fn setup_root() -> RootSetup {
     // exhausting local temp storage under parallel test execution.
     let serial_guard = ROOT_SETUP_SERIAL
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     ensure_local_artifacts_built();
     let root_wasm = load_root_wasm().expect("load root wasm");
 
-    let pic = pic();
-    let root_id = pic
-        .create_and_install_root_canister(root_wasm)
-        .expect("install root canister");
+    for attempt in 1..=ROOT_SETUP_MAX_ATTEMPTS {
+        let wasm = root_wasm.clone();
+        let attempt_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let pic = pic();
+            let root_id = pic
+                .create_and_install_root_canister(wasm)
+                .expect("install root canister");
 
-    wait_for_bootstrap(&pic, root_id);
+            wait_for_bootstrap(&pic, root_id);
 
-    let subnet_directory = fetch_subnet_directory(&pic, root_id);
-    wait_for_children_ready(&pic, &subnet_directory);
+            let subnet_directory = fetch_subnet_directory(&pic, root_id);
+            wait_for_children_ready(&pic, &subnet_directory);
 
-    RootSetup {
-        pic,
-        root_id,
-        subnet_directory,
-        _serial_guard: serial_guard,
+            (pic, root_id, subnet_directory)
+        }));
+
+        match attempt_result {
+            Ok((pic, root_id, subnet_directory)) => {
+                return RootSetup {
+                    pic,
+                    root_id,
+                    subnet_directory,
+                    _serial_guard: serial_guard,
+                };
+            }
+            Err(err) if attempt < ROOT_SETUP_MAX_ATTEMPTS => {
+                eprintln!(
+                    "setup_root attempt {attempt}/{ROOT_SETUP_MAX_ATTEMPTS} failed; retrying"
+                );
+                drop(err);
+            }
+            Err(err) => std::panic::resume_unwind(err),
+        }
     }
+
+    unreachable!("setup_root must return or panic");
 }
 
 fn ensure_local_artifacts_built() {
