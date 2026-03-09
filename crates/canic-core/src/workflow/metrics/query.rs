@@ -2,8 +2,8 @@ use crate::{
     dto::{
         metrics::{
             AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, EndpointHealth,
-            HttpMetricEntry, IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry,
-            TimerMetricEntry,
+            HttpMetricEntry, IccMetricEntry, MetricsKind, MetricsRequest, MetricsResponse,
+            RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
@@ -33,6 +33,28 @@ use crate::{
 pub struct MetricsQuery;
 
 impl MetricsQuery {
+    #[must_use]
+    pub fn dispatch(req: MetricsRequest) -> MetricsResponse {
+        match req.kind {
+            MetricsKind::System => MetricsResponse::System(Self::system_snapshot()),
+            MetricsKind::Icc => MetricsResponse::Icc(Self::icc_page(req.page)),
+            MetricsKind::Http => MetricsResponse::Http(Self::http_page(req.page)),
+            MetricsKind::Timer => MetricsResponse::Timer(Self::timer_page(req.page)),
+            MetricsKind::Access => MetricsResponse::Access(Self::access_page(req.page)),
+            MetricsKind::Delegation => MetricsResponse::Delegation(Self::delegation_page(req.page)),
+            MetricsKind::RootCapability => {
+                MetricsResponse::RootCapability(Self::root_capability_page(req.page))
+            }
+            MetricsKind::CyclesFunding => {
+                MetricsResponse::CyclesFunding(Self::cycles_funding_page(req.page))
+            }
+            MetricsKind::Perf => MetricsResponse::Perf(Self::perf_page(req.page)),
+            MetricsKind::EndpointHealth => MetricsResponse::EndpointHealth(
+                Self::endpoint_health_page(req.page, Some(crate::protocol::CANIC_METRICS)),
+            ),
+        }
+    }
+
     #[must_use]
     pub fn system_snapshot() -> Vec<SystemMetricEntry> {
         let snapshot = MetricsOps::system_snapshot();

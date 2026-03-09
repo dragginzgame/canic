@@ -12,8 +12,8 @@ use canic::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::ErrorCode,
-        metrics::RootCapabilityMetricEntry,
-        page::{Page, PageRequest},
+        metrics::{MetricsKind, MetricsRequest, MetricsResponse, RootCapabilityMetricEntry},
+        page::PageRequest,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
             RootRequestMetadata, UpgradeCanisterRequest,
@@ -618,19 +618,25 @@ fn root_response_as(
 }
 
 fn root_capability_metrics(setup: &RootSetup) -> Vec<RootCapabilityMetricEntry> {
-    let page: Result<Page<RootCapabilityMetricEntry>, Error> = setup
+    let response: Result<MetricsResponse, Error> = setup
         .pic
         .query_call(
             setup.root_id,
-            protocol::CANIC_METRICS_ROOT_CAPABILITY,
-            (PageRequest {
-                limit: 256,
-                offset: 0,
+            protocol::CANIC_METRICS,
+            (MetricsRequest {
+                kind: MetricsKind::RootCapability,
+                page: PageRequest {
+                    limit: 256,
+                    offset: 0,
+                },
             },),
         )
         .expect("root capability metrics transport query failed");
-    page.expect("root capability metrics application query failed")
-        .entries
+
+    match response.expect("root capability metrics application query failed") {
+        MetricsResponse::RootCapability(page) => page.entries,
+        other => panic!("unexpected metrics response variant: {other:?}"),
+    }
 }
 
 fn metric_count(entries: &[RootCapabilityMetricEntry], capability: &str, event: &str) -> u64 {
