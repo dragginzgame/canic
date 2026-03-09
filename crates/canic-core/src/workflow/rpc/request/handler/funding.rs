@@ -1,4 +1,4 @@
-use crate::{InternalError, cdk::types::Principal, ids::CanisterRole};
+use crate::{cdk::types::Principal, ids::CanisterRole};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -102,10 +102,8 @@ struct FundingLedger {
 }
 
 // Resolve the effective policy for a child role from current config.
-pub(super) fn policy_for_child_role(
-    _child_role: &CanisterRole,
-) -> Result<FundingPolicy, InternalError> {
-    Ok(default_policy())
+pub(super) const fn policy_for_child_role(_child_role: &CanisterRole) -> FundingPolicy {
+    default_policy()
 }
 
 // Record a successful grant for cooldown and child-budget accounting.

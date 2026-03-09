@@ -115,7 +115,7 @@ async fn execute_request_cycles(
         return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
     }
 
-    let policy = funding::policy_for_child_role(&child.role)?;
+    let policy = funding::policy_for_child_role(&child.role);
     let approved_cycles = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
         Ok(decision) => decision.approved_cycles,
         Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
