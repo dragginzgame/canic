@@ -36,6 +36,9 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet role")]
     SubnetRoleUnavailable,
 
+    #[error("failed to determine current parent principal")]
+    ParentPidUnavailable,
+
     #[error("operation must be called from the root canister")]
     NotRoot,
 
@@ -135,6 +138,10 @@ impl EnvOps {
 
     pub fn root_pid() -> Result<Principal, InternalError> {
         Env::get_root_pid().ok_or_else(|| EnvOpsError::RootPidUnavailable.into())
+    }
+
+    pub fn parent_pid() -> Result<Principal, InternalError> {
+        Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
 
     pub fn prime_root_pid() -> Result<Principal, InternalError> {

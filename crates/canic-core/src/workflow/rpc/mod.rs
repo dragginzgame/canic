@@ -25,8 +25,11 @@ pub enum RpcWorkflowError {
     #[error("canister {0}'s parent was not found")]
     ParentNotFound(Principal),
 
-    #[error("insufficient root cycles: requested={requested}, available={available}")]
-    InsufficientRootCycles { requested: u128, available: u128 },
+    #[error("insufficient funding cycles: requested={requested}, available={available}")]
+    InsufficientFundingCycles { requested: u128, available: u128 },
+
+    #[error("cycles funding disabled")]
+    CyclesFundingDisabled,
 
     #[error("missing replay metadata for capability '{0}'")]
     MissingReplayMetadata(&'static str),

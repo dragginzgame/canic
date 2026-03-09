@@ -362,8 +362,8 @@ fn cycles_rejects_when_requested_above_root_balance() {
         .expect_err("cycles above available root balance must reject");
     assert_eq!(err.code, ErrorCode::Internal);
     assert!(
-        err.message.contains("insufficient root cycles"),
-        "expected insufficient root cycles error, got: {err:?}"
+        err.message.contains("insufficient funding cycles"),
+        "expected insufficient funding cycles error, got: {err:?}"
     );
 
     let metrics = root_capability_metrics(&setup);

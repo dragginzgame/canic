@@ -48,12 +48,27 @@ impl Display for AppMode {
 /// AppStateRecord
 ///
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateRecord {
     pub mode: AppMode,
+    #[serde(default = "default_cycles_funding_enabled")]
+    pub cycles_funding_enabled: bool,
 }
 
 impl_storable_bounded!(AppStateRecord, 32, true);
+
+const fn default_cycles_funding_enabled() -> bool {
+    true
+}
+
+impl Default for AppStateRecord {
+    fn default() -> Self {
+        Self {
+            mode: AppMode::default(),
+            cycles_funding_enabled: default_cycles_funding_enabled(),
+        }
+    }
+}
 
 ///
 /// AppState
@@ -71,6 +86,19 @@ impl AppState {
         APP_STATE.with_borrow_mut(|cell| {
             let mut data = *cell.get();
             data.mode = mode;
+            cell.set(data);
+        });
+    }
+
+    #[must_use]
+    pub(crate) fn cycles_funding_enabled() -> bool {
+        APP_STATE.with_borrow(|cell| cell.get().cycles_funding_enabled)
+    }
+
+    pub(crate) fn set_cycles_funding_enabled(enabled: bool) {
+        APP_STATE.with_borrow_mut(|cell| {
+            let mut data = *cell.get();
+            data.cycles_funding_enabled = enabled;
             cell.set(data);
         });
     }
@@ -94,7 +122,10 @@ mod tests {
     use super::*;
 
     fn reset_state(mode: AppMode) {
-        AppState::import(AppStateRecord { mode });
+        AppState::import(AppStateRecord {
+            mode,
+            cycles_funding_enabled: true,
+        });
     }
 
     #[test]
@@ -120,12 +151,26 @@ mod tests {
 
         let data = AppStateRecord {
             mode: AppMode::Readonly,
+            cycles_funding_enabled: false,
         };
         AppState::import(data);
 
         assert_eq!(AppState::export().mode, AppMode::Readonly);
+        assert!(!AppState::export().cycles_funding_enabled);
 
         let exported = AppState::export();
         assert_eq!(exported, data);
+    }
+
+    #[test]
+    fn cycles_funding_switch_round_trip() {
+        AppState::import(AppStateRecord::default());
+        assert!(AppState::cycles_funding_enabled());
+
+        AppState::set_cycles_funding_enabled(false);
+        assert!(!AppState::cycles_funding_enabled());
+
+        AppState::set_cycles_funding_enabled(true);
+        assert!(AppState::cycles_funding_enabled());
     }
 }

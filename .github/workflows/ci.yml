@@ -57,6 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export RUSTFLAGS="-C debuginfo=0"
           mkdir -p .dfx/local/canisters
 
           for canister in app blank scale scale_hub shard shard_hub test user_hub user_shard; do
@@ -70,6 +71,11 @@ jobs:
           mkdir -p .dfx/local/canisters/root
           cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
+          ROOT_WASM_GZ_BYTES="$(stat -c%s .dfx/local/canisters/root/root.wasm.gz)"
+          if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
+            echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes"
+            exit 1
+          fi
       - name: Layering guards
         shell: bash
         run: |
@@ -148,6 +154,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export RUSTFLAGS="-C debuginfo=0"
           mkdir -p .dfx/local/canisters
 
           for canister in app blank scale scale_hub shard shard_hub test user_hub user_shard; do
@@ -161,6 +168,11 @@ jobs:
           mkdir -p .dfx/local/canisters/root
           cp target/wasm32-unknown-unknown/debug/canister_root.wasm .dfx/local/canisters/root/root.wasm
           gzip -n -c .dfx/local/canisters/root/root.wasm > .dfx/local/canisters/root/root.wasm.gz
+          ROOT_WASM_GZ_BYTES="$(stat -c%s .dfx/local/canisters/root/root.wasm.gz)"
+          if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
+            echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes"
+            exit 1
+          fi
       - name: Forbidden crypto API guards
         shell: bash
         run: |

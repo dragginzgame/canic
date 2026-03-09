@@ -958,7 +958,10 @@ mod tests {
         };
 
         for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateRecord { mode });
+            AppState::import(AppStateRecord {
+                mode,
+                ..AppStateRecord::default()
+            });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
             let direct_result = access::app::guard_app_update();
             assert_eq!(
@@ -981,7 +984,10 @@ mod tests {
         };
 
         for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateRecord { mode });
+            AppState::import(AppStateRecord {
+                mode,
+                ..AppStateRecord::default()
+            });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
             let direct_result = access::app::guard_app_query();
             assert_eq!(

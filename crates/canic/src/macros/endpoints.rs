@@ -159,6 +159,15 @@ macro_rules! canic_endpoints {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()
         }
 
+        // canic_response_capability_v1
+        // Versioned capability-envelope endpoint for subnet capability routing.
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_response_capability_v1(
+            envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
+        ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
+            $crate::__internal::core::api::rpc::RpcApi::response_capability_v1(envelope).await
+        }
+
         #[canic_query]
         fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
@@ -307,15 +316,6 @@ macro_rules! canic_endpoints_root {
                     .await?;
 
             Ok(res)
-        }
-
-        // canic_response_capability_v1
-        // Versioned capability-envelope endpoint for 0.13 rollout.
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_response_capability_v1(
-            envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
-        ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
-            $crate::__internal::core::api::rpc::RpcApi::response_capability_v1(envelope).await
         }
 
         // canic_canister_status
