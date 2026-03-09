@@ -17,7 +17,8 @@ macro_rules! ic_memory {
         let _type_check: Option<$label> = None;
 
         // Enqueue this memory ID registration for deferred validation.
-        $crate::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label));
+        $crate::registry::defer_register($id, env!("CARGO_PKG_NAME"), stringify!($label))
+            .expect("memory id registration validation failed");
         $crate::runtime::registry::MemoryRegistryRuntime::commit_pending_if_initialized()
             .expect("late memory id registration commit failed");
 
@@ -37,7 +38,8 @@ macro_rules! ic_memory_range {
         // Enqueue this range reservation. The actual check/insert happens in
         // `init_eager_tls()`. This guarantees the reservation is made
         // before any memory IDs from this range are registered.
-        $crate::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end);
+        $crate::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end)
+            .expect("memory range reservation validation failed");
         $crate::runtime::registry::MemoryRegistryRuntime::commit_pending_if_initialized()
             .expect("late memory range registration commit failed");
     }};
