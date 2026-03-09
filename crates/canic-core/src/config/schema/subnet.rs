@@ -173,10 +173,42 @@ impl CanisterConfig {
 
         let threshold = topup.threshold.to_u128();
         let amount = topup.amount.to_u128();
+        let max_per_request = topup.max_per_request.to_u128();
+        let max_per_child = topup.max_per_child.to_u128();
 
         if amount.saturating_mul(2) >= threshold {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "canister '{canister}' topup.amount must be < 50% of topup.threshold (got amount={amount}, threshold={threshold})",
+            )));
+        }
+
+        if max_per_request == 0 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.max_per_request must be > 0",
+            )));
+        }
+
+        if max_per_child == 0 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.max_per_child must be > 0",
+            )));
+        }
+
+        if max_per_request > max_per_child {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.max_per_request must be <= topup.max_per_child (got max_per_request={max_per_request}, max_per_child={max_per_child})",
+            )));
+        }
+
+        if amount > max_per_request {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.amount must be <= topup.max_per_request (got amount={amount}, max_per_request={max_per_request})",
+            )));
+        }
+
+        if amount > max_per_child {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.amount must be <= topup.max_per_child (got amount={amount}, max_per_child={max_per_child})",
             )));
         }
 
@@ -322,6 +354,29 @@ pub struct CanisterTopup {
 
     #[serde(default, deserialize_with = "Cycles::from_config")]
     pub amount: Cycles,
+
+    #[serde(
+        default = "default_topup_max_per_request",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub max_per_request: Cycles,
+
+    #[serde(
+        default = "default_topup_max_per_child",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub max_per_child: Cycles,
+
+    #[serde(default)]
+    pub cooldown_secs: u64,
+}
+
+const fn default_topup_max_per_request() -> Cycles {
+    Cycles::new(u128::MAX)
+}
+
+const fn default_topup_max_per_child() -> Cycles {
+    Cycles::new(u128::MAX)
 }
 
 impl Default for CanisterTopup {
@@ -329,6 +384,9 @@ impl Default for CanisterTopup {
         Self {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(4 * TC),
+            max_per_request: default_topup_max_per_request(),
+            max_per_child: default_topup_max_per_child(),
+            cooldown_secs: 0,
         }
     }
 }
@@ -745,6 +803,7 @@ mod tests {
             topup: Some(CanisterTopup {
                 threshold: Cycles::new(10 * TC),
                 amount: Cycles::new(5 * TC),
+                ..CanisterTopup::default()
             }),
             ..base_canister_config(CanisterKind::Singleton)
         };
@@ -769,6 +828,7 @@ mod tests {
             topup: Some(CanisterTopup {
                 threshold: Cycles::new(10 * TC),
                 amount: Cycles::new(4 * TC),
+                ..CanisterTopup::default()
             }),
             ..base_canister_config(CanisterKind::Singleton)
         };
@@ -804,6 +864,59 @@ mod tests {
         subnet
             .validate()
             .expect("expected default topup to satisfy half-threshold invariant");
+    }
+
+    #[test]
+    fn topup_amount_must_not_exceed_max_per_request() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup: Some(CanisterTopup {
+                threshold: Cycles::new(10 * TC),
+                amount: Cycles::new(4 * TC),
+                max_per_request: Cycles::new(3 * TC),
+                ..CanisterTopup::default()
+            }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected topup amount > max_per_request to fail");
+    }
+
+    #[test]
+    fn topup_max_per_request_must_not_exceed_max_per_child() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup: Some(CanisterTopup {
+                threshold: Cycles::new(10 * TC),
+                amount: Cycles::new(4 * TC),
+                max_per_request: Cycles::new(8 * TC),
+                max_per_child: Cycles::new(7 * TC),
+                ..CanisterTopup::default()
+            }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected max_per_request > max_per_child to fail");
     }
 
     #[test]

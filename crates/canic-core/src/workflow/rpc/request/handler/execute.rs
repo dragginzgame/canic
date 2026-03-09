@@ -1,4 +1,4 @@
-use super::{RootCapability, RootContext, authorize, delegation};
+use super::{RootCapability, RootContext, authorize, delegation, funding};
 use crate::{
     InternalError,
     dto::auth::{
@@ -15,6 +15,7 @@ use crate::{
         auth::DelegatedTokenOps,
         ic::{IcOps, mgmt::MgmtOps},
         runtime::env::EnvOps,
+        runtime::metrics::cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
         storage::{
             auth::DelegationStateOps, directory::subnet::SubnetDirectoryOps,
             registry::subnet::SubnetRegistryOps,
@@ -101,7 +102,17 @@ async fn execute_mint_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<Response, InternalError> {
-    MgmtOps::deposit_cycles(ctx.caller, req.cycles).await?;
+    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, req.cycles).await {
+        CyclesFundingMetrics::record_denied(
+            ctx.caller,
+            req.cycles,
+            CyclesFundingDeniedReason::ExecutionError,
+        );
+        return Err(err);
+    }
+
+    CyclesFundingMetrics::record_granted(ctx.caller, req.cycles);
+    funding::record_child_grant(ctx.caller, req.cycles, ctx.now);
 
     let cycles_transferred = req.cycles;
 

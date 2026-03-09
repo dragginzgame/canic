@@ -130,6 +130,13 @@ macro_rules! canic_endpoints {
             Ok($crate::__internal::core::api::metrics::MetricsQuery::root_capability_page(page))
         }
 
+        #[canic_query]
+        fn canic_metrics_cycles_funding(
+            page: ::canic::dto::page::PageRequest,
+        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::CyclesFundingMetricEntry>, ::canic::Error> {
+            Ok($crate::__internal::core::api::metrics::MetricsQuery::cycles_funding_page(page))
+        }
+
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(

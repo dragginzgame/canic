@@ -1,12 +1,14 @@
 use crate::{
     cdk::types::Principal,
     dto::metrics::{
-        AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry, IccMetricEntry,
-        RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
+        AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, EndpointHealth,
+        HttpMetricEntry, IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry,
+        TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
         access::AccessMetricKey,
+        cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetricKey},
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
@@ -188,6 +190,37 @@ impl RootCapabilityMetricEntryMapper {
                     outcome: outcome.metric_label().to_string(),
                     proof_mode: proof_mode.metric_label().to_string(),
                     count,
+                },
+            )
+            .collect()
+    }
+}
+
+///
+/// CyclesFundingMetricEntryMapper
+///
+
+pub struct CyclesFundingMetricEntryMapper;
+
+impl CyclesFundingMetricEntryMapper {
+    #[must_use]
+    pub fn record_to_view(
+        raw: impl IntoIterator<
+            Item = (
+                CyclesFundingMetricKey,
+                Option<Principal>,
+                Option<CyclesFundingDeniedReason>,
+                u128,
+            ),
+        >,
+    ) -> Vec<CyclesFundingMetricEntry> {
+        raw.into_iter()
+            .map(
+                |(metric, child_principal, reason, cycles)| CyclesFundingMetricEntry {
+                    metric: metric.metric_label().to_string(),
+                    child_principal,
+                    reason: reason.map(|label| label.metric_label().to_string()),
+                    cycles,
                 },
             )
             .collect()

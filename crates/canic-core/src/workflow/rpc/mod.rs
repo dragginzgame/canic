@@ -1,7 +1,12 @@
 pub mod adapter;
 pub mod request;
 
-use crate::{InternalError, InternalErrorOrigin, cdk::types::Principal, ids::CanisterRole};
+use crate::{
+    InternalError, InternalErrorOrigin,
+    cdk::types::Principal,
+    dto::error::{Error as PublicError, ErrorCode},
+    ids::CanisterRole,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -30,6 +35,26 @@ pub enum RpcWorkflowError {
 
     #[error("cycles funding disabled")]
     CyclesFundingDisabled,
+
+    #[error(
+        "funding request exceeds max_per_request: requested={requested}, max_per_request={max_per_request}"
+    )]
+    FundingRequestExceedsMaxPerRequest {
+        requested: u128,
+        max_per_request: u128,
+    },
+
+    #[error(
+        "funding request exceeds child budget: requested={requested}, remaining_budget={remaining_budget}, max_per_child={max_per_child}"
+    )]
+    FundingRequestExceedsChildBudget {
+        requested: u128,
+        remaining_budget: u128,
+        max_per_child: u128,
+    },
+
+    #[error("funding request is in cooldown: retry_after_secs={retry_after_secs}")]
+    FundingCooldownActive { retry_after_secs: u64 },
 
     #[error("missing replay metadata for capability '{0}'")]
     MissingReplayMetadata(&'static str),
@@ -130,6 +155,36 @@ pub enum RpcWorkflowError {
 
 impl From<RpcWorkflowError> for InternalError {
     fn from(err: RpcWorkflowError) -> Self {
-        Self::workflow(InternalErrorOrigin::Workflow, err.to_string())
+        match err {
+            RpcWorkflowError::CyclesFundingDisabled => {
+                Self::public(PublicError::unavailable("cycles funding disabled"))
+            }
+            RpcWorkflowError::FundingRequestExceedsMaxPerRequest { .. }
+            | RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
+            | RpcWorkflowError::FundingCooldownActive { .. } => Self::public(PublicError::policy(
+                ErrorCode::ResourceExhausted,
+                err.to_string(),
+            )),
+            other => Self::workflow(InternalErrorOrigin::Workflow, other.to_string()),
+        }
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dto::error::ErrorCode;
+
+    #[test]
+    fn cycles_funding_disabled_maps_to_unavailable_public_error() {
+        let internal: InternalError = RpcWorkflowError::CyclesFundingDisabled.into();
+        let public = internal
+            .public_error()
+            .expect("expected public error mapping for kill switch");
+        assert_eq!(public.code, ErrorCode::Unavailable);
     }
 }

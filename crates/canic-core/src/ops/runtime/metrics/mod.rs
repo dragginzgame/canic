@@ -1,5 +1,6 @@
 pub mod access;
 pub mod auth;
+pub mod cycles_funding;
 pub mod delegation;
 pub mod endpoint;
 pub mod http;
@@ -11,6 +12,7 @@ pub mod timer;
 
 use {
     access::{AccessMetrics, AccessMetricsSnapshot},
+    cycles_funding::{CyclesFundingMetrics, CyclesFundingMetricsSnapshot},
     delegation::{DelegationMetrics, DelegationMetricsSnapshot},
     endpoint::{EndpointHealthSnapshot, EndpointMetrics},
     http::{HttpMetrics, HttpMetricsSnapshot},
@@ -46,6 +48,11 @@ impl MetricsOps {
     #[must_use]
     pub fn delegation_snapshot() -> DelegationMetricsSnapshot {
         DelegationMetrics::snapshot()
+    }
+
+    #[must_use]
+    pub fn cycles_funding_snapshot() -> CyclesFundingMetricsSnapshot {
+        CyclesFundingMetrics::snapshot()
     }
 
     #[must_use]
