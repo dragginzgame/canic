@@ -170,7 +170,7 @@ impl ConfigModel {
             CanisterConfig {
                 kind: CanisterKind::Root,
                 initial_cycles: crate::cdk::types::Cycles::new(0),
-                topup: None,
+                topup_policy: None,
                 randomness: RandomnessConfig::default(),
                 scaling: None,
                 sharding: None,
@@ -524,7 +524,7 @@ mod tests {
         CanisterConfig {
             kind,
             initial_cycles: Cycles::new(0),
-            topup: None,
+            topup_policy: None,
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,

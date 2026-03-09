@@ -12,7 +12,7 @@ use crate::{
 pub(super) enum RootCapability {
     Provision(CreateCanisterRequest),
     Upgrade(UpgradeCanisterRequest),
-    MintCycles(CyclesRequest),
+    RequestCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
 }
@@ -22,7 +22,7 @@ impl RootCapability {
         match self {
             Self::Provision(_) => "Provision",
             Self::Upgrade(_) => "Upgrade",
-            Self::MintCycles(_) => "MintCycles",
+            Self::RequestCycles(_) => "RequestCycles",
             Self::IssueDelegation(_) => "IssueDelegation",
             Self::IssueRoleAttestation(_) => "IssueRoleAttestation",
         }
@@ -32,7 +32,7 @@ impl RootCapability {
         match self {
             Self::Provision(req) => req.metadata,
             Self::Upgrade(req) => req.metadata,
-            Self::MintCycles(req) => req.metadata,
+            Self::RequestCycles(req) => req.metadata,
             Self::IssueDelegation(req) => req.metadata,
             Self::IssueRoleAttestation(req) => req.metadata,
         }
@@ -42,7 +42,7 @@ impl RootCapability {
         match self {
             Self::Provision(_) => RootCapabilityMetricKey::Provision,
             Self::Upgrade(_) => RootCapabilityMetricKey::Upgrade,
-            Self::MintCycles(_) => RootCapabilityMetricKey::MintCycles,
+            Self::RequestCycles(_) => RootCapabilityMetricKey::RequestCycles,
             Self::IssueDelegation(_) => RootCapabilityMetricKey::IssueDelegation,
             Self::IssueRoleAttestation(_) => RootCapabilityMetricKey::IssueRoleAttestation,
         }
@@ -60,10 +60,10 @@ impl RootCapability {
                 canonical.metadata = None;
                 RootCapabilityCommand::UpgradeCanister(canonical)
             }
-            Self::MintCycles(req) => {
+            Self::RequestCycles(req) => {
                 let mut canonical = req.clone();
                 canonical.metadata = None;
-                RootCapabilityCommand::MintCycles(canonical)
+                RootCapabilityCommand::RequestCycles(canonical)
             }
             Self::IssueDelegation(req) => {
                 let mut canonical = req.clone();
@@ -85,7 +85,7 @@ pub(super) fn map_request(req: RootCapabilityCommand) -> RootCapability {
     match req {
         RootCapabilityCommand::ProvisionCanister(req) => RootCapability::Provision(req),
         RootCapabilityCommand::UpgradeCanister(req) => RootCapability::Upgrade(req),
-        RootCapabilityCommand::MintCycles(req) => RootCapability::MintCycles(req),
+        RootCapabilityCommand::RequestCycles(req) => RootCapability::RequestCycles(req),
         RootCapabilityCommand::IssueDelegation(req) => RootCapability::IssueDelegation(req),
         RootCapabilityCommand::IssueRoleAttestation(req) => {
             RootCapability::IssueRoleAttestation(req)

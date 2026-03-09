@@ -1,11 +1,12 @@
 use super::{
     DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext,
-    funding::{self, FundingPolicyViolation},
+    funding::{self, FundingDecision, FundingPolicyViolation},
 };
 use crate::{
     InternalError,
     dto::auth::{DelegationRequest, RoleAttestationRequest},
     dto::rpc::{CyclesRequest, UpgradeCanisterRequest},
+    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -32,7 +33,7 @@ pub(super) fn authorize(
         RootCapability::Upgrade(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
         }
-        RootCapability::MintCycles(req) => authorize_mint_cycles(ctx, req),
+        RootCapability::RequestCycles(req) => authorize_request_cycles(ctx, req),
         RootCapability::IssueDelegation(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_issue_delegation(ctx, req))
         }
@@ -94,7 +95,7 @@ fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<
     Ok(())
 }
 
-fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
+fn authorize_request_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
     let Some(child) = SubnetRegistryOps::get(ctx.caller) else {
@@ -105,7 +106,11 @@ fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), I
         );
         return Err(RpcWorkflowError::ChildNotFound(ctx.caller).into());
     };
-    if child.parent_pid != Some(ctx.self_pid) {
+    let root_self_request = ctx.is_root_env
+        && ctx.caller == ctx.self_pid
+        && child.role == CanisterRole::ROOT
+        && child.parent_pid.is_none();
+    if child.parent_pid != Some(ctx.self_pid) && !root_self_request {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             req.cycles,
@@ -124,66 +129,73 @@ fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), I
     }
 
     let policy = funding::policy_for_child_role(&child.role)?;
-    if let Err(violation) = policy.evaluate(ctx.caller, req.cycles, ctx.now) {
-        match violation {
-            FundingPolicyViolation::MaxPerRequest {
-                requested,
-                max_per_request,
-            } => {
-                CyclesFundingMetrics::record_denied(
-                    ctx.caller,
-                    req.cycles,
-                    CyclesFundingDeniedReason::MaxPerRequestExceeded,
-                );
-                return Err(RpcWorkflowError::FundingRequestExceedsMaxPerRequest {
+    let decision = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
+        Ok(decision) => decision,
+        Err(violation) => {
+            return match violation {
+                FundingPolicyViolation::MaxPerChild {
                     requested,
-                    max_per_request,
-                }
-                .into());
-            }
-            FundingPolicyViolation::MaxPerChild {
-                requested,
-                max_per_child,
-                remaining_budget,
-            } => {
-                CyclesFundingMetrics::record_denied(
-                    ctx.caller,
-                    req.cycles,
-                    CyclesFundingDeniedReason::MaxPerChildExceeded,
-                );
-                return Err(RpcWorkflowError::FundingRequestExceedsChildBudget {
-                    requested,
-                    remaining_budget,
                     max_per_child,
+                    remaining_budget,
+                } => {
+                    CyclesFundingMetrics::record_denied(
+                        ctx.caller,
+                        req.cycles,
+                        CyclesFundingDeniedReason::MaxPerChildExceeded,
+                    );
+                    Err(RpcWorkflowError::FundingRequestExceedsChildBudget {
+                        requested,
+                        remaining_budget,
+                        max_per_child,
+                    }
+                    .into())
                 }
-                .into());
-            }
-            FundingPolicyViolation::CooldownActive { retry_after_secs } => {
-                CyclesFundingMetrics::record_denied(
-                    ctx.caller,
-                    req.cycles,
-                    CyclesFundingDeniedReason::CooldownActive,
-                );
-                return Err(RpcWorkflowError::FundingCooldownActive { retry_after_secs }.into());
-            }
+                FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+                    CyclesFundingMetrics::record_denied(
+                        ctx.caller,
+                        req.cycles,
+                        CyclesFundingDeniedReason::CooldownActive,
+                    );
+                    Err(RpcWorkflowError::FundingCooldownActive { retry_after_secs }.into())
+                }
+            };
         }
-    }
+    };
+
+    log_clamped_cycles_request(ctx, req, decision);
 
     let available = MgmtOps::canister_cycle_balance().to_u128();
-    if req.cycles > available {
+    if decision.approved_cycles > available {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
-            req.cycles,
+            decision.approved_cycles,
             CyclesFundingDeniedReason::InsufficientCycles,
         );
         return Err(RpcWorkflowError::InsufficientFundingCycles {
-            requested: req.cycles,
+            requested: decision.approved_cycles,
             available,
         }
         .into());
     }
 
     Ok(())
+}
+
+fn log_clamped_cycles_request(ctx: &RootContext, req: &CyclesRequest, decision: FundingDecision) {
+    if !decision.clamped_max_per_request && !decision.clamped_max_per_child {
+        return;
+    }
+
+    log!(
+        Topic::Rpc,
+        Info,
+        "cycles request clamped (caller={}, requested={}, approved={}, max_per_request_clamped={}, child_budget_clamped={})",
+        ctx.caller,
+        req.cycles,
+        decision.approved_cycles,
+        decision.clamped_max_per_request,
+        decision.clamped_max_per_child
+    );
 }
 
 fn authorize_issue_delegation(

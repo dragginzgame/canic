@@ -19,7 +19,7 @@ fn root_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Root,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -30,7 +30,7 @@ fn singleton_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -50,7 +50,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: Some(scaling),
         sharding: None,
@@ -61,7 +61,7 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(ShardingConfig::default()),
@@ -72,7 +72,7 @@ fn replica_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Replica,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -83,7 +83,7 @@ fn shard_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Shard,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -94,7 +94,7 @@ fn tenant_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Tenant,
         initial_cycles: Cycles::new(0),
-        topup: None,
+        topup_policy: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,

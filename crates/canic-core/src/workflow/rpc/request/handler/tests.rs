@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     cdk::types::{Cycles, Principal, TC},
-    config::schema::{CanisterConfig, CanisterKind, CanisterTopup},
+    config::schema::{CanisterConfig, CanisterKind},
     dto::{
         auth::{DelegationRequest, RoleAttestationRequest},
         rpc::{
@@ -79,13 +79,13 @@ fn map_request_maps_upgrade() {
 
 #[test]
 fn map_request_maps_cycles() {
-    let req = RootCapabilityCommand::MintCycles(CyclesRequest {
+    let req = RootCapabilityCommand::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     });
 
     let mapped = RootResponseWorkflow::map_request(req);
-    assert_eq!(mapped.capability_name(), "MintCycles");
+    assert_eq!(mapped.capability_name(), "RequestCycles");
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn preflight_authorize_then_replay_denies_before_replay_validation() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     });
@@ -201,7 +201,7 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     });
@@ -229,7 +229,7 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: Some(meta(7, 60)),
     });
@@ -257,7 +257,7 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
 }
 
 #[test]
-fn authorize_mint_cycles_records_requested_and_child_not_found_denial_metrics() {
+fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics() {
     CyclesFundingMetrics::reset();
     funding::reset_for_tests();
 
@@ -269,7 +269,7 @@ fn authorize_mint_cycles_records_requested_and_child_not_found_denial_metrics() 
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: Some(meta(22, 60)),
     });
@@ -312,7 +312,7 @@ fn authorize_mint_cycles_records_requested_and_child_not_found_denial_metrics() 
 }
 
 #[test]
-fn authorize_mint_cycles_records_kill_switch_denial_metrics() {
+fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     CyclesFundingMetrics::reset();
     funding::reset_for_tests();
 
@@ -334,7 +334,7 @@ fn authorize_mint_cycles_records_kill_switch_denial_metrics() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 33,
         metadata: Some(meta(23, 60)),
     });
@@ -375,185 +375,6 @@ fn authorize_mint_cycles_records_kill_switch_denial_metrics() {
         mode: AppMode::Enabled,
         cycles_funding_enabled: true,
     });
-}
-
-#[test]
-fn authorize_mint_cycles_records_max_per_request_denial_metrics() {
-    CyclesFundingMetrics::reset();
-    funding::reset_for_tests();
-
-    let role = CanisterRole::new("limited_max_per_request");
-    let cfg = CanisterConfig {
-        topup: Some(CanisterTopup {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(4 * TC),
-            max_per_request: Cycles::new(4 * TC),
-            max_per_child: Cycles::new(8 * TC),
-            cooldown_secs: 0,
-        }),
-        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
-    };
-    let _ = ConfigTestBuilder::new()
-        .with_prime_canister(role.clone(), cfg)
-        .install();
-
-    let self_pid = p(92);
-    let child = p(93);
-    SubnetRegistryOps::register_root(self_pid, 1);
-    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
-        .expect("register child");
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: true,
-    });
-
-    let ctx = RootContext {
-        caller: child,
-        self_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::MintCycles(CyclesRequest {
-        cycles: 4 * TC + 1,
-        metadata: Some(meta(24, 60)),
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("max_per_request"),
-        "expected max_per_request denial, got: {err}"
-    );
-
-    let map = cycles_funding_snapshot_map();
-    assert_eq!(
-        map.get(&(
-            CyclesFundingMetricKey::DeniedToChild,
-            Some(child),
-            Some(CyclesFundingDeniedReason::MaxPerRequestExceeded),
-        )),
-        Some(&(4 * TC + 1))
-    );
-}
-
-#[test]
-fn authorize_mint_cycles_records_cooldown_denial_metrics() {
-    CyclesFundingMetrics::reset();
-    funding::reset_for_tests();
-
-    let role = CanisterRole::new("limited_cooldown");
-    let cfg = CanisterConfig {
-        topup: Some(CanisterTopup {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(4 * TC),
-            max_per_request: Cycles::new(5 * TC),
-            max_per_child: Cycles::new(20 * TC),
-            cooldown_secs: 30,
-        }),
-        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
-    };
-    let _ = ConfigTestBuilder::new()
-        .with_prime_canister(role.clone(), cfg)
-        .install();
-
-    let self_pid = p(94);
-    let child = p(95);
-    SubnetRegistryOps::register_root(self_pid, 1);
-    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
-        .expect("register child");
-    funding::record_child_grant(child, 5, 100);
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: true,
-    });
-
-    let ctx = RootContext {
-        caller: child,
-        self_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 110,
-    };
-    let capability = RootCapability::MintCycles(CyclesRequest {
-        cycles: 5,
-        metadata: Some(meta(25, 60)),
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("cooldown"),
-        "expected cooldown denial, got: {err}"
-    );
-
-    let map = cycles_funding_snapshot_map();
-    assert_eq!(
-        map.get(&(
-            CyclesFundingMetricKey::DeniedToChild,
-            Some(child),
-            Some(CyclesFundingDeniedReason::CooldownActive),
-        )),
-        Some(&5)
-    );
-}
-
-#[test]
-fn authorize_mint_cycles_records_max_per_child_denial_metrics() {
-    CyclesFundingMetrics::reset();
-    funding::reset_for_tests();
-
-    let role = CanisterRole::new("limited_child_budget");
-    let cfg = CanisterConfig {
-        topup: Some(CanisterTopup {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(4 * TC),
-            max_per_request: Cycles::new(4 * TC),
-            max_per_child: Cycles::new(4 * TC),
-            cooldown_secs: 0,
-        }),
-        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
-    };
-    let _ = ConfigTestBuilder::new()
-        .with_prime_canister(role.clone(), cfg)
-        .install();
-
-    let self_pid = p(96);
-    let child = p(97);
-    SubnetRegistryOps::register_root(self_pid, 1);
-    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
-        .expect("register child");
-    funding::record_child_grant(child, 4 * TC - 10, 100);
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: true,
-    });
-
-    let ctx = RootContext {
-        caller: child,
-        self_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 120,
-    };
-    let capability = RootCapability::MintCycles(CyclesRequest {
-        cycles: 15,
-        metadata: Some(meta(26, 60)),
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("child budget"),
-        "expected child-budget denial, got: {err}"
-    );
-
-    let map = cycles_funding_snapshot_map();
-    assert_eq!(
-        map.get(&(
-            CyclesFundingMetricKey::DeniedToChild,
-            Some(child),
-            Some(CyclesFundingDeniedReason::MaxPerChildExceeded),
-        )),
-        Some(&15)
-    );
 }
 
 #[test]
@@ -762,13 +583,13 @@ fn build_role_attestation_rejects_invalid_ttl() {
 
 #[test]
 fn payload_hash_ignores_metadata() {
-    let hash_a = RootCapability::MintCycles(CyclesRequest {
+    let hash_a = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: Some(meta(1, 60)),
     })
     .payload_hash()
     .expect("hash");
-    let hash_b = RootCapability::MintCycles(CyclesRequest {
+    let hash_b = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: Some(meta(9, 120)),
     })
@@ -780,7 +601,7 @@ fn payload_hash_ignores_metadata() {
 
 #[test]
 fn payload_hash_includes_capability_variant_discriminant() {
-    let capability_hash = RootCapability::MintCycles(CyclesRequest {
+    let capability_hash = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     })
@@ -835,7 +656,7 @@ fn check_replay_reads_legacy_slot_key_for_compatibility() {
         subnet_id: p(2),
         now: 1_000,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, 60)),
     });
@@ -882,7 +703,7 @@ fn check_replay_rejects_invalid_ttl() {
         now: 1_000,
     };
 
-    let too_small = RootCapability::MintCycles(CyclesRequest {
+    let too_small = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, 0)),
     });
@@ -892,7 +713,7 @@ fn check_replay_rejects_invalid_ttl() {
         "expected ttl validation error, got: {err}"
     );
 
-    let too_large = RootCapability::MintCycles(CyclesRequest {
+    let too_large = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, MAX_ROOT_TTL_SECONDS + 1)),
     });
@@ -914,7 +735,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
         subnet_id: p(8),
         now: 10_000,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 500,
         metadata: Some(meta(11, 60)),
     });
@@ -984,7 +805,7 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
         subnet_id: p(2),
         now: 1_000,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, 60)),
     });
@@ -1023,11 +844,11 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
         subnet_id: p(4),
         now: 2_000,
     };
-    let base = RootCapability::MintCycles(CyclesRequest {
+    let base = RootCapability::RequestCycles(CyclesRequest {
         cycles: 10,
         metadata: Some(meta(8, 60)),
     });
-    let conflict = RootCapability::MintCycles(CyclesRequest {
+    let conflict = RootCapability::RequestCycles(CyclesRequest {
         cycles: 11,
         metadata: Some(meta(8, 60)),
     });
@@ -1129,7 +950,7 @@ fn check_replay_rejects_when_capacity_reached() {
         subnet_id: p(2),
         now: 1_000,
     };
-    let capability = RootCapability::MintCycles(CyclesRequest {
+    let capability = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, 60)),
     });

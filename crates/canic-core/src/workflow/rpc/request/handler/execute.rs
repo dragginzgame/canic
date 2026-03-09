@@ -1,4 +1,6 @@
-use super::{RootCapability, RootContext, authorize, delegation, funding};
+use super::{
+    RootCapability, RootContext, authorize, delegation, funding, funding::FundingPolicyViolation,
+};
 use crate::{
     InternalError,
     dto::auth::{
@@ -9,6 +11,7 @@ use crate::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, Response, UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
+    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -37,7 +40,7 @@ pub(super) async fn execute_root_capability(
     let result = match capability {
         RootCapability::Provision(req) => execute_provision(ctx, &req).await,
         RootCapability::Upgrade(req) => execute_upgrade(&req).await,
-        RootCapability::MintCycles(req) => execute_mint_cycles(ctx, &req).await,
+        RootCapability::RequestCycles(req) => execute_request_cycles(ctx, &req).await,
         RootCapability::IssueDelegation(req) => execute_issue_delegation(ctx, &req).await,
         RootCapability::IssueRoleAttestation(req) => {
             execute_issue_role_attestation(ctx, &req).await
@@ -98,25 +101,75 @@ async fn execute_upgrade(req: &UpgradeCanisterRequest) -> Result<Response, Inter
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
 }
 
-async fn execute_mint_cycles(
+async fn execute_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<Response, InternalError> {
-    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, req.cycles).await {
+    let child =
+        SubnetRegistryOps::get(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
+    let root_self_request = ctx.is_root_env
+        && ctx.caller == ctx.self_pid
+        && child.role == CanisterRole::ROOT
+        && child.parent_pid.is_none();
+    if child.parent_pid != Some(ctx.self_pid) && !root_self_request {
+        return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
+    }
+
+    let policy = funding::policy_for_child_role(&child.role)?;
+    let approved_cycles = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
+        Ok(decision) => decision.approved_cycles,
+        Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
+    };
+
+    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, approved_cycles).await {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
-            req.cycles,
+            approved_cycles,
             CyclesFundingDeniedReason::ExecutionError,
         );
         return Err(err);
     }
 
-    CyclesFundingMetrics::record_granted(ctx.caller, req.cycles);
-    funding::record_child_grant(ctx.caller, req.cycles, ctx.now);
+    CyclesFundingMetrics::record_granted(ctx.caller, approved_cycles);
+    funding::record_child_grant(ctx.caller, approved_cycles, ctx.now);
 
-    let cycles_transferred = req.cycles;
+    let cycles_transferred = approved_cycles;
 
     Ok(Response::Cycles(CyclesResponse { cycles_transferred }))
+}
+
+fn map_funding_policy_violation(
+    ctx: &RootContext,
+    requested_cycles: u128,
+    violation: FundingPolicyViolation,
+) -> InternalError {
+    match violation {
+        FundingPolicyViolation::MaxPerChild {
+            requested,
+            max_per_child,
+            remaining_budget,
+        } => {
+            CyclesFundingMetrics::record_denied(
+                ctx.caller,
+                requested_cycles,
+                CyclesFundingDeniedReason::MaxPerChildExceeded,
+            );
+            RpcWorkflowError::FundingRequestExceedsChildBudget {
+                requested,
+                remaining_budget,
+                max_per_child,
+            }
+            .into()
+        }
+        FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+            CyclesFundingMetrics::record_denied(
+                ctx.caller,
+                requested_cycles,
+                CyclesFundingDeniedReason::CooldownActive,
+            );
+            RpcWorkflowError::FundingCooldownActive { retry_after_secs }.into()
+        }
+    }
 }
 
 async fn execute_issue_delegation(
