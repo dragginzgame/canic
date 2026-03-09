@@ -288,7 +288,7 @@ fn delegated_grant_hash_changes_with_payload() {
         audience: vec![p(1)],
         scope: DelegatedGrantScope {
             service: CapabilityService::Root,
-            capability_family: "MintCycles".to_string(),
+            capability_family: "RequestCycles".to_string(),
         },
         capability_hash: [1u8; 32],
         quota: 1,

@@ -1,10 +1,4 @@
-use crate::{
-    InternalError,
-    cdk::types::Principal,
-    config::schema::{CanisterTopup, ConfigModel},
-    ids::CanisterRole,
-    ops::config::ConfigOps,
-};
+use crate::{InternalError, cdk::types::Principal, ids::CanisterRole};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -31,14 +25,7 @@ impl FundingPolicy {
         child: Principal,
         requested_cycles: u128,
         now_secs: u64,
-    ) -> Result<(), FundingPolicyViolation> {
-        if requested_cycles > self.max_per_request {
-            return Err(FundingPolicyViolation::MaxPerRequest {
-                requested: requested_cycles,
-                max_per_request: self.max_per_request,
-            });
-        }
-
+    ) -> Result<FundingDecision, FundingPolicyViolation> {
         let ledger = child_ledger(child);
         if self.cooldown_secs > 0 {
             let earliest_next = ledger.last_granted_at.saturating_add(self.cooldown_secs);
@@ -50,7 +37,7 @@ impl FundingPolicy {
         }
 
         let remaining_budget = self.max_per_child.saturating_sub(ledger.granted_total);
-        if requested_cycles > remaining_budget {
+        if remaining_budget == 0 {
             return Err(FundingPolicyViolation::MaxPerChild {
                 requested: requested_cycles,
                 max_per_child: self.max_per_child,
@@ -58,21 +45,46 @@ impl FundingPolicy {
             });
         }
 
-        Ok(())
+        let mut approved_cycles = requested_cycles;
+        let mut clamped_max_per_request = false;
+        let mut clamped_max_per_child = false;
+
+        if approved_cycles > self.max_per_request {
+            approved_cycles = self.max_per_request;
+            clamped_max_per_request = true;
+        }
+        if approved_cycles > remaining_budget {
+            approved_cycles = remaining_budget;
+            clamped_max_per_child = true;
+        }
+
+        Ok(FundingDecision {
+            approved_cycles,
+            clamped_max_per_request,
+            clamped_max_per_child,
+        })
     }
 }
 
 ///
+/// FundingDecision
+/// Effective approved grant amount after applying policy clamping.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct FundingDecision {
+    pub approved_cycles: u128,
+    pub clamped_max_per_request: bool,
+    pub clamped_max_per_child: bool,
+}
+
+///
 /// FundingPolicyViolation
-/// Pure policy violations for mint-cycle authorization.
+/// Pure policy violations for funding authorization.
 ///
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum FundingPolicyViolation {
-    MaxPerRequest {
-        requested: u128,
-        max_per_request: u128,
-    },
     MaxPerChild {
         requested: u128,
         max_per_child: u128,
@@ -91,10 +103,9 @@ struct FundingLedger {
 
 // Resolve the effective policy for a child role from current config.
 pub(super) fn policy_for_child_role(
-    child_role: &CanisterRole,
+    _child_role: &CanisterRole,
 ) -> Result<FundingPolicy, InternalError> {
-    let config = ConfigOps::get()?;
-    Ok(resolve_policy_from_config(&config, child_role).unwrap_or(default_policy()))
+    Ok(default_policy())
 }
 
 // Record a successful grant for cooldown and child-budget accounting.
@@ -111,28 +122,6 @@ fn child_ledger(child: Principal) -> FundingLedger {
     FUNDING_LEDGER.with_borrow(|ledger| ledger.get(&child).copied().unwrap_or_default())
 }
 
-// Resolve role policy by scanning configured subnets for the role definition.
-fn resolve_policy_from_config(
-    config: &ConfigModel,
-    child_role: &CanisterRole,
-) -> Option<FundingPolicy> {
-    config
-        .subnets
-        .values()
-        .find_map(|subnet| subnet.canisters.get(child_role))
-        .and_then(|cfg| cfg.topup.as_ref())
-        .map(policy_from_topup)
-}
-
-// Convert topup config into an effective mint-cycle policy.
-const fn policy_from_topup(topup: &CanisterTopup) -> FundingPolicy {
-    FundingPolicy {
-        max_per_request: topup.max_per_request.to_u128(),
-        max_per_child: topup.max_per_child.to_u128(),
-        cooldown_secs: topup.cooldown_secs,
-    }
-}
-
 // Fail-open defaults preserve existing behavior when role policy is absent.
 const fn default_policy() -> FundingPolicy {
     FundingPolicy {
@@ -145,4 +134,98 @@ const fn default_policy() -> FundingPolicy {
 #[cfg(test)]
 pub(super) fn reset_for_tests() {
     FUNDING_LEDGER.with_borrow_mut(HashMap::clear);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn evaluate_clamps_to_max_per_request() {
+        reset_for_tests();
+        let child = p(1);
+        let policy = FundingPolicy {
+            max_per_request: 100,
+            max_per_child: 1_000,
+            cooldown_secs: 0,
+        };
+
+        let decision = policy.evaluate(child, 250, 10).expect("must clamp");
+        assert_eq!(decision.approved_cycles, 100);
+        assert!(decision.clamped_max_per_request);
+        assert!(!decision.clamped_max_per_child);
+    }
+
+    #[test]
+    fn evaluate_clamps_to_remaining_budget() {
+        reset_for_tests();
+        let child = p(2);
+        record_child_grant(child, 950, 5);
+        let policy = FundingPolicy {
+            max_per_request: 200,
+            max_per_child: 1_000,
+            cooldown_secs: 0,
+        };
+
+        let decision = policy.evaluate(child, 200, 10).expect("must clamp");
+        assert_eq!(decision.approved_cycles, 50);
+        assert!(!decision.clamped_max_per_request);
+        assert!(decision.clamped_max_per_child);
+    }
+
+    #[test]
+    fn evaluate_denies_when_child_budget_exhausted() {
+        reset_for_tests();
+        let child = p(3);
+        record_child_grant(child, 1_000, 5);
+        let policy = FundingPolicy {
+            max_per_request: 200,
+            max_per_child: 1_000,
+            cooldown_secs: 0,
+        };
+
+        let err = policy
+            .evaluate(child, 1, 10)
+            .expect_err("budget exhaustion must deny");
+        match err {
+            FundingPolicyViolation::MaxPerChild {
+                requested,
+                max_per_child,
+                remaining_budget,
+            } => {
+                assert_eq!(requested, 1);
+                assert_eq!(max_per_child, 1_000);
+                assert_eq!(remaining_budget, 0);
+            }
+            FundingPolicyViolation::CooldownActive { .. } => {
+                panic!("expected child-budget violation")
+            }
+        }
+    }
+
+    #[test]
+    fn evaluate_denies_when_cooldown_active() {
+        reset_for_tests();
+        let child = p(4);
+        record_child_grant(child, 100, 50);
+        let policy = FundingPolicy {
+            max_per_request: 1_000,
+            max_per_child: 10_000,
+            cooldown_secs: 20,
+        };
+
+        let err = policy
+            .evaluate(child, 10, 60)
+            .expect_err("cooldown must deny");
+        match err {
+            FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+                assert_eq!(retry_after_secs, 10);
+            }
+            FundingPolicyViolation::MaxPerChild { .. } => panic!("expected cooldown violation"),
+        }
+    }
 }

@@ -29,7 +29,7 @@ pub enum Request {
 pub enum RequestFamily {
     Provision,
     Upgrade,
-    MintCycles,
+    RequestCycles,
     IssueDelegation,
     IssueRoleAttestation,
 }
@@ -43,7 +43,7 @@ impl RequestFamily {
         match self {
             Self::Provision => "Provision",
             Self::Upgrade => "Upgrade",
-            Self::MintCycles => "MintCycles",
+            Self::RequestCycles => "RequestCycles",
             Self::IssueDelegation => "IssueDelegation",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
         }
@@ -69,7 +69,7 @@ impl Request {
 
     /// cycles
     ///
-    /// Build a root request for minting/transferring cycles.
+    /// Build a root request for requesting/transferring cycles.
     #[must_use]
     pub const fn cycles(request: CyclesRequest) -> Self {
         Self::Cycles(request)
@@ -99,7 +99,7 @@ impl Request {
         match self {
             Self::CreateCanister(_) => RequestFamily::Provision,
             Self::UpgradeCanister(_) => RequestFamily::Upgrade,
-            Self::Cycles(_) => RequestFamily::MintCycles,
+            Self::Cycles(_) => RequestFamily::RequestCycles,
             Self::IssueDelegation(_) => RequestFamily::IssueDelegation,
             Self::IssueRoleAttestation(_) => RequestFamily::IssueRoleAttestation,
         }
@@ -170,7 +170,7 @@ impl Request {
 pub enum RootCapabilityCommand {
     ProvisionCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
-    MintCycles(CyclesRequest),
+    RequestCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
 }
@@ -180,7 +180,7 @@ impl From<Request> for RootCapabilityCommand {
         match value {
             Request::CreateCanister(req) => Self::ProvisionCanister(req),
             Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
-            Request::Cycles(req) => Self::MintCycles(req),
+            Request::Cycles(req) => Self::RequestCycles(req),
             Request::IssueDelegation(req) => Self::IssueDelegation(req),
             Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
         }
@@ -361,7 +361,7 @@ mod tests {
             vec![
                 RequestFamily::Provision,
                 RequestFamily::Upgrade,
-                RequestFamily::MintCycles,
+                RequestFamily::RequestCycles,
                 RequestFamily::IssueDelegation,
                 RequestFamily::IssueRoleAttestation,
             ]

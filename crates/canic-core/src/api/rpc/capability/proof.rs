@@ -19,7 +19,7 @@ pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), E
         ));
     }
 
-    if capability.family() == RequestFamily::MintCycles {
+    if capability.family() == RequestFamily::RequestCycles {
         return Ok(());
     }
 

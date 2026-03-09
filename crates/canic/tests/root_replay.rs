@@ -169,13 +169,16 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     }
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "MintCycles", "Authorized"), 1);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
-        metric_count(&metrics, "MintCycles", "ReplayDuplicateSame"),
+        metric_count(&metrics, "RequestCycles", "ReplayDuplicateSame"),
         1
     );
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 1);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        1
+    );
 }
 
 #[test]
@@ -270,10 +273,13 @@ fn replay_rejects_cross_variant_same_request_id() {
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
-        metric_count(&metrics, "MintCycles", "ReplayDuplicateConflict"),
+        metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
         1
     );
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 0);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        0
+    );
 }
 
 #[test]
@@ -307,10 +313,13 @@ fn replay_rejects_same_variant_mutated_payload() {
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
-        metric_count(&metrics, "MintCycles", "ReplayDuplicateConflict"),
+        metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
         1
     );
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 1);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        1
+    );
 }
 
 #[test]
@@ -342,12 +351,15 @@ fn replay_returns_cached_response_for_identical_request() {
     }
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
-        metric_count(&metrics, "MintCycles", "ReplayDuplicateSame"),
+        metric_count(&metrics, "RequestCycles", "ReplayDuplicateSame"),
         1
     );
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 1);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        1
+    );
 }
 
 #[test]
@@ -373,10 +385,13 @@ fn cycles_rejects_when_requested_above_root_balance() {
     );
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 1);
-    assert_eq!(metric_count(&metrics, "MintCycles", "Denied"), 1);
-    assert_eq!(metric_count(&metrics, "MintCycles", "Authorized"), 0);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 0);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "Denied"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 0);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        0
+    );
 }
 
 #[test]
@@ -397,9 +412,15 @@ fn replay_rejects_ttl_above_max() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayTtlExceeded"), 1);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayAccepted"), 0);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 0);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ReplayTtlExceeded"),
+        1
+    );
+    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 0);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        0
+    );
 }
 
 #[test]
@@ -431,8 +452,11 @@ fn replay_rejects_expired_request() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ReplayExpired"), 1);
-    assert_eq!(metric_count(&metrics, "MintCycles", "ExecutionSuccess"), 1);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayExpired"), 1);
+    assert_eq!(
+        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        1
+    );
 }
 
 #[test]

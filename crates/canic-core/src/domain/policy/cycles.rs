@@ -22,12 +22,12 @@ pub struct TopupPlan {
 
 #[must_use]
 pub fn should_topup(cycles: u128, cfg: &CanisterConfig) -> Option<TopupPlan> {
-    let topup = cfg.topup.as_ref()?;
-    if cycles >= topup.threshold.to_u128() {
+    let topup_policy = cfg.topup_policy.as_ref()?;
+    if cycles >= topup_policy.threshold.to_u128() {
         return None;
     }
 
     Some(TopupPlan {
-        amount: topup.amount.clone(),
+        amount: topup_policy.amount.clone(),
     })
 }

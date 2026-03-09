@@ -101,7 +101,7 @@ impl ConfigTestBuilder {
         CanisterConfig {
             kind,
             initial_cycles: Cycles::new(0),
-            topup: None,
+            topup_policy: None,
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,

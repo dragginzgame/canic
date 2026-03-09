@@ -44,6 +44,7 @@ All reports must use the month/day layout.
 Use these file patterns:
 - Recurring definitions: `<focus>.md`
 - Reports (inside day directory): `<scope>.md`
+- Same-day reruns for a scope: `<scope>-2.md`, `<scope>-3.md`, ...
 - Required report directory: `docs/audits/reports/YYYY-MM/YYYY-MM-DD/`
 - Required month summary: `docs/audits/reports/YYYY-MM/summary.md`
 
@@ -60,13 +61,28 @@ For crosscutting structure/velocity runs, include the required Hub Import Pressu
 - top imports for each hub module
 - unique sibling subsystem import count
 - cross-layer dependency count
-- delta vs previous comparable report
+- delta vs daily baseline report
+
+### Daily baseline policy (mandatory)
+
+For each `scope` on a given day:
+- The first report file (`<scope>.md`) is the canonical daily baseline.
+- Every same-day rerun (`<scope>-2.md`, `<scope>-3.md`, ...) must compare against `<scope>.md`.
+- Do not chain comparisons across reruns (for example, `-3` must not compare against `-2`).
+- Baseline resets on the next day.
+
+Example:
+- `docs/audits/reports/2026-03/2026-03-09/complexity-accretion.md` = baseline
+- `docs/audits/reports/2026-03/2026-03-09/complexity-accretion-2.md` compares to baseline above
+- `docs/audits/reports/2026-03/2026-03-09/complexity-accretion-3.md` compares to baseline above
 
 ### Required report preamble (every report)
 
 Each report must include a short preamble block with:
 - scope
-- compared baseline report path (or `N/A` if first run)
+- compared baseline report path:
+  - first run of day: `N/A`
+  - rerun: path to that day’s baseline file (`.../<scope>.md`)
 - code snapshot identifier (for example `git rev-parse --short HEAD`, or `N/A`)
 - method tag/version (for example `Method V3`)
 - comparability status:

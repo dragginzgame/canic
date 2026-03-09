@@ -37,14 +37,6 @@ pub enum RpcWorkflowError {
     CyclesFundingDisabled,
 
     #[error(
-        "funding request exceeds max_per_request: requested={requested}, max_per_request={max_per_request}"
-    )]
-    FundingRequestExceedsMaxPerRequest {
-        requested: u128,
-        max_per_request: u128,
-    },
-
-    #[error(
         "funding request exceeds child budget: requested={requested}, remaining_budget={remaining_budget}, max_per_child={max_per_child}"
     )]
     FundingRequestExceedsChildBudget {
@@ -159,8 +151,7 @@ impl From<RpcWorkflowError> for InternalError {
             RpcWorkflowError::CyclesFundingDisabled => {
                 Self::public(PublicError::unavailable("cycles funding disabled"))
             }
-            RpcWorkflowError::FundingRequestExceedsMaxPerRequest { .. }
-            | RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
+            RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
             | RpcWorkflowError::FundingCooldownActive { .. } => Self::public(PublicError::policy(
                 ErrorCode::ResourceExhausted,
                 err.to_string(),
