@@ -19,9 +19,10 @@ use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use std::{
     env, fs,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::Once,
+    sync::{Mutex, MutexGuard, Once},
     time::Duration,
 };
 
@@ -29,6 +30,26 @@ const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
+static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+
+struct SerialPic {
+    pic: pocket_ic::PocketIc,
+    _serial_guard: MutexGuard<'static, ()>,
+}
+
+impl Deref for SerialPic {
+    type Target = pocket_ic::PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pic
+    }
+}
+
+impl DerefMut for SerialPic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.pic
+    }
+}
 
 #[test]
 fn role_attestation_issue_and_verify_happy_path() {
@@ -36,7 +57,7 @@ fn role_attestation_issue_and_verify_happy_path() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -64,7 +85,7 @@ fn role_attestation_verify_rejects_mismatched_caller() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -97,7 +118,7 @@ fn role_attestation_verify_rejects_expired() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -133,7 +154,7 @@ fn role_attestation_verify_rejects_audience_mismatch() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
     let wrong_audience = Principal::from_slice(&[9; 29]);
 
@@ -167,7 +188,7 @@ fn role_attestation_verify_rejects_epoch_floor() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -200,7 +221,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let previous_key_id = 1_001u32;
@@ -299,7 +320,7 @@ fn capability_endpoint_role_attestation_proof_happy_path() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -348,7 +369,7 @@ fn capability_endpoint_rejects_expired_role_attestation() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -400,7 +421,7 @@ fn capability_endpoint_rejects_audience_mismatch() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
     let wrong_audience = Principal::from_slice(&[9; 29]);
 
@@ -451,7 +472,7 @@ fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -507,7 +528,7 @@ fn capability_endpoint_policy_denial_is_not_replay_cached() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -592,7 +613,7 @@ fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -648,7 +669,7 @@ fn capability_endpoint_rejects_tampered_signature() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -701,7 +722,7 @@ fn capability_endpoint_allows_structural_cycles_for_registered_caller() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -748,7 +769,7 @@ fn capability_endpoint_rejects_structural_for_unsupported_capability() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -801,7 +822,7 @@ fn capability_endpoint_rejects_delegated_grant_scope_mismatch() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -869,7 +890,7 @@ fn capability_endpoint_rejects_capability_hash_mismatch() {
     build_canisters_once(&workspace_root);
     let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -1023,6 +1044,18 @@ fn build_canisters_once(workspace_root: &PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     });
+}
+
+// Serialize full PocketIC usage to avoid concurrent server races across tests.
+fn build_pic() -> SerialPic {
+    let serial_guard = PIC_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    SerialPic {
+        pic: PocketIcBuilder::new().with_application_subnet().build(),
+        _serial_guard: serial_guard,
+    }
 }
 
 fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
