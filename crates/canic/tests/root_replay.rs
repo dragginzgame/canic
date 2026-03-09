@@ -258,7 +258,7 @@ fn replay_rejects_cross_variant_same_request_id() {
             return;
         }
         Err(err) => panic!("first request must succeed: {err:?}"),
-    };
+    }
 
     let second = Request::Cycles(CyclesRequest {
         cycles: 1_000_000,
