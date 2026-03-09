@@ -29,6 +29,7 @@
 pub mod abi;
 pub mod auth;
 pub mod canister;
+pub mod capability;
 pub mod cascade;
 pub mod cycles;
 pub mod env;

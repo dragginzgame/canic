@@ -288,8 +288,8 @@ make clippy
 make test
 ```
 
-For delegated-crypto verification in CI-equivalent strict mode:
+For delegated replay verification:
 
 ```bash
-CANIC_REQUIRE_THRESHOLD_KEYS=1 cargo test -p canic-core --test pic_delegation_provision -- --nocapture --test-threads=1
+cargo test -p canic --test root_replay --locked delegation_issuance_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1
 ```

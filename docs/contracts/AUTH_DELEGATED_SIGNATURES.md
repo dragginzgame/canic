@@ -62,7 +62,7 @@ Token signature preimage includes:
 - all `DelegatedTokenClaims`
 - `cert_hash` (SHA-256 over domain-separated, candid-encoded `DelegationCert`)
 
-Implementation: `crates/canic-core/src/ops/auth.rs`
+Implementation: `crates/canic-core/src/ops/auth/mod.rs`
 
 ## Issuance and Provisioning Flow
 

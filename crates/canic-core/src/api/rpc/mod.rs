@@ -1,23 +1,23 @@
+mod capability;
+
 use crate::{
     cdk::{candid::CandidType, types::Principal},
     dto::{
+        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
         error::Error,
-        rpc::{
-            CreateCanisterParent, CreateCanisterResponse, Request, Response,
-            UpgradeCanisterResponse,
-        },
+        rpc::{CreateCanisterParent, CreateCanisterResponse, UpgradeCanisterResponse},
     },
     ids::CanisterRole,
-    workflow::rpc::request::{RpcRequestWorkflow, handler::RootResponseWorkflow},
+    workflow::rpc::request::RpcRequestWorkflow,
 };
 
 ///
 /// RpcApi
 ///
-/// Public, user-callable wrappers for Canic’s internal RPC workflows.
+/// Public, user-callable wrappers for Canic's internal RPC workflows.
 ///
 /// These functions:
-/// - form part of the **public API surface**
+/// - form part of the public API surface
 /// - are safe to call from downstream canister `lib.rs` code
 /// - return [`Error`] suitable for IC boundaries
 ///
@@ -54,9 +54,9 @@ impl RpcApi {
             .map_err(Error::from)
     }
 
-    pub async fn response(request: Request) -> Result<Response, Error> {
-        RootResponseWorkflow::response(request)
-            .await
-            .map_err(Error::from)
+    pub async fn response_capability_v1(
+        envelope: RootCapabilityEnvelopeV1,
+    ) -> Result<RootCapabilityResponseV1, Error> {
+        capability::response_capability_v1(envelope).await
     }
 }

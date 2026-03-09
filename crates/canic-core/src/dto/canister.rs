@@ -56,6 +56,7 @@ pub struct CanisterSettings {
     pub freezing_threshold: Nat,
     pub reserved_cycles_limit: Nat,
     pub log_visibility: LogVisibility,
+    pub log_memory_limit: Nat,
     pub wasm_memory_limit: Nat,
     pub wasm_memory_threshold: Nat,
     pub environment_variables: Vec<EnvironmentVariable>,

@@ -75,6 +75,27 @@ pub struct DelegationMetricEntry {
 }
 
 ///
+/// RootCapabilityMetricEntry
+///
+/// Snapshot entry keyed by capability family + event type + proof mode.
+///
+/// Semantics:
+/// - `capability` is the internal root capability discriminant.
+/// - `event_type` identifies the pipeline stage (`Envelope`, `Proof`, etc.).
+/// - `outcome` identifies the stage outcome (`Accepted`, `Rejected`, etc.).
+/// - `proof_mode` identifies the proof class when relevant.
+/// - `count` is the cumulative counter for this tuple.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct RootCapabilityMetricEntry {
+    pub capability: String,
+    pub event_type: String,
+    pub outcome: String,
+    pub proof_mode: String,
+    pub count: u64,
+}
+
+///
 /// EndpointAttemptMetricEntry
 ///
 /// Snapshot entry for endpoint execution lifecycle metrics.

@@ -12,6 +12,7 @@ use canic::{
     Error,
     api::{auth::DelegationApi, env::EnvQuery},
     dto::auth::{DelegatedToken, DelegationProof, DelegationProvisionTargetKind},
+    ids::cap,
     prelude::*,
 };
 use canic_internal::canister::TEST;
@@ -64,7 +65,7 @@ async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> 
 
 /// test_verify_delegated_token
 /// Verifies delegated tokens using the access guard.
-#[canic_update(requires(auth::authenticated("test:verify")))]
+#[canic_update(requires(auth::is_authenticated(cap::VERIFY)))]
 async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));

@@ -25,7 +25,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
 * ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
-* 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.92.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
+* 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.94.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
 
 ## 📁 Repository Layout
 
@@ -187,7 +187,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Build release WASMs: `make build`
 * Build example targets: `cargo build -p canic --examples`
 * Delegated auth PocketIC flow: `cargo test -p canic-core --test pic_delegation_provision -- --nocapture`
-* Strict crypto mode (fail if threshold keys are unavailable): `CANIC_REQUIRE_THRESHOLD_KEYS=1 cargo test -p canic-core --test pic_delegation_provision -- --nocapture --test-threads=1`
+* Root replay dispatcher coverage: `cargo test -p canic --test root_replay --locked delegation_issuance_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

@@ -76,6 +76,7 @@ pub struct CanisterSettings {
     pub freezing_threshold: Option<Nat>,
     pub reserved_cycles_limit: Option<Nat>,
     pub log_visibility: Option<LogVisibility>,
+    pub log_memory_limit: Option<Nat>,
     pub wasm_memory_limit: Option<Nat>,
     pub wasm_memory_threshold: Option<Nat>,
     pub environment_variables: Option<Vec<EnvironmentVariable>>,
@@ -132,6 +133,7 @@ pub struct CanisterSettingsSnapshot {
     pub freezing_threshold: Nat,
     pub reserved_cycles_limit: Nat,
     pub log_visibility: LogVisibility,
+    pub log_memory_limit: Nat,
     pub wasm_memory_limit: Nat,
     pub wasm_memory_threshold: Nat,
     pub environment_variables: Vec<EnvironmentVariable>,
@@ -396,6 +398,7 @@ fn settings_from_infra(settings: DefiniteCanisterSettings) -> CanisterSettingsSn
         freezing_threshold: settings.freezing_threshold,
         reserved_cycles_limit: settings.reserved_cycles_limit,
         log_visibility: log_visibility_from_infra(settings.log_visibility),
+        log_memory_limit: settings.log_memory_limit,
         wasm_memory_limit: settings.wasm_memory_limit,
         wasm_memory_threshold: settings.wasm_memory_threshold,
         environment_variables: settings
@@ -470,6 +473,7 @@ fn settings_to_cdk(settings: &CanisterSettings) -> cdk::mgmt::CanisterSettings {
         freezing_threshold: settings.freezing_threshold.clone(),
         reserved_cycles_limit: settings.reserved_cycles_limit.clone(),
         log_visibility: settings.log_visibility.clone().map(log_visibility_to_cdk),
+        log_memory_limit: settings.log_memory_limit.clone(),
         wasm_memory_limit: settings.wasm_memory_limit.clone(),
         wasm_memory_threshold: settings.wasm_memory_threshold.clone(),
         environment_variables: settings

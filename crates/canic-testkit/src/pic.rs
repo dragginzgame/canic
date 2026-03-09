@@ -10,11 +10,15 @@ use canic::{
     },
     ids::CanisterRole,
 };
-use derive_more::{Deref, DerefMut};
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Mutex, MutexGuard},
+};
 
 const INSTALL_CYCLES: u128 = 500 * TC;
+static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
 /// Create a fresh PocketIC universe.
@@ -65,7 +69,17 @@ impl PicBuilder {
     /// Finish building the singleton PocketIC instance and wrap it.
     #[must_use]
     pub fn build(self) -> Pic {
-        Pic(self.0.build())
+        // Hold the guard for the full PocketIC lifetime to avoid concurrent
+        // server interactions that can crash the local pocket-ic process
+        // (for example `KeyAlreadyExists { key: "nns_subnet_id", ... }`).
+        let serial_guard = PIC_BUILD_SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        Pic {
+            inner: self.0.build(),
+            _serial_guard: serial_guard,
+        }
     }
 }
 
@@ -76,8 +90,24 @@ impl PicBuilder {
 /// This type intentionally exposes only a minimal API surface; callers should
 /// use `pic()` to obtain the singleton and then perform installs/calls.
 ///
-#[derive(Deref, DerefMut)]
-pub struct Pic(PocketIc);
+pub struct Pic {
+    inner: PocketIc,
+    _serial_guard: MutexGuard<'static, ()>,
+}
+
+impl Deref for Pic {
+    type Target = PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Pic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
 
 impl Pic {
     /// Install a root canister with the default root init arguments.
@@ -103,7 +133,8 @@ impl Pic {
     fn create_funded_and_install(&self, wasm: Vec<u8>, init_bytes: Vec<u8>) -> Principal {
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, INSTALL_CYCLES);
-        self.0.install_canister(canister_id, wasm, init_bytes, None);
+        self.inner
+            .install_canister(canister_id, wasm, init_bytes, None);
 
         canister_id
     }
@@ -122,7 +153,7 @@ impl Pic {
         let bytes: Vec<u8> = encode_args(args)
             .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
-            .0
+            .inner
             .update_call(canister_id, Principal::anonymous(), method, bytes)
             .map_err(|err| {
                 Error::internal(format!(
@@ -148,7 +179,7 @@ impl Pic {
         let bytes: Vec<u8> = encode_args(args)
             .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
-            .0
+            .inner
             .update_call(canister_id, caller, method, bytes)
             .map_err(|err| {
                 Error::internal(format!(
@@ -173,7 +204,7 @@ impl Pic {
         let bytes: Vec<u8> = encode_args(args)
             .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
-            .0
+            .inner
             .query_call(canister_id, Principal::anonymous(), method, bytes)
             .map_err(|err| {
                 Error::internal(format!(
@@ -199,7 +230,7 @@ impl Pic {
         let bytes: Vec<u8> = encode_args(args)
             .map_err(|err| Error::internal(format!("encode_args failed: {err}")))?;
         let result = self
-            .0
+            .inner
             .query_call(canister_id, caller, method, bytes)
             .map_err(|err| {
                 Error::internal(format!(

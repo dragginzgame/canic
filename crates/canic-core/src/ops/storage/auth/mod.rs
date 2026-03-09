@@ -2,10 +2,11 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::DelegationProof,
+    dto::auth::AttestationKeySet,
+    dto::auth::{AttestationKey, DelegationProof},
     storage::stable::auth::{DelegationProofRecord, DelegationState},
 };
-use mapper::DelegationProofRecordMapper;
+use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
 
 ///
 /// DelegationStateOps
@@ -83,5 +84,39 @@ impl DelegationStateOps {
 
     pub fn set_shard_public_key(shard_pid: Principal, public_key_sec1: Vec<u8>) {
         DelegationState::set_shard_public_key(shard_pid, public_key_sec1);
+    }
+
+    #[must_use]
+    pub fn attestation_public_key(key_id: u32) -> Option<AttestationKey> {
+        DelegationState::get_attestation_public_key(key_id)
+            .map(AttestationPublicKeyRecordMapper::record_to_dto)
+    }
+
+    #[must_use]
+    pub fn attestation_public_key_sec1(key_id: u32) -> Option<Vec<u8>> {
+        Self::attestation_public_key(key_id).map(|entry| entry.public_key)
+    }
+
+    #[must_use]
+    pub fn attestation_keys() -> Vec<AttestationKey> {
+        DelegationState::get_attestation_public_keys()
+            .into_iter()
+            .map(AttestationPublicKeyRecordMapper::record_to_dto)
+            .collect()
+    }
+
+    pub fn set_attestation_key_set(key_set: AttestationKeySet) {
+        let keys = key_set
+            .keys
+            .into_iter()
+            .map(AttestationPublicKeyRecordMapper::dto_to_record)
+            .collect();
+        DelegationState::set_attestation_public_keys(keys);
+    }
+
+    pub fn upsert_attestation_key(key: AttestationKey) {
+        DelegationState::upsert_attestation_public_key(
+            AttestationPublicKeyRecordMapper::dto_to_record(key),
+        );
     }
 }

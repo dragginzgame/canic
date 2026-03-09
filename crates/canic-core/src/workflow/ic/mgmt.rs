@@ -50,6 +50,7 @@ impl MgmtAdapter {
             freezing_threshold: settings.freezing_threshold,
             reserved_cycles_limit: settings.reserved_cycles_limit,
             log_visibility: Self::log_visibility_to_dto(settings.log_visibility),
+            log_memory_limit: settings.log_memory_limit,
             wasm_memory_limit: settings.wasm_memory_limit,
             wasm_memory_threshold: settings.wasm_memory_threshold,
             environment_variables: settings
