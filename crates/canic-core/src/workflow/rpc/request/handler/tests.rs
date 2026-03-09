@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
-    cdk::types::{Cycles, Principal, TC},
-    config::schema::{CanisterConfig, CanisterKind},
+    cdk::types::Principal,
     dto::{
         auth::{DelegationRequest, RoleAttestationRequest},
         rpc::{
@@ -21,7 +20,6 @@ use crate::{
     },
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
     storage::stable::state::app::{AppMode, AppStateRecord},
-    test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};

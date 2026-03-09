@@ -745,7 +745,6 @@ mod tests {
             topup_policy: Some(TopupPolicy {
                 threshold: Cycles::new(10 * TC),
                 amount: Cycles::new(5 * TC),
-                ..TopupPolicy::default()
             }),
             ..base_canister_config(CanisterKind::Singleton)
         };
@@ -770,7 +769,6 @@ mod tests {
             topup_policy: Some(TopupPolicy {
                 threshold: Cycles::new(10 * TC),
                 amount: Cycles::new(4 * TC),
-                ..TopupPolicy::default()
             }),
             ..base_canister_config(CanisterKind::Singleton)
         };

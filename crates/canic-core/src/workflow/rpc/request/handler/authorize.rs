@@ -128,7 +128,7 @@ fn authorize_request_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<()
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
     }
 
-    let policy = funding::policy_for_child_role(&child.role)?;
+    let policy = funding::policy_for_child_role(&child.role);
     let decision = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
         Ok(decision) => decision,
         Err(violation) => {
