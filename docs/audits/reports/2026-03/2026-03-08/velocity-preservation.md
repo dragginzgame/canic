@@ -10,7 +10,7 @@
 - Commit: `c98bb574`
 - Worktree: `dirty`
 - Scope: `crates/canic-core/src/**`
-- Previous baseline: `docs/audits/reports/2026-03-07/velocity-preservation.md` (latest rerun `02ac3107`)
+- Previous baseline: `docs/audits/reports/2026-03/2026-03-07/velocity-preservation.md` (latest rerun `02ac3107`)
 
 Rerun note:
 - Boundary and replay/auth hot paths were re-scanned in this pass after enum-surface decomposition.

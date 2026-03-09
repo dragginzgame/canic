@@ -12,11 +12,16 @@ use canic::{
 };
 use canic_testkit::pic::{Pic, pic};
 use std::{
-    collections::HashMap,
+    cell::RefCell,
+    collections::{HashMap, HashSet},
     env, fs, io,
+    mem::ManuallyDrop,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, MutexGuard, Once},
+    sync::{Mutex, MutexGuard, Once, TryLockError},
+    thread,
+    time::{Duration, Instant},
 };
 
 /// Environment variable override for providing a pre-built root canister wasm.
@@ -25,10 +30,29 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
+// WARNING: `Pic` MUST NOT be cached/shared across tests by default.
+// This toggle is intentionally opt-in for local experimentation only.
+// Enabling it can reintroduce hangs or flaky behavior from retained runtime state.
+const ROOT_SETUP_CACHE_ENV: &str = "CANIC_TEST_ROOT_SETUP_CACHE";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
 static DFX_BUILD_ONCE: Once = Once::new();
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
+thread_local! {
+    static ROOT_SETUP_CACHE: RefCell<Option<ManuallyDrop<RootSetupState>>> = const { RefCell::new(None) };
+}
+
+pub struct RootSetupState {
+    pub pic: Pic,
+    pub root_id: Principal,
+    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    baseline_snapshots: Option<HashMap<Principal, BaselineSnapshot>>,
+}
+
+struct BaselineSnapshot {
+    snapshot_id: Vec<u8>,
+    sender: Option<Principal>,
+}
 
 ///
 /// RootSetup
@@ -36,24 +60,116 @@ static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 ///
 
 pub struct RootSetup {
-    pub pic: Pic,
-    pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    state: Option<RootSetupState>,
     _serial_guard: MutexGuard<'static, ()>,
 }
 
-/// Create a fresh PocketIC instance, install root, wait for bootstrap,
-/// and validate global invariants.
+impl Deref for RootSetup {
+    type Target = RootSetupState;
+
+    fn deref(&self) -> &Self::Target {
+        self.state.as_ref().expect("root setup state must exist")
+    }
+}
+
+impl DerefMut for RootSetup {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.state.as_mut().expect("root setup state must exist")
+    }
+}
+
+impl Drop for RootSetup {
+    fn drop(&mut self) {
+        if let Some(state) = self.state.take()
+            && root_setup_cache_enabled()
+            && state.baseline_snapshots.is_some()
+        {
+            ROOT_SETUP_CACHE.with(|cache| {
+                *cache.borrow_mut() = Some(ManuallyDrop::new(state));
+            });
+        }
+    }
+}
+
+/// Acquire an isolated root setup for a test.
+///
+/// The first call creates a PocketIC instance and captures canister snapshots.
+/// Later calls restore those snapshots instead of reinstalling all canisters.
 pub fn setup_root() -> RootSetup {
     // Each setup spins up a full PocketIC topology; serialize to avoid
     // exhausting local temp storage under parallel test execution.
-    let serial_guard = ROOT_SETUP_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let serial_guard = acquire_root_setup_serial_guard();
+
+    if root_setup_cache_enabled()
+        && let Some(mut cached) = ROOT_SETUP_CACHE.with(|cache| cache.borrow_mut().take())
+    {
+        // SAFETY: The cached value is taken out of thread-local storage exactly once
+        // before being reused and rewrapped in `RootSetup`, so moving it out is sound.
+        let state = unsafe { ManuallyDrop::take(&mut cached) };
+        restore_cached_setup(&state);
+
+        return RootSetup {
+            state: Some(state),
+            _serial_guard: serial_guard,
+        };
+    }
 
     ensure_local_artifacts_built();
     let root_wasm = load_root_wasm().expect("load root wasm");
+    let state = initialize_setup(root_wasm);
 
+    RootSetup {
+        state: Some(state),
+        _serial_guard: serial_guard,
+    }
+}
+
+// Acquire the global setup lock with a bounded wait so blocked tests fail fast.
+fn acquire_root_setup_serial_guard() -> MutexGuard<'static, ()> {
+    const WAIT_STEP: Duration = Duration::from_millis(100);
+    const WAIT_WARN: Duration = Duration::from_secs(5);
+    const WAIT_TIMEOUT: Duration = Duration::from_secs(120);
+
+    let started = Instant::now();
+    let mut warned = false;
+
+    loop {
+        match ROOT_SETUP_SERIAL.try_lock() {
+            Ok(guard) => return guard,
+            Err(TryLockError::Poisoned(err)) => return err.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                let elapsed = started.elapsed();
+                if !warned && elapsed >= WAIT_WARN {
+                    warned = true;
+                    eprintln!(
+                        "setup_root: waiting for setup lock (>{}s); another root test is still active",
+                        WAIT_WARN.as_secs()
+                    );
+                }
+
+                assert!(
+                    elapsed < WAIT_TIMEOUT,
+                    "setup_root: timed out after {}s waiting for setup lock",
+                    WAIT_TIMEOUT.as_secs()
+                );
+
+                thread::sleep(WAIT_STEP);
+            }
+        }
+    }
+}
+
+// WARNING: DO NOT ENABLE THIS IN CI OR SHARED TEST RUNNERS.
+// Root setup caching is opt-in because `Pic` is not safe to cache/share across
+// arbitrary test scheduling patterns.
+fn root_setup_cache_enabled() -> bool {
+    match env::var(ROOT_SETUP_CACHE_ENV) {
+        Ok(value) => matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"),
+        Err(_) => false,
+    }
+}
+
+fn initialize_setup(root_wasm: Vec<u8>) -> RootSetupState {
     for attempt in 1..=ROOT_SETUP_MAX_ATTEMPTS {
         let wasm = root_wasm.clone();
         let attempt_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -66,19 +182,22 @@ pub fn setup_root() -> RootSetup {
 
             let subnet_directory = fetch_subnet_directory(&pic, root_id);
             wait_for_children_ready(&pic, &subnet_directory);
+            let baseline_snapshots = if root_setup_cache_enabled() {
+                capture_baseline_snapshots(&pic, root_id, &subnet_directory)
+            } else {
+                None
+            };
 
-            (pic, root_id, subnet_directory)
+            RootSetupState {
+                pic,
+                root_id,
+                subnet_directory,
+                baseline_snapshots,
+            }
         }));
 
         match attempt_result {
-            Ok((pic, root_id, subnet_directory)) => {
-                return RootSetup {
-                    pic,
-                    root_id,
-                    subnet_directory,
-                    _serial_guard: serial_guard,
-                };
-            }
+            Ok(state) => return state,
             Err(err) if attempt < ROOT_SETUP_MAX_ATTEMPTS => {
                 eprintln!(
                     "setup_root attempt {attempt}/{ROOT_SETUP_MAX_ATTEMPTS} failed; retrying"
@@ -89,7 +208,110 @@ pub fn setup_root() -> RootSetup {
         }
     }
 
-    unreachable!("setup_root must return or panic");
+    unreachable!("setup_root must return or panic")
+}
+
+fn restore_cached_setup(state: &RootSetupState) {
+    let Some(baselines) = &state.baseline_snapshots else {
+        return;
+    };
+
+    for (canister_id, baseline) in baselines {
+        restore_canister_snapshot_with_sender(&state.pic, state.root_id, *canister_id, baseline);
+    }
+
+    wait_for_bootstrap(&state.pic, state.root_id);
+    wait_for_children_ready(&state.pic, &state.subnet_directory);
+}
+
+fn capture_baseline_snapshots(
+    pic: &Pic,
+    root_id: Principal,
+    subnet_directory: &HashMap<CanisterRole, Principal>,
+) -> Option<HashMap<Principal, BaselineSnapshot>> {
+    let mut tracked = HashSet::new();
+    tracked.insert(root_id);
+    tracked.extend(subnet_directory.values().copied());
+
+    let mut snapshots = HashMap::new();
+    for canister_id in tracked {
+        let Some(baseline) = try_take_canister_snapshot_with_sender(pic, root_id, canister_id)
+        else {
+            eprintln!(
+                "setup_root: snapshot capture unavailable for {canister_id}; disabling root setup cache"
+            );
+            return None;
+        };
+        snapshots.insert(canister_id, baseline);
+    }
+
+    Some(snapshots)
+}
+
+fn try_take_canister_snapshot_with_sender(
+    pic: &Pic,
+    root_id: Principal,
+    canister_id: Principal,
+) -> Option<BaselineSnapshot> {
+    let candidates = snapshot_sender_candidates(root_id, canister_id);
+    let mut last_err = None;
+
+    for sender in candidates {
+        match pic.take_canister_snapshot(canister_id, sender, None) {
+            Ok(snapshot) => {
+                return Some(BaselineSnapshot {
+                    snapshot_id: snapshot.id,
+                    sender,
+                });
+            }
+            Err(err) => last_err = Some((sender, err)),
+        }
+    }
+
+    if let Some((sender, err)) = last_err {
+        eprintln!(
+            "failed to capture canister snapshot for {canister_id} using sender {sender:?}: {err}"
+        );
+    }
+    None
+}
+
+// Prefer the likely controller sender first to avoid expected management-call
+// rejections being printed by PocketIC during snapshot capture.
+fn snapshot_sender_candidates(
+    root_id: Principal,
+    canister_id: Principal,
+) -> [Option<Principal>; 2] {
+    if canister_id == root_id {
+        [None, Some(root_id)]
+    } else {
+        [Some(root_id), None]
+    }
+}
+
+fn restore_canister_snapshot_with_sender(
+    pic: &Pic,
+    root_id: Principal,
+    canister_id: Principal,
+    baseline: &BaselineSnapshot,
+) {
+    let fallback_sender = if baseline.sender.is_some() {
+        None
+    } else {
+        Some(root_id)
+    };
+    let candidates = [baseline.sender, fallback_sender];
+    let mut last_err = None;
+
+    for sender in candidates {
+        match pic.load_canister_snapshot(canister_id, sender, baseline.snapshot_id.clone()) {
+            Ok(()) => return,
+            Err(err) => last_err = Some((sender, err)),
+        }
+    }
+
+    let (sender, err) = last_err.expect("snapshot restore must have at least one sender attempt");
+    panic!("failed to restore canister snapshot for {canister_id} using sender {sender:?}: {err}");
 }
 
 fn ensure_local_artifacts_built() {

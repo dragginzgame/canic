@@ -59,5 +59,5 @@
 
 ## Report Files
 
-- `docs/audits/reports/2026-03-07/complexity-accretion.md`
-- `docs/audits/reports/2026-03-07/velocity-preservation.md`
+- `docs/audits/reports/2026-03/2026-03-07/complexity-accretion.md`
+- `docs/audits/reports/2026-03/2026-03-07/velocity-preservation.md`

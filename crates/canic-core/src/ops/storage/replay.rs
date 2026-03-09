@@ -65,6 +65,10 @@ impl RootReplayOps {
         RootReplayStore::upsert(key, record);
     }
 
+    pub fn remove(key: ReplaySlotKey) -> Option<RootReplayRecord> {
+        RootReplayStore::remove(key)
+    }
+
     #[must_use]
     pub fn len() -> usize {
         RootReplayStore::len()

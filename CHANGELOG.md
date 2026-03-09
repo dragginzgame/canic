@@ -24,6 +24,7 @@ See detailed breakdown:
 - `0.13.5` further reduced branching pressure by moving replay commit fully into ops, switching built-in access predicates to evaluator-based dispatch, and replacing monolithic root capability metric events with structured `event_type`/`outcome`/`proof_mode` metrics.
 - `0.13.6` expanded auth/replay/capability test coverage and aligned root replay integration tests with current duplicate handling, while making the shared root test harness recover cleanly after a failed test.
 - `0.13.7` completed lifecycle boundary follow-up coverage (non-root repeated post-upgrade readiness plus non-root post-upgrade failure-phase checks), tightened root capability metric internals, refreshed replay/audit run guidance for constrained local environments, and fixed intent concurrency capacity checks so `max_in_flight` counts only pending reservations (preventing committed claim intents from permanently blocking later claims for the same caller-scoped key).
+- `0.13.8` hardens cycles top-up safety validation with stronger config tests, restructures design/audit documentation layout for maintainability, and adds the `0.14` parent-funded cycles control-plane design/status documentation.
 
 ```text
 same request_id + same payload -> ReplayDuplicateSame (rejected)

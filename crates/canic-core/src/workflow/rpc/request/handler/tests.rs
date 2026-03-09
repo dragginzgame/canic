@@ -193,6 +193,44 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
 }
 
 #[test]
+fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
+    RootReplayOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(9),
+        is_root_env: false,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 42,
+        metadata: Some(meta(7, 60)),
+    });
+
+    let err = RootResponseWorkflow::preflight(
+        &ctx,
+        &capability,
+        AuthorizationPipelineOrder::ReplayThenAuthorize,
+    )
+    .expect_err("policy denial should fail preflight");
+    assert!(
+        err.to_string().contains("root"),
+        "expected root-env denial, got: {err}"
+    );
+
+    let replay = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("denied preflight must not leave replay slot in-flight");
+    let pending = match replay {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => {
+            panic!("policy-denied replay should not return cached response")
+        }
+    };
+    RootResponseWorkflow::abort_replay(pending);
+}
+
+#[test]
 fn authorize_rejects_role_attestation_when_subject_mismatches_caller() {
     let ctx = RootContext {
         caller: p(1),
@@ -494,11 +532,16 @@ fn check_replay_reads_legacy_slot_key_for_compatibility() {
         },
     );
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must reject");
-    assert!(
-        err.to_string().contains("duplicate replay request"),
-        "expected duplicate replay rejection, got: {err}"
-    );
+    let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
+    match preflight {
+        replay::ReplayPreflight::Cached(Response::Cycles(cached)) => {
+            assert_eq!(cached.cycles_transferred, 77);
+        }
+        replay::ReplayPreflight::Cached(other) => {
+            panic!("expected cached cycles response, got: {other:?}");
+        }
+        replay::ReplayPreflight::Fresh(_) => panic!("legacy slot should return cached replay"),
+    }
 }
 
 #[test]
@@ -605,7 +648,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
 }
 
 #[test]
-fn check_replay_rejects_duplicate_same_payload() {
+fn check_replay_returns_cached_response_for_duplicate_same_payload() {
     RootReplayOps::reset_for_tests();
 
     let ctx = RootContext {
@@ -620,18 +663,27 @@ fn check_replay_rejects_duplicate_same_payload() {
         metadata: Some(meta(7, 60)),
     });
 
-    let pending = RootResponseWorkflow::check_replay(&ctx, &capability).expect("first replay");
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability).expect("first replay")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
 
     let response = Response::Cycles(CyclesResponse {
         cycles_transferred: 77,
     });
     RootResponseWorkflow::commit_replay(pending, &response).expect("commit");
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must reject");
-    assert!(
-        err.to_string().contains("duplicate replay request"),
-        "expected duplicate replay rejection, got: {err}"
-    );
+    let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
+    match preflight {
+        replay::ReplayPreflight::Cached(Response::Cycles(response)) => {
+            assert_eq!(response.cycles_transferred, 77);
+        }
+        replay::ReplayPreflight::Cached(other) => {
+            panic!("expected cached cycles response, got: {other:?}");
+        }
+        replay::ReplayPreflight::Fresh(_) => panic!("duplicate replay must return cached response"),
+    }
 }
 
 #[test]
@@ -654,7 +706,10 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
         metadata: Some(meta(8, 60)),
     });
 
-    let pending = RootResponseWorkflow::check_replay(&ctx, &base).expect("first replay");
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &base).expect("first replay") {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
     RootResponseWorkflow::commit_replay(
         pending,
         &Response::Cycles(CyclesResponse {
@@ -718,7 +773,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 }
 
 #[test]
-fn commit_replay_rejects_when_capacity_reached() {
+fn check_replay_rejects_when_capacity_reached() {
     RootReplayOps::reset_for_tests();
 
     let response_candid = encode_one(Response::Cycles(CyclesResponse {
@@ -735,24 +790,25 @@ fn commit_replay_rejects_when_capacity_reached() {
             RootReplayRecord {
                 payload_hash: [0u8; 32],
                 issued_at: 0,
-                expires_at: 100,
+                expires_at: 5_000,
                 response_candid: response_candid.clone(),
             },
         );
     }
 
-    let err = RootResponseWorkflow::commit_replay(
-        ReplayPending {
-            slot_key: ReplaySlotKey([255u8; 32]),
-            payload_hash: [1u8; 32],
-            issued_at: 1,
-            expires_at: 2,
-        },
-        &Response::Cycles(CyclesResponse {
-            cycles_transferred: 1,
-        }),
-    )
-    .expect_err("commit must fail when store is at capacity");
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(7, 60)),
+    });
+    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect_err("reservation must fail when store is at capacity");
 
     assert!(
         err.to_string().contains("replay store capacity reached"),

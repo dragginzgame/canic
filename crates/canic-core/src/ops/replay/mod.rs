@@ -9,29 +9,55 @@ pub mod slot;
 pub mod ttl;
 
 ///
+/// ReplayReserveError
+/// Mechanical replay-reservation failures surfaced by ops replay reservation APIs.
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReplayReserveError {
+    CapacityReached { max_entries: usize },
+}
+
+///
 /// ReplayCommitError
 /// Mechanical replay-commit failures surfaced by ops replay commit APIs.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayCommitError {
-    CapacityReached { max_entries: usize },
     EncodeFailed(String),
+}
+
+/// reserve_root_replay
+///
+/// Persist a pending replay reservation marker before capability execution.
+pub fn reserve_root_replay(
+    pending: ReplayPending,
+    max_entries: usize,
+) -> Result<(), ReplayReserveError> {
+    if !replay_slot::has_root_slot(pending.slot_key) && replay_slot::root_slot_len() >= max_entries
+    {
+        return Err(ReplayReserveError::CapacityReached { max_entries });
+    }
+
+    replay_slot::reserve_root_slot(pending);
+    Ok(())
 }
 
 /// commit_root_replay
 ///
-/// Persist a fresh root replay reservation and canonical response payload bytes.
+/// Persist canonical response bytes for an existing root replay reservation.
 pub fn commit_root_replay(
     pending: ReplayPending,
     response: &Response,
-    max_entries: usize,
 ) -> Result<(), ReplayCommitError> {
-    if replay_slot::root_slot_len() >= max_entries {
-        return Err(ReplayCommitError::CapacityReached { max_entries });
-    }
-
     let response_candid =
         encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
     replay_slot::commit_root_slot(pending, response_candid);
     Ok(())
+}
+
+/// abort_root_replay
+///
+/// Remove an in-flight replay reservation after failed capability execution.
+pub fn abort_root_replay(pending: ReplayPending) {
+    let _ = replay_slot::remove_root_slot(pending.slot_key);
 }
