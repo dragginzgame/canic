@@ -5,6 +5,7 @@
 
 # in case we need to use this
 CARGO_ENV :=
+TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 
 # Network defaults and mapping for build-time DFX_NETWORK
 NETWORK ?= local
@@ -96,7 +97,7 @@ install-dev:
 
 # Install wasm target + candid tools
 install-canister-deps:
-	rustup toolchain install 1.92.0 || true
+	rustup toolchain install 1.94.0 || true
 	rustup target add wasm32-unknown-unknown
 	cargo install candid-extractor ic-wasm --locked || true
 
@@ -147,18 +148,23 @@ publish: ensure-clean
 
 test: test-canisters test-unit
 
+# Keep rust test execution single-threaded for PocketIC stability.
+# Parallel test threads can trigger PocketIC panics like:
+# `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
 test-unit:
-	$(CARGO_ENV) cargo test --workspace
+	@mkdir -p "$(TEST_TMPDIR)"
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace -- --test-threads=1
 
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \
-		( dfx canister create --all -qq ); \
-		( RELEASE=0 dfx build --all ); \
-		( dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
-		( dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
+		mkdir -p "$(TEST_TMPDIR)"; \
+		( TMPDIR="$(TEST_TMPDIR)" dfx canister create --all -qq ); \
+		( TMPDIR="$(TEST_TMPDIR)" RELEASE=0 dfx build --all ); \
+		( TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
+		( TMPDIR="$(TEST_TMPDIR)" dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
 		( root_pid="$$(dfx canister id root)"; \
-		  dfx canister install test --mode=reinstall -y --argument "(record { env = record { prime_root_pid = opt principal \"$$root_pid\"; subnet_role = opt \"prime\"; subnet_pid = opt principal \"$$root_pid\"; root_pid = opt principal \"$$root_pid\"; canister_role = opt \"test\"; parent_pid = opt principal \"$$root_pid\" }; app_directory = vec {}; subnet_directory = vec {} }, null)" ); \
-		( dfx canister call test test ); \
+		  TMPDIR="$(TEST_TMPDIR)" dfx canister install test --mode=reinstall -y --argument "(record { env = record { prime_root_pid = opt principal \"$$root_pid\"; subnet_role = opt \"prime\"; subnet_pid = opt principal \"$$root_pid\"; root_pid = opt principal \"$$root_pid\"; canister_role = opt \"test\"; parent_pid = opt principal \"$$root_pid\" }; app_directory = vec {}; subnet_directory = vec {} }, null)" ); \
+		( TMPDIR="$(TEST_TMPDIR)" dfx canister call test test ); \
 	else \
 		echo "Skipping canister tests (dfx not installed)"; \
 	fi

@@ -16,9 +16,10 @@ use pocket_ic::PocketIcBuilder;
 use serde::de::DeserializeOwned;
 use std::{
     env, fs,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::Once,
+    sync::{Mutex, MutexGuard, Once},
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
@@ -27,6 +28,26 @@ const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_shard_hub"
 const POOL_NAME: &str = "shards";
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
+static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+
+struct SerialPic {
+    pic: pocket_ic::PocketIc,
+    _serial_guard: MutexGuard<'static, ()>,
+}
+
+impl Deref for SerialPic {
+    type Target = pocket_ic::PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pic
+    }
+}
+
+impl DerefMut for SerialPic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.pic
+    }
+}
 
 #[test]
 fn sharding_bootstraps_first_shard_when_active_empty() {
@@ -36,7 +57,7 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
     let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
 
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -87,7 +108,7 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
     let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
 
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -196,6 +217,18 @@ fn build_canisters_once(workspace_root: &PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     });
+}
+
+// Serialize full PocketIC usage to avoid concurrent server races across tests.
+fn build_pic() -> SerialPic {
+    let serial_guard = PIC_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    SerialPic {
+        pic: PocketIcBuilder::new().with_application_subnet().build(),
+        _serial_guard: serial_guard,
+    }
 }
 
 fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {

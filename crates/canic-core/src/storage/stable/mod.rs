@@ -7,6 +7,7 @@ pub mod intent;
 pub mod log;
 pub mod pool;
 pub mod registry;
+pub mod replay;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
@@ -75,8 +76,9 @@ pub mod memory {
 
     pub mod auth {
         pub const DELEGATION_STATE_ID: u8 = 16;
+        pub const ROOT_REPLAY_ID: u8 = 17;
 
-        // Reserved: 17–25
+        // Reserved: 18–25
     }
 
     // ---------------------------------------------------------------------

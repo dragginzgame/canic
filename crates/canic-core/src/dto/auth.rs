@@ -1,4 +1,4 @@
-use crate::dto::{error::Error, prelude::*};
+use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 
 ///
 /// DelegationCert
@@ -61,6 +61,90 @@ pub struct DelegationRequest {
     pub ttl_secs: u64,
     pub verifier_targets: Vec<Principal>,
     pub include_root_verifier: bool,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
+}
+
+///
+/// RoleAttestationRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct RoleAttestationRequest {
+    pub subject: Principal,
+    pub role: CanisterRole,
+    #[serde(default)]
+    pub subnet_id: Option<Principal>,
+    #[serde(default)]
+    pub audience: Option<Principal>,
+    pub ttl_secs: u64,
+    pub epoch: u64,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
+}
+
+///
+/// RoleAttestation
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RoleAttestation {
+    pub subject: Principal,
+    pub role: CanisterRole,
+    #[serde(default)]
+    pub subnet_id: Option<Principal>,
+    #[serde(default)]
+    pub audience: Option<Principal>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub epoch: u64,
+}
+
+///
+/// SignedRoleAttestation
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignedRoleAttestation {
+    pub payload: RoleAttestation,
+    pub signature: Vec<u8>,
+    pub key_id: u32,
+}
+
+///
+/// AttestationKeyStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AttestationKeyStatus {
+    Current,
+    Previous,
+}
+
+///
+/// AttestationKey
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AttestationKey {
+    pub key_id: u32,
+    pub public_key: Vec<u8>,
+    pub status: AttestationKeyStatus,
+    #[serde(default)]
+    pub valid_from: Option<u64>,
+    #[serde(default)]
+    pub valid_until: Option<u64>,
+}
+
+///
+/// AttestationKeySet
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AttestationKeySet {
+    pub root_pid: Principal,
+    pub generated_at: u64,
+    pub keys: Vec<AttestationKey>,
 }
 
 // admin-only: not part of canonical delegation flow.

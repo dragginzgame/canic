@@ -66,11 +66,24 @@ If code conflicts with this document, **the code is wrong**.
 
 ### Changelog Rules
 
-* Keep the existing changelog structure and header format.
-* Use `## [x.y.z] - YYYY-MM-DD - Short Title` when a title is needed.
-* Smaller entries may omit the title segment and use `## [x.y.z] - YYYY-MM-DD`.
-* Changelog subsections are optional; include only sections relevant to the release.
-* Use this fixed emoji mapping for section headers:
+* Follow `docs/governance/changelog.md` as the authoritative changelog policy.
+* Root `CHANGELOG.md` must use **minor-line headers**, not per-patch headers:
+  * `## [x.y.x] - YYYY-MM-DD - Short Title`
+* Root `CHANGELOG.md` entries must be concise and junior-friendly:
+  * one short bullet per patch release in that minor line
+  * no deep internal implementation detail
+  * include a detailed-notes link block:
+    * `See detailed breakdown:`
+    * `[docs/changelog/x.y.md](docs/changelog/x.y.md)`
+* Detailed notes must live in:
+  * `docs/changelog/x.y.md`
+  * with one section per patch: `## x.y.z - YYYY-MM-DD - Short Title`
+  * and `---` separators between patch sections.
+* When adding a new patch in an existing minor line:
+  * append a new patch bullet to the existing root `x.y.x` section
+  * append/update the matching patch section in `docs/changelog/x.y.md`
+  * do not create a new root per-patch header.
+* Use this fixed emoji mapping for section headers (primarily in detailed notes):
   * `Added=➕`
   * `Changed=🔧`
   * `Fixed=🩹`
@@ -80,21 +93,24 @@ If code conflicts with this document, **the code is wrong**.
   * `Summary=📝`
   * `Cleanup=🧹`
   * `Testing=🧪`
-* When updating the changelog, use the version specified by the user or the existing latest entry.
-* Do not create a new version header if the newest entry already exists; append to that entry.
+  * `Audit=📊`
+  * `Governance=🥾`
+  * `Documentation=📚`
 * Write in plain, industry-friendly language and lead with user impact.
-* Keep wording concise and junior-friendly; avoid jargon.
-* Keep bullets short (1–2 sentences), and use inline code for API/type names.
+* Keep bullets short (1–2 sentences) and use inline code for API/type names when relevant.
 * Prefer explaining why a change matters, not only what changed.
-* Include code examples only when they clarify behavior, migration, or usage.
-* Include at least one fenced block per changelog page when practical (for example usage, migration snippet, or binary spec).
+* When a minor version has a change that benefits from a code example, include one short fenced example for that minor version in both:
+  * root `CHANGELOG.md` (inside the matching `x.y.x` minor section)
+  * `docs/changelog/x.y.md` (inside the matching minor file)
+* Include fenced examples only when they materially clarify behavior, migration, or usage.
 
 ```md
-## [0.0.0] - 2026-02-17 - Example Title
+## [0.45.x] - 2026-03-07 - Example Minor Line
 
-### 🔧 Changed
+- `0.45.0` starts the example minor line with concise, high-level behavior changes.
 
-- Updated `MyApi::call()` error handling so policy failures keep structured messages.
+See detailed breakdown:
+[docs/changelog/0.45.md](docs/changelog/0.45.md)
 ```
 
 ---
@@ -562,6 +578,12 @@ Rules:
 * Do not add `use crate::...` imports in the middle of a file.
 * Group imports logically and keep them consolidated instead of scattering them across sections.
 
+### Module layout
+
+* Use directory modules with `mod.rs` for module roots (for example `foo/mod.rs`), not flat `foo.rs` roots.
+* Never keep both `foo.rs` and `foo/` for the same module name at the same level.
+* When expanding a module, move it to `foo/mod.rs` and keep all of its files under `foo/`.
+
 ### Doc comments
 
 * Struct doc comments must be exactly:
@@ -570,11 +592,28 @@ Rules:
   * `///`
   * (blank line)
   * then the `struct` definition
+* Struct comment blocks must appear as a standalone 3-line doc block with surrounding spacing:
+  * keep a blank line before the first `///` when context allows
+  * keep a blank line after the last `///` before `pub struct ...`
+  * canonical example:
+```rust
+///
+/// ConfigApi
+///
+
+pub struct ConfigApi;
+```
 * Prefer a blank line after any multi-line `///` doc comment block before the item it documents (in addition to the struct-specific rule above).
 * Keep comments directly adjacent
 * Use section banners for structure
+* Every function must include a concise 1–2 line intent comment directly above it.
+  * Public functions should prefer `///` docs.
+  * Private/internal functions may use `//` intent comments.
+* Break complex function bodies into explicit phases with short header comments (for example validation, mapping, execution, commit).
+* For non-trivial blocks, add phase comments that explain purpose/invariants, not line-by-line narration.
 * Large groups of related functions must be separated with a header divider like:
   * `// --- Removal --------------------------------------------------------`
+* Related function families should be grouped under consistent banner headers (for example `Validation`, `Mapping`, `Execution`, `Cleanup`).
 
 ---
 

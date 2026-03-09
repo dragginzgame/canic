@@ -123,6 +123,13 @@ macro_rules! canic_endpoints {
             Ok($crate::__internal::core::api::metrics::MetricsQuery::delegation_page(page))
         }
 
+        #[canic_query]
+        fn canic_metrics_root_capability(
+            page: ::canic::dto::page::PageRequest,
+        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::RootCapabilityMetricEntry>, ::canic::Error> {
+            Ok($crate::__internal::core::api::metrics::MetricsQuery::root_capability_page(page))
+        }
+
         // metrics, but lives in the perf module
         #[canic_query]
         fn canic_metrics_perf(
@@ -302,16 +309,13 @@ macro_rules! canic_endpoints_root {
             Ok(res)
         }
 
-        // canic_response
-        // root's way to respond to a generic request from another canister
-        // has to come from a direct child canister
+        // canic_response_capability_v1
+        // Versioned capability-envelope endpoint for 0.13 rollout.
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_response(
-            request: ::canic::dto::rpc::Request,
-        ) -> Result<::canic::dto::rpc::Response, ::canic::Error> {
-            let response = $crate::__internal::core::api::rpc::RpcApi::response(request).await?;
-
-            Ok(response)
+        async fn canic_response_capability_v1(
+            envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
+        ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
+            $crate::__internal::core::api::rpc::RpcApi::response_capability_v1(envelope).await
         }
 
         // canic_canister_status
@@ -369,19 +373,25 @@ macro_rules! canic_endpoints_root {
         // DELEGATION
         //
 
-        // admin-only: not part of canonical delegation flow.
-        #[canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_provision(
-            request: ::canic::dto::auth::DelegationProvisionRequest,
-        ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::provision(request).await
-        }
-
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_delegation(
             request: ::canic::dto::auth::DelegationRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
+        }
+
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_request_role_attestation(
+            request: ::canic::dto::auth::RoleAttestationRequest,
+        ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::request_role_attestation(request)
+                .await
+        }
+
+        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_attestation_key_set()
+        -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
         }
     };
 }

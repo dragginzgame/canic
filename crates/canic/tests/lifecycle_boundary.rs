@@ -9,9 +9,10 @@ use canic::{
         topology::{AppDirectoryArgs, DirectoryEntryInput, SubnetDirectoryArgs},
     },
     ids::{CanisterRole, SubnetRole},
+    protocol,
 };
 use canic_internal::canister::{APP, SCALE_HUB, SHARD_HUB, TEST, USER_HUB};
-use canic_testkit::pic::pic;
+use canic_testkit::pic::{Pic, pic};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -19,6 +20,7 @@ use std::{
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
+const READY_TICK_LIMIT: usize = 120;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 
@@ -69,6 +71,64 @@ fn lifecycle_boundary_traps_are_phase_correct() {
     assert_phase_error("post_upgrade", &upgrade_err);
 }
 
+#[test]
+fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
+    let workspace_root = workspace_root();
+    build_canisters(&workspace_root);
+
+    let canic_wasm = read_wasm(&workspace_root, "canister_test");
+    let pic = pic();
+
+    let canic_id = pic.create_canister();
+    pic.add_cycles(canic_id, INSTALL_CYCLES);
+    let init_args = encode_init_args(init_payload(canic_id));
+
+    pic.install_canister(canic_id, canic_wasm.clone(), init_args, None);
+    wait_for_ready(&pic, canic_id, "install");
+
+    for attempt in 1..=3 {
+        pic.upgrade_canister(
+            canic_id,
+            canic_wasm.clone(),
+            encode_one(()).expect("encode upgrade"),
+            None,
+        )
+        .unwrap_or_else(|err| panic!("upgrade attempt {attempt} should succeed: {err}"));
+
+        wait_for_ready(&pic, canic_id, "post_upgrade");
+    }
+}
+
+#[test]
+fn non_root_post_upgrade_failure_reports_phase_error() {
+    let workspace_root = workspace_root();
+    build_canisters(&workspace_root);
+
+    let canic_wasm = read_wasm(&workspace_root, "canister_test");
+    let authority_wasm = read_wasm(&workspace_root, "intent_authority");
+    let pic = pic();
+
+    let authority_id = pic.create_canister();
+    pic.add_cycles(authority_id, INSTALL_CYCLES);
+    pic.install_canister(
+        authority_id,
+        authority_wasm,
+        encode_one(Principal::anonymous()).expect("encode authority init"),
+        None,
+    );
+
+    let upgrade_err = pic
+        .upgrade_canister(
+            authority_id,
+            canic_wasm,
+            encode_one(()).expect("encode upgrade"),
+            None,
+        )
+        .expect_err("upgrade should fail for non-canic stable state");
+
+    assert_phase_error("post_upgrade", &upgrade_err);
+}
+
 fn assert_phase_error(phase: &str, err: &impl ToString) {
     let message = err.to_string();
     assert!(
@@ -78,6 +138,22 @@ fn assert_phase_error(phase: &str, err: &impl ToString) {
     assert!(
         !message.contains("Internal"),
         "unexpected internal error: {message}"
+    );
+}
+
+fn wait_for_ready(pic: &Pic, canister_id: Principal, phase: &str) {
+    for _ in 0..READY_TICK_LIMIT {
+        pic.tick();
+        let ready: bool = pic
+            .query_call(canister_id, protocol::CANIC_READY, ())
+            .expect("query canic_ready");
+        if ready {
+            return;
+        }
+    }
+
+    panic!(
+        "{phase} did not reach ready state after {READY_TICK_LIMIT} ticks for canister {canister_id}"
     );
 }
 

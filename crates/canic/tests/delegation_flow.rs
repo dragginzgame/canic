@@ -11,13 +11,11 @@ use canic::{
         auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
         error::ErrorCode,
     },
-    ids::BuildNetwork,
+    ids::{BuildNetwork, cap},
 };
 use canic_internal::canister;
 use root::harness::{RootSetup, setup_root};
-use std::{path::PathBuf, process::Command, sync::Once};
-
-static DFX_BUILD_ONCE: Once = Once::new();
+use std::time::Duration;
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -56,7 +54,7 @@ fn delegation_provisioning_flow() {
         sub: p(9),
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -105,7 +103,7 @@ fn delegated_token_flow() {
         sub: caller,
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -163,7 +161,7 @@ fn authenticated_rpc_flow() {
         sub: subject,
         shard_pid,
         aud: vec![test_pid],
-        scopes: vec!["test:verify".to_string()],
+        scopes: vec![cap::VERIFY.to_string()],
         iat: now,
         exp: now + 60,
     };
@@ -176,6 +174,17 @@ fn authenticated_rpc_flow() {
     let token = minted
         .expect("user_shard_mint_token transport failed")
         .expect("user_shard_mint_token application failed");
+
+    // Establish that the token is otherwise valid in the same request pipeline.
+    let ok_response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+        test_pid,
+        subject,
+        "test_verify_delegated_token",
+        (token.clone(),),
+    );
+    ok_response
+        .expect("test_verify_delegated_token transport failed for subject caller")
+        .expect("test_verify_delegated_token should succeed for subject caller");
 
     log_step(&format!(
         "calling test_verify_delegated_token via test={test_pid}"
@@ -191,6 +200,127 @@ fn authenticated_rpc_flow() {
         .expect("test_verify_delegated_token transport failed")
         .expect_err("test_verify_delegated_token should fail on subject mismatch");
     assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("does not match caller"),
+        "expected caller-subject binding rejection, got: {err:?}"
+    );
+}
+
+#[test]
+fn authenticated_rpc_flow_rejects_valid_token_missing_required_scope() {
+    if !should_run_certified("authenticated_rpc_flow_rejects_valid_token_missing_required_scope") {
+        return;
+    }
+
+    log_step("authenticated_rpc_flow_rejects_valid_token_missing_required_scope: setup root");
+    let setup = setup_root();
+
+    let user_hub_pid = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in subnet directory");
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
+
+    let tenant = p(7);
+    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let caller = p(9);
+
+    let now = now_secs();
+    let claims = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid,
+        aud: vec![test_pid],
+        scopes: vec![cap::READ.to_string()],
+        iat: now,
+        exp: now + 60,
+    };
+
+    let minted: Result<Result<DelegatedToken, Error>, Error> =
+        setup
+            .pic
+            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+    let token = minted
+        .expect("user_shard_mint_token transport failed")
+        .expect("user_shard_mint_token application failed");
+
+    let response: Result<Result<(), Error>, Error> =
+        setup
+            .pic
+            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
+
+    let err = response
+        .expect("test_verify_delegated_token transport failed")
+        .expect_err("missing required scope must deny");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("missing required scope"),
+        "expected missing scope rejection, got: {err:?}"
+    );
+}
+
+#[test]
+fn authenticated_rpc_flow_rejects_expired_token() {
+    if !should_run_certified("authenticated_rpc_flow_rejects_expired_token") {
+        return;
+    }
+
+    log_step("authenticated_rpc_flow_rejects_expired_token: setup root");
+    let setup = setup_root();
+
+    let user_hub_pid = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in subnet directory");
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
+
+    let tenant = p(7);
+    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let caller = p(9);
+
+    let now = now_secs();
+    let claims = DelegatedTokenClaims {
+        sub: caller,
+        shard_pid,
+        aud: vec![test_pid],
+        scopes: vec![cap::VERIFY.to_string()],
+        iat: now,
+        exp: now + 1,
+    };
+
+    let minted: Result<Result<DelegatedToken, Error>, Error> =
+        setup
+            .pic
+            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+    let token = minted
+        .expect("user_shard_mint_token transport failed")
+        .expect("user_shard_mint_token application failed");
+
+    setup.pic.advance_time(Duration::from_secs(2));
+    setup.pic.tick();
+
+    let response: Result<Result<(), Error>, Error> =
+        setup
+            .pic
+            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
+
+    let err = response
+        .expect("test_verify_delegated_token transport failed")
+        .expect_err("expired token must deny");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("expired"),
+        "expected expired-token rejection, got: {err:?}"
+    );
 }
 
 #[test]
@@ -235,8 +365,6 @@ fn authenticated_guard_rejects_bogus_token_on_local() {
     if !should_run_local("authenticated_guard_rejects_bogus_token_on_local") {
         return;
     }
-
-    ensure_local_artifacts_built();
 
     log_step("authenticated_guard_rejects_bogus_token_on_local: setup root");
     let setup = setup_root();
@@ -304,7 +432,7 @@ fn bogus_delegated_token() -> DelegatedToken {
             sub: p(31),
             shard_pid: p(30),
             aud: vec![p(32)],
-            scopes: vec!["read".to_string()],
+            scopes: vec![cap::READ.to_string()],
             iat: 1,
             exp: 2,
         },
@@ -313,7 +441,7 @@ fn bogus_delegated_token() -> DelegatedToken {
                 root_pid: p(29),
                 shard_pid: p(30),
                 aud: vec![p(32)],
-                scopes: vec!["read".to_string()],
+                scopes: vec![cap::READ.to_string()],
                 issued_at: 1,
                 expires_at: 2,
             },
@@ -321,28 +449,4 @@ fn bogus_delegated_token() -> DelegatedToken {
         },
         token_sig: vec![0],
     }
-}
-
-fn ensure_local_artifacts_built() {
-    DFX_BUILD_ONCE.call_once(|| {
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| p.parent())
-            .map(PathBuf::from)
-            .expect("workspace root");
-
-        let output = Command::new("dfx")
-            .current_dir(&workspace_root)
-            .env("DFX_NETWORK", "local")
-            .env("RELEASE", "0")
-            .args(["build", "--all"])
-            .output()
-            .expect("failed to run `dfx build --all`");
-
-        assert!(
-            output.status.success(),
-            "dfx build --all failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    });
 }

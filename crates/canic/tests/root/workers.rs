@@ -11,15 +11,11 @@ use canic_internal::canister::SCALE;
 use canic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
-///
-/// Panics on transport or application failure.
-pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Principal {
+pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> {
     let result: Result<Result<Principal, Error>, Error> =
         pic.update_call(hub_pid, "create_worker", ());
 
-    result
-        .expect("create_worker transport failed")
-        .expect("create_worker application failed")
+    result.map_err(|err| Error::internal(format!("create_worker transport failed: {err}")))?
 }
 
 /// Count worker canisters registered under a given parent.

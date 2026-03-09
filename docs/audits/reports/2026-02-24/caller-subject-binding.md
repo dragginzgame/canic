@@ -92,7 +92,7 @@ No matches found.
     - logs indicate skip path on unknown threshold key
 - [x] CI includes this test file:
   - workspace test job runs all targets
-  - dedicated `delegated-crypto` job runs `pic_delegation_provision` when `CANIC_REQUIRE_THRESHOLD_KEYS=1`.
+  - crypto-dependent assertions are covered where threshold keys are available; unavailable-key environments take the documented skip path.
 
 ## Findings
 

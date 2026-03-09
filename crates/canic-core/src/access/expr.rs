@@ -64,20 +64,47 @@ pub enum AccessPredicate {
 
 #[derive(Clone, Copy, Debug)]
 pub enum BuiltinPredicate {
-    AppAllowsUpdates,
-    AppIsQueryable,
-    SelfIsPrimeSubnet,
-    SelfIsPrimeRoot,
-    CallerIsController,
-    CallerIsParent,
-    CallerIsChild,
-    CallerIsRoot,
-    CallerIsSameCanister,
-    CallerIsRegisteredToSubnet,
-    CallerIsWhitelisted,
+    App(AppPredicate),
+    Caller(CallerPredicate),
+    Environment(EnvironmentPredicate),
     Authenticated {
         required_scope: Option<&'static str>,
     },
+}
+
+///
+/// AppPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum AppPredicate {
+    AllowsUpdates,
+    IsQueryable,
+}
+
+///
+/// CallerPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum CallerPredicate {
+    IsController,
+    IsParent,
+    IsChild,
+    IsRoot,
+    IsSameCanister,
+    IsRegisteredToSubnet,
+    IsWhitelisted,
+}
+
+///
+/// EnvironmentPredicate
+///
+
+#[derive(Clone, Copy, Debug)]
+pub enum EnvironmentPredicate {
+    SelfIsPrimeSubnet,
+    SelfIsPrimeRoot,
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -128,79 +155,89 @@ where
 }
 
 pub mod app {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, AppPredicate, BuiltinPredicate, builtin};
 
     #[must_use]
     pub const fn allows_updates() -> AccessExpr {
-        builtin(BuiltinPredicate::AppAllowsUpdates)
+        builtin(BuiltinPredicate::App(AppPredicate::AllowsUpdates))
     }
 
     #[must_use]
     pub const fn is_queryable() -> AccessExpr {
-        builtin(BuiltinPredicate::AppIsQueryable)
+        builtin(BuiltinPredicate::App(AppPredicate::IsQueryable))
     }
 }
 
 pub mod caller {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, BuiltinPredicate, CallerPredicate, builtin};
 
     #[must_use]
     pub const fn is_controller() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsController)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsController))
     }
 
     #[must_use]
     pub const fn is_parent() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsParent)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsParent))
     }
 
     #[must_use]
     pub const fn is_child() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsChild)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsChild))
     }
 
     #[must_use]
     pub const fn is_root() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsRoot)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsRoot))
     }
 
     #[must_use]
     pub const fn is_same_canister() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsSameCanister)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsSameCanister))
     }
 
     #[must_use]
     pub const fn is_registered_to_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsRegisteredToSubnet)
+        builtin(BuiltinPredicate::Caller(
+            CallerPredicate::IsRegisteredToSubnet,
+        ))
     }
 
     #[must_use]
     pub const fn is_whitelisted() -> AccessExpr {
-        builtin(BuiltinPredicate::CallerIsWhitelisted)
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted))
     }
 }
 
 pub mod env {
-    use super::{AccessExpr, BuiltinPredicate, builtin};
+    use super::{AccessExpr, BuiltinPredicate, EnvironmentPredicate, builtin};
 
     #[must_use]
     pub const fn is_prime_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::SelfIsPrimeSubnet)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::SelfIsPrimeSubnet,
+        ))
     }
 
     #[must_use]
     pub const fn is_prime_root() -> AccessExpr {
-        builtin(BuiltinPredicate::SelfIsPrimeRoot)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::SelfIsPrimeRoot,
+        ))
     }
 
     #[must_use]
     pub const fn build_ic_only() -> AccessExpr {
-        builtin(BuiltinPredicate::BuildIcOnly)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::BuildIcOnly,
+        ))
     }
 
     #[must_use]
     pub const fn build_local_only() -> AccessExpr {
-        builtin(BuiltinPredicate::BuildLocalOnly)
+        builtin(BuiltinPredicate::Environment(
+            EnvironmentPredicate::BuildLocalOnly,
+        ))
     }
 }
 
@@ -208,8 +245,13 @@ pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
 
     #[must_use]
-    pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
+    pub const fn is_authenticated(required_scope: Option<&'static str>) -> AccessExpr {
         builtin(BuiltinPredicate::Authenticated { required_scope })
+    }
+
+    #[must_use]
+    pub const fn is_authenticated_with_scope(required_scope: &'static str) -> AccessExpr {
+        is_authenticated(Some(required_scope))
     }
 }
 
@@ -235,8 +277,10 @@ pub fn eval_default_app_guard(
         Ok(()) => Ok(()),
         Err(err) => {
             let predicate = match guard {
-                DefaultAppGuard::AllowsUpdates => BuiltinPredicate::AppAllowsUpdates,
-                DefaultAppGuard::IsQueryable => BuiltinPredicate::AppIsQueryable,
+                DefaultAppGuard::AllowsUpdates => {
+                    BuiltinPredicate::App(AppPredicate::AllowsUpdates)
+                }
+                DefaultAppGuard::IsQueryable => BuiltinPredicate::App(AppPredicate::IsQueryable),
             };
             Err(record_access_failure(
                 ctx,
@@ -291,29 +335,7 @@ fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> Access
 }
 
 async fn eval_builtin(pred: &BuiltinPredicate, ctx: &AccessContext) -> Result<(), AccessError> {
-    match pred {
-        BuiltinPredicate::AppAllowsUpdates => access::app::guard_app_update(),
-        BuiltinPredicate::AppIsQueryable => access::app::guard_app_query(),
-        BuiltinPredicate::SelfIsPrimeSubnet => access::env::is_prime_subnet(),
-        BuiltinPredicate::SelfIsPrimeRoot => access::env::is_prime_root(),
-        BuiltinPredicate::CallerIsController => access::auth::is_controller(ctx.caller).await,
-        BuiltinPredicate::CallerIsParent => access::auth::is_parent(ctx.caller).await,
-        BuiltinPredicate::CallerIsChild => access::auth::is_child(ctx.caller).await,
-        BuiltinPredicate::CallerIsRoot => access::auth::is_root(ctx.caller).await,
-        BuiltinPredicate::CallerIsSameCanister => access::auth::is_same_canister(ctx.caller).await,
-        BuiltinPredicate::CallerIsRegisteredToSubnet => {
-            access::auth::is_registered_to_subnet(ctx.caller).await
-        }
-        BuiltinPredicate::CallerIsWhitelisted => access::auth::is_whitelisted(ctx.caller).await,
-        BuiltinPredicate::Authenticated { required_scope } => {
-            let verified =
-                access::auth::delegated_token_verified(ctx.caller, *required_scope).await?;
-            DelegationMetrics::record_authority(verified.cert.shard_pid);
-            Ok(())
-        }
-        BuiltinPredicate::BuildIcOnly => access::env::build_network_ic(),
-        BuiltinPredicate::BuildLocalOnly => access::env::build_network_local(),
-    }
+    pred.evaluator().evaluate(ctx, *pred).await
 }
 
 const fn builtin(pred: BuiltinPredicate) -> AccessExpr {
@@ -329,7 +351,7 @@ struct AccessFailure {
 }
 
 impl AccessFailure {
-    const fn from_builtin(pred: BuiltinPredicate, error: AccessError) -> Self {
+    fn from_builtin(pred: BuiltinPredicate, error: AccessError) -> Self {
         Self {
             error,
             metric_kind: pred.metric_kind(),
@@ -372,39 +394,477 @@ impl AccessFailure {
 }
 
 impl BuiltinPredicate {
-    const fn name(self) -> &'static str {
+    /// name
+    ///
+    /// Return the stable metrics/logging name for this builtin predicate.
+    fn name(self) -> &'static str {
+        self.evaluator().name()
+    }
+
+    /// metric_kind
+    ///
+    /// Return the metric family used to classify this builtin predicate.
+    fn metric_kind(self) -> AccessMetricKind {
+        self.evaluator().metric_kind()
+    }
+
+    /// required_scope
+    ///
+    /// Return the optional auth scope used by the authenticated predicate variant.
+    const fn required_scope(self) -> Option<&'static str> {
         match self {
-            Self::AppAllowsUpdates => "app_allows_updates",
-            Self::AppIsQueryable => "app_is_queryable",
-            Self::SelfIsPrimeSubnet => "self_is_prime_subnet",
-            Self::SelfIsPrimeRoot => "self_is_prime_root",
-            Self::CallerIsController => "caller_is_controller",
-            Self::CallerIsParent => "caller_is_parent",
-            Self::CallerIsChild => "caller_is_child",
-            Self::CallerIsRoot => "caller_is_root",
-            Self::CallerIsSameCanister => "caller_is_same_canister",
-            Self::CallerIsRegisteredToSubnet => "caller_is_registered_to_subnet",
-            Self::CallerIsWhitelisted => "caller_is_whitelisted",
-            Self::Authenticated { .. } => "authenticated",
-            Self::BuildIcOnly => "build_ic_only",
-            Self::BuildLocalOnly => "build_local_only",
+            Self::Authenticated { required_scope } => required_scope,
+            _ => None,
         }
     }
 
-    const fn metric_kind(self) -> AccessMetricKind {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation responsible for this builtin variant.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
         match self {
-            Self::AppAllowsUpdates | Self::AppIsQueryable => AccessMetricKind::Guard,
-            Self::SelfIsPrimeSubnet | Self::SelfIsPrimeRoot => AccessMetricKind::Env,
-            Self::BuildIcOnly | Self::BuildLocalOnly => AccessMetricKind::Rule,
-            Self::CallerIsController
-            | Self::CallerIsParent
-            | Self::CallerIsChild
-            | Self::CallerIsRoot
-            | Self::CallerIsSameCanister
-            | Self::CallerIsRegisteredToSubnet
-            | Self::CallerIsWhitelisted
-            | Self::Authenticated { .. } => AccessMetricKind::Auth,
+            Self::App(pred) => pred.evaluator(),
+            Self::Caller(pred) => pred.evaluator(),
+            Self::Environment(pred) => pred.evaluator(),
+            Self::Authenticated { .. } => &AUTHENTICATED_EVALUATOR,
         }
+    }
+}
+
+impl AppPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for app-mode predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::AllowsUpdates => &APP_ALLOWS_UPDATES_EVALUATOR,
+            Self::IsQueryable => &APP_IS_QUERYABLE_EVALUATOR,
+        }
+    }
+}
+
+impl CallerPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for caller predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::IsController => &CALLER_IS_CONTROLLER_EVALUATOR,
+            Self::IsParent => &CALLER_IS_PARENT_EVALUATOR,
+            Self::IsChild => &CALLER_IS_CHILD_EVALUATOR,
+            Self::IsRoot => &CALLER_IS_ROOT_EVALUATOR,
+            Self::IsSameCanister => &CALLER_IS_SAME_CANISTER_EVALUATOR,
+            Self::IsRegisteredToSubnet => &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR,
+            Self::IsWhitelisted => &CALLER_IS_WHITELISTED_EVALUATOR,
+        }
+    }
+}
+
+impl EnvironmentPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for environment predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::SelfIsPrimeSubnet => &SELF_IS_PRIME_SUBNET_EVALUATOR,
+            Self::SelfIsPrimeRoot => &SELF_IS_PRIME_ROOT_EVALUATOR,
+            Self::BuildIcOnly => &BUILD_IC_ONLY_EVALUATOR,
+            Self::BuildLocalOnly => &BUILD_LOCAL_ONLY_EVALUATOR,
+        }
+    }
+}
+
+// --- Builtin Evaluators ---------------------------------------------------
+
+#[async_trait]
+trait BuiltinPredicateEvaluator: Send + Sync {
+    /// evaluate
+    ///
+    /// Execute a builtin predicate against the current access context.
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        pred: BuiltinPredicate,
+    ) -> Result<(), AccessError>;
+
+    /// name
+    ///
+    /// Return the stable label used for metrics and logs.
+    fn name(&self) -> &'static str;
+
+    /// metric_kind
+    ///
+    /// Return the metric group for this builtin predicate evaluator.
+    fn metric_kind(&self) -> AccessMetricKind;
+}
+
+///
+/// AppAllowsUpdatesEvaluator
+///
+
+struct AppAllowsUpdatesEvaluator;
+
+///
+/// AppIsQueryableEvaluator
+///
+
+struct AppIsQueryableEvaluator;
+
+///
+/// SelfIsPrimeSubnetEvaluator
+///
+
+struct SelfIsPrimeSubnetEvaluator;
+
+///
+/// SelfIsPrimeRootEvaluator
+///
+
+struct SelfIsPrimeRootEvaluator;
+
+///
+/// CallerIsControllerEvaluator
+///
+
+struct CallerIsControllerEvaluator;
+
+///
+/// CallerIsParentEvaluator
+///
+
+struct CallerIsParentEvaluator;
+
+///
+/// CallerIsChildEvaluator
+///
+
+struct CallerIsChildEvaluator;
+
+///
+/// CallerIsRootEvaluator
+///
+
+struct CallerIsRootEvaluator;
+
+///
+/// CallerIsSameCanisterEvaluator
+///
+
+struct CallerIsSameCanisterEvaluator;
+
+///
+/// CallerIsRegisteredToSubnetEvaluator
+///
+
+struct CallerIsRegisteredToSubnetEvaluator;
+
+///
+/// CallerIsWhitelistedEvaluator
+///
+
+struct CallerIsWhitelistedEvaluator;
+
+///
+/// AuthenticatedEvaluator
+///
+
+struct AuthenticatedEvaluator;
+
+///
+/// BuildIcOnlyEvaluator
+///
+
+struct BuildIcOnlyEvaluator;
+
+///
+/// BuildLocalOnlyEvaluator
+///
+
+struct BuildLocalOnlyEvaluator;
+
+static APP_ALLOWS_UPDATES_EVALUATOR: AppAllowsUpdatesEvaluator = AppAllowsUpdatesEvaluator;
+static APP_IS_QUERYABLE_EVALUATOR: AppIsQueryableEvaluator = AppIsQueryableEvaluator;
+static SELF_IS_PRIME_SUBNET_EVALUATOR: SelfIsPrimeSubnetEvaluator = SelfIsPrimeSubnetEvaluator;
+static SELF_IS_PRIME_ROOT_EVALUATOR: SelfIsPrimeRootEvaluator = SelfIsPrimeRootEvaluator;
+static CALLER_IS_CONTROLLER_EVALUATOR: CallerIsControllerEvaluator = CallerIsControllerEvaluator;
+static CALLER_IS_PARENT_EVALUATOR: CallerIsParentEvaluator = CallerIsParentEvaluator;
+static CALLER_IS_CHILD_EVALUATOR: CallerIsChildEvaluator = CallerIsChildEvaluator;
+static CALLER_IS_ROOT_EVALUATOR: CallerIsRootEvaluator = CallerIsRootEvaluator;
+static CALLER_IS_SAME_CANISTER_EVALUATOR: CallerIsSameCanisterEvaluator =
+    CallerIsSameCanisterEvaluator;
+static CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR: CallerIsRegisteredToSubnetEvaluator =
+    CallerIsRegisteredToSubnetEvaluator;
+static CALLER_IS_WHITELISTED_EVALUATOR: CallerIsWhitelistedEvaluator = CallerIsWhitelistedEvaluator;
+static AUTHENTICATED_EVALUATOR: AuthenticatedEvaluator = AuthenticatedEvaluator;
+static BUILD_IC_ONLY_EVALUATOR: BuildIcOnlyEvaluator = BuildIcOnlyEvaluator;
+static BUILD_LOCAL_ONLY_EVALUATOR: BuildLocalOnlyEvaluator = BuildLocalOnlyEvaluator;
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for AppAllowsUpdatesEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::app::guard_app_update()
+    }
+
+    fn name(&self) -> &'static str {
+        "app_allows_updates"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Guard
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for AppIsQueryableEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::app::guard_app_query()
+    }
+
+    fn name(&self) -> &'static str {
+        "app_is_queryable"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Guard
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for SelfIsPrimeSubnetEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::env::is_prime_subnet()
+    }
+
+    fn name(&self) -> &'static str {
+        "self_is_prime_subnet"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Env
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for SelfIsPrimeRootEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::env::is_prime_root()
+    }
+
+    fn name(&self) -> &'static str {
+        "self_is_prime_root"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Env
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsControllerEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_controller(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_controller"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsParentEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_parent(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_parent"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsChildEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_child(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_child"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsRootEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_root(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_root"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsSameCanisterEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_same_canister(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_same_canister"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsRegisteredToSubnetEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_registered_to_subnet(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_registered_to_subnet"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for CallerIsWhitelistedEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::auth::is_whitelisted(ctx.caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_whitelisted"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        let verified =
+            access::auth::delegated_token_verified(ctx.caller, pred.required_scope()).await?;
+        DelegationMetrics::record_authority(verified.cert.shard_pid);
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "authenticated"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for BuildIcOnlyEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::env::build_network_ic()
+    }
+
+    fn name(&self) -> &'static str {
+        "build_ic_only"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Rule
+    }
+}
+
+#[async_trait]
+impl BuiltinPredicateEvaluator for BuildLocalOnlyEvaluator {
+    async fn evaluate(
+        &self,
+        _ctx: &AccessContext,
+        _pred: BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        access::env::build_network_local()
+    }
+
+    fn name(&self) -> &'static str {
+        "build_local_only"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Rule
     }
 }
 
@@ -433,6 +893,7 @@ mod tests {
         access,
         ids::{EndpointCall, EndpointCallKind, EndpointId},
         storage::stable::env::{Env, EnvRecord},
+        storage::stable::state::app::{AppMode, AppState, AppStateRecord},
         test::seams,
     };
 
@@ -441,6 +902,14 @@ mod tests {
     impl Drop for EnvRestore {
         fn drop(&mut self) {
             Env::import(self.0.clone());
+        }
+    }
+
+    struct AppRestore(AppStateRecord);
+
+    impl Drop for AppRestore {
+        fn drop(&mut self) {
+            AppState::import(self.0);
         }
     }
 
@@ -475,6 +944,68 @@ mod tests {
         let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
         let auth_other = futures::executor::block_on(access::auth::is_parent(other));
         assert_eq!(expr_other.is_ok(), auth_other.is_ok());
+    }
+
+    #[test]
+    fn app_allows_updates_matches_access_app_guard() {
+        let _guard = seams::lock();
+        let original = AppState::export();
+        let _restore = AppRestore(original);
+        let expr = app::allows_updates();
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
+            AppState::import(AppStateRecord { mode });
+            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let direct_result = access::app::guard_app_update();
+            assert_eq!(
+                expr_result.is_ok(),
+                direct_result.is_ok(),
+                "app::allows_updates parity mismatch for mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn app_is_queryable_matches_access_app_guard() {
+        let _guard = seams::lock();
+        let original = AppState::export();
+        let _restore = AppRestore(original);
+        let expr = app::is_queryable();
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
+            AppState::import(AppStateRecord { mode });
+            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let direct_result = access::app::guard_app_query();
+            assert_eq!(
+                expr_result.is_ok(),
+                direct_result.is_ok(),
+                "app::is_queryable parity mismatch for mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_network_predicates_match_env_access_checks() {
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+
+        let expr_local = futures::executor::block_on(eval_access(&env::build_local_only(), &ctx));
+        let direct_local = access::env::build_network_local();
+        assert_eq!(expr_local.is_ok(), direct_local.is_ok());
+
+        let expr_ic = futures::executor::block_on(eval_access(&env::build_ic_only(), &ctx));
+        let direct_ic = access::env::build_network_ic();
+        assert_eq!(expr_ic.is_ok(), direct_ic.is_ok());
     }
 
     fn test_call() -> EndpointCall {

@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::metrics::{
         AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry, IccMetricEntry,
-        SystemMetricEntry, TimerMetricEntry,
+        RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
@@ -10,6 +10,10 @@ use crate::{
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
+        root_capability::{
+            RootCapabilityMetricEventType, RootCapabilityMetricKey, RootCapabilityMetricOutcome,
+            RootCapabilityMetricProofMode,
+        },
         timer::{TimerMetricKey, TimerMode},
     },
 };
@@ -153,6 +157,39 @@ impl DelegationMetricEntryMapper {
     ) -> Vec<DelegationMetricEntry> {
         raw.into_iter()
             .map(|(authority, count)| DelegationMetricEntry { authority, count })
+            .collect()
+    }
+}
+
+///
+/// RootCapabilityMetricEntryMapper
+///
+
+pub struct RootCapabilityMetricEntryMapper;
+
+impl RootCapabilityMetricEntryMapper {
+    #[must_use]
+    pub fn record_to_view(
+        raw: impl IntoIterator<
+            Item = (
+                RootCapabilityMetricKey,
+                RootCapabilityMetricEventType,
+                RootCapabilityMetricOutcome,
+                RootCapabilityMetricProofMode,
+                u64,
+            ),
+        >,
+    ) -> Vec<RootCapabilityMetricEntry> {
+        raw.into_iter()
+            .map(
+                |(capability, event_type, outcome, proof_mode, count)| RootCapabilityMetricEntry {
+                    capability: capability.metric_label().to_string(),
+                    event_type: event_type.metric_label().to_string(),
+                    outcome: outcome.metric_label().to_string(),
+                    proof_mode: proof_mode.metric_label().to_string(),
+                    count,
+                },
+            )
             .collect()
     }
 }
