@@ -25,6 +25,7 @@ impl AppStateInputMapper {
                 StorageAppMode::Readonly => AppModeDto::Readonly,
                 StorageAppMode::Disabled => AppModeDto::Disabled,
             },
+            cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
 
@@ -37,6 +38,7 @@ impl AppStateInputMapper {
                 AppModeDto::Readonly => StorageAppMode::Readonly,
                 AppModeDto::Disabled => StorageAppMode::Disabled,
             },
+            cycles_funding_enabled: view.cycles_funding_enabled,
         }
     }
 }
@@ -56,6 +58,7 @@ impl AppStateResponseMapper {
                 StorageAppMode::Readonly => AppModeDto::Readonly,
                 StorageAppMode::Disabled => AppModeDto::Disabled,
             },
+            cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
 }
@@ -102,9 +105,10 @@ impl AppStateCommandMapper {
     #[must_use]
     pub const fn dto_to_record(cmd: AppCommand) -> AppStateCommand {
         match cmd {
-            AppCommand::Start => AppStateCommand::Start,
-            AppCommand::Readonly => AppStateCommand::Readonly,
-            AppCommand::Stop => AppStateCommand::Stop,
+            AppCommand::SetStatus(status) => AppStateCommand::SetStatus(status),
+            AppCommand::SetCyclesFundingEnabled(enabled) => {
+                AppStateCommand::SetCyclesFundingEnabled(enabled)
+            }
         }
     }
 }

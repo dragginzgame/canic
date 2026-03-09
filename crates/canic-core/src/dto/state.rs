@@ -6,9 +6,19 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppCommand {
-    Start,
+    SetStatus(AppStatus),
+    SetCyclesFundingEnabled(bool),
+}
+
+///
+/// AppStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AppStatus {
+    Active,
     Readonly,
-    Stop,
+    Stopped,
 }
 
 ///
@@ -29,6 +39,7 @@ pub enum AppMode {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateInput {
     pub mode: AppMode,
+    pub cycles_funding_enabled: bool,
 }
 
 ///
@@ -38,6 +49,7 @@ pub struct AppStateInput {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateResponse {
     pub mode: AppMode,
+    pub cycles_funding_enabled: bool,
 }
 
 ///

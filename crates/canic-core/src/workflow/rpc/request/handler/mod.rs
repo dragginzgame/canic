@@ -140,8 +140,6 @@ impl RootResponseWorkflow {
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {
-        EnvOps::require_root()?;
-
         Ok(RootContext {
             caller: IcOps::msg_caller(),
             self_pid: IcOps::canister_self(),

@@ -9,6 +9,7 @@ use crate::{
         ic::IcOps,
         prelude::*,
         rpc::{Rpc, RpcOps},
+        runtime::env::EnvOps,
     },
 };
 use candid::encode_one;
@@ -41,30 +42,42 @@ impl RequestOps {
             )
         })?;
 
-        RpcOps::execute_root_response_rpc(CreateCanisterRpc {
-            canister_role: canister_role.clone(),
-            parent,
-            extra_arg,
-            metadata: Some(new_request_metadata()),
-        })
+        let root_pid = EnvOps::root_pid()?;
+        RpcOps::execute_response_rpc(
+            root_pid,
+            CreateCanisterRpc {
+                canister_role: canister_role.clone(),
+                parent,
+                extra_arg,
+                metadata: Some(new_request_metadata()),
+            },
+        )
         .await
     }
 
     pub async fn upgrade_canister(
         canister_pid: Principal,
     ) -> Result<UpgradeCanisterResponse, InternalError> {
-        RpcOps::execute_root_response_rpc(UpgradeCanisterRpc {
-            canister_pid,
-            metadata: Some(new_request_metadata()),
-        })
+        let root_pid = EnvOps::root_pid()?;
+        RpcOps::execute_response_rpc(
+            root_pid,
+            UpgradeCanisterRpc {
+                canister_pid,
+                metadata: Some(new_request_metadata()),
+            },
+        )
         .await
     }
 
     pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, InternalError> {
-        RpcOps::execute_root_response_rpc(CyclesRpc {
-            cycles,
-            metadata: Some(new_request_metadata()),
-        })
+        let parent_pid = EnvOps::parent_pid()?;
+        RpcOps::execute_response_rpc(
+            parent_pid,
+            CyclesRpc {
+                cycles,
+                metadata: Some(new_request_metadata()),
+            },
+        )
         .await
     }
 }

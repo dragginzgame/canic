@@ -69,7 +69,7 @@ kind = "replica"
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
 topup.threshold = "10T"
-topup.amount = "5T"
+topup.amount = "4T"
 
 # --- Scale Hub Pools ---
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
@@ -84,7 +84,7 @@ kind = "replica"
 [subnets.prime.canisters.shard_hub]
 kind = "singleton"
 topup.threshold = "10T"
-topup.amount = "5T"
+topup.amount = "4T"
 
 # --- Shard Hub Pools ---
 [subnets.prime.canisters.shard_hub.sharding.pools.shards]
@@ -96,7 +96,7 @@ policy.max_shards = 4
 [subnets.prime.canisters.shard]
 kind = "shard"
 topup.threshold = "10T"
-topup.amount = "5T"
+topup.amount = "4T"
 
 
 # --- Test ---

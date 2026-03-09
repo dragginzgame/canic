@@ -29,6 +29,7 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
+const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.
@@ -426,7 +427,16 @@ fn load_root_wasm() -> Option<Vec<u8>> {
 
     for path in candidates {
         match fs::read(&path) {
-            Ok(bytes) => return Some(bytes),
+            Ok(bytes) => {
+                assert!(
+                    bytes.len() < POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES,
+                    "root wasm artifact is too large for PocketIC chunked install: {} bytes at {}. \
+Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=\"-C debuginfo=0\"`.",
+                    bytes.len(),
+                    path.display()
+                );
+                return Some(bytes);
+            }
             Err(err) if err.kind() == io::ErrorKind::NotFound => {}
             Err(err) => panic!("failed to read root wasm at {}: {}", path.display(), err),
         }

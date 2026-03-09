@@ -159,8 +159,8 @@ fn preflight_authorize_then_replay_denies_before_replay_validation() {
     )
     .expect_err("authorize-then-replay should deny before replay validation");
     assert!(
-        err.to_string().contains("root"),
-        "expected root denial first, got: {err}"
+        !err.to_string().contains("missing replay metadata"),
+        "expected policy denial before replay validation, got: {err}"
     );
 }
 
@@ -215,8 +215,8 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
     )
     .expect_err("policy denial should fail preflight");
     assert!(
-        err.to_string().contains("root"),
-        "expected root-env denial, got: {err}"
+        err.to_string().contains("not found") || err.to_string().contains("not a child"),
+        "expected caller topology denial, got: {err}"
     );
 
     let replay = RootResponseWorkflow::check_replay(&ctx, &capability)

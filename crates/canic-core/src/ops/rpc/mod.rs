@@ -107,16 +107,18 @@ impl RpcOps {
     }
 
     ///
-    /// execute_root_response_rpc
+    /// execute_response_rpc
     ///
     /// Executes a protocol-level RPC via Request/Response.
     ///
-    async fn execute_root_response_rpc<R: Rpc>(rpc: R) -> Result<R::Response, InternalError> {
+    pub(crate) async fn execute_response_rpc<R: Rpc>(
+        target_pid: Principal,
+        rpc: R,
+    ) -> Result<R::Response, InternalError> {
         let root_pid = EnvOps::root_pid()?;
         let request = rpc.into_request();
-        let attestation = Self::request_root_response_attestation(root_pid).await?;
-        let call_res =
-            Self::call_root_response_capability_v1(root_pid, request, attestation).await?;
+        let attestation = Self::request_root_response_attestation(root_pid, target_pid).await?;
+        let call_res = Self::call_response_capability_v1(target_pid, request, attestation).await?;
 
         let response = R::try_from_response(call_res)?;
 
@@ -125,6 +127,7 @@ impl RpcOps {
 
     async fn request_root_response_attestation(
         root_pid: Principal,
+        audience_pid: Principal,
     ) -> Result<SignedRoleAttestation, InternalError> {
         let self_pid = IcOps::canister_self();
         let role = EnvOps::canister_role()?;
@@ -139,7 +142,7 @@ impl RpcOps {
             subject: self_pid,
             role,
             subnet_id: None,
-            audience: Some(root_pid),
+            audience: Some(audience_pid),
             ttl_secs: cfg.max_ttl_secs,
             epoch,
             metadata: Some(new_root_attestation_request_metadata()),
@@ -148,13 +151,13 @@ impl RpcOps {
         Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request).await
     }
 
-    async fn call_root_response_capability_v1(
-        root_pid: Principal,
+    async fn call_response_capability_v1(
+        target_pid: Principal,
         request: Request,
         attestation: SignedRoleAttestation,
     ) -> Result<Response, InternalError> {
         let dto_request: crate::dto::rpc::Request = request.clone();
-        let capability_hash = root_capability_hash(root_pid, &dto_request)?;
+        let capability_hash = root_capability_hash(target_pid, &dto_request)?;
         let envelope = RootCapabilityEnvelopeV1 {
             service: CapabilityService::Root,
             capability_version: CAPABILITY_VERSION_V1,
@@ -168,7 +171,7 @@ impl RpcOps {
         };
 
         let response: RootCapabilityResponseV1 =
-            Self::call_rpc_result(root_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
+            Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
                 .await?;
 
         Ok(response.response)

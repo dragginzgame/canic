@@ -12,7 +12,7 @@ use crate::{
         runtime::metrics::root_capability::{
             RootCapabilityAuthorizationOutcome, RootCapabilityMetrics,
         },
-        storage::registry::subnet::SubnetRegistryOps,
+        storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
     },
     workflow::rpc::RpcWorkflowError,
 };
@@ -21,22 +21,20 @@ pub(super) fn authorize(
     ctx: &RootContext,
     capability: &RootCapability,
 ) -> Result<(), InternalError> {
-    if !ctx.is_root_env {
-        RootCapabilityMetrics::record_authorization(
-            capability.metric_key(),
-            RootCapabilityAuthorizationOutcome::Denied,
-        );
-        return EnvOps::require_root();
-    }
-
     let capability_key = capability.metric_key();
     let capability_name = capability.capability_name();
     let decision = match capability {
-        RootCapability::Provision(_req) => Ok(()),
-        RootCapability::Upgrade(req) => authorize_upgrade(ctx, req),
+        RootCapability::Provision(_req) => authorize_root_only(ctx).map(|_| ()),
+        RootCapability::Upgrade(req) => {
+            authorize_root_only(ctx).and_then(|_| authorize_upgrade(ctx, req))
+        }
         RootCapability::MintCycles(req) => authorize_mint_cycles(ctx, req),
-        RootCapability::IssueDelegation(req) => authorize_issue_delegation(ctx, req),
-        RootCapability::IssueRoleAttestation(req) => authorize_issue_role_attestation(ctx, req),
+        RootCapability::IssueDelegation(req) => {
+            authorize_root_only(ctx).and_then(|_| authorize_issue_delegation(ctx, req))
+        }
+        RootCapability::IssueRoleAttestation(req) => {
+            authorize_root_only(ctx).and_then(|_| authorize_issue_role_attestation(ctx, req))
+        }
     };
 
     match &decision {
@@ -48,7 +46,7 @@ pub(super) fn authorize(
             log!(
                 Topic::Rpc,
                 Info,
-                "root capability authorized (capability={capability_name}, caller={}, subnet={}, now={})",
+                "capability authorized (capability={capability_name}, caller={}, subnet={}, now={})",
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -62,7 +60,7 @@ pub(super) fn authorize(
             log!(
                 Topic::Rpc,
                 Warn,
-                "root capability denied (capability={capability_name}, caller={}, subnet={}, now={}): {err}",
+                "capability denied (capability={capability_name}, caller={}, subnet={}, now={}): {err}",
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -71,6 +69,14 @@ pub(super) fn authorize(
     }
 
     decision
+}
+
+fn authorize_root_only(ctx: &RootContext) -> Result<(), InternalError> {
+    if ctx.is_root_env {
+        Ok(())
+    } else {
+        EnvOps::require_root()
+    }
 }
 
 fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<(), InternalError> {
@@ -84,10 +90,20 @@ fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<
     Ok(())
 }
 
-fn authorize_mint_cycles(_ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
+fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
+    let child =
+        SubnetRegistryOps::get(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
+    if child.parent_pid != Some(ctx.self_pid) {
+        return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
+    }
+
+    if !AppStateOps::cycles_funding_enabled() {
+        return Err(RpcWorkflowError::CyclesFundingDisabled.into());
+    }
+
     let available = MgmtOps::canister_cycle_balance().to_u128();
     if req.cycles > available {
-        return Err(RpcWorkflowError::InsufficientRootCycles {
+        return Err(RpcWorkflowError::InsufficientFundingCycles {
             requested: req.cycles,
             available,
         }
