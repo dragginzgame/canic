@@ -84,76 +84,10 @@ macro_rules! canic_endpoints {
         //
 
         #[canic_query]
-        fn canic_metrics_system() -> Result<Vec<::canic::dto::metrics::SystemMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::system_snapshot())
-        }
-
-        #[canic_query]
-        fn canic_metrics_icc(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::IccMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::icc_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_http(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::HttpMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::http_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_timer(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::TimerMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::timer_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_access(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::AccessMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::access_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_delegation(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::DelegationMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::delegation_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_root_capability(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::RootCapabilityMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::root_capability_page(page))
-        }
-
-        #[canic_query]
-        fn canic_metrics_cycles_funding(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::CyclesFundingMetricEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::cycles_funding_page(page))
-        }
-
-        // metrics, but lives in the perf module
-        #[canic_query]
-        fn canic_metrics_perf(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::__internal::core::perf::PerfEntry>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::perf_page(page))
-        }
-
-        // derived_view
-        #[canic_query]
-        fn canic_metrics_endpoint_health(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::EndpointHealth>, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::endpoint_health_page(
-                page,
-                Some($crate::__internal::core::protocol::CANIC_METRICS_ENDPOINT_HEALTH),
-            ))
+        fn canic_metrics(
+            req: ::canic::dto::metrics::MetricsRequest,
+        ) -> Result<::canic::dto::metrics::MetricsResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::metrics::MetricsQuery::dispatch(req))
         }
 
         //

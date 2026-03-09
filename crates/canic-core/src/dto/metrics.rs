@@ -1,4 +1,11 @@
-use crate::{dto::prelude::*, ids::AccessMetricKind};
+use crate::{
+    dto::{
+        page::{Page, PageRequest},
+        prelude::*,
+    },
+    ids::AccessMetricKind,
+    perf::PerfEntry,
+};
 
 ///
 /// Metrics DTOs
@@ -34,6 +41,7 @@ use crate::{dto::prelude::*, ids::AccessMetricKind};
 /// Access metrics are emitted only on denial and represent the kind and
 /// predicate where access failed.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct AccessMetricEntry {
     /// Normalized endpoint name.
@@ -56,6 +64,58 @@ pub struct AccessMetricEntry {
 }
 
 ///
+/// MetricsKind
+///
+/// Metric family selector for the unified metrics query endpoint.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum MetricsKind {
+    System,
+    Icc,
+    Http,
+    Timer,
+    Access,
+    Delegation,
+    RootCapability,
+    CyclesFunding,
+    Perf,
+    EndpointHealth,
+}
+
+///
+/// MetricsRequest
+///
+/// Unified metrics query request envelope.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MetricsRequest {
+    pub kind: MetricsKind,
+    pub page: PageRequest,
+}
+
+///
+/// MetricsResponse
+///
+/// Unified metrics query response envelope.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub enum MetricsResponse {
+    System(Vec<SystemMetricEntry>),
+    Icc(Page<IccMetricEntry>),
+    Http(Page<HttpMetricEntry>),
+    Timer(Page<TimerMetricEntry>),
+    Access(Page<AccessMetricEntry>),
+    Delegation(Page<DelegationMetricEntry>),
+    RootCapability(Page<RootCapabilityMetricEntry>),
+    CyclesFunding(Page<CyclesFundingMetricEntry>),
+    Perf(Page<PerfEntry>),
+    EndpointHealth(Page<EndpointHealth>),
+}
+
+///
 /// DelegationMetricEntry
 ///
 /// Snapshot entry pairing a delegation authority with its usage count.
@@ -65,6 +125,7 @@ pub struct AccessMetricEntry {
 /// - This metric provides visibility into which authorities are active.
 /// - Cardinality is bounded by the number of configured delegation certs.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct DelegationMetricEntry {
     /// Principal of the delegation authority (cert signer).
@@ -86,6 +147,7 @@ pub struct DelegationMetricEntry {
 /// - `proof_mode` identifies the proof class when relevant.
 /// - `count` is the cumulative counter for this tuple.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct RootCapabilityMetricEntry {
     pub capability: String,
@@ -106,6 +168,7 @@ pub struct RootCapabilityMetricEntry {
 /// - `reason` is present for denied child-scoped metrics.
 /// - `cycles` is the accumulated cycles amount for the tuple.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CyclesFundingMetricEntry {
     pub metric: String,
@@ -125,6 +188,7 @@ pub struct CyclesFundingMetricEntry {
 ///
 /// This metric does NOT encode success or failure.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointAttemptMetricEntry {
     /// Normalized endpoint name.
@@ -149,6 +213,7 @@ pub struct EndpointAttemptMetricEntry {
 /// This metric intentionally excludes *error causes* to prevent
 /// high-cardinality labels.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointResultMetricEntry {
     /// Normalized endpoint name.
@@ -176,6 +241,7 @@ pub struct EndpointResultMetricEntry {
 ///
 /// It exists purely for observability convenience.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct EndpointHealth {
     /// Normalized endpoint name.
@@ -208,6 +274,7 @@ pub struct EndpointHealth {
 ///
 /// Labels MUST be controlled and finite.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct HttpMetricEntry {
     /// HTTP method (e.g. GET, POST).
@@ -227,6 +294,7 @@ pub struct HttpMetricEntry {
 ///
 /// Tracks outbound calls made by this canister.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct IccMetricEntry {
     /// Target canister principal.
@@ -247,6 +315,7 @@ pub struct IccMetricEntry {
 /// `kind` is intentionally a string to allow extension without
 /// schema changes, but MUST remain low-cardinality.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct SystemMetricEntry {
     /// Metric kind identifier.
@@ -263,6 +332,7 @@ pub struct SystemMetricEntry {
 ///
 /// Used to observe scheduled or delayed execution behavior.
 ///
+
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct TimerMetricEntry {
     /// Timer mode (e.g. one-shot, interval).
