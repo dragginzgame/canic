@@ -1,8 +1,9 @@
 use crate::{
     dto::{
         metrics::{
-            AccessMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry,
-            IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
+            AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, EndpointHealth,
+            HttpMetricEntry, IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry,
+            TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
@@ -11,9 +12,10 @@ use crate::{
         runtime::metrics::{
             MetricsOps,
             mapper::{
-                AccessMetricEntryMapper, DelegationMetricEntryMapper, EndpointHealthMapper,
-                HttpMetricEntryMapper, IccMetricEntryMapper, RootCapabilityMetricEntryMapper,
-                SystemMetricEntryMapper, TimerMetricEntryMapper,
+                AccessMetricEntryMapper, CyclesFundingMetricEntryMapper,
+                DelegationMetricEntryMapper, EndpointHealthMapper, HttpMetricEntryMapper,
+                IccMetricEntryMapper, RootCapabilityMetricEntryMapper, SystemMetricEntryMapper,
+                TimerMetricEntryMapper,
             },
         },
     },
@@ -117,6 +119,21 @@ impl MetricsQuery {
                 .then_with(|| a.event_type.cmp(&b.event_type))
                 .then_with(|| a.outcome.cmp(&b.outcome))
                 .then_with(|| a.proof_mode.cmp(&b.proof_mode))
+        });
+
+        paginate_vec(entries, page)
+    }
+
+    #[must_use]
+    pub fn cycles_funding_page(page: PageRequest) -> Page<CyclesFundingMetricEntry> {
+        let snapshot = MetricsOps::cycles_funding_snapshot();
+        let mut entries = CyclesFundingMetricEntryMapper::record_to_view(snapshot.entries);
+
+        entries.sort_by(|a, b| {
+            a.metric
+                .cmp(&b.metric)
+                .then_with(|| a.child_principal.cmp(&b.child_principal))
+                .then_with(|| a.reason.cmp(&b.reason))
         });
 
         paginate_vec(entries, page)

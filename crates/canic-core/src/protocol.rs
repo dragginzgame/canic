@@ -44,6 +44,7 @@ pub const CANIC_METRICS_TIMER: &str = "canic_metrics_timer";
 pub const CANIC_METRICS_ACCESS: &str = "canic_metrics_access";
 pub const CANIC_METRICS_DELEGATION: &str = "canic_metrics_delegation";
 pub const CANIC_METRICS_ROOT_CAPABILITY: &str = "canic_metrics_root_capability";
+pub const CANIC_METRICS_CYCLES_FUNDING: &str = "canic_metrics_cycles_funding";
 pub const CANIC_METRICS_PERF: &str = "canic_metrics_perf";
 pub const CANIC_METRICS_ENDPOINT_HEALTH: &str = "canic_metrics_endpoint_health";
 pub const CANIC_READY: &str = "canic_ready";

@@ -1,4 +1,7 @@
-use super::{DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext};
+use super::{
+    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext,
+    funding::{self, MintFundingPolicyViolation},
+};
 use crate::{
     InternalError,
     dto::auth::{DelegationRequest, RoleAttestationRequest},
@@ -9,6 +12,7 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, mgmt::MgmtOps},
         runtime::env::EnvOps,
+        runtime::metrics::cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
         runtime::metrics::root_capability::{
             RootCapabilityAuthorizationOutcome, RootCapabilityMetrics,
         },
@@ -24,16 +28,16 @@ pub(super) fn authorize(
     let capability_key = capability.metric_key();
     let capability_name = capability.capability_name();
     let decision = match capability {
-        RootCapability::Provision(_req) => authorize_root_only(ctx).map(|_| ()),
+        RootCapability::Provision(_req) => authorize_root_only(ctx),
         RootCapability::Upgrade(req) => {
-            authorize_root_only(ctx).and_then(|_| authorize_upgrade(ctx, req))
+            authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
         }
         RootCapability::MintCycles(req) => authorize_mint_cycles(ctx, req),
         RootCapability::IssueDelegation(req) => {
-            authorize_root_only(ctx).and_then(|_| authorize_issue_delegation(ctx, req))
+            authorize_root_only(ctx).and_then(|()| authorize_issue_delegation(ctx, req))
         }
         RootCapability::IssueRoleAttestation(req) => {
-            authorize_root_only(ctx).and_then(|_| authorize_issue_role_attestation(ctx, req))
+            authorize_root_only(ctx).and_then(|()| authorize_issue_role_attestation(ctx, req))
         }
     };
 
@@ -91,18 +95,87 @@ fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<
 }
 
 fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), InternalError> {
-    let child =
-        SubnetRegistryOps::get(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
+    CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
+
+    let Some(child) = SubnetRegistryOps::get(ctx.caller) else {
+        CyclesFundingMetrics::record_denied(
+            ctx.caller,
+            req.cycles,
+            CyclesFundingDeniedReason::ChildNotFound,
+        );
+        return Err(RpcWorkflowError::ChildNotFound(ctx.caller).into());
+    };
     if child.parent_pid != Some(ctx.self_pid) {
+        CyclesFundingMetrics::record_denied(
+            ctx.caller,
+            req.cycles,
+            CyclesFundingDeniedReason::NotDirectChild,
+        );
         return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
     }
 
     if !AppStateOps::cycles_funding_enabled() {
+        CyclesFundingMetrics::record_denied(
+            ctx.caller,
+            req.cycles,
+            CyclesFundingDeniedReason::KillSwitchDisabled,
+        );
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
+    }
+
+    let policy = funding::policy_for_child_role(&child.role)?;
+    if let Err(violation) = policy.evaluate(ctx.caller, req.cycles, ctx.now) {
+        match violation {
+            MintFundingPolicyViolation::MaxPerRequest {
+                requested,
+                max_per_request,
+            } => {
+                CyclesFundingMetrics::record_denied(
+                    ctx.caller,
+                    req.cycles,
+                    CyclesFundingDeniedReason::MaxPerRequestExceeded,
+                );
+                return Err(RpcWorkflowError::FundingRequestExceedsMaxPerRequest {
+                    requested,
+                    max_per_request,
+                }
+                .into());
+            }
+            MintFundingPolicyViolation::MaxPerChild {
+                requested,
+                max_per_child,
+                remaining_budget,
+            } => {
+                CyclesFundingMetrics::record_denied(
+                    ctx.caller,
+                    req.cycles,
+                    CyclesFundingDeniedReason::MaxPerChildExceeded,
+                );
+                return Err(RpcWorkflowError::FundingRequestExceedsChildBudget {
+                    requested,
+                    remaining_budget,
+                    max_per_child,
+                }
+                .into());
+            }
+            MintFundingPolicyViolation::CooldownActive { retry_after_secs } => {
+                CyclesFundingMetrics::record_denied(
+                    ctx.caller,
+                    req.cycles,
+                    CyclesFundingDeniedReason::CooldownActive,
+                );
+                return Err(RpcWorkflowError::FundingCooldownActive { retry_after_secs }.into());
+            }
+        }
     }
 
     let available = MgmtOps::canister_cycle_balance().to_u128();
     if req.cycles > available {
+        CyclesFundingMetrics::record_denied(
+            ctx.caller,
+            req.cycles,
+            CyclesFundingDeniedReason::InsufficientCycles,
+        );
         return Err(RpcWorkflowError::InsufficientFundingCycles {
             requested: req.cycles,
             available,

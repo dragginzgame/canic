@@ -96,6 +96,25 @@ pub struct RootCapabilityMetricEntry {
 }
 
 ///
+/// CyclesFundingMetricEntry
+///
+/// Snapshot entry for subtree cycles-funding observability.
+///
+/// Semantics:
+/// - `metric` is the stable metric name.
+/// - `child_principal` is present for child-scoped metrics.
+/// - `reason` is present for denied child-scoped metrics.
+/// - `cycles` is the accumulated cycles amount for the tuple.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct CyclesFundingMetricEntry {
+    pub metric: String,
+    pub child_principal: Option<Principal>,
+    pub reason: Option<String>,
+    pub cycles: u128,
+}
+
+///
 /// EndpointAttemptMetricEntry
 ///
 /// Snapshot entry for endpoint execution lifecycle metrics.

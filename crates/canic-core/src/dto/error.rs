@@ -70,6 +70,11 @@ impl Error {
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message.into())
     }
+
+    /// 503 – Service is temporarily unavailable due to runtime controls.
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::Unavailable, message.into())
+    }
 }
 
 impl From<AccessError> for Error {
@@ -102,4 +107,5 @@ pub enum ErrorCode {
     PolicyTenantRequiresSingletonParent,
     ResourceExhausted,
     Unauthorized,
+    Unavailable,
 }

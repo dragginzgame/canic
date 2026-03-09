@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
-    cdk::types::Principal,
+    cdk::types::{Cycles, Principal, TC},
+    config::schema::{CanisterConfig, CanisterKind, CanisterTopup},
     dto::{
         auth::{DelegationRequest, RoleAttestationRequest},
         rpc::{
@@ -10,11 +11,21 @@ use crate::{
         },
     },
     ids::CanisterRole,
-    ops::storage::{registry::subnet::SubnetRegistryOps, replay::RootReplayOps},
+    ops::{
+        runtime::metrics::cycles_funding::{
+            CyclesFundingDeniedReason, CyclesFundingMetricKey, CyclesFundingMetrics,
+        },
+        storage::{
+            registry::subnet::SubnetRegistryOps, replay::RootReplayOps, state::app::AppStateOps,
+        },
+    },
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
+    storage::stable::state::app::{AppMode, AppStateRecord},
+    test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -25,6 +36,21 @@ fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
         request_id: [id; 32],
         ttl_seconds,
     }
+}
+
+fn cycles_funding_snapshot_map() -> HashMap<
+    (
+        CyclesFundingMetricKey,
+        Option<Principal>,
+        Option<CyclesFundingDeniedReason>,
+    ),
+    u128,
+> {
+    CyclesFundingMetrics::snapshot()
+        .entries
+        .into_iter()
+        .map(|(metric, child, reason, cycles)| ((metric, child, reason), cycles))
+        .collect()
 }
 
 #[test]
@@ -228,6 +254,306 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
         }
     };
     RootResponseWorkflow::abort_replay(pending);
+}
+
+#[test]
+fn authorize_mint_cycles_records_requested_and_child_not_found_denial_metrics() {
+    CyclesFundingMetrics::reset();
+    funding::reset_for_tests();
+
+    let child = p(71);
+    let ctx = RootContext {
+        caller: child,
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 42,
+        metadata: Some(meta(22, 60)),
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("not found"),
+        "expected child-not-found denial, got: {err}"
+    );
+
+    let map = cycles_funding_snapshot_map();
+    assert_eq!(
+        map.get(&(CyclesFundingMetricKey::RequestedTotal, None, None)),
+        Some(&42)
+    );
+    assert_eq!(
+        map.get(&(CyclesFundingMetricKey::RequestedByChild, Some(child), None)),
+        Some(&42)
+    );
+    assert_eq!(
+        map.get(&(CyclesFundingMetricKey::DeniedTotal, None, None)),
+        Some(&42)
+    );
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::ChildNotFound),
+        )),
+        Some(&42)
+    );
+    assert!(
+        !map.contains_key(&(
+            CyclesFundingMetricKey::DeniedGlobalKillSwitch,
+            None,
+            Some(CyclesFundingDeniedReason::KillSwitchDisabled),
+        )),
+        "kill-switch metric must not increment for child-not-found denial"
+    );
+}
+
+#[test]
+fn authorize_mint_cycles_records_kill_switch_denial_metrics() {
+    CyclesFundingMetrics::reset();
+    funding::reset_for_tests();
+
+    let self_pid = p(90);
+    let child = p(91);
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &CanisterRole::new("test"), self_pid, vec![], 2)
+        .expect("register child");
+
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: false,
+    });
+
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 33,
+        metadata: Some(meta(23, 60)),
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("cycles funding disabled"),
+        "expected kill-switch denial, got: {err}"
+    );
+
+    let map = cycles_funding_snapshot_map();
+    assert_eq!(
+        map.get(&(CyclesFundingMetricKey::RequestedTotal, None, None)),
+        Some(&33)
+    );
+    assert_eq!(
+        map.get(&(CyclesFundingMetricKey::DeniedTotal, None, None)),
+        Some(&33)
+    );
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::KillSwitchDisabled),
+        )),
+        Some(&33)
+    );
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedGlobalKillSwitch,
+            None,
+            Some(CyclesFundingDeniedReason::KillSwitchDisabled),
+        )),
+        Some(&33)
+    );
+
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: true,
+    });
+}
+
+#[test]
+fn authorize_mint_cycles_records_max_per_request_denial_metrics() {
+    CyclesFundingMetrics::reset();
+    funding::reset_for_tests();
+
+    let role = CanisterRole::new("limited_max_per_request");
+    let cfg = CanisterConfig {
+        topup: Some(CanisterTopup {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(4 * TC),
+            max_per_request: Cycles::new(4 * TC),
+            max_per_child: Cycles::new(8 * TC),
+            cooldown_secs: 0,
+        }),
+        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
+    };
+    let _ = ConfigTestBuilder::new()
+        .with_prime_canister(role.clone(), cfg)
+        .install();
+
+    let self_pid = p(92);
+    let child = p(93);
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
+        .expect("register child");
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: true,
+    });
+
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 4 * TC + 1,
+        metadata: Some(meta(24, 60)),
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("max_per_request"),
+        "expected max_per_request denial, got: {err}"
+    );
+
+    let map = cycles_funding_snapshot_map();
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::MaxPerRequestExceeded),
+        )),
+        Some(&(4 * TC + 1))
+    );
+}
+
+#[test]
+fn authorize_mint_cycles_records_cooldown_denial_metrics() {
+    CyclesFundingMetrics::reset();
+    funding::reset_for_tests();
+
+    let role = CanisterRole::new("limited_cooldown");
+    let cfg = CanisterConfig {
+        topup: Some(CanisterTopup {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(4 * TC),
+            max_per_request: Cycles::new(5 * TC),
+            max_per_child: Cycles::new(20 * TC),
+            cooldown_secs: 30,
+        }),
+        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
+    };
+    let _ = ConfigTestBuilder::new()
+        .with_prime_canister(role.clone(), cfg)
+        .install();
+
+    let self_pid = p(94);
+    let child = p(95);
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
+        .expect("register child");
+    funding::record_child_grant(child, 5, 100);
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: true,
+    });
+
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 110,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 5,
+        metadata: Some(meta(25, 60)),
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("cooldown"),
+        "expected cooldown denial, got: {err}"
+    );
+
+    let map = cycles_funding_snapshot_map();
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::CooldownActive),
+        )),
+        Some(&5)
+    );
+}
+
+#[test]
+fn authorize_mint_cycles_records_max_per_child_denial_metrics() {
+    CyclesFundingMetrics::reset();
+    funding::reset_for_tests();
+
+    let role = CanisterRole::new("limited_child_budget");
+    let cfg = CanisterConfig {
+        topup: Some(CanisterTopup {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(4 * TC),
+            max_per_request: Cycles::new(4 * TC),
+            max_per_child: Cycles::new(4 * TC),
+            cooldown_secs: 0,
+        }),
+        ..ConfigTestBuilder::canister_config(CanisterKind::Singleton)
+    };
+    let _ = ConfigTestBuilder::new()
+        .with_prime_canister(role.clone(), cfg)
+        .install();
+
+    let self_pid = p(96);
+    let child = p(97);
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &role, self_pid, vec![], 2)
+        .expect("register child");
+    funding::record_child_grant(child, 4 * TC - 10, 100);
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: true,
+    });
+
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 120,
+    };
+    let capability = RootCapability::MintCycles(CyclesRequest {
+        cycles: 15,
+        metadata: Some(meta(26, 60)),
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("child budget"),
+        "expected child-budget denial, got: {err}"
+    );
+
+    let map = cycles_funding_snapshot_map();
+    assert_eq!(
+        map.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::MaxPerChildExceeded),
+        )),
+        Some(&15)
+    );
 }
 
 #[test]

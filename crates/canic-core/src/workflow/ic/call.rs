@@ -37,7 +37,11 @@ impl CallWorkflow {
     }
 }
 
-// Internal intent spec for call orchestration.
+///
+/// IntentSpec
+/// Internal intent spec for call orchestration.
+///
+
 pub struct IntentSpec {
     key: IntentResourceKey,
     quantity: u64,
