@@ -1,6 +1,6 @@
 use super::{
     DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext,
-    funding::{self, MintFundingPolicyViolation},
+    funding::{self, FundingPolicyViolation},
 };
 use crate::{
     InternalError,
@@ -126,7 +126,7 @@ fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), I
     let policy = funding::policy_for_child_role(&child.role)?;
     if let Err(violation) = policy.evaluate(ctx.caller, req.cycles, ctx.now) {
         match violation {
-            MintFundingPolicyViolation::MaxPerRequest {
+            FundingPolicyViolation::MaxPerRequest {
                 requested,
                 max_per_request,
             } => {
@@ -141,7 +141,7 @@ fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), I
                 }
                 .into());
             }
-            MintFundingPolicyViolation::MaxPerChild {
+            FundingPolicyViolation::MaxPerChild {
                 requested,
                 max_per_child,
                 remaining_budget,
@@ -158,7 +158,7 @@ fn authorize_mint_cycles(ctx: &RootContext, req: &CyclesRequest) -> Result<(), I
                 }
                 .into());
             }
-            MintFundingPolicyViolation::CooldownActive { retry_after_secs } => {
+            FundingPolicyViolation::CooldownActive { retry_after_secs } => {
                 CyclesFundingMetrics::record_denied(
                     ctx.caller,
                     req.cycles,

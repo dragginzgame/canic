@@ -8,32 +8,32 @@ use crate::{
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static MINT_FUNDING_LEDGER: RefCell<HashMap<Principal, MintFundingLedger>> =
+    static FUNDING_LEDGER: RefCell<HashMap<Principal, FundingLedger>> =
         RefCell::new(HashMap::new());
 }
 
 ///
-/// MintFundingPolicy
+/// FundingPolicy
 /// Effective parent funding limits for a single child role.
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct MintFundingPolicy {
+pub(super) struct FundingPolicy {
     pub max_per_request: u128,
     pub max_per_child: u128,
     pub cooldown_secs: u64,
 }
 
-impl MintFundingPolicy {
+impl FundingPolicy {
     // Evaluate a child request against role policy and child runtime ledger.
     pub(super) fn evaluate(
         self,
         child: Principal,
         requested_cycles: u128,
         now_secs: u64,
-    ) -> Result<(), MintFundingPolicyViolation> {
+    ) -> Result<(), FundingPolicyViolation> {
         if requested_cycles > self.max_per_request {
-            return Err(MintFundingPolicyViolation::MaxPerRequest {
+            return Err(FundingPolicyViolation::MaxPerRequest {
                 requested: requested_cycles,
                 max_per_request: self.max_per_request,
             });
@@ -43,7 +43,7 @@ impl MintFundingPolicy {
         if self.cooldown_secs > 0 {
             let earliest_next = ledger.last_granted_at.saturating_add(self.cooldown_secs);
             if now_secs < earliest_next {
-                return Err(MintFundingPolicyViolation::CooldownActive {
+                return Err(FundingPolicyViolation::CooldownActive {
                     retry_after_secs: earliest_next.saturating_sub(now_secs),
                 });
             }
@@ -51,7 +51,7 @@ impl MintFundingPolicy {
 
         let remaining_budget = self.max_per_child.saturating_sub(ledger.granted_total);
         if requested_cycles > remaining_budget {
-            return Err(MintFundingPolicyViolation::MaxPerChild {
+            return Err(FundingPolicyViolation::MaxPerChild {
                 requested: requested_cycles,
                 max_per_child: self.max_per_child,
                 remaining_budget,
@@ -63,12 +63,12 @@ impl MintFundingPolicy {
 }
 
 ///
-/// MintFundingPolicyViolation
+/// FundingPolicyViolation
 /// Pure policy violations for mint-cycle authorization.
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum MintFundingPolicyViolation {
+pub(super) enum FundingPolicyViolation {
     MaxPerRequest {
         requested: u128,
         max_per_request: u128,
@@ -84,7 +84,7 @@ pub(super) enum MintFundingPolicyViolation {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct MintFundingLedger {
+struct FundingLedger {
     granted_total: u128,
     last_granted_at: u64,
 }
@@ -92,14 +92,14 @@ struct MintFundingLedger {
 // Resolve the effective policy for a child role from current config.
 pub(super) fn policy_for_child_role(
     child_role: &CanisterRole,
-) -> Result<MintFundingPolicy, InternalError> {
+) -> Result<FundingPolicy, InternalError> {
     let config = ConfigOps::get()?;
     Ok(resolve_policy_from_config(&config, child_role).unwrap_or(default_policy()))
 }
 
 // Record a successful grant for cooldown and child-budget accounting.
 pub(super) fn record_child_grant(child: Principal, granted_cycles: u128, now_secs: u64) {
-    MINT_FUNDING_LEDGER.with_borrow_mut(|ledger| {
+    FUNDING_LEDGER.with_borrow_mut(|ledger| {
         let entry = ledger.entry(child).or_default();
         entry.granted_total = entry.granted_total.saturating_add(granted_cycles);
         entry.last_granted_at = now_secs;
@@ -107,15 +107,15 @@ pub(super) fn record_child_grant(child: Principal, granted_cycles: u128, now_sec
 }
 
 // Return the current ledger state for a child.
-fn child_ledger(child: Principal) -> MintFundingLedger {
-    MINT_FUNDING_LEDGER.with_borrow(|ledger| ledger.get(&child).copied().unwrap_or_default())
+fn child_ledger(child: Principal) -> FundingLedger {
+    FUNDING_LEDGER.with_borrow(|ledger| ledger.get(&child).copied().unwrap_or_default())
 }
 
 // Resolve role policy by scanning configured subnets for the role definition.
 fn resolve_policy_from_config(
     config: &ConfigModel,
     child_role: &CanisterRole,
-) -> Option<MintFundingPolicy> {
+) -> Option<FundingPolicy> {
     config
         .subnets
         .values()
@@ -125,8 +125,8 @@ fn resolve_policy_from_config(
 }
 
 // Convert topup config into an effective mint-cycle policy.
-const fn policy_from_topup(topup: &CanisterTopup) -> MintFundingPolicy {
-    MintFundingPolicy {
+const fn policy_from_topup(topup: &CanisterTopup) -> FundingPolicy {
+    FundingPolicy {
         max_per_request: topup.max_per_request.to_u128(),
         max_per_child: topup.max_per_child.to_u128(),
         cooldown_secs: topup.cooldown_secs,
@@ -134,8 +134,8 @@ const fn policy_from_topup(topup: &CanisterTopup) -> MintFundingPolicy {
 }
 
 // Fail-open defaults preserve existing behavior when role policy is absent.
-const fn default_policy() -> MintFundingPolicy {
-    MintFundingPolicy {
+const fn default_policy() -> FundingPolicy {
+    FundingPolicy {
         max_per_request: u128::MAX,
         max_per_child: u128::MAX,
         cooldown_secs: 0,
@@ -144,5 +144,5 @@ const fn default_policy() -> MintFundingPolicy {
 
 #[cfg(test)]
 pub(super) fn reset_for_tests() {
-    MINT_FUNDING_LEDGER.with_borrow_mut(HashMap::clear);
+    FUNDING_LEDGER.with_borrow_mut(HashMap::clear);
 }
