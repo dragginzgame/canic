@@ -20,6 +20,21 @@ This document is the single source of truth for test configuration policy.
 
 Tests in `canic-core` MUST follow exactly one configuration strategy.
 Mixing configuration mechanisms is forbidden.
+Workspace test runs should use single-threaded rust test execution (`-- --test-threads=1`)
+to avoid PocketIC startup races under parallel harness execution.
+
+### PocketIC Stability Guard (Required)
+
+- Never run workspace PocketIC tests with parallel rust test threads.
+- Use `make test` (or explicitly pass `-- --test-threads=1`).
+- Keep a writable temp directory with enough free space. PocketIC allocates runtime
+  state under `TMPDIR`; this repo's `make test` sets `TMPDIR=.tmp/test-runtime`.
+- If you run tests manually and `/tmp` is near full, set `TMPDIR` yourself to avoid
+  startup crashes and state-init panics.
+- Known failure signatures when this rule is violated include:
+  - `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }`
+  - `ERROR: Failed to initialize PocketIC ... connection closed before message completed`
+  - `HTTP failure ... hyper::Error(IncompleteMessage)`
 
 ### Configuration Categories
 

@@ -4,13 +4,35 @@ use candid::{Principal, decode_one, encode_one};
 use pocket_ic::PocketIcBuilder;
 use std::{
     env, fs,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Mutex, MutexGuard},
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
+static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+
+struct SerialPic {
+    pic: pocket_ic::PocketIc,
+    _serial_guard: MutexGuard<'static, ()>,
+}
+
+impl Deref for SerialPic {
+    type Target = pocket_ic::PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pic
+    }
+}
+
+impl DerefMut for SerialPic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.pic
+    }
+}
 
 #[test]
 fn intent_race_capacity_one() {
@@ -28,7 +50,7 @@ fn intent_race_capacity_one() {
         client_wasm.len()
     );
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pic();
     println!("intent_race: PocketIC ready");
 
     let external_id = pic.create_canister();
@@ -122,6 +144,18 @@ fn build_canisters(workspace_root: &PathBuf) {
         "cargo build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+// Serialize full PocketIC usage to avoid concurrent server races across tests.
+fn build_pic() -> SerialPic {
+    let serial_guard = PIC_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    SerialPic {
+        pic: PocketIcBuilder::new().with_application_subnet().build(),
+        _serial_guard: serial_guard,
+    }
 }
 
 fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
