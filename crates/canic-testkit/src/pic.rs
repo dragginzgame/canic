@@ -25,7 +25,9 @@ static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 ///
 /// IMPORTANT:
 /// - Each call creates a new IC instance
-/// - This must NOT be cached or shared across tests
+/// - WARNING: DO NOT CACHE OR SHARE `Pic` ACROSS TESTS
+/// - Reusing `Pic` can retain global locks and background runtime state
+///   and can make later tests hang or fail nondeterministically
 /// - Required to avoid PocketIC wasm chunk store exhaustion
 ///
 #[must_use]
@@ -89,6 +91,9 @@ impl PicBuilder {
 ///
 /// This type intentionally exposes only a minimal API surface; callers should
 /// use `pic()` to obtain the singleton and then perform installs/calls.
+///
+/// WARNING: DO NOT CACHE OR SHARE `Pic` ACROSS TESTS.
+/// Keep `Pic` lifetime scoped to a single test setup and drop it promptly.
 ///
 pub struct Pic {
     inner: PocketIc,

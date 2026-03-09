@@ -32,12 +32,22 @@ pub struct ReplayPending {
 /// ReplayDecision
 ///
 /// Pure replay outcome independent from auth/policy decisions.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayDecision {
     Fresh(ReplayPending),
-    DuplicateSame,
+    DuplicateSame(ReplayCached),
+    InFlight,
     DuplicateConflict,
     Expired,
+}
+
+///
+/// ReplayCached
+///
+/// Canonical cached replay payload bytes for identical replay requests.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReplayCached {
+    pub response_candid: Vec<u8>,
 }
 
 /// ReplayGuardError
@@ -69,12 +79,7 @@ pub fn evaluate_root_replay(
 
     let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
     if let Some(existing) = slot::get_root_slot(slot_key) {
-        return Ok(resolve_existing(
-            input.now,
-            input.payload_hash,
-            existing.payload_hash,
-            existing.expires_at,
-        ));
+        return Ok(resolve_existing(input.now, input.payload_hash, existing));
     }
 
     let legacy_slot_key =
@@ -82,12 +87,7 @@ pub fn evaluate_root_replay(
     if legacy_slot_key != slot_key
         && let Some(existing) = slot::get_root_slot(legacy_slot_key)
     {
-        return Ok(resolve_existing(
-            input.now,
-            input.payload_hash,
-            existing.payload_hash,
-            existing.expires_at,
-        ));
+        return Ok(resolve_existing(input.now, input.payload_hash, existing));
     }
 
     let _ = slot::purge_root_expired(input.now, input.purge_scan_limit);
@@ -108,18 +108,23 @@ pub fn evaluate_root_replay(
 fn resolve_existing(
     now: u64,
     payload_hash: [u8; 32],
-    existing_payload_hash: [u8; 32],
-    existing_expires_at: u64,
+    existing: crate::storage::stable::replay::RootReplayRecord,
 ) -> ReplayDecision {
-    if now > existing_expires_at {
+    if now > existing.expires_at {
         return ReplayDecision::Expired;
     }
 
-    if existing_payload_hash != payload_hash {
+    if existing.payload_hash != payload_hash {
         return ReplayDecision::DuplicateConflict;
     }
 
-    ReplayDecision::DuplicateSame
+    if existing.response_candid.is_empty() {
+        return ReplayDecision::InFlight;
+    }
+
+    ReplayDecision::DuplicateSame(ReplayCached {
+        response_candid: existing.response_candid,
+    })
 }
 
 #[cfg(test)]
@@ -168,6 +173,32 @@ mod tests {
 
         let input = base_input();
         let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let expected = vec![1, 2, 3];
+        slot::upsert_root_slot(
+            slot_key,
+            RootReplayRecord {
+                payload_hash: input.payload_hash,
+                issued_at: 900,
+                expires_at: 1_200,
+                response_candid: expected.clone(),
+            },
+        );
+
+        let decision = evaluate_root_replay(input).expect("decision");
+        assert_eq!(
+            decision,
+            ReplayDecision::DuplicateSame(ReplayCached {
+                response_candid: expected
+            })
+        );
+    }
+
+    #[test]
+    fn evaluate_root_replay_returns_in_flight_for_reserved_entry_without_response() {
+        RootReplayOps::reset_for_tests();
+
+        let input = base_input();
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
@@ -179,7 +210,7 @@ mod tests {
         );
 
         let decision = evaluate_root_replay(input).expect("decision");
-        assert_eq!(decision, ReplayDecision::DuplicateSame);
+        assert_eq!(decision, ReplayDecision::InFlight);
     }
 
     #[test]

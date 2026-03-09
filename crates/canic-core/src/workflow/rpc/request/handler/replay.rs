@@ -7,7 +7,7 @@ use crate::{
     dto::rpc::{Response, RootCapabilityCommand},
     ops::{
         replay::{
-            self as replay_ops, ReplayCommitError,
+            self as replay_ops, ReplayCommitError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
         runtime::metrics::root_capability::{
@@ -20,8 +20,17 @@ use crate::{
 use crate::{
     cdk::types::Principal, ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey,
 };
-use candid::encode_one;
+use candid::{decode_one, encode_one};
 use sha2::{Digest, Sha256};
+
+/// ReplayPreflight
+///
+/// Workflow replay gate result used to branch execute-vs-cache behavior.
+#[derive(Debug)]
+pub(super) enum ReplayPreflight {
+    Fresh(ReplayPending),
+    Cached(Response),
+}
 
 /// check_replay
 ///
@@ -29,11 +38,12 @@ use sha2::{Digest, Sha256};
 pub(super) fn check_replay(
     ctx: &RootContext,
     capability: &RootCapability,
-) -> Result<ReplayPending, InternalError> {
+) -> Result<ReplayPreflight, InternalError> {
     let capability_key = capability.metric_key();
+    let capability_name = capability.capability_name();
     let metadata = capability
         .metadata()
-        .ok_or_else(|| RpcWorkflowError::MissingReplayMetadata(capability.capability_name()))?;
+        .ok_or(RpcWorkflowError::MissingReplayMetadata(capability_name))?;
     let payload_hash = capability.payload_hash()?;
 
     let decision =
@@ -42,32 +52,41 @@ pub(super) fn check_replay(
 
     match decision {
         ReplayDecision::Fresh(pending) => {
+            replay_ops::reserve_root_replay(pending, MAX_ROOT_REPLAY_ENTRIES)
+                .map_err(map_replay_reserve_error)?;
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityReplayOutcome::Accepted,
             );
-            Ok(pending)
+            Ok(ReplayPreflight::Fresh(pending))
         }
-        ReplayDecision::DuplicateSame => {
+        ReplayDecision::DuplicateSame(cached) => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityReplayOutcome::DuplicateSame,
             );
-            Err(RpcWorkflowError::ReplayDuplicateSame(capability.capability_name()).into())
+            decode_replay_response(&cached.response_candid).map(ReplayPreflight::Cached)
+        }
+        ReplayDecision::InFlight => {
+            RootCapabilityMetrics::record_replay(
+                capability_key,
+                RootCapabilityReplayOutcome::DuplicateSame,
+            );
+            Err(RpcWorkflowError::ReplayDuplicateSame(capability_name).into())
         }
         ReplayDecision::DuplicateConflict => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityReplayOutcome::DuplicateConflict,
             );
-            Err(RpcWorkflowError::ReplayConflict(capability.capability_name()).into())
+            Err(RpcWorkflowError::ReplayConflict(capability_name).into())
         }
         ReplayDecision::Expired => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityReplayOutcome::Expired,
             );
-            Err(RpcWorkflowError::ReplayExpired(capability.capability_name()).into())
+            Err(RpcWorkflowError::ReplayExpired(capability_name).into())
         }
     }
 }
@@ -97,18 +116,33 @@ fn map_replay_guard_error(
     }
 }
 
+/// map_replay_reserve_error
+///
+/// Convert ops replay-reservation failures into workflow replay errors.
+fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
+    match err {
+        ReplayReserveError::CapacityReached { max_entries } => {
+            RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
+        }
+    }
+}
+
 /// map_replay_commit_error
 ///
 /// Convert ops replay-commit failures into workflow replay errors.
 fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
     match err {
-        ReplayCommitError::CapacityReached { max_entries } => {
-            RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
-        }
         ReplayCommitError::EncodeFailed(message) => {
             RpcWorkflowError::ReplayEncodeFailed(message).into()
         }
     }
+}
+
+/// decode_replay_response
+///
+/// Decode cached replay payload bytes back into canonical root responses.
+fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
+    decode_one(bytes).map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()).into())
 }
 
 /// commit_replay
@@ -118,8 +152,14 @@ pub(super) fn commit_replay(
     pending: ReplayPending,
     response: &Response,
 ) -> Result<(), InternalError> {
-    replay_ops::commit_root_replay(pending, response, MAX_ROOT_REPLAY_ENTRIES)
-        .map_err(map_replay_commit_error)
+    replay_ops::commit_root_replay(pending, response).map_err(map_replay_commit_error)
+}
+
+/// abort_replay
+///
+/// Remove reserved replay state when capability execution fails.
+pub(super) fn abort_replay(pending: ReplayPending) {
+    replay_ops::abort_root_replay(pending);
 }
 
 /// hash_capability_payload

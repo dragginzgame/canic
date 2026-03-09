@@ -17,12 +17,14 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::Once,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const READY_TICK_LIMIT: usize = 120;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
+static BUILD_ONCE: Once = Once::new();
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -31,7 +33,7 @@ const fn p(id: u8) -> Principal {
 #[test]
 fn lifecycle_boundary_traps_are_phase_correct() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
+    build_canisters_once(&workspace_root);
 
     let canic_wasm = read_wasm(&workspace_root, "canister_test");
     let authority_wasm = read_wasm(&workspace_root, "intent_authority");
@@ -74,7 +76,7 @@ fn lifecycle_boundary_traps_are_phase_correct() {
 #[test]
 fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
+    build_canisters_once(&workspace_root);
 
     let canic_wasm = read_wasm(&workspace_root, "canister_test");
     let pic = pic();
@@ -102,7 +104,7 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
 #[test]
 fn non_root_post_upgrade_failure_reports_phase_error() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
+    build_canisters_once(&workspace_root);
 
     let canic_wasm = read_wasm(&workspace_root, "canister_test");
     let authority_wasm = read_wasm(&workspace_root, "intent_authority");
@@ -242,27 +244,35 @@ fn directory_entries(
     entries
 }
 
-fn build_canisters(workspace_root: &PathBuf) {
-    if prebuilt_wasm_dir().is_some() {
-        return;
-    }
+fn build_canisters_once(workspace_root: &PathBuf) {
+    BUILD_ONCE.call_once(|| {
+        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTERS) {
+            return;
+        }
 
-    let target_dir = test_target_dir(workspace_root);
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(workspace_root);
-    cmd.env("CARGO_TARGET_DIR", &target_dir);
-    cmd.env("DFX_NETWORK", "local");
-    cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
-    for name in CANISTERS {
-        cmd.args(["-p", name]);
-    }
+        let target_dir = test_target_dir(workspace_root);
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(workspace_root);
+        cmd.env("CARGO_TARGET_DIR", &target_dir);
+        cmd.env("DFX_NETWORK", "local");
+        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+        for name in CANISTERS {
+            cmd.args(["-p", name]);
+        }
 
-    let output = cmd.output().expect("failed to run cargo build");
-    assert!(
-        output.status.success(),
-        "cargo build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+        let output = cmd.output().expect("failed to run cargo build");
+        assert!(
+            output.status.success(),
+            "cargo build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    });
+}
+
+fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
+    canisters
+        .iter()
+        .all(|name| wasm_path(workspace_root, name).is_file())
 }
 
 fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {

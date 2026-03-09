@@ -94,6 +94,7 @@ impl Validate for SubnetConfig {
             }
 
             cfg.validate_kind(role)?;
+            cfg.validate_topup(role)?;
             cfg.validate_scaling(role, &self.canisters)?;
             cfg.validate_sharding(role, &self.canisters)?;
         }
@@ -113,8 +114,10 @@ pub struct PoolImport {
     /// Optional count of canisters to import immediately before queuing the rest.
     #[serde(default)]
     pub initial: Option<u16>,
+
     #[serde(default)]
     pub local: Vec<Principal>,
+
     #[serde(default)]
     pub ic: Vec<Principal>,
 }
@@ -162,6 +165,24 @@ pub struct CanisterConfig {
 }
 
 impl CanisterConfig {
+    // Enforce top-up bounds at config load time to avoid runaway refill cascades.
+    fn validate_topup(&self, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {
+        let Some(topup) = &self.topup else {
+            return Ok(());
+        };
+
+        let threshold = topup.threshold.to_u128();
+        let amount = topup.amount.to_u128();
+
+        if amount.saturating_mul(2) >= threshold {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' topup.amount must be < 50% of topup.threshold (got amount={amount}, threshold={threshold})",
+            )));
+        }
+
+        Ok(())
+    }
+
     fn validate_kind(&self, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {
         match self.kind {
             CanisterKind::Root => {
@@ -307,7 +328,7 @@ impl Default for CanisterTopup {
     fn default() -> Self {
         Self {
             threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(5 * TC),
+            amount: Cycles::new(4 * TC),
         }
     }
 }
@@ -714,6 +735,75 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid randomness interval to fail");
+    }
+
+    #[test]
+    fn topup_amount_must_be_less_than_half_threshold() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup: Some(CanisterTopup {
+                threshold: Cycles::new(10 * TC),
+                amount: Cycles::new(5 * TC),
+            }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected topup amount >= half threshold to fail");
+    }
+
+    #[test]
+    fn topup_amount_below_half_threshold_is_valid() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup: Some(CanisterTopup {
+                threshold: Cycles::new(10 * TC),
+                amount: Cycles::new(4 * TC),
+            }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect("expected topup amount below half threshold to validate");
+    }
+
+    #[test]
+    fn default_topup_is_below_half_threshold() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup: Some(CanisterTopup::default()),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect("expected default topup to satisfy half-threshold invariant");
     }
 
     #[test]

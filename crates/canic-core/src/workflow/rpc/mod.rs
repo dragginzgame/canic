@@ -51,6 +51,9 @@ pub enum RpcWorkflowError {
     #[error("replay cache encode failed: {0}")]
     ReplayEncodeFailed(String),
 
+    #[error("replay cache decode failed: {0}")]
+    ReplayDecodeFailed(String),
+
     #[error("replay store capacity reached ({0})")]
     ReplayStoreCapacityReached(usize),
 

@@ -4,6 +4,8 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::rpc::{Request, Response, RootCapabilityCommand},
+    log,
+    log::Topic,
     ops::{
         ic::IcOps,
         replay::guard::ReplayPending,
@@ -72,12 +74,18 @@ impl RootResponseWorkflow {
         let capability_req = RootCapabilityCommand::from(req);
         let capability = Self::map_request(capability_req);
         let capability_key = capability.metric_key();
+        let capability_name = capability.capability_name();
 
-        let pending = Self::preflight(&ctx, &capability, order)?;
+        let preflight = Self::preflight(&ctx, &capability, order)?;
+        let pending = match preflight {
+            replay::ReplayPreflight::Fresh(pending) => pending,
+            replay::ReplayPreflight::Cached(response) => return Ok(response),
+        };
 
         let response = match Self::execute_root_capability(&ctx, capability).await {
             Ok(response) => response,
             Err(err) => {
+                Self::abort_replay(pending);
                 RootCapabilityMetrics::record_execution(
                     capability_key,
                     RootCapabilityExecutionOutcome::Error,
@@ -86,11 +94,15 @@ impl RootResponseWorkflow {
             }
         };
         if let Err(err) = Self::commit_replay(pending, &response) {
-            RootCapabilityMetrics::record_execution(
-                capability_key,
-                RootCapabilityExecutionOutcome::Error,
+            log!(
+                Topic::Rpc,
+                Warn,
+                "replay finalize failed after successful capability execution (capability={}, caller={}, subnet={}, now={}): {err}",
+                capability_name,
+                ctx.caller,
+                ctx.subnet_id,
+                ctx.now
             );
-            return Err(err);
         }
         RootCapabilityMetrics::record_execution(
             capability_key,
@@ -104,16 +116,25 @@ impl RootResponseWorkflow {
         ctx: &RootContext,
         capability: &RootCapability,
         order: AuthorizationPipelineOrder,
-    ) -> Result<ReplayPending, InternalError> {
+    ) -> Result<replay::ReplayPreflight, InternalError> {
         match order {
             AuthorizationPipelineOrder::AuthorizeThenReplay => {
                 Self::authorize(ctx, capability)?;
                 Self::check_replay(ctx, capability)
             }
             AuthorizationPipelineOrder::ReplayThenAuthorize => {
-                let replay = Self::check_replay(ctx, capability)?;
-                Self::authorize(ctx, capability)?;
-                Ok(replay)
+                match Self::check_replay(ctx, capability)? {
+                    replay::ReplayPreflight::Fresh(pending) => {
+                        if let Err(err) = Self::authorize(ctx, capability) {
+                            Self::abort_replay(pending);
+                            return Err(err);
+                        }
+                        Ok(replay::ReplayPreflight::Fresh(pending))
+                    }
+                    replay::ReplayPreflight::Cached(response) => {
+                        Ok(replay::ReplayPreflight::Cached(response))
+                    }
+                }
             }
         }
     }
@@ -148,12 +169,16 @@ impl RootResponseWorkflow {
     fn check_replay(
         ctx: &RootContext,
         capability: &RootCapability,
-    ) -> Result<ReplayPending, InternalError> {
+    ) -> Result<replay::ReplayPreflight, InternalError> {
         replay::check_replay(ctx, capability)
     }
 
     fn commit_replay(pending: ReplayPending, response: &Response) -> Result<(), InternalError> {
         replay::commit_replay(pending, response)
+    }
+
+    fn abort_replay(pending: ReplayPending) {
+        replay::abort_replay(pending);
     }
 
     #[cfg(test)]

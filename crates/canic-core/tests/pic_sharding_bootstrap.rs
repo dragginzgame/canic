@@ -196,7 +196,8 @@ where
 
 fn build_canisters_once(workspace_root: &PathBuf) {
     BUILD_ONCE.call_once(|| {
-        if prebuilt_wasm_dir().is_some() {
+        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTER_PACKAGES)
+        {
             return;
         }
 
@@ -217,6 +218,12 @@ fn build_canisters_once(workspace_root: &PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     });
+}
+
+fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
+    canisters
+        .iter()
+        .all(|name| wasm_path(workspace_root, name).is_file())
 }
 
 // Serialize full PocketIC usage to avoid concurrent server races across tests.

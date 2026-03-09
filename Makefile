@@ -123,13 +123,13 @@ version:
 tags:
 	@git tag --sort=-version:refname | head -10
 
-patch: ensure-clean fmt
+patch: ensure-clean fmt clippy
 	@scripts/ci/bump-version.sh patch
 
-minor: ensure-clean fmt
+minor: ensure-clean fmt clippy
 	@scripts/ci/bump-version.sh minor
 
-major: ensure-clean fmt
+major: ensure-clean fmt clippy
 	@scripts/ci/bump-version.sh major
 
 release: ensure-clean

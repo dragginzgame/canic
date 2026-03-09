@@ -89,11 +89,11 @@
 
 ## Report Files
 
-- `docs/audits/reports/2026-03-08/complexity-accretion.md`
-- `docs/audits/reports/2026-03-08/velocity-preservation.md`
-- `docs/audits/reports/2026-03-08/layer-violations.md`
-- `docs/audits/reports/2026-03-08/caller-subject-binding.md`
-- `docs/audits/reports/2026-03-08/capability-pipeline-conformance.md`
-- `docs/audits/reports/2026-03-08/replay-integrity-and-ttl.md`
-- `docs/audits/reports/2026-03-08/lifecycle-symmetry-and-bootstrap.md`
-- `docs/audits/reports/2026-03-08/summary.md`
+- `docs/audits/reports/2026-03/2026-03-08/complexity-accretion.md`
+- `docs/audits/reports/2026-03/2026-03-08/velocity-preservation.md`
+- `docs/audits/reports/2026-03/2026-03-08/layer-violations.md`
+- `docs/audits/reports/2026-03/2026-03-08/caller-subject-binding.md`
+- `docs/audits/reports/2026-03/2026-03-08/capability-pipeline-conformance.md`
+- `docs/audits/reports/2026-03/2026-03-08/replay-integrity-and-ttl.md`
+- `docs/audits/reports/2026-03/2026-03-08/lifecycle-symmetry-and-bootstrap.md`
+- `docs/audits/reports/2026-03/2026-03-08/summary.md`

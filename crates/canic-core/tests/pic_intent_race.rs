@@ -7,12 +7,13 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, MutexGuard},
+    sync::{Mutex, MutexGuard, Once},
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
+static BUILD_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 struct SerialPic {
@@ -117,33 +118,41 @@ fn intent_race_capacity_one() {
 }
 
 fn build_canisters(workspace_root: &PathBuf) {
-    if prebuilt_wasm_dir().is_some() {
-        return;
-    }
+    BUILD_ONCE.call_once(|| {
+        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTERS) {
+            return;
+        }
 
-    // Build intent_* canisters for wasm32-unknown-unknown before installing.
-    let target_dir = test_target_dir(workspace_root);
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(workspace_root);
-    cmd.env("CARGO_TARGET_DIR", &target_dir);
-    cmd.env("DFX_NETWORK", "local");
-    cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
-    for name in CANISTERS {
-        cmd.args(["-p", name]);
-    }
+        // Build intent_* canisters for wasm32-unknown-unknown before installing.
+        let target_dir = test_target_dir(workspace_root);
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(workspace_root);
+        cmd.env("CARGO_TARGET_DIR", &target_dir);
+        cmd.env("DFX_NETWORK", "local");
+        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+        for name in CANISTERS {
+            cmd.args(["-p", name]);
+        }
 
-    let output = cmd.output().expect("failed to run cargo build");
-    println!(
-        "intent_race: cargo build status={} stdout={} stderr={}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        output.status.success(),
-        "cargo build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+        let output = cmd.output().expect("failed to run cargo build");
+        println!(
+            "intent_race: cargo build status={} stdout={} stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            output.status.success(),
+            "cargo build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    });
+}
+
+fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
+    canisters
+        .iter()
+        .all(|name| wasm_path(workspace_root, name).is_file())
 }
 
 // Serialize full PocketIC usage to avoid concurrent server races across tests.

@@ -149,7 +149,7 @@ impl CallBuilder {
 
         if let Some(max_in_flight) = intent.max_in_flight {
             let totals = IntentStoreOps::totals_at(&resource_key, now);
-            let in_flight = in_flight_quantity(totals.reserved_qty);
+            let in_flight = totals.reserved_qty;
             let next = next_in_flight_quantity(in_flight, intent.quantity)?;
 
             if next > max_in_flight {
@@ -202,12 +202,6 @@ requested={} max_in_flight={max_in_flight}",
     }
 }
 
-// Compute the active in-flight quantity used for capacity checks.
-// Only pending reservations count; committed quantity is historical.
-fn in_flight_quantity(reserved_qty: u64) -> u64 {
-    reserved_qty
-}
-
 // Compute the next in-flight quantity after applying a reservation request.
 // Returns an invariant error if arithmetic overflows.
 fn next_in_flight_quantity(in_flight: u64, requested: u64) -> Result<u64, InternalError> {
@@ -243,17 +237,6 @@ impl CallResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    // Ensure committed totals do not consume in-flight capacity.
-    fn in_flight_counts_only_pending_reservations() {
-        let reserved_qty = 1_u64;
-        let committed_qty = 10_000_u64;
-        let in_flight = in_flight_quantity(reserved_qty);
-
-        assert_eq!(in_flight, reserved_qty);
-        assert_ne!(in_flight, committed_qty);
-    }
 
     #[test]
     // Guard against arithmetic wraparound when adding a new reservation.
