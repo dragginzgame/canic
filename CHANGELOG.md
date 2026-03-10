@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `0.14.1` removes `funding_policy` config fields and keeps `topup_policy` as the only cycles config surface, while restoring unbounded request evaluation so oversized requests fail on actual parent balance checks instead of being clamped by config.
 - `0.14.2` consolidates metrics queries under `canic_metrics` (`MetricsRequest`/`MetricsResponse`) and removes the per-metric `canic_metrics_*` endpoint variants.
 - `0.14.3` standardizes delegated-token issuance naming on `issue`, adds `DelegationApi::issue_token` as the single app-facing issuance path, and removes legacy `mint` naming from delegation endpoints and metrics labels.
+- `0.14.4` upgrades recurring architecture/auth audits with normalized risk scoring, structural hotspot tracing, early-warning/fan-in detection, and stronger layer-drift checks so risks are easier to spot before regressions ship.
 
 ```text
 canic_metrics(record { kind = variant { RootCapability }; page = record { limit = 100; offset = 0 } })
