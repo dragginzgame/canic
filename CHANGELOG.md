@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.14.x] - 2026-03-09 - Parent-Funded Cycles Control Plane
 
-- `0.14.0` makes subtree funding parent-only with replay-safe RPC execution, adds an app-level global funding kill switch, introduces per-role funding policy limits (`max_per_request`, `max_per_child`, `cooldown_secs`), and ships parent-emitted cycles funding metrics (totals, per-child, and denial reasons).
+- `0.14.0` makes subtree funding parent-only with replay-safe RPC execution, adds an app-level global funding kill switch, and ships parent-emitted cycles funding metrics (totals, per-child, and denial reasons).
 - `0.14.1` removes `funding_policy` config fields and keeps `topup_policy` as the only cycles config surface, while restoring unbounded request evaluation so oversized requests fail on actual parent balance checks instead of being clamped by config.
 - `0.14.2` consolidates metrics queries under `canic_metrics` (`MetricsRequest`/`MetricsResponse`) and removes the per-metric `canic_metrics_*` endpoint variants.
 - `0.14.3` standardizes delegated-token issuance naming on `issue`, adds `DelegationApi::issue_token` as the single app-facing issuance path, and removes legacy `mint` naming from delegation endpoints and metrics labels.
