@@ -22,12 +22,12 @@ async fn signer_issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedTok
     DelegationApi::issue_token(claims).await
 }
 
-#[canic_update(requires(auth::is_authenticated(cap::VERIFY)))]
+#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
 async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update(requires(auth::is_authenticated()))]
+#[canic_update(requires(auth::authenticated()))]
 async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }

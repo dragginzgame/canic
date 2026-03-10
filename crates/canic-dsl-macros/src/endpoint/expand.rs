@@ -95,7 +95,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     if requires_authenticated(&args.requires)
         && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
     {
-        // is_authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
+        // authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
         let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
         func.block.stmts.insert(0, keepalive);
     }

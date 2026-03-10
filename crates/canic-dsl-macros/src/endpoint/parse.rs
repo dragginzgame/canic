@@ -275,10 +275,10 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             )))
         }
         _ => {
-            if is_legacy_authenticated_path(&path) {
+            if is_legacy_is_authenticated_path(&path) {
                 return Err(syn::Error::new_spanned(
                     &path,
-                    "use is_authenticated(...) instead of authenticated(...)",
+                    "use authenticated(...) instead of is_authenticated(...)",
                 ));
             }
 
@@ -289,7 +289,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                         if args.next().is_some() {
                             return Err(syn::Error::new_spanned(
                                 &path,
-                                "is_authenticated(...) accepts zero arguments or one string literal/path scope",
+                                "authenticated(...) accepts zero arguments or one string literal/path scope",
                             ));
                         }
                         let scope = match scope_expr {
@@ -299,7 +299,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                                     if value.trim().is_empty() {
                                         return Err(syn::Error::new_spanned(
                                             &path,
-                                            "is_authenticated(...) scope must not be empty",
+                                            "authenticated(...) scope must not be empty",
                                         ));
                                     }
                                     AuthScopeArg::Literal(value)
@@ -307,7 +307,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                                 _ => {
                                     return Err(syn::Error::new_spanned(
                                         expr_lit,
-                                        "is_authenticated(...) scope must be a string literal or path constant",
+                                        "authenticated(...) scope must be a string literal or path constant",
                                     ));
                                 }
                             },
@@ -315,7 +315,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                             other => {
                                 return Err(syn::Error::new_spanned(
                                     other,
-                                    "is_authenticated(...) scope must be a string literal or path constant",
+                                    "authenticated(...) scope must be a string literal or path constant",
                                 ));
                             }
                         };
@@ -337,7 +337,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 if builtin_from_path_tail(&path).is_some() || is_authenticated_path(&path) {
                     return syn::Error::new_spanned(
                         &path,
-                        "built-in predicates must use short paths like auth::is_authenticated()",
+                        "built-in predicates must use short paths like auth::authenticated()",
                     );
                 }
                 syn::Error::new_spanned(
@@ -420,31 +420,6 @@ fn is_authenticated_path(path: &Path) -> bool {
         return path
             .segments
             .last()
-            .is_some_and(|seg| seg.ident == "is_authenticated");
-    }
-
-    if path.segments.len() != 2 {
-        return false;
-    }
-
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back();
-    let module = names.next_back();
-    matches!(
-        (module.as_deref(), last.as_deref()),
-        (Some("auth"), Some("is_authenticated"))
-    )
-}
-
-fn is_legacy_authenticated_path(path: &Path) -> bool {
-    if path.leading_colon.is_some() {
-        return false;
-    }
-
-    if path.segments.len() == 1 {
-        return path
-            .segments
-            .last()
             .is_some_and(|seg| seg.ident == "authenticated");
     }
 
@@ -458,6 +433,31 @@ fn is_legacy_authenticated_path(path: &Path) -> bool {
     matches!(
         (module.as_deref(), last.as_deref()),
         (Some("auth"), Some("authenticated"))
+    )
+}
+
+fn is_legacy_is_authenticated_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    if path.segments.len() == 1 {
+        return path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "is_authenticated");
+    }
+
+    if path.segments.len() != 2 {
+        return false;
+    }
+
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back();
+    let module = names.next_back();
+    matches!(
+        (module.as_deref(), last.as_deref()),
+        (Some("auth"), Some("is_authenticated"))
     )
 }
 
@@ -483,8 +483,8 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn is_authenticated_allows_no_scope_argument() {
-        let parsed = parse_args(quote!(requires(auth::is_authenticated()))).expect("parse args");
+    fn authenticated_allows_no_scope_argument() {
+        let parsed = parse_args(quote!(requires(auth::authenticated()))).expect("parse args");
         let AccessExprAst::All(exprs) = &parsed.requires[0] else {
             panic!("expected requires(all)");
         };
@@ -498,9 +498,9 @@ mod tests {
     }
 
     #[test]
-    fn is_authenticated_allows_string_scope_argument() {
+    fn authenticated_allows_string_scope_argument() {
         let parsed =
-            parse_args(quote!(requires(auth::is_authenticated("scope:test")))).expect("parse args");
+            parse_args(quote!(requires(auth::authenticated("scope:test")))).expect("parse args");
         let AccessExprAst::All(exprs) = &parsed.requires[0] else {
             panic!("expected requires(all)");
         };
@@ -517,9 +517,9 @@ mod tests {
     }
 
     #[test]
-    fn is_authenticated_allows_path_scope_argument() {
+    fn authenticated_allows_path_scope_argument() {
         let parsed =
-            parse_args(quote!(requires(auth::is_authenticated(cap::VERIFY)))).expect("parse args");
+            parse_args(quote!(requires(auth::authenticated(cap::VERIFY)))).expect("parse args");
         let AccessExprAst::All(exprs) = &parsed.requires[0] else {
             panic!("expected requires(all)");
         };
@@ -536,20 +536,20 @@ mod tests {
     }
 
     #[test]
-    fn is_authenticated_rejects_multiple_arguments() {
-        let err = parse_args(quote!(requires(auth::is_authenticated("a", "b"))))
-            .expect_err("is_authenticated with two args must fail");
+    fn authenticated_rejects_multiple_arguments() {
+        let err = parse_args(quote!(requires(auth::authenticated("a", "b"))))
+            .expect_err("authenticated with two args must fail");
         assert!(err.to_string().contains(
-            "is_authenticated(...) accepts zero arguments or one string literal/path scope"
+            "authenticated(...) accepts zero arguments or one string literal/path scope"
         ));
     }
 
     #[test]
-    fn authenticated_rejected_with_guidance() {
-        let err = parse_args(quote!(requires(auth::authenticated()))).expect_err("must reject");
+    fn is_authenticated_rejected_with_guidance() {
+        let err = parse_args(quote!(requires(auth::is_authenticated()))).expect_err("must reject");
         assert!(
             err.to_string()
-                .contains("use is_authenticated(...) instead of authenticated(...)")
+                .contains("use authenticated(...) instead of is_authenticated(...)")
         );
     }
 }
