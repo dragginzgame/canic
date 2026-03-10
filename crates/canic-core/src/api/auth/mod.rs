@@ -6,7 +6,7 @@ use crate::{
             DelegationProof, DelegationProvisionResponse, DelegationProvisionTargetKind,
             DelegationRequest, RoleAttestationRequest, SignedRoleAttestation,
         },
-        error::Error,
+        error::{Error, ErrorCode},
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
@@ -19,7 +19,7 @@ use crate::{
         rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_signer_mint_without_proof,
+            record_attestation_refresh_failed, record_signer_issue_without_proof,
         },
         storage::auth::DelegationStateOps,
     },
@@ -63,13 +63,22 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    pub async fn sign_token(
+    async fn sign_token(
         claims: DelegatedTokenClaims,
         proof: DelegationProof,
     ) -> Result<DelegatedToken, Error> {
         DelegatedTokenOps::sign_token(claims, proof)
             .await
             .map_err(Self::map_delegation_error)
+    }
+
+    /// Issue a delegated token using a reusable local proof when possible.
+    ///
+    /// If the proof is missing or no longer valid for the requested claims, this
+    /// performs canonical shard-initiated setup and retries with the refreshed proof.
+    pub async fn issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+        let proof = Self::ensure_signing_proof(&claims).await?;
+        Self::sign_token(claims, proof).await
     }
 
     /// Full delegated token verification (structure + signature).
@@ -285,16 +294,94 @@ impl DelegationApi {
         Ok(())
     }
 
-    pub fn require_proof() -> Result<DelegationProof, Error> {
+    fn require_proof() -> Result<DelegationProof, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         DelegationStateOps::proof_dto().ok_or_else(|| {
-            record_signer_mint_without_proof();
+            record_signer_issue_without_proof();
             Error::not_found("delegation proof not set")
         })
+    }
+
+    // Resolve a proof that is currently usable for token issuance.
+    async fn ensure_signing_proof(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
+        let now_secs = IcOps::now_secs();
+
+        match Self::require_proof() {
+            Ok(proof) if !Self::proof_is_reusable_for_claims(&proof, claims, now_secs) => {
+                Self::setup_delegation(claims).await
+            }
+            Ok(proof) => Ok(proof),
+            Err(err) if err.code == ErrorCode::NotFound => Self::setup_delegation(claims).await,
+            Err(err) => Err(err),
+        }
+    }
+
+    // Provision a fresh delegation from root, then load locally stored proof.
+    async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
+        let request = Self::delegation_request_from_claims(claims)?;
+        let _ = Self::request_delegation(request).await?;
+        Self::require_proof()
+    }
+
+    // Build a canonical delegation request from token claims.
+    fn delegation_request_from_claims(
+        claims: &DelegatedTokenClaims,
+    ) -> Result<DelegationRequest, Error> {
+        let ttl_secs = claims.exp.saturating_sub(claims.iat);
+        if ttl_secs == 0 {
+            return Err(Error::invalid(
+                "delegation ttl_secs must be greater than zero",
+            ));
+        }
+
+        Ok(DelegationRequest {
+            shard_pid: IcOps::canister_self(),
+            scopes: claims.scopes.clone(),
+            aud: claims.aud.clone(),
+            ttl_secs,
+            verifier_targets: Vec::new(),
+            include_root_verifier: true,
+            metadata: None,
+        })
+    }
+
+    // Check whether a proof can be reused safely for the requested claims.
+    fn proof_is_reusable_for_claims(
+        proof: &DelegationProof,
+        claims: &DelegatedTokenClaims,
+        now_secs: u64,
+    ) -> bool {
+        if now_secs > proof.cert.expires_at {
+            return false;
+        }
+
+        if claims.shard_pid != proof.cert.shard_pid {
+            return false;
+        }
+
+        if claims.iat < proof.cert.issued_at || claims.exp > proof.cert.expires_at {
+            return false;
+        }
+
+        Self::is_principal_subset(&claims.aud, &proof.cert.aud)
+            && Self::is_string_subset(&claims.scopes, &proof.cert.scopes)
+    }
+
+    // Return true when every principal in `subset` is present in `superset`.
+    fn is_principal_subset(
+        subset: &[crate::cdk::types::Principal],
+        superset: &[crate::cdk::types::Principal],
+    ) -> bool {
+        subset.iter().all(|item| superset.contains(item))
+    }
+
+    // Return true when every scope in `subset` is present in `superset`.
+    fn is_string_subset(subset: &[String], superset: &[String]) -> bool {
+        subset.iter().all(|item| superset.contains(item))
     }
 }
 

@@ -1,5 +1,7 @@
 use super::*;
 use crate::InternalErrorOrigin;
+use crate::cdk::types::Principal;
+use crate::dto::auth::{DelegatedTokenClaims, DelegationCert, DelegationProof};
 use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
 use futures::executor::block_on;
 use std::cell::Cell;
@@ -170,4 +172,61 @@ fn resolve_min_accepted_epoch_prefers_explicit_argument() {
 fn resolve_min_accepted_epoch_falls_back_to_config_or_zero() {
     assert_eq!(verify_flow::resolve_min_accepted_epoch(0, Some(4)), 4);
     assert_eq!(verify_flow::resolve_min_accepted_epoch(0, None), 0);
+}
+
+fn p(id: u8) -> Principal {
+    Principal::from_slice(&[id; 29])
+}
+
+fn sample_claims() -> DelegatedTokenClaims {
+    DelegatedTokenClaims {
+        sub: p(9),
+        shard_pid: p(2),
+        scopes: vec!["verify".to_string()],
+        aud: vec![p(3)],
+        iat: 100,
+        exp: 120,
+    }
+}
+
+fn sample_proof() -> DelegationProof {
+    DelegationProof {
+        cert: DelegationCert {
+            root_pid: p(1),
+            shard_pid: p(2),
+            issued_at: 90,
+            expires_at: 130,
+            scopes: vec!["verify".to_string(), "read".to_string()],
+            aud: vec![p(3), p(4)],
+        },
+        cert_sig: vec![1, 2, 3],
+    }
+}
+
+#[test]
+fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
+    let claims = sample_claims();
+    let proof = sample_proof();
+    assert!(DelegationApi::proof_is_reusable_for_claims(
+        &proof, &claims, 110
+    ));
+}
+
+#[test]
+fn proof_is_reusable_for_claims_rejects_expired_cert() {
+    let claims = sample_claims();
+    let proof = sample_proof();
+    assert!(!DelegationApi::proof_is_reusable_for_claims(
+        &proof, &claims, 131
+    ));
+}
+
+#[test]
+fn proof_is_reusable_for_claims_rejects_scope_mismatch() {
+    let mut claims = sample_claims();
+    claims.scopes = vec!["admin".to_string()];
+    let proof = sample_proof();
+    assert!(!DelegationApi::proof_is_reusable_for_claims(
+        &proof, &claims, 110
+    ));
 }

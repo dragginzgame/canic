@@ -59,14 +59,14 @@ fn delegation_provisioning_flow() {
         exp: now + 60,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
 
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    let token = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed");
 
     DelegationApi::verify_delegation_proof(&token.proof, setup.root_id)
         .expect("delegation proof must verify");
@@ -108,16 +108,16 @@ fn delegated_token_flow() {
         exp: now + 60,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
 
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    let token = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed");
     log_step(&format!(
-        "minted token proof shard={}",
+        "issued token proof shard={}",
         token.proof.cert.shard_pid
     ));
 
@@ -166,14 +166,14 @@ fn authenticated_rpc_flow() {
         exp: now + 60,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
 
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+    let token = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed");
 
     // Establish that the token is otherwise valid in the same request pipeline.
     let ok_response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
@@ -240,13 +240,13 @@ fn authenticated_rpc_flow_rejects_valid_token_missing_required_scope() {
         exp: now + 60,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
+    let token = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed");
 
     let response: Result<Result<(), Error>, Error> =
         setup
@@ -297,13 +297,13 @@ fn authenticated_rpc_flow_rejects_expired_token() {
         exp: now + 1,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
-    let token = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect("user_shard_mint_token application failed");
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
+    let token = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed");
 
     setup.pic.advance_time(Duration::from_secs(2));
     setup.pic.tick();
@@ -349,14 +349,14 @@ fn delegated_token_request_rejected_on_invalid_claims() {
         exp: now + 60,
     };
 
-    let minted: Result<Result<DelegatedToken, Error>, Error> =
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
         setup
             .pic
-            .update_call(shard_pid, "user_shard_mint_token", (claims,));
+            .update_call(shard_pid, "user_shard_issue_token", (claims,));
 
-    let err = minted
-        .expect("user_shard_mint_token transport failed")
-        .expect_err("user_shard_mint_token should fail on invalid claims");
+    let err = issued
+        .expect("user_shard_issue_token transport failed")
+        .expect_err("user_shard_issue_token should fail on invalid claims");
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 

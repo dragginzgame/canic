@@ -64,7 +64,7 @@ Evidence:
 Evidence:
 - `access/auth.rs:289-294` (`subject_binding_rejects_mismatched_subject_and_caller`)
 - `crates/canic-core/tests/pic_role_attestation.rs:62-90` (mismatched caller fails)
-- `crates/canic/tests/delegation_flow.rs` (`authenticated_rpc_flow`): valid minted token succeeds for subject caller and is rejected for mismatched ingress caller with caller-subject binding error.
+- `crates/canic/tests/delegation_flow.rs` (`authenticated_rpc_flow`): valid issued token succeeds for subject caller and is rejected for mismatched ingress caller with caller-subject binding error.
 
 ## Findings
 

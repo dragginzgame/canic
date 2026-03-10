@@ -76,9 +76,9 @@ Implementation: `crates/canic-core/src/ops/auth/mod.rs`
 3. Root signs delegation cert in one step (`sign_delegation_cert`).
 4. Root provisions proof to signer/verifier targets via workflow.
 
-### Token minting
-- Shard loads stored proof (`DelegationApi::require_proof`).
-- Shard signs token in one step (`DelegatedTokenOps::sign_token`).
+### Token issuance
+- Shard issues token with one call (`DelegationApi::issue_token`).
+- API reuses local proof only when still valid for claims; otherwise it reprovisions via canonical delegation request before signing.
 
 No prepare/get two-step signature API is used.
 
@@ -138,7 +138,7 @@ Allowed internal use:
 ## Test-Only Paths
 
 The following are explicitly test-only and guarded in non-debug builds:
-- `user_shard_mint_token` in `crates/canisters/user_shard/src/lib.rs`
+- `user_shard_issue_token` in `crates/canisters/user_shard/src/lib.rs`
 - `register_principal` in `crates/canisters/shard_hub/src/lib.rs`
 
 Admin provisioning API (`DelegationApi::provision`) is retained as a

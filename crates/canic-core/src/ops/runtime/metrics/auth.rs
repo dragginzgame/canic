@@ -4,7 +4,7 @@ const AUTH_SIGNER_ENDPOINT: &str = "auth_signer";
 const AUTH_VERIFIER_ENDPOINT: &str = "auth_verifier";
 const AUTH_ATTESTATION_VERIFIER_ENDPOINT: &str = "auth_attestation_verifier";
 
-const PRED_MINT_WITHOUT_PROOF: &str = "mint_without_proof";
+const PRED_ISSUE_WITHOUT_PROOF: &str = "issue_without_proof";
 const PRED_PROOF_MISSING: &str = "token_rejected_proof_missing";
 const PRED_PROOF_MISMATCH: &str = "token_rejected_proof_mismatch";
 const PRED_CERT_EXPIRED: &str = "token_rejected_expired_cert";
@@ -13,11 +13,11 @@ const PRED_ATTESTATION_UNKNOWN_KEY_ID: &str = "attestation_unknown_key_id";
 const PRED_ATTESTATION_EPOCH_REJECTED: &str = "attestation_epoch_rejected";
 const PRED_ATTESTATION_REFRESH_FAILED: &str = "attestation_refresh_failed";
 
-pub fn record_signer_mint_without_proof() {
+pub fn record_signer_issue_without_proof() {
     AccessMetrics::increment(
         AUTH_SIGNER_ENDPOINT,
         AccessMetricKind::Auth,
-        PRED_MINT_WITHOUT_PROOF,
+        PRED_ISSUE_WITHOUT_PROOF,
     );
 }
 

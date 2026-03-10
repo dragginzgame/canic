@@ -18,9 +18,8 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_update]
-async fn signer_mint_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
-    let proof = DelegationApi::require_proof()?;
-    DelegationApi::sign_token(claims, proof).await
+async fn signer_issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+    DelegationApi::issue_token(claims).await
 }
 
 #[canic_update(requires(auth::is_authenticated(cap::VERIFY)))]
