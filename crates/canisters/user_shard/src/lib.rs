@@ -45,7 +45,7 @@ async fn user_shard_issue_token(claims: DelegatedTokenClaims) -> Result<Delegate
     DelegationApi::issue_token(claims).await
 }
 
-#[canic_query(requires(auth::is_authenticated(cap::VERIFY)))]
+#[canic_query(requires(auth::authenticated(cap::VERIFY)))]
 async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
