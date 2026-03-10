@@ -174,9 +174,9 @@ impl CanisterConfig {
         let threshold = topup_policy.threshold.to_u128();
         let amount = topup_policy.amount.to_u128();
 
-        if amount.saturating_mul(2) >= threshold {
+        if amount.saturating_mul(2) > threshold {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{canister}' topup_policy.amount must be < 50% of topup_policy.threshold (got amount={amount}, threshold={threshold})",
+                "canister '{canister}' topup_policy.amount must be <= 50% of topup_policy.threshold (got amount={amount}, threshold={threshold})",
             )));
         }
 
