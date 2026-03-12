@@ -22,8 +22,25 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct AccessContext {
+    // Raw transport identity from msg_caller().
     pub caller: Principal,
+    // Resolved app/auth subject (raw caller or delegated session subject).
+    pub authenticated_caller: Principal,
+    // Source of the resolved authenticated subject.
+    pub identity_source: access::auth::AuthenticatedIdentitySource,
     pub call: EndpointCall,
+}
+
+impl AccessContext {
+    #[must_use]
+    pub const fn transport_caller(&self) -> Principal {
+        self.caller
+    }
+
+    #[must_use]
+    pub const fn authenticated_subject(&self) -> Principal {
+        self.authenticated_caller
+    }
 }
 
 ///
@@ -816,7 +833,8 @@ impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
         pred: BuiltinPredicate,
     ) -> Result<(), AccessError> {
         let verified =
-            access::auth::delegated_token_verified(ctx.caller, pred.required_scope()).await?;
+            access::auth::delegated_token_verified(ctx.authenticated_caller, pred.required_scope())
+                .await?;
         DelegationMetrics::record_authority(verified.cert.shard_pid);
         Ok(())
     }
@@ -930,10 +948,14 @@ mod tests {
 
         let ctx_parent = AccessContext {
             caller: parent,
+            authenticated_caller: parent,
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
         let ctx_other = AccessContext {
             caller: other,
+            authenticated_caller: other,
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -954,6 +976,8 @@ mod tests {
         let expr = app::allows_updates();
         let ctx = AccessContext {
             caller: seams::p(1),
+            authenticated_caller: seams::p(1),
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -980,6 +1004,8 @@ mod tests {
         let expr = app::is_queryable();
         let ctx = AccessContext {
             caller: seams::p(1),
+            authenticated_caller: seams::p(1),
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -1002,6 +1028,8 @@ mod tests {
     fn build_network_predicates_match_env_access_checks() {
         let ctx = AccessContext {
             caller: seams::p(1),
+            authenticated_caller: seams::p(1),
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -1019,5 +1047,30 @@ mod tests {
             endpoint: EndpointId::new("test"),
             kind: EndpointCallKind::Update,
         }
+    }
+
+    #[test]
+    fn caller_predicates_use_transport_caller_not_authenticated_subject() {
+        let _guard = seams::lock();
+        let original = Env::export();
+        let _restore = EnvRestore(original);
+
+        let parent = seams::p(10);
+        let delegated_subject = seams::p(11);
+        Env::import(EnvRecord {
+            parent_pid: Some(parent),
+            ..EnvRecord::default()
+        });
+
+        let expr = caller::is_parent();
+        let ctx = AccessContext {
+            caller: parent,
+            authenticated_caller: delegated_subject,
+            identity_source: access::auth::AuthenticatedIdentitySource::DelegatedSession,
+            call: test_call(),
+        };
+
+        let result = futures::executor::block_on(eval_access(&expr, &ctx));
+        assert!(result.is_ok());
     }
 }
