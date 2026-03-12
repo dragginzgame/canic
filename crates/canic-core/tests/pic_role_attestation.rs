@@ -3,7 +3,10 @@
 
 use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic_core::dto::{
-    auth::{AttestationKeyStatus, RoleAttestationRequest, SignedRoleAttestation},
+    auth::{
+        AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, RoleAttestationRequest,
+        SignedRoleAttestation,
+    },
     capability::{
         CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
         DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope, PROOF_VERSION_V1,
@@ -12,8 +15,9 @@ use canic_core::dto::{
     error::{Error, ErrorCode},
     rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
+    topology::SubnetRegistryResponse,
 };
-use canic_core::ids::CanisterRole;
+use canic_core::ids::{CanisterRole, cap};
 use pocket_ic::PocketIcBuilder;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
@@ -312,6 +316,288 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
         (current_attestation, 0u64),
     );
     verify_current_after_grace.expect("current key should verify after grace");
+}
+
+#[test]
+fn delegated_session_bootstrap_affects_authenticated_guard_only() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let wallet = Principal::from_slice(&[41; 29]);
+    let delegated_subject = Principal::from_slice(&[42; 29]);
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let issued: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+    let token = issued.expect("token issuance failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+    let install_signer_material: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (
+            token.proof.clone(),
+            root_public_key.clone(),
+            shard_public_key,
+        ),
+    );
+    install_signer_material.expect("install signer delegation material must succeed");
+
+    let denied_before: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_verify_token",
+        (token.clone(),),
+    );
+    let err = denied_before.expect_err("subject mismatch must deny before session bootstrap");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("does not match caller"),
+        "expected subject mismatch denial, got: {err:?}"
+    );
+
+    let invalid_bootstrap: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (
+            bogus_delegated_token(root_id, signer_id),
+            delegated_subject,
+            Some(60u64),
+        ),
+    );
+    invalid_bootstrap.expect_err("bogus token bootstrap must fail closed");
+
+    let bootstrap_ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token.clone(), delegated_subject, Some(60u64)),
+    );
+    bootstrap_ok.expect("secure session bootstrap should succeed");
+
+    let active_subject: Result<Option<Principal>, Error> = query_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_delegated_session_subject",
+        (),
+    );
+    assert_eq!(
+        active_subject.expect("query session subject failed"),
+        Some(delegated_subject)
+    );
+
+    let verify_after_bootstrap: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_verify_token",
+        (token.clone(),),
+    );
+    verify_after_bootstrap.expect("authenticated guard must honor delegated session subject");
+
+    for method in [
+        "signer_guard_is_root",
+        "signer_guard_is_controller",
+        "signer_guard_is_parent",
+        "signer_guard_is_registered_to_subnet",
+    ] {
+        let denied: Result<(), Error> = update_call_as(&pic, signer_id, wallet, method, ());
+        let err = denied.expect_err("raw caller guard must deny wallet caller");
+        assert_eq!(err.code, ErrorCode::Unauthorized);
+    }
+
+    let cleared: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_clear_delegated_session",
+        (),
+    );
+    cleared.expect("session clear should succeed");
+
+    let denied_after_clear: Result<(), Error> =
+        update_call_as(&pic, signer_id, wallet, "signer_verify_token", (token,));
+    let err = denied_after_clear.expect_err("subject mismatch must return after clearing session");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("does not match caller"),
+        "expected subject mismatch denial after clear, got: {err:?}"
+    );
+}
+
+#[test]
+fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let wallet = Principal::from_slice(&[51; 29]);
+    let delegated_subject = Principal::from_slice(&[52; 29]);
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![root_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let issued_token: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+    let token = issued_token.expect("token issuance failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+
+    let canister_bootstrap_attempt: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        signer_id,
+        "root_bootstrap_delegated_session",
+        (token.clone(), delegated_subject, Some(60u64)),
+    );
+    let err = canister_bootstrap_attempt.expect_err("registered canister caller must be rejected");
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("wallet caller rejected"),
+        "expected wallet-caller rejection, got: {err:?}"
+    );
+
+    let stored: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_install_test_delegation_material",
+        (
+            token.proof.clone(),
+            root_public_key.clone(),
+            shard_public_key.clone(),
+        ),
+    );
+    stored.expect("installing root verifier proof material should succeed");
+
+    let bootstrap_ok: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        wallet,
+        "root_bootstrap_delegated_session",
+        (token, delegated_subject, Some(60u64)),
+    );
+    bootstrap_ok.expect("wallet delegated session bootstrap should succeed");
+
+    let active_subject: Result<Option<Principal>, Error> =
+        query_call_as(&pic, root_id, wallet, "root_delegated_session_subject", ());
+    assert_eq!(
+        active_subject.expect("query root delegated session subject failed"),
+        Some(delegated_subject)
+    );
+
+    let issued_attestation: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        wallet,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued_attestation = issued_attestation.expect("attestation issuance failed");
+
+    let verify_attestation: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        wallet,
+        "root_verify_role_attestation",
+        (issued_attestation.clone(), 0u64),
+    );
+    verify_attestation.expect("role attestation should verify against raw transport caller");
+
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 1,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued_attestation.clone(),
+        }),
+        metadata: capability_metadata(issued_attestation.payload.issued_at, 12, 34, 60),
+    };
+
+    let capability_response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        wallet,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let err =
+        capability_response.expect_err("capability should fail for unregistered wallet caller");
+    assert!(
+        !err.message.contains("subject mismatch"),
+        "capability path must not use delegated subject as caller: {err:?}"
+    );
+    assert!(
+        err.message
+            .contains("not registered on the subnet registry"),
+        "expected raw caller subnet-registry denial, got: {err:?}"
+    );
 }
 
 #[test]
@@ -963,6 +1249,96 @@ where
         .expect("update_call failed");
 
     decode_one(&result).expect("decode response")
+}
+
+fn query_call_as<T, A>(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    caller: Principal,
+    method: &str,
+    args: A,
+) -> T
+where
+    T: candid::CandidType + DeserializeOwned,
+    A: ArgumentEncoder,
+{
+    let payload = encode_args(args).expect("encode args");
+    let result = pic
+        .query_call(canister_id, caller, method, payload)
+        .expect("query_call failed");
+
+    decode_one(&result).expect("decode response")
+}
+
+fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+    for _ in 0..120 {
+        let registry: Result<SubnetRegistryResponse, Error> = query_call_as(
+            pic,
+            root_id,
+            Principal::anonymous(),
+            "canic_subnet_registry",
+            (),
+        );
+
+        if let Ok(registry) = registry
+            && let Some(pid) = registry
+                .0
+                .into_iter()
+                .find(|entry| entry.role == CanisterRole::new("signer"))
+                .map(|entry| entry.pid)
+        {
+            return pid;
+        }
+
+        pic.tick();
+    }
+
+    panic!("signer canister must be registered");
+}
+
+fn wait_until_ready(pic: &pocket_ic::PocketIc, canister_id: Principal) {
+    let payload = encode_args(()).expect("encode empty args");
+    for _ in 0..240 {
+        if let Ok(bytes) = pic.query_call(
+            canister_id,
+            Principal::anonymous(),
+            "canic_ready",
+            payload.clone(),
+        ) && let Ok(ready) = decode_one::<bool>(&bytes)
+            && ready
+        {
+            return;
+        }
+        pic.tick();
+    }
+
+    panic!("canister did not report ready in time: {canister_id}");
+}
+
+fn bogus_delegated_token(root_pid: Principal, shard_pid: Principal) -> DelegatedToken {
+    let user = Principal::from_slice(&[77; 29]);
+    DelegatedToken {
+        claims: DelegatedTokenClaims {
+            sub: user,
+            shard_pid,
+            aud: vec![root_pid],
+            scopes: vec![cap::VERIFY.to_string()],
+            iat: 1,
+            exp: 2,
+        },
+        proof: canic_core::dto::auth::DelegationProof {
+            cert: canic_core::dto::auth::DelegationCert {
+                root_pid,
+                shard_pid,
+                issued_at: 1,
+                expires_at: 2,
+                scopes: vec![cap::VERIFY.to_string()],
+                aud: vec![root_pid],
+            },
+            cert_sig: vec![0],
+        },
+        token_sig: vec![0],
+    }
 }
 
 fn root_capability_hash(target_canister: Principal, capability: &Request) -> [u8; 32] {

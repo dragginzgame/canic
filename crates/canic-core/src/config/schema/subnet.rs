@@ -738,13 +738,13 @@ mod tests {
     }
 
     #[test]
-    fn topup_policy_amount_must_be_less_than_half_threshold() {
+    fn topup_policy_amount_above_half_threshold_fails() {
         let mut canisters = BTreeMap::new();
 
         let cfg = CanisterConfig {
             topup_policy: Some(TopupPolicy {
                 threshold: Cycles::new(10 * TC),
-                amount: Cycles::new(5 * TC),
+                amount: Cycles::new(6 * TC),
             }),
             ..base_canister_config(CanisterKind::Singleton)
         };
@@ -758,7 +758,31 @@ mod tests {
 
         subnet
             .validate()
-            .expect_err("expected topup_policy amount >= half threshold to fail");
+            .expect_err("expected topup_policy amount above half threshold to fail");
+    }
+
+    #[test]
+    fn topup_policy_amount_equal_half_threshold_is_valid() {
+        let mut canisters = BTreeMap::new();
+
+        let cfg = CanisterConfig {
+            topup_policy: Some(TopupPolicy {
+                threshold: Cycles::new(50 * TC),
+                amount: Cycles::new(25 * TC),
+            }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("app"), cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect("expected topup_policy amount equal to half threshold to validate");
     }
 
     #[test]

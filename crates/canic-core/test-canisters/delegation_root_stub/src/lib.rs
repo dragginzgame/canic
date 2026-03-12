@@ -7,19 +7,31 @@ use canic::{
     api::auth::DelegationApi,
     api::canister::{CanisterRole, wasm::WasmApi},
     dto::auth::{
-        AttestationKey, AttestationKeySet, AttestationKeyStatus, RoleAttestation,
-        RoleAttestationRequest, SignedRoleAttestation,
+        AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
+        DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProvisionTargetKind,
+        RoleAttestation, RoleAttestationRequest, SignedRoleAttestation,
     },
     prelude::*,
 };
 use ic_cdk::api::msg_caller;
 use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 const TEST_ATTESTATION_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
 const TEST_ATTESTATION_KEY_ID: u32 = 4_242;
 const TEST_ATTESTATION_KEY_SEED: [u8; 32] = [7u8; 32];
+const TEST_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_DELEGATION_CERT_V1";
+const TEST_DELEGATED_TOKEN_DOMAIN: &[u8] = b"CANIC_DELEGATED_TOKEN_V1";
+const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
+const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
+
+#[derive(CandidType, Serialize)]
+struct TestTokenSigningPayload {
+    cert_hash: Vec<u8>,
+    claims: DelegatedTokenClaims,
+}
 
 canic::start_root!();
 
@@ -165,6 +177,88 @@ async fn root_verify_role_attestation(
     DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
+#[canic_update]
+async fn root_store_delegation_proof(proof: DelegationProof) -> Result<(), Error> {
+    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier).await
+}
+
+#[canic_query]
+async fn root_now_secs() -> Result<u64, Error> {
+    Ok(ic_cdk::api::time() / 1_000_000_000)
+}
+
+#[canic_query]
+async fn root_test_delegation_public_keys() -> Result<(Vec<u8>, Vec<u8>), Error> {
+    Ok((
+        test_public_key(TEST_DELEGATION_ROOT_KEY_SEED)?,
+        test_public_key(TEST_DELEGATION_SHARD_KEY_SEED)?,
+    ))
+}
+
+#[canic_update(requires(caller::is_root()))]
+async fn root_issue_test_delegated_token(
+    claims: DelegatedTokenClaims,
+) -> Result<DelegatedToken, Error> {
+    if claims.exp <= claims.iat {
+        return Err(Error::invalid("token exp must be greater than iat"));
+    }
+    if claims.aud.is_empty() {
+        return Err(Error::invalid("token aud must not be empty"));
+    }
+    if claims.scopes.is_empty() {
+        return Err(Error::invalid("token scopes must not be empty"));
+    }
+
+    let cert = DelegationCert {
+        root_pid: canister_self(),
+        shard_pid: claims.shard_pid,
+        issued_at: claims.iat,
+        expires_at: claims.exp,
+        scopes: claims.scopes.clone(),
+        aud: claims.aud.clone(),
+    };
+    let proof = DelegationProof {
+        cert: cert.clone(),
+        cert_sig: sign_delegation_cert(&cert, TEST_DELEGATION_ROOT_KEY_SEED)?,
+    };
+    let token_sig = sign_delegated_token(&claims, &cert, TEST_DELEGATION_SHARD_KEY_SEED)?;
+
+    Ok(DelegatedToken {
+        claims,
+        proof,
+        token_sig,
+    })
+}
+
+#[canic_update(requires(caller::is_root()))]
+async fn root_install_test_delegation_material(
+    proof: DelegationProof,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+) -> Result<(), Error> {
+    DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
+}
+
+#[canic_update]
+async fn root_bootstrap_delegated_session(
+    token: DelegatedToken,
+    delegated_subject: candid::Principal,
+    requested_ttl_secs: Option<u64>,
+) -> Result<(), Error> {
+    DelegationApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
+}
+
+#[canic_update]
+async fn root_clear_delegated_session() -> Result<(), Error> {
+    DelegationApi::clear_delegated_session();
+    Ok(())
+}
+
+#[canic_query]
+async fn root_delegated_session_subject() -> Result<Option<candid::Principal>, Error> {
+    Ok(DelegationApi::delegated_session_subject())
+}
+
 fn test_public_key(seed: [u8; 32]) -> Result<Vec<u8>, Error> {
     let signing_key = SigningKey::from_bytes((&seed).into())
         .map_err(|err| Error::internal(format!("test signing key invalid: {err}")))?;
@@ -191,6 +285,57 @@ fn sign_attestation(payload: &RoleAttestation, seed: [u8; 32]) -> Result<Vec<u8>
         .map_err(|err| Error::internal(format!("sign failed: {err}")))?;
 
     Ok(signature.to_bytes().to_vec())
+}
+
+fn sign_delegation_cert(cert: &DelegationCert, seed: [u8; 32]) -> Result<Vec<u8>, Error> {
+    let digest = cert_hash(cert)?;
+    sign_digest(digest, seed)
+}
+
+fn sign_delegated_token(
+    claims: &DelegatedTokenClaims,
+    cert: &DelegationCert,
+    seed: [u8; 32],
+) -> Result<Vec<u8>, Error> {
+    let digest = token_signing_hash(claims, cert)?;
+    sign_digest(digest, seed)
+}
+
+fn sign_digest(digest: [u8; 32], seed: [u8; 32]) -> Result<Vec<u8>, Error> {
+    let signing_key = SigningKey::from_bytes((&seed).into())
+        .map_err(|err| Error::internal(format!("test signing key invalid: {err}")))?;
+    let signature: Signature = signing_key
+        .sign_prehash(&digest)
+        .map_err(|err| Error::internal(format!("sign failed: {err}")))?;
+    Ok(signature.to_bytes().to_vec())
+}
+
+fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], Error> {
+    let payload =
+        candid::encode_one(cert).map_err(|err| Error::internal(format!("encode failed: {err}")))?;
+    Ok(hash_domain_separated(TEST_DELEGATION_CERT_DOMAIN, &payload))
+}
+
+fn token_signing_hash(
+    claims: &DelegatedTokenClaims,
+    cert: &DelegationCert,
+) -> Result<[u8; 32], Error> {
+    let payload = TestTokenSigningPayload {
+        cert_hash: cert_hash(cert)?.to_vec(),
+        claims: claims.clone(),
+    };
+    let encoded = candid::encode_one(&payload)
+        .map_err(|err| Error::internal(format!("encode failed: {err}")))?;
+    Ok(hash_domain_separated(TEST_DELEGATED_TOKEN_DOMAIN, &encoded))
+}
+
+fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update((domain.len() as u64).to_be_bytes());
+    hasher.update(domain);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    hasher.finalize().into()
 }
 
 // WASM registry entry to satisfy bootstrap invariants and allow

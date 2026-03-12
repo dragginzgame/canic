@@ -42,7 +42,6 @@ pub struct DelegationApi;
 impl DelegationApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
-    const DEFAULT_DELEGATED_SESSION_TTL_SECS: u64 = 30 * 60;
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
 
     fn map_delegation_error(err: crate::InternalError) -> Error {
@@ -246,19 +245,12 @@ impl DelegationApi {
     /// Persist a temporary delegated session subject for the caller wallet.
     pub fn set_delegated_session_subject(
         delegated_subject: Principal,
-        ttl_secs: u64,
+        bootstrap_token: DelegatedToken,
+        requested_ttl_secs: Option<u64>,
     ) -> Result<(), Error> {
-        if ttl_secs == 0 {
-            return Err(Error::invalid(
-                "delegated session ttl_secs must be greater than zero",
-            ));
-        }
-
-        if ttl_secs > Self::MAX_DELEGATED_SESSION_TTL_SECS {
-            return Err(Error::invalid(format!(
-                "delegated session ttl_secs exceeds max {}",
-                Self::MAX_DELEGATED_SESSION_TTL_SECS
-            )));
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         let wallet_caller = IcOps::msg_caller();
@@ -275,7 +267,29 @@ impl DelegationApi {
         }
 
         let issued_at = IcOps::now_secs();
-        let expires_at = issued_at.saturating_add(ttl_secs);
+        let authority_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let self_pid = IcOps::canister_self();
+        let verified =
+            DelegatedTokenOps::verify_token(&bootstrap_token, authority_pid, issued_at, self_pid)
+                .map_err(Self::map_delegation_error)?;
+
+        if verified.claims.sub != delegated_subject {
+            return Err(Error::forbidden(format!(
+                "delegated session subject mismatch: requested={} token_subject={}",
+                delegated_subject, verified.claims.sub
+            )));
+        }
+
+        let configured_max_ttl_secs = cfg
+            .max_ttl_secs
+            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
+        let expires_at = Self::clamp_delegated_session_expires_at(
+            issued_at,
+            verified.claims.exp,
+            configured_max_ttl_secs,
+            requested_ttl_secs,
+        )?;
+
         DelegationStateOps::upsert_delegated_session(
             DelegatedSession {
                 wallet_pid: wallet_caller,
@@ -309,21 +323,12 @@ impl DelegationApi {
     }
 
     /// Compatibility helper for the legacy delegated-caller API.
-    pub fn set_delegated_caller(delegated_caller: Principal) {
-        if let Err(err) = Self::set_delegated_session_subject(
-            delegated_caller,
-            Self::DEFAULT_DELEGATED_SESSION_TTL_SECS,
-        ) {
-            log!(
-                Topic::Auth,
-                Warn,
-                "legacy delegated caller rejected local={} caller={} delegated={} error={}",
-                IcOps::canister_self(),
-                IcOps::msg_caller(),
-                delegated_caller,
-                err
-            );
-        }
+    pub fn set_delegated_caller(
+        delegated_caller: Principal,
+        bootstrap_token: DelegatedToken,
+        requested_ttl_secs: Option<u64>,
+    ) -> Result<(), Error> {
+        Self::set_delegated_session_subject(delegated_caller, bootstrap_token, requested_ttl_secs)
     }
 
     /// Compatibility helper for the legacy delegated-caller API.
@@ -388,6 +393,40 @@ impl DelegationApi {
             stored.cert.expires_at
         );
 
+        Ok(())
+    }
+
+    /// Install delegation proof and key material directly, bypassing management-key lookups.
+    ///
+    /// This is intended for controlled root-driven test flows where deterministic
+    /// key material is used instead of chain-key ECDSA.
+    pub fn install_test_delegation_material(
+        proof: DelegationProof,
+        root_public_key: Vec<u8>,
+        shard_public_key: Vec<u8>,
+    ) -> Result<(), Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "test delegation material install requires root caller",
+            ));
+        }
+
+        if proof.cert.root_pid != root_pid {
+            return Err(Error::invalid(format!(
+                "delegation proof root mismatch: expected={} found={}",
+                root_pid, proof.cert.root_pid
+            )));
+        }
+
+        if root_public_key.is_empty() || shard_public_key.is_empty() {
+            return Err(Error::invalid("delegation public keys must not be empty"));
+        }
+
+        DelegationStateOps::set_root_public_key(root_public_key);
+        DelegationStateOps::set_shard_public_key(proof.cert.shard_pid, shard_public_key);
+        DelegationStateOps::set_proof_from_dto(proof);
         Ok(())
     }
 
@@ -479,6 +518,41 @@ impl DelegationApi {
     // Return true when every scope in `subset` is present in `superset`.
     fn is_string_subset(subset: &[String], superset: &[String]) -> bool {
         subset.iter().all(|item| superset.contains(item))
+    }
+
+    fn clamp_delegated_session_expires_at(
+        now_secs: u64,
+        token_expires_at: u64,
+        configured_max_ttl_secs: u64,
+        requested_ttl_secs: Option<u64>,
+    ) -> Result<u64, Error> {
+        if configured_max_ttl_secs == 0 {
+            return Err(Error::invariant(
+                "delegated session configured max ttl_secs must be greater than zero",
+            ));
+        }
+
+        if let Some(ttl_secs) = requested_ttl_secs
+            && ttl_secs == 0
+        {
+            return Err(Error::invalid(
+                "delegated session requested ttl_secs must be greater than zero",
+            ));
+        }
+
+        let mut expires_at = token_expires_at;
+        expires_at = expires_at.min(now_secs.saturating_add(configured_max_ttl_secs));
+        if let Some(ttl_secs) = requested_ttl_secs {
+            expires_at = expires_at.min(now_secs.saturating_add(ttl_secs));
+        }
+
+        if expires_at <= now_secs {
+            return Err(Error::forbidden(
+                "delegated session bootstrap token is expired",
+            ));
+        }
+
+        Ok(expires_at)
     }
 }
 
