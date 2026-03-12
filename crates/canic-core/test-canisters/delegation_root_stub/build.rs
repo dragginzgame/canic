@@ -1,6 +1,13 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
+    // Register and forward the test-only delegation-material cfg for this
+    // canister and the nested signer build that this script triggers.
+    println!("cargo:rustc-check-cfg=cfg(canic_test_delegation_material)");
+    if env::var_os("CANIC_TEST_DELEGATION_MATERIAL").is_some() {
+        println!("cargo:rustc-cfg=canic_test_delegation_material");
+    }
+
     canic::build_root!("canic.toml");
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
@@ -16,6 +23,9 @@ fn main() {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(workspace_root);
     cmd.env("CARGO_TARGET_DIR", &target_dir);
+    if let Some(flag) = env::var_os("CANIC_TEST_DELEGATION_MATERIAL") {
+        cmd.env("CANIC_TEST_DELEGATION_MATERIAL", flag);
+    }
     cmd.args([
         "build",
         "--release",

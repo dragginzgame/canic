@@ -26,6 +26,9 @@ use crate::{
         auth::{DelegatedTokenOps, VerifiedDelegatedToken},
         ic::IcOps,
         runtime::env::EnvOps,
+        runtime::metrics::auth::{
+            record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
+        },
         storage::{
             auth::DelegationStateOps, children::CanisterChildrenOps,
             registry::subnet::SubnetRegistryOps,
@@ -158,8 +161,10 @@ pub(crate) fn resolve_authenticated_identity_at(
         }
 
         DelegationStateOps::clear_delegated_session(transport_caller);
+        record_session_fallback_invalid_subject();
     }
 
+    record_session_fallback_raw_caller();
     ResolvedAuthenticatedIdentity {
         transport_caller,
         authenticated_subject: transport_caller,
@@ -205,16 +210,15 @@ pub fn validate_delegated_session_subject(
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+#[expect(clippy::unnecessary_wraps)]
 fn try_canister_self() -> Option<Principal> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        Some(IcOps::canister_self())
-    }
+    Some(IcOps::canister_self())
+}
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
-    }
+#[cfg(not(target_arch = "wasm32"))]
+const fn try_canister_self() -> Option<Principal> {
+    None
 }
 
 pub(crate) async fn delegated_token_verified(
@@ -455,10 +459,31 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ids::cap, test::seams};
+    use crate::{
+        ids::{AccessMetricKind, cap},
+        ops::runtime::metrics::access::AccessMetrics,
+        test::seams,
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
+    }
+
+    fn auth_session_metric_count(predicate: &str) -> u64 {
+        AccessMetrics::snapshot()
+            .entries
+            .into_iter()
+            .find_map(|(key, count)| {
+                if key.endpoint == "auth_session"
+                    && key.kind == AccessMetricKind::Auth
+                    && key.predicate == predicate
+                {
+                    Some(count)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0)
     }
 
     #[test]
@@ -498,14 +523,21 @@ mod tests {
     #[test]
     fn resolve_authenticated_caller_defaults_to_wallet_when_no_override_exists() {
         let _guard = seams::lock();
+        AccessMetrics::reset();
         let wallet = p(9);
         DelegationStateOps::clear_delegated_session(wallet);
         assert_eq!(resolve_authenticated_caller(wallet), wallet);
+        assert_eq!(
+            auth_session_metric_count("session_fallback_raw_caller"),
+            1,
+            "missing delegated session should record raw-caller fallback"
+        );
     }
 
     #[test]
     fn resolve_authenticated_identity_prefers_active_delegated_session() {
         let _guard = seams::lock();
+        AccessMetrics::reset();
         let wallet = p(8);
         let delegated = p(7);
         DelegationStateOps::upsert_delegated_session(
@@ -514,6 +546,7 @@ mod tests {
                 delegated_pid: delegated,
                 issued_at: 100,
                 expires_at: 200,
+                bootstrap_token_fingerprint: None,
             },
             100,
         );
@@ -525,6 +558,11 @@ mod tests {
             resolved.identity_source,
             AuthenticatedIdentitySource::DelegatedSession
         );
+        assert_eq!(
+            auth_session_metric_count("session_fallback_raw_caller"),
+            0,
+            "active delegated session should not fallback to raw caller"
+        );
 
         DelegationStateOps::clear_delegated_session(wallet);
     }
@@ -532,6 +570,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_falls_back_when_session_expired() {
         let _guard = seams::lock();
+        AccessMetrics::reset();
         let wallet = p(6);
         let delegated = p(5);
         DelegationStateOps::upsert_delegated_session(
@@ -540,6 +579,7 @@ mod tests {
                 delegated_pid: delegated,
                 issued_at: 100,
                 expires_at: 120,
+                bootstrap_token_fingerprint: None,
             },
             100,
         );
@@ -550,6 +590,11 @@ mod tests {
             resolved.identity_source,
             AuthenticatedIdentitySource::RawCaller
         );
+        assert_eq!(
+            auth_session_metric_count("session_fallback_raw_caller"),
+            1,
+            "expired delegated session should fallback to raw caller"
+        );
 
         DelegationStateOps::clear_delegated_session(wallet);
     }
@@ -557,6 +602,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_falls_back_after_clear() {
         let _guard = seams::lock();
+        AccessMetrics::reset();
         let wallet = p(4);
         let delegated = p(3);
         DelegationStateOps::upsert_delegated_session(
@@ -565,6 +611,7 @@ mod tests {
                 delegated_pid: delegated,
                 issued_at: 50,
                 expires_at: 500,
+                bootstrap_token_fingerprint: None,
             },
             50,
         );
@@ -575,6 +622,40 @@ mod tests {
         assert_eq!(
             resolved.identity_source,
             AuthenticatedIdentitySource::RawCaller
+        );
+        assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
+    }
+
+    #[test]
+    fn resolve_authenticated_identity_records_invalid_subject_fallback() {
+        let _guard = seams::lock();
+        AccessMetrics::reset();
+        let wallet = p(23);
+        DelegationStateOps::upsert_delegated_session(
+            crate::ops::storage::auth::DelegatedSession {
+                wallet_pid: wallet,
+                delegated_pid: Principal::management_canister(),
+                issued_at: 10,
+                expires_at: 100,
+                bootstrap_token_fingerprint: None,
+            },
+            10,
+        );
+
+        let resolved = resolve_authenticated_identity_at(wallet, 20);
+        assert_eq!(resolved.authenticated_subject, wallet);
+        assert_eq!(
+            resolved.identity_source,
+            AuthenticatedIdentitySource::RawCaller
+        );
+        assert_eq!(
+            auth_session_metric_count("session_fallback_invalid_subject"),
+            1
+        );
+        assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
+        assert!(
+            DelegationStateOps::delegated_session(wallet, 20).is_none(),
+            "invalid delegated session should be cleared"
         );
     }
 

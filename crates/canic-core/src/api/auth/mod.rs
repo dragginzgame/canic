@@ -20,13 +20,24 @@ use crate::{
         rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_signer_issue_without_proof,
+            record_attestation_refresh_failed, record_session_bootstrap_rejected_disabled,
+            record_session_bootstrap_rejected_replay_conflict,
+            record_session_bootstrap_rejected_replay_reused,
+            record_session_bootstrap_rejected_subject_mismatch,
+            record_session_bootstrap_rejected_subject_rejected,
+            record_session_bootstrap_rejected_token_invalid,
+            record_session_bootstrap_rejected_ttl_invalid,
+            record_session_bootstrap_rejected_wallet_caller_rejected,
+            record_session_bootstrap_replay_idempotent, record_session_cleared,
+            record_session_created, record_session_pruned, record_session_replaced,
+            record_signer_issue_without_proof,
         },
-        storage::auth::{DelegatedSession, DelegationStateOps},
+        storage::auth::{DelegatedSession, DelegatedSessionBootstrapBinding, DelegationStateOps},
     },
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
 };
+use sha2::{Digest, Sha256};
 
 mod metadata;
 mod verify_flow;
@@ -43,6 +54,8 @@ impl DelegationApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
+    const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
+        b"canic-session-bootstrap-token-fingerprint:v1";
 
     fn map_delegation_error(err: crate::InternalError) -> Error {
         match err.class() {
@@ -250,17 +263,20 @@ impl DelegationApi {
     ) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
+            record_session_bootstrap_rejected_disabled();
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
         let wallet_caller = IcOps::msg_caller();
         if let Err(reason) = validate_delegated_session_subject(wallet_caller) {
+            record_session_bootstrap_rejected_wallet_caller_rejected();
             return Err(Error::forbidden(format!(
                 "delegated session wallet caller rejected: {reason}"
             )));
         }
 
         if let Err(reason) = validate_delegated_session_subject(delegated_subject) {
+            record_session_bootstrap_rejected_subject_rejected();
             return Err(Error::forbidden(format!(
                 "delegated session subject rejected: {reason}"
             )));
@@ -271,9 +287,13 @@ impl DelegationApi {
         let self_pid = IcOps::canister_self();
         let verified =
             DelegatedTokenOps::verify_token(&bootstrap_token, authority_pid, issued_at, self_pid)
-                .map_err(Self::map_delegation_error)?;
+                .map_err(|err| {
+                record_session_bootstrap_rejected_token_invalid();
+                Self::map_delegation_error(err)
+            })?;
 
         if verified.claims.sub != delegated_subject {
+            record_session_bootstrap_rejected_subject_mismatch();
             return Err(Error::forbidden(format!(
                 "delegated session subject mismatch: requested={} token_subject={}",
                 delegated_subject, verified.claims.sub
@@ -288,7 +308,24 @@ impl DelegationApi {
             verified.claims.exp,
             configured_max_ttl_secs,
             requested_ttl_secs,
-        )?;
+        )
+        .inspect_err(|_| record_session_bootstrap_rejected_ttl_invalid())?;
+
+        let token_fingerprint =
+            Self::delegated_session_bootstrap_token_fingerprint(&bootstrap_token)
+                .inspect_err(|_| record_session_bootstrap_rejected_token_invalid())?;
+
+        if Self::enforce_bootstrap_replay_policy(
+            wallet_caller,
+            delegated_subject,
+            token_fingerprint,
+            issued_at,
+        )? {
+            return Ok(());
+        }
+
+        let had_active_session =
+            DelegationStateOps::delegated_session(wallet_caller, issued_at).is_some();
 
         DelegationStateOps::upsert_delegated_session(
             DelegatedSession {
@@ -296,9 +333,26 @@ impl DelegationApi {
                 delegated_pid: delegated_subject,
                 issued_at,
                 expires_at,
+                bootstrap_token_fingerprint: Some(token_fingerprint),
             },
             issued_at,
         );
+        DelegationStateOps::upsert_delegated_session_bootstrap_binding(
+            DelegatedSessionBootstrapBinding {
+                wallet_pid: wallet_caller,
+                delegated_pid: delegated_subject,
+                token_fingerprint,
+                bound_at: issued_at,
+                expires_at: verified.claims.exp,
+            },
+            issued_at,
+        );
+
+        if had_active_session {
+            record_session_replaced();
+        } else {
+            record_session_created();
+        }
 
         Ok(())
     }
@@ -306,7 +360,12 @@ impl DelegationApi {
     /// Remove the caller's delegated session subject.
     pub fn clear_delegated_session() {
         let wallet_caller = IcOps::msg_caller();
+        let had_active_session =
+            DelegationStateOps::delegated_session(wallet_caller, IcOps::now_secs()).is_some();
         DelegationStateOps::clear_delegated_session(wallet_caller);
+        if had_active_session {
+            record_session_cleared();
+        }
     }
 
     /// Read the caller's active delegated session subject, if configured.
@@ -319,7 +378,13 @@ impl DelegationApi {
     /// Prune all currently expired delegated sessions.
     #[must_use]
     pub fn prune_expired_delegated_sessions() -> usize {
-        DelegationStateOps::prune_expired_delegated_sessions(IcOps::now_secs())
+        let now_secs = IcOps::now_secs();
+        let removed = DelegationStateOps::prune_expired_delegated_sessions(now_secs);
+        let _ = DelegationStateOps::prune_expired_delegated_session_bootstrap_bindings(now_secs);
+        if removed > 0 {
+            record_session_pruned(removed);
+        }
+        removed
     }
 
     /// Compatibility helper for the legacy delegated-caller API.
@@ -400,6 +465,8 @@ impl DelegationApi {
     ///
     /// This is intended for controlled root-driven test flows where deterministic
     /// key material is used instead of chain-key ECDSA.
+    // Compiled only for controlled test canister builds.
+    #[cfg(canic_test_delegation_material)]
     pub fn install_test_delegation_material(
         proof: DelegationProof,
         root_public_key: Vec<u8>,
@@ -518,6 +585,58 @@ impl DelegationApi {
     // Return true when every scope in `subset` is present in `superset`.
     fn is_string_subset(subset: &[String], superset: &[String]) -> bool {
         subset.iter().all(|item| superset.contains(item))
+    }
+
+    fn delegated_session_bootstrap_token_fingerprint(
+        token: &DelegatedToken,
+    ) -> Result<[u8; 32], Error> {
+        let token_bytes = crate::cdk::candid::encode_one(token).map_err(|err| {
+            Error::internal(format!("bootstrap token fingerprint encode failed: {err}"))
+        })?;
+        let mut hasher = Sha256::new();
+        hasher.update(Self::SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN);
+        hasher.update(token_bytes);
+        Ok(hasher.finalize().into())
+    }
+
+    // Enforce replay policy for delegated-session bootstrap by token fingerprint.
+    fn enforce_bootstrap_replay_policy(
+        wallet_caller: Principal,
+        delegated_subject: Principal,
+        token_fingerprint: [u8; 32],
+        issued_at: u64,
+    ) -> Result<bool, Error> {
+        let Some(binding) =
+            DelegationStateOps::delegated_session_bootstrap_binding(token_fingerprint, issued_at)
+        else {
+            return Ok(false);
+        };
+
+        if binding.wallet_pid == wallet_caller && binding.delegated_pid == delegated_subject {
+            let active_same_session =
+                DelegationStateOps::delegated_session(wallet_caller, issued_at).is_some_and(
+                    |session| {
+                        session.delegated_pid == delegated_subject
+                            && session.bootstrap_token_fingerprint == Some(token_fingerprint)
+                    },
+                );
+
+            if active_same_session {
+                record_session_bootstrap_replay_idempotent();
+                return Ok(true);
+            }
+
+            record_session_bootstrap_rejected_replay_reused();
+            return Err(Error::forbidden(
+                "delegated session bootstrap token replay rejected; use a fresh token",
+            ));
+        }
+
+        record_session_bootstrap_rejected_replay_conflict();
+        Err(Error::forbidden(format!(
+            "delegated session bootstrap token already bound (wallet={} delegated_subject={})",
+            binding.wallet_pid, binding.delegated_pid
+        )))
     }
 
     fn clamp_delegated_session_expires_at(

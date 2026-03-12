@@ -4,7 +4,10 @@ use crate::{
     cdk::types::Principal,
     dto::auth::AttestationKeySet,
     dto::auth::{AttestationKey, DelegationProof},
-    storage::stable::auth::{DelegatedSessionRecord, DelegationProofRecord, DelegationState},
+    storage::stable::auth::{
+        DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationProofRecord,
+        DelegationState,
+    },
 };
 use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
 
@@ -40,6 +43,20 @@ pub struct DelegatedSession {
     pub wallet_pid: Principal,
     pub delegated_pid: Principal,
     pub issued_at: u64,
+    pub expires_at: u64,
+    pub bootstrap_token_fingerprint: Option<[u8; 32]>,
+}
+
+///
+/// DelegatedSessionBootstrapBinding
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DelegatedSessionBootstrapBinding {
+    pub wallet_pid: Principal,
+    pub delegated_pid: Principal,
+    pub token_fingerprint: [u8; 32],
+    pub bound_at: u64,
     pub expires_at: u64,
 }
 
@@ -130,6 +147,33 @@ impl DelegationStateOps {
         DelegationState::prune_expired_delegated_sessions(now_secs)
     }
 
+    /// Resolve an active delegated-session bootstrap binding by token fingerprint.
+    #[must_use]
+    pub fn delegated_session_bootstrap_binding(
+        token_fingerprint: [u8; 32],
+        now_secs: u64,
+    ) -> Option<DelegatedSessionBootstrapBinding> {
+        DelegationState::get_active_delegated_session_bootstrap_binding(token_fingerprint, now_secs)
+            .map(delegated_session_bootstrap_binding_record_to_view)
+    }
+
+    /// Upsert delegated-session bootstrap binding metadata by token fingerprint.
+    pub fn upsert_delegated_session_bootstrap_binding(
+        binding: DelegatedSessionBootstrapBinding,
+        now_secs: u64,
+    ) {
+        DelegationState::upsert_delegated_session_bootstrap_binding(
+            delegated_session_bootstrap_binding_view_to_record(binding),
+            now_secs,
+        );
+    }
+
+    /// Remove expired delegated-session bootstrap bindings and return removed count.
+    #[must_use]
+    pub fn prune_expired_delegated_session_bootstrap_bindings(now_secs: u64) -> usize {
+        DelegationState::prune_expired_delegated_session_bootstrap_bindings(now_secs)
+    }
+
     #[must_use]
     pub fn attestation_public_key(key_id: u32) -> Option<AttestationKey> {
         DelegationState::get_attestation_public_key(key_id)
@@ -171,6 +215,7 @@ const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> Del
         delegated_pid: record.delegated_pid,
         issued_at: record.issued_at,
         expires_at: record.expires_at,
+        bootstrap_token_fingerprint: record.bootstrap_token_fingerprint,
     }
 }
 
@@ -179,6 +224,31 @@ const fn delegated_session_view_to_record(view: DelegatedSession) -> DelegatedSe
         wallet_pid: view.wallet_pid,
         delegated_pid: view.delegated_pid,
         issued_at: view.issued_at,
+        expires_at: view.expires_at,
+        bootstrap_token_fingerprint: view.bootstrap_token_fingerprint,
+    }
+}
+
+const fn delegated_session_bootstrap_binding_record_to_view(
+    record: DelegatedSessionBootstrapBindingRecord,
+) -> DelegatedSessionBootstrapBinding {
+    DelegatedSessionBootstrapBinding {
+        wallet_pid: record.wallet_pid,
+        delegated_pid: record.delegated_pid,
+        token_fingerprint: record.token_fingerprint,
+        bound_at: record.bound_at,
+        expires_at: record.expires_at,
+    }
+}
+
+const fn delegated_session_bootstrap_binding_view_to_record(
+    view: DelegatedSessionBootstrapBinding,
+) -> DelegatedSessionBootstrapBindingRecord {
+    DelegatedSessionBootstrapBindingRecord {
+        wallet_pid: view.wallet_pid,
+        delegated_pid: view.delegated_pid,
+        token_fingerprint: view.token_fingerprint,
+        bound_at: view.bound_at,
         expires_at: view.expires_at,
     }
 }

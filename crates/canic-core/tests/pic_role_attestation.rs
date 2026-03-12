@@ -13,6 +13,8 @@ use canic_core::dto::{
         RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
+    metrics::{MetricsKind, MetricsRequest, MetricsResponse},
+    page::PageRequest,
     rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
     topology::SubnetRegistryResponse,
@@ -34,6 +36,7 @@ const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
+static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 struct SerialPic {
@@ -319,6 +322,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn delegated_session_bootstrap_affects_authenticated_guard_only() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
@@ -365,11 +369,7 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
         signer_id,
         root_id,
         "signer_install_test_delegation_material",
-        (
-            token.proof.clone(),
-            root_public_key.clone(),
-            shard_public_key,
-        ),
+        (token.proof.clone(), root_public_key, shard_public_key),
     );
     install_signer_material.expect("install signer delegation material must succeed");
 
@@ -461,6 +461,7 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks() {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
@@ -522,11 +523,7 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
         root_id,
         root_id,
         "root_install_test_delegation_material",
-        (
-            token.proof.clone(),
-            root_public_key.clone(),
-            shard_public_key.clone(),
-        ),
+        (token.proof.clone(), root_public_key, shard_public_key),
     );
     stored.expect("installing root verifier proof material should succeed");
 
@@ -597,6 +594,416 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
         err.message
             .contains("not registered on the subnet registry"),
         "expected raw caller subnet-registry denial, got: {err:?}"
+    );
+}
+
+#[test]
+#[expect(clippy::too_many_lines)]
+fn delegated_session_bootstrap_replay_policy_and_metrics() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let wallet = Principal::from_slice(&[71; 29]);
+    let wallet_other = Principal::from_slice(&[72; 29]);
+    let delegated_subject = Principal::from_slice(&[73; 29]);
+    let delegated_subject_other = Principal::from_slice(&[74; 29]);
+
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims_a = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let token_a: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims_a,),
+    );
+    let token_a = token_a.expect("token_a issuance failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+    let install_signer_material_a: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (
+            token_a.proof.clone(),
+            root_public_key.clone(),
+            shard_public_key.clone(),
+        ),
+    );
+    install_signer_material_a.expect("install signer proof A should succeed");
+
+    let bootstrap_a: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_a.clone(), delegated_subject, Some(60u64)),
+    );
+    bootstrap_a.expect("initial bootstrap should succeed");
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_created"),
+        1
+    );
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_replaced"),
+        0
+    );
+
+    let bootstrap_a_repeat: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_a.clone(), delegated_subject, Some(60u64)),
+    );
+    bootstrap_a_repeat
+        .expect("same-token replay with active matching session should be idempotent");
+    assert_eq!(
+        access_metric_count(
+            &pic,
+            signer_id,
+            "auth_session",
+            "session_bootstrap_replay_idempotent"
+        ),
+        1
+    );
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_created"),
+        1
+    );
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_replaced"),
+        0
+    );
+
+    let mismatch: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_a.clone(), delegated_subject_other, Some(60u64)),
+    );
+    let mismatch_err =
+        mismatch.expect_err("same wallet with different delegated subject must fail closed");
+    assert_eq!(mismatch_err.code, ErrorCode::Forbidden);
+    assert!(
+        mismatch_err.message.contains("subject mismatch"),
+        "expected subject mismatch rejection, got: {mismatch_err:?}"
+    );
+    assert_eq!(
+        access_metric_count(
+            &pic,
+            signer_id,
+            "auth_session",
+            "session_bootstrap_rejected_subject_mismatch"
+        ),
+        1
+    );
+
+    let clear: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_clear_delegated_session",
+        (),
+    );
+    clear.expect("clear delegated session should succeed");
+
+    let replay_after_clear: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_a.clone(), delegated_subject, Some(60u64)),
+    );
+    let replay_after_clear_err =
+        replay_after_clear.expect_err("same token replay after clear should be rejected");
+    assert_eq!(replay_after_clear_err.code, ErrorCode::Forbidden);
+    assert!(
+        replay_after_clear_err.message.contains("replay rejected"),
+        "expected replay rejection after clear, got: {replay_after_clear_err:?}"
+    );
+    assert_eq!(
+        access_metric_count(
+            &pic,
+            signer_id,
+            "auth_session",
+            "session_bootstrap_rejected_replay_reused"
+        ),
+        1
+    );
+
+    let replay_other_wallet: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet_other,
+        "signer_bootstrap_delegated_session",
+        (token_a, delegated_subject, Some(60u64)),
+    );
+    let replay_other_wallet_err =
+        replay_other_wallet.expect_err("same token replay from another wallet should be rejected");
+    assert_eq!(replay_other_wallet_err.code, ErrorCode::Forbidden);
+    assert!(
+        replay_other_wallet_err.message.contains("already bound"),
+        "expected replay-conflict rejection, got: {replay_other_wallet_err:?}"
+    );
+    assert_eq!(
+        access_metric_count(
+            &pic,
+            signer_id,
+            "auth_session",
+            "session_bootstrap_rejected_replay_conflict"
+        ),
+        1
+    );
+
+    let claims_b = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 180,
+    };
+    let token_b: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims_b,),
+    );
+    let token_b = token_b.expect("token_b issuance failed");
+
+    let install_signer_material_b: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (
+            token_b.proof.clone(),
+            root_public_key.clone(),
+            shard_public_key.clone(),
+        ),
+    );
+    install_signer_material_b.expect("install signer proof B should succeed");
+
+    let bootstrap_b: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_b, delegated_subject, Some(60u64)),
+    );
+    bootstrap_b.expect("fresh token should create session state after clear");
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_created"),
+        2
+    );
+
+    let claims_c = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 240,
+    };
+    let token_c: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims_c,),
+    );
+    let token_c = token_c.expect("token_c issuance failed");
+
+    let install_signer_material_c: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (token_c.proof.clone(), root_public_key, shard_public_key),
+    );
+    install_signer_material_c.expect("install signer proof C should succeed");
+
+    let bootstrap_c: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token_c, delegated_subject, Some(60u64)),
+    );
+    bootstrap_c.expect("fresh token with active session should replace session state");
+    assert_eq!(
+        access_metric_count(&pic, signer_id, "auth_session", "session_replaced"),
+        1
+    );
+}
+
+#[test]
+fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let wallet = Principal::from_slice(&[81; 29]);
+    let delegated_subject = Principal::from_slice(&[82; 29]);
+
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 5,
+    };
+    let token: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+    let token = token.expect("token issuance failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+    let install_signer_material: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (token.proof.clone(), root_public_key, shard_public_key),
+    );
+    install_signer_material.expect("install signer proof should succeed");
+
+    let bootstrap_ok: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token.clone(), delegated_subject, Some(5u64)),
+    );
+    bootstrap_ok.expect("initial bootstrap should succeed before token expiry");
+
+    pic.advance_time(Duration::from_secs(6));
+    pic.tick();
+
+    let expired_replay: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token, delegated_subject, Some(5u64)),
+    );
+    expired_replay.expect_err("expired replay must fail closed");
+    assert_eq!(
+        access_metric_count(
+            &pic,
+            signer_id,
+            "auth_session",
+            "session_bootstrap_rejected_token_invalid"
+        ),
+        1
+    );
+}
+
+#[test]
+fn test_delegation_material_install_hook_unavailable_in_normal_build() {
+    let workspace_root = workspace_root();
+    build_canisters_without_test_material_once(&workspace_root);
+    let root_wasm = read_wasm_from_target(
+        &test_target_dir_without_test_material(&workspace_root),
+        "delegation_root_stub",
+    );
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims = DelegatedTokenClaims {
+        sub: Principal::from_slice(&[61; 29]),
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![root_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let issued_token: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+    let token = issued_token.expect("token issuance failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+
+    let install: Result<(), Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_install_test_delegation_material",
+        (token.proof, root_public_key, shard_public_key),
+    );
+    let err = install.expect_err("normal build must reject test delegation-material install hook");
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message
+            .contains("test delegation material install is unavailable in this build"),
+        "expected unavailable-in-build rejection, got: {err:?}"
     );
 }
 
@@ -1270,6 +1677,42 @@ where
     decode_one(&result).expect("decode response")
 }
 
+fn access_metric_count(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    endpoint: &str,
+    predicate: &str,
+) -> u64 {
+    let response: Result<MetricsResponse, Error> = query_call_as(
+        pic,
+        canister_id,
+        Principal::anonymous(),
+        "canic_metrics",
+        (MetricsRequest {
+            kind: MetricsKind::Access,
+            page: PageRequest {
+                limit: 10_000,
+                offset: 0,
+            },
+        },),
+    );
+    let response = response.expect("query canic_metrics failed");
+    let MetricsResponse::Access(page) = response else {
+        panic!("expected access metrics response");
+    };
+
+    page.entries
+        .into_iter()
+        .find_map(|entry| {
+            if entry.endpoint == endpoint && entry.predicate == predicate {
+                Some(entry.count)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0)
+}
+
 fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
     for _ in 0..120 {
         let registry: Result<SubnetRegistryResponse, Error> = query_call_as(
@@ -1397,6 +1840,8 @@ const fn capability_metadata(
     }
 }
 
+// Build the test canisters with delegation-material test cfg enabled.
+// This path is used by the main delegated-session regression suite.
 fn build_canisters_once(workspace_root: &PathBuf) {
     BUILD_ONCE.call_once_force(|_| {
         if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTER_PACKAGES)
@@ -1405,6 +1850,31 @@ fn build_canisters_once(workspace_root: &PathBuf) {
         }
 
         let target_dir = test_target_dir(workspace_root);
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(workspace_root);
+        cmd.env("CARGO_TARGET_DIR", &target_dir);
+        cmd.env("DFX_NETWORK", "local");
+        // Activate compile-time test delegation-material hooks for PIC canisters.
+        cmd.env("CANIC_TEST_DELEGATION_MATERIAL", "1");
+        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+        for name in CANISTER_PACKAGES {
+            cmd.args(["-p", name]);
+        }
+
+        let output = cmd.output().expect("failed to run cargo build");
+        assert!(
+            output.status.success(),
+            "cargo build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    });
+}
+
+// Build the same test canisters without delegation-material test cfg enabled.
+// This validates that normal builds do not compile the install hook.
+fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
+    BUILD_WITHOUT_TEST_MATERIAL_ONCE.call_once_force(|_| {
+        let target_dir = test_target_dir_without_test_material(workspace_root);
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root);
         cmd.env("CARGO_TARGET_DIR", &target_dir);
@@ -1446,6 +1916,11 @@ fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
     fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
 }
 
+fn read_wasm_from_target(target_dir: &Path, crate_name: &str) -> Vec<u8> {
+    let wasm_path = wasm_path_from_target(target_dir, crate_name);
+    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
+}
+
 fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
     if let Some(dir) = prebuilt_wasm_dir() {
         return dir.join(format!("{crate_name}.wasm"));
@@ -1453,6 +1928,10 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
 
     let target_dir = test_target_dir(workspace_root);
 
+    wasm_path_from_target(&target_dir, crate_name)
+}
+
+fn wasm_path_from_target(target_dir: &Path, crate_name: &str) -> PathBuf {
     target_dir
         .join("wasm32-unknown-unknown")
         .join("release")
@@ -1465,6 +1944,12 @@ fn prebuilt_wasm_dir() -> Option<PathBuf> {
 
 fn test_target_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("target").join("pic-wasm")
+}
+
+fn test_target_dir_without_test_material(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("target")
+        .join("pic-wasm-no-test-material")
 }
 
 fn workspace_root() -> PathBuf {
