@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.15.x] - 2026-03-12 - Unified Auth Identity Foundation
 
-- `0.15.0` hardens delegated-session auth by requiring verified bootstrap tokens, clamping session lifetime to token/config TTL bounds, and preserving raw-caller-only infrastructure trust checks while adding explicit identity-boundary regression coverage.
+- `0.15.0` hardens delegated-caller behavior into token-gated delegated-session semantics with strict subject binding, TTL clamp, replay/session-binding controls, and auth observability, while keeping raw-caller infrastructure predicates unchanged.
+- `0.15.1` finalizes 0.15 release governance docs by recording explicit security sign-off scope/residual risks, freezing the auth-semantic boundary for 0.15, and clarifying canonical release-boundary tracking.
 
 ```rust
 DelegationApi::set_delegated_session_subject(delegated_subject, bootstrap_token, Some(300))?;

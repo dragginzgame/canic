@@ -230,13 +230,29 @@ async fn root_issue_test_delegated_token(
     })
 }
 
+// This endpoint is test-only and is compiled in when
+// CANIC_TEST_DELEGATION_MATERIAL enables `canic_test_delegation_material`.
 #[canic_update(requires(caller::is_root()))]
+#[cfg(canic_test_delegation_material)]
 async fn root_install_test_delegation_material(
     proof: DelegationProof,
     root_public_key: Vec<u8>,
     shard_public_key: Vec<u8>,
 ) -> Result<(), Error> {
     DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
+}
+
+// Normal builds keep the endpoint name for compatibility but fail closed.
+#[canic_update(requires(caller::is_root()))]
+#[cfg(not(canic_test_delegation_material))]
+async fn root_install_test_delegation_material(
+    _proof: DelegationProof,
+    _root_public_key: Vec<u8>,
+    _shard_public_key: Vec<u8>,
+) -> Result<(), Error> {
+    Err(Error::forbidden(
+        "test delegation material install is unavailable in this build",
+    ))
 }
 
 #[canic_update]
