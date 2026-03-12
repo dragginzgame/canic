@@ -165,7 +165,7 @@ impl DelegationStateOps {
     }
 }
 
-fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
+const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
     DelegatedSession {
         wallet_pid: record.wallet_pid,
         delegated_pid: record.delegated_pid,
@@ -174,7 +174,7 @@ fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> Delegated
     }
 }
 
-fn delegated_session_view_to_record(view: DelegatedSession) -> DelegatedSessionRecord {
+const fn delegated_session_view_to_record(view: DelegatedSession) -> DelegatedSessionRecord {
     DelegatedSessionRecord {
         wallet_pid: view.wallet_pid,
         delegated_pid: view.delegated_pid,

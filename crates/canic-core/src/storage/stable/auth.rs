@@ -296,7 +296,7 @@ pub struct DelegationStateRecord {
 
 impl_storable_unbounded!(DelegationStateRecord);
 
-fn session_expired(expires_at: u64, now_secs: u64) -> bool {
+const fn session_expired(expires_at: u64, now_secs: u64) -> bool {
     now_secs > expires_at
 }
 

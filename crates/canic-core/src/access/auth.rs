@@ -129,6 +129,7 @@ impl CallerBoundToken {
 /// resolve_authenticated_identity
 ///
 /// Resolve transport caller and authenticated subject for user auth checks.
+#[must_use]
 pub fn resolve_authenticated_identity(
     transport_caller: Principal,
 ) -> ResolvedAuthenticatedIdentity {
@@ -138,6 +139,7 @@ pub fn resolve_authenticated_identity(
 /// resolve_authenticated_caller
 ///
 /// Compatibility shim returning the resolved authenticated subject.
+#[must_use]
 pub fn resolve_authenticated_caller(caller: Principal) -> Principal {
     resolve_authenticated_identity(caller).authenticated_subject
 }
