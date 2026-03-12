@@ -5,6 +5,19 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.15.x] - 2026-03-12 - Unified Auth Identity Foundation
+
+- `0.15.0` hardens delegated-session auth by requiring verified bootstrap tokens, clamping session lifetime to token/config TTL bounds, and preserving raw-caller-only infrastructure trust checks while adding explicit identity-boundary regression coverage.
+
+```rust
+DelegationApi::set_delegated_session_subject(delegated_subject, bootstrap_token, Some(300))?;
+```
+
+See detailed breakdown:
+[docs/changelog/0.15.md](docs/changelog/0.15.md)
+
+---
+
 ## [0.14.x] - 2026-03-09 - Parent-Funded Cycles Control Plane
 
 - `0.14.0` makes subtree funding parent-only with replay-safe RPC execution, adds an app-level global funding kill switch, and ships parent-emitted cycles funding metrics (totals, per-child, and denial reasons).

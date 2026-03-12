@@ -5,7 +5,8 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    cdk::candid::Principal,
+    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof, SignedRoleAttestation},
     ids::cap,
     prelude::*,
 };
@@ -29,6 +30,63 @@ async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
 
 #[canic_update(requires(auth::authenticated()))]
 async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update]
+async fn signer_bootstrap_delegated_session(
+    token: DelegatedToken,
+    delegated_subject: Principal,
+    requested_ttl_secs: Option<u64>,
+) -> Result<(), Error> {
+    DelegationApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
+}
+
+#[canic_update]
+async fn signer_clear_delegated_session() -> Result<(), Error> {
+    DelegationApi::clear_delegated_session();
+    Ok(())
+}
+
+#[canic_query]
+async fn signer_delegated_session_subject() -> Result<Option<Principal>, Error> {
+    Ok(DelegationApi::delegated_session_subject())
+}
+
+#[canic_update(internal, requires(caller::is_root()))]
+async fn signer_install_test_delegation_material(
+    proof: DelegationProof,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+) -> Result<(), Error> {
+    DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
+}
+
+#[canic_update]
+async fn signer_verify_role_attestation(
+    attestation: SignedRoleAttestation,
+    min_accepted_epoch: u64,
+) -> Result<(), Error> {
+    DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+}
+
+#[canic_update(requires(caller::is_root()))]
+async fn signer_guard_is_root() -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_controller()))]
+async fn signer_guard_is_controller() -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_parent()))]
+async fn signer_guard_is_parent() -> Result<(), Error> {
+    Ok(())
+}
+
+#[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+async fn signer_guard_is_registered_to_subnet() -> Result<(), Error> {
     Ok(())
 }
 

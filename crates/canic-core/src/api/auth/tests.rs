@@ -230,3 +230,38 @@ fn proof_is_reusable_for_claims_rejects_scope_mismatch() {
         &proof, &claims, 110
     ));
 }
+
+#[test]
+fn clamp_delegated_session_expires_at_clamps_to_token_expiry() {
+    let expires_at = DelegationApi::clamp_delegated_session_expires_at(100, 130, 600, Some(500))
+        .expect("clamp should succeed");
+    assert_eq!(expires_at, 130);
+}
+
+#[test]
+fn clamp_delegated_session_expires_at_clamps_to_configured_max_ttl() {
+    let expires_at = DelegationApi::clamp_delegated_session_expires_at(100, 900, 60, Some(500))
+        .expect("clamp should succeed");
+    assert_eq!(expires_at, 160);
+}
+
+#[test]
+fn clamp_delegated_session_expires_at_clamps_to_requested_ttl() {
+    let expires_at = DelegationApi::clamp_delegated_session_expires_at(100, 900, 600, Some(30))
+        .expect("clamp should succeed");
+    assert_eq!(expires_at, 130);
+}
+
+#[test]
+fn clamp_delegated_session_expires_at_rejects_zero_requested_ttl() {
+    let err = DelegationApi::clamp_delegated_session_expires_at(100, 900, 600, Some(0))
+        .expect_err("zero requested ttl must fail");
+    assert_eq!(err.code, crate::dto::error::ErrorCode::InvalidInput);
+}
+
+#[test]
+fn clamp_delegated_session_expires_at_rejects_expired_token() {
+    let err = DelegationApi::clamp_delegated_session_expires_at(100, 100, 600, Some(30))
+        .expect_err("expired token must fail");
+    assert_eq!(err.code, crate::dto::error::ErrorCode::Forbidden);
+}
