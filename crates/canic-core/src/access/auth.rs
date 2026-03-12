@@ -26,13 +26,70 @@ use crate::{
         auth::{DelegatedTokenOps, VerifiedDelegatedToken},
         ic::IcOps,
         runtime::env::EnvOps,
-        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            auth::DelegationStateOps, children::CanisterChildrenOps,
+            registry::subnet::SubnetRegistryOps,
+        },
     },
 };
+use std::fmt;
 
 const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 
 pub type Role = CanisterRole;
+
+///
+/// AuthenticatedIdentitySource
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthenticatedIdentitySource {
+    RawCaller,
+    DelegatedSession,
+}
+
+///
+/// ResolvedAuthenticatedIdentity
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResolvedAuthenticatedIdentity {
+    pub transport_caller: Principal,
+    pub authenticated_subject: Principal,
+    pub identity_source: AuthenticatedIdentitySource,
+}
+
+///
+/// DelegatedSessionSubjectRejection
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DelegatedSessionSubjectRejection {
+    Anonymous,
+    ManagementCanister,
+    LocalCanister,
+    RootCanister,
+    ParentCanister,
+    SubnetCanister,
+    PrimeRootCanister,
+    RegisteredCanister,
+}
+
+impl fmt::Display for DelegatedSessionSubjectRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let reason = match self {
+            Self::Anonymous => "anonymous principals are not allowed",
+            Self::ManagementCanister => "management canister principal is not allowed",
+            Self::LocalCanister => "current canister principal is not allowed",
+            Self::RootCanister => "root canister principal is not allowed",
+            Self::ParentCanister => "parent canister principal is not allowed",
+            Self::SubnetCanister => "subnet principal is not allowed",
+            Self::PrimeRootCanister => "prime root principal is not allowed",
+            Self::RegisteredCanister => "subnet-registered canister principal is not allowed",
+        };
+        f.write_str(reason)
+    }
+}
 
 ///
 /// CallerBoundToken
@@ -69,8 +126,97 @@ impl CallerBoundToken {
     }
 }
 
+/// resolve_authenticated_identity
+///
+/// Resolve transport caller and authenticated subject for user auth checks.
+pub fn resolve_authenticated_identity(
+    transport_caller: Principal,
+) -> ResolvedAuthenticatedIdentity {
+    resolve_authenticated_identity_at(transport_caller, IcOps::now_secs())
+}
+
+/// resolve_authenticated_caller
+///
+/// Compatibility shim returning the resolved authenticated subject.
+pub fn resolve_authenticated_caller(caller: Principal) -> Principal {
+    resolve_authenticated_identity(caller).authenticated_subject
+}
+
+pub(crate) fn resolve_authenticated_identity_at(
+    transport_caller: Principal,
+    now_secs: u64,
+) -> ResolvedAuthenticatedIdentity {
+    if let Some(session) = DelegationStateOps::delegated_session(transport_caller, now_secs) {
+        if validate_delegated_session_subject(session.delegated_pid).is_ok() {
+            return ResolvedAuthenticatedIdentity {
+                transport_caller,
+                authenticated_subject: session.delegated_pid,
+                identity_source: AuthenticatedIdentitySource::DelegatedSession,
+            };
+        }
+
+        DelegationStateOps::clear_delegated_session(transport_caller);
+    }
+
+    ResolvedAuthenticatedIdentity {
+        transport_caller,
+        authenticated_subject: transport_caller,
+        identity_source: AuthenticatedIdentitySource::RawCaller,
+    }
+}
+
+/// validate_delegated_session_subject
+///
+/// Reject obvious canister and infrastructure identities for delegated user sessions.
+pub fn validate_delegated_session_subject(
+    subject: Principal,
+) -> Result<(), DelegatedSessionSubjectRejection> {
+    if subject == Principal::anonymous() {
+        return Err(DelegatedSessionSubjectRejection::Anonymous);
+    }
+
+    if subject == Principal::management_canister() {
+        return Err(DelegatedSessionSubjectRejection::ManagementCanister);
+    }
+
+    if try_canister_self().is_some_and(|pid| pid == subject) {
+        return Err(DelegatedSessionSubjectRejection::LocalCanister);
+    }
+
+    let env = EnvOps::snapshot();
+    if env.root_pid.is_some_and(|pid| pid == subject) {
+        return Err(DelegatedSessionSubjectRejection::RootCanister);
+    }
+    if env.parent_pid.is_some_and(|pid| pid == subject) {
+        return Err(DelegatedSessionSubjectRejection::ParentCanister);
+    }
+    if env.subnet_pid.is_some_and(|pid| pid == subject) {
+        return Err(DelegatedSessionSubjectRejection::SubnetCanister);
+    }
+    if env.prime_root_pid.is_some_and(|pid| pid == subject) {
+        return Err(DelegatedSessionSubjectRejection::PrimeRootCanister);
+    }
+    if SubnetRegistryOps::is_registered(subject) {
+        return Err(DelegatedSessionSubjectRejection::RegisteredCanister);
+    }
+
+    Ok(())
+}
+
+fn try_canister_self() -> Option<Principal> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Some(IcOps::canister_self())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        None
+    }
+}
+
 pub(crate) async fn delegated_token_verified(
-    caller: Principal,
+    authenticated_subject: Principal,
     required_scope: Option<&str>,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
     let token = delegated_token_from_args()?;
@@ -83,7 +229,7 @@ pub(crate) async fn delegated_token_verified(
 
     verify_token(
         token,
-        caller,
+        authenticated_subject,
         authority_pid,
         now_secs,
         self_pid,
@@ -307,7 +453,7 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::cap;
+    use crate::{ids::cap, test::seams};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -345,5 +491,104 @@ mod tests {
     fn required_scope_none_is_allowed() {
         let scopes = vec![cap::READ.to_string()];
         assert!(enforce_required_scope(None, &scopes).is_ok());
+    }
+
+    #[test]
+    fn resolve_authenticated_caller_defaults_to_wallet_when_no_override_exists() {
+        let _guard = seams::lock();
+        let wallet = p(9);
+        DelegationStateOps::clear_delegated_session(wallet);
+        assert_eq!(resolve_authenticated_caller(wallet), wallet);
+    }
+
+    #[test]
+    fn resolve_authenticated_identity_prefers_active_delegated_session() {
+        let _guard = seams::lock();
+        let wallet = p(8);
+        let delegated = p(7);
+        DelegationStateOps::upsert_delegated_session(
+            crate::ops::storage::auth::DelegatedSession {
+                wallet_pid: wallet,
+                delegated_pid: delegated,
+                issued_at: 100,
+                expires_at: 200,
+            },
+            100,
+        );
+
+        let resolved = resolve_authenticated_identity_at(wallet, 150);
+        assert_eq!(resolved.transport_caller, wallet);
+        assert_eq!(resolved.authenticated_subject, delegated);
+        assert_eq!(
+            resolved.identity_source,
+            AuthenticatedIdentitySource::DelegatedSession
+        );
+
+        DelegationStateOps::clear_delegated_session(wallet);
+    }
+
+    #[test]
+    fn resolve_authenticated_identity_falls_back_when_session_expired() {
+        let _guard = seams::lock();
+        let wallet = p(6);
+        let delegated = p(5);
+        DelegationStateOps::upsert_delegated_session(
+            crate::ops::storage::auth::DelegatedSession {
+                wallet_pid: wallet,
+                delegated_pid: delegated,
+                issued_at: 100,
+                expires_at: 120,
+            },
+            100,
+        );
+
+        let resolved = resolve_authenticated_identity_at(wallet, 121);
+        assert_eq!(resolved.authenticated_subject, wallet);
+        assert_eq!(
+            resolved.identity_source,
+            AuthenticatedIdentitySource::RawCaller
+        );
+
+        DelegationStateOps::clear_delegated_session(wallet);
+    }
+
+    #[test]
+    fn resolve_authenticated_identity_falls_back_after_clear() {
+        let _guard = seams::lock();
+        let wallet = p(4);
+        let delegated = p(3);
+        DelegationStateOps::upsert_delegated_session(
+            crate::ops::storage::auth::DelegatedSession {
+                wallet_pid: wallet,
+                delegated_pid: delegated,
+                issued_at: 50,
+                expires_at: 500,
+            },
+            50,
+        );
+        DelegationStateOps::clear_delegated_session(wallet);
+
+        let resolved = resolve_authenticated_identity_at(wallet, 100);
+        assert_eq!(resolved.authenticated_subject, wallet);
+        assert_eq!(
+            resolved.identity_source,
+            AuthenticatedIdentitySource::RawCaller
+        );
+    }
+
+    #[test]
+    fn validate_delegated_session_subject_rejects_anonymous() {
+        let _guard = seams::lock();
+        let err = validate_delegated_session_subject(Principal::anonymous())
+            .expect_err("anonymous must be rejected");
+        assert_eq!(err, DelegatedSessionSubjectRejection::Anonymous);
+    }
+
+    #[test]
+    fn validate_delegated_session_subject_rejects_management_canister() {
+        let _guard = seams::lock();
+        let err = validate_delegated_session_subject(Principal::management_canister())
+            .expect_err("management canister must be rejected");
+        assert_eq!(err, DelegatedSessionSubjectRejection::ManagementCanister);
     }
 }

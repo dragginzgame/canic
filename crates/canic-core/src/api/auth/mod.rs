@@ -1,4 +1,5 @@
 use crate::{
+    access::auth::validate_delegated_session_subject,
     cdk::types::Principal,
     dto::{
         auth::{
@@ -21,7 +22,7 @@ use crate::{
         runtime::metrics::auth::{
             record_attestation_refresh_failed, record_signer_issue_without_proof,
         },
-        storage::auth::DelegationStateOps,
+        storage::auth::{DelegatedSession, DelegationStateOps},
     },
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
@@ -41,6 +42,8 @@ pub struct DelegationApi;
 impl DelegationApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
+    const DEFAULT_DELEGATED_SESSION_TTL_SECS: u64 = 30 * 60;
+    const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
 
     fn map_delegation_error(err: crate::InternalError) -> Error {
         match err.class() {
@@ -238,6 +241,100 @@ impl DelegationApi {
                 Err(Self::map_delegation_error(err.into()))
             }
         }
+    }
+
+    /// Persist a temporary delegated session subject for the caller wallet.
+    pub fn set_delegated_session_subject(
+        delegated_subject: Principal,
+        ttl_secs: u64,
+    ) -> Result<(), Error> {
+        if ttl_secs == 0 {
+            return Err(Error::invalid(
+                "delegated session ttl_secs must be greater than zero",
+            ));
+        }
+
+        if ttl_secs > Self::MAX_DELEGATED_SESSION_TTL_SECS {
+            return Err(Error::invalid(format!(
+                "delegated session ttl_secs exceeds max {}",
+                Self::MAX_DELEGATED_SESSION_TTL_SECS
+            )));
+        }
+
+        let wallet_caller = IcOps::msg_caller();
+        if let Err(reason) = validate_delegated_session_subject(wallet_caller) {
+            return Err(Error::forbidden(format!(
+                "delegated session wallet caller rejected: {reason}"
+            )));
+        }
+
+        if let Err(reason) = validate_delegated_session_subject(delegated_subject) {
+            return Err(Error::forbidden(format!(
+                "delegated session subject rejected: {reason}"
+            )));
+        }
+
+        let issued_at = IcOps::now_secs();
+        let expires_at = issued_at.saturating_add(ttl_secs);
+        DelegationStateOps::upsert_delegated_session(
+            DelegatedSession {
+                wallet_pid: wallet_caller,
+                delegated_pid: delegated_subject,
+                issued_at,
+                expires_at,
+            },
+            issued_at,
+        );
+
+        Ok(())
+    }
+
+    /// Remove the caller's delegated session subject.
+    pub fn clear_delegated_session() {
+        let wallet_caller = IcOps::msg_caller();
+        DelegationStateOps::clear_delegated_session(wallet_caller);
+    }
+
+    /// Read the caller's active delegated session subject, if configured.
+    #[must_use]
+    pub fn delegated_session_subject() -> Option<Principal> {
+        let wallet_caller = IcOps::msg_caller();
+        DelegationStateOps::delegated_session_subject(wallet_caller, IcOps::now_secs())
+    }
+
+    /// Prune all currently expired delegated sessions.
+    #[must_use]
+    pub fn prune_expired_delegated_sessions() -> usize {
+        DelegationStateOps::prune_expired_delegated_sessions(IcOps::now_secs())
+    }
+
+    /// Compatibility helper for the legacy delegated-caller API.
+    pub fn set_delegated_caller(delegated_caller: Principal) {
+        if let Err(err) = Self::set_delegated_session_subject(
+            delegated_caller,
+            Self::DEFAULT_DELEGATED_SESSION_TTL_SECS,
+        ) {
+            log!(
+                Topic::Auth,
+                Warn,
+                "legacy delegated caller rejected local={} caller={} delegated={} error={}",
+                IcOps::canister_self(),
+                IcOps::msg_caller(),
+                delegated_caller,
+                err
+            );
+        }
+    }
+
+    /// Compatibility helper for the legacy delegated-caller API.
+    pub fn clear_delegated_caller() {
+        Self::clear_delegated_session();
+    }
+
+    /// Compatibility helper for the legacy delegated-caller API.
+    #[must_use]
+    pub fn delegated_caller() -> Option<Principal> {
+        Self::delegated_session_subject()
     }
 
     pub async fn store_proof(

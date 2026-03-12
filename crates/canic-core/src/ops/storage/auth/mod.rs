@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::AttestationKeySet,
     dto::auth::{AttestationKey, DelegationProof},
-    storage::stable::auth::{DelegationProofRecord, DelegationState},
+    storage::stable::auth::{DelegatedSessionRecord, DelegationProofRecord, DelegationState},
 };
 use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
 
@@ -30,6 +30,18 @@ use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
 ///
 
 pub struct DelegationStateOps;
+
+///
+/// DelegatedSession
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DelegatedSession {
+    pub wallet_pid: Principal,
+    pub delegated_pid: Principal,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
 
 impl DelegationStateOps {
     /// Get the currently active delegation proof.
@@ -86,6 +98,38 @@ impl DelegationStateOps {
         DelegationState::set_shard_public_key(shard_pid, public_key_sec1);
     }
 
+    /// Return an active delegated session for the provided wallet caller.
+    #[must_use]
+    pub fn delegated_session(wallet_pid: Principal, now_secs: u64) -> Option<DelegatedSession> {
+        DelegationState::get_active_delegated_session(wallet_pid, now_secs)
+            .map(delegated_session_record_to_view)
+    }
+
+    /// Return the active delegated subject for the provided wallet caller.
+    #[must_use]
+    pub fn delegated_session_subject(wallet_pid: Principal, now_secs: u64) -> Option<Principal> {
+        Self::delegated_session(wallet_pid, now_secs).map(|session| session.delegated_pid)
+    }
+
+    /// Upsert the delegated session for the provided wallet caller.
+    pub fn upsert_delegated_session(session: DelegatedSession, now_secs: u64) {
+        DelegationState::upsert_delegated_session(
+            delegated_session_view_to_record(session),
+            now_secs,
+        );
+    }
+
+    /// Remove the delegated session for the provided wallet caller.
+    pub fn clear_delegated_session(wallet_pid: Principal) {
+        DelegationState::clear_delegated_session(wallet_pid);
+    }
+
+    /// Remove all expired delegated sessions and return removed count.
+    #[must_use]
+    pub fn prune_expired_delegated_sessions(now_secs: u64) -> usize {
+        DelegationState::prune_expired_delegated_sessions(now_secs)
+    }
+
     #[must_use]
     pub fn attestation_public_key(key_id: u32) -> Option<AttestationKey> {
         DelegationState::get_attestation_public_key(key_id)
@@ -118,5 +162,23 @@ impl DelegationStateOps {
         DelegationState::upsert_attestation_public_key(
             AttestationPublicKeyRecordMapper::dto_to_record(key),
         );
+    }
+}
+
+fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
+    DelegatedSession {
+        wallet_pid: record.wallet_pid,
+        delegated_pid: record.delegated_pid,
+        issued_at: record.issued_at,
+        expires_at: record.expires_at,
+    }
+}
+
+fn delegated_session_view_to_record(view: DelegatedSession) -> DelegatedSessionRecord {
+    DelegatedSessionRecord {
+        wallet_pid: view.wallet_pid,
+        delegated_pid: view.delegated_pid,
+        issued_at: view.issued_at,
+        expires_at: view.expires_at,
     }
 }
