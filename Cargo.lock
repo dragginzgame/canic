@@ -175,9 +175,9 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "candid"
-version = "0.10.24"
+version = "0.10.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "601b519700ec333a2a2c7eb3e8e1eca89177055e3e1fb24ca42cbbb025986696"
+checksum = "259bc749d63e6177a22f2cd3aa48e03b3426a12dfa9573021f5895ab1de93fd3"
 dependencies = [
  "anyhow",
  "binread",
@@ -198,9 +198,9 @@ dependencies = [
 
 [[package]]
 name = "candid_derive"
-version = "0.10.24"
+version = "0.10.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f195a40cd3d199191fc8b534165fadd78c08a1f9666222addaf9f58593002a73"
+checksum = "ba137ee83e51735380f2d051f4c09d573f5de93b45746822faea58b25a8f6d00"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "derive_more",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "async-trait",
  "candid",
@@ -268,11 +268,11 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.15.3"
+version = "0.15.4"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
@@ -282,14 +282,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "convert_case 0.11.0",
  "derive_more",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -573,7 +573,7 @@ dependencies = [
  "ciborium",
  "clap",
  "criterion-plot",
- "itertools 0.13.0",
+ "itertools",
  "num-traits",
  "oorandom",
  "page_size",
@@ -593,7 +593,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8d80a2f4f5b554395e47b5d8305bc3d27813bacb73493eb1001e8f76dae29ea"
 dependencies = [
  "cast",
- "itertools 0.13.0",
+ "itertools",
 ]
 
 [[package]]
@@ -716,7 +716,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
@@ -1443,9 +1443,9 @@ dependencies = [
 
 [[package]]
 name = "icrc-ledger-types"
-version = "0.1.12"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aafb78e620b2cc2b000cd745c0504dfb23a828acc3dd6f1baef208cd6c471e32"
+checksum = "263acc94fa47008ad00f76b8d3694efe7f8361870c9ec92cddcc588b571518b7"
 dependencies = [
  "base32",
  "candid",
@@ -1453,7 +1453,6 @@ dependencies = [
  "hex",
  "ic-stable-structures 0.6.9",
  "icrc-cbor",
- "itertools 0.12.1",
  "minicbor",
  "num-bigint",
  "num-traits",
@@ -1602,7 +1601,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic-core",
@@ -1611,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1619,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1639,15 +1638,6 @@ checksum = "c91338f0783edbd6195decb37bae672fd3b165faffb89bf7b9e6942f8b1a731a"
 dependencies = [
  "memchr",
  "serde",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
 ]
 
 [[package]]
@@ -2675,7 +2665,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "candid",
  "canic",
