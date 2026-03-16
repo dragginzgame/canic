@@ -5,6 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.16.x] - 2026-03-16 - Delegation Proof Evolution
+
+- `0.16.0` is reserved as a placeholder minor-line entry for delegation proof evolution follow-up work (deferred from `0.15` Phase 3), with implementation details tracked in the `0.16` design docs.
+
+See detailed breakdown:
+[docs/changelog/0.16.md](docs/changelog/0.16.md)
+
+---
+
 ## [0.15.x] - 2026-03-12 - Unified Auth Identity Foundation
 
 - `0.15.0` hardens delegated-caller behavior into token-gated delegated-session semantics with strict subject binding, TTL clamp, replay/session-binding controls, and auth observability, while keeping raw-caller infrastructure predicates unchanged.
