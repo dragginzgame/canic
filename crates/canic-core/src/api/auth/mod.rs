@@ -131,16 +131,23 @@ impl DelegationApi {
         request: DelegationRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
         let request = metadata::with_root_request_metadata(request);
-        let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
-            .await
-            .map_err(Self::map_delegation_error)?;
+        if EnvOps::is_root() {
+            let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
+                .await
+                .map_err(Self::map_delegation_error)?;
 
-        match response {
-            RootCapabilityResponse::DelegationIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for delegation request",
-            )),
+            return match response {
+                RootCapabilityResponse::DelegationIssued(response) => Ok(response),
+                _ => Err(Error::internal(
+                    "invalid root response type for delegation request",
+                )),
+            };
         }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
+            .await
+            .map_err(Self::map_delegation_error)
     }
 
     pub async fn request_role_attestation(
