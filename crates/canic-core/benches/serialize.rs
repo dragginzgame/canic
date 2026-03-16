@@ -8,7 +8,7 @@ use criterion::Criterion;
 ///
 
 // Runs the placeholder benchmark body to keep this bench target valid.
-fn bench_stub(_criterion: &mut Criterion) {
+const fn bench_stub(_criterion: &mut Criterion) {
     // Intentionally empty.
     // Future contributors can replace with real benchmarks.
 }
