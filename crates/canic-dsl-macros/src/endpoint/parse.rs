@@ -275,13 +275,6 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             )))
         }
         _ => {
-            if is_legacy_is_authenticated_path(&path) {
-                return Err(syn::Error::new_spanned(
-                    &path,
-                    "use authenticated(...) instead of is_authenticated(...)",
-                ));
-            }
-
             if is_authenticated_path(&path) {
                 let required_scope = match args.next() {
                     None => None,
@@ -436,31 +429,6 @@ fn is_authenticated_path(path: &Path) -> bool {
     )
 }
 
-fn is_legacy_is_authenticated_path(path: &Path) -> bool {
-    if path.leading_colon.is_some() {
-        return false;
-    }
-
-    if path.segments.len() == 1 {
-        return path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "is_authenticated");
-    }
-
-    if path.segments.len() != 2 {
-        return false;
-    }
-
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back();
-    let module = names.next_back();
-    matches!(
-        (module.as_deref(), last.as_deref()),
-        (Some("auth"), Some("is_authenticated"))
-    )
-}
-
 fn path_ident(path: &Path) -> syn::Result<&Ident> {
     for segment in &path.segments {
         if !segment.arguments.is_empty() {
@@ -542,14 +510,5 @@ mod tests {
         assert!(err.to_string().contains(
             "authenticated(...) accepts zero arguments or one string literal/path scope"
         ));
-    }
-
-    #[test]
-    fn is_authenticated_rejected_with_guidance() {
-        let err = parse_args(quote!(requires(auth::is_authenticated()))).expect_err("must reject");
-        assert!(
-            err.to_string()
-                .contains("use authenticated(...) instead of is_authenticated(...)")
-        );
     }
 }

@@ -382,7 +382,7 @@ pub struct DelegationStateRecord {
     #[serde(default)]
     pub shard_public_keys: Vec<ShardPublicKeyRecord>,
 
-    #[serde(default, alias = "delegated_callers")]
+    #[serde(default)]
     pub delegated_sessions: Vec<DelegatedSessionRecord>,
 
     #[serde(default)]

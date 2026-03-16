@@ -394,26 +394,6 @@ impl DelegationApi {
         removed
     }
 
-    /// Compatibility helper for the legacy delegated-caller API.
-    pub fn set_delegated_caller(
-        delegated_caller: Principal,
-        bootstrap_token: DelegatedToken,
-        requested_ttl_secs: Option<u64>,
-    ) -> Result<(), Error> {
-        Self::set_delegated_session_subject(delegated_caller, bootstrap_token, requested_ttl_secs)
-    }
-
-    /// Compatibility helper for the legacy delegated-caller API.
-    pub fn clear_delegated_caller() {
-        Self::clear_delegated_session();
-    }
-
-    /// Compatibility helper for the legacy delegated-caller API.
-    #[must_use]
-    pub fn delegated_caller() -> Option<Principal> {
-        Self::delegated_session_subject()
-    }
-
     pub async fn store_proof(
         proof: DelegationProof,
         kind: DelegationProvisionTargetKind,

@@ -339,7 +339,7 @@ async fn install_canister(
         &parent_role,
         &parent_cfg,
     )
-    .map_err(InternalError::from)?;
+    .map_err(policy::topology::TopologyPolicyError::from)?;
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;

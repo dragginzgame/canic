@@ -1,22 +1,53 @@
-use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, dto::error::Error};
+use crate::{
+    InternalError, InternalErrorClass, InternalErrorOrigin,
+    dto::error::{Error, ErrorCode},
+};
+
+fn registry_policy_error_code(message: &str) -> Option<ErrorCode> {
+    if message.contains("already registered to") {
+        return Some(ErrorCode::PolicyRoleAlreadyRegistered);
+    }
+    if message.contains("already registered under parent") {
+        return Some(ErrorCode::PolicySingletonAlreadyRegisteredUnderParent);
+    }
+    if message.contains("must be created by a singleton parent with scaling config") {
+        return Some(ErrorCode::PolicyReplicaRequiresSingletonWithScaling);
+    }
+    if message.contains("must be created by a singleton parent with sharding config") {
+        return Some(ErrorCode::PolicyShardRequiresSingletonWithSharding);
+    }
+    if message.contains("must be created by a singleton parent") {
+        return Some(ErrorCode::PolicyTenantRequiresSingletonParent);
+    }
+
+    None
+}
 
 fn internal_error_to_public(err: &InternalError) -> Error {
     if let Some(public) = err.public_error() {
         return public.clone();
     }
 
+    let message = err.to_string();
+
     match err.class() {
-        InternalErrorClass::Access => Error::unauthorized(err.to_string()),
+        InternalErrorClass::Access => Error::unauthorized(message),
 
         InternalErrorClass::Domain => match err.origin() {
-            InternalErrorOrigin::Config => Error::invalid(err.to_string()),
-            _ => Error::conflict(err.to_string()),
+            InternalErrorOrigin::Config => Error::invalid(message),
+            _ => {
+                if let Some(code) = registry_policy_error_code(&message) {
+                    Error::policy(code, message)
+                } else {
+                    Error::conflict(message)
+                }
+            }
         },
 
-        InternalErrorClass::Invariant => Error::invariant(err.to_string()),
+        InternalErrorClass::Invariant => Error::invariant(message),
 
         InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
-            Error::internal(err.to_string())
+            Error::internal(message)
         }
     }
 }
@@ -40,7 +71,16 @@ impl From<InternalError> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{access::AccessError, dto::error::ErrorCode};
+    use crate::{
+        access::AccessError,
+        cdk::types::Principal,
+        domain::policy::topology::{TopologyPolicyError, registry::RegistryPolicyError},
+        ids::CanisterRole,
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
 
     #[test]
     fn internal_error_mapping_matches_class_contract() {
@@ -75,5 +115,16 @@ mod tests {
         let public = Error::not_found("missing");
         let remapped: Error = InternalError::public(public.clone()).into();
         assert_eq!(remapped, public);
+    }
+
+    #[test]
+    fn registry_policy_errors_map_to_stable_public_policy_codes() {
+        let err = RegistryPolicyError::RoleAlreadyRegistered {
+            role: CanisterRole::new("app"),
+            pid: p(7),
+        };
+        let internal: InternalError = TopologyPolicyError::from(err).into();
+        let public: Error = internal.into();
+        assert_eq!(public.code, ErrorCode::PolicyRoleAlreadyRegistered);
     }
 }
