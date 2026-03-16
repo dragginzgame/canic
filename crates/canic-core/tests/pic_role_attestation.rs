@@ -462,6 +462,96 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
 }
 
 #[test]
+fn authenticated_guard_checks_current_proof_before_signature_validation() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let wallet = Principal::from_slice(&[92; 29]);
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims_a = DelegatedTokenClaims {
+        sub: wallet,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let token_a: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims_a,),
+    );
+    let mut token_a = token_a.expect("issue token_a failed");
+
+    let claims_b = DelegatedTokenClaims {
+        sub: wallet,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string(), "extra".to_string()],
+        aud: vec![signer_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let token_b: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims_b,),
+    );
+    let token_b = token_b.expect("issue token_b failed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+    let install_verifier_material: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (token_b.proof, root_public_key, shard_public_key),
+    );
+    install_verifier_material.expect("install signer delegation material must succeed");
+
+    // Make signatures invalid so stage ordering regressions fail this test.
+    token_a.proof.cert_sig.clear();
+    token_a.token_sig.clear();
+
+    let denied: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        wallet,
+        "signer_verify_token_any",
+        (token_a,),
+    );
+    let err = denied.expect_err("mismatched proof must fail before signature checks");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("proof does not match current proof"),
+        "expected proof mismatch denial, got: {err:?}"
+    );
+    assert!(
+        !err.message.contains("signature unavailable"),
+        "expected proof check to run before signature validation, got: {err:?}"
+    );
+}
+
+#[test]
 #[expect(clippy::too_many_lines)]
 fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
     let workspace_root = workspace_root();
