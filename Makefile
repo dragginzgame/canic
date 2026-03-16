@@ -63,7 +63,7 @@ help:
 	@echo "  publish          Publish crates to registry"
 	@echo ""
 	@echo "Development:"
-	@echo "  test             Run all tests"
+	@echo "  test             Run clippy + all tests"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
@@ -78,7 +78,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
-	@echo "  make test        # Run tests"
+	@echo "  make test        # Run clippy and tests"
 	@echo "  make build       # Build project"
 
 #
@@ -146,7 +146,7 @@ publish: ensure-clean
 # create the canisters first, or the unit tests will fail
 #
 
-test: test-canisters test-unit
+test: clippy test-canisters test-unit
 
 # Keep rust test execution single-threaded for PocketIC stability.
 # Parallel test threads can trigger PocketIC panics like:
@@ -216,4 +216,4 @@ test-watch:
 	cargo watch -x test
 
 # Build and test everything
-all: ensure-clean ensure-hooks clean fmt-check clippy check test build
+all: ensure-clean ensure-hooks clean fmt-check check test build
