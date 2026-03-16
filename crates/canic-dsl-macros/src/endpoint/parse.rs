@@ -327,7 +327,10 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 ));
             }
             let builtin = builtin_from_path(&path).ok_or_else(|| {
-                if builtin_from_path_tail(&path).is_some() || is_authenticated_path(&path) {
+                if builtin_from_path_tail(&path).is_some()
+                    || is_authenticated_path(&path)
+                    || is_bare_authenticated_path(&path)
+                {
                     return syn::Error::new_spanned(
                         &path,
                         "built-in predicates must use short paths like auth::authenticated()",
@@ -409,13 +412,6 @@ fn is_authenticated_path(path: &Path) -> bool {
         return false;
     }
 
-    if path.segments.len() == 1 {
-        return path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "authenticated");
-    }
-
     if path.segments.len() != 2 {
         return false;
     }
@@ -427,6 +423,18 @@ fn is_authenticated_path(path: &Path) -> bool {
         (module.as_deref(), last.as_deref()),
         (Some("auth"), Some("authenticated"))
     )
+}
+
+fn is_bare_authenticated_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    path.segments.len() == 1
+        && path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "authenticated")
 }
 
 fn path_ident(path: &Path) -> syn::Result<&Ident> {
@@ -510,5 +518,14 @@ mod tests {
         assert!(err.to_string().contains(
             "authenticated(...) accepts zero arguments or one string literal/path scope"
         ));
+    }
+
+    #[test]
+    fn authenticated_rejects_bare_alias_path() {
+        let err = parse_args(quote!(requires(authenticated()))).expect_err("bare alias must fail");
+        assert!(
+            err.to_string()
+                .contains("built-in predicates must use short paths like auth::authenticated()")
+        );
     }
 }

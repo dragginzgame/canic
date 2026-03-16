@@ -1,6 +1,9 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
+    // Rebuild when test-material cfg flag changes to avoid stale cfg mismatches.
+    println!("cargo:rerun-if-env-changed=CANIC_TEST_DELEGATION_MATERIAL");
+
     // Register and forward the test-only delegation-material cfg for this
     // canister and the nested signer build that this script triggers.
     println!("cargo:rustc-check-cfg=cfg(canic_test_delegation_material)");
