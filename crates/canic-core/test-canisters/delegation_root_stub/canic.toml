@@ -14,3 +14,7 @@ kind = "root"
 [subnets.prime.canisters.signer]
 kind = "singleton"
 initial_cycles = "1T"
+
+[subnets.prime.canisters.project_hub]
+kind = "singleton"
+initial_cycles = "1T"

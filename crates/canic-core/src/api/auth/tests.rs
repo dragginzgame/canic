@@ -1,7 +1,11 @@
 use super::*;
 use crate::InternalErrorOrigin;
 use crate::cdk::types::Principal;
-use crate::dto::auth::{DelegatedTokenClaims, DelegationCert, DelegationProof};
+use crate::dto::auth::{
+    DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProvisionResponse,
+    DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
+};
+use crate::dto::error::ErrorCode;
 use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
 use futures::executor::block_on;
 use std::cell::Cell;
@@ -229,6 +233,129 @@ fn proof_is_reusable_for_claims_rejects_scope_mismatch() {
     assert!(!DelegationApi::proof_is_reusable_for_claims(
         &proof, &claims, 110
     ));
+}
+
+#[test]
+fn derive_required_verifier_targets_excludes_root_and_signer_and_dedupes() {
+    let signer_pid = p(1);
+    let root_pid = p(2);
+    let verifier_a = p(3);
+    let verifier_b = p(4);
+    let audience = vec![signer_pid, root_pid, verifier_a, verifier_a, verifier_b];
+
+    let derived = DelegationApi::derive_required_verifier_targets_from_aud(
+        &audience,
+        signer_pid,
+        root_pid,
+        |principal| principal == verifier_a || principal == verifier_b,
+    )
+    .expect("target derivation should succeed");
+
+    assert_eq!(derived, vec![verifier_a, verifier_b]);
+}
+
+#[test]
+fn derive_required_verifier_targets_rejects_invalid_audience_target() {
+    let signer_pid = p(1);
+    let root_pid = p(2);
+    let invalid_verifier = p(9);
+    let audience = vec![invalid_verifier];
+
+    let err = DelegationApi::derive_required_verifier_targets_from_aud(
+        &audience,
+        signer_pid,
+        root_pid,
+        |_principal| false,
+    )
+    .expect_err("invalid verifier target must fail closed");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message
+            .contains("invalid for canonical verifier provisioning"),
+        "expected strict invalid-target message, got: {err:?}"
+    );
+}
+
+#[test]
+fn signer_issuance_fails_when_required_verifier_proof_missing_regression() {
+    let required_target = p(7);
+    let response = DelegationProvisionResponse {
+        proof: sample_proof(),
+        results: vec![],
+    };
+
+    let err =
+        DelegationApi::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+            .expect_err("missing required verifier proof fanout must fail issuance");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("missing verifier target result"),
+        "expected missing-result message, got: {err:?}"
+    );
+}
+
+#[test]
+fn ensure_required_verifier_targets_provisioned_accepts_all_ok_results() {
+    let required_target = p(7);
+    let response = DelegationProvisionResponse {
+        proof: sample_proof(),
+        results: vec![DelegationProvisionTargetResponse {
+            target: required_target,
+            kind: DelegationProvisionTargetKind::Verifier,
+            status: DelegationProvisionStatus::Ok,
+            error: None,
+        }],
+    };
+
+    DelegationApi::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+        .expect("required verifier fanout should pass when target is ok");
+}
+
+#[test]
+fn ensure_required_verifier_targets_provisioned_rejects_failed_target() {
+    let required_target = p(7);
+    let response = DelegationProvisionResponse {
+        proof: sample_proof(),
+        results: vec![DelegationProvisionTargetResponse {
+            target: required_target,
+            kind: DelegationProvisionTargetKind::Verifier,
+            status: DelegationProvisionStatus::Failed,
+            error: Some(Error::internal("simulated push failure")),
+        }],
+    };
+
+    let err =
+        DelegationApi::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+            .expect_err("failed verifier fanout must fail closed");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("failed for required verifier target"),
+        "expected provisioning failure message, got: {err:?}"
+    );
+}
+
+#[test]
+fn ensure_required_verifier_targets_provisioned_rejects_missing_target_result() {
+    let required_target = p(7);
+    let response = DelegationProvisionResponse {
+        proof: sample_proof(),
+        results: vec![DelegationProvisionTargetResponse {
+            target: p(8),
+            kind: DelegationProvisionTargetKind::Verifier,
+            status: DelegationProvisionStatus::Ok,
+            error: None,
+        }],
+    };
+
+    let err =
+        DelegationApi::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+            .expect_err("missing verifier fanout result must fail closed");
+    assert_eq!(err.code, ErrorCode::Internal);
+    assert!(
+        err.message.contains("missing verifier target result"),
+        "expected missing-result message, got: {err:?}"
+    );
 }
 
 #[test]

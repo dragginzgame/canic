@@ -6,6 +6,22 @@ const AUTH_VERIFIER_ENDPOINT: &str = "auth_verifier";
 const AUTH_ATTESTATION_VERIFIER_ENDPOINT: &str = "auth_attestation_verifier";
 
 const PRED_ISSUE_WITHOUT_PROOF: &str = "issue_without_proof";
+const PRED_DELEGATION_VERIFIER_TARGET_FAILED: &str = "delegation_verifier_target_failed";
+const PRED_DELEGATION_VERIFIER_TARGET_MISSING: &str = "delegation_verifier_target_missing";
+const PRED_DELEGATION_VERIFIER_TARGET_COUNT: &str = "delegation_verifier_target_count";
+const PRED_DELEGATION_PROVISION_COMPLETE: &str = "delegation_provision_complete";
+const PRED_DELEGATION_PROVISION_ATTEMPT_SIGNER: &str =
+    "delegation_provision_attempt{role=\"signer\"}";
+const PRED_DELEGATION_PROVISION_ATTEMPT_VERIFIER: &str =
+    "delegation_provision_attempt{role=\"verifier\"}";
+const PRED_DELEGATION_PROVISION_SUCCESS_SIGNER: &str =
+    "delegation_provision_success{role=\"signer\"}";
+const PRED_DELEGATION_PROVISION_SUCCESS_VERIFIER: &str =
+    "delegation_provision_success{role=\"verifier\"}";
+const PRED_DELEGATION_PROVISION_FAILED_SIGNER: &str =
+    "delegation_provision_failed{role=\"signer\"}";
+const PRED_DELEGATION_PROVISION_FAILED_VERIFIER: &str =
+    "delegation_provision_failed{role=\"verifier\"}";
 const PRED_SESSION_BOOTSTRAP_REJECTED_DISABLED: &str = "session_bootstrap_rejected_disabled";
 const PRED_SESSION_BOOTSTRAP_REJECTED_SUBJECT_MISMATCH: &str =
     "session_bootstrap_rejected_subject_mismatch";
@@ -35,11 +51,98 @@ const PRED_ATTESTATION_UNKNOWN_KEY_ID: &str = "attestation_unknown_key_id";
 const PRED_ATTESTATION_EPOCH_REJECTED: &str = "attestation_epoch_rejected";
 const PRED_ATTESTATION_REFRESH_FAILED: &str = "attestation_refresh_failed";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DelegationProvisionRole {
+    Signer,
+    Verifier,
+}
+
+impl DelegationProvisionRole {
+    const fn attempt_predicate(self) -> &'static str {
+        match self {
+            Self::Signer => PRED_DELEGATION_PROVISION_ATTEMPT_SIGNER,
+            Self::Verifier => PRED_DELEGATION_PROVISION_ATTEMPT_VERIFIER,
+        }
+    }
+
+    const fn success_predicate(self) -> &'static str {
+        match self {
+            Self::Signer => PRED_DELEGATION_PROVISION_SUCCESS_SIGNER,
+            Self::Verifier => PRED_DELEGATION_PROVISION_SUCCESS_VERIFIER,
+        }
+    }
+
+    const fn failed_predicate(self) -> &'static str {
+        match self {
+            Self::Signer => PRED_DELEGATION_PROVISION_FAILED_SIGNER,
+            Self::Verifier => PRED_DELEGATION_PROVISION_FAILED_VERIFIER,
+        }
+    }
+}
+
 pub fn record_signer_issue_without_proof() {
     AccessMetrics::increment(
         AUTH_SIGNER_ENDPOINT,
         AccessMetricKind::Auth,
         PRED_ISSUE_WITHOUT_PROOF,
+    );
+}
+
+pub fn record_delegation_verifier_target_failed() {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        PRED_DELEGATION_VERIFIER_TARGET_FAILED,
+    );
+}
+
+pub fn record_delegation_verifier_target_missing() {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        PRED_DELEGATION_VERIFIER_TARGET_MISSING,
+    );
+}
+
+pub fn record_delegation_verifier_target_count(target_count: usize) {
+    for _ in 0..target_count {
+        AccessMetrics::increment(
+            AUTH_SIGNER_ENDPOINT,
+            AccessMetricKind::Auth,
+            PRED_DELEGATION_VERIFIER_TARGET_COUNT,
+        );
+    }
+}
+
+pub fn record_delegation_provision_attempt(role: DelegationProvisionRole) {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        role.attempt_predicate(),
+    );
+}
+
+pub fn record_delegation_provision_success(role: DelegationProvisionRole) {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        role.success_predicate(),
+    );
+}
+
+pub fn record_delegation_provision_failed(role: DelegationProvisionRole) {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        role.failed_predicate(),
+    );
+}
+
+pub fn record_delegation_provision_complete() {
+    AccessMetrics::increment(
+        AUTH_SIGNER_ENDPOINT,
+        AccessMetricKind::Auth,
+        PRED_DELEGATION_PROVISION_COMPLETE,
     );
 }
 
@@ -338,6 +441,76 @@ mod tests {
                 AUTH_SESSION_ENDPOINT,
                 PRED_SESSION_BOOTSTRAP_REPLAY_IDEMPOTENT
             ),
+            1
+        );
+    }
+
+    #[test]
+    fn delegation_provision_metrics_increment_expected_predicates() {
+        AccessMetrics::reset();
+
+        record_delegation_provision_attempt(DelegationProvisionRole::Signer);
+        record_delegation_provision_attempt(DelegationProvisionRole::Verifier);
+        record_delegation_provision_success(DelegationProvisionRole::Signer);
+        record_delegation_provision_success(DelegationProvisionRole::Verifier);
+        record_delegation_provision_failed(DelegationProvisionRole::Verifier);
+        record_delegation_verifier_target_failed();
+        record_delegation_verifier_target_missing();
+        record_delegation_verifier_target_count(3);
+        record_delegation_provision_complete();
+
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_PROVISION_ATTEMPT_SIGNER
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_PROVISION_ATTEMPT_VERIFIER
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_PROVISION_SUCCESS_SIGNER
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_PROVISION_SUCCESS_VERIFIER
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_PROVISION_FAILED_VERIFIER
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(AUTH_SIGNER_ENDPOINT, PRED_DELEGATION_VERIFIER_TARGET_FAILED),
+            1
+        );
+        assert_eq!(
+            metric_count(
+                AUTH_SIGNER_ENDPOINT,
+                PRED_DELEGATION_VERIFIER_TARGET_MISSING
+            ),
+            1
+        );
+        assert_eq!(
+            metric_count(AUTH_SIGNER_ENDPOINT, PRED_DELEGATION_VERIFIER_TARGET_COUNT),
+            3
+        );
+        assert_eq!(
+            metric_count(AUTH_SIGNER_ENDPOINT, PRED_DELEGATION_PROVISION_COMPLETE),
             1
         );
     }

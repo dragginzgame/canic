@@ -18,6 +18,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps, replay::RootReplayOps, state::app::AppStateOps,
         },
     },
+    storage::stable::env::{Env, EnvRecord},
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
     storage::stable::state::app::{AppMode, AppStateRecord},
 };
@@ -34,6 +35,23 @@ fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
         request_id: [id; 32],
         ttl_seconds,
     }
+}
+
+struct EnvRestore(EnvRecord);
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        Env::import(self.0.clone());
+    }
+}
+
+fn configure_root_env(root_pid: Principal) -> EnvRestore {
+    let original = Env::export();
+    Env::import(EnvRecord {
+        root_pid: Some(root_pid),
+        ..EnvRecord::default()
+    });
+    EnvRestore(original)
 }
 
 fn cycles_funding_snapshot_map() -> HashMap<
@@ -116,6 +134,137 @@ fn map_request_maps_issue_role_attestation() {
 
     let mapped = RootResponseWorkflow::map_request(req);
     assert_eq!(mapped.capability_name(), "IssueRoleAttestation");
+}
+
+#[test]
+fn authorize_rejects_issue_delegation_when_verifier_target_is_root() {
+    let root_pid = p(30);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let caller = p(31);
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueDelegation(DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![p(33)],
+        ttl_secs: 60,
+        verifier_targets: vec![root_pid],
+        include_root_verifier: true,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("must not equal root pid"),
+        "expected root-target denial, got: {err}"
+    );
+}
+
+#[test]
+fn authorize_rejects_issue_delegation_when_verifier_target_is_shard() {
+    let root_pid = p(40);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let caller = p(34);
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueDelegation(DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![p(35)],
+        ttl_secs: 60,
+        verifier_targets: vec![caller],
+        include_root_verifier: true,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("must not equal shard_pid"),
+        "expected shard-target denial, got: {err}"
+    );
+}
+
+#[test]
+fn authorize_rejects_issue_delegation_when_verifier_target_is_unregistered() {
+    let root_pid = p(50);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let caller = p(36);
+    let unregistered = p(37);
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueDelegation(DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![unregistered],
+        ttl_secs: 60,
+        verifier_targets: vec![unregistered],
+        include_root_verifier: true,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("must be registered"),
+        "expected unregistered-target denial, got: {err}"
+    );
+}
+
+#[test]
+fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
+    let root_pid = p(60);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let verifier = p(38);
+    SubnetRegistryOps::register_unchecked(
+        verifier,
+        &CanisterRole::new("project_hub"),
+        root_pid,
+        vec![],
+        2,
+    )
+    .expect("register verifier canister");
+
+    let caller = p(39);
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueDelegation(DelegationRequest {
+        shard_pid: caller,
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![verifier],
+        ttl_secs: 60,
+        verifier_targets: vec![verifier],
+        include_root_verifier: true,
+        metadata: None,
+    });
+
+    RootResponseWorkflow::authorize(&ctx, &capability).expect("registered verifier must authorize");
 }
 
 #[test]

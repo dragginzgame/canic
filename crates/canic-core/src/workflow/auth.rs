@@ -20,7 +20,14 @@ use crate::{
     },
     log,
     log::Topic,
-    ops::{auth::DelegatedTokenOps, ic::call::CallOps},
+    ops::{
+        auth::DelegatedTokenOps,
+        ic::call::CallOps,
+        runtime::metrics::auth::{
+            DelegationProvisionRole, record_delegation_provision_attempt,
+            record_delegation_provision_failed, record_delegation_provision_success,
+        },
+    },
     protocol,
 };
 
@@ -140,6 +147,8 @@ impl DelegationWorkflow {
         kind: DelegationProvisionTargetKind,
         origin: DelegationPushOrigin,
     ) -> DelegationProvisionTargetResponse {
+        let role = Self::metric_role(kind);
+        record_delegation_provision_attempt(role);
         log!(
             Topic::Auth,
             Info,
@@ -163,6 +172,7 @@ impl DelegationWorkflow {
             Ok(call) => call,
             Err(err) => {
                 let response = Self::failure(target, kind, ErrorDto::from(err));
+                Self::record_push_result_metric(role, response.status);
                 Self::log_push_result(&response, origin);
                 return response;
             }
@@ -172,6 +182,7 @@ impl DelegationWorkflow {
             Ok(result) => result,
             Err(err) => {
                 let response = Self::failure(target, kind, ErrorDto::from(err));
+                Self::record_push_result_metric(role, response.status);
                 Self::log_push_result(&response, origin);
                 return response;
             }
@@ -181,6 +192,7 @@ impl DelegationWorkflow {
             Ok(response) => response,
             Err(err) => {
                 let response = Self::failure(target, kind, ErrorDto::from(err));
+                Self::record_push_result_metric(role, response.status);
                 Self::log_push_result(&response, origin);
                 return response;
             }
@@ -196,6 +208,7 @@ impl DelegationWorkflow {
             Err(err) => Self::failure(target, kind, err),
         };
 
+        Self::record_push_result_metric(role, response.status);
         Self::log_push_result(&response, origin);
         response
     }
@@ -240,6 +253,20 @@ impl DelegationWorkflow {
                     err
                 );
             }
+        }
+    }
+
+    fn metric_role(kind: DelegationProvisionTargetKind) -> DelegationProvisionRole {
+        match kind {
+            DelegationProvisionTargetKind::Signer => DelegationProvisionRole::Signer,
+            DelegationProvisionTargetKind::Verifier => DelegationProvisionRole::Verifier,
+        }
+    }
+
+    fn record_push_result_metric(role: DelegationProvisionRole, status: DelegationProvisionStatus) {
+        match status {
+            DelegationProvisionStatus::Ok => record_delegation_provision_success(role),
+            DelegationProvisionStatus::Failed => record_delegation_provision_failed(role),
         }
     }
 }

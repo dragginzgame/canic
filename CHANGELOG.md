@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `0.15.1` finalizes 0.15 release governance docs by recording explicit security sign-off scope/residual risks, freezing the auth-semantic boundary for 0.15, and clarifying canonical release-boundary tracking.
 - `0.15.2` fixes shard token issuance regression by routing non-root delegation requests to root over RPC, so shard-initiated proof refresh works again while root-only authorization stays enforced.
 - `0.15.3` removes unused legacy compatibility shims/fallbacks and records a follow-up `layer-violations` rerun (`3/10`, no hard layer violations).
+- `0.15.4` completes Tier 1 delegation provisioning guarantees by requiring required verifier fanout success at issuance, adding root-side verifier-target validation and role-labeled provisioning metrics, and validating issuance -> verifier verify -> bootstrap -> authenticated guard success end to end; Phase 3 follow-ups are explicitly deferred to the `0.16` design track.
 
 ```rust
 DelegationApi::set_delegated_session_subject(delegated_subject, bootstrap_token, Some(300))?;

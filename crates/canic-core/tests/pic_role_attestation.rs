@@ -15,6 +15,7 @@ use canic_core::dto::{
     error::{Error, ErrorCode},
     metrics::{MetricsKind, MetricsRequest, MetricsResponse},
     page::PageRequest,
+    rpc::{CreateCanisterParent, CreateCanisterRequest},
     rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
     topology::SubnetRegistryResponse,
@@ -458,6 +459,152 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
         err.message.contains("does not match caller"),
         "expected subject mismatch denial after clear, got: {err:?}"
     );
+}
+
+#[test]
+#[expect(clippy::too_many_lines)]
+fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let issued_attestation: Result<SignedRoleAttestation, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued_attestation =
+        issued_attestation.expect("root role attestation issuance must succeed");
+    let issued_at = issued_attestation.payload.issued_at;
+
+    let create_verifier_request = Request::CreateCanister(CreateCanisterRequest {
+        canister_role: CanisterRole::new("project_hub"),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+        metadata: None,
+    });
+    let create_verifier_envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: create_verifier_request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &create_verifier_request),
+            attestation: issued_attestation,
+        }),
+        metadata: capability_metadata(issued_at, 21, 19, 60),
+    };
+    let create_verifier_response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (create_verifier_envelope,),
+    );
+    let verifier_id = match create_verifier_response
+        .expect("verifier canister creation capability call must succeed")
+        .response
+    {
+        Response::CreateCanister(res) => res.new_canister_pid,
+        other => panic!("expected create-canister response, got: {other:?}"),
+    };
+    wait_until_ready(&pic, verifier_id);
+
+    let wallet = Principal::from_slice(&[61; 29]);
+    let delegated_subject = Principal::from_slice(&[62; 29]);
+    let now: Result<u64, Error> =
+        query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+
+    let claims = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![verifier_id],
+        iat: now,
+        exp: now + 120,
+    };
+    let issued_token: Result<DelegatedToken, Error> = update_call_as(
+        &pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+    let token = issued_token.expect("test delegation token issuance must succeed");
+
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        &pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+    let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
+
+    let install_signer_material: Result<(), Error> = update_call_as(
+        &pic,
+        signer_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (
+            token.proof.clone(),
+            root_public_key.clone(),
+            shard_public_key.clone(),
+        ),
+    );
+    install_signer_material.expect("install signer delegation material must succeed");
+
+    let install_verifier_material: Result<(), Error> = update_call_as(
+        &pic,
+        verifier_id,
+        root_id,
+        "signer_install_test_delegation_material",
+        (token.proof.clone(), root_public_key, shard_public_key),
+    );
+    install_verifier_material.expect("install verifier delegation material must succeed");
+
+    let verify_on_verifier: Result<(), Error> = update_call_as(
+        &pic,
+        verifier_id,
+        delegated_subject,
+        "signer_verify_token",
+        (token.clone(),),
+    );
+    verify_on_verifier.expect("verifier local token check must succeed after provisioning");
+
+    let bootstrap_ok: Result<(), Error> = update_call_as(
+        &pic,
+        verifier_id,
+        wallet,
+        "signer_bootstrap_delegated_session",
+        (token.clone(), delegated_subject, Some(60u64)),
+    );
+    bootstrap_ok.expect("delegated session bootstrap must succeed on verifier");
+
+    let active_subject: Result<Option<Principal>, Error> = query_call_as(
+        &pic,
+        verifier_id,
+        wallet,
+        "signer_delegated_session_subject",
+        (),
+    );
+    assert_eq!(
+        active_subject.expect("query verifier delegated session subject failed"),
+        Some(delegated_subject)
+    );
+
+    let authenticated_after_bootstrap: Result<(), Error> =
+        update_call_as(&pic, verifier_id, wallet, "signer_verify_token", (token,));
+    authenticated_after_bootstrap
+        .expect("authenticated guard must succeed after verifier bootstrap");
 }
 
 #[test]
@@ -948,7 +1095,7 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
 }
 
 #[test]
-fn test_delegation_material_install_hook_unavailable_in_normal_build() {
+fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
     let workspace_root = workspace_root();
     build_canisters_without_test_material_once(&workspace_root);
     let root_wasm = read_wasm_from_target(
@@ -991,19 +1138,20 @@ fn test_delegation_material_install_hook_unavailable_in_normal_build() {
     );
     let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
 
-    let install: Result<(), Error> = update_call_as(
+    let install = update_call_raw_as(
         &pic,
         root_id,
         root_id,
         "root_install_test_delegation_material",
         (token.proof, root_public_key, shard_public_key),
     );
-    let err = install.expect_err("normal build must reject test delegation-material install hook");
-    assert_eq!(err.code, ErrorCode::Forbidden);
+    let err = install.expect_err("normal build must not compile test delegation-material install");
+    let normalized = err.to_ascii_lowercase();
     assert!(
-        err.message
-            .contains("test delegation material install is unavailable in this build"),
-        "expected unavailable-in-build rejection, got: {err:?}"
+        normalized.contains("method") && normalized.contains("not")
+            || normalized.contains("not found")
+            || normalized.contains("has no update method"),
+        "expected missing-method failure, got: {err}"
     );
 }
 
@@ -1656,6 +1804,21 @@ where
         .expect("update_call failed");
 
     decode_one(&result).expect("decode response")
+}
+
+fn update_call_raw_as<A>(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    caller: Principal,
+    method: &str,
+    args: A,
+) -> Result<Vec<u8>, String>
+where
+    A: ArgumentEncoder,
+{
+    let payload = encode_args(args).expect("encode args");
+    pic.update_call(canister_id, caller, method, payload)
+        .map_err(|err| err.to_string())
 }
 
 fn query_call_as<T, A>(

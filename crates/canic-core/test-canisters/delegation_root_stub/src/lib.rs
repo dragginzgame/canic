@@ -8,8 +8,8 @@ use canic::{
     api::canister::{CanisterRole, wasm::WasmApi},
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
-        DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProvisionTargetKind,
-        RoleAttestation, RoleAttestationRequest, SignedRoleAttestation,
+        DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
+        RoleAttestationRequest, SignedRoleAttestation,
     },
     prelude::*,
 };
@@ -177,11 +177,6 @@ async fn root_verify_role_attestation(
     DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
-#[canic_update]
-async fn root_store_delegation_proof(proof: DelegationProof) -> Result<(), Error> {
-    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier).await
-}
-
 #[canic_query]
 async fn root_now_secs() -> Result<u64, Error> {
     Ok(ic_cdk::api::time() / 1_000_000_000)
@@ -240,19 +235,6 @@ async fn root_install_test_delegation_material(
     shard_public_key: Vec<u8>,
 ) -> Result<(), Error> {
     DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
-}
-
-// Normal builds keep the endpoint name for compatibility but fail closed.
-#[canic_update(requires(caller::is_root()))]
-#[cfg(not(canic_test_delegation_material))]
-async fn root_install_test_delegation_material(
-    _proof: DelegationProof,
-    _root_public_key: Vec<u8>,
-    _shard_public_key: Vec<u8>,
-) -> Result<(), Error> {
-    Err(Error::forbidden(
-        "test delegation material install is unavailable in this build",
-    ))
 }
 
 #[canic_update]
@@ -357,7 +339,9 @@ fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
 // WASM registry entry to satisfy bootstrap invariants and allow
 // auto-create of a non-root canister for delegation tests.
 const SIGNER_ROLE: CanisterRole = CanisterRole::new("signer");
+const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
 const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
-const WASMS: &[(CanisterRole, &[u8])] = &[(SIGNER_ROLE, SIGNER_WASM)];
+const WASMS: &[(CanisterRole, &[u8])] =
+    &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
 
 export_candid!();
