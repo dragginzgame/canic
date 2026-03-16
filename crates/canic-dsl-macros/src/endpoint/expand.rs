@@ -413,17 +413,17 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         }
         BuiltinPredicate::Authenticated { required_scope } => match required_scope {
             Some(AuthScopeArg::Literal(required_scope)) => quote!(
-                ::canic::__internal::core::access::expr::auth::is_authenticated_with_scope(
+                ::canic::__internal::core::access::expr::auth::authenticated_with_scope(
                     #required_scope
                 )
             ),
             Some(AuthScopeArg::Expr(required_scope)) => quote!(
-                ::canic::__internal::core::access::expr::auth::is_authenticated_with_scope(
+                ::canic::__internal::core::access::expr::auth::authenticated_with_scope(
                     #required_scope
                 )
             ),
             None => quote!(
-                ::canic::__internal::core::access::expr::auth::is_authenticated(
+                ::canic::__internal::core::access::expr::auth::authenticated(
                     ::core::option::Option::None
                 )
             ),

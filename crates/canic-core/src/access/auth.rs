@@ -139,14 +139,6 @@ pub fn resolve_authenticated_identity(
     resolve_authenticated_identity_at(transport_caller, IcOps::now_secs())
 }
 
-/// resolve_authenticated_caller
-///
-/// Compatibility shim returning the resolved authenticated subject.
-#[must_use]
-pub fn resolve_authenticated_caller(caller: Principal) -> Principal {
-    resolve_authenticated_identity(caller).authenticated_subject
-}
-
 pub(crate) fn resolve_authenticated_identity_at(
     transport_caller: Principal,
     now_secs: u64,
@@ -521,12 +513,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_authenticated_caller_defaults_to_wallet_when_no_override_exists() {
+    fn resolve_authenticated_identity_defaults_to_wallet_when_no_override_exists() {
         let _guard = seams::lock();
         AccessMetrics::reset();
         let wallet = p(9);
         DelegationStateOps::clear_delegated_session(wallet);
-        assert_eq!(resolve_authenticated_caller(wallet), wallet);
+        let resolved = resolve_authenticated_identity(wallet);
+        assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
             auth_session_metric_count("session_fallback_raw_caller"),
             1,

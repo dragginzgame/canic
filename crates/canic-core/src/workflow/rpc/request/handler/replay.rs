@@ -186,18 +186,6 @@ pub(super) fn replay_slot_key(
     replay_key::root_slot_key(caller, target_canister, request_id)
 }
 
-/// replay_slot_key_legacy
-///
-/// Build legacy root replay slot key (test helper passthrough).
-#[cfg(test)]
-pub(super) fn replay_slot_key_legacy(
-    caller: Principal,
-    subnet_id: Principal,
-    request_id: [u8; 32],
-) -> ReplaySlotKey {
-    replay_key::legacy_root_slot_key(caller, subnet_id, request_id)
-}
-
 /// hash_domain_separated
 ///
 /// Build deterministic domain-separated hash values for replay payloads.
@@ -225,7 +213,6 @@ mod replay {
         crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
             caller: ctx.caller,
             target_canister: ctx.self_pid,
-            subnet_id: ctx.subnet_id,
             request_id,
             ttl_seconds,
             payload_hash,

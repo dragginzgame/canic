@@ -1,9 +1,7 @@
 use super::RegistryPolicyInput;
 use crate::{
-    InternalError,
     cdk::candid::Principal,
     config::schema::{CanisterConfig, CanisterKind},
-    dto::error::{Error as PublicError, ErrorCode},
     ids::CanisterRole,
 };
 use thiserror::Error as ThisError;
@@ -46,32 +44,6 @@ pub enum RegistryPolicyError {
         role: CanisterRole,
         parent_role: CanisterRole,
     },
-}
-
-impl RegistryPolicyError {
-    const fn code(&self) -> ErrorCode {
-        match self {
-            Self::RoleAlreadyRegistered { .. } => ErrorCode::PolicyRoleAlreadyRegistered,
-            Self::SingletonAlreadyRegisteredUnderParent { .. } => {
-                ErrorCode::PolicySingletonAlreadyRegisteredUnderParent
-            }
-            Self::ReplicaRequiresSingletonWithScaling { .. } => {
-                ErrorCode::PolicyReplicaRequiresSingletonWithScaling
-            }
-            Self::ShardRequiresSingletonWithSharding { .. } => {
-                ErrorCode::PolicyShardRequiresSingletonWithSharding
-            }
-            Self::TenantRequiresSingletonParent { .. } => {
-                ErrorCode::PolicyTenantRequiresSingletonParent
-            }
-        }
-    }
-}
-
-impl From<RegistryPolicyError> for InternalError {
-    fn from(err: RegistryPolicyError) -> Self {
-        Self::public(PublicError::policy(err.code(), err.to_string()))
-    }
 }
 
 ///

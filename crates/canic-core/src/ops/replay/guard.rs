@@ -9,7 +9,6 @@ use super::{key, slot, ttl};
 pub struct RootReplayGuardInput {
     pub caller: Principal,
     pub target_canister: Principal,
-    pub subnet_id: Principal,
     pub request_id: [u8; 32],
     pub ttl_seconds: u64,
     pub payload_hash: [u8; 32],
@@ -82,14 +81,6 @@ pub fn evaluate_root_replay(
         return Ok(resolve_existing(input.now, input.payload_hash, existing));
     }
 
-    let legacy_slot_key =
-        key::legacy_root_slot_key(input.caller, input.subnet_id, input.request_id);
-    if legacy_slot_key != slot_key
-        && let Some(existing) = slot::get_root_slot(legacy_slot_key)
-    {
-        return Ok(resolve_existing(input.now, input.payload_hash, existing));
-    }
-
     let _ = slot::purge_root_expired(input.now, input.purge_scan_limit);
 
     let issued_at = input.now;
@@ -149,7 +140,6 @@ mod tests {
         RootReplayGuardInput {
             caller: p(1),
             target_canister: p(2),
-            subnet_id: p(3),
             request_id: [9u8; 32],
             ttl_seconds: 60,
             payload_hash: [7u8; 32],

@@ -644,52 +644,6 @@ fn replay_slot_key_binds_caller_target_and_request_id() {
 }
 
 #[test]
-fn check_replay_reads_legacy_slot_key_for_compatibility() {
-    RootReplayOps::reset_for_tests();
-
-    let ctx = RootContext {
-        caller: p(1),
-        self_pid: p(42),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 1_000,
-    };
-    let capability = RootCapability::RequestCycles(CyclesRequest {
-        cycles: 77,
-        metadata: Some(meta(7, 60)),
-    });
-    let payload_hash = capability.payload_hash().expect("hash");
-    let request_id = capability.metadata().expect("metadata").request_id;
-    let legacy_key = replay::replay_slot_key_legacy(ctx.caller, ctx.subnet_id, request_id);
-
-    let response = Response::Cycles(CyclesResponse {
-        cycles_transferred: 77,
-    });
-    let response_candid = encode_one(&response).expect("encode");
-
-    RootReplayOps::upsert(
-        legacy_key,
-        RootReplayRecord {
-            payload_hash,
-            issued_at: 900,
-            expires_at: 1_200,
-            response_candid,
-        },
-    );
-
-    let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
-    match preflight {
-        replay::ReplayPreflight::Cached(Response::Cycles(cached)) => {
-            assert_eq!(cached.cycles_transferred, 77);
-        }
-        replay::ReplayPreflight::Cached(other) => {
-            panic!("expected cached cycles response, got: {other:?}");
-        }
-        replay::ReplayPreflight::Fresh(_) => panic!("legacy slot should return cached replay"),
-    }
-}
-
-#[test]
 fn check_replay_rejects_invalid_ttl() {
     RootReplayOps::reset_for_tests();
 

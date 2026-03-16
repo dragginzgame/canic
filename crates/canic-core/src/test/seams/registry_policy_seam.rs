@@ -8,7 +8,7 @@ use crate::{
         ShardingConfig,
     },
     domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
-    domain::policy::topology::{RegistryPolicyInput, TopologyPolicyInput},
+    domain::policy::topology::{RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput},
     dto::error::{Error, ErrorCode},
     ids::CanisterRole,
     ops::storage::registry::subnet::SubnetRegistryOps,
@@ -148,7 +148,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         }
     }
 
-    let public = Error::from(InternalError::from(err));
+    let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(public.code, ErrorCode::PolicyRoleAlreadyRegistered);
 
     let created_at = 1;
@@ -218,7 +218,7 @@ fn registry_singleton_policy_blocks_under_parent() {
         }
     }
 
-    let public = Error::from(InternalError::from(err));
+    let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(
         public.code,
         ErrorCode::PolicySingletonAlreadyRegisteredUnderParent
@@ -254,7 +254,7 @@ fn tenant_creation_requires_singleton_parent() {
         _ => panic!("expected tenant singleton-parent policy error"),
     }
 
-    let public = Error::from(InternalError::from(err));
+    let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(public.code, ErrorCode::PolicyTenantRequiresSingletonParent);
     assert!(
         public
