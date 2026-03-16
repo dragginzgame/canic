@@ -2,11 +2,13 @@
 
 #![allow(clippy::unused_async)]
 
+#[cfg(canic_test_delegation_material)]
+use canic::dto::auth::DelegationProof;
 use canic::{
     Error,
     api::auth::DelegationApi,
     cdk::candid::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof, SignedRoleAttestation},
+    dto::auth::{DelegatedToken, DelegatedTokenClaims, SignedRoleAttestation},
     ids::cap,
     prelude::*,
 };
@@ -63,19 +65,6 @@ async fn signer_install_test_delegation_material(
     shard_public_key: Vec<u8>,
 ) -> Result<(), Error> {
     DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
-}
-
-// Normal builds keep the endpoint name for compatibility but fail closed.
-#[canic_update(internal, requires(caller::is_root()))]
-#[cfg(not(canic_test_delegation_material))]
-async fn signer_install_test_delegation_material(
-    _proof: DelegationProof,
-    _root_public_key: Vec<u8>,
-    _shard_public_key: Vec<u8>,
-) -> Result<(), Error> {
-    Err(Error::forbidden(
-        "test delegation material install is unavailable in this build",
-    ))
 }
 
 #[canic_update]

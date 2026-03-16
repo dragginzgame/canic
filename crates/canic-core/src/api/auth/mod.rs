@@ -4,8 +4,9 @@ use crate::{
     dto::{
         auth::{
             AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationCert,
-            DelegationProof, DelegationProvisionResponse, DelegationProvisionTargetKind,
-            DelegationRequest, RoleAttestationRequest, SignedRoleAttestation,
+            DelegationProof, DelegationProvisionResponse, DelegationProvisionStatus,
+            DelegationProvisionTargetKind, DelegationRequest, RoleAttestationRequest,
+            SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
@@ -20,7 +21,9 @@ use crate::{
         rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_session_bootstrap_rejected_disabled,
+            record_attestation_refresh_failed, record_delegation_provision_complete,
+            record_delegation_verifier_target_count, record_delegation_verifier_target_failed,
+            record_delegation_verifier_target_missing, record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_replay_conflict,
             record_session_bootstrap_rejected_replay_reused,
             record_session_bootstrap_rejected_subject_mismatch,
@@ -32,7 +35,11 @@ use crate::{
             record_session_created, record_session_pruned, record_session_replaced,
             record_signer_issue_without_proof,
         },
-        storage::auth::{DelegatedSession, DelegatedSessionBootstrapBinding, DelegationStateOps},
+        storage::{
+            auth::{DelegatedSession, DelegatedSessionBootstrapBinding, DelegationStateOps},
+            directory::subnet::SubnetDirectoryOps,
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
@@ -513,7 +520,9 @@ impl DelegationApi {
     // Provision a fresh delegation from root, then load locally stored proof.
     async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
         let request = Self::delegation_request_from_claims(claims)?;
-        let _ = Self::request_delegation(request).await?;
+        let required_verifier_targets = request.verifier_targets.clone();
+        let response = Self::request_delegation(request).await?;
+        Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
         Self::require_proof()
     }
 
@@ -528,15 +537,106 @@ impl DelegationApi {
             ));
         }
 
+        let signer_pid = IcOps::canister_self();
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let verifier_targets = Self::derive_required_verifier_targets_from_aud(
+            &claims.aud,
+            signer_pid,
+            root_pid,
+            Self::is_registered_canister,
+        )?;
+
         Ok(DelegationRequest {
-            shard_pid: IcOps::canister_self(),
+            shard_pid: signer_pid,
             scopes: claims.scopes.clone(),
             aud: claims.aud.clone(),
             ttl_secs,
-            verifier_targets: Vec::new(),
+            verifier_targets,
             include_root_verifier: true,
             metadata: None,
         })
+    }
+
+    // Validate required verifier fanout and fail closed when any required target is missing/failing.
+    fn ensure_required_verifier_targets_provisioned(
+        required_targets: &[Principal],
+        response: &DelegationProvisionResponse,
+    ) -> Result<(), Error> {
+        let mut checked = Vec::new();
+        for target in required_targets {
+            if checked.contains(target) {
+                continue;
+            }
+            checked.push(*target);
+        }
+        record_delegation_verifier_target_count(checked.len());
+
+        for target in &checked {
+            let Some(result) = response.results.iter().find(|entry| {
+                entry.kind == DelegationProvisionTargetKind::Verifier && entry.target == *target
+            }) else {
+                record_delegation_verifier_target_missing();
+                return Err(Error::internal(format!(
+                    "delegation provisioning missing verifier target result for '{target}'"
+                )));
+            };
+
+            if result.status != DelegationProvisionStatus::Ok {
+                record_delegation_verifier_target_failed();
+                let detail = result
+                    .error
+                    .as_ref()
+                    .map_or_else(|| "unknown error".to_string(), ToString::to_string);
+                return Err(Error::internal(format!(
+                    "delegation provisioning failed for required verifier target '{target}': {detail}"
+                )));
+            }
+        }
+
+        record_delegation_provision_complete();
+        Ok(())
+    }
+
+    // Derive required verifier targets from audience with strict filtering/validation.
+    fn derive_required_verifier_targets_from_aud<F>(
+        audience: &[Principal],
+        signer_pid: Principal,
+        root_pid: Principal,
+        mut is_valid_target: F,
+    ) -> Result<Vec<Principal>, Error>
+    where
+        F: FnMut(Principal) -> bool,
+    {
+        let mut verifier_targets = Vec::new();
+        for principal in audience {
+            if *principal == signer_pid || *principal == root_pid {
+                continue;
+            }
+
+            if !is_valid_target(*principal) {
+                return Err(Error::invalid(format!(
+                    "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
+                )));
+            }
+
+            if !verifier_targets.contains(principal) {
+                verifier_targets.push(*principal);
+            }
+        }
+
+        Ok(verifier_targets)
+    }
+
+    // Return true when a principal is a provisionable verifier canister target.
+    fn is_registered_canister(principal: Principal) -> bool {
+        if SubnetRegistryOps::is_registered(principal) {
+            return true;
+        }
+
+        SubnetDirectoryOps::data()
+            .entries
+            .iter()
+            .any(|(_, pid)| *pid == principal)
     }
 
     // Check whether a proof can be reused safely for the requested claims.

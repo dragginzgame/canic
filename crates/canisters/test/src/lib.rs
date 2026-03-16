@@ -8,13 +8,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{
-    Error,
-    api::{auth::DelegationApi, env::EnvQuery},
-    dto::auth::{DelegatedToken, DelegationProof, DelegationProvisionTargetKind},
-    ids::cap,
-    prelude::*,
-};
+use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use canic_internal::canister::TEST;
 use std::time::Duration;
 
@@ -46,21 +40,6 @@ async fn test() -> Result<(), Error> {
     }
 
     Ok(())
-}
-
-/// test_set_delegation_proof
-/// Root-only helper to install a delegation proof for auth tests.
-#[canic_update(internal, requires(caller::is_root()))]
-async fn test_set_delegation_proof(proof: DelegationProof) -> Result<(), Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
-    }
-
-    let _root_pid = EnvQuery::snapshot()
-        .root_pid
-        .ok_or_else(|| Error::internal("root pid unavailable"))?;
-
-    DelegationApi::store_proof(proof, DelegationProvisionTargetKind::Verifier).await
 }
 
 /// test_verify_delegated_token

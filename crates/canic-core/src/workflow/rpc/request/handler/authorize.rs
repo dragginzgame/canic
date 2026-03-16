@@ -11,7 +11,7 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::mgmt::MgmtOps,
         runtime::env::EnvOps,
         runtime::metrics::cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
         runtime::metrics::root_capability::{
@@ -208,7 +208,7 @@ fn authorize_issue_delegation(
     }
 
     let root_pid = EnvOps::root_pid()?;
-    if root_pid != IcOps::canister_self() {
+    if root_pid != ctx.self_pid {
         return Err(RpcWorkflowError::DelegationMustTargetRoot.into());
     }
 
@@ -232,6 +232,31 @@ fn authorize_issue_delegation(
 
     if req.scopes.iter().any(String::is_empty) {
         return Err(RpcWorkflowError::DelegationScopeEmpty.into());
+    }
+
+    for target in &req.verifier_targets {
+        if *target == req.shard_pid {
+            return Err(RpcWorkflowError::DelegationVerifierTargetIncludesShard {
+                target: *target,
+                shard_pid: req.shard_pid,
+            }
+            .into());
+        }
+
+        if *target == root_pid {
+            return Err(RpcWorkflowError::DelegationVerifierTargetIncludesRoot {
+                target: *target,
+                root_pid,
+            }
+            .into());
+        }
+
+        if !SubnetRegistryOps::is_registered(*target) {
+            return Err(RpcWorkflowError::DelegationVerifierTargetNotRegistered {
+                target: *target,
+            }
+            .into());
+        }
     }
 
     Ok(())

@@ -98,6 +98,21 @@ pub enum RpcWorkflowError {
     #[error("delegation scope values must not contain empty strings")]
     DelegationScopeEmpty,
 
+    #[error("delegation verifier target {target} must be registered in subnet registry")]
+    DelegationVerifierTargetNotRegistered { target: Principal },
+
+    #[error("delegation verifier target {target} must not equal shard_pid {shard_pid}")]
+    DelegationVerifierTargetIncludesShard {
+        target: Principal,
+        shard_pid: Principal,
+    },
+
+    #[error("delegation verifier target {target} must not equal root pid {root_pid}")]
+    DelegationVerifierTargetIncludesRoot {
+        target: Principal,
+        root_pid: Principal,
+    },
+
     #[error(
         "delegation expires_at must be greater than issued_at (issued_at={issued_at}, expires_at={expires_at})"
     )]
