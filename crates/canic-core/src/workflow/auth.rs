@@ -256,7 +256,7 @@ impl DelegationWorkflow {
         }
     }
 
-    fn metric_role(kind: DelegationProvisionTargetKind) -> DelegationProvisionRole {
+    const fn metric_role(kind: DelegationProvisionTargetKind) -> DelegationProvisionRole {
         match kind {
             DelegationProvisionTargetKind::Signer => DelegationProvisionRole::Signer,
             DelegationProvisionTargetKind::Verifier => DelegationProvisionRole::Verifier,
