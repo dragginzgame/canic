@@ -1,4 +1,4 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::Criterion;
 
 ///
 /// BENCH TEMPLATE
@@ -7,10 +7,15 @@ use criterion::{Criterion, criterion_group, criterion_main};
 /// Safe to compile; does not perform any measurements.
 ///
 
-const fn bench_stub(_c: &mut Criterion) {
+// Runs the placeholder benchmark body to keep this bench target valid.
+fn bench_stub(_criterion: &mut Criterion) {
     // Intentionally empty.
     // Future contributors can replace with real benchmarks.
 }
 
-criterion_group!(benches, bench_stub);
-criterion_main!(benches);
+// Executes the placeholder benchmark without parsing CLI args.
+fn main() {
+    let mut criterion = Criterion::default();
+    bench_stub(&mut criterion);
+    criterion.final_summary();
+}

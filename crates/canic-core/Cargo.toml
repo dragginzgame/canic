@@ -40,6 +40,7 @@ pocket-ic = { workspace = true }
 [[bench]]
 name = "serialize"
 harness = false
+test = false
 
 [lints]
 workspace = true
