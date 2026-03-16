@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 // Example: minimal root canister scaffold.
-// Compile with `--features ic` to include the canister module.
+// Compile this example with `cargo build -p canic --example minimal_root`.
 
 mod canister {
     use canic::prelude::*;
@@ -26,5 +26,5 @@ mod canister {
 }
 
 fn main() {
-    println!("minimal_root example (use --features ic)");
+    println!("minimal_root example");
 }
