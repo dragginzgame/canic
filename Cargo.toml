@@ -32,7 +32,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.94.0"
 edition = "2024"
-version = "0.15.5"
+version = "0.15.6"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -65,7 +65,7 @@ ic-cdk-timers = "1.0"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = "0.1.12"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
-pocket-ic = "12.0"
+pocket-ic = "13.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 rand_chacha = "0.10"
