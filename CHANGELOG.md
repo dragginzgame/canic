@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.16.x] - 2026-03-16 - Delegation Proof Evolution
 
 - `0.16.0` is reserved as a placeholder minor-line entry for delegation proof evolution follow-up work (deferred from `0.15` Phase 3), with implementation details tracked in the `0.16` design docs.
+- `0.16.1` hardens delegated-auth audience binding so verifier proof installs and delegated-session bootstrap reject out-of-scope audiences, while typed auth rollout metrics make prewarm/repair failures easier to track during the `0.16` auth refactor.
 
 See detailed breakdown:
 [docs/changelog/0.16.md](docs/changelog/0.16.md)

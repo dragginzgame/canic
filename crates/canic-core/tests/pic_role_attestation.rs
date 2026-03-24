@@ -5,8 +5,9 @@ use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEnco
 use canic_core::dto::{
     auth::{
         AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand,
-        DelegationAdminResponse, DelegationProvisionStatus, DelegationVerifierProofPushRequest,
-        RoleAttestationRequest, SignedRoleAttestation,
+        DelegationAdminResponse, DelegationProofInstallIntent, DelegationProofInstallRequest,
+        DelegationProvisionStatus, DelegationVerifierProofPushRequest, RoleAttestationRequest,
+        SignedRoleAttestation,
     },
     capability::{
         CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
@@ -693,6 +694,51 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
         &fixture.pic,
         fixture.root_id,
         &[("repair_failure", AuthRolloutMetricClass::HardGate, 1)],
+    );
+}
+
+#[test]
+fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience() {
+    let fixture = delegation_admin_fixture(88);
+
+    install_root_test_delegation_material(
+        &fixture.pic,
+        fixture.root_id,
+        fixture.current_token.proof.clone(),
+        fixture.root_public_key,
+        fixture.shard_public_key,
+    );
+
+    let store: Result<(), Error> = update_call_as(
+        &fixture.pic,
+        fixture.signer_id,
+        fixture.root_id,
+        "canic_delegation_set_verifier_proof",
+        (DelegationProofInstallRequest {
+            proof: fixture.current_token.proof,
+            intent: DelegationProofInstallIntent::Prewarm,
+        },),
+    );
+    let err = store.expect_err("verifier store must reject proof outside local audience");
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message.contains("not in proof audience"),
+        "expected target-side audience rejection, got: {err:?}"
+    );
+
+    assert_access_metrics(
+        &fixture.pic,
+        fixture.signer_id,
+        "auth_signer",
+        &[(
+            "delegation_install_validation_failed{intent=\"prewarm\",stage=\"post_normalization\",reason=\"target_not_in_audience\"}",
+            1,
+        )],
+    );
+    assert_auth_rollout_metrics(
+        &fixture.pic,
+        fixture.signer_id,
+        &[("prewarm_failure", AuthRolloutMetricClass::Operational, 1)],
     );
 }
 

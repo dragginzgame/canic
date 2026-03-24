@@ -1,5 +1,7 @@
 use super::*;
-use crate::dto::auth::{AttestationKeyStatus, DelegationCert, DelegationProof};
+use crate::dto::auth::{
+    AttestationKeyStatus, DelegatedTokenClaims, DelegationCert, DelegationProof,
+};
 use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
 fn p(id: u8) -> Principal {
@@ -32,6 +34,17 @@ fn sample_proof(shard_pid: Principal, issued_at: u64) -> DelegationProof {
     }
 }
 
+fn sample_claims() -> DelegatedTokenClaims {
+    DelegatedTokenClaims {
+        sub: p(9),
+        shard_pid: p(2),
+        scopes: vec!["verify".to_string()],
+        aud: vec![p(3)],
+        iat: 100,
+        exp: 120,
+    }
+}
+
 fn signing_material(seed: u8, payload: &RoleAttestation) -> (Vec<u8>, Vec<u8>) {
     let signing_key = SigningKey::from_bytes((&[seed; 32]).into()).expect("signing key");
     let signature: k256::ecdsa::Signature = signing_key
@@ -50,6 +63,31 @@ fn role_attestation_hash_changes_with_payload() {
     let hash_a = role_attestation_hash(&sample_attestation(1)).expect("hash");
     let hash_b = role_attestation_hash(&sample_attestation(2)).expect("hash");
     assert_ne!(hash_a, hash_b, "epoch must affect attestation hash");
+}
+
+#[test]
+fn audience_helpers_use_set_semantics_for_principals() {
+    assert!(audience::principals_subset(&[p(3), p(3)], &[p(3), p(4)]));
+    assert!(!audience::principals_subset(&[p(3), p(5)], &[p(3), p(4)]));
+}
+
+#[test]
+fn audience_helpers_validate_claims_against_cert() {
+    audience::validate_claims_against_cert(&sample_claims(), &sample_proof(p(2), 90).cert)
+        .expect("claims must fit cert");
+}
+
+#[test]
+fn audience_helpers_reject_claim_outside_cert_audience() {
+    let mut claims = sample_claims();
+    claims.aud.push(p(8));
+
+    let err = audience::validate_claims_against_cert(&claims, &sample_proof(p(2), 90).cert)
+        .expect_err("audience outside cert must fail");
+    assert!(matches!(
+        err,
+        DelegationScopeError::AudienceNotAllowed { aud } if aud == p(8)
+    ));
 }
 
 #[test]

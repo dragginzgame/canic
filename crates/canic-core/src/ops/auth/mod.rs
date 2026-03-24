@@ -8,6 +8,7 @@ use crate::{
 };
 
 mod attestation;
+pub mod audience;
 mod crypto;
 mod delegation;
 mod error;

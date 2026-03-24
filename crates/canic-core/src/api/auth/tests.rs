@@ -1,10 +1,12 @@
+use super::proof_store::AudienceBindingFailureStage;
 use super::*;
 use crate::InternalErrorOrigin;
 use crate::cdk::types::Principal;
 use crate::dto::auth::{
-    DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProofInstallIntent,
-    DelegationProvisionResponse, DelegationProvisionStatus, DelegationProvisionTargetKind,
-    DelegationProvisionTargetResponse, DelegationVerifierProofPushRequest,
+    DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+    DelegationProofInstallIntent, DelegationProvisionResponse, DelegationProvisionStatus,
+    DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
+    DelegationVerifierProofPushRequest,
 };
 use crate::dto::error::ErrorCode;
 use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
@@ -208,6 +210,14 @@ fn sample_proof() -> DelegationProof {
     }
 }
 
+fn sample_token() -> DelegatedToken {
+    DelegatedToken {
+        claims: sample_claims(),
+        proof: sample_proof(),
+        token_sig: vec![4, 5, 6],
+    }
+}
+
 #[test]
 fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
     let claims = sample_claims();
@@ -234,6 +244,59 @@ fn proof_is_reusable_for_claims_rejects_scope_mismatch() {
     assert!(!DelegationApi::proof_is_reusable_for_claims(
         &proof, &claims, 110
     ));
+}
+
+#[test]
+fn ensure_token_claim_audience_subset_accepts_subset() {
+    let token = sample_token();
+
+    DelegationApi::ensure_token_claim_audience_subset(&token)
+        .expect("subset audience must be accepted");
+}
+
+#[test]
+fn ensure_token_claim_audience_subset_uses_set_semantics() {
+    let mut token = sample_token();
+    token.claims.aud = vec![p(4), p(3), p(3)];
+
+    DelegationApi::ensure_token_claim_audience_subset(&token)
+        .expect("duplicate and reordered audience entries must be accepted");
+}
+
+#[test]
+fn ensure_token_claim_audience_subset_rejects_empty_claim_audience() {
+    let mut token = sample_token();
+    token.claims.aud.clear();
+
+    let err = DelegationApi::ensure_token_claim_audience_subset(&token)
+        .expect_err("empty claims audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("must not be empty"));
+}
+
+#[test]
+fn ensure_token_claim_audience_subset_rejects_claim_outside_proof_audience() {
+    let mut token = sample_token();
+    token.claims.aud.push(p(9));
+
+    let err = DelegationApi::ensure_token_claim_audience_subset(&token)
+        .expect_err("claims audience outside proof audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not a subset of proof audience"));
+}
+
+#[test]
+fn ensure_token_claim_audience_subset_rejects_empty_proof_audience() {
+    let mut token = sample_token();
+    token.proof.cert.aud.clear();
+
+    let err = DelegationApi::ensure_token_claim_audience_subset(&token)
+        .expect_err("empty proof audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not a subset of proof audience"));
 }
 
 #[test]
@@ -362,8 +425,8 @@ fn ensure_required_verifier_targets_provisioned_rejects_missing_target_result() 
 #[test]
 fn normalize_explicit_verifier_push_request_dedupes_targets() {
     let root_pid = p(1);
-    let verifier_a = p(5);
-    let verifier_b = p(6);
+    let verifier_a = p(3);
+    let verifier_b = p(4);
 
     let normalized = DelegationApi::normalize_explicit_verifier_push_request_with(
         DelegationVerifierProofPushRequest {
@@ -433,10 +496,32 @@ fn normalize_explicit_verifier_push_request_rejects_unregistered_target() {
 }
 
 #[test]
+fn normalize_explicit_verifier_push_request_rejects_target_not_in_audience() {
+    let root_pid = p(1);
+    let verifier_a = p(3);
+    let verifier_b = p(4);
+    let out_of_audience = p(9);
+
+    let err = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![verifier_a, verifier_b, out_of_audience],
+        },
+        DelegationProofInstallIntent::Prewarm,
+        root_pid,
+        |_principal| true,
+    )
+    .expect_err("target outside proof audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not in proof audience"));
+}
+
+#[test]
 fn normalize_explicit_verifier_push_request_is_idempotent() {
     let root_pid = p(1);
-    let verifier_a = p(5);
-    let verifier_b = p(6);
+    let verifier_a = p(3);
+    let verifier_b = p(4);
     let request = DelegationVerifierProofPushRequest {
         proof: sample_proof(),
         verifier_targets: vec![verifier_a, verifier_a, verifier_b],
@@ -464,8 +549,8 @@ fn normalize_explicit_verifier_push_request_is_idempotent() {
 #[test]
 fn normalize_explicit_verifier_push_request_rejects_mixed_targets_without_partial_apply() {
     let root_pid = p(1);
-    let verifier_a = p(5);
-    let verifier_b = p(6);
+    let verifier_a = p(3);
+    let verifier_b = p(4);
     let invalid = p(99);
 
     let err = DelegationApi::normalize_explicit_verifier_push_request_with(
@@ -519,6 +604,31 @@ fn repair_accepts_existing_identical_local_proof() {
         Ok(Some(proof.clone()))
     })
     .expect("repair should accept identical stored proof");
+}
+
+#[test]
+fn ensure_target_in_proof_audience_accepts_allowed_verifier() {
+    DelegationApi::ensure_target_in_proof_audience(
+        &sample_proof(),
+        p(3),
+        DelegationProofInstallIntent::Repair,
+        AudienceBindingFailureStage::PostNormalization,
+    )
+    .expect("audience-bound target should succeed");
+}
+
+#[test]
+fn ensure_target_in_proof_audience_rejects_target_outside_audience() {
+    let err = DelegationApi::ensure_target_in_proof_audience(
+        &sample_proof(),
+        p(9),
+        DelegationProofInstallIntent::Repair,
+        AudienceBindingFailureStage::PostNormalization,
+    )
+    .expect_err("target outside audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not in proof audience"));
 }
 
 #[test]

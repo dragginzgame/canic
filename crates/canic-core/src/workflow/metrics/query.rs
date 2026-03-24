@@ -12,6 +12,7 @@ use crate::{
         perf::PerfOps,
         runtime::metrics::{
             MetricsOps,
+            auth::typed_auth_metric_records,
             mapper::{
                 AccessMetricEntryMapper, AuthMetricEntryMapper, AuthRolloutMetricEntryMapper,
                 CyclesFundingMetricEntryMapper, DelegationMetricEntryMapper, EndpointHealthMapper,
@@ -128,7 +129,8 @@ impl MetricsQuery {
     #[must_use]
     pub fn auth_page(page: PageRequest) -> Page<AuthMetricEntry> {
         let snapshot = MetricsOps::access_snapshot();
-        let mut entries = AuthMetricEntryMapper::record_to_view(snapshot.entries);
+        let mut entries =
+            AuthMetricEntryMapper::record_to_view(typed_auth_metric_records(snapshot.entries));
 
         entries.sort_by(|a, b| {
             a.endpoint
@@ -142,7 +144,9 @@ impl MetricsQuery {
     #[must_use]
     pub fn auth_rollout_page(page: PageRequest) -> Page<AuthRolloutMetricEntry> {
         let snapshot = MetricsOps::access_snapshot();
-        let entries = AuthRolloutMetricEntryMapper::record_to_view(snapshot.entries);
+        let entries = AuthRolloutMetricEntryMapper::record_to_view(typed_auth_metric_records(
+            snapshot.entries,
+        ));
 
         paginate_vec(entries, page)
     }
@@ -217,8 +221,16 @@ impl MetricsQuery {
 mod tests {
     use super::*;
     use crate::{
-        dto::metrics::AuthRolloutMetricClass, ids::AccessMetricKind,
-        ops::runtime::metrics::access::AccessMetrics,
+        dto::metrics::AuthRolloutMetricClass,
+        ids::AccessMetricKind,
+        ops::runtime::metrics::{
+            access::AccessMetrics,
+            auth::{
+                AuthMetricPredicate, AuthProofCacheUtilizationBucket,
+                DelegationInstallValidationFailureReason, DelegationProvisionRole,
+                VerifierProofCacheEvictionClass,
+            },
+        },
     };
 
     #[test]
@@ -228,12 +240,12 @@ mod tests {
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "token_rejected_proof_miss",
+            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
         );
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "token_rejected_proof_miss",
+            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
         );
         AccessMetrics::increment(
             "canic_metrics",
@@ -248,7 +260,10 @@ mod tests {
 
         assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].endpoint, "auth_verifier");
-        assert_eq!(page.entries[0].predicate, "token_rejected_proof_miss");
+        assert_eq!(
+            page.entries[0].predicate,
+            AuthMetricPredicate::ProofMiss.as_str().as_ref()
+        );
         assert_eq!(page.entries[0].count, 2);
     }
 
@@ -259,37 +274,59 @@ mod tests {
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "token_rejected_proof_miss",
+            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
         );
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "token_rejected_proof_mismatch",
+            AuthMetricPredicate::ProofMismatch.as_str().as_ref(),
         );
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "proof_cache_evictions_total{class=\"active\"}",
+            AuthMetricPredicate::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Active,
+            }
+            .as_str()
+            .as_ref(),
         );
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "proof_cache_utilization{bucket=\"95_100\"}",
+            AuthMetricPredicate::ProofCacheUtilization {
+                bucket: AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred,
+            }
+            .as_str()
+            .as_ref(),
         );
         AccessMetrics::increment(
             "auth_signer",
             AccessMetricKind::Auth,
-            "delegation_push_failed{role=\"verifier\",origin=\"repair\"}",
+            AuthMetricPredicate::DelegationPushFailed {
+                role: DelegationProvisionRole::Verifier,
+                intent: crate::dto::auth::DelegationProofInstallIntent::Repair,
+            }
+            .as_str()
+            .as_ref(),
         );
         AccessMetrics::increment(
             "auth_signer",
             AccessMetricKind::Auth,
-            "delegation_install_validation_failed{intent=\"prewarm\",stage=\"post_normalization\",reason=\"verify_proof\"}",
+            AuthMetricPredicate::DelegationInstallValidationFailed {
+                intent: crate::dto::auth::DelegationProofInstallIntent::Prewarm,
+                reason: DelegationInstallValidationFailureReason::VerifyProof,
+            }
+            .as_str()
+            .as_ref(),
         );
         AccessMetrics::increment(
             "auth_verifier",
             AccessMetricKind::Auth,
-            "proof_cache_evictions_total{class=\"cold\"}",
+            AuthMetricPredicate::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Cold,
+            }
+            .as_str()
+            .as_ref(),
         );
         AccessMetrics::increment(
             "canic_metrics",
