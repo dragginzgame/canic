@@ -4,8 +4,9 @@
 use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic_core::dto::{
     auth::{
-        AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, RoleAttestationRequest,
-        SignedRoleAttestation,
+        AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand,
+        DelegationAdminResponse, DelegationProvisionStatus, DelegationVerifierProofPushRequest,
+        RoleAttestationRequest, SignedRoleAttestation,
     },
     capability::{
         CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
@@ -13,7 +14,7 @@ use canic_core::dto::{
         RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
-    metrics::{MetricsKind, MetricsRequest, MetricsResponse},
+    metrics::{AuthRolloutMetricClass, MetricsKind, MetricsRequest, MetricsResponse},
     page::PageRequest,
     rpc::{CreateCanisterParent, CreateCanisterRequest},
     rpc::{CyclesRequest, Request, Response},
@@ -539,15 +540,210 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
         "signer_verify_token_any",
         (token_a,),
     );
-    let err = denied.expect_err("mismatched proof must fail before signature checks");
+    let err = denied.expect_err("missing proof must fail before signature checks");
     assert_eq!(err.code, ErrorCode::Unauthorized);
     assert!(
-        err.message.contains("proof does not match current proof"),
-        "expected proof mismatch denial, got: {err:?}"
+        err.message.contains("delegation proof miss"),
+        "expected proof-miss denial, got: {err:?}"
     );
     assert!(
         !err.message.contains("signature unavailable"),
         "expected proof check to run before signature validation, got: {err:?}"
+    );
+}
+
+#[test]
+fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
+    let fixture = delegation_admin_fixture(83);
+
+    install_root_test_delegation_material(
+        &fixture.pic,
+        fixture.root_id,
+        fixture.current_token.proof.clone(),
+        fixture.root_public_key.clone(),
+        fixture.shard_public_key.clone(),
+    );
+    install_signer_test_delegation_material(
+        &fixture.pic,
+        fixture.verifier_id,
+        fixture.root_id,
+        fixture.stale_token.proof.clone(),
+        fixture.root_public_key.clone(),
+        fixture.shard_public_key.clone(),
+    );
+
+    assert_token_verify_proof_missing(
+        &fixture.pic,
+        fixture.verifier_id,
+        fixture.delegated_subject,
+        fixture.current_token.clone(),
+    );
+
+    let prewarm = prewarm_verifiers(
+        &fixture.pic,
+        fixture.root_id,
+        fixture.current_token.proof.clone(),
+        vec![fixture.verifier_id],
+    );
+    let DelegationAdminResponse::PrewarmedVerifiers { result } = prewarm else {
+        panic!("expected prewarm response");
+    };
+    assert_eq!(result.results.len(), 1);
+    let response = &result.results[0];
+    assert_eq!(response.target, fixture.verifier_id);
+    assert_eq!(response.status, DelegationProvisionStatus::Ok);
+    assert!(
+        response.error.is_none(),
+        "unexpected prewarm error: {response:?}"
+    );
+
+    let verified_after_prewarm: Result<(), Error> = update_call_as(
+        &fixture.pic,
+        fixture.verifier_id,
+        fixture.delegated_subject,
+        "signer_verify_token",
+        (fixture.current_token,),
+    );
+    verified_after_prewarm.expect("prewarm should update verifier proof");
+
+    assert_access_metrics(
+        &fixture.pic,
+        fixture.root_id,
+        "auth_signer",
+        &[
+            ("delegation_install_total{intent=\"prewarm\"}", 1),
+            (
+                "delegation_install_normalized_target_total{intent=\"prewarm\"}",
+                1,
+            ),
+            (
+                "delegation_install_fanout_bucket{intent=\"prewarm\",bucket=\"1\"}",
+                1,
+            ),
+            (
+                "delegation_push_attempt{role=\"verifier\",origin=\"prewarm\"}",
+                1,
+            ),
+            (
+                "delegation_push_success{role=\"verifier\",origin=\"prewarm\"}",
+                1,
+            ),
+            ("delegation_push_complete{origin=\"prewarm\"}", 1),
+        ],
+    );
+    assert_access_metrics(
+        &fixture.pic,
+        fixture.verifier_id,
+        "auth_verifier",
+        &[("token_rejected_proof_miss", 1)],
+    );
+    assert_auth_rollout_metrics(
+        &fixture.pic,
+        fixture.verifier_id,
+        &[("proof_miss", AuthRolloutMetricClass::HardGate, 1)],
+    );
+}
+
+#[test]
+fn delegation_admin_repair_requires_matching_local_root_proof() {
+    let fixture = delegation_admin_fixture(84);
+
+    install_root_test_delegation_material(
+        &fixture.pic,
+        fixture.root_id,
+        fixture.stale_token.proof,
+        fixture.root_public_key,
+        fixture.shard_public_key,
+    );
+
+    let repair = repair_verifiers(
+        &fixture.pic,
+        fixture.root_id,
+        fixture.current_token.proof,
+        vec![fixture.verifier_id],
+    );
+    let err = repair.expect_err("repair must reject non-local proof redistribution");
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert!(
+        err.message.contains("existing local proof"),
+        "expected repair no-create failure, got: {err:?}"
+    );
+
+    assert_access_metrics(
+        &fixture.pic,
+        fixture.root_id,
+        "auth_signer",
+        &[
+            ("delegation_install_total{intent=\"repair\"}", 1),
+            (
+                "delegation_install_normalized_target_total{intent=\"repair\"}",
+                1,
+            ),
+            (
+                "delegation_install_validation_failed{intent=\"repair\",stage=\"post_normalization\",reason=\"repair_missing_local\"}",
+                1,
+            ),
+            (
+                "delegation_push_attempt{role=\"verifier\",origin=\"repair\"}",
+                0,
+            ),
+        ],
+    );
+    assert_auth_rollout_metrics(
+        &fixture.pic,
+        fixture.root_id,
+        &[("repair_failure", AuthRolloutMetricClass::HardGate, 1)],
+    );
+}
+
+#[test]
+fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
+    let fixture = delegation_admin_fixture(85);
+
+    install_signer_test_delegation_material(
+        &fixture.pic,
+        fixture.signer_id,
+        fixture.root_id,
+        fixture.stale_token.proof.clone(),
+        fixture.root_public_key.clone(),
+        fixture.shard_public_key.clone(),
+    );
+
+    let selected_before: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
+        query_call_as(
+            &fixture.pic,
+            fixture.signer_id,
+            Principal::anonymous(),
+            "signer_current_signing_proof_test",
+            (),
+        );
+    assert_eq!(
+        selected_before.expect("query current signing proof failed"),
+        Some(fixture.stale_token.proof.clone()),
+        "signer should expose the initially installed proof"
+    );
+
+    install_signer_test_delegation_material(
+        &fixture.pic,
+        fixture.signer_id,
+        fixture.root_id,
+        fixture.current_token.proof.clone(),
+        fixture.root_public_key.clone(),
+        fixture.shard_public_key.clone(),
+    );
+
+    let selected_after: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
+        query_call_as(
+            &fixture.pic,
+            fixture.signer_id,
+            Principal::anonymous(),
+            "signer_current_signing_proof_test",
+            (),
+        );
+    assert_eq!(
+        selected_after.expect("query current signing proof failed"),
+        Some(fixture.current_token.proof),
+        "signer should prefer the newest keyed proof after rotation"
     );
 }
 
@@ -1865,6 +2061,240 @@ fn capability_endpoint_rejects_capability_hash_mismatch() {
     );
 }
 
+///
+/// DelegationAdminFixture
+///
+
+struct DelegationAdminFixture {
+    pic: SerialPic,
+    root_id: Principal,
+    signer_id: Principal,
+    verifier_id: Principal,
+    delegated_subject: Principal,
+    stale_token: DelegatedToken,
+    current_token: DelegatedToken,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+}
+
+// Build a reusable root/signer/verifier setup with two proof generations.
+fn delegation_admin_fixture(subject_seed: u8) -> DelegationAdminFixture {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+    let signer_id = signer_pid(&pic, root_id);
+    let verifier_id = create_verifier_canister(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+
+    let delegated_subject = Principal::from_slice(&[subject_seed; 29]);
+    let stale_token =
+        issue_test_delegated_token(&pic, root_id, signer_id, verifier_id, delegated_subject, 60);
+    let current_token = issue_test_delegated_token(
+        &pic,
+        root_id,
+        signer_id,
+        verifier_id,
+        delegated_subject,
+        120,
+    );
+    let (root_public_key, shard_public_key) = delegation_public_keys(&pic, root_id);
+
+    DelegationAdminFixture {
+        pic,
+        root_id,
+        signer_id,
+        verifier_id,
+        delegated_subject,
+        stale_token,
+        current_token,
+        root_public_key,
+        shard_public_key,
+    }
+}
+
+// Issue a test delegated token for the requested verifier audience and TTL.
+fn issue_test_delegated_token(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    signer_id: Principal,
+    verifier_id: Principal,
+    delegated_subject: Principal,
+    ttl_seconds: u64,
+) -> DelegatedToken {
+    let now: Result<u64, Error> =
+        query_call_as(pic, root_id, Principal::anonymous(), "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+    let claims = DelegatedTokenClaims {
+        sub: delegated_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![verifier_id],
+        iat: now,
+        exp: now + ttl_seconds,
+    };
+    let issued_token: Result<DelegatedToken, Error> = update_call_as(
+        pic,
+        root_id,
+        root_id,
+        "root_issue_test_delegated_token",
+        (claims,),
+    );
+
+    issued_token.expect("delegated token issuance failed")
+}
+
+// Query the root test public keys used for proof installation hooks.
+fn delegation_public_keys(pic: &pocket_ic::PocketIc, root_id: Principal) -> (Vec<u8>, Vec<u8>) {
+    let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
+        pic,
+        root_id,
+        Principal::anonymous(),
+        "root_test_delegation_public_keys",
+        (),
+    );
+
+    keys.expect("query test delegation keys failed")
+}
+
+// Install proof material into the root verifier test hook.
+fn install_root_test_delegation_material(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    proof: canic_core::dto::auth::DelegationProof,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+) {
+    let install: Result<(), Error> = update_call_as(
+        pic,
+        root_id,
+        root_id,
+        "root_install_test_delegation_material",
+        (proof, root_public_key, shard_public_key),
+    );
+
+    install.expect("root test delegation material install must succeed");
+}
+
+// Install proof material into a signer/verifier test hook.
+fn install_signer_test_delegation_material(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    caller: Principal,
+    proof: canic_core::dto::auth::DelegationProof,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+) {
+    let install: Result<(), Error> = update_call_as(
+        pic,
+        canister_id,
+        caller,
+        "signer_install_test_delegation_material",
+        (proof, root_public_key, shard_public_key),
+    );
+
+    install.expect("signer delegation material install must succeed");
+}
+
+// Verify that keyed lookup fails as a proof miss before any prewarm repair.
+fn assert_token_verify_proof_missing(
+    pic: &pocket_ic::PocketIc,
+    verifier_id: Principal,
+    delegated_subject: Principal,
+    token: DelegatedToken,
+) {
+    let denied: Result<(), Error> = update_call_as(
+        pic,
+        verifier_id,
+        delegated_subject,
+        "signer_verify_token",
+        (token,),
+    );
+    let err = denied.expect_err("stale verifier proof must fail closed");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("delegation proof miss"),
+        "expected proof-miss denial, got: {err:?}"
+    );
+}
+
+// Dispatch a root prewarm admin command and decode the typed response.
+fn prewarm_verifiers(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    proof: canic_core::dto::auth::DelegationProof,
+    verifier_targets: Vec<Principal>,
+) -> DelegationAdminResponse {
+    let prewarm: Result<DelegationAdminResponse, Error> = update_call_as(
+        pic,
+        root_id,
+        Principal::anonymous(),
+        "canic_delegation_admin",
+        (DelegationAdminCommand::PrewarmVerifiers(
+            DelegationVerifierProofPushRequest {
+                proof,
+                verifier_targets,
+            },
+        ),),
+    );
+
+    prewarm.expect("prewarm admin call must succeed")
+}
+
+// Dispatch a root repair admin command and preserve the typed error surface.
+fn repair_verifiers(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    proof: canic_core::dto::auth::DelegationProof,
+    verifier_targets: Vec<Principal>,
+) -> Result<DelegationAdminResponse, Error> {
+    update_call_as(
+        pic,
+        root_id,
+        Principal::anonymous(),
+        "canic_delegation_admin",
+        (DelegationAdminCommand::RepairVerifiers(
+            DelegationVerifierProofPushRequest {
+                proof,
+                verifier_targets,
+            },
+        ),),
+    )
+}
+
+// Assert a batch of access-metric predicates for a single canister endpoint.
+fn assert_access_metrics(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    endpoint: &str,
+    expected: &[(&str, u64)],
+) {
+    for (predicate, count) in expected {
+        assert_eq!(
+            access_metric_count(pic, canister_id, endpoint, predicate),
+            *count,
+            "unexpected metric count for {endpoint} / {predicate}"
+        );
+    }
+}
+
+// Assert a batch of derived auth-rollout signals for a single canister.
+fn assert_auth_rollout_metrics(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    expected: &[(&str, AuthRolloutMetricClass, u64)],
+) {
+    for (signal, class, count) in expected {
+        assert_eq!(
+            auth_rollout_metric_entry(pic, canister_id, signal),
+            Some((*class, *count)),
+            "unexpected rollout metric for {signal}"
+        );
+    }
+}
+
 fn install_root_canister(pic: &pocket_ic::PocketIc, wasm: Vec<u8>) -> Principal {
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -1964,6 +2394,82 @@ fn access_metric_count(
             }
         })
         .unwrap_or(0)
+}
+
+// Query the auth-rollout metrics page and return one derived signal entry.
+fn auth_rollout_metric_entry(
+    pic: &pocket_ic::PocketIc,
+    canister_id: Principal,
+    signal: &str,
+) -> Option<(AuthRolloutMetricClass, u64)> {
+    let response: Result<MetricsResponse, Error> = query_call_as(
+        pic,
+        canister_id,
+        Principal::anonymous(),
+        "canic_metrics",
+        (MetricsRequest {
+            kind: MetricsKind::AuthRollout,
+            page: PageRequest {
+                limit: 10_000,
+                offset: 0,
+            },
+        },),
+    );
+    let response = response.expect("query canic_metrics failed");
+    let MetricsResponse::AuthRollout(page) = response else {
+        panic!("expected auth rollout metrics response");
+    };
+
+    page.entries
+        .into_iter()
+        .find_map(|entry| (entry.signal == signal).then_some((entry.class, entry.count)))
+}
+
+// Create a non-root verifier canister through the root capability endpoint.
+fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
+        pic,
+        root_id,
+        root_id,
+        "root_issue_self_attestation_test",
+        (60u64, Some(root_id), 0u64),
+    );
+    let issued = issued.expect("attestation issuance failed");
+    let issued_at = issued.payload.issued_at;
+
+    let request = Request::CreateCanister(CreateCanisterRequest {
+        canister_role: CanisterRole::new("project_hub"),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+        metadata: None,
+    });
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request.clone(),
+        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: root_capability_hash(root_id, &request),
+            attestation: issued,
+        }),
+        metadata: capability_metadata(issued_at, 41, 24, 60),
+    };
+    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
+        pic,
+        root_id,
+        root_id,
+        "canic_response_capability_v1",
+        (envelope,),
+    );
+    let verifier_id = match response
+        .expect("verifier canister creation capability call must succeed")
+        .response
+    {
+        Response::CreateCanister(res) => res.new_canister_pid,
+        other => panic!("expected create-canister response, got: {other:?}"),
+    };
+    wait_until_ready(pic, verifier_id);
+    verifier_id
 }
 
 fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
@@ -2097,8 +2603,7 @@ const fn capability_metadata(
 // This path is used by the main delegated-session regression suite.
 fn build_canisters_once(workspace_root: &PathBuf) {
     BUILD_ONCE.call_once_force(|_| {
-        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTER_PACKAGES)
-        {
+        if prebuilt_wasm_dir().is_some() {
             return;
         }
 
@@ -2144,12 +2649,6 @@ fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     });
-}
-
-fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
-    canisters
-        .iter()
-        .all(|name| wasm_path(workspace_root, name).is_file())
 }
 
 // Serialize full PocketIC usage to avoid concurrent server races across tests.

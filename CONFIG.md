@@ -75,7 +75,26 @@ Configure log retention for every canister.
 Root-signed delegated token authentication (cert -> proof -> token).
 
 - `enabled: bool` – enable delegated token auth (default `true`).
+- `ecdsa_key_name: string` – signing key name for delegated-token proofs and tokens (default `"test_key_1"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated token TTL in seconds (default `null` = no upper bound; must be > 0 when set).
+- `proof_cache` – optional verifier-local proof cache policy (see below).
+
+### `[auth.delegated_tokens.proof_cache]`
+
+Static verifier proof-cache sizing and active-proof tracking.
+
+- `profile = "small" | "standard" | "large"` – optional explicit capacity profile.
+  - `small = 64`
+  - `standard = 96` (default when no hint/profile is set)
+  - `large = 160`
+- `shard_count_hint: u16` – optional shard-count hint used to resolve the profile when `profile` is omitted.
+  - `<= 16` resolves to `small`
+  - `17..=48` resolves to `standard`
+  - `>= 49` resolves to `large`
+- `capacity_override: u16` – optional upward-only override; must be `>=` the resolved profile minimum.
+- `active_window_secs: u32` – recent-use window used to classify a proof as active for eviction safety and metrics (default `600`, must be > 0).
+
+Capacity is static for the process lifetime. Runtime auto-resizing is not supported.
 
 ### `[standards]`
 
@@ -178,6 +197,10 @@ app_directory = ["user_hub", "scale_hub", "shard_hub"]
 
 [auth.delegated_tokens]
 enabled = true
+
+[auth.delegated_tokens.proof_cache]
+profile = "standard"
+active_window_secs = 600
 
 [standards]
 icrc21 = true

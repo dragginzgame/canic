@@ -50,10 +50,10 @@ pub enum DelegationValidationError {
     #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
     DelegatedTokenAuthDisabled,
 
-    #[error("delegation proof unavailable")]
-    ProofUnavailable,
+    #[error("delegation proof miss")]
+    ProofMiss,
 
-    #[error("delegation proof does not match current proof")]
+    #[error("delegation proof does not match stored proof")]
     ProofMismatch,
 }
 

@@ -12,8 +12,8 @@ use crate::{
         },
         ic::{IcOps, ecdsa::EcdsaOps},
         runtime::metrics::auth::{
-            record_verifier_cert_expired, record_verifier_proof_mismatch,
-            record_verifier_proof_missing,
+            record_verifier_cert_expired, record_verifier_proof_cache_stats,
+            record_verifier_proof_mismatch, record_verifier_proof_miss,
         },
         storage::auth::DelegationStateOps,
     },
@@ -124,22 +124,48 @@ pub(super) fn verify_time_bounds(
 }
 
 pub(super) fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
-    let Some(stored) = DelegationStateOps::proof_dto() else {
-        record_verifier_proof_missing();
+    let now_secs = IcOps::now_secs();
+    let Some(stored) = DelegationStateOps::matching_proof_dto(proof)? else {
+        let stats = DelegationStateOps::proof_cache_stats(now_secs)?;
+        record_verifier_proof_cache_stats(
+            stats.size,
+            stats.active_count,
+            stats.capacity,
+            stats.profile,
+            stats.active_window_secs,
+        );
+        record_verifier_proof_miss();
         let local = IcOps::canister_self();
         crate::log!(
             crate::log::Topic::Auth,
             Warn,
-            "delegation proof missing local={} shard={}",
+            "delegation proof miss local={} shard={}",
             local,
             proof.cert.shard_pid
         );
-        return Err(DelegationValidationError::ProofUnavailable.into());
+        return Err(DelegationValidationError::ProofMiss.into());
     };
 
     if proofs_equal(proof, &stored) {
+        let _ = DelegationStateOps::mark_matching_proof_verified(proof, now_secs)?;
+        let stats = DelegationStateOps::proof_cache_stats(now_secs)?;
+        record_verifier_proof_cache_stats(
+            stats.size,
+            stats.active_count,
+            stats.capacity,
+            stats.profile,
+            stats.active_window_secs,
+        );
         Ok(())
     } else {
+        let stats = DelegationStateOps::proof_cache_stats(now_secs)?;
+        record_verifier_proof_cache_stats(
+            stats.size,
+            stats.active_count,
+            stats.capacity,
+            stats.profile,
+            stats.active_window_secs,
+        );
         record_verifier_proof_mismatch();
         let local = IcOps::canister_self();
         crate::log!(

@@ -64,6 +64,61 @@ pub struct AccessMetricEntry {
 }
 
 ///
+/// AuthMetricEntry
+///
+/// Snapshot entry for auth-specific counters exposed via `canic_metrics`.
+///
+/// This is a filtered projection over auth-kind access metrics so operator
+/// dashboards can consume delegated-token and attestation signals without
+/// mixing in unrelated guard or rule failures.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct AuthMetricEntry {
+    /// Endpoint that emitted the auth metric.
+    pub endpoint: String,
+
+    /// Stable auth metric predicate.
+    pub predicate: String,
+
+    /// Total count for this (endpoint, predicate) tuple.
+    pub count: u64,
+}
+
+///
+/// AuthRolloutMetricClass
+///
+/// Stable severity class for derived auth rollout signals.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AuthRolloutMetricClass {
+    HardGate,
+    Operational,
+}
+
+///
+/// AuthRolloutMetricEntry
+///
+/// Derived rollout-facing auth signal grouped from lower-level auth counters.
+///
+/// This keeps rollout dashboards from depending directly on raw predicate
+/// strings while still exposing bounded, queryable counters.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct AuthRolloutMetricEntry {
+    /// Stable rollout signal name.
+    pub signal: String,
+
+    /// Release-gating severity class for the signal.
+    pub class: AuthRolloutMetricClass,
+
+    /// Aggregated total across all matching auth counters.
+    pub count: u64,
+}
+
+///
 /// MetricsKind
 ///
 /// Metric family selector for the unified metrics query endpoint.
@@ -76,6 +131,8 @@ pub enum MetricsKind {
     Http,
     Timer,
     Access,
+    Auth,
+    AuthRollout,
     Delegation,
     RootCapability,
     CyclesFunding,
@@ -108,6 +165,8 @@ pub enum MetricsResponse {
     Http(Page<HttpMetricEntry>),
     Timer(Page<TimerMetricEntry>),
     Access(Page<AccessMetricEntry>),
+    Auth(Page<AuthMetricEntry>),
+    AuthRollout(Page<AuthRolloutMetricEntry>),
     Delegation(Page<DelegationMetricEntry>),
     RootCapability(Page<RootCapabilityMetricEntry>),
     CyclesFunding(Page<CyclesFundingMetricEntry>),

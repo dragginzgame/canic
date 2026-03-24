@@ -2,8 +2,9 @@ use super::*;
 use crate::InternalErrorOrigin;
 use crate::cdk::types::Principal;
 use crate::dto::auth::{
-    DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProvisionResponse,
-    DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
+    DelegatedTokenClaims, DelegationCert, DelegationProof, DelegationProofInstallIntent,
+    DelegationProvisionResponse, DelegationProvisionStatus, DelegationProvisionTargetKind,
+    DelegationProvisionTargetResponse, DelegationVerifierProofPushRequest,
 };
 use crate::dto::error::ErrorCode;
 use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
@@ -356,6 +357,168 @@ fn ensure_required_verifier_targets_provisioned_rejects_missing_target_result() 
         err.message.contains("missing verifier target result"),
         "expected missing-result message, got: {err:?}"
     );
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_dedupes_targets() {
+    let root_pid = p(1);
+    let verifier_a = p(5);
+    let verifier_b = p(6);
+
+    let normalized = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![verifier_a, verifier_a, verifier_b],
+        },
+        DelegationProofInstallIntent::Repair,
+        root_pid,
+        |principal| principal == verifier_a || principal == verifier_b,
+    )
+    .expect("normalization should succeed");
+
+    assert_eq!(normalized.verifier_targets, vec![verifier_a, verifier_b]);
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_rejects_signer_target() {
+    let err = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![sample_proof().cert.shard_pid],
+        },
+        DelegationProofInstallIntent::Repair,
+        p(1),
+        |_principal| true,
+    )
+    .expect_err("signer target must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("must not match signer shard"));
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_rejects_root_target() {
+    let root_pid = p(1);
+
+    let err = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![root_pid],
+        },
+        DelegationProofInstallIntent::Repair,
+        root_pid,
+        |_principal| true,
+    )
+    .expect_err("root target must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("must not match root canister"));
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_rejects_unregistered_target() {
+    let err = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![p(99)],
+        },
+        DelegationProofInstallIntent::Repair,
+        p(1),
+        |_principal| false,
+    )
+    .expect_err("unregistered target must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not registered"));
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_is_idempotent() {
+    let root_pid = p(1);
+    let verifier_a = p(5);
+    let verifier_b = p(6);
+    let request = DelegationVerifierProofPushRequest {
+        proof: sample_proof(),
+        verifier_targets: vec![verifier_a, verifier_a, verifier_b],
+    };
+
+    let once = DelegationApi::normalize_explicit_verifier_push_request_with(
+        request,
+        DelegationProofInstallIntent::Repair,
+        root_pid,
+        |principal| principal == verifier_a || principal == verifier_b,
+    )
+    .expect("first normalization should succeed");
+
+    let twice = DelegationApi::normalize_explicit_verifier_push_request_with(
+        once.clone(),
+        DelegationProofInstallIntent::Repair,
+        root_pid,
+        |principal| principal == verifier_a || principal == verifier_b,
+    )
+    .expect("second normalization should succeed");
+
+    assert_eq!(once, twice, "normalization must be idempotent");
+}
+
+#[test]
+fn normalize_explicit_verifier_push_request_rejects_mixed_targets_without_partial_apply() {
+    let root_pid = p(1);
+    let verifier_a = p(5);
+    let verifier_b = p(6);
+    let invalid = p(99);
+
+    let err = DelegationApi::normalize_explicit_verifier_push_request_with(
+        DelegationVerifierProofPushRequest {
+            proof: sample_proof(),
+            verifier_targets: vec![verifier_a, invalid, verifier_b],
+        },
+        DelegationProofInstallIntent::Repair,
+        root_pid,
+        |principal| principal == verifier_a || principal == verifier_b,
+    )
+    .expect_err("mixed valid/invalid targets must fail before fanout");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("is not registered"));
+}
+
+#[test]
+fn repair_requires_existing_local_proof() {
+    let err = DelegationApi::ensure_repair_push_proof_is_locally_available_with(
+        &sample_proof(),
+        |_proof| Ok(None),
+    )
+    .expect_err("repair must fail when no local proof exists");
+
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert!(err.message.contains("requires an existing local proof"));
+}
+
+#[test]
+fn repair_rejects_mismatched_local_proof() {
+    let proof = sample_proof();
+    let mut stored = sample_proof();
+    stored.cert_sig = vec![9, 9, 9];
+
+    let err =
+        DelegationApi::ensure_repair_push_proof_is_locally_available_with(&proof, |_candidate| {
+            Ok(Some(stored))
+        })
+        .expect_err("repair must fail when stored proof differs");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("must match the existing local proof"));
+}
+
+#[test]
+fn repair_accepts_existing_identical_local_proof() {
+    let proof = sample_proof();
+
+    DelegationApi::ensure_repair_push_proof_is_locally_available_with(&proof, |_candidate| {
+        Ok(Some(proof.clone()))
+    })
+    .expect("repair should accept identical stored proof");
 }
 
 #[test]

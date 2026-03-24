@@ -25,6 +25,27 @@ pub struct DelegationProof {
 }
 
 ///
+/// DelegationProofInstallIntent
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DelegationProofInstallIntent {
+    Provisioning,
+    Prewarm,
+    Repair,
+}
+
+///
+/// DelegationProofInstallRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationProofInstallRequest {
+    pub proof: DelegationProof,
+    pub intent: DelegationProofInstallIntent,
+}
+
+///
 /// DelegatedTokenClaims
 ///
 
@@ -173,6 +194,25 @@ pub struct DelegationProvisionResponse {
 }
 
 ///
+/// DelegationVerifierProofPushRequest
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationVerifierProofPushRequest {
+    pub proof: DelegationProof,
+    pub verifier_targets: Vec<Principal>,
+}
+
+///
+/// DelegationVerifierProofPushResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct DelegationVerifierProofPushResponse {
+    pub results: Vec<DelegationProvisionTargetResponse>,
+}
+
+///
 /// DelegationProofStatus
 ///
 
@@ -193,6 +233,30 @@ pub enum DelegationProvisionTargetKind {
 pub enum DelegationProvisionStatus {
     Ok,
     Failed,
+}
+
+///
+/// DelegationAdminCommand
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub enum DelegationAdminCommand {
+    PrewarmVerifiers(DelegationVerifierProofPushRequest),
+    RepairVerifiers(DelegationVerifierProofPushRequest),
+}
+
+///
+/// DelegationAdminResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub enum DelegationAdminResponse {
+    PrewarmedVerifiers {
+        result: DelegationVerifierProofPushResponse,
+    },
+    RepairedVerifiers {
+        result: DelegationVerifierProofPushResponse,
+    },
 }
 
 ///

@@ -18,7 +18,13 @@ use crate::{
         auth::DelegatedTokenOps,
         ic::{IcOps, mgmt::MgmtOps},
         runtime::env::EnvOps,
-        runtime::metrics::cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
+        runtime::metrics::{
+            auth::{
+                VerifierProofCacheEvictionClass, record_verifier_proof_cache_eviction,
+                record_verifier_proof_cache_stats,
+            },
+            cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
+        },
         storage::{
             auth::DelegationStateOps, directory::subnet::SubnetDirectoryOps,
             registry::subnet::SubnetRegistryOps,
@@ -198,7 +204,25 @@ async fn execute_issue_delegation(
 
     if req.include_root_verifier {
         DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert).await?;
-        DelegationStateOps::set_proof_from_dto(response.proof.clone());
+        let outcome = DelegationStateOps::upsert_proof_from_dto(response.proof.clone(), ctx.now)?;
+        record_verifier_proof_cache_stats(
+            outcome.stats.size,
+            outcome.stats.active_count,
+            outcome.stats.capacity,
+            outcome.stats.profile,
+            outcome.stats.active_window_secs,
+        );
+        if let Some(class) = outcome.evicted {
+            let class = match class {
+                crate::ops::storage::auth::DelegationProofEvictionClass::Cold => {
+                    VerifierProofCacheEvictionClass::Cold
+                }
+                crate::ops::storage::auth::DelegationProofEvictionClass::Active => {
+                    VerifierProofCacheEvictionClass::Active
+                }
+            };
+            record_verifier_proof_cache_eviction(class);
+        }
     }
 
     Ok(Response::DelegationIssued(response))

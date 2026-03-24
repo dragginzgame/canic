@@ -7,8 +7,8 @@
 //! - delegated token verification
 //!
 //! Security invariants for delegated tokens:
-//! - Delegated tokens are only valid if their proof matches the currently stored delegation proof.
-//! - Delegation rotation invalidates all previously issued delegated tokens.
+//! - Delegated tokens are only valid if their proof matches a verifier-local keyed delegation proof.
+//! - Delegation rotation may retain multiple proofs concurrently until older tokens age out.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 //! - Endpoint-required scopes are enforced against delegated token claims.
 

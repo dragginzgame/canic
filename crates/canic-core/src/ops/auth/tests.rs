@@ -1,5 +1,5 @@
 use super::*;
-use crate::dto::auth::AttestationKeyStatus;
+use crate::dto::auth::{AttestationKeyStatus, DelegationCert, DelegationProof};
 use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
 fn p(id: u8) -> Principal {
@@ -15,6 +15,20 @@ fn sample_attestation(epoch: u64) -> RoleAttestation {
         issued_at: 100,
         expires_at: 200,
         epoch,
+    }
+}
+
+fn sample_proof(shard_pid: Principal, issued_at: u64) -> DelegationProof {
+    DelegationProof {
+        cert: DelegationCert {
+            root_pid: p(42),
+            shard_pid,
+            issued_at,
+            expires_at: issued_at + 120,
+            scopes: vec!["verify".to_string()],
+            aud: vec![p(3)],
+        },
+        cert_sig: vec![shard_pid.as_slice()[0], issued_at.to_le_bytes()[0]],
     }
 }
 
@@ -273,6 +287,62 @@ fn verify_role_attestation_cached_resolves_public_key_by_key_id() {
             key_id: 2
         })
     ));
+}
+
+#[test]
+fn verify_current_proof_accepts_matching_key_when_multiple_proofs_exist() {
+    let proof_a = sample_proof(p(11), 100);
+    let proof_b = sample_proof(p(12), 110);
+
+    DelegationStateOps::upsert_proof_from_dto(proof_a.clone(), 100).expect("store proof a");
+    DelegationStateOps::upsert_proof_from_dto(proof_b, 110).expect("store proof b");
+
+    verify::verify_current_proof(&proof_a).expect("matching keyed proof must verify");
+}
+
+#[test]
+fn matching_proof_lookup_distinguishes_missing_key_from_other_stored_proof() {
+    let stored = sample_proof(p(21), 200);
+    let missing = sample_proof(p(22), 200);
+
+    DelegationStateOps::upsert_proof_from_dto(stored.clone(), 200).expect("store keyed proof");
+
+    let matched = DelegationStateOps::matching_proof_dto(&stored).expect("lookup stored proof");
+    assert_eq!(matched, Some(stored), "stored proof key must resolve");
+
+    let missing_match =
+        DelegationStateOps::matching_proof_dto(&missing).expect("lookup missing proof");
+    assert_eq!(
+        missing_match, None,
+        "different proof key must resolve as miss"
+    );
+}
+
+#[test]
+fn verify_current_proof_accepts_same_shard_parallel_rotation_entries() {
+    let old_proof = sample_proof(p(31), 300);
+    let new_proof = sample_proof(p(31), 360);
+
+    DelegationStateOps::upsert_proof_from_dto(old_proof.clone(), 300).expect("store old proof");
+    DelegationStateOps::upsert_proof_from_dto(new_proof.clone(), 360).expect("store new proof");
+
+    verify::verify_current_proof(&old_proof).expect("old rotated proof must still verify");
+    verify::verify_current_proof(&new_proof).expect("new rotated proof must verify");
+}
+
+#[test]
+fn latest_proof_dto_prefers_most_recent_keyed_install_for_signing() {
+    let old_proof = sample_proof(p(41), 400);
+    let new_proof = sample_proof(p(42), 460);
+
+    DelegationStateOps::upsert_proof_from_dto(old_proof, 400).expect("store old proof");
+    DelegationStateOps::upsert_proof_from_dto(new_proof.clone(), 460).expect("store new proof");
+
+    let latest = DelegationStateOps::latest_proof_dto().expect("latest proof must exist");
+    assert_eq!(
+        latest, new_proof,
+        "signer selection must use newest keyed proof"
+    );
 }
 
 #[test]
