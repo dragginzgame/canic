@@ -3,8 +3,8 @@ use crate::{
     config::{
         Config, ConfigError, ConfigModel,
         schema::{
-            AppInitMode, CanisterConfig, DelegatedTokenConfig, LogConfig, RoleAttestationConfig,
-            ScalingConfig, SubnetConfig,
+            AppInitMode, CanisterConfig, DelegatedTokenConfig, DelegationProofCacheProfile,
+            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
     ids::SubnetRole,
@@ -48,6 +48,17 @@ impl From<ConfigOpsError> for InternalError {
 ///
 
 pub struct ConfigOps;
+
+///
+/// DelegationProofCachePolicy
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DelegationProofCachePolicy {
+    pub profile: DelegationProofCacheProfile,
+    pub capacity: usize,
+    pub active_window_secs: u64,
+}
 
 impl ConfigOps {
     /// Export the full current configuration as TOML.
@@ -103,6 +114,18 @@ impl ConfigOps {
 
     pub(crate) fn delegated_tokens_config() -> Result<DelegatedTokenConfig, InternalError> {
         Ok(Config::get()?.auth.delegated_tokens.clone())
+    }
+
+    pub(crate) fn delegation_proof_cache_policy()
+    -> Result<DelegationProofCachePolicy, InternalError> {
+        let cfg = Self::delegated_tokens_config()?;
+        let profile = cfg.proof_cache.resolved_profile();
+
+        Ok(DelegationProofCachePolicy {
+            profile,
+            capacity: cfg.proof_cache.resolved_capacity(),
+            active_window_secs: u64::from(cfg.proof_cache.active_window_secs),
+        })
     }
 
     pub(crate) fn role_attestation_config() -> Result<RoleAttestationConfig, InternalError> {

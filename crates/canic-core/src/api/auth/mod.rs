@@ -3,10 +3,11 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationCert,
-            DelegationProof, DelegationProvisionResponse, DelegationProvisionStatus,
-            DelegationProvisionTargetKind, DelegationRequest, RoleAttestationRequest,
-            SignedRoleAttestation,
+            AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand,
+            DelegationAdminResponse, DelegationCert, DelegationProof,
+            DelegationProofInstallRequest, DelegationProvisionResponse, DelegationProvisionStatus,
+            DelegationProvisionTargetKind, DelegationRequest, DelegationVerifierProofPushRequest,
+            RoleAttestationRequest, SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
@@ -21,7 +22,12 @@ use crate::{
         rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_delegation_provision_complete,
+            DelegationInstallNormalizationRejectReason, DelegationInstallValidationFailureReason,
+            VerifierProofCacheEvictionClass, record_attestation_refresh_failed,
+            record_delegation_install_fanout_bucket,
+            record_delegation_install_normalization_rejected,
+            record_delegation_install_normalized_target_count, record_delegation_install_total,
+            record_delegation_install_validation_failed, record_delegation_provision_complete,
             record_delegation_verifier_target_count, record_delegation_verifier_target_failed,
             record_delegation_verifier_target_missing, record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_replay_conflict,
@@ -33,7 +39,8 @@ use crate::{
             record_session_bootstrap_rejected_wallet_caller_rejected,
             record_session_bootstrap_replay_idempotent, record_session_cleared,
             record_session_created, record_session_pruned, record_session_replaced,
-            record_signer_issue_without_proof,
+            record_signer_issue_without_proof, record_verifier_proof_cache_eviction,
+            record_verifier_proof_cache_stats,
         },
         storage::{
             auth::{DelegatedSession, DelegatedSessionBootstrapBinding, DelegationStateOps},
@@ -42,7 +49,7 @@ use crate::{
         },
     },
     protocol,
-    workflow::rpc::request::handler::RootResponseWorkflow,
+    workflow::{auth::DelegationWorkflow, rpc::request::handler::RootResponseWorkflow},
 };
 use sha2::{Digest, Sha256};
 
@@ -56,6 +63,32 @@ mod verify_flow;
 ///
 
 pub struct DelegationApi;
+
+struct PreparedDelegationVerifierPush {
+    proof: DelegationProof,
+    verifier_targets: Vec<Principal>,
+    intent: crate::dto::auth::DelegationProofInstallIntent,
+}
+
+impl PreparedDelegationVerifierPush {
+    fn into_command(self) -> DelegationAdminCommand {
+        let request = DelegationVerifierProofPushRequest {
+            proof: self.proof,
+            verifier_targets: self.verifier_targets,
+        };
+        match self.intent {
+            crate::dto::auth::DelegationProofInstallIntent::Prewarm => {
+                DelegationAdminCommand::PrewarmVerifiers(request)
+            }
+            crate::dto::auth::DelegationProofInstallIntent::Repair => {
+                DelegationAdminCommand::RepairVerifiers(request)
+            }
+            crate::dto::auth::DelegationProofInstallIntent::Provisioning => {
+                unreachable!("provisioning does not use explicit admin push")
+            }
+        }
+    }
+}
 
 impl DelegationApi {
     const DELEGATED_TOKENS_DISABLED: &str =
@@ -83,6 +116,12 @@ impl DelegationApi {
     ) -> Result<(), Error> {
         DelegatedTokenOps::verify_delegation_proof(proof, authority_pid)
             .map_err(Self::map_delegation_error)
+    }
+
+    #[cfg(canic_test_delegation_material)]
+    #[must_use]
+    pub fn current_signing_proof_for_test() -> Option<DelegationProof> {
+        DelegationStateOps::latest_proof_dto()
     }
 
     async fn sign_token(
@@ -175,6 +214,44 @@ impl DelegationApi {
 
     pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
         DelegatedTokenOps::attestation_key_set()
+            .await
+            .map_err(Self::map_delegation_error)
+    }
+
+    /// Execute explicit root-controlled delegation repair/prewarm operations.
+    pub async fn admin(cmd: DelegationAdminCommand) -> Result<DelegationAdminResponse, Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+        if !EnvOps::is_root() {
+            return Err(Error::forbidden("delegation admin requires root canister"));
+        }
+
+        let prepared = match cmd {
+            DelegationAdminCommand::PrewarmVerifiers(request) => {
+                record_delegation_install_total(
+                    crate::dto::auth::DelegationProofInstallIntent::Prewarm,
+                );
+                Self::prepare_explicit_verifier_push(
+                    request,
+                    crate::dto::auth::DelegationProofInstallIntent::Prewarm,
+                )
+                .await?
+            }
+            DelegationAdminCommand::RepairVerifiers(request) => {
+                record_delegation_install_total(
+                    crate::dto::auth::DelegationProofInstallIntent::Repair,
+                );
+                Self::prepare_explicit_verifier_push(
+                    request,
+                    crate::dto::auth::DelegationProofInstallIntent::Repair,
+                )
+                .await?
+            }
+        };
+
+        DelegationWorkflow::handle_admin(prepared.into_command())
             .await
             .map_err(Self::map_delegation_error)
     }
@@ -402,7 +479,7 @@ impl DelegationApi {
     }
 
     pub async fn store_proof(
-        proof: DelegationProof,
+        request: DelegationProofInstallRequest,
         kind: DelegationProvisionTargetKind,
     ) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
@@ -418,6 +495,9 @@ impl DelegationApi {
             ));
         }
 
+        let proof = request.proof;
+        let intent = request.intent;
+
         DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
             .await
             .map_err(Self::map_delegation_error)?;
@@ -426,7 +506,8 @@ impl DelegationApi {
             log!(
                 Topic::Auth,
                 Warn,
-                "delegation proof rejected kind={:?} local={} shard={} issued_at={} expires_at={} error={}",
+                "delegation proof rejected intent={:?} kind={:?} local={} shard={} issued_at={} expires_at={} error={}",
+                intent,
                 kind,
                 local,
                 proof.cert.shard_pid,
@@ -437,19 +518,22 @@ impl DelegationApi {
             return Err(Self::map_delegation_error(err));
         }
 
-        DelegationStateOps::set_proof_from_dto(proof);
+        let outcome = DelegationStateOps::upsert_proof_from_dto(proof.clone(), IcOps::now_secs())
+            .map_err(Self::map_delegation_error)?;
+        if kind == DelegationProvisionTargetKind::Verifier {
+            Self::record_verifier_cache_install_outcome(outcome);
+        }
         let local = IcOps::canister_self();
-        let stored = DelegationStateOps::proof_dto()
-            .ok_or_else(|| Error::invariant("delegation proof missing after store"))?;
         log!(
             Topic::Auth,
             Info,
-            "delegation proof stored kind={:?} local={} shard={} issued_at={} expires_at={}",
+            "delegation proof stored intent={:?} kind={:?} local={} shard={} issued_at={} expires_at={}",
+            intent,
             kind,
             local,
-            stored.cert.shard_pid,
-            stored.cert.issued_at,
-            stored.cert.expires_at
+            proof.cert.shard_pid,
+            proof.cert.issued_at,
+            proof.cert.expires_at
         );
 
         Ok(())
@@ -487,7 +571,9 @@ impl DelegationApi {
 
         DelegationStateOps::set_root_public_key(root_public_key);
         DelegationStateOps::set_shard_public_key(proof.cert.shard_pid, shard_public_key);
-        DelegationStateOps::set_proof_from_dto(proof);
+        let outcome = DelegationStateOps::upsert_proof_from_dto(proof, IcOps::now_secs())
+            .map_err(Self::map_delegation_error)?;
+        Self::record_verifier_cache_install_outcome(outcome);
         Ok(())
     }
 
@@ -497,9 +583,9 @@ impl DelegationApi {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
-        DelegationStateOps::proof_dto().ok_or_else(|| {
+        DelegationStateOps::latest_proof_dto().ok_or_else(|| {
             record_signer_issue_without_proof();
-            Error::not_found("delegation proof not set")
+            Error::not_found("delegation proof not installed")
         })
     }
 
@@ -517,7 +603,7 @@ impl DelegationApi {
         }
     }
 
-    // Provision a fresh delegation from root, then load locally stored proof.
+    // Provision a fresh delegation from root, then resolve the latest locally stored proof.
     async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
         let request = Self::delegation_request_from_claims(claims)?;
         let required_verifier_targets = request.verifier_targets.clone();
@@ -595,6 +681,172 @@ impl DelegationApi {
 
         record_delegation_provision_complete();
         Ok(())
+    }
+
+    // Normalize and verify an explicit verifier-push request before workflow fanout.
+    async fn prepare_explicit_verifier_push(
+        request: DelegationVerifierProofPushRequest,
+        intent: crate::dto::auth::DelegationProofInstallIntent,
+    ) -> Result<PreparedDelegationVerifierPush, Error> {
+        let request = Self::normalize_explicit_verifier_push_request_with(
+            request,
+            intent,
+            EnvOps::root_pid().map_err(Error::from)?,
+            Self::is_registered_canister,
+        )?;
+        record_delegation_install_normalized_target_count(intent, request.verifier_targets.len());
+        record_delegation_install_fanout_bucket(intent, request.verifier_targets.len());
+        Self::prepare_explicit_verifier_push_proof(&request.proof, intent).await?;
+
+        Ok(PreparedDelegationVerifierPush {
+            proof: request.proof,
+            verifier_targets: request.verifier_targets,
+            intent,
+        })
+    }
+
+    // Normalize explicit verifier push targets with root/signer/registration guards.
+    fn normalize_explicit_verifier_push_request_with<F>(
+        request: DelegationVerifierProofPushRequest,
+        intent: crate::dto::auth::DelegationProofInstallIntent,
+        root_pid: Principal,
+        mut is_valid_target: F,
+    ) -> Result<DelegationVerifierProofPushRequest, Error>
+    where
+        F: FnMut(Principal) -> bool,
+    {
+        let signer_pid = request.proof.cert.shard_pid;
+        let mut verifier_targets = Vec::new();
+
+        for principal in request.verifier_targets {
+            if principal == signer_pid {
+                record_delegation_install_normalization_rejected(
+                    intent,
+                    DelegationInstallNormalizationRejectReason::SignerTarget,
+                );
+                return Err(Error::invalid(
+                    "delegation verifier target must not match signer shard",
+                ));
+            }
+            if principal == root_pid {
+                record_delegation_install_normalization_rejected(
+                    intent,
+                    DelegationInstallNormalizationRejectReason::RootTarget,
+                );
+                return Err(Error::invalid(
+                    "delegation verifier target must not match root canister",
+                ));
+            }
+            if !is_valid_target(principal) {
+                record_delegation_install_normalization_rejected(
+                    intent,
+                    DelegationInstallNormalizationRejectReason::UnregisteredTarget,
+                );
+                return Err(Error::invalid(format!(
+                    "delegation verifier target '{principal}' is not registered"
+                )));
+            }
+            if !verifier_targets.contains(&principal) {
+                verifier_targets.push(principal);
+            }
+        }
+
+        Ok(DelegationVerifierProofPushRequest {
+            proof: request.proof,
+            verifier_targets,
+        })
+    }
+
+    // Validate/caches proof dependencies once before explicit fanout.
+    async fn prepare_explicit_verifier_push_proof(
+        proof: &DelegationProof,
+        intent: crate::dto::auth::DelegationProofInstallIntent,
+    ) -> Result<(), Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
+            .await
+            .map_err(|err| {
+                record_delegation_install_validation_failed(
+                    intent,
+                    DelegationInstallValidationFailureReason::CacheKeys,
+                );
+                Self::map_delegation_error(err)
+            })?;
+        Self::verify_delegation_proof(proof, root_pid).inspect_err(|_| {
+            record_delegation_install_validation_failed(
+                intent,
+                DelegationInstallValidationFailureReason::VerifyProof,
+            );
+        })?;
+
+        if intent == crate::dto::auth::DelegationProofInstallIntent::Repair {
+            Self::ensure_repair_push_proof_is_locally_available(proof)?;
+        }
+
+        Ok(())
+    }
+
+    // Enforce repair as redistribution of already-installed proof state only.
+    fn ensure_repair_push_proof_is_locally_available(proof: &DelegationProof) -> Result<(), Error> {
+        Self::ensure_repair_push_proof_is_locally_available_with(proof, |candidate| {
+            DelegationStateOps::matching_proof_dto(candidate).map_err(Self::map_delegation_error)
+        })
+    }
+
+    // Check repair preconditions using an injectable lookup for unit tests.
+    fn ensure_repair_push_proof_is_locally_available_with<F>(
+        proof: &DelegationProof,
+        lookup: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(&DelegationProof) -> Result<Option<DelegationProof>, Error>,
+    {
+        let Some(stored) = lookup(proof)? else {
+            record_delegation_install_validation_failed(
+                crate::dto::auth::DelegationProofInstallIntent::Repair,
+                DelegationInstallValidationFailureReason::RepairMissingLocal,
+            );
+            return Err(Error::not_found(
+                "delegation repair requires an existing local proof",
+            ));
+        };
+
+        if stored != *proof {
+            record_delegation_install_validation_failed(
+                crate::dto::auth::DelegationProofInstallIntent::Repair,
+                DelegationInstallValidationFailureReason::RepairLocalMismatch,
+            );
+            return Err(Error::invalid(
+                "delegation repair proof must match the existing local proof",
+            ));
+        }
+
+        Ok(())
+    }
+
+    // Record verifier-cache occupancy/utilization and any eviction caused by install.
+    fn record_verifier_cache_install_outcome(
+        outcome: crate::ops::storage::auth::DelegationProofUpsertOutcome,
+    ) {
+        record_verifier_proof_cache_stats(
+            outcome.stats.size,
+            outcome.stats.active_count,
+            outcome.stats.capacity,
+            outcome.stats.profile,
+            outcome.stats.active_window_secs,
+        );
+
+        if let Some(class) = outcome.evicted {
+            let class = match class {
+                crate::ops::storage::auth::DelegationProofEvictionClass::Cold => {
+                    VerifierProofCacheEvictionClass::Cold
+                }
+                crate::ops::storage::auth::DelegationProofEvictionClass::Active => {
+                    VerifierProofCacheEvictionClass::Active
+                }
+            };
+            record_verifier_proof_cache_eviction(class);
+        }
     }
 
     // Derive required verifier targets from audience with strict filtering/validation.

@@ -67,6 +67,12 @@ async fn signer_install_test_delegation_material(
     DelegationApi::install_test_delegation_material(proof, root_public_key, shard_public_key)
 }
 
+#[canic_query]
+#[cfg(canic_test_delegation_material)]
+async fn signer_current_signing_proof_test() -> Result<Option<DelegationProof>, Error> {
+    Ok(DelegationApi::current_signing_proof_for_test())
+}
+
 #[canic_update]
 async fn signer_verify_role_attestation(
     attestation: SignedRoleAttestation,

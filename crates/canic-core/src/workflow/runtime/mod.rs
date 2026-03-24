@@ -37,6 +37,7 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start timers that should run on all canisters.
     pub fn start_all() {
+        log_delegation_proof_cache_policy();
         workflow::runtime::attestation::AttestationKeyCacheWorkflow::start();
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
         workflow::runtime::intent::IntentCleanupWorkflow::start();
@@ -59,6 +60,25 @@ impl RuntimeWorkflow {
         // root-only services
         workflow::pool::scheduler::PoolSchedulerWorkflow::start();
         Ok(())
+    }
+}
+
+// Log the resolved verifier proof-cache policy once during runtime startup.
+fn log_delegation_proof_cache_policy() {
+    match ConfigOps::delegation_proof_cache_policy() {
+        Ok(policy) => crate::log!(
+            Topic::Auth,
+            Info,
+            "delegation proof cache policy profile={} capacity={} active_window_secs={}",
+            policy.profile.as_str(),
+            policy.capacity,
+            policy.active_window_secs
+        ),
+        Err(err) => crate::log!(
+            Topic::Auth,
+            Warn,
+            "delegation proof cache policy unavailable at runtime startup: {err}"
+        ),
     }
 }
 

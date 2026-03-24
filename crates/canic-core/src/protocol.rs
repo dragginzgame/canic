@@ -16,6 +16,7 @@ pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
 pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
 pub const CANIC_REQUEST_ROLE_ATTESTATION: &str = "canic_request_role_attestation";
 pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";
+pub const CANIC_DELEGATION_ADMIN: &str = "canic_delegation_admin";
 pub const CANIC_DELEGATION_SET_SIGNER_PROOF: &str = "canic_delegation_set_signer_proof";
 pub const CANIC_DELEGATION_SET_VERIFIER_PROOF: &str = "canic_delegation_set_verifier_proof";
 

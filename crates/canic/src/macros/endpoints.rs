@@ -334,6 +334,13 @@ macro_rules! canic_endpoints_root {
         -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
         }
+
+        #[canic_update(requires(caller::is_controller()))]
+        async fn canic_delegation_admin(
+            cmd: ::canic::dto::auth::DelegationAdminCommand,
+        ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::admin(cmd).await
+        }
     };
 }
 
@@ -365,17 +372,17 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_signer_proof(
-            proof: ::canic::dto::auth::DelegationProof,
+            request: ::canic::dto::auth::DelegationProofInstallRequest,
         ) -> Result<(), ::canic::Error> {
             let self_pid = $crate::__internal::core::cdk::api::canister_self();
-            if proof.cert.shard_pid != self_pid {
+            if request.proof.cert.shard_pid != self_pid {
                 return Err(::canic::Error::invalid(
                     "delegation shard does not match canister",
                 ));
             }
 
             $crate::__internal::core::api::auth::DelegationApi::store_proof(
-                proof,
+                request,
                 ::canic::dto::auth::DelegationProvisionTargetKind::Signer,
             )
             .await
@@ -383,10 +390,10 @@ macro_rules! canic_endpoints_nonroot {
 
         #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_verifier_proof(
-            proof: ::canic::dto::auth::DelegationProof,
+            request: ::canic::dto::auth::DelegationProofInstallRequest,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::store_proof(
-                proof,
+                request,
                 ::canic::dto::auth::DelegationProvisionTargetKind::Verifier,
             )
             .await
