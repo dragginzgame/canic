@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-use super::crypto;
+use super::{audience, crypto};
 
 enum SignatureKind {
     Delegation,
@@ -213,41 +213,14 @@ pub(super) fn verify_self_audience(
     claims: &DelegatedTokenClaims,
     self_pid: Principal,
 ) -> Result<(), InternalError> {
-    if claims.aud.contains(&self_pid) {
-        Ok(())
-    } else {
-        Err(DelegationScopeError::SelfAudienceMissing { self_pid }.into())
-    }
+    audience::verify_self_audience(claims, self_pid).map_err(InternalError::from)
 }
 
 pub(super) fn validate_claims_against_cert(
     claims: &DelegatedTokenClaims,
     cert: &DelegationCert,
 ) -> Result<(), InternalError> {
-    if claims.shard_pid != cert.shard_pid {
-        return Err(DelegationScopeError::ShardPidMismatch {
-            expected: cert.shard_pid,
-            found: claims.shard_pid,
-        }
-        .into());
-    }
-
-    for aud in &claims.aud {
-        if !cert.aud.iter().any(|allowed| allowed == aud) {
-            return Err(DelegationScopeError::AudienceNotAllowed { aud: *aud }.into());
-        }
-    }
-
-    for scope in &claims.scopes {
-        if !cert.scopes.iter().any(|allowed| allowed == scope) {
-            return Err(DelegationScopeError::ScopeNotAllowed {
-                scope: scope.clone(),
-            }
-            .into());
-        }
-    }
-
-    Ok(())
+    audience::validate_claims_against_cert(claims, cert).map_err(InternalError::from)
 }
 
 pub(super) fn verify_role_attestation_claims(

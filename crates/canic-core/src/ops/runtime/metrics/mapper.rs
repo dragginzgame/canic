@@ -5,9 +5,10 @@ use crate::{
         CyclesFundingMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry,
         IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
     },
-    ids::{AccessMetricKind, SystemMetricKind},
+    ids::SystemMetricKind,
     ops::runtime::metrics::{
         access::AccessMetricKey,
+        auth::{AuthRolloutSignal, TypedAuthMetricRecord},
         cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetricKey},
         endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
@@ -155,15 +156,13 @@ pub struct AuthMetricEntryMapper;
 impl AuthMetricEntryMapper {
     #[must_use]
     pub fn record_to_view(
-        raw: impl IntoIterator<Item = (AccessMetricKey, u64)>,
+        raw: impl IntoIterator<Item = TypedAuthMetricRecord>,
     ) -> Vec<AuthMetricEntry> {
         raw.into_iter()
-            .filter_map(|(key, count)| {
-                (key.kind == AccessMetricKind::Auth).then_some(AuthMetricEntry {
-                    endpoint: key.endpoint,
-                    predicate: key.predicate,
-                    count,
-                })
+            .map(|record| AuthMetricEntry {
+                endpoint: record.endpoint,
+                predicate: record.predicate.as_str().into_owned(),
+                count: record.count,
             })
             .collect()
     }
@@ -177,64 +176,56 @@ pub struct AuthRolloutMetricEntryMapper;
 
 #[derive(Clone, Copy)]
 struct AuthRolloutSignalSpec {
-    signal: &'static str,
+    signal: AuthRolloutSignal,
     class: AuthRolloutMetricClass,
-    matches: fn(&str) -> bool,
 }
 
 const AUTH_ROLLOUT_SIGNAL_SPECS: [AuthRolloutSignalSpec; 7] = [
     AuthRolloutSignalSpec {
-        signal: "proof_miss",
+        signal: AuthRolloutSignal::ProofMiss,
         class: AuthRolloutMetricClass::HardGate,
-        matches: predicate_is_proof_miss,
     },
     AuthRolloutSignalSpec {
-        signal: "proof_mismatch",
+        signal: AuthRolloutSignal::ProofMismatch,
         class: AuthRolloutMetricClass::HardGate,
-        matches: predicate_is_proof_mismatch,
     },
     AuthRolloutSignalSpec {
-        signal: "active_proof_eviction",
+        signal: AuthRolloutSignal::ActiveProofEviction,
         class: AuthRolloutMetricClass::HardGate,
-        matches: predicate_is_active_proof_eviction,
     },
     AuthRolloutSignalSpec {
-        signal: "repair_failure",
+        signal: AuthRolloutSignal::RepairFailure,
         class: AuthRolloutMetricClass::HardGate,
-        matches: predicate_is_repair_failure,
     },
     AuthRolloutSignalSpec {
-        signal: "cache_saturation",
+        signal: AuthRolloutSignal::CacheSaturation,
         class: AuthRolloutMetricClass::HardGate,
-        matches: predicate_is_cache_saturation,
     },
     AuthRolloutSignalSpec {
-        signal: "cold_proof_eviction",
+        signal: AuthRolloutSignal::ColdProofEviction,
         class: AuthRolloutMetricClass::Operational,
-        matches: predicate_is_cold_proof_eviction,
     },
     AuthRolloutSignalSpec {
-        signal: "prewarm_failure",
+        signal: AuthRolloutSignal::PrewarmFailure,
         class: AuthRolloutMetricClass::Operational,
-        matches: predicate_is_prewarm_failure,
     },
 ];
 
 impl AuthRolloutMetricEntryMapper {
     #[must_use]
     pub fn record_to_view(
-        raw: impl IntoIterator<Item = (AccessMetricKey, u64)>,
+        raw: impl IntoIterator<Item = TypedAuthMetricRecord>,
     ) -> Vec<AuthRolloutMetricEntry> {
         let mut counts = [0u64; AUTH_ROLLOUT_SIGNAL_SPECS.len()];
 
-        for (key, count) in raw {
-            if key.kind != AccessMetricKind::Auth {
+        for record in raw {
+            let Some(signal) = record.predicate.rollout_signal() else {
                 continue;
-            }
+            };
 
             for (index, spec) in AUTH_ROLLOUT_SIGNAL_SPECS.iter().enumerate() {
-                if (spec.matches)(&key.predicate) {
-                    counts[index] = counts[index].saturating_add(count);
+                if spec.signal == signal {
+                    counts[index] = counts[index].saturating_add(record.count);
                 }
             }
         }
@@ -243,49 +234,12 @@ impl AuthRolloutMetricEntryMapper {
             .iter()
             .enumerate()
             .map(|(index, spec)| AuthRolloutMetricEntry {
-                signal: spec.signal.to_string(),
+                signal: spec.signal.label().to_string(),
                 class: spec.class,
                 count: counts[index],
             })
             .collect()
     }
-}
-
-fn predicate_is_proof_miss(predicate: &str) -> bool {
-    predicate == "token_rejected_proof_miss"
-}
-
-fn predicate_is_proof_mismatch(predicate: &str) -> bool {
-    predicate == "token_rejected_proof_mismatch"
-}
-
-fn predicate_is_active_proof_eviction(predicate: &str) -> bool {
-    predicate == "proof_cache_evictions_total{class=\"active\"}"
-}
-
-fn predicate_is_cold_proof_eviction(predicate: &str) -> bool {
-    predicate == "proof_cache_evictions_total{class=\"cold\"}"
-}
-
-fn predicate_is_repair_failure(predicate: &str) -> bool {
-    (predicate.starts_with("delegation_push_failed{") && predicate.contains("origin=\"repair\""))
-        || (predicate.starts_with("delegation_install_normalization_rejected{")
-            && predicate.contains("intent=\"repair\""))
-        || (predicate.starts_with("delegation_install_validation_failed{")
-            && predicate.contains("intent=\"repair\""))
-}
-
-fn predicate_is_prewarm_failure(predicate: &str) -> bool {
-    (predicate.starts_with("delegation_push_failed{") && predicate.contains("origin=\"prewarm\""))
-        || (predicate.starts_with("delegation_install_normalization_rejected{")
-            && predicate.contains("intent=\"prewarm\""))
-        || (predicate.starts_with("delegation_install_validation_failed{")
-            && predicate.contains("intent=\"prewarm\""))
-}
-
-fn predicate_is_cache_saturation(predicate: &str) -> bool {
-    predicate == "proof_cache_utilization{bucket=\"85_94\"}"
-        || predicate == "proof_cache_utilization{bucket=\"95_100\"}"
 }
 
 ///

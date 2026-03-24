@@ -1,7 +1,15 @@
 use crate::{
-    config::schema::DelegationProofCacheProfile, dto::auth::DelegationProofInstallIntent,
-    ids::AccessMetricKind, ops::runtime::metrics::access::AccessMetrics,
+    config::schema::DelegationProofCacheProfile,
+    dto::auth::DelegationProofInstallIntent,
+    ids::AccessMetricKind,
+    ops::runtime::metrics::access::{AccessMetricKey, AccessMetrics},
 };
+use std::borrow::Cow;
+
+// Auth metric predicates are schema-owned here.
+// Emitters should construct rollout-relevant predicates through `AuthMetricPredicate::as_str`,
+// and mappers should classify legacy/raw snapshot data through `AuthMetricPredicate::parse`
+// rather than matching strings in multiple places.
 
 const AUTH_SIGNER_ENDPOINT: &str = "auth_signer";
 const AUTH_SESSION_ENDPOINT: &str = "auth_session";
@@ -82,31 +90,84 @@ const PRED_ATTESTATION_UNKNOWN_KEY_ID: &str = "attestation_unknown_key_id";
 const PRED_ATTESTATION_EPOCH_REJECTED: &str = "attestation_epoch_rejected";
 const PRED_ATTESTATION_REFRESH_FAILED: &str = "attestation_refresh_failed";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DelegationProvisionRole {
     Signer,
     Verifier,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DelegationInstallNormalizationRejectReason {
     SignerTarget,
     RootTarget,
     UnregisteredTarget,
+    TargetNotInAudience,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DelegationInstallValidationFailureReason {
     CacheKeys,
     VerifyProof,
     RepairMissingLocal,
     RepairLocalMismatch,
+    TargetNotInAudience,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum VerifierProofCacheEvictionClass {
     Cold,
     Active,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthMetricPredicate {
+    DelegationPushFailed {
+        role: DelegationProvisionRole,
+        intent: DelegationProofInstallIntent,
+    },
+    DelegationInstallNormalizationRejected {
+        intent: DelegationProofInstallIntent,
+        reason: DelegationInstallNormalizationRejectReason,
+    },
+    DelegationInstallValidationFailed {
+        intent: DelegationProofInstallIntent,
+        reason: DelegationInstallValidationFailureReason,
+    },
+    ProofMiss,
+    ProofMismatch,
+    ProofCacheEviction {
+        class: VerifierProofCacheEvictionClass,
+    },
+    ProofCacheUtilization {
+        bucket: AuthProofCacheUtilizationBucket,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthProofCacheUtilizationBucket {
+    ZeroToFortyNine,
+    FiftyToEightyFour,
+    EightyFiveToNinetyFour,
+    NinetyFiveToOneHundred,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthRolloutSignal {
+    ProofMiss,
+    ProofMismatch,
+    ActiveProofEviction,
+    RepairFailure,
+    CacheSaturation,
+    ColdProofEviction,
+    PrewarmFailure,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypedAuthMetricRecord {
+    pub endpoint: String,
+    pub predicate: AuthMetricPredicate,
+    pub count: u64,
 }
 
 impl DelegationProvisionRole {
@@ -196,6 +257,23 @@ const fn install_intent_label(intent: DelegationProofInstallIntent) -> &'static 
     }
 }
 
+fn parse_install_intent_label(label: &str) -> Option<DelegationProofInstallIntent> {
+    match label {
+        "provisioning" => Some(DelegationProofInstallIntent::Provisioning),
+        "prewarm" => Some(DelegationProofInstallIntent::Prewarm),
+        "repair" => Some(DelegationProofInstallIntent::Repair),
+        _ => None,
+    }
+}
+
+fn parse_provision_role_label(label: &str) -> Option<DelegationProvisionRole> {
+    match label {
+        "signer" => Some(DelegationProvisionRole::Signer),
+        "verifier" => Some(DelegationProvisionRole::Verifier),
+        _ => None,
+    }
+}
+
 const fn normalization_reject_reason_label(
     reason: DelegationInstallNormalizationRejectReason,
 ) -> &'static str {
@@ -203,6 +281,7 @@ const fn normalization_reject_reason_label(
         DelegationInstallNormalizationRejectReason::SignerTarget => "signer_target",
         DelegationInstallNormalizationRejectReason::RootTarget => "root_target",
         DelegationInstallNormalizationRejectReason::UnregisteredTarget => "unregistered_target",
+        DelegationInstallNormalizationRejectReason::TargetNotInAudience => "target_not_in_audience",
     }
 }
 
@@ -214,6 +293,42 @@ const fn validation_failure_reason_label(
         DelegationInstallValidationFailureReason::VerifyProof => "verify_proof",
         DelegationInstallValidationFailureReason::RepairMissingLocal => "repair_missing_local",
         DelegationInstallValidationFailureReason::RepairLocalMismatch => "repair_local_mismatch",
+        DelegationInstallValidationFailureReason::TargetNotInAudience => "target_not_in_audience",
+    }
+}
+
+fn parse_normalization_reject_reason_label(
+    label: &str,
+) -> Option<DelegationInstallNormalizationRejectReason> {
+    match label {
+        "signer_target" => Some(DelegationInstallNormalizationRejectReason::SignerTarget),
+        "root_target" => Some(DelegationInstallNormalizationRejectReason::RootTarget),
+        "unregistered_target" => {
+            Some(DelegationInstallNormalizationRejectReason::UnregisteredTarget)
+        }
+        "target_not_in_audience" => {
+            Some(DelegationInstallNormalizationRejectReason::TargetNotInAudience)
+        }
+        _ => None,
+    }
+}
+
+fn parse_validation_failure_reason_label(
+    label: &str,
+) -> Option<DelegationInstallValidationFailureReason> {
+    match label {
+        "cache_keys" => Some(DelegationInstallValidationFailureReason::CacheKeys),
+        "verify_proof" => Some(DelegationInstallValidationFailureReason::VerifyProof),
+        "repair_missing_local" => {
+            Some(DelegationInstallValidationFailureReason::RepairMissingLocal)
+        }
+        "repair_local_mismatch" => {
+            Some(DelegationInstallValidationFailureReason::RepairLocalMismatch)
+        }
+        "target_not_in_audience" => {
+            Some(DelegationInstallValidationFailureReason::TargetNotInAudience)
+        }
+        _ => None,
     }
 }
 
@@ -227,6 +342,29 @@ const fn fanout_bucket(target_count: usize) -> &'static str {
     }
 }
 
+const fn proof_cache_utilization_bucket_label(
+    bucket: AuthProofCacheUtilizationBucket,
+) -> &'static str {
+    match bucket {
+        AuthProofCacheUtilizationBucket::ZeroToFortyNine => "0_49",
+        AuthProofCacheUtilizationBucket::FiftyToEightyFour => "50_84",
+        AuthProofCacheUtilizationBucket::EightyFiveToNinetyFour => "85_94",
+        AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred => "95_100",
+    }
+}
+
+fn parse_proof_cache_utilization_bucket_label(
+    label: &str,
+) -> Option<AuthProofCacheUtilizationBucket> {
+    match label {
+        "0_49" => Some(AuthProofCacheUtilizationBucket::ZeroToFortyNine),
+        "50_84" => Some(AuthProofCacheUtilizationBucket::FiftyToEightyFour),
+        "85_94" => Some(AuthProofCacheUtilizationBucket::EightyFiveToNinetyFour),
+        "95_100" => Some(AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred),
+        _ => None,
+    }
+}
+
 const fn proof_cache_eviction_predicate(class: VerifierProofCacheEvictionClass) -> &'static str {
     match class {
         VerifierProofCacheEvictionClass::Cold => PRED_PROOF_CACHE_COLD_EVICTION,
@@ -234,18 +372,187 @@ const fn proof_cache_eviction_predicate(class: VerifierProofCacheEvictionClass) 
     }
 }
 
-const fn proof_cache_utilization_bucket(size: usize, capacity: usize) -> &'static str {
-    if capacity == 0 {
-        return "empty";
+impl AuthProofCacheUtilizationBucket {
+    const fn from_size_and_capacity(size: usize, capacity: usize) -> Self {
+        if capacity == 0 {
+            return Self::ZeroToFortyNine;
+        }
+
+        let percent = size.saturating_mul(100) / capacity;
+        match percent {
+            0..=49 => Self::ZeroToFortyNine,
+            50..=84 => Self::FiftyToEightyFour,
+            85..=94 => Self::EightyFiveToNinetyFour,
+            _ => Self::NinetyFiveToOneHundred,
+        }
+    }
+}
+
+impl AuthRolloutSignal {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::ProofMiss => "proof_miss",
+            Self::ProofMismatch => "proof_mismatch",
+            Self::ActiveProofEviction => "active_proof_eviction",
+            Self::RepairFailure => "repair_failure",
+            Self::CacheSaturation => "cache_saturation",
+            Self::ColdProofEviction => "cold_proof_eviction",
+            Self::PrewarmFailure => "prewarm_failure",
+        }
+    }
+}
+
+impl AuthMetricPredicate {
+    #[must_use]
+    pub fn as_str(self) -> Cow<'static, str> {
+        match self {
+            Self::DelegationPushFailed { role, intent } => {
+                Cow::Borrowed(role.failed_predicate(intent))
+            }
+            Self::DelegationInstallNormalizationRejected { intent, reason } => Cow::Owned(format!(
+                "delegation_install_normalization_rejected{{intent=\"{}\",reason=\"{}\"}}",
+                install_intent_label(intent),
+                normalization_reject_reason_label(reason)
+            )),
+            Self::DelegationInstallValidationFailed { intent, reason } => Cow::Owned(format!(
+                "delegation_install_validation_failed{{intent=\"{}\",stage=\"post_normalization\",reason=\"{}\"}}",
+                install_intent_label(intent),
+                validation_failure_reason_label(reason)
+            )),
+            Self::ProofMiss => Cow::Borrowed(PRED_PROOF_MISS),
+            Self::ProofMismatch => Cow::Borrowed(PRED_PROOF_MISMATCH),
+            Self::ProofCacheEviction { class } => {
+                Cow::Borrowed(proof_cache_eviction_predicate(class))
+            }
+            Self::ProofCacheUtilization { bucket } => Cow::Owned(format!(
+                "proof_cache_utilization{{bucket=\"{}\"}}",
+                proof_cache_utilization_bucket_label(bucket)
+            )),
+        }
     }
 
-    let percent = size.saturating_mul(100) / capacity;
-    match percent {
-        0..=49 => "0_49",
-        50..=84 => "50_84",
-        85..=94 => "85_94",
-        _ => "95_100",
+    #[must_use]
+    pub fn parse(predicate: &str) -> Option<Self> {
+        match predicate {
+            PRED_PROOF_MISS => Some(Self::ProofMiss),
+            PRED_PROOF_MISMATCH => Some(Self::ProofMismatch),
+            PRED_PROOF_CACHE_ACTIVE_EVICTION => Some(Self::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Active,
+            }),
+            PRED_PROOF_CACHE_COLD_EVICTION => Some(Self::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Cold,
+            }),
+            _ => Self::parse_dynamic(predicate),
+        }
     }
+
+    #[must_use]
+    pub const fn rollout_signal(self) -> Option<AuthRolloutSignal> {
+        match self {
+            Self::ProofMiss => Some(AuthRolloutSignal::ProofMiss),
+            Self::ProofMismatch => Some(AuthRolloutSignal::ProofMismatch),
+            Self::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Active,
+            } => Some(AuthRolloutSignal::ActiveProofEviction),
+            Self::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Cold,
+            } => Some(AuthRolloutSignal::ColdProofEviction),
+            Self::ProofCacheUtilization {
+                bucket:
+                    AuthProofCacheUtilizationBucket::EightyFiveToNinetyFour
+                    | AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred,
+            } => Some(AuthRolloutSignal::CacheSaturation),
+            Self::ProofCacheUtilization { .. } => None,
+            Self::DelegationPushFailed { intent, .. }
+            | Self::DelegationInstallNormalizationRejected { intent, .. }
+            | Self::DelegationInstallValidationFailed { intent, .. } => match intent {
+                DelegationProofInstallIntent::Repair => Some(AuthRolloutSignal::RepairFailure),
+                DelegationProofInstallIntent::Prewarm => Some(AuthRolloutSignal::PrewarmFailure),
+                DelegationProofInstallIntent::Provisioning => None,
+            },
+        }
+    }
+
+    fn parse_dynamic(predicate: &str) -> Option<Self> {
+        parse_delegation_push_failed(predicate)
+            .or_else(|| parse_delegation_install_normalization_rejected(predicate))
+            .or_else(|| parse_delegation_install_validation_failed(predicate))
+            .or_else(|| parse_proof_cache_utilization(predicate))
+    }
+}
+
+fn record_auth_metric(endpoint: &str, predicate: AuthMetricPredicate) {
+    let predicate = predicate.as_str();
+    AccessMetrics::increment(endpoint, AccessMetricKind::Auth, predicate.as_ref());
+}
+
+#[must_use]
+pub fn typed_auth_metric_records(
+    raw: impl IntoIterator<Item = (AccessMetricKey, u64)>,
+) -> Vec<TypedAuthMetricRecord> {
+    raw.into_iter()
+        .filter_map(|(key, count)| {
+            (key.kind == AccessMetricKind::Auth)
+                .then_some((key, count))
+                .and_then(|(key, count)| {
+                    AuthMetricPredicate::parse(&key.predicate).map(|predicate| {
+                        TypedAuthMetricRecord {
+                            endpoint: key.endpoint,
+                            predicate,
+                            count,
+                        }
+                    })
+                })
+        })
+        .collect()
+}
+
+fn parse_delegation_push_failed(predicate: &str) -> Option<AuthMetricPredicate> {
+    let inner = predicate
+        .strip_prefix("delegation_push_failed{role=\"")?
+        .strip_suffix("\"}")?;
+    let (role, origin) = inner.split_once("\",origin=\"")?;
+    Some(AuthMetricPredicate::DelegationPushFailed {
+        role: parse_provision_role_label(role)?,
+        intent: parse_install_intent_label(origin)?,
+    })
+}
+
+fn parse_delegation_install_normalization_rejected(predicate: &str) -> Option<AuthMetricPredicate> {
+    let inner = predicate
+        .strip_prefix("delegation_install_normalization_rejected{intent=\"")?
+        .strip_suffix("\"}")?;
+    let (intent, reason) = inner.split_once("\",reason=\"")?;
+    Some(
+        AuthMetricPredicate::DelegationInstallNormalizationRejected {
+            intent: parse_install_intent_label(intent)?,
+            reason: parse_normalization_reject_reason_label(reason)?,
+        },
+    )
+}
+
+fn parse_delegation_install_validation_failed(predicate: &str) -> Option<AuthMetricPredicate> {
+    let inner = predicate
+        .strip_prefix("delegation_install_validation_failed{intent=\"")?
+        .strip_suffix("\"}")?;
+    let (intent, rest) = inner.split_once("\",stage=\"")?;
+    let (stage, reason) = rest.split_once("\",reason=\"")?;
+    if stage != "post_normalization" {
+        return None;
+    }
+    Some(AuthMetricPredicate::DelegationInstallValidationFailed {
+        intent: parse_install_intent_label(intent)?,
+        reason: parse_validation_failure_reason_label(reason)?,
+    })
+}
+
+fn parse_proof_cache_utilization(predicate: &str) -> Option<AuthMetricPredicate> {
+    let bucket = predicate
+        .strip_prefix("proof_cache_utilization{bucket=\"")?
+        .strip_suffix("\"}")?;
+    Some(AuthMetricPredicate::ProofCacheUtilization {
+        bucket: parse_proof_cache_utilization_bucket_label(bucket)?,
+    })
 }
 
 pub fn record_signer_issue_without_proof() {
@@ -308,10 +615,9 @@ pub fn record_delegation_push_failed(
     role: DelegationProvisionRole,
     intent: DelegationProofInstallIntent,
 ) {
-    AccessMetrics::increment(
+    record_auth_metric(
         AUTH_SIGNER_ENDPOINT,
-        AccessMetricKind::Auth,
-        role.failed_predicate(intent),
+        AuthMetricPredicate::DelegationPushFailed { role, intent },
     );
 }
 
@@ -364,24 +670,20 @@ pub fn record_delegation_install_normalization_rejected(
     intent: DelegationProofInstallIntent,
     reason: DelegationInstallNormalizationRejectReason,
 ) {
-    let predicate = format!(
-        "delegation_install_normalization_rejected{{intent=\"{}\",reason=\"{}\"}}",
-        install_intent_label(intent),
-        normalization_reject_reason_label(reason)
+    record_auth_metric(
+        AUTH_SIGNER_ENDPOINT,
+        AuthMetricPredicate::DelegationInstallNormalizationRejected { intent, reason },
     );
-    AccessMetrics::increment(AUTH_SIGNER_ENDPOINT, AccessMetricKind::Auth, &predicate);
 }
 
 pub fn record_delegation_install_validation_failed(
     intent: DelegationProofInstallIntent,
     reason: DelegationInstallValidationFailureReason,
 ) {
-    let predicate = format!(
-        "delegation_install_validation_failed{{intent=\"{}\",stage=\"post_normalization\",reason=\"{}\"}}",
-        install_intent_label(intent),
-        validation_failure_reason_label(reason)
+    record_auth_metric(
+        AUTH_SIGNER_ENDPOINT,
+        AuthMetricPredicate::DelegationInstallValidationFailed { intent, reason },
     );
-    AccessMetrics::increment(AUTH_SIGNER_ENDPOINT, AccessMetricKind::Auth, &predicate);
 }
 
 pub fn record_session_bootstrap_rejected_disabled() {
@@ -507,19 +809,11 @@ pub fn record_session_fallback_invalid_subject() {
 }
 
 pub fn record_verifier_proof_miss() {
-    AccessMetrics::increment(
-        AUTH_VERIFIER_ENDPOINT,
-        AccessMetricKind::Auth,
-        PRED_PROOF_MISS,
-    );
+    record_auth_metric(AUTH_VERIFIER_ENDPOINT, AuthMetricPredicate::ProofMiss);
 }
 
 pub fn record_verifier_proof_mismatch() {
-    AccessMetrics::increment(
-        AUTH_VERIFIER_ENDPOINT,
-        AccessMetricKind::Auth,
-        PRED_PROOF_MISMATCH,
-    );
+    record_auth_metric(AUTH_VERIFIER_ENDPOINT, AuthMetricPredicate::ProofMismatch);
 }
 
 pub fn record_verifier_cert_expired() {
@@ -551,14 +845,11 @@ pub fn record_verifier_proof_cache_stats(
         &active_predicate,
     );
 
-    let utilization_predicate = format!(
-        "proof_cache_utilization{{bucket=\"{}\"}}",
-        proof_cache_utilization_bucket(size, capacity)
-    );
-    AccessMetrics::increment(
+    record_auth_metric(
         AUTH_VERIFIER_ENDPOINT,
-        AccessMetricKind::Auth,
-        &utilization_predicate,
+        AuthMetricPredicate::ProofCacheUtilization {
+            bucket: AuthProofCacheUtilizationBucket::from_size_and_capacity(size, capacity),
+        },
     );
 
     let capacity_predicate = format!(
@@ -581,10 +872,9 @@ pub fn record_verifier_proof_cache_stats(
 }
 
 pub fn record_verifier_proof_cache_eviction(class: VerifierProofCacheEvictionClass) {
-    AccessMetrics::increment(
+    record_auth_metric(
         AUTH_VERIFIER_ENDPOINT,
-        AccessMetricKind::Auth,
-        proof_cache_eviction_predicate(class),
+        AuthMetricPredicate::ProofCacheEviction { class },
     );
 }
 
@@ -835,11 +1125,11 @@ mod tests {
         record_delegation_install_fanout_bucket(DelegationProofInstallIntent::Repair, 3);
         record_delegation_install_normalization_rejected(
             DelegationProofInstallIntent::Repair,
-            DelegationInstallNormalizationRejectReason::RootTarget,
+            DelegationInstallNormalizationRejectReason::TargetNotInAudience,
         );
         record_delegation_install_validation_failed(
             DelegationProofInstallIntent::Repair,
-            DelegationInstallValidationFailureReason::RepairMissingLocal,
+            DelegationInstallValidationFailureReason::TargetNotInAudience,
         );
 
         assert_eq!(
@@ -866,14 +1156,24 @@ mod tests {
         assert_eq!(
             metric_count(
                 AUTH_SIGNER_ENDPOINT,
-                "delegation_install_normalization_rejected{intent=\"repair\",reason=\"root_target\"}"
+                AuthMetricPredicate::DelegationInstallNormalizationRejected {
+                    intent: DelegationProofInstallIntent::Repair,
+                    reason: DelegationInstallNormalizationRejectReason::TargetNotInAudience,
+                }
+                .as_str()
+                .as_ref()
             ),
             1
         );
         assert_eq!(
             metric_count(
                 AUTH_SIGNER_ENDPOINT,
-                "delegation_install_validation_failed{intent=\"repair\",stage=\"post_normalization\",reason=\"repair_missing_local\"}"
+                AuthMetricPredicate::DelegationInstallValidationFailed {
+                    intent: DelegationProofInstallIntent::Repair,
+                    reason: DelegationInstallValidationFailureReason::TargetNotInAudience,
+                }
+                .as_str()
+                .as_ref()
             ),
             1
         );
@@ -901,7 +1201,11 @@ mod tests {
         assert_eq!(
             metric_count(
                 AUTH_VERIFIER_ENDPOINT,
-                "proof_cache_utilization{bucket=\"50_84\"}"
+                AuthMetricPredicate::ProofCacheUtilization {
+                    bucket: AuthProofCacheUtilizationBucket::FiftyToEightyFour,
+                }
+                .as_str()
+                .as_ref()
             ),
             1
         );
@@ -926,6 +1230,81 @@ mod tests {
         assert_eq!(
             metric_count(AUTH_VERIFIER_ENDPOINT, PRED_PROOF_CACHE_ACTIVE_EVICTION),
             1
+        );
+    }
+
+    #[test]
+    fn rollout_predicates_round_trip_through_typed_schema() {
+        let cases = [
+            AuthMetricPredicate::ProofMiss,
+            AuthMetricPredicate::ProofMismatch,
+            AuthMetricPredicate::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Active,
+            },
+            AuthMetricPredicate::ProofCacheEviction {
+                class: VerifierProofCacheEvictionClass::Cold,
+            },
+            AuthMetricPredicate::ProofCacheUtilization {
+                bucket: AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred,
+            },
+            AuthMetricPredicate::DelegationPushFailed {
+                role: DelegationProvisionRole::Verifier,
+                intent: DelegationProofInstallIntent::Repair,
+            },
+            AuthMetricPredicate::DelegationInstallNormalizationRejected {
+                intent: DelegationProofInstallIntent::Prewarm,
+                reason: DelegationInstallNormalizationRejectReason::TargetNotInAudience,
+            },
+            AuthMetricPredicate::DelegationInstallValidationFailed {
+                intent: DelegationProofInstallIntent::Repair,
+                reason: DelegationInstallValidationFailureReason::VerifyProof,
+            },
+        ];
+
+        for case in cases {
+            let rendered = case.as_str();
+            assert_eq!(AuthMetricPredicate::parse(rendered.as_ref()), Some(case));
+        }
+    }
+
+    #[test]
+    fn typed_auth_metric_records_parse_auth_boundary_once() {
+        let raw = vec![
+            (
+                AccessMetricKey {
+                    endpoint: AUTH_VERIFIER_ENDPOINT.to_string(),
+                    kind: AccessMetricKind::Auth,
+                    predicate: AuthMetricPredicate::ProofMiss.as_str().into_owned(),
+                },
+                2,
+            ),
+            (
+                AccessMetricKey {
+                    endpoint: AUTH_VERIFIER_ENDPOINT.to_string(),
+                    kind: AccessMetricKind::Auth,
+                    predicate: "unknown_auth_predicate".to_string(),
+                },
+                7,
+            ),
+            (
+                AccessMetricKey {
+                    endpoint: "canic_metrics".to_string(),
+                    kind: AccessMetricKind::Guard,
+                    predicate: "caller_is_controller".to_string(),
+                },
+                1,
+            ),
+        ];
+
+        let typed = typed_auth_metric_records(raw);
+
+        assert_eq!(
+            typed,
+            vec![TypedAuthMetricRecord {
+                endpoint: AUTH_VERIFIER_ENDPOINT.to_string(),
+                predicate: AuthMetricPredicate::ProofMiss,
+                count: 2,
+            }]
         );
     }
 }
