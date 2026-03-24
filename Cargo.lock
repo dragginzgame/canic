@@ -175,9 +175,9 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "candid"
-version = "0.10.25"
+version = "0.10.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "259bc749d63e6177a22f2cd3aa48e03b3426a12dfa9573021f5895ab1de93fd3"
+checksum = "846adba6d1b4a00eeb8d4a0e4b88dfab570c25ad150cd52e51dfdc4f9d0a66cd"
 dependencies = [
  "anyhow",
  "binread",
@@ -198,9 +198,9 @@ dependencies = [
 
 [[package]]
 name = "candid_derive"
-version = "0.10.25"
+version = "0.10.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba137ee83e51735380f2d051f4c09d573f5de93b45746822faea58b25a8f6d00"
+checksum = "4c367110b158be2edc335a4ad70f3467fa588d5c5675e149ef38638a8e281fc4"
 dependencies = [
  "lazy_static",
  "proc-macro2",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "derive_more",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "async-trait",
  "candid",
@@ -268,11 +268,11 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.15.5"
+version = "0.15.6"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
@@ -282,14 +282,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "convert_case 0.11.0",
  "derive_more",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "canister_blank"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -716,7 +716,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -1394,9 +1394,9 @@ dependencies = [
 
 [[package]]
 name = "ic-transport-types"
-version = "0.40.1"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2e7706e55836e8104c98149ec0796d20d5213fef972ac01b544657d410f1883"
+checksum = "4a775244756a5d97ff19b08071a946a4b4896904e35deb036bf215e80f2e703d"
 dependencies = [
  "candid",
  "hex",
@@ -1601,7 +1601,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic-core",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1632,9 +1632,9 @@ checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
 name = "iri-string"
-version = "0.7.10"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c91338f0783edbd6195decb37bae672fd3b165faffb89bf7b9e6942f8b1a731a"
+checksum = "d8e7418f59cc01c88316161279a7f665217ae316b388e58a0d10e29f54f1e5eb"
 dependencies = [
  "memchr",
  "serde",
@@ -1651,9 +1651,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
+checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "js-sys"
@@ -1971,9 +1971,9 @@ dependencies = [
 
 [[package]]
 name = "pocket-ic"
-version = "12.0.0"
+version = "13.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03c0fe19b920be1485cdd3d58a70abfa768c2608f8349864d950791fe1a5c193"
+checksum = "e30621a12b204880522340df8327930d1b7fdefd784c9fc6093b311440fa0506"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -1987,7 +1987,6 @@ dependencies = [
  "schemars",
  "semver",
  "serde",
- "serde_bytes",
  "serde_cbor",
  "serde_json",
  "sha2",
@@ -2422,9 +2421,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.9"
+version = "0.103.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53"
+checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -2624,9 +2623,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "1.0.4"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
+checksum = "876ac351060d4f882bb1032b6369eb0aef79ad9df1ea8bc404874d8cc3d0cd98"
 dependencies = [
  "serde_core",
 ]
@@ -2665,7 +2664,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "candid",
  "canic",
@@ -3023,9 +3022,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.0.6+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399b1124a3c9e16766831c6bba21e50192572cdd98706ea114f9502509686ffc"
+checksum = "f8195ca05e4eb728f4ba94f3e3291661320af739c4e43779cbdfae82ab239fcc"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -3038,27 +3037,27 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "1.0.0+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32c2555c699578a4f59f0cc68e5116c8d7cabbd45e1409b989d4be085b53f13e"
+checksum = "97251a7c317e03ad83774a8752a7e81fb6067740609f75ea2b585b569a59198f"
 dependencies = [
  "serde_core",
 ]
 
 [[package]]
 name = "toml_parser"
-version = "1.0.9+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "702d4415e08923e7e1ef96cd5727c0dfed80b4d2fa25db9647fe5eb6f7c5a4c4"
+checksum = "2334f11ee363607eb04df9b8fc8a13ca1715a72ba8662a26ac285c98aabb4011"
 dependencies = [
  "winnow",
 ]
 
 [[package]]
 name = "toml_writer"
-version = "1.0.6+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
+checksum = "d282ade6016312faf3e41e57ebbba0c073e4056dab1232ab1cb624199648f8ed"
 
 [[package]]
 name = "tower"
@@ -3658,9 +3657,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
-version = "0.7.15"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+checksum = "a90e88e4667264a994d34e6d1ab2d26d398dcdca8b7f52bec8668957517fc7d8"
 
 [[package]]
 name = "wit-bindgen"
@@ -3793,18 +3792,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.42"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2578b716f8a7a858b7f02d5bd870c14bf4ddbbcf3a4c05414ba6503640505e3"
+checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.42"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e6cc098ea4d3bd6246687de65af3f920c430e236bee1e3bf2e441463f08a02f"
+checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
 dependencies = [
  "proc-macro2",
  "quote",
