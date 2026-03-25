@@ -6,8 +6,8 @@ METHOD_TAG="Method V1"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
 DEFAULT_PROFILE="wasm-release"
-DEFAULT_CANISTERS=(app blank user_hub user_shard scale_hub scale shard_hub shard test root)
-ROOT_BUNDLE_CANISTERS=(app blank user_hub user_shard scale_hub scale shard_hub shard test)
+DEFAULT_CANISTERS=(app minimal user_hub user_shard scale_hub scale shard_hub shard test root)
+ROOT_BUNDLE_CANISTERS=(app minimal user_hub user_shard scale_hub scale shard_hub shard test)
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
@@ -214,7 +214,9 @@ build_and_cache_artifacts() {
         ensure_raw_canister root
     fi
 
-    dfx build "${CANISTERS[@]}"
+    for canister in "${CANISTERS[@]}"; do
+        dfx build "$canister"
+    done
 
     for canister in "${CANISTERS[@]}"; do
         local shrunk_wasm_src=".dfx/local/canisters/$canister/$canister.wasm"
@@ -567,7 +569,7 @@ EOF
         local reason="largest retained symbol from raw-built twiggy analysis"
         if [ "$canister" = "root" ]; then
             reason="bundle-canister outlier; embeds child .wasm.gz artifacts and must not be compared directly to leaf peers"
-        elif [ "$canister" = "blank" ]; then
+        elif [ "$canister" = "minimal" ]; then
             reason="shared-runtime floor; use this to judge workspace baseline pressure"
         fi
 
@@ -587,7 +589,7 @@ EOF
 
 ## Dependency Fan-In Pressure
 
-- \`blank\` remains the shared-runtime floor. If \`blank\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
+- \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
 - \`root\` is always interpreted as a bundle canister because it embeds child \`.wasm.gz\` artifacts during build.
 - Large retained hotspots that repeat across many per-canister Twiggy reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
 
@@ -595,9 +597,9 @@ EOF
 
 | Signal | Status | Evidence |
 | --- | --- | --- |
-| Blank floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[blank]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v blank="${SHRUNK_WASM_BYTES[blank]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - blank) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`blank\` shrunk wasm = ${SHRUNK_WASM_BYTES[blank]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
+| Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
 | Root bundle outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
-| Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[blank]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`blank\` shrink delta = ${SHRINK_DELTA_BYTES[blank]:-N/A} bytes. |
+| Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
 
 ## Per-Canister Snapshot
 
@@ -655,7 +657,7 @@ EOF
     else
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`shared runtime baseline\`
-   Action: compare \`blank\` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.
+   Action: compare \`minimal\` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.
    Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
 2. Owner boundary: \`bundle canister root\`
    Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.

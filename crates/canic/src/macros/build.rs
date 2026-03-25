@@ -60,6 +60,43 @@ macro_rules! __canic_build_internal {
         // Run the extra body (per-canister or nothing)
         $body
 
+        // Emit compile-time endpoint surface flags for non-root canister crates.
+        println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
+        println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
+
+        if let Ok(package_name) = std::env::var("CARGO_PKG_NAME") {
+            if let Some(role_name) = package_name.strip_prefix("canister_") {
+                let mut role_found = false;
+                let mut has_scaling = false;
+                let mut has_sharding = false;
+
+                for subnet in $cfg.subnets.values() {
+                    if let Some(canister_cfg) = subnet.canisters.get(role_name) {
+                        role_found = true;
+                        has_scaling |= canister_cfg.scaling.is_some();
+                        has_sharding |= canister_cfg.sharding.is_some();
+                    }
+                }
+
+                if role_found {
+                    if has_scaling {
+                        println!("cargo:rustc-cfg=canic_has_scaling");
+                    }
+
+                    if has_sharding {
+                        println!("cargo:rustc-cfg=canic_has_sharding");
+                    }
+                } else if role_name != "root" {
+                    panic!(
+                        "canister role '{}' from package '{}' was not found in {}",
+                        role_name,
+                        package_name,
+                        $cfg_path.display()
+                    );
+                }
+            }
+        }
+
         let abs = $cfg_path.canonicalize().expect("canonicalize canic config path");
         println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", abs.display());
         println!("cargo:rerun-if-changed={}", abs.display());

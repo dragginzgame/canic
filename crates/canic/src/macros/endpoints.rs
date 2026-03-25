@@ -163,6 +163,7 @@ macro_rules! canic_endpoints {
         // SCALING
         //
 
+        #[cfg(canic_has_scaling)]
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_scaling_registry()
         -> Result<::canic::dto::placement::scaling::ScalingRegistryResponse, ::canic::Error> {
@@ -173,12 +174,14 @@ macro_rules! canic_endpoints {
         // SHARDING
         //
 
+        #[cfg(canic_has_sharding)]
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry())
         }
 
+        #[cfg(canic_has_sharding)]
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_partition_keys(
             pool: String,

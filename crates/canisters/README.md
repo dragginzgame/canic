@@ -11,7 +11,7 @@ try features end-to-end without touching production code.
 - `user_hub/` + `user_shard/` – delegated signing pool (hub does placement only; shard initiates delegation with root).
 - `shard_hub/` + `shard/` – sharding pool demo (assign principals to shard replicas).
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
-- `blank/` – minimal canister used for provisioning flows (create-canister requests).
+- `minimal/` – minimal canister used as the shared runtime baseline canister.
 - `test/` – timer and update/query coverage used by `make test-canisters`.
 
 The shared demo topology lives in `crates/canisters/canic.toml` and is referenced by each canister’s `build.rs`.

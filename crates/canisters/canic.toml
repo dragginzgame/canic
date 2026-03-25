@@ -61,8 +61,8 @@ policy.max_shards = 4
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
-# --- Blank ---
-[subnets.prime.canisters.blank]
+# --- Minimal ---
+[subnets.prime.canisters.minimal]
 kind = "replica"
 
 # --- Scale Hub ---
@@ -108,6 +108,6 @@ kind = "singleton"
 # ================================================================
 [subnets.general]
 
-# --- Blank Canister ---
-[subnets.general.canisters.blank]
+# --- Minimal Canister ---
+[subnets.general.canisters.minimal]
 kind = "replica"

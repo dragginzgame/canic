@@ -123,7 +123,7 @@ version:
 tags:
 	@git tag --sort=-version:refname | head -10
 
-patch: ensure-clean fmt clippy
+patch: ensure-clean fmt test
 	@scripts/ci/bump-version.sh patch
 
 minor: ensure-clean fmt clippy

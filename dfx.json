@@ -14,7 +14,7 @@
             ],
             "dependencies": [
                 "app",
-                "blank",
+                "minimal",
                 "user_hub",
                 "scale_hub",
                 "shard_hub",
@@ -34,11 +34,11 @@
                 }
             ]
         },
-        "blank": {
+        "minimal": {
             "type": "custom",
-            "candid": ".dfx/local/canisters/blank/blank.did",
-            "build": "bash -c 'scripts/app/build.sh blank'",
-            "wasm": ".dfx/local/canisters/blank/blank.wasm",
+            "candid": ".dfx/local/canisters/minimal/minimal.did",
+            "build": "bash -c 'scripts/app/build.sh minimal'",
+            "wasm": ".dfx/local/canisters/minimal/minimal.wasm",
             "shrink": true,
             "gzip": true,
             "metadata": [

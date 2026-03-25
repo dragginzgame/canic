@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  POCKET_IC_VERSION: 13.0.0
+
 permissions:
   contents: read
 
@@ -33,13 +36,13 @@ jobs:
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/pocket-ic-server-12.0.0
-          key: pocket-ic-12.0.0-${{ runner.os }}
+          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
+          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
       - name: Install PocketIC server
         shell: bash
         run: |
           set -euxo pipefail
-          VERSION="12.0.0"
+          VERSION="${POCKET_IC_VERSION}"
           DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
           BIN="$DIR/pocket-ic"
           mkdir -p "$DIR"
@@ -60,7 +63,7 @@ jobs:
           export RUSTFLAGS="-C debuginfo=0"
           mkdir -p .dfx/local/canisters
 
-          for canister in app blank scale scale_hub shard shard_hub test user_hub user_shard; do
+          for canister in app minimal scale scale_hub shard shard_hub test user_hub user_shard; do
             cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
             mkdir -p ".dfx/local/canisters/${canister}"
             cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"
@@ -128,13 +131,13 @@ jobs:
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/pocket-ic-server-12.0.0
-          key: pocket-ic-12.0.0-${{ runner.os }}
+          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
+          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
       - name: Install PocketIC server
         shell: bash
         run: |
           set -euxo pipefail
-          VERSION="12.0.0"
+          VERSION="${POCKET_IC_VERSION}"
           DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
           BIN="$DIR/pocket-ic"
           mkdir -p "$DIR"
@@ -155,7 +158,7 @@ jobs:
           export RUSTFLAGS="-C debuginfo=0"
           mkdir -p .dfx/local/canisters
 
-          for canister in app blank scale scale_hub shard shard_hub test user_hub user_shard; do
+          for canister in app minimal scale scale_hub shard shard_hub test user_hub user_shard; do
             cargo build --target wasm32-unknown-unknown -p "canister_${canister}" --locked
             mkdir -p ".dfx/local/canisters/${canister}"
             cp "target/wasm32-unknown-unknown/debug/canister_${canister}.wasm" ".dfx/local/canisters/${canister}/${canister}.wasm"
