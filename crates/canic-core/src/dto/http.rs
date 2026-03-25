@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// HttpRequestArgs
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpRequestArgs {
     pub url: String,
     pub max_response_bytes: Option<u64>,
@@ -18,7 +18,7 @@ pub struct HttpRequestArgs {
 /// HttpRequestResult
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpRequestResult {
     pub status: Nat,
     pub headers: Vec<HttpHeader>,
@@ -30,7 +30,7 @@ pub struct HttpRequestResult {
 /// HttpMethod
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
 pub enum HttpMethod {
     #[serde(rename = "get")]
     GET,
@@ -44,7 +44,7 @@ pub enum HttpMethod {
 /// HttpHeader
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpHeader {
     pub name: String,
     pub value: String,

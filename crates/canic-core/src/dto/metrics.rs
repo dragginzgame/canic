@@ -42,7 +42,7 @@ use crate::{
 /// predicate where access failed.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct AccessMetricEntry {
     /// Normalized endpoint name.
     ///
@@ -63,81 +63,22 @@ pub struct AccessMetricEntry {
     pub count: u64,
 }
 
-///
-/// AuthMetricEntry
-///
-/// Snapshot entry for auth-specific counters exposed via `canic_metrics`.
-///
-/// This is a filtered projection over auth-kind access metrics so operator
-/// dashboards can consume delegated-token and attestation signals without
-/// mixing in unrelated guard or rule failures.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AuthMetricEntry {
-    /// Endpoint that emitted the auth metric.
-    pub endpoint: String,
-
-    /// Stable auth metric predicate.
-    pub predicate: String,
-
-    /// Total count for this (endpoint, predicate) tuple.
-    pub count: u64,
-}
-
-///
-/// AuthRolloutMetricClass
-///
-/// Stable severity class for derived auth rollout signals.
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AuthRolloutMetricClass {
-    HardGate,
-    Operational,
-}
-
-///
-/// AuthRolloutMetricEntry
-///
-/// Derived rollout-facing auth signal grouped from lower-level auth counters.
-///
-/// This keeps rollout dashboards from depending directly on raw predicate
-/// strings while still exposing bounded, queryable counters.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AuthRolloutMetricEntry {
-    /// Stable rollout signal name.
-    pub signal: String,
-
-    /// Release-gating severity class for the signal.
-    pub class: AuthRolloutMetricClass,
-
-    /// Aggregated total across all matching auth counters.
-    pub count: u64,
-}
-
-///
 /// MetricsKind
 ///
 /// Metric family selector for the unified metrics query endpoint.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum MetricsKind {
     System,
     Icc,
     Http,
     Timer,
     Access,
-    Auth,
-    AuthRollout,
     Delegation,
     RootCapability,
     CyclesFunding,
     Perf,
-    EndpointHealth,
 }
 
 ///
@@ -146,7 +87,7 @@ pub enum MetricsKind {
 /// Unified metrics query request envelope.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct MetricsRequest {
     pub kind: MetricsKind,
     pub page: PageRequest,
@@ -158,20 +99,17 @@ pub struct MetricsRequest {
 /// Unified metrics query response envelope.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum MetricsResponse {
     System(Vec<SystemMetricEntry>),
     Icc(Page<IccMetricEntry>),
     Http(Page<HttpMetricEntry>),
     Timer(Page<TimerMetricEntry>),
     Access(Page<AccessMetricEntry>),
-    Auth(Page<AuthMetricEntry>),
-    AuthRollout(Page<AuthRolloutMetricEntry>),
     Delegation(Page<DelegationMetricEntry>),
     RootCapability(Page<RootCapabilityMetricEntry>),
     CyclesFunding(Page<CyclesFundingMetricEntry>),
     Perf(Page<PerfEntry>),
-    EndpointHealth(Page<EndpointHealth>),
 }
 
 ///
@@ -185,7 +123,7 @@ pub enum MetricsResponse {
 /// - Cardinality is bounded by the number of configured delegation certs.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationMetricEntry {
     /// Principal of the delegation authority (cert signer).
     pub authority: Principal,
@@ -207,7 +145,7 @@ pub struct DelegationMetricEntry {
 /// - `count` is the cumulative counter for this tuple.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityMetricEntry {
     pub capability: String,
     pub event_type: String,
@@ -228,7 +166,7 @@ pub struct RootCapabilityMetricEntry {
 /// - `cycles` is the accumulated cycles amount for the tuple.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesFundingMetricEntry {
     pub metric: String,
     pub child_principal: Option<Principal>,
@@ -236,93 +174,6 @@ pub struct CyclesFundingMetricEntry {
     pub cycles: u128,
 }
 
-///
-/// EndpointAttemptMetricEntry
-///
-/// Snapshot entry for endpoint execution lifecycle metrics.
-///
-/// Semantics:
-/// - `attempted` counts total execution attempts
-/// - `completed` counts executions that reached completion
-///
-/// This metric does NOT encode success or failure.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointAttemptMetricEntry {
-    /// Normalized endpoint name.
-    pub endpoint: String,
-
-    /// Number of times the endpoint was attempted.
-    pub attempted: u64,
-
-    /// Number of times execution completed.
-    pub completed: u64,
-}
-
-///
-/// EndpointResultMetricEntry
-///
-/// Snapshot entry for endpoint execution outcomes.
-///
-/// Semantics:
-/// - `ok` counts successful executions
-/// - `err` counts failed executions
-///
-/// This metric intentionally excludes *error causes* to prevent
-/// high-cardinality labels.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointResultMetricEntry {
-    /// Normalized endpoint name.
-    pub endpoint: String,
-
-    /// Number of successful executions.
-    pub ok: u64,
-
-    /// Number of failed executions.
-    pub err: u64,
-}
-
-///
-/// EndpointHealth
-///
-/// Derived, read-only view combining multiple metric streams.
-///
-/// IMPORTANT:
-/// -----------
-/// This struct is NOT stored directly.
-/// It is materialized at read time by joining:
-/// - access metrics
-/// - attempt metrics
-/// - result metrics
-///
-/// It exists purely for observability convenience.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct EndpointHealth {
-    /// Normalized endpoint name.
-    pub endpoint: String,
-
-    /// Total execution attempts.
-    pub attempted: u64,
-
-    /// Total access denials.
-    pub denied: u64,
-
-    /// Total completed executions.
-    pub completed: u64,
-
-    /// Successful executions.
-    pub ok: u64,
-
-    /// Failed executions.
-    pub err: u64,
-}
-
-///
 /// HttpMetricEntry
 ///
 /// Snapshot entry for HTTP ingress metrics.
@@ -334,7 +185,7 @@ pub struct EndpointHealth {
 /// Labels MUST be controlled and finite.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpMetricEntry {
     /// HTTP method (e.g. GET, POST).
     pub method: String,
@@ -354,7 +205,7 @@ pub struct HttpMetricEntry {
 /// Tracks outbound calls made by this canister.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct IccMetricEntry {
     /// Target canister principal.
     pub target: Principal,
@@ -375,7 +226,7 @@ pub struct IccMetricEntry {
 /// schema changes, but MUST remain low-cardinality.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct SystemMetricEntry {
     /// Metric kind identifier.
     pub kind: String,
@@ -392,7 +243,7 @@ pub struct SystemMetricEntry {
 /// Used to observe scheduled or delayed execution behavior.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TimerMetricEntry {
     /// Timer mode (e.g. one-shot, interval).
     pub mode: String,

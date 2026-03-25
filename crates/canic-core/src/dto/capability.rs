@@ -20,7 +20,7 @@ pub const PROOF_VERSION_V1: u16 = 1;
 /// CapabilityService
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum CapabilityService {
     Root,
     ProjectRegistry,
@@ -33,7 +33,7 @@ pub enum CapabilityService {
 /// CapabilityRequestMetadata
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct CapabilityRequestMetadata {
     pub request_id: [u8; 16],
     pub nonce: [u8; 16],
@@ -45,7 +45,7 @@ pub struct CapabilityRequestMetadata {
 /// RoleAttestationProof
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RoleAttestationProof {
     pub proof_version: u16,
     pub capability_hash: [u8; 32],
@@ -56,7 +56,7 @@ pub struct RoleAttestationProof {
 /// DelegatedGrantScope
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrantScope {
     pub service: CapabilityService,
     pub capability_family: String,
@@ -66,7 +66,7 @@ pub struct DelegatedGrantScope {
 /// DelegatedGrant
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrant {
     pub issuer: Principal,
     pub subject: Principal,
@@ -83,7 +83,7 @@ pub struct DelegatedGrant {
 /// DelegatedGrantProof
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrantProof {
     pub proof_version: u16,
     pub capability_hash: [u8; 32],
@@ -96,7 +96,7 @@ pub struct DelegatedGrantProof {
 /// CapabilityProof
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CapabilityProof {
     Structural,
     RoleAttestation(RoleAttestationProof),
@@ -107,7 +107,7 @@ pub enum CapabilityProof {
 /// RootCapabilityEnvelopeV1
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityEnvelopeV1 {
     pub service: CapabilityService,
     pub capability_version: u16,
@@ -120,7 +120,7 @@ pub struct RootCapabilityEnvelopeV1 {
 /// RootCapabilityResponseV1
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityResponseV1 {
     pub response: Response,
 }

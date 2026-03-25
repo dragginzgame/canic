@@ -1,10 +1,9 @@
 use crate::{
     dto::{
         metrics::{
-            AccessMetricEntry, AuthMetricEntry, AuthRolloutMetricEntry, CyclesFundingMetricEntry,
-            DelegationMetricEntry, EndpointHealth, HttpMetricEntry, IccMetricEntry, MetricsKind,
-            MetricsRequest, MetricsResponse, RootCapabilityMetricEntry, SystemMetricEntry,
-            TimerMetricEntry,
+            AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, HttpMetricEntry,
+            IccMetricEntry, MetricsKind, MetricsRequest, MetricsResponse,
+            RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
         },
         page::{Page, PageRequest},
     },
@@ -12,12 +11,10 @@ use crate::{
         perf::PerfOps,
         runtime::metrics::{
             MetricsOps,
-            auth::typed_auth_metric_records,
             mapper::{
-                AccessMetricEntryMapper, AuthMetricEntryMapper, AuthRolloutMetricEntryMapper,
-                CyclesFundingMetricEntryMapper, DelegationMetricEntryMapper, EndpointHealthMapper,
-                HttpMetricEntryMapper, IccMetricEntryMapper, RootCapabilityMetricEntryMapper,
-                SystemMetricEntryMapper, TimerMetricEntryMapper,
+                AccessMetricEntryMapper, CyclesFundingMetricEntryMapper,
+                DelegationMetricEntryMapper, HttpMetricEntryMapper, IccMetricEntryMapper,
+                RootCapabilityMetricEntryMapper, SystemMetricEntryMapper, TimerMetricEntryMapper,
             },
         },
     },
@@ -43,10 +40,6 @@ impl MetricsQuery {
             MetricsKind::Http => MetricsResponse::Http(Self::http_page(req.page)),
             MetricsKind::Timer => MetricsResponse::Timer(Self::timer_page(req.page)),
             MetricsKind::Access => MetricsResponse::Access(Self::access_page(req.page)),
-            MetricsKind::Auth => MetricsResponse::Auth(Self::auth_page(req.page)),
-            MetricsKind::AuthRollout => {
-                MetricsResponse::AuthRollout(Self::auth_rollout_page(req.page))
-            }
             MetricsKind::Delegation => MetricsResponse::Delegation(Self::delegation_page(req.page)),
             MetricsKind::RootCapability => {
                 MetricsResponse::RootCapability(Self::root_capability_page(req.page))
@@ -55,9 +48,6 @@ impl MetricsQuery {
                 MetricsResponse::CyclesFunding(Self::cycles_funding_page(req.page))
             }
             MetricsKind::Perf => MetricsResponse::Perf(Self::perf_page(req.page)),
-            MetricsKind::EndpointHealth => MetricsResponse::EndpointHealth(
-                Self::endpoint_health_page(req.page, Some(crate::protocol::CANIC_METRICS)),
-            ),
         }
     }
 
@@ -127,31 +117,6 @@ impl MetricsQuery {
     }
 
     #[must_use]
-    pub fn auth_page(page: PageRequest) -> Page<AuthMetricEntry> {
-        let snapshot = MetricsOps::access_snapshot();
-        let mut entries =
-            AuthMetricEntryMapper::record_to_view(typed_auth_metric_records(snapshot.entries));
-
-        entries.sort_by(|a, b| {
-            a.endpoint
-                .cmp(&b.endpoint)
-                .then_with(|| a.predicate.cmp(&b.predicate))
-        });
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn auth_rollout_page(page: PageRequest) -> Page<AuthRolloutMetricEntry> {
-        let snapshot = MetricsOps::access_snapshot();
-        let entries = AuthRolloutMetricEntryMapper::record_to_view(typed_auth_metric_records(
-            snapshot.entries,
-        ));
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
     pub fn delegation_page(page: PageRequest) -> Page<DelegationMetricEntry> {
         let snapshot = MetricsOps::delegation_snapshot();
         let mut entries = DelegationMetricEntryMapper::record_to_view(snapshot.entries);
@@ -196,186 +161,5 @@ impl MetricsQuery {
     pub fn perf_page(page: PageRequest) -> Page<PerfEntry> {
         let snapshot = PerfOps::snapshot();
         paginate_vec(snapshot.entries, page)
-    }
-
-    #[must_use]
-    pub fn endpoint_health_page(
-        page: PageRequest,
-        exclude_endpoint: Option<&str>,
-    ) -> Page<EndpointHealth> {
-        let snapshot = MetricsOps::endpoint_health_snapshot();
-        let mut entries = EndpointHealthMapper::record_to_view(
-            snapshot.attempts,
-            snapshot.results,
-            snapshot.access,
-            exclude_endpoint,
-        );
-
-        entries.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
-
-        paginate_vec(entries, page)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        dto::metrics::AuthRolloutMetricClass,
-        ids::AccessMetricKind,
-        ops::runtime::metrics::{
-            access::AccessMetrics,
-            auth::{
-                AuthMetricPredicate, AuthProofCacheUtilizationBucket,
-                DelegationInstallValidationFailureReason, DelegationProvisionRole,
-                VerifierProofCacheEvictionClass,
-            },
-        },
-    };
-
-    #[test]
-    fn auth_page_filters_non_auth_metrics() {
-        AccessMetrics::reset();
-
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
-        );
-        AccessMetrics::increment(
-            "canic_metrics",
-            AccessMetricKind::Guard,
-            "caller_is_controller",
-        );
-
-        let page = MetricsQuery::auth_page(PageRequest {
-            offset: 0,
-            limit: 10,
-        });
-
-        assert_eq!(page.entries.len(), 1);
-        assert_eq!(page.entries[0].endpoint, "auth_verifier");
-        assert_eq!(
-            page.entries[0].predicate,
-            AuthMetricPredicate::ProofMiss.as_str().as_ref()
-        );
-        assert_eq!(page.entries[0].count, 2);
-    }
-
-    #[test]
-    fn auth_rollout_page_groups_gate_and_operational_signals() {
-        AccessMetrics::reset();
-
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofMiss.as_str().as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofMismatch.as_str().as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofCacheEviction {
-                class: VerifierProofCacheEvictionClass::Active,
-            }
-            .as_str()
-            .as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofCacheUtilization {
-                bucket: AuthProofCacheUtilizationBucket::NinetyFiveToOneHundred,
-            }
-            .as_str()
-            .as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_signer",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::DelegationPushFailed {
-                role: DelegationProvisionRole::Verifier,
-                intent: crate::dto::auth::DelegationProofInstallIntent::Repair,
-            }
-            .as_str()
-            .as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_signer",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::DelegationInstallValidationFailed {
-                intent: crate::dto::auth::DelegationProofInstallIntent::Prewarm,
-                reason: DelegationInstallValidationFailureReason::VerifyProof,
-            }
-            .as_str()
-            .as_ref(),
-        );
-        AccessMetrics::increment(
-            "auth_verifier",
-            AccessMetricKind::Auth,
-            AuthMetricPredicate::ProofCacheEviction {
-                class: VerifierProofCacheEvictionClass::Cold,
-            }
-            .as_str()
-            .as_ref(),
-        );
-        AccessMetrics::increment(
-            "canic_metrics",
-            AccessMetricKind::Guard,
-            "caller_is_controller",
-        );
-
-        let page = MetricsQuery::auth_rollout_page(PageRequest {
-            offset: 0,
-            limit: 20,
-        });
-
-        assert_eq!(page.entries.len(), 7);
-        assert_eq!(
-            rollout_entry(&page, "proof_miss"),
-            Some((AuthRolloutMetricClass::HardGate, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "proof_mismatch"),
-            Some((AuthRolloutMetricClass::HardGate, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "active_proof_eviction"),
-            Some((AuthRolloutMetricClass::HardGate, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "repair_failure"),
-            Some((AuthRolloutMetricClass::HardGate, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "cache_saturation"),
-            Some((AuthRolloutMetricClass::HardGate, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "cold_proof_eviction"),
-            Some((AuthRolloutMetricClass::Operational, 1))
-        );
-        assert_eq!(
-            rollout_entry(&page, "prewarm_failure"),
-            Some((AuthRolloutMetricClass::Operational, 1))
-        );
-    }
-
-    fn rollout_entry(
-        page: &Page<AuthRolloutMetricEntry>,
-        signal: &str,
-    ) -> Option<(AuthRolloutMetricClass, u64)> {
-        page.entries
-            .iter()
-            .find_map(|entry| (entry.signal == signal).then_some((entry.class, entry.count)))
     }
 }

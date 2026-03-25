@@ -1,5 +1,3 @@
-use crate::config::Config;
-
 ///
 /// ICRC 10
 /// formatting instructions for each standard
@@ -51,19 +49,15 @@ pub enum Icrc10Standard {
 pub struct Icrc10Registry;
 
 impl Icrc10Registry {
-    fn enabled_standards() -> Vec<Icrc10Standard> {
+    fn enabled_standards(icrc21_enabled: bool, icrc103_enabled: bool) -> Vec<Icrc10Standard> {
         let mut supported = vec![Icrc10Standard::Icrc10];
 
-        if let Ok(config) = Config::get()
-            && let Some(standards) = config.standards.as_ref()
-        {
-            if standards.icrc21 {
-                supported.push(Icrc10Standard::Icrc21);
-            }
+        if icrc21_enabled {
+            supported.push(Icrc10Standard::Icrc21);
+        }
 
-            if standards.icrc103 {
-                supported.push(Icrc10Standard::Icrc103);
-            }
+        if icrc103_enabled {
+            supported.push(Icrc10Standard::Icrc103);
         }
 
         supported
@@ -71,14 +65,22 @@ impl Icrc10Registry {
 
     /// Checks whether the given standard is currently registered.
     #[must_use]
-    pub fn is_registered(standard: Icrc10Standard) -> bool {
-        matches!(standard, Icrc10Standard::Icrc10) || Self::enabled_standards().contains(&standard)
+    pub fn is_registered(
+        standard: Icrc10Standard,
+        icrc21_enabled: bool,
+        icrc103_enabled: bool,
+    ) -> bool {
+        matches!(standard, Icrc10Standard::Icrc10)
+            || Self::enabled_standards(icrc21_enabled, icrc103_enabled).contains(&standard)
     }
 
     /// Returns `(name, url)` for all supported standards from the static list.
     #[must_use]
-    pub fn supported_standards() -> Vec<(String, String)> {
-        let reg = Self::enabled_standards();
+    pub fn supported_standards(
+        icrc21_enabled: bool,
+        icrc103_enabled: bool,
+    ) -> Vec<(String, String)> {
+        let reg = Self::enabled_standards(icrc21_enabled, icrc103_enabled);
 
         ICRC_10_SUPPORTED_STANDARDS
             .iter()

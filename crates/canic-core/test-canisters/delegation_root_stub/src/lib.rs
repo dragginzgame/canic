@@ -15,7 +15,6 @@ use canic::{
 };
 use ic_cdk::api::msg_caller;
 use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 const TEST_ATTESTATION_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
@@ -27,7 +26,7 @@ const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
-#[derive(CandidType, Serialize)]
+#[derive(CandidType)]
 struct TestTokenSigningPayload {
     cert_hash: Vec<u8>,
     claims: DelegatedTokenClaims,

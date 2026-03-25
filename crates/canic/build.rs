@@ -3,8 +3,26 @@ use std::path::PathBuf;
 fn main() {
     // The exported endpoint macros use these cfg names when optional endpoint
     // groups are compiled out for a role-specific canister build.
+    println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_signer_proof)");
+    println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_verifier_proof)");
+    println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
+    println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
+    println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_icrc)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_icts)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_directory)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_cycles)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
 
     // If the env var changes, we must re-run to pick up a different config.
     println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");

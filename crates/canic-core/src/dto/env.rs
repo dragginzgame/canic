@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// EnvBootstrapArgs
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvBootstrapArgs {
     // app
     pub prime_root_pid: Option<Principal>,
@@ -23,7 +23,7 @@ pub struct EnvBootstrapArgs {
 /// EnvSnapshotResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvSnapshotResponse {
     // app
     pub prime_root_pid: Option<Principal>,

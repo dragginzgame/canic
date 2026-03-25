@@ -61,6 +61,10 @@ policy.max_shards = 4
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
+[subnets.prime.canisters.user_shard.delegated_auth]
+signer = true
+verifier = true
+
 # --- Minimal ---
 [subnets.prime.canisters.minimal]
 kind = "replica"
@@ -102,6 +106,9 @@ topup_policy.amount = "4T"
 # --- Test ---
 [subnets.prime.canisters.test]
 kind = "singleton"
+
+[subnets.prime.canisters.test.delegated_auth]
+verifier = true
 
 # ================================================================
 #  GENERAL SUBNET

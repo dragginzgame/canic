@@ -15,7 +15,7 @@ use canic_core::dto::{
         RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
-    metrics::{AuthRolloutMetricClass, MetricsKind, MetricsRequest, MetricsResponse},
+    metrics::{MetricsKind, MetricsRequest, MetricsResponse},
     page::PageRequest,
     rpc::{CreateCanisterParent, CreateCanisterRequest},
     rpc::{CyclesRequest, Request, Response},
@@ -638,11 +638,6 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         "auth_verifier",
         &[("token_rejected_proof_miss", 1)],
     );
-    assert_auth_rollout_metrics(
-        &fixture.pic,
-        fixture.verifier_id,
-        &[("proof_miss", AuthRolloutMetricClass::HardGate, 1)],
-    );
 }
 
 #[test]
@@ -690,11 +685,6 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
             ),
         ],
     );
-    assert_auth_rollout_metrics(
-        &fixture.pic,
-        fixture.root_id,
-        &[("repair_failure", AuthRolloutMetricClass::HardGate, 1)],
-    );
 }
 
 #[test]
@@ -734,11 +724,6 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
             "delegation_install_validation_failed{intent=\"prewarm\",stage=\"post_normalization\",reason=\"target_not_in_audience\"}",
             1,
         )],
-    );
-    assert_auth_rollout_metrics(
-        &fixture.pic,
-        fixture.signer_id,
-        &[("prewarm_failure", AuthRolloutMetricClass::Operational, 1)],
     );
 }
 
@@ -2326,21 +2311,6 @@ fn assert_access_metrics(
     }
 }
 
-// Assert a batch of derived auth-rollout signals for a single canister.
-fn assert_auth_rollout_metrics(
-    pic: &pocket_ic::PocketIc,
-    canister_id: Principal,
-    expected: &[(&str, AuthRolloutMetricClass, u64)],
-) {
-    for (signal, class, count) in expected {
-        assert_eq!(
-            auth_rollout_metric_entry(pic, canister_id, signal),
-            Some((*class, *count)),
-            "unexpected rollout metric for {signal}"
-        );
-    }
-}
-
 fn install_root_canister(pic: &pocket_ic::PocketIc, wasm: Vec<u8>) -> Principal {
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -2440,35 +2410,6 @@ fn access_metric_count(
             }
         })
         .unwrap_or(0)
-}
-
-// Query the auth-rollout metrics page and return one derived signal entry.
-fn auth_rollout_metric_entry(
-    pic: &pocket_ic::PocketIc,
-    canister_id: Principal,
-    signal: &str,
-) -> Option<(AuthRolloutMetricClass, u64)> {
-    let response: Result<MetricsResponse, Error> = query_call_as(
-        pic,
-        canister_id,
-        Principal::anonymous(),
-        "canic_metrics",
-        (MetricsRequest {
-            kind: MetricsKind::AuthRollout,
-            page: PageRequest {
-                limit: 10_000,
-                offset: 0,
-            },
-        },),
-    );
-    let response = response.expect("query canic_metrics failed");
-    let MetricsResponse::AuthRollout(page) = response else {
-        panic!("expected auth rollout metrics response");
-    };
-
-    page.entries
-        .into_iter()
-        .find_map(|entry| (entry.signal == signal).then_some((entry.class, entry.count)))
 }
 
 // Create a non-root verifier canister through the root capability endpoint.

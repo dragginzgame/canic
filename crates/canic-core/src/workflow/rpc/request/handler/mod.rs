@@ -21,8 +21,10 @@ mod capability;
 mod delegation;
 mod execute;
 mod funding;
+mod nonroot_cycles;
 mod replay;
 use capability::RootCapability;
+pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;

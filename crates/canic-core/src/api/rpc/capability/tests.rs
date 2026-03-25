@@ -196,6 +196,58 @@ fn validate_root_capability_envelope_rejects_service_mismatch() {
 }
 
 #[test]
+fn validate_nonroot_cycles_envelope_accepts_structural_cycles() {
+    validate_nonroot_cycles_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &sample_request(10),
+        &CapabilityProof::Structural,
+    )
+    .expect("structural cycles envelope must be accepted for non-root path");
+}
+
+#[test]
+fn validate_nonroot_cycles_envelope_rejects_non_cycles_request() {
+    let request = Request::IssueDelegation(crate::dto::auth::DelegationRequest {
+        shard_pid: p(1),
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![p(2)],
+        ttl_secs: 60,
+        verifier_targets: Vec::new(),
+        include_root_verifier: false,
+        metadata: None,
+    });
+
+    let err = validate_nonroot_cycles_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &request,
+        &CapabilityProof::Structural,
+    )
+    .expect_err("non-root path must reject non-cycles capability");
+    assert!(
+        err.message
+            .contains("only supports structural cycles requests")
+    );
+}
+
+#[test]
+fn validate_nonroot_cycles_envelope_rejects_non_structural_proof() {
+    let err = validate_nonroot_cycles_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &sample_request(10),
+        &CapabilityProof::RoleAttestation(crate::dto::capability::RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash: [0u8; 32],
+            attestation: sample_signed_attestation(),
+        }),
+    )
+    .expect_err("non-root path must reject non-structural proof");
+    assert!(err.message.contains("only supports structural proof mode"));
+}
+
+#[test]
 fn validate_root_capability_envelope_rejects_capability_version_mismatch() {
     let err = validate_root_capability_envelope(
         CapabilityService::Root,

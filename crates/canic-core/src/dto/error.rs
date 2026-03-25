@@ -8,7 +8,7 @@ use std::fmt::{self, Display};
 /// Encodes a stable error code and a human-readable message.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Error {
     pub code: ErrorCode,
     pub message: String,
@@ -90,7 +90,7 @@ impl From<AccessError> for Error {
 /// New variants may be added in the future; consumers must handle unknown values.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[non_exhaustive]
 #[remain::sorted]
 pub enum ErrorCode {

@@ -3,28 +3,22 @@ use crate::{
     dto::{
         capability::{
             CapabilityProof, CapabilityRequestMetadata, CapabilityService, DelegatedGrantProof,
-            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
         rpc::{Request, RequestFamily, RootRequestMetadata},
     },
-    log,
-    log::Topic,
-    ops::{
-        ic::IcOps,
-        runtime::metrics::root_capability::{
-            RootCapabilityEnvelopeOutcome, RootCapabilityMetricKey, RootCapabilityMetricProofMode,
-            RootCapabilityMetrics, RootCapabilityProofOutcome,
-        },
+    ops::runtime::metrics::root_capability::{
+        RootCapabilityMetricKey, RootCapabilityMetricProofMode,
     },
-    workflow::rpc::request::handler::RootResponseWorkflow,
 };
 
 mod envelope;
 mod grant;
 mod hash;
+mod nonroot;
 mod proof;
 mod replay;
+mod root;
 mod verifier;
 
 #[cfg(test)]
@@ -36,76 +30,16 @@ const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_SECONDS: u64 = 30;
 const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
 
-pub(super) async fn response_capability_v1(
-    envelope: RootCapabilityEnvelopeV1,
-) -> Result<RootCapabilityResponseV1, Error> {
-    let RootCapabilityEnvelopeV1 {
-        service,
-        capability_version,
-        capability,
-        proof,
-        metadata,
-    } = envelope;
+pub(super) async fn response_capability_v1_nonroot(
+    envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
+) -> Result<crate::dto::capability::RootCapabilityResponseV1, Error> {
+    nonroot::response_capability_v1_nonroot(envelope).await
+}
 
-    let capability_key = root_capability_metric_key(&capability);
-    let proof_mode = capability_proof_mode_metric_key(&proof);
-    if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
-        RootCapabilityMetrics::record_envelope(
-            capability_key,
-            RootCapabilityEnvelopeOutcome::Rejected,
-            proof_mode,
-        );
-        log!(
-            Topic::Rpc,
-            Warn,
-            "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
-            IcOps::msg_caller(),
-            service,
-            capability_version,
-            capability_proof_mode_label(&proof),
-            err
-        );
-        return Err(err);
-    }
-    RootCapabilityMetrics::record_envelope(
-        capability_key,
-        RootCapabilityEnvelopeOutcome::Accepted,
-        proof_mode,
-    );
-
-    if let Err(err) = verify_root_capability_proof(&capability, capability_version, &proof).await {
-        RootCapabilityMetrics::record_proof(
-            capability_key,
-            RootCapabilityProofOutcome::Rejected,
-            proof_mode,
-        );
-        log!(
-            Topic::Rpc,
-            Warn,
-            "root capability proof rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
-            IcOps::msg_caller(),
-            service,
-            capability_version,
-            capability_proof_mode_label(&proof),
-            err
-        );
-        return Err(err);
-    }
-    RootCapabilityMetrics::record_proof(
-        capability_key,
-        RootCapabilityProofOutcome::Accepted,
-        proof_mode,
-    );
-
-    let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
-    let capability = with_root_request_metadata(capability, replay_metadata);
-    let response = RootResponseWorkflow::response_replay_first(capability)
-        .await
-        .map_err(Error::from)?;
-
-    Ok(RootCapabilityResponseV1 { response })
+pub(super) async fn response_capability_v1_root(
+    envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
+) -> Result<crate::dto::capability::RootCapabilityResponseV1, Error> {
+    root::response_capability_v1_root(envelope).await
 }
 
 fn validate_root_capability_envelope(
@@ -116,6 +50,29 @@ fn validate_root_capability_envelope(
     envelope::validate_root_capability_envelope(service, capability_version, proof)
 }
 
+fn validate_nonroot_cycles_envelope(
+    service: CapabilityService,
+    capability_version: u16,
+    capability: &Request,
+    proof: &CapabilityProof,
+) -> Result<(), Error> {
+    envelope::validate_root_capability_envelope(service, capability_version, proof)?;
+
+    if capability.family() != RequestFamily::RequestCycles {
+        return Err(Error::forbidden(
+            "non-root capability endpoint only supports structural cycles requests",
+        ));
+    }
+
+    if !matches!(proof, CapabilityProof::Structural) {
+        return Err(Error::forbidden(
+            "non-root capability endpoint only supports structural proof mode",
+        ));
+    }
+
+    Ok(())
+}
+
 async fn verify_root_capability_proof(
     capability: &Request,
     capability_version: u16,
@@ -124,6 +81,10 @@ async fn verify_root_capability_proof(
     verifier::verify_root_capability_proof(capability, capability_version, proof)
         .await
         .map(|_| ())
+}
+
+fn verify_nonroot_cycles_proof(capability: &Request) -> Result<(), Error> {
+    proof::verify_root_structural_proof(capability)
 }
 
 #[cfg(test)]

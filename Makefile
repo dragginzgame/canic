@@ -1,5 +1,5 @@
 .PHONY: help version tags patch minor major release package publish \
-        test build check clippy fmt fmt-check clean install-dev \
+        test test-wasm build check clippy fmt fmt-check clean install-dev \
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
@@ -64,6 +64,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  test             Run clippy + all tests"
+	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
@@ -79,6 +80,7 @@ help:
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make test        # Run clippy and tests"
+	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
 
 #
@@ -148,12 +150,21 @@ publish: ensure-clean
 
 test: clippy test-canisters test-unit
 
+# Fast iteration path for wasm work.
+# Skips dfx canister install/reinstall and excludes integration tests under
+# `tests/`, which is where the PocketIC-heavy suites live today.
+test-wasm: clippy test-unit-fast
+
 # Keep rust test execution single-threaded for PocketIC stability.
 # Parallel test threads can trigger PocketIC panics like:
 # `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
 test-unit:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace -- --test-threads=1
+
+test-unit-fast:
+	@mkdir -p "$(TEST_TMPDIR)"
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace --lib --bins -- --test-threads=1
 
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \

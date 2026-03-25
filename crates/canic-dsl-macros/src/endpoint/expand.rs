@@ -117,7 +117,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let call_ident = format_ident!("__canic_call");
     let call_decl = call_decl(kind, &call_ident, &orig_name);
-
     let attempted = attempted(&call_ident);
 
     let access_stage = access_stage(&access_plan, &call_ident);
@@ -585,7 +584,6 @@ fn dispatch_call(
     }
 }
 
-// Must run only after successful dispatch; access denials return earlier.
 fn completion(
     call: &syn::Ident,
     returns_fallible: bool,

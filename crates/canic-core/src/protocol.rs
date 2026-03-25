@@ -55,4 +55,3 @@ pub const ICTS_NAME: &str = "icts_name";
 pub const ICTS_VERSION: &str = "icts_version";
 pub const ICTS_DESCRIPTION: &str = "icts_description";
 pub const ICTS_METADATA: &str = "icts_metadata";
-pub const ICTS_CANISTER_STATUS: &str = "icts_canister_status";

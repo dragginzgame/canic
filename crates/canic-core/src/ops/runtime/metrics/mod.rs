@@ -14,7 +14,6 @@ use {
     access::{AccessMetrics, AccessMetricsSnapshot},
     cycles_funding::{CyclesFundingMetrics, CyclesFundingMetricsSnapshot},
     delegation::{DelegationMetrics, DelegationMetricsSnapshot},
-    endpoint::{EndpointHealthSnapshot, EndpointMetrics},
     http::{HttpMetrics, HttpMetricsSnapshot},
     icc::{IccMetrics, IccMetricsSnapshot},
     root_capability::{RootCapabilityMetrics, RootCapabilityMetricsSnapshot},
@@ -53,11 +52,6 @@ impl MetricsOps {
     #[must_use]
     pub fn cycles_funding_snapshot() -> CyclesFundingMetricsSnapshot {
         CyclesFundingMetrics::snapshot()
-    }
-
-    #[must_use]
-    pub fn endpoint_health_snapshot() -> EndpointHealthSnapshot {
-        EndpointMetrics::health_snapshot()
     }
 
     #[must_use]

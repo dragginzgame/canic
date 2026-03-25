@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// MemoryRegistryResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryRegistryResponse {
     pub entries: Vec<MemoryRegistryEntry>,
 }
@@ -13,7 +13,7 @@ pub struct MemoryRegistryResponse {
 /// MemoryRegistryEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryRegistryEntry {
     pub id: u8,
     pub crate_name: String,

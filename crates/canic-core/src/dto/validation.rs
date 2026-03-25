@@ -5,7 +5,7 @@ use crate::dto::prelude::*;
 ///
 
 #[expect(clippy::struct_excessive_bools)]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ValidationReport {
     pub ok: bool,
     pub registry_directory_consistent: bool,
@@ -18,7 +18,7 @@ pub struct ValidationReport {
 /// ValidationIssue
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ValidationIssue {
     pub code: String,
     pub message: String,

@@ -5,6 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.17.x] - 2026-03-25 - Wasm Audit and Endpoint Surface Reduction
+
+- `0.17.0` starts the wasm audit line with a measured per-canister footprint baseline, renames the canonical baseline canister from `blank` to `minimal`, and trims optional scaling, sharding, delegated-auth, and `ICRC-21` endpoint exports behind compile-time config so disabled features stop inflating every build.
+- `0.17.1` cuts the shared wasm floor again by separating root-only capability verification from the non-root cycles path and by removing the old `ICTS` canister-status endpoint, bringing the `minimal` raw release artifact down to `2561000` bytes while keeping the intended runtime feature set intact.
+
+See detailed breakdown:
+[docs/changelog/0.17.md](docs/changelog/0.17.md)
+
+---
+
 ## [0.16.x] - 2026-03-16 - Delegation Proof Evolution
 
 - `0.16.0` is reserved as a placeholder minor-line entry for delegation proof evolution follow-up work (deferred from `0.15` Phase 3), with implementation details tracked in the `0.16` design docs.

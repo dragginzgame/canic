@@ -14,7 +14,7 @@ pub enum AppCommand {
 /// AppStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppStatus {
     Active,
     Readonly,
@@ -25,7 +25,7 @@ pub enum AppStatus {
 /// AppMode
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppMode {
     Enabled,
     Readonly,
@@ -36,7 +36,7 @@ pub enum AppMode {
 /// AppStateInput
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct AppStateInput {
     pub mode: AppMode,
     pub cycles_funding_enabled: bool,
@@ -46,7 +46,7 @@ pub struct AppStateInput {
 /// AppStateResponse
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct AppStateResponse {
     pub mode: AppMode,
     pub cycles_funding_enabled: bool,
@@ -56,12 +56,12 @@ pub struct AppStateResponse {
 /// SubnetStateInput
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateInput {}
 
 ///
 /// SubnetStateResponse
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateResponse {}

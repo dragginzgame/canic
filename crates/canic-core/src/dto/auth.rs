@@ -4,7 +4,7 @@ use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 /// DelegationCert
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationCert {
     pub root_pid: Principal,
     pub shard_pid: Principal,
@@ -18,7 +18,7 @@ pub struct DelegationCert {
 /// DelegationProof
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationProof {
     pub cert: DelegationCert,
     pub cert_sig: Vec<u8>,
@@ -28,7 +28,7 @@ pub struct DelegationProof {
 /// DelegationProofInstallIntent
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum DelegationProofInstallIntent {
     Provisioning,
     Prewarm,
@@ -39,7 +39,7 @@ pub enum DelegationProofInstallIntent {
 /// DelegationProofInstallRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProofInstallRequest {
     pub proof: DelegationProof,
     pub intent: DelegationProofInstallIntent,
@@ -49,7 +49,7 @@ pub struct DelegationProofInstallRequest {
 /// DelegatedTokenClaims
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegatedTokenClaims {
     pub sub: Principal,
     pub shard_pid: Principal,
@@ -63,7 +63,7 @@ pub struct DelegatedTokenClaims {
 /// DelegatedToken
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub proof: DelegationProof,
@@ -74,7 +74,7 @@ pub struct DelegatedToken {
 /// DelegationRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationRequest {
     pub shard_pid: Principal,
     pub scopes: Vec<String>,
@@ -90,7 +90,7 @@ pub struct DelegationRequest {
 /// RoleAttestationRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RoleAttestationRequest {
     pub subject: Principal,
     pub role: CanisterRole,
@@ -108,7 +108,7 @@ pub struct RoleAttestationRequest {
 /// RoleAttestation
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RoleAttestation {
     pub subject: Principal,
     pub role: CanisterRole,
@@ -125,7 +125,7 @@ pub struct RoleAttestation {
 /// SignedRoleAttestation
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
     pub signature: Vec<u8>,
@@ -136,7 +136,7 @@ pub struct SignedRoleAttestation {
 /// AttestationKeyStatus
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AttestationKeyStatus {
     Current,
     Previous,
@@ -146,7 +146,7 @@ pub enum AttestationKeyStatus {
 /// AttestationKey
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AttestationKey {
     pub key_id: u32,
     pub public_key: Vec<u8>,
@@ -161,7 +161,7 @@ pub struct AttestationKey {
 /// AttestationKeySet
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AttestationKeySet {
     pub root_pid: Principal,
     pub generated_at: u64,
@@ -174,7 +174,7 @@ pub struct AttestationKeySet {
 /// DelegationProvisionRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionRequest {
     pub cert: DelegationCert,
     pub signer_targets: Vec<Principal>,
@@ -187,7 +187,7 @@ pub struct DelegationProvisionRequest {
 /// DelegationProvisionResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionResponse {
     pub proof: DelegationProof,
     pub results: Vec<DelegationProvisionTargetResponse>,
@@ -197,7 +197,7 @@ pub struct DelegationProvisionResponse {
 /// DelegationVerifierProofPushRequest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationVerifierProofPushRequest {
     pub proof: DelegationProof,
     pub verifier_targets: Vec<Principal>,
@@ -207,7 +207,7 @@ pub struct DelegationVerifierProofPushRequest {
 /// DelegationVerifierProofPushResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationVerifierProofPushResponse {
     pub results: Vec<DelegationProvisionTargetResponse>,
 }
@@ -216,20 +216,20 @@ pub struct DelegationVerifierProofPushResponse {
 /// DelegationProofStatus
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationProofStatus {
     pub shard_pid: Principal,
     pub issued_at: u64,
     pub expires_at: u64,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum DelegationProvisionTargetKind {
     Signer,
     Verifier,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum DelegationProvisionStatus {
     Ok,
     Failed,
@@ -239,7 +239,7 @@ pub enum DelegationProvisionStatus {
 /// DelegationAdminCommand
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminCommand {
     PrewarmVerifiers(DelegationVerifierProofPushRequest),
     RepairVerifiers(DelegationVerifierProofPushRequest),
@@ -249,7 +249,7 @@ pub enum DelegationAdminCommand {
 /// DelegationAdminResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminResponse {
     PrewarmedVerifiers {
         result: DelegationVerifierProofPushResponse,
@@ -263,7 +263,7 @@ pub enum DelegationAdminResponse {
 /// DelegationProvisionTargetResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionTargetResponse {
     pub target: Principal,
     pub kind: DelegationProvisionTargetKind,

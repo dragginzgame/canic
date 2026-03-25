@@ -4,8 +4,8 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::schema::{
-        CanisterConfig, CanisterKind, RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig,
-        ShardingConfig,
+        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, RandomnessConfig, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
     },
     domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
     domain::policy::topology::{RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput},
@@ -23,6 +23,8 @@ fn root_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -34,6 +36,8 @@ fn singleton_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -54,6 +58,8 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: Some(scaling),
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -65,6 +71,8 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(ShardingConfig::default()),
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -76,6 +84,8 @@ fn replica_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -87,6 +97,8 @@ fn shard_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 
@@ -98,6 +110,8 @@ fn tenant_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     }
 }
 

@@ -9,7 +9,7 @@
 
 use crate::ids::{EndpointCall, EndpointId};
 use canic_cdk::candid::CandidType;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -62,9 +62,7 @@ pub fn perf_counter() -> u64 {
 /// splitting up by Timer type to avoid confusing string comparisons
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PerfKey {
     Endpoint(String),
     Timer(String),
@@ -102,7 +100,7 @@ impl PerfSlot {
 /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct PerfEntry {
     pub key: PerfKey,
     pub count: u64,
