@@ -13,15 +13,13 @@ Monthly index of audit report runs under `docs/audits/reports/2026-03/`.
 ## Month Status
 
 - Status: `partial` (month in progress)
-- Latest note: `2026-03-24` complexity-accretion rerun scored `6.5 / 10` (no audience-binding correctness break; structurally stressed auth slice, with explicit refactor order now set: extract invariants first, then decompose, while prioritizing typed rollout metrics before the next feature).
+- Latest note: `2026-03-24` rerun after the auth remediation slices lowered `token-trust-chain` to `4 / 10` and `layer-violations` to `1 / 10` (no trust-chain validation break, no hard layer violation, and the verifier/API hotspots are materially smaller; remaining pressure is mostly `DelegationProof` spread plus churn in `api/auth/mod.rs`).
 - Carry-forward follow-up:
-  - monitor policy principal-coupling drift (`cdk::candid::Principal`) in next `layer-violations` recurring run
-  - keep token trust-chain stage order fixed (`structure -> current_proof -> signatures`) in follow-up recurring run
-  - monitor fan-in/churn pressure for `crates/canic-core/src/api/auth/mod.rs` and `crates/canic-core/src/access/auth.rs` during 0.16 proof-evolution work
+  - keep token trust-chain stage order fixed (`structure -> current_proof -> signatures`) in the next `token-trust-chain` recurring run
+  - keep shrinking direct `DelegationProof` dependence outside explicit boundary seams
+  - keep `api/auth/mod.rs` from re-accumulating pure trust helpers now that those decisions live in ops
+  - monitor `DelegationProof`, `StoredDelegationProof`, and `VerifiedTokenClaims` spread so future trust-model work does not increase cross-layer dependency pressure
   - monitor fan-in/churn trend for `crates/canic-core/src/access/expr.rs` and `crates/canic-core/src/workflow/runtime/mod.rs`
   - keep high-CAF cross-subsystem slices split to reduce blast radius in upcoming runs
-  - split `crates/canic-core/src/api/auth/mod.rs` by concern before adding more 0.16 auth behavior
-  - extract shared audience invariant helpers before splitting `api/auth` to avoid moving duplication around
-  - replace auth rollout string-classification seams with typed/shared metric keys
-  - decide and document whether verifier-local install failures should keep the `auth_signer` endpoint label
-  - avoid trait-heavy abstraction, over-splitting, and public API churn during the auth refactor
+  - document whether verifier-local install failures should keep the `auth_signer` endpoint label before changing metric semantics
+  - avoid trait-heavy abstraction and public API churn during the remaining auth cleanup

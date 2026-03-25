@@ -1,9 +1,6 @@
-use crate::{
-    cdk::types::Principal,
-    dto::auth::{DelegatedTokenClaims, DelegationCert},
-};
+use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 
-use super::DelegationScopeError;
+use super::{DelegationScopeError, TokenAudience, TokenGrant};
 
 // Return true when the principal is present in the allowed set.
 pub fn principal_allowed(target: Principal, allowed: &[Principal]) -> bool {
@@ -22,10 +19,10 @@ pub fn strings_subset(subset: &[String], superset: &[String]) -> bool {
 
 // Verify that this canister is explicitly included in the delegated audience.
 pub fn verify_self_audience(
-    claims: &DelegatedTokenClaims,
+    audience: TokenAudience<'_>,
     self_pid: Principal,
 ) -> Result<(), DelegationScopeError> {
-    if principal_allowed(self_pid, &claims.aud) {
+    if principal_allowed(self_pid, audience.aud) {
         Ok(())
     } else {
         Err(DelegationScopeError::SelfAudienceMissing { self_pid })
@@ -34,26 +31,26 @@ pub fn verify_self_audience(
 
 // Validate token claims against the bounds encoded in the delegation cert.
 pub fn validate_claims_against_cert(
-    claims: &DelegatedTokenClaims,
+    grant: TokenGrant<'_>,
     cert: &DelegationCert,
 ) -> Result<(), DelegationScopeError> {
-    if claims.shard_pid != cert.shard_pid {
+    if grant.shard_pid != cert.shard_pid {
         return Err(DelegationScopeError::ShardPidMismatch {
             expected: cert.shard_pid,
-            found: claims.shard_pid,
+            found: grant.shard_pid,
         });
     }
 
-    if !principals_subset(&claims.aud, &cert.aud) {
-        for aud in &claims.aud {
+    if !principals_subset(grant.aud, &cert.aud) {
+        for aud in grant.aud {
             if !principal_allowed(*aud, &cert.aud) {
                 return Err(DelegationScopeError::AudienceNotAllowed { aud: *aud });
             }
         }
     }
 
-    if !strings_subset(&claims.scopes, &cert.scopes) {
-        for scope in &claims.scopes {
+    if !strings_subset(grant.scopes, &cert.scopes) {
+        for scope in grant.scopes {
             if !cert.scopes.iter().any(|allowed| allowed == scope) {
                 return Err(DelegationScopeError::ScopeNotAllowed {
                     scope: scope.clone(),

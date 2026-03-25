@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::{auth::DelegatedToken, error::Error},
     ops::{
-        auth::{DelegatedTokenOps, audience},
+        auth::{BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp, DelegatedTokenOps},
         config::ConfigOps,
         ic::IcOps,
         runtime::env::EnvOps,
@@ -66,11 +66,12 @@ impl DelegationApi {
                 Self::map_delegation_error(err)
             })?;
 
-        if verified.claims.sub != delegated_subject {
+        if verified.claims.subject() != delegated_subject {
             record_session_bootstrap_rejected_subject_mismatch();
             return Err(Error::forbidden(format!(
                 "delegated session subject mismatch: requested={} token_subject={}",
-                delegated_subject, verified.claims.sub
+                delegated_subject,
+                verified.claims.subject()
             )));
         }
 
@@ -79,7 +80,7 @@ impl DelegationApi {
             .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
         let expires_at = Self::clamp_delegated_session_expires_at(
             issued_at,
-            verified.claims.exp,
+            verified.claims.expires_at(),
             configured_max_ttl_secs,
             requested_ttl_secs,
         )
@@ -117,7 +118,7 @@ impl DelegationApi {
                 delegated_pid: delegated_subject,
                 token_fingerprint,
                 bound_at: issued_at,
-                expires_at: verified.claims.exp,
+                expires_at: verified.claims.expires_at(),
             },
             issued_at,
         );
@@ -163,19 +164,15 @@ impl DelegationApi {
 
     // Reject externally supplied tokens whose requested audience is empty or exceeds the proof audience.
     pub(super) fn ensure_token_claim_audience_subset(token: &DelegatedToken) -> Result<(), Error> {
-        if token.claims.aud.is_empty() {
-            return Err(Error::invalid(
+        match DelegatedTokenOps::bootstrap_token_audience_subset(token) {
+            BootstrapTokenAudienceSubset::Accepted => Ok(()),
+            BootstrapTokenAudienceSubset::EmptyClaimsAudience => Err(Error::invalid(
                 "delegated token claims audience must not be empty",
-            ));
+            )),
+            BootstrapTokenAudienceSubset::OutsideProofAudience => Err(Error::invalid(
+                "delegated token claims audience is not a subset of proof audience",
+            )),
         }
-
-        if audience::principals_subset(&token.claims.aud, &token.proof.cert.aud) {
-            return Ok(());
-        }
-
-        Err(Error::invalid(
-            "delegated token claims audience is not a subset of proof audience",
-        ))
     }
 
     // Fingerprint a bootstrap token for replay protection and idempotence checks.
@@ -238,32 +235,22 @@ impl DelegationApi {
         configured_max_ttl_secs: u64,
         requested_ttl_secs: Option<u64>,
     ) -> Result<u64, Error> {
-        if configured_max_ttl_secs == 0 {
-            return Err(Error::invariant(
+        match DelegatedTokenOps::clamp_delegated_session_expires_at(
+            now_secs,
+            token_expires_at,
+            configured_max_ttl_secs,
+            requested_ttl_secs,
+        ) {
+            DelegatedSessionExpiryClamp::Accepted(expires_at) => Ok(expires_at),
+            DelegatedSessionExpiryClamp::InvalidConfiguredMaxTtl => Err(Error::invariant(
                 "delegated session configured max ttl_secs must be greater than zero",
-            ));
-        }
-
-        if let Some(ttl_secs) = requested_ttl_secs
-            && ttl_secs == 0
-        {
-            return Err(Error::invalid(
+            )),
+            DelegatedSessionExpiryClamp::InvalidRequestedTtl => Err(Error::invalid(
                 "delegated session requested ttl_secs must be greater than zero",
-            ));
-        }
-
-        let mut expires_at = token_expires_at;
-        expires_at = expires_at.min(now_secs.saturating_add(configured_max_ttl_secs));
-        if let Some(ttl_secs) = requested_ttl_secs {
-            expires_at = expires_at.min(now_secs.saturating_add(ttl_secs));
-        }
-
-        if expires_at <= now_secs {
-            return Err(Error::forbidden(
+            )),
+            DelegatedSessionExpiryClamp::ExpiredToken => Err(Error::forbidden(
                 "delegated session bootstrap token is expired",
-            ));
+            )),
         }
-
-        Ok(expires_at)
     }
 }

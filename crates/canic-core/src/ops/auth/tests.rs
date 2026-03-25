@@ -1,6 +1,6 @@
 use super::*;
 use crate::dto::auth::{
-    AttestationKeyStatus, DelegatedTokenClaims, DelegationCert, DelegationProof,
+    AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
 };
 use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
@@ -45,6 +45,68 @@ fn sample_claims() -> DelegatedTokenClaims {
     }
 }
 
+fn sample_claims_for(
+    shard_pid: Principal,
+    audience: Principal,
+    iat: u64,
+    exp: u64,
+) -> DelegatedTokenClaims {
+    DelegatedTokenClaims {
+        sub: p(9),
+        shard_pid,
+        scopes: vec!["verify".to_string()],
+        aud: vec![audience],
+        iat,
+        exp,
+    }
+}
+
+fn sign_prehash(seed: u8, hash: [u8; 32]) -> (Vec<u8>, Vec<u8>) {
+    let signing_key = SigningKey::from_bytes((&[seed; 32]).into()).expect("signing key");
+    let signature: k256::ecdsa::Signature =
+        signing_key.sign_prehash(&hash).expect("prehash signature");
+    let public_key = signing_key
+        .verifying_key()
+        .to_encoded_point(true)
+        .as_bytes()
+        .to_vec();
+    (public_key, signature.to_bytes().to_vec())
+}
+
+fn signed_token_for(
+    shard_pid: Principal,
+    audience: Principal,
+    cert_issued_at: u64,
+    token_iat: u64,
+    token_exp: u64,
+    root_seed: u8,
+    shard_seed: u8,
+) -> DelegatedToken {
+    let claims = sample_claims_for(shard_pid, audience, token_iat, token_exp);
+    let mut proof = sample_proof(shard_pid, cert_issued_at);
+    proof.cert.aud = vec![audience];
+
+    let (root_public_key, cert_sig) = sign_prehash(
+        root_seed,
+        crypto::cert_hash(&proof.cert).expect("cert hash"),
+    );
+    let (shard_public_key, token_sig) = sign_prehash(
+        shard_seed,
+        crypto::token_signing_hash(&VerifiedTokenClaims::from_dto_ref(&claims), &proof.cert)
+            .expect("token hash"),
+    );
+    proof.cert_sig = cert_sig;
+
+    DelegationStateOps::set_root_public_key(root_public_key);
+    DelegationStateOps::set_shard_public_key(shard_pid, shard_public_key);
+
+    DelegatedToken {
+        claims,
+        proof,
+        token_sig,
+    }
+}
+
 fn signing_material(seed: u8, payload: &RoleAttestation) -> (Vec<u8>, Vec<u8>) {
     let signing_key = SigningKey::from_bytes((&[seed; 32]).into()).expect("signing key");
     let signature: k256::ecdsa::Signature = signing_key
@@ -73,7 +135,8 @@ fn audience_helpers_use_set_semantics_for_principals() {
 
 #[test]
 fn audience_helpers_validate_claims_against_cert() {
-    audience::validate_claims_against_cert(&sample_claims(), &sample_proof(p(2), 90).cert)
+    let claims = VerifiedTokenClaims::from_dto(sample_claims());
+    audience::validate_claims_against_cert(claims.grant(), &sample_proof(p(2), 90).cert)
         .expect("claims must fit cert");
 }
 
@@ -82,11 +145,77 @@ fn audience_helpers_reject_claim_outside_cert_audience() {
     let mut claims = sample_claims();
     claims.aud.push(p(8));
 
-    let err = audience::validate_claims_against_cert(&claims, &sample_proof(p(2), 90).cert)
+    let claims = VerifiedTokenClaims::from_dto(claims);
+    let err = audience::validate_claims_against_cert(claims.grant(), &sample_proof(p(2), 90).cert)
         .expect_err("audience outside cert must fail");
     assert!(matches!(
         err,
         DelegationScopeError::AudienceNotAllowed { aud } if aud == p(8)
+    ));
+}
+
+#[test]
+fn validate_claim_invariants_rejects_expiry_before_issued() {
+    let err =
+        DelegatedTokenOps::validate_claim_invariants(TokenLifetime { iat: 120, exp: 110 }, 115)
+            .expect_err("exp before iat must fail before deeper verification");
+
+    assert!(matches!(
+        err,
+        DelegationExpiryError::TokenExpiryBeforeIssued
+    ));
+}
+
+#[test]
+fn verify_max_ttl_rejects_expiry_before_issued_without_underflow() {
+    let err = verify::verify_max_ttl(TokenLifetime { iat: 120, exp: 110 }, 60)
+        .expect_err("ttl check must fail closed on invalid lifetime");
+
+    assert!(matches!(
+        err,
+        DelegationExpiryError::TokenExpiryBeforeIssued
+    ));
+}
+
+#[test]
+fn validate_claim_invariants_rejects_expired_lifetime() {
+    let err =
+        DelegatedTokenOps::validate_claim_invariants(TokenLifetime { iat: 100, exp: 110 }, 111)
+            .expect_err("expired claims must fail");
+
+    assert!(matches!(
+        err,
+        DelegationExpiryError::TokenExpired { exp: 110 }
+    ));
+}
+
+#[test]
+fn validate_claim_invariants_rejects_not_yet_valid_lifetime() {
+    let err =
+        DelegatedTokenOps::validate_claim_invariants(TokenLifetime { iat: 120, exp: 130 }, 119)
+            .expect_err("future-issued claims must fail");
+
+    assert!(matches!(
+        err,
+        DelegationExpiryError::TokenNotYetValid { iat: 120 }
+    ));
+}
+
+#[test]
+fn validate_claim_invariants_accepts_equal_boundary_timestamps() {
+    DelegatedTokenOps::validate_claim_invariants(TokenLifetime { iat: 120, exp: 120 }, 120)
+        .expect("equal issued/expiry boundary at now should remain valid");
+}
+
+#[test]
+fn validate_claim_invariants_uses_explicit_zero_skew_policy() {
+    let err =
+        DelegatedTokenOps::validate_claim_invariants(TokenLifetime { iat: 121, exp: 130 }, 120)
+            .expect_err("zero-skew policy must reject claims issued even one second in the future");
+
+    assert!(matches!(
+        err,
+        DelegationExpiryError::TokenNotYetValid { iat: 121 }
     ));
 }
 
@@ -369,7 +498,7 @@ fn verify_current_proof_accepts_same_shard_parallel_rotation_entries() {
 }
 
 #[test]
-fn latest_proof_dto_prefers_most_recent_keyed_install_for_signing() {
+fn latest_proof_prefers_most_recent_keyed_install_for_signing() {
     let old_proof = sample_proof(p(41), 400);
     let new_proof = sample_proof(p(42), 460);
 
@@ -381,6 +510,63 @@ fn latest_proof_dto_prefers_most_recent_keyed_install_for_signing() {
         latest, new_proof,
         "signer selection must use newest keyed proof"
     );
+}
+
+#[test]
+fn trace_token_trust_chain_stops_at_current_proof_before_signatures() {
+    let authority_pid = p(42);
+    let self_pid = p(61);
+    let token = signed_token_for(p(51), self_pid, 500, 505, 520, 51, 61);
+
+    let (stages, result) = trace_token_trust_chain_with_forced_current_proof_failure(
+        &token,
+        authority_pid,
+        510,
+        self_pid,
+        DelegationValidationError::ProofMiss.into(),
+    );
+    let err = result.expect_err("missing local proof must fail before signatures");
+
+    assert_eq!(stages, vec!["structure", "current_proof"]);
+    assert_eq!(err.class(), crate::InternalErrorClass::Ops);
+    assert!(err.to_string().contains("delegation proof miss"));
+}
+
+#[test]
+fn trace_token_trust_chain_records_canonical_order_for_valid_token() {
+    let authority_pid = p(42);
+    let self_pid = p(62);
+    let token = signed_token_for(p(52), self_pid, 600, 605, 620, 52, 62);
+
+    DelegationStateOps::upsert_proof_from_dto(token.proof.clone(), 600).expect("store proof");
+
+    let (stages, result) = trace_token_trust_chain(&token, authority_pid, 610, self_pid);
+    result.expect("valid token trace must succeed");
+    assert_eq!(
+        stages,
+        vec![
+            "structure",
+            "current_proof",
+            "delegation_signature",
+            "token_signature"
+        ]
+    );
+
+    let verified = DelegatedTokenOps::verify_token(&token, authority_pid, 610, self_pid)
+        .expect("valid token must verify");
+    let claims = verified.claims.to_dto();
+    assert_eq!(claims.sub, token.claims.sub);
+    assert_eq!(claims.shard_pid, token.claims.shard_pid);
+    assert_eq!(claims.aud, token.claims.aud);
+    assert_eq!(claims.scopes, token.claims.scopes);
+    assert_eq!(claims.iat, token.claims.iat);
+    assert_eq!(claims.exp, token.claims.exp);
+    assert_eq!(verified.cert.root_pid, token.proof.cert.root_pid);
+    assert_eq!(verified.cert.shard_pid, token.proof.cert.shard_pid);
+    assert_eq!(verified.cert.issued_at, token.proof.cert.issued_at);
+    assert_eq!(verified.cert.expires_at, token.proof.cert.expires_at);
+    assert_eq!(verified.cert.aud, token.proof.cert.aud);
+    assert_eq!(verified.cert.scopes, token.proof.cert.scopes);
 }
 
 #[test]

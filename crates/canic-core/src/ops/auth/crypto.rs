@@ -1,7 +1,9 @@
-use super::{CERT_SIGNING_DOMAIN, ROLE_ATTESTATION_SIGNING_DOMAIN, TOKEN_SIGNING_DOMAIN};
+use super::{
+    CERT_SIGNING_DOMAIN, ROLE_ATTESTATION_SIGNING_DOMAIN, TOKEN_SIGNING_DOMAIN, VerifiedTokenClaims,
+};
 use crate::{
     InternalError,
-    dto::auth::{DelegatedTokenClaims, DelegationCert, RoleAttestation},
+    dto::auth::{DelegationCert, RoleAttestation},
     ops::{auth::DelegationValidationError, prelude::*},
 };
 use candid::encode_one;
@@ -10,7 +12,7 @@ use sha2::{Digest, Sha256};
 #[derive(CandidType, Serialize)]
 struct TokenSigningPayload {
     cert_hash: Vec<u8>,
-    claims: DelegatedTokenClaims,
+    claims: VerifiedTokenClaims,
 }
 
 pub(super) fn encode_candid<T: CandidType>(
@@ -32,7 +34,7 @@ pub(super) fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], InternalError
 }
 
 pub(super) fn token_signing_hash(
-    claims: &DelegatedTokenClaims,
+    claims: &VerifiedTokenClaims,
     cert: &DelegationCert,
 ) -> Result<[u8; 32], InternalError> {
     let payload = TokenSigningPayload {

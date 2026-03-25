@@ -2,6 +2,7 @@ use crate::{
     InternalError,
     dto::auth::{AttestationKey, AttestationKeyStatus, DelegationCert, DelegationProof},
     ops::auth::DelegationValidationError,
+    ops::storage::auth::{StoredDelegationCert, StoredDelegationProof},
     storage::stable::auth::{
         AttestationKeyStatusRecord, AttestationPublicKeyRecord, DelegationCertRecord,
         DelegationProofEntryRecord, DelegationProofKeyRecord, DelegationProofRecord,
@@ -20,8 +21,37 @@ pub struct DelegationProofRecordMapper;
 
 impl DelegationProofRecordMapper {
     #[must_use]
-    pub fn dto_to_record(proof: DelegationProof) -> DelegationProofRecord {
-        // TODO: keep record schema and DTO fields in sync; mapping lives in ops.
+    pub(super) fn dto_to_stored_proof(proof: DelegationProof) -> StoredDelegationProof {
+        StoredDelegationProof {
+            cert: StoredDelegationCert {
+                root_pid: proof.cert.root_pid,
+                shard_pid: proof.cert.shard_pid,
+                issued_at: proof.cert.issued_at,
+                expires_at: proof.cert.expires_at,
+                scopes: proof.cert.scopes,
+                aud: proof.cert.aud,
+            },
+            cert_sig: proof.cert_sig,
+        }
+    }
+
+    #[must_use]
+    pub(super) fn stored_proof_to_dto(proof: StoredDelegationProof) -> DelegationProof {
+        DelegationProof {
+            cert: DelegationCert {
+                root_pid: proof.cert.root_pid,
+                shard_pid: proof.cert.shard_pid,
+                issued_at: proof.cert.issued_at,
+                expires_at: proof.cert.expires_at,
+                scopes: proof.cert.scopes,
+                aud: proof.cert.aud,
+            },
+            cert_sig: proof.cert_sig,
+        }
+    }
+
+    #[must_use]
+    pub(super) fn stored_proof_to_record(proof: StoredDelegationProof) -> DelegationProofRecord {
         DelegationProofRecord {
             cert: DelegationCertRecord {
                 root_pid: proof.cert.root_pid,
@@ -36,10 +66,9 @@ impl DelegationProofRecordMapper {
     }
 
     #[must_use]
-    pub fn record_to_view(record: DelegationProofRecord) -> DelegationProof {
-        // TODO: keep record schema and DTO fields in sync; mapping lives in ops.
-        DelegationProof {
-            cert: DelegationCert {
+    pub(super) fn record_to_stored_proof(record: DelegationProofRecord) -> StoredDelegationProof {
+        StoredDelegationProof {
+            cert: StoredDelegationCert {
                 root_pid: record.cert.root_pid,
                 shard_pid: record.cert.shard_pid,
                 issued_at: record.cert.issued_at,
@@ -52,7 +81,7 @@ impl DelegationProofRecordMapper {
     }
 
     #[must_use]
-    pub const fn record_to_entry(
+    pub(super) const fn record_to_entry(
         proof: DelegationProofRecord,
         key: DelegationProofKeyRecord,
         installed_at: u64,
@@ -65,24 +94,33 @@ impl DelegationProofRecordMapper {
         }
     }
 
-    pub fn dto_to_entry(
-        proof: DelegationProof,
+    pub(super) fn stored_proof_to_entry(
+        proof: StoredDelegationProof,
         installed_at: u64,
     ) -> Result<DelegationProofEntryRecord, InternalError> {
-        let key = Self::proof_key_from_dto(&proof)?;
+        let key = Self::proof_key_from_stored_proof(&proof)?;
         Ok(Self::record_to_entry(
-            Self::dto_to_record(proof),
+            Self::stored_proof_to_record(proof),
             key,
             installed_at,
         ))
     }
 
-    pub fn proof_key_from_dto(
+    pub(super) fn proof_key_from_dto(
         proof: &DelegationProof,
     ) -> Result<DelegationProofKeyRecord, InternalError> {
         Ok(DelegationProofKeyRecord {
             shard_pid: proof.cert.shard_pid,
             cert_hash: cert_hash(&proof.cert)?,
+        })
+    }
+
+    pub(super) fn proof_key_from_stored_proof(
+        proof: &StoredDelegationProof,
+    ) -> Result<DelegationProofKeyRecord, InternalError> {
+        Ok(DelegationProofKeyRecord {
+            shard_pid: proof.cert.shard_pid,
+            cert_hash: cert_hash(&stored_cert_to_dto(&proof.cert))?,
         })
     }
 }
@@ -139,4 +177,15 @@ fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     hasher.update((payload.len() as u64).to_be_bytes());
     hasher.update(payload);
     hasher.finalize().into()
+}
+
+fn stored_cert_to_dto(cert: &StoredDelegationCert) -> DelegationCert {
+    DelegationCert {
+        root_pid: cert.root_pid,
+        shard_pid: cert.shard_pid,
+        issued_at: cert.issued_at,
+        expires_at: cert.expires_at,
+        scopes: cert.scopes.clone(),
+        aud: cert.aud.clone(),
+    }
 }

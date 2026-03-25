@@ -110,7 +110,7 @@ impl CallerBoundToken {
         verified: VerifiedDelegatedToken,
         caller: Principal,
     ) -> Result<Self, AccessError> {
-        enforce_subject_binding(verified.claims.sub, caller)?;
+        enforce_subject_binding(verified.claims.subject(), caller)?;
         Ok(Self { verified })
     }
 
@@ -118,7 +118,7 @@ impl CallerBoundToken {
     ///
     /// Borrow token scopes after caller binding has been enforced.
     fn scopes(&self) -> &[String] {
-        &self.verified.claims.scopes
+        self.verified.claims.scopes()
     }
 
     /// into_verified
