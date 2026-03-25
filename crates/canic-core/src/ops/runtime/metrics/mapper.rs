@@ -1,16 +1,13 @@
 use crate::{
     cdk::types::Principal,
     dto::metrics::{
-        AccessMetricEntry, AuthMetricEntry, AuthRolloutMetricClass, AuthRolloutMetricEntry,
-        CyclesFundingMetricEntry, DelegationMetricEntry, EndpointHealth, HttpMetricEntry,
+        AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, HttpMetricEntry,
         IccMetricEntry, RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
     },
     ids::SystemMetricKind,
     ops::runtime::metrics::{
         access::AccessMetricKey,
-        auth::{AuthRolloutSignal, TypedAuthMetricRecord},
         cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetricKey},
-        endpoint::{EndpointAttemptCounts, EndpointResultCounts},
         http::HttpMetricKey,
         icc::IccMetricKey,
         root_capability::{
@@ -20,7 +17,6 @@ use crate::{
         timer::{TimerMetricKey, TimerMode},
     },
 };
-use std::collections::{BTreeSet, HashMap};
 
 ///
 /// SystemMetricEntryMapper
@@ -148,101 +144,6 @@ impl AccessMetricEntryMapper {
 }
 
 ///
-/// AuthMetricEntryMapper
-///
-
-pub struct AuthMetricEntryMapper;
-
-impl AuthMetricEntryMapper {
-    #[must_use]
-    pub fn record_to_view(
-        raw: impl IntoIterator<Item = TypedAuthMetricRecord>,
-    ) -> Vec<AuthMetricEntry> {
-        raw.into_iter()
-            .map(|record| AuthMetricEntry {
-                endpoint: record.endpoint,
-                predicate: record.predicate.as_str().into_owned(),
-                count: record.count,
-            })
-            .collect()
-    }
-}
-
-///
-/// AuthRolloutMetricEntryMapper
-///
-
-pub struct AuthRolloutMetricEntryMapper;
-
-#[derive(Clone, Copy)]
-struct AuthRolloutSignalSpec {
-    signal: AuthRolloutSignal,
-    class: AuthRolloutMetricClass,
-}
-
-const AUTH_ROLLOUT_SIGNAL_SPECS: [AuthRolloutSignalSpec; 7] = [
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::ProofMiss,
-        class: AuthRolloutMetricClass::HardGate,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::ProofMismatch,
-        class: AuthRolloutMetricClass::HardGate,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::ActiveProofEviction,
-        class: AuthRolloutMetricClass::HardGate,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::RepairFailure,
-        class: AuthRolloutMetricClass::HardGate,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::CacheSaturation,
-        class: AuthRolloutMetricClass::HardGate,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::ColdProofEviction,
-        class: AuthRolloutMetricClass::Operational,
-    },
-    AuthRolloutSignalSpec {
-        signal: AuthRolloutSignal::PrewarmFailure,
-        class: AuthRolloutMetricClass::Operational,
-    },
-];
-
-impl AuthRolloutMetricEntryMapper {
-    #[must_use]
-    pub fn record_to_view(
-        raw: impl IntoIterator<Item = TypedAuthMetricRecord>,
-    ) -> Vec<AuthRolloutMetricEntry> {
-        let mut counts = [0u64; AUTH_ROLLOUT_SIGNAL_SPECS.len()];
-
-        for record in raw {
-            let Some(signal) = record.predicate.rollout_signal() else {
-                continue;
-            };
-
-            for (index, spec) in AUTH_ROLLOUT_SIGNAL_SPECS.iter().enumerate() {
-                if spec.signal == signal {
-                    counts[index] = counts[index].saturating_add(record.count);
-                }
-            }
-        }
-
-        AUTH_ROLLOUT_SIGNAL_SPECS
-            .iter()
-            .enumerate()
-            .map(|(index, spec)| AuthRolloutMetricEntry {
-                signal: spec.signal.label().to_string(),
-                class: spec.class,
-                count: counts[index],
-            })
-            .collect()
-    }
-}
-
-///
 /// DelegationMetricEntryMapper
 ///
 
@@ -319,78 +220,6 @@ impl CyclesFundingMetricEntryMapper {
                     cycles,
                 },
             )
-            .collect()
-    }
-}
-
-///
-/// EndpointHealthMapper
-///
-
-pub struct EndpointHealthMapper;
-
-impl EndpointHealthMapper {
-    #[must_use]
-    pub fn record_to_view(
-        attempts: impl IntoIterator<Item = (&'static str, EndpointAttemptCounts)>,
-        results: impl IntoIterator<Item = (&'static str, EndpointResultCounts)>,
-        access: impl IntoIterator<Item = (AccessMetricKey, u64)>,
-        exclude_endpoint: Option<&str>,
-    ) -> Vec<EndpointHealth> {
-        // Aggregate access-kind denials (guard/auth/env/rule/custom) per endpoint.
-        let mut denied: HashMap<String, u64> = HashMap::new();
-
-        for (key, count) in access {
-            denied
-                .entry(key.endpoint)
-                .and_modify(|v| *v = v.saturating_add(count))
-                .or_insert(count);
-        }
-
-        let mut endpoints = BTreeSet::<String>::new();
-
-        let attempts: HashMap<&'static str, EndpointAttemptCounts> = attempts
-            .into_iter()
-            .inspect(|(ep, _)| {
-                endpoints.insert((*ep).to_string());
-            })
-            .collect();
-
-        let results: HashMap<&'static str, EndpointResultCounts> = results
-            .into_iter()
-            .inspect(|(ep, _)| {
-                endpoints.insert((*ep).to_string());
-            })
-            .collect();
-
-        endpoints.extend(denied.keys().cloned());
-
-        endpoints
-            .into_iter()
-            .filter(|endpoint| match exclude_endpoint {
-                Some(excluded) => endpoint != excluded,
-                None => true,
-            })
-            .map(|endpoint| {
-                let (attempted, completed) = attempts
-                    .get(endpoint.as_str())
-                    .map_or((0, 0), |c| (c.attempted, c.completed));
-
-                let (ok, err) = results
-                    .get(endpoint.as_str())
-                    .map_or((0, 0), |c| (c.ok, c.err));
-
-                let denied = denied.get(&endpoint).copied().unwrap_or(0);
-
-                EndpointHealth {
-                    endpoint,
-                    attempted,
-                    denied,
-                    completed,
-                    ok,
-                    err,
-                }
-            })
             .collect()
     }
 }

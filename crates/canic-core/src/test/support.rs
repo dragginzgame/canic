@@ -4,7 +4,8 @@ use crate::{
     cdk::candid::Principal,
     cdk::types::Cycles,
     config::schema::{
-        CanisterConfig, CanisterKind, RandomnessConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
+        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, RandomnessConfig, ShardPool,
+        ShardPoolPolicy, ShardingConfig, StandardsCanisterConfig,
     },
     ids::{CanisterRole, SubnetRole},
     ops::runtime::env::EnvOps,
@@ -32,6 +33,8 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     };
 
     let manager_cfg = CanisterConfig {
@@ -41,6 +44,8 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(sharding),
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     };
 
     let shard_cfg = CanisterConfig {
@@ -50,6 +55,8 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
     };
 
     let _config = ConfigTestBuilder::new()

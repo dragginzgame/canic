@@ -20,7 +20,7 @@ use crate::{cdk::types::Cycles, dto::prelude::*};
 /// Read-only pool snapshot for endpoints.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterPoolResponse {
     pub entries: Vec<CanisterPoolEntry>,
 }
@@ -29,7 +29,7 @@ pub struct CanisterPoolResponse {
 /// CanisterPoolEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterPoolEntry {
     pub pid: Principal,
     pub created_at: u64,
@@ -44,7 +44,7 @@ pub struct CanisterPoolEntry {
 /// CanisterPoolStatus
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CanisterPoolStatus {
     PendingReset,
     Ready,

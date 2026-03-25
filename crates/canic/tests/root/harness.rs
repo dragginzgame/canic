@@ -21,7 +21,7 @@ use std::{
     process::Command,
     sync::{Mutex, MutexGuard, Once, TryLockError},
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 /// Environment variable override for providing a pre-built root canister wasm.
@@ -37,6 +37,13 @@ const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const ROOT_SETUP_CACHE_ENV: &str = "CANIC_TEST_ROOT_SETUP_CACHE";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
+const ROOT_WASM_WATCH_PATHS: &[&str] = &[
+    "Cargo.toml",
+    "Cargo.lock",
+    "dfx.json",
+    "crates",
+    "scripts/app/build.sh",
+];
 static DFX_BUILD_ONCE: Once = Once::new();
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 thread_local! {
@@ -344,10 +351,47 @@ fn workspace_root() -> PathBuf {
 
 fn local_artifacts_ready(workspace_root: &Path) -> bool {
     let root_wasm = workspace_root.join(".dfx/local/canisters/root/root.wasm.gz");
-    match fs::metadata(root_wasm) {
-        Ok(meta) => meta.is_file() && meta.len() > 0,
-        Err(_) => false,
+    match fs::metadata(&root_wasm) {
+        Ok(meta) if meta.is_file() && meta.len() > 0 => {
+            artifact_is_fresh(workspace_root, &root_wasm).unwrap_or(false)
+        }
+        _ => false,
     }
+}
+
+// Treat prebuilt `.dfx` artifacts as valid only when they are newer than the
+// source/config inputs that shape the installed root topology.
+fn artifact_is_fresh(workspace_root: &Path, artifact_path: &Path) -> io::Result<bool> {
+    let artifact_mtime = fs::metadata(artifact_path)?.modified()?;
+    let newest_input = newest_watched_input_mtime(workspace_root)?;
+    Ok(newest_input <= artifact_mtime)
+}
+
+// Walk the watched root build inputs and return the newest modification time.
+fn newest_watched_input_mtime(workspace_root: &Path) -> io::Result<SystemTime> {
+    let mut newest = SystemTime::UNIX_EPOCH;
+
+    for relative in ROOT_WASM_WATCH_PATHS {
+        let path = workspace_root.join(relative);
+        newest = newest.max(newest_path_mtime(&path)?);
+    }
+
+    Ok(newest)
+}
+
+// Recursively compute the newest modification time under a watched file or directory.
+fn newest_path_mtime(path: &Path) -> io::Result<SystemTime> {
+    let metadata = fs::metadata(path)?;
+    let mut newest = metadata.modified()?;
+
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            newest = newest.max(newest_path_mtime(&entry.path())?);
+        }
+    }
+
+    Ok(newest)
 }
 
 fn run_dfx_build_with_lock(workspace_root: &Path) -> std::process::Output {

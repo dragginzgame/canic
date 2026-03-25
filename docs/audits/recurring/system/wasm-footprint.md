@@ -17,6 +17,9 @@ The job of this audit is to measure shipped wasm output, explain where the
 bytes live, and identify the largest retained-size drivers with artifact tools
 such as `ic-wasm` and `twiggy`.
 
+This audit is not permission to delete intended behavior to make the numbers
+look better.
+
 ## Why This Audit Is Canic-Specific
 
 Canic is not a single-canister product.
@@ -43,6 +46,12 @@ Risk model:
   deployment/install bottleneck on its own
 - large retained-size hotspots are expensive to optimize unless attribution is
   specific and repeatable
+
+Optimization constraint:
+
+- reduce wasm without removing intended runtime capabilities or operator-facing signal
+- do not count feature removal as a normal wasm optimization win
+- any feature-removal proposal requires a separate explicit design decision outside this recurring audit
 
 ## Run This Audit After
 
@@ -77,7 +86,10 @@ Measure and report:
 - deterministic gzip of the raw built wasm (`built .wasm.gz`) as secondary context
 - canonical shrunk wasm size (`shrunk .wasm`) from `dfx build`
 - deterministic gzip of the shrunk wasm (`shrunk .wasm.gz`) as secondary context
+- raw debug/dev wasm size (`wasm-debug built .wasm`) for comparison against the audit profile
+- optional debug/dev deterministic gzip (`wasm-debug built .wasm.gz`) when captured by the runner
 - shrink deltas between built and shrunk artifacts
+- debug-vs-audit deltas between `wasm-debug` and the audited profile
 - `ic-wasm info` structure snapshots for built and shrunk artifacts
 - `twiggy` breakdowns (`top`, retained `top`, `dominators`, `monos`) for hotspot attribution
 
@@ -99,6 +111,16 @@ Default scope is the full reference canister set in `dfx.json`:
 ### Default Profile
 
 - profile: `wasm-release`
+
+The recurring audit must still compare the audited profile against `wasm-debug`
+artifacts for the same canisters.
+
+Reason:
+
+- `wasm-release` remains the shipping/install authority
+- `wasm-debug` is the fastest way to see whether a regression is coming from
+  optimization-sensitive codegen/linking or from real surface-area growth
+- large debug-vs-release gaps are diagnostic signals and must be tracked, not ignored
 
 Profile mapping:
 
@@ -168,6 +190,8 @@ Required:
 
 - raw non-gzipped wasm is the optimization authority
 - use built `.wasm` and shrunk `.wasm` as the primary pass/fail and drift metrics
+- compare the audited profile against `wasm-debug` on the same day as a
+  secondary diagnostic, not as the release decision metric
 - record deterministic gzip artifacts for transport continuity only
 - run `twiggy` on a name-preserving analysis artifact when possible so hotspot
   attribution remains readable
@@ -182,8 +206,10 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 4. `twiggy dominators` output was captured for retained-size ownership.
 5. `twiggy monos` output was captured for generic bloat signal.
 6. Baseline path was selected according to Canic daily baseline discipline.
-7. Size deltas versus baseline were recorded when comparable baseline artifacts exist.
-8. Verification readout includes command outcomes with `PASS` / `FAIL` / `BLOCKED`.
+7. `wasm-debug` artifacts were captured or the run explicitly marked them `BLOCKED`.
+8. Debug-vs-audit size deltas were recorded when comparable debug artifacts exist.
+9. Size deltas versus baseline were recorded when comparable baseline artifacts exist.
+10. Verification readout includes command outcomes with `PASS` / `FAIL` / `BLOCKED`.
 
 ## Execution Contract
 
@@ -197,6 +223,12 @@ Optional controls:
 - `WASM_AUDIT_SKIP_BUILD=1` to reuse cached artifacts under `artifacts/wasm-size/`
 - `WASM_CANISTER_NAME=<name>` to scope to a single canister
 - `WASM_PROFILE=wasm-release|wasm-debug`
+
+Recurring-run rule:
+
+- a normal dated audit run must audit `wasm-release`
+- the same dated run must also capture `wasm-debug` built artifacts for profile comparison
+- a report that lacks `wasm-debug` comparison must call that out explicitly as `PARTIAL` or `BLOCKED`
 
 Optional scope note:
 
@@ -227,6 +259,7 @@ Required artifacts for each run:
 - aggregated size report JSON (`size-report.json`)
 - per-canister size report JSON (`<canister>.size-report.json`)
 - aggregated size summary markdown (`size-summary.md`)
+- debug/profile comparison markdown or table artifact when `wasm-debug` is available
 - per-canister detailed markdown (`<canister>.md`)
 - built `ic-wasm info` snapshot (`<canister>.built.ic-wasm-info.txt`)
 - shrunk `ic-wasm info` snapshot (`<canister>.shrunk.ic-wasm-info.txt`)
@@ -245,6 +278,8 @@ Every report generated from this audit must include:
 - explicit note when `root` growth is dominated by embedded child bundles
 - explicit note when feature canisters remain close to `minimal`, because that
   signals shared-runtime baseline pressure
+- explicit comparison between `wasm-debug` and the audited profile, or an
+  explicit `BLOCKED` note explaining why that comparison is absent
 
 ## Risk Score (Required)
 

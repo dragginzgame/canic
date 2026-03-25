@@ -65,13 +65,8 @@ impl AccessMetrics {
 ///
 /// Endpoint lifecycle metrics.
 ///
-/// These metrics describe *execution flow*, not authorization:
-///   attempted → completed → (ok | err)
-///
-/// Invariants:
-/// - `increment_attempted` is emitted before user code runs.
-/// - `increment_completed` is emitted exactly once per attempt.
-/// - This module does NOT enforce ordering; enforcement may be added here later.
+/// These metrics describe execution flow, not authorization:
+/// attempted -> completed -> (ok | err)
 ///
 pub struct EndpointAttemptMetrics;
 
@@ -94,12 +89,7 @@ impl EndpointAttemptMetrics {
 ///
 /// Endpoint result metrics (success vs failure).
 ///
-/// These metrics intentionally exclude *why* a call failed; that information
-/// belongs in logs, not in high-cardinality metric labels.
-///
-/// Invariants:
-/// - Exactly one of `increment_ok` or `increment_err` is emitted per completed call.
-/// - Must be emitted after `increment_completed`.
+/// These metrics intentionally exclude error causes; those belong in logs.
 ///
 pub struct EndpointResultMetrics;
 

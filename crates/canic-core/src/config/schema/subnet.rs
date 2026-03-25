@@ -139,6 +139,35 @@ pub struct CanisterPool {
 /// CanisterConfig
 ///
 
+///
+/// DelegatedAuthCanisterConfig
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DelegatedAuthCanisterConfig {
+    #[serde(default)]
+    pub signer: bool,
+
+    #[serde(default)]
+    pub verifier: bool,
+}
+
+///
+/// StandardsCanisterConfig
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandardsCanisterConfig {
+    #[serde(default)]
+    pub icrc21: bool,
+}
+
+///
+/// CanisterConfig
+///
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanisterConfig {
@@ -162,6 +191,12 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub sharding: Option<ShardingConfig>,
+
+    #[serde(default)]
+    pub delegated_auth: DelegatedAuthCanisterConfig,
+
+    #[serde(default)]
+    pub standards: StandardsCanisterConfig,
 }
 
 impl CanisterConfig {
@@ -186,9 +221,14 @@ impl CanisterConfig {
     fn validate_kind(&self, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {
         match self.kind {
             CanisterKind::Root => {
-                if self.scaling.is_some() || self.sharding.is_some() {
+                if self.scaling.is_some()
+                    || self.sharding.is_some()
+                    || self.delegated_auth.signer
+                    || self.delegated_auth.verifier
+                    || self.standards.icrc21
+                {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{canister}' kind = \"root\" cannot define scaling or sharding",
+                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, delegated auth roles, or canister-local standards",
                     )));
                 }
             }
@@ -488,6 +528,8 @@ mod tests {
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,
+            delegated_auth: DelegatedAuthCanisterConfig::default(),
+            standards: StandardsCanisterConfig::default(),
         }
     }
 

@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 /// CanisterInfo
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterInfo {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -17,7 +17,7 @@ pub struct CanisterInfo {
 /// CanisterStatusResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterStatusResponse {
     pub status: CanisterStatusType,
     pub settings: CanisterSettings,
@@ -34,7 +34,7 @@ pub struct CanisterStatusResponse {
 /// CanisterStatusType
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
 pub enum CanisterStatusType {
     #[serde(rename = "running")]
     Running,
@@ -48,7 +48,7 @@ pub enum CanisterStatusType {
 /// CanisterSettings
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
@@ -66,7 +66,7 @@ pub struct CanisterSettings {
 /// LogVisibility
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum LogVisibility {
     #[serde(rename = "controllers")]
     Controllers,
@@ -80,7 +80,7 @@ pub enum LogVisibility {
 /// EnvironmentVariable
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvironmentVariable {
     pub name: String,
     pub value: String,
@@ -90,7 +90,7 @@ pub struct EnvironmentVariable {
 /// MemoryMetrics
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
@@ -106,7 +106,7 @@ pub struct MemoryMetrics {
 /// QueryStats
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct QueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,

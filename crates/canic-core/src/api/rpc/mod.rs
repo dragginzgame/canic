@@ -33,6 +33,20 @@ use crate::{
 pub struct RpcApi;
 
 impl RpcApi {
+    /// Dispatch the full root capability envelope verifier/orchestrator path.
+    pub async fn response_capability_v1_root(
+        envelope: RootCapabilityEnvelopeV1,
+    ) -> Result<RootCapabilityResponseV1, Error> {
+        capability::response_capability_v1_root(envelope).await
+    }
+
+    /// Dispatch the non-root structural cycles capability path.
+    pub async fn response_capability_v1_nonroot(
+        envelope: RootCapabilityEnvelopeV1,
+    ) -> Result<RootCapabilityResponseV1, Error> {
+        capability::response_capability_v1_nonroot(envelope).await
+    }
+
     pub async fn create_canister_request<A>(
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
@@ -57,6 +71,6 @@ impl RpcApi {
     pub async fn response_capability_v1(
         envelope: RootCapabilityEnvelopeV1,
     ) -> Result<RootCapabilityResponseV1, Error> {
-        capability::response_capability_v1(envelope).await
+        capability::response_capability_v1_root(envelope).await
     }
 }

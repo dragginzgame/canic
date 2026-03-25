@@ -1,4 +1,3 @@
-use crate::ops::runtime::metrics::access::{AccessMetricKey, AccessMetrics};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -7,17 +6,6 @@ thread_local! {
 
     static ENDPOINT_RESULT_METRICS: RefCell<HashMap<&'static str, EndpointResultCounts>> =
         RefCell::new(HashMap::new());
-}
-
-///
-/// EndpointHealthSnapshot
-///
-
-#[derive(Clone)]
-pub struct EndpointHealthSnapshot {
-    pub attempts: Vec<(&'static str, EndpointAttemptCounts)>,
-    pub results: Vec<(&'static str, EndpointResultCounts)>,
-    pub access: Vec<(AccessMetricKey, u64)>,
 }
 
 ///
@@ -41,37 +29,9 @@ pub struct EndpointResultCounts {
 }
 
 ///
-/// EndpointMetrics
-///
-
-pub struct EndpointMetrics;
-
-impl EndpointMetrics {
-    #[must_use]
-    pub fn health_snapshot() -> EndpointHealthSnapshot {
-        let attempts = EndpointAttemptMetrics::snapshot_entries();
-        let results = EndpointResultMetrics::snapshot_entries();
-        let access = AccessMetrics::snapshot().entries;
-
-        EndpointHealthSnapshot {
-            attempts,
-            results,
-            access,
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Metrics state + operations
-// -----------------------------------------------------------------------------
-
-///
 /// EndpointAttemptMetrics
-/// Best-effort attempt/completion counters per endpoint.
 ///
-/// Intended uses:
-/// - Derive access-denial rate via attempted vs denied.
-/// - Detect suspected traps via attempted vs (denied + completed).
+/// Best-effort attempt/completion counters per endpoint.
 ///
 
 pub struct EndpointAttemptMetrics;
@@ -97,16 +57,6 @@ impl EndpointAttemptMetrics {
         ENDPOINT_ATTEMPT_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
-    #[must_use]
-    pub fn snapshot_entries() -> Vec<(&'static str, EndpointAttemptCounts)> {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, value)| (*key, value.clone()))
-                .collect()
-        })
-    }
-
     #[cfg(test)]
     pub fn reset() {
         ENDPOINT_ATTEMPT_METRICS.with_borrow_mut(HashMap::clear);
@@ -115,10 +65,8 @@ impl EndpointAttemptMetrics {
 
 ///
 /// EndpointResultMetrics
-/// Best-effort ok/err counters per endpoint for Result-returning endpoints.
 ///
-/// Notes:
-/// - Access-denied errors are excluded (pre-dispatch).
+/// Best-effort ok/err counters per endpoint for Result-returning endpoints.
 ///
 
 pub struct EndpointResultMetrics;
@@ -144,25 +92,11 @@ impl EndpointResultMetrics {
         ENDPOINT_RESULT_METRICS.with_borrow(std::clone::Clone::clone)
     }
 
-    #[must_use]
-    pub fn snapshot_entries() -> Vec<(&'static str, EndpointResultCounts)> {
-        ENDPOINT_RESULT_METRICS.with_borrow(|counts| {
-            counts
-                .iter()
-                .map(|(key, value)| (*key, value.clone()))
-                .collect()
-        })
-    }
-
     #[cfg(test)]
     pub fn reset() {
         ENDPOINT_RESULT_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
-
-///
-/// TESTS
-///
 
 #[cfg(test)]
 mod tests {
@@ -171,14 +105,9 @@ mod tests {
     const EP_A: &str = "endpoint_a";
     const EP_B: &str = "endpoint_b";
 
-    // -------------------------------------------------------------------------
-    // EndpointAttemptMetrics
-    // -------------------------------------------------------------------------
-
     #[test]
     fn attempt_metrics_start_empty() {
         EndpointAttemptMetrics::reset();
-
         let raw = EndpointAttemptMetrics::export_raw();
         assert!(raw.is_empty());
     }
@@ -186,7 +115,6 @@ mod tests {
     #[test]
     fn increment_attempted_increases_attempted_only() {
         EndpointAttemptMetrics::reset();
-
         EndpointAttemptMetrics::increment_attempted(EP_A);
 
         let raw = EndpointAttemptMetrics::export_raw();
@@ -199,7 +127,6 @@ mod tests {
     #[test]
     fn increment_completed_increases_completed_only() {
         EndpointAttemptMetrics::reset();
-
         EndpointAttemptMetrics::increment_completed(EP_A);
 
         let raw = EndpointAttemptMetrics::export_raw();
@@ -210,173 +137,41 @@ mod tests {
     }
 
     #[test]
-    fn attempt_and_completed_accumulate_independently() {
-        EndpointAttemptMetrics::reset();
-
-        EndpointAttemptMetrics::increment_attempted(EP_A);
-        EndpointAttemptMetrics::increment_attempted(EP_A);
-        EndpointAttemptMetrics::increment_completed(EP_A);
-
-        let raw = EndpointAttemptMetrics::export_raw();
-        let counts = raw.get(EP_A).unwrap();
-
-        assert_eq!(counts.attempted, 2);
-        assert_eq!(counts.completed, 1);
-    }
-
-    #[test]
     fn attempt_metrics_are_per_endpoint() {
         EndpointAttemptMetrics::reset();
-
         EndpointAttemptMetrics::increment_attempted(EP_A);
         EndpointAttemptMetrics::increment_completed(EP_B);
 
         let raw = EndpointAttemptMetrics::export_raw();
-
         let a = raw.get(EP_A).unwrap();
         let b = raw.get(EP_B).unwrap();
 
         assert_eq!(a.attempted, 1);
         assert_eq!(a.completed, 0);
-
         assert_eq!(b.attempted, 0);
         assert_eq!(b.completed, 1);
     }
 
     #[test]
-    fn attempt_snapshot_entries_match_export_raw() {
-        EndpointAttemptMetrics::reset();
-
-        EndpointAttemptMetrics::increment_attempted(EP_A);
-        EndpointAttemptMetrics::increment_completed(EP_B);
-
-        let raw = EndpointAttemptMetrics::export_raw();
-        let snapshot = EndpointAttemptMetrics::snapshot_entries();
-
-        assert_eq!(raw.len(), snapshot.len());
-
-        for (key, counts) in snapshot {
-            let entry = raw.get(key).unwrap();
-            assert_eq!(entry.attempted, counts.attempted);
-            assert_eq!(entry.completed, counts.completed);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // EndpointResultMetrics
-    // -------------------------------------------------------------------------
-
-    #[test]
     fn result_metrics_start_empty() {
         EndpointResultMetrics::reset();
-
         let raw = EndpointResultMetrics::export_raw();
         assert!(raw.is_empty());
     }
 
     #[test]
-    fn increment_ok_increases_ok_only() {
+    fn increment_ok_and_err_are_tracked_per_endpoint() {
         EndpointResultMetrics::reset();
-
-        EndpointResultMetrics::increment_ok(EP_A);
-
-        let raw = EndpointResultMetrics::export_raw();
-        let counts = raw.get(EP_A).unwrap();
-
-        assert_eq!(counts.ok, 1);
-        assert_eq!(counts.err, 0);
-    }
-
-    #[test]
-    fn increment_err_increases_err_only() {
-        EndpointResultMetrics::reset();
-
-        EndpointResultMetrics::increment_err(EP_A);
-
-        let raw = EndpointResultMetrics::export_raw();
-        let counts = raw.get(EP_A).unwrap();
-
-        assert_eq!(counts.ok, 0);
-        assert_eq!(counts.err, 1);
-    }
-
-    #[test]
-    fn ok_and_err_accumulate_independently() {
-        EndpointResultMetrics::reset();
-
-        EndpointResultMetrics::increment_ok(EP_A);
-        EndpointResultMetrics::increment_ok(EP_A);
-        EndpointResultMetrics::increment_err(EP_A);
-
-        let raw = EndpointResultMetrics::export_raw();
-        let counts = raw.get(EP_A).unwrap();
-
-        assert_eq!(counts.ok, 2);
-        assert_eq!(counts.err, 1);
-    }
-
-    #[test]
-    fn result_metrics_are_per_endpoint() {
-        EndpointResultMetrics::reset();
-
         EndpointResultMetrics::increment_ok(EP_A);
         EndpointResultMetrics::increment_err(EP_B);
 
         let raw = EndpointResultMetrics::export_raw();
-
         let a = raw.get(EP_A).unwrap();
         let b = raw.get(EP_B).unwrap();
 
         assert_eq!(a.ok, 1);
         assert_eq!(a.err, 0);
-
         assert_eq!(b.ok, 0);
         assert_eq!(b.err, 1);
-    }
-
-    #[test]
-    fn result_snapshot_entries_match_export_raw() {
-        EndpointResultMetrics::reset();
-
-        EndpointResultMetrics::increment_ok(EP_A);
-        EndpointResultMetrics::increment_err(EP_B);
-
-        let raw = EndpointResultMetrics::export_raw();
-        let snapshot = EndpointResultMetrics::snapshot_entries();
-
-        assert_eq!(raw.len(), snapshot.len());
-
-        for (key, counts) in snapshot {
-            let entry = raw.get(key).unwrap();
-            assert_eq!(entry.ok, counts.ok);
-            assert_eq!(entry.err, counts.err);
-        }
-    }
-
-    #[test]
-    fn health_snapshot_includes_attempts_and_results() {
-        EndpointAttemptMetrics::reset();
-        EndpointResultMetrics::reset();
-
-        EndpointAttemptMetrics::increment_attempted(EP_A);
-        EndpointResultMetrics::increment_ok(EP_A);
-
-        let snapshot = EndpointMetrics::health_snapshot();
-
-        let attempts = snapshot
-            .attempts
-            .iter()
-            .find(|(key, _)| *key == EP_A)
-            .expect("missing attempt snapshot");
-        assert_eq!(attempts.1.attempted, 1);
-        assert_eq!(attempts.1.completed, 0);
-
-        let results = snapshot
-            .results
-            .iter()
-            .find(|(key, _)| *key == EP_A)
-            .expect("missing result snapshot");
-        assert_eq!(results.1.ok, 1);
-        assert_eq!(results.1.err, 0);
     }
 }

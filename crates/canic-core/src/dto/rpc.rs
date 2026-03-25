@@ -11,7 +11,7 @@ use crate::dto::{
 /// Root-directed orchestration commands.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
@@ -166,7 +166,7 @@ impl Request {
 /// Internal root capability command shape used by root workflow dispatch.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum RootCapabilityCommand {
     ProvisionCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
@@ -192,7 +192,7 @@ impl From<Request> for RootCapabilityCommand {
 /// Replay and idempotency metadata for mutating root requests.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct RootRequestMetadata {
     pub request_id: [u8; 32],
     pub ttl_seconds: u64,
@@ -203,7 +203,7 @@ pub struct RootRequestMetadata {
 /// Payload for [`Request::CreateCanister`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
@@ -217,7 +217,7 @@ pub struct CreateCanisterRequest {
 /// Parent-location choices for a new canister
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
     /// Use the requesting canister as parent.
@@ -233,7 +233,7 @@ pub enum CreateCanisterParent {
 /// Payload for [`Request::UpgradeCanister`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
     #[serde(default)]
@@ -245,7 +245,7 @@ pub struct UpgradeCanisterRequest {
 /// Payload for [`Request::Cycles`]
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
     pub cycles: u128,
     #[serde(default)]
@@ -257,7 +257,7 @@ pub struct CyclesRequest {
 /// Response payloads produced by root for orchestration requests.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Response {
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
@@ -271,7 +271,7 @@ pub enum Response {
 /// Result of creating and installing a new canister.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
@@ -281,7 +281,7 @@ pub struct CreateCanisterResponse {
 /// Result of an upgrade request (currently empty, reserved for metadata)
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterResponse {}
 
 ///
@@ -289,7 +289,7 @@ pub struct UpgradeCanisterResponse {}
 /// Result of transferring cycles to a child canister
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }

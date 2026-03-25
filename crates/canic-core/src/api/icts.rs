@@ -1,8 +1,4 @@
-use crate::{
-    cdk::api::canister_self,
-    dto::{canister::CanisterStatusResponse, error::Error, icts::CanisterMetadataResponse},
-    workflow::ic::mgmt::MgmtWorkflow,
-};
+use crate::dto::icts::CanisterMetadataResponse;
 
 ///
 /// IctsApi
@@ -33,12 +29,5 @@ impl IctsApi {
             version: Self::version(),
             description: Self::description(),
         }
-    }
-
-    /// ICTS standard: return types and string errors are fixed by the spec.
-    pub async fn canister_status() -> Result<CanisterStatusResponse, Error> {
-        MgmtWorkflow::canister_status(canister_self())
-            .await
-            .map_err(Error::from)
     }
 }

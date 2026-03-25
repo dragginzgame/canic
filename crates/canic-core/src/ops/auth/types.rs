@@ -36,7 +36,7 @@ pub struct TokenLifetime {
 /// VerifiedTokenClaims
 ///
 
-#[derive(CandidType, Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedTokenClaims {
     sub: Principal,
     shard_pid: Principal,
