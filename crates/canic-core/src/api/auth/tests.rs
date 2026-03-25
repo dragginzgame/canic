@@ -222,7 +222,7 @@ fn sample_token() -> DelegatedToken {
 fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
     let claims = sample_claims();
     let proof = sample_proof();
-    assert!(DelegationApi::proof_is_reusable_for_claims(
+    assert!(DelegatedTokenOps::proof_reusable_for_claims(
         &proof, &claims, 110
     ));
 }
@@ -231,7 +231,7 @@ fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
 fn proof_is_reusable_for_claims_rejects_expired_cert() {
     let claims = sample_claims();
     let proof = sample_proof();
-    assert!(!DelegationApi::proof_is_reusable_for_claims(
+    assert!(!DelegatedTokenOps::proof_reusable_for_claims(
         &proof, &claims, 131
     ));
 }
@@ -241,7 +241,7 @@ fn proof_is_reusable_for_claims_rejects_scope_mismatch() {
     let mut claims = sample_claims();
     claims.scopes = vec!["admin".to_string()];
     let proof = sample_proof();
-    assert!(!DelegationApi::proof_is_reusable_for_claims(
+    assert!(!DelegatedTokenOps::proof_reusable_for_claims(
         &proof, &claims, 110
     ));
 }

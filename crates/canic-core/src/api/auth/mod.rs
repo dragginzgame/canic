@@ -14,7 +14,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::{DelegatedTokenOps, audience},
+        auth::DelegatedTokenOps,
         config::ConfigOps,
         ic::IcOps,
         rpc::RpcOps,
@@ -127,7 +127,7 @@ impl DelegationApi {
         now_secs: u64,
     ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
         DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
-            .map(|verified| (verified.claims, verified.cert))
+            .map(crate::ops::auth::VerifiedDelegatedToken::into_parts)
             .map_err(Self::map_delegation_error)
     }
 
@@ -286,7 +286,9 @@ impl DelegationApi {
         let now_secs = IcOps::now_secs();
 
         match Self::require_proof() {
-            Ok(proof) if !Self::proof_is_reusable_for_claims(&proof, claims, now_secs) => {
+            Ok(proof)
+                if !DelegatedTokenOps::proof_reusable_for_claims(&proof, claims, now_secs) =>
+            {
                 Self::setup_delegation(claims).await
             }
             Ok(proof) => Ok(proof),
@@ -317,12 +319,17 @@ impl DelegationApi {
 
         let signer_pid = IcOps::canister_self();
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let verifier_targets = Self::derive_required_verifier_targets_from_aud(
+        let verifier_targets = DelegatedTokenOps::required_verifier_targets_from_audience(
             &claims.aud,
             signer_pid,
             root_pid,
             Self::is_registered_canister,
-        )?;
+        )
+        .map_err(|principal| {
+            Error::invalid(format!(
+                "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
+            ))
+        })?;
 
         Ok(DelegationRequest {
             shard_pid: signer_pid,
@@ -376,33 +383,27 @@ impl DelegationApi {
     }
 
     // Derive required verifier targets from audience with strict filtering/validation.
+    #[cfg(test)]
     fn derive_required_verifier_targets_from_aud<F>(
         audience: &[Principal],
         signer_pid: Principal,
         root_pid: Principal,
-        mut is_valid_target: F,
+        is_valid_target: F,
     ) -> Result<Vec<Principal>, Error>
     where
         F: FnMut(Principal) -> bool,
     {
-        let mut verifier_targets = Vec::new();
-        for principal in audience {
-            if *principal == signer_pid || *principal == root_pid {
-                continue;
-            }
-
-            if !is_valid_target(*principal) {
-                return Err(Error::invalid(format!(
-                    "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
-                )));
-            }
-
-            if !verifier_targets.contains(principal) {
-                verifier_targets.push(*principal);
-            }
-        }
-
-        Ok(verifier_targets)
+        DelegatedTokenOps::required_verifier_targets_from_audience(
+            audience,
+            signer_pid,
+            root_pid,
+            is_valid_target,
+        )
+        .map_err(|principal| {
+            Error::invalid(format!(
+                "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
+            ))
+        })
     }
 
     // Delegated audience invariants:
@@ -412,28 +413,6 @@ impl DelegationApi {
     // 4. token acceptance on canister C requires C ∈ claims.aud.
     //
     // Keep ingress, fanout, install, and runtime checks aligned to this block.
-
-    // Check whether a proof can be reused safely for the requested claims.
-    fn proof_is_reusable_for_claims(
-        proof: &DelegationProof,
-        claims: &DelegatedTokenClaims,
-        now_secs: u64,
-    ) -> bool {
-        if now_secs > proof.cert.expires_at {
-            return false;
-        }
-
-        if claims.shard_pid != proof.cert.shard_pid {
-            return false;
-        }
-
-        if claims.iat < proof.cert.issued_at || claims.exp > proof.cert.expires_at {
-            return false;
-        }
-
-        audience::principals_subset(&claims.aud, &proof.cert.aud)
-            && audience::strings_subset(&claims.scopes, &proof.cert.scopes)
-    }
 }
 
 #[cfg(test)]

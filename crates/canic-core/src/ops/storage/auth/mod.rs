@@ -64,6 +64,30 @@ pub struct DelegatedSessionBootstrapBinding {
     pub expires_at: u64,
 }
 
+///
+/// StoredDelegationCert
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StoredDelegationCert {
+    root_pid: Principal,
+    shard_pid: Principal,
+    issued_at: u64,
+    expires_at: u64,
+    scopes: Vec<String>,
+    aud: Vec<Principal>,
+}
+
+///
+/// StoredDelegationProof
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StoredDelegationProof {
+    cert: StoredDelegationCert,
+    cert_sig: Vec<u8>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DelegationProofEvictionClass {
     Cold,
@@ -89,8 +113,11 @@ impl DelegationStateOps {
     /// Resolve the most recently installed keyed delegation proof for signer issuance.
     #[must_use]
     pub fn latest_proof_dto() -> Option<DelegationProof> {
-        DelegationState::get_latest_proof_entry()
-            .map(|entry| DelegationProofRecordMapper::record_to_view(entry.proof))
+        DelegationState::get_latest_proof_entry().map(|entry| {
+            DelegationProofRecordMapper::stored_proof_to_dto(
+                DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
+            )
+        })
     }
 
     /// Resolve a keyed verifier proof that matches the incoming proof identity.
@@ -99,8 +126,11 @@ impl DelegationStateOps {
     ) -> Result<Option<DelegationProof>, InternalError> {
         let key = DelegationProofRecordMapper::proof_key_from_dto(proof)?;
 
-        Ok(DelegationState::get_proof_entry(&key)
-            .map(|entry| DelegationProofRecordMapper::record_to_view(entry.proof)))
+        Ok(DelegationState::get_proof_entry(&key).map(|entry| {
+            DelegationProofRecordMapper::stored_proof_to_dto(
+                DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
+            )
+        }))
     }
 
     /// Upsert a keyed verifier proof into bounded verifier-local storage.
@@ -109,7 +139,10 @@ impl DelegationStateOps {
         installed_at: u64,
     ) -> Result<DelegationProofUpsertOutcome, InternalError> {
         let policy = Self::proof_cache_policy()?;
-        let entry = DelegationProofRecordMapper::dto_to_entry(proof, installed_at)?;
+        let entry = DelegationProofRecordMapper::stored_proof_to_entry(
+            DelegationProofRecordMapper::dto_to_stored_proof(proof),
+            installed_at,
+        )?;
         Ok(proof_upsert_record_to_view(
             DelegationState::upsert_proof_entry(
                 entry,

@@ -2,13 +2,14 @@
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{AttestationKey, RoleAttestation, SignedRoleAttestation},
+    dto::auth::{AttestationKey, DelegatedToken, RoleAttestation, SignedRoleAttestation},
     ops::storage::auth::DelegationStateOps,
     workflow::prelude::CanisterRole,
 };
 
 mod attestation;
 pub mod audience;
+mod boundary;
 mod crypto;
 mod delegation;
 mod error;
@@ -16,11 +17,14 @@ mod keys;
 mod token;
 mod types;
 mod verify;
+pub use boundary::{BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp};
 pub use error::{
     DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError, DelegationSignatureError,
     DelegationValidationError,
 };
-pub use types::VerifiedDelegatedToken;
+pub use types::{
+    TokenAudience, TokenGrant, TokenLifetime, VerifiedDelegatedToken, VerifiedTokenClaims,
+};
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";
 const ROOT_PATH_SEGMENT: &[u8] = b"root";
@@ -74,6 +78,33 @@ fn attestation_derivation_path() -> Vec<Vec<u8>> {
 #[cfg(test)]
 fn role_attestation_hash(attestation: &RoleAttestation) -> Result<[u8; 32], InternalError> {
     crypto::role_attestation_hash(attestation)
+}
+
+#[cfg(test)]
+fn trace_token_trust_chain(
+    token: &DelegatedToken,
+    authority_pid: Principal,
+    now_secs: u64,
+    self_pid: Principal,
+) -> (Vec<&'static str>, Result<(), InternalError>) {
+    verify::trace_token_trust_chain(token, authority_pid, now_secs, self_pid)
+}
+
+#[cfg(test)]
+fn trace_token_trust_chain_with_forced_current_proof_failure(
+    token: &DelegatedToken,
+    authority_pid: Principal,
+    now_secs: u64,
+    self_pid: Principal,
+    err: InternalError,
+) -> (Vec<&'static str>, Result<(), InternalError>) {
+    verify::trace_token_trust_chain_with_forced_current_proof_failure(
+        token,
+        authority_pid,
+        now_secs,
+        self_pid,
+        err,
+    )
 }
 
 #[cfg(test)]
