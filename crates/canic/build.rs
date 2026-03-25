@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
 fn main() {
+    // The exported endpoint macros use these cfg names when optional endpoint
+    // groups are compiled out for a role-specific canister build.
+    println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
+    println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
+
     // If the env var changes, we must re-run to pick up a different config.
     println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
 

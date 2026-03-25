@@ -57,9 +57,10 @@ const USER_SHARD_WASM: &[u8] =
 const USER_SHARD_WASM: &[u8] = &[];
 
 #[cfg(target_arch = "wasm32")]
-const BLANK_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/blank/blank.wasm.gz");
+const MINIMAL_WASM: &[u8] =
+    include_bytes!("../../../../.dfx/local/canisters/minimal/minimal.wasm.gz");
 #[cfg(not(target_arch = "wasm32"))]
-const BLANK_WASM: &[u8] = &[];
+const MINIMAL_WASM: &[u8] = &[];
 
 #[cfg(target_arch = "wasm32")]
 const SCALE_HUB_WASM: &[u8] =
@@ -92,7 +93,7 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
     (canister::APP, APP_WASM),
     (canister::USER_HUB, USER_HUB_WASM),
     (canister::USER_SHARD, USER_SHARD_WASM),
-    (canister::BLANK, BLANK_WASM),
+    (canister::MINIMAL, MINIMAL_WASM),
     (canister::SCALE_HUB, SCALE_HUB_WASM),
     (canister::SCALE, SCALE_WASM),
     (canister::SHARD_HUB, SHARD_HUB_WASM),
@@ -100,16 +101,16 @@ pub static WASMS: &[(CanisterRole, &[u8])] = &[
     (canister::TEST, TEST_WASM),
 ];
 
-/// create_blank
+/// create_minimal
 /// Controller-only helper for local Canic testing.
 #[canic_update(requires(caller::is_controller()))]
-async fn create_blank() -> Result<CreateCanisterResponse, Error> {
+async fn create_minimal() -> Result<CreateCanisterResponse, Error> {
     if !cfg!(debug_assertions) {
         return Err(Error::forbidden("test-only canister"));
     }
 
     RpcApi::create_canister_request::<()>(
-        &canister::BLANK,
+        &canister::MINIMAL,
         CreateCanisterParent::ThisCanister,
         None,
     )

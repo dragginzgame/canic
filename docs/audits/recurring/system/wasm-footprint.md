@@ -86,7 +86,7 @@ Measure and report:
 Default scope is the full reference canister set in `dfx.json`:
 
 - `app`
-- `blank`
+- `minimal`
 - `user_hub`
 - `user_shard`
 - `scale_hub`
@@ -108,6 +108,21 @@ Profile mapping:
 ## Canic Artifact Model (Mandatory)
 
 Use these artifact classes consistently:
+
+### Minimal Baseline Rule
+
+`minimal` is the canonical minimal leaf-canister baseline for wasm audits.
+
+This is a locked audit assumption:
+
+- `minimal` exists to measure the shared Canic runtime floor
+- `minimal` must remain on the standard non-root Canic runtime surface
+- `minimal` must not accumulate role-specific helpers beyond that shared surface
+- `minimal` must not accumulate provisioning helpers, RPC helpers, or other bespoke behavior
+- if `minimal` changes meaning, the audit definition is wrong until it is explicitly revised
+
+When comparing leaf canisters, interpret size above `minimal` as role-specific
+addition on top of the shared runtime floor.
 
 ### Built Artifact
 
@@ -147,7 +162,7 @@ Required:
 - identify `root` as `bundle-canister`
 - compare `root` against its own prior baselines first
 - avoid using `root` alone to judge shared-runtime regressions in leaf canisters
-- use `blank` as the shared-runtime floor and `root` as the bundle ceiling
+- use `minimal` as the shared-runtime floor and `root` as the bundle ceiling
 
 ## Decision Rule
 
@@ -228,7 +243,7 @@ Every report generated from this audit must include:
 - concrete artifact outliers by canister
 - at least one retained-size hotspot table grounded in `twiggy`
 - explicit note when `root` growth is dominated by embedded child bundles
-- explicit note when `blank` remains close to feature canisters, because that
+- explicit note when feature canisters remain close to `minimal`, because that
   signals shared-runtime baseline pressure
 
 ## Risk Score (Required)
@@ -247,7 +262,7 @@ Suggested interpretation for this audit:
 
 Reports must watch for:
 
-- `blank` approaching the same size class as more feature-heavy canisters
+- `minimal` approaching the same size class as more feature-heavy canisters
 - `root` growing faster than the sum of child bundle changes
 - shrink delta collapsing unexpectedly, which can mean dead code is becoming live
 - `twiggy monos` showing repeated generic expansion in shared crates

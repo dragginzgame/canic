@@ -17,7 +17,7 @@ members = [
     "crates/canic-testkit",
     "crates/canic-utils",
     "crates/canisters/app",
-    "crates/canisters/blank",
+    "crates/canisters/minimal",
     "crates/canisters/root",
     "crates/canisters/scale",
     "crates/canisters/scale_hub",

@@ -16,13 +16,13 @@ Environment:
   CARGO_TARGET_DIR     Defaults to TMPDIR
   MAX_CANISTERS        Same as --max
   ROOT_CANISTER_ID     Same as --root (defaults to dfx canister id root)
-  CANISTER_METHOD      Same as --method (default: create_blank on the root canister)
+  CANISTER_METHOD      Same as --method (default: create_minimal on the root canister)
 EOF
 }
 
 MAX_CANISTERS="${MAX_CANISTERS:-0}"
 ROOT_CANISTER_ID="${ROOT_CANISTER_ID:-}"
-CANISTER_METHOD="${CANISTER_METHOD:-create_blank}"
+CANISTER_METHOD="${CANISTER_METHOD:-create_minimal}"
 REPORT_EVERY="${REPORT_EVERY:-10}"
 
 while [[ $# -gt 0 ]]; do
