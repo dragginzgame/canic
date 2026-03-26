@@ -60,7 +60,7 @@ pub fn perf_counter() -> u64 {
 /// splitting up by Timer type to avoid confusing string comparisons
 ///
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PerfKey {
     Endpoint(String),
     Timer(String),
@@ -98,7 +98,7 @@ impl PerfSlot {
 /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PerfEntry {
     pub key: PerfKey,
     pub count: u64,

@@ -9,7 +9,7 @@ thread_local! {
 /// RootCapabilityMetricKey
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum RootCapabilityMetricKey {
     Provision,
     Upgrade,
@@ -35,7 +35,7 @@ impl RootCapabilityMetricKey {
 /// RootCapabilityMetricEventType
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum RootCapabilityMetricEventType {
     Envelope,
     Proof,
@@ -61,7 +61,7 @@ impl RootCapabilityMetricEventType {
 /// RootCapabilityMetricOutcome
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum RootCapabilityMetricOutcome {
     Accepted,
     Rejected,
@@ -95,7 +95,7 @@ impl RootCapabilityMetricOutcome {
 /// RootCapabilityMetricProofMode
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum RootCapabilityMetricProofMode {
     Unspecified,
     Structural,
@@ -119,7 +119,7 @@ impl RootCapabilityMetricProofMode {
 /// RootCapabilityMetricStorageKey
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct RootCapabilityMetricStorageKey {
     capability: RootCapabilityMetricKey,
     event_type: RootCapabilityMetricEventType,

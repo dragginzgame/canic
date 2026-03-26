@@ -46,7 +46,7 @@ pub struct AppStateInput {
 /// AppStateResponse
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Deserialize)]
 pub struct AppStateResponse {
     pub mode: AppMode,
     pub cycles_funding_enabled: bool,
@@ -63,5 +63,5 @@ pub struct SubnetStateInput {}
 /// SubnetStateResponse
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Deserialize)]
 pub struct SubnetStateResponse {}

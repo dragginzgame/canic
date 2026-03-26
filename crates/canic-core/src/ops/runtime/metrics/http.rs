@@ -8,7 +8,7 @@ thread_local! {
 /// HttpMetricKey
 ///
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct HttpMetricKey {
     pub method: HttpMethod,
     pub label: String,
@@ -18,7 +18,7 @@ pub struct HttpMetricKey {
 /// HttpMetricsSnapshot
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HttpMetricsSnapshot {
     pub entries: Vec<(HttpMetricKey, u64)>,
 }
@@ -27,7 +27,7 @@ pub struct HttpMetricsSnapshot {
 /// HttpMethod
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum HttpMethod {
     Get,
     Post,

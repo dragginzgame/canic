@@ -4,14 +4,14 @@ use crate::dto::{canister::CanisterInfo, prelude::*};
 /// AppRegistryResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct AppRegistryResponse(pub Vec<AppRegistryEntry>);
 
 ///
 /// AppRegistryEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct AppRegistryEntry {
     pub subnet_pid: Principal,
     pub root_pid: Principal,
@@ -25,7 +25,7 @@ pub struct AppRegistryEntry {
 /// canister record payload.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct SubnetRegistryResponse(pub Vec<SubnetRegistryEntry>);
 
 ///
@@ -36,7 +36,7 @@ pub struct SubnetRegistryResponse(pub Vec<SubnetRegistryEntry>);
 /// filtering and indexing by consumers.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct SubnetRegistryEntry {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -71,7 +71,7 @@ pub struct DirectoryEntryInput {
 /// DirectoryEntryResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
 pub struct DirectoryEntryResponse {
     pub role: CanisterRole,
     pub pid: Principal,

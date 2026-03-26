@@ -12,8 +12,8 @@ use canic::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::ErrorCode,
-        metrics::{MetricEntry, MetricsKind, MetricsRequest, MetricsResponse},
-        page::PageRequest,
+        metrics::{MetricEntry, MetricValue, MetricsKind},
+        page::{Page, PageRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
             RootRequestMetadata, UpgradeCanisterRequest,
@@ -618,24 +618,23 @@ fn root_response_as(
 }
 
 fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
-    let response: Result<MetricsResponse, Error> = setup
+    let response: Result<Page<MetricEntry>, Error> = setup
         .pic
         .query_call(
             setup.root_id,
             protocol::CANIC_METRICS,
-            (MetricsRequest {
-                kind: MetricsKind::RootCapability,
-                page: PageRequest {
+            (
+                MetricsKind::RootCapability,
+                PageRequest {
                     limit: 256,
                     offset: 0,
                 },
-            },),
+            ),
         )
         .expect("root capability metrics transport query failed");
 
     response
         .expect("root capability metrics application query failed")
-        .entries
         .entries
 }
 
@@ -651,7 +650,10 @@ fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
                 && entry.labels.get(1).is_some_and(|label| label == event_type)
                 && entry.labels.get(2).is_some_and(|label| label == outcome)
         })
-        .map(|entry| entry.count.unwrap_or(0))
+        .map(|entry| match entry.value {
+            MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
+            MetricValue::U128(_) => 0,
+        })
         .sum()
 }
 

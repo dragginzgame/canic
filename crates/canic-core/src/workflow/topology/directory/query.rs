@@ -3,7 +3,9 @@ use crate::{
         page::{Page, PageRequest},
         topology::DirectoryEntryResponse,
     },
-    ops::storage::directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+    ops::storage::directory::{
+        app::AppDirectoryOps, mapper::DirectoryResponseMapper, subnet::SubnetDirectoryOps,
+    },
     workflow::{prelude::*, view::paginate::paginate_vec},
 };
 
@@ -21,8 +23,7 @@ impl AppDirectoryQuery {
 
     #[must_use]
     pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
-        let data = AppDirectoryOps::data();
-        map_directory_page(paginate_vec(data.entries, page))
+        directory_page(AppDirectoryOps::data().entries, page)
     }
 }
 
@@ -40,20 +41,14 @@ impl SubnetDirectoryQuery {
 
     #[must_use]
     pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
-        let data = SubnetDirectoryOps::data();
-        map_directory_page(paginate_vec(data.entries, page))
+        directory_page(SubnetDirectoryOps::data().entries, page)
     }
 }
 
-fn map_directory_page(page: Page<(CanisterRole, Principal)>) -> Page<DirectoryEntryResponse> {
-    let entries = page
-        .entries
-        .into_iter()
-        .map(|(role, pid)| DirectoryEntryResponse { role, pid })
-        .collect();
-
-    Page {
-        entries,
-        total: page.total,
-    }
+// Paginate directory tuples and let ops own the tuple -> DTO mapping.
+fn directory_page(
+    entries: Vec<(CanisterRole, Principal)>,
+    page: PageRequest,
+) -> Page<DirectoryEntryResponse> {
+    DirectoryResponseMapper::record_page_to_response(paginate_vec(entries, page))
 }
