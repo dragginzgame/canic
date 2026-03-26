@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.17.x] - 2026-03-25 - Wasm Audit and Endpoint Surface Reduction
 
-- `0.17.2` continues the wasm audit line by slimming shared runtime, metrics, and observability paths, bringing the `minimal` raw release artifact down to `2460376` bytes while keeping the intended operator-facing feature set intact.
+- `0.17.2` continues the wasm audit line by slimming shared runtime, metrics, and observability paths, bringing the `minimal` raw release artifact down to `2460376` bytes (`delta -100624` vs `0.17.1`) while keeping the intended operator-facing feature set intact.
 - `0.17.1` cuts the shared wasm floor again by separating root-only capability verification from the non-root cycles path and by removing the old `ICTS` canister-status endpoint, bringing the `minimal` raw release artifact down to `2561000` bytes while keeping the intended runtime feature set intact.
 - `0.17.0` starts the wasm audit line with a measured per-canister footprint baseline, renames the canonical baseline canister from `blank` to `minimal`, and trims optional scaling, sharding, delegated-auth, and `ICRC-21` endpoint exports behind compile-time config so disabled features stop inflating every build.
 
