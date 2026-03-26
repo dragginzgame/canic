@@ -30,6 +30,10 @@ const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
+///
+/// SerialPic
+///
+
 struct SerialPic {
     pic: pocket_ic::PocketIc,
     _serial_guard: MutexGuard<'static, ()>,

@@ -1,20 +1,48 @@
+///
+/// IsController
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct IsController;
+
+///
+/// IsParent
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct IsParent;
 
+///
+/// IsChild
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct IsChild;
+
+///
+/// IsRoot
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct IsRoot;
 
+///
+/// IsSameCanister
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct IsSameCanister;
 
+///
+/// IsRegisteredToSubnet
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct IsRegisteredToSubnet;
+
+///
+/// IsWhitelisted
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct IsWhitelisted;

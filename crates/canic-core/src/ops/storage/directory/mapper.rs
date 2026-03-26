@@ -1,7 +1,27 @@
 use crate::{
+    cdk::types::Principal,
     dto::topology::{AppDirectoryArgs, DirectoryEntryInput, SubnetDirectoryArgs},
+    ids::CanisterRole,
     storage::stable::directory::{app::AppDirectoryRecord, subnet::SubnetDirectoryRecord},
 };
+
+// --- Helpers ---------------------------------------------------------------
+
+// Map stored directory tuples into the shared DTO entry shape.
+fn record_entries_to_dto(entries: Vec<(CanisterRole, Principal)>) -> Vec<DirectoryEntryInput> {
+    entries
+        .into_iter()
+        .map(|(role, pid)| DirectoryEntryInput { role, pid })
+        .collect()
+}
+
+// Map DTO entry snapshots back into stored directory tuples.
+fn dto_entries_to_record(entries: Vec<DirectoryEntryInput>) -> Vec<(CanisterRole, Principal)> {
+    entries
+        .into_iter()
+        .map(|entry| (entry.role, entry.pid))
+        .collect()
+}
 
 ///
 /// AppDirectoryRecordMapper
@@ -12,25 +32,15 @@ pub struct AppDirectoryRecordMapper;
 impl AppDirectoryRecordMapper {
     #[must_use]
     pub fn record_to_view(data: AppDirectoryRecord) -> AppDirectoryArgs {
-        let entries = data
-            .entries
-            .into_iter()
-            .map(|(role, pid)| DirectoryEntryInput { role, pid })
-            .collect();
-
-        AppDirectoryArgs(entries)
+        AppDirectoryArgs(record_entries_to_dto(data.entries))
     }
 
     #[must_use]
     pub fn dto_to_record(view: AppDirectoryArgs) -> AppDirectoryRecord {
         // TODO: mapping from DTO to storage record must remain in ops.
-        let entries = view
-            .0
-            .into_iter()
-            .map(|entry| (entry.role, entry.pid))
-            .collect();
-
-        AppDirectoryRecord { entries }
+        AppDirectoryRecord {
+            entries: dto_entries_to_record(view.0),
+        }
     }
 }
 
@@ -43,24 +53,14 @@ pub struct SubnetDirectoryRecordMapper;
 impl SubnetDirectoryRecordMapper {
     #[must_use]
     pub fn record_to_view(data: SubnetDirectoryRecord) -> SubnetDirectoryArgs {
-        let entries = data
-            .entries
-            .into_iter()
-            .map(|(role, pid)| DirectoryEntryInput { role, pid })
-            .collect();
-
-        SubnetDirectoryArgs(entries)
+        SubnetDirectoryArgs(record_entries_to_dto(data.entries))
     }
 
     #[must_use]
     pub fn dto_to_record(view: SubnetDirectoryArgs) -> SubnetDirectoryRecord {
         // TODO: mapping from DTO to storage record must remain in ops.
-        let entries = view
-            .0
-            .into_iter()
-            .map(|entry| (entry.role, entry.pid))
-            .collect();
-
-        SubnetDirectoryRecord { entries }
+        SubnetDirectoryRecord {
+            entries: dto_entries_to_record(view.0),
+        }
     }
 }

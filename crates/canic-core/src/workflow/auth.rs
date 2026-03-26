@@ -34,32 +34,6 @@ use crate::{
     protocol,
 };
 
-///
-/// DelegationWorkflow
-///
-/// WHY THIS MODULE EXISTS
-/// ----------------------
-/// This module coordinates **delegation issuance** as a workflow,
-/// separating *orchestration* from:
-/// - cryptographic operations
-/// - storage details
-/// - authorization policy
-///
-/// Responsibilities:
-/// - Call cryptographic primitives in the correct order
-/// - Coordinate persistence and publication
-///
-/// Explicit non-responsibilities:
-/// - Authorization (caller must enforce)
-/// - Validation (delegation certs are assumed valid inputs)
-/// - Retry or recovery logic
-/// - Token verification
-///
-/// This separation ensures delegation remains auditable and predictable.
-///
-
-pub struct DelegationWorkflow;
-
 // -------------------------------------------------------------------------
 // Logging context
 // -------------------------------------------------------------------------
@@ -88,6 +62,32 @@ impl DelegationPushOrigin {
         }
     }
 }
+
+///
+/// DelegationWorkflow
+///
+/// WHY THIS MODULE EXISTS
+/// ----------------------
+/// This module coordinates **delegation issuance** as a workflow,
+/// separating *orchestration* from:
+/// - cryptographic operations
+/// - storage details
+/// - authorization policy
+///
+/// Responsibilities:
+/// - Call cryptographic primitives in the correct order
+/// - Coordinate persistence and publication
+///
+/// Explicit non-responsibilities:
+/// - Authorization (caller must enforce)
+/// - Validation (delegation certs are assumed valid inputs)
+/// - Retry or recovery logic
+/// - Token verification
+///
+/// This separation ensures delegation remains auditable and predictable.
+///
+
+pub struct DelegationWorkflow;
 
 impl DelegationWorkflow {
     // -------------------------------------------------------------------------

@@ -23,12 +23,6 @@ eager_static! {
 
 pub struct ShardingLifecycle;
 
-///
-/// ShardingActiveSet
-///
-
-pub struct ShardingActiveSet;
-
 impl ShardingLifecycle {
     pub(crate) fn with<F, R>(f: F) -> R
     where
@@ -75,9 +69,19 @@ impl ShardingLifecycle {
     }
 }
 
+///
+/// ShardingActiveSet
+///
+
+pub struct ShardingActiveSet;
+
 //
 // ShardingLifecycleCore
 //
+
+///
+/// ShardingLifecycleCore
+///
 
 pub struct ShardingLifecycleCore<M: Memory> {
     active: BTreeMap<Principal, u8, M>,

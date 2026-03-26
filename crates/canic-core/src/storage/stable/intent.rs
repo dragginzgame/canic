@@ -146,6 +146,10 @@ pub struct IntentStoreMetaRecord {
     pub aborted_total: u64,
 }
 
+impl IntentStoreMetaRecord {
+    pub const STORABLE_MAX_SIZE: u32 = 96;
+}
+
 impl Default for IntentStoreMetaRecord {
     fn default() -> Self {
         Self {
@@ -156,10 +160,6 @@ impl Default for IntentStoreMetaRecord {
             aborted_total: 0,
         }
     }
-}
-
-impl IntentStoreMetaRecord {
-    pub const STORABLE_MAX_SIZE: u32 = 96;
 }
 
 impl_storable_bounded!(

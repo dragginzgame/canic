@@ -1,5 +1,9 @@
 use crate::dto::icts::CanisterMetadataResponse;
 
+const CANISTER_NAME: &str = env!("CARGO_PKG_NAME");
+const CANISTER_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CANISTER_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+
 ///
 /// IctsApi
 ///
@@ -9,25 +13,25 @@ pub struct IctsApi;
 impl IctsApi {
     #[must_use]
     pub fn name() -> String {
-        env!("CARGO_PKG_NAME").to_string()
+        CANISTER_NAME.to_string()
     }
 
     #[must_use]
     pub fn version() -> String {
-        env!("CARGO_PKG_VERSION").to_string()
+        CANISTER_VERSION.to_string()
     }
 
     #[must_use]
     pub fn description() -> String {
-        env!("CARGO_PKG_DESCRIPTION").to_string()
+        CANISTER_DESCRIPTION.to_string()
     }
 
     #[must_use]
     pub fn metadata() -> CanisterMetadataResponse {
         CanisterMetadataResponse {
-            name: Self::name(),
-            version: Self::version(),
-            description: Self::description(),
+            name: CANISTER_NAME.to_string(),
+            version: CANISTER_VERSION.to_string(),
+            description: CANISTER_DESCRIPTION.to_string(),
         }
     }
 }

@@ -13,9 +13,7 @@ use crate::{
     log::Topic,
     ops::{
         ic::IcOps,
-        runtime::metrics::root_capability::{
-            RootCapabilityEnvelopeOutcome, RootCapabilityMetrics, RootCapabilityProofOutcome,
-        },
+        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
     workflow::rpc::request::handler::NonrootCyclesCapabilityWorkflow,
 };
@@ -41,7 +39,7 @@ pub(super) async fn response_capability_v1_nonroot(
     {
         RootCapabilityMetrics::record_envelope(
             capability_key,
-            RootCapabilityEnvelopeOutcome::Rejected,
+            RootCapabilityMetricOutcome::Rejected,
             proof_mode,
         );
         log!(
@@ -59,14 +57,14 @@ pub(super) async fn response_capability_v1_nonroot(
     }
     RootCapabilityMetrics::record_envelope(
         capability_key,
-        RootCapabilityEnvelopeOutcome::Accepted,
+        RootCapabilityMetricOutcome::Accepted,
         proof_mode,
     );
 
     if let Err(err) = verify_nonroot_cycles_proof(&capability) {
         RootCapabilityMetrics::record_proof(
             capability_key,
-            RootCapabilityProofOutcome::Rejected,
+            RootCapabilityMetricOutcome::Rejected,
             proof_mode,
         );
         log!(
@@ -84,7 +82,7 @@ pub(super) async fn response_capability_v1_nonroot(
     }
     RootCapabilityMetrics::record_proof(
         capability_key,
-        RootCapabilityProofOutcome::Accepted,
+        RootCapabilityMetricOutcome::Accepted,
         proof_mode,
     );
 

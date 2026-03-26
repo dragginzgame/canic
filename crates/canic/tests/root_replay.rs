@@ -12,7 +12,7 @@ use canic::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::ErrorCode,
-        metrics::{MetricsKind, MetricsRequest, MetricsResponse, RootCapabilityMetricEntry},
+        metrics::{MetricEntry, MetricsKind, MetricsRequest, MetricsResponse},
         page::PageRequest,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
@@ -617,7 +617,7 @@ fn root_response_as(
         .map(|response| response.response)
 }
 
-fn root_capability_metrics(setup: &RootSetup) -> Vec<RootCapabilityMetricEntry> {
+fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
     let response: Result<MetricsResponse, Error> = setup
         .pic
         .query_call(
@@ -633,22 +633,25 @@ fn root_capability_metrics(setup: &RootSetup) -> Vec<RootCapabilityMetricEntry> 
         )
         .expect("root capability metrics transport query failed");
 
-    match response.expect("root capability metrics application query failed") {
-        MetricsResponse::RootCapability(page) => page.entries,
-        other => panic!("unexpected metrics response variant: {other:?}"),
-    }
+    response
+        .expect("root capability metrics application query failed")
+        .entries
+        .entries
 }
 
-fn metric_count(entries: &[RootCapabilityMetricEntry], capability: &str, event: &str) -> u64 {
+fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
     let (event_type, outcome) = legacy_event_parts(event);
     entries
         .iter()
         .filter(|entry| {
-            entry.capability == capability
-                && entry.event_type == event_type
-                && entry.outcome == outcome
+            entry
+                .labels
+                .first()
+                .is_some_and(|label| label == capability)
+                && entry.labels.get(1).is_some_and(|label| label == event_type)
+                && entry.labels.get(2).is_some_and(|label| label == outcome)
         })
-        .map(|entry| entry.count)
+        .map(|entry| entry.count.unwrap_or(0))
         .sum()
 }
 

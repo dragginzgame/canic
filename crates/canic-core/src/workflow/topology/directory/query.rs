@@ -19,6 +19,7 @@ impl AppDirectoryQuery {
         AppDirectoryOps::get(&role)
     }
 
+    #[must_use]
     pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         let data = AppDirectoryOps::data();
         map_directory_page(paginate_vec(data.entries, page))
@@ -37,6 +38,7 @@ impl SubnetDirectoryQuery {
         SubnetDirectoryOps::get(&role)
     }
 
+    #[must_use]
     pub fn page(page: PageRequest) -> Page<DirectoryEntryResponse> {
         let data = SubnetDirectoryOps::data();
         map_directory_page(paginate_vec(data.entries, page))

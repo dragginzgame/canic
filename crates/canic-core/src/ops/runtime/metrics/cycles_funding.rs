@@ -66,25 +66,15 @@ impl CyclesFundingDeniedReason {
     }
 }
 
+///
+/// CyclesFundingMetricStorageKey
+///
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct CyclesFundingMetricStorageKey {
     metric: CyclesFundingMetricKey,
     child_principal: Option<Principal>,
     reason: Option<CyclesFundingDeniedReason>,
-}
-
-///
-/// CyclesFundingMetricsSnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct CyclesFundingMetricsSnapshot {
-    pub entries: Vec<(
-        CyclesFundingMetricKey,
-        Option<Principal>,
-        Option<CyclesFundingDeniedReason>,
-        u128,
-    )>,
 }
 
 ///
@@ -159,14 +149,17 @@ impl CyclesFundingMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> CyclesFundingMetricsSnapshot {
-        let entries = CYCLES_FUNDING_METRICS
+    pub fn snapshot() -> Vec<(
+        CyclesFundingMetricKey,
+        Option<Principal>,
+        Option<CyclesFundingDeniedReason>,
+        u128,
+    )> {
+        CYCLES_FUNDING_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
             .map(|(key, cycles)| (key.metric, key.child_principal, key.reason, cycles))
-            .collect();
-
-        CyclesFundingMetricsSnapshot { entries }
+            .collect()
     }
 
     #[cfg(test)]
@@ -197,7 +190,6 @@ mod tests {
         u128,
     > {
         CyclesFundingMetrics::snapshot()
-            .entries
             .into_iter()
             .map(|(metric, child_principal, reason, cycles)| {
                 ((metric, child_principal, reason), cycles)

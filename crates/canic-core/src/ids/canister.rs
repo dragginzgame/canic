@@ -4,9 +4,8 @@
 //! parsing while avoiding repeated `Cow` boilerplate around the codebase.
 use crate::memory::impl_storable_bounded;
 use candid::CandidType;
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, borrow::Cow, str::FromStr};
+use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
 
 ///
 /// CanisterRole
@@ -20,7 +19,7 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 const ROOT_ROLE: &str = "root";
 
 #[derive(
-    CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
+    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
 #[serde(transparent)]
 pub struct CanisterRole(pub Cow<'static, str>);
@@ -97,6 +96,12 @@ impl AsRef<str> for CanisterRole {
 impl Borrow<str> for CanisterRole {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl fmt::Display for CanisterRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

@@ -16,15 +16,15 @@ use candid::encode_one;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
+static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
+
 ///
 /// RequestOps
 /// Ops-level helpers for request/response RPCs.
 ///
 
 pub struct RequestOps;
-
-const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
-static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
 impl RequestOps {
     pub async fn create_canister<A>(

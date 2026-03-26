@@ -1,24 +1,9 @@
 use crate::{
     dto::{
-        metrics::{
-            AccessMetricEntry, CyclesFundingMetricEntry, DelegationMetricEntry, HttpMetricEntry,
-            IccMetricEntry, MetricsKind, MetricsRequest, MetricsResponse,
-            RootCapabilityMetricEntry, SystemMetricEntry, TimerMetricEntry,
-        },
+        metrics::{MetricEntry, MetricsKind, MetricsRequest, MetricsResponse},
         page::{Page, PageRequest},
     },
-    ops::{
-        perf::PerfOps,
-        runtime::metrics::{
-            MetricsOps,
-            mapper::{
-                AccessMetricEntryMapper, CyclesFundingMetricEntryMapper,
-                DelegationMetricEntryMapper, HttpMetricEntryMapper, IccMetricEntryMapper,
-                RootCapabilityMetricEntryMapper, SystemMetricEntryMapper, TimerMetricEntryMapper,
-            },
-        },
-    },
-    perf::PerfEntry,
+    ops::runtime::metrics::MetricsOps,
     workflow::view::paginate::paginate_vec,
 };
 
@@ -34,132 +19,23 @@ pub struct MetricsQuery;
 impl MetricsQuery {
     #[must_use]
     pub fn dispatch(req: MetricsRequest) -> MetricsResponse {
-        match req.kind {
-            MetricsKind::System => MetricsResponse::System(Self::system_snapshot()),
-            MetricsKind::Icc => MetricsResponse::Icc(Self::icc_page(req.page)),
-            MetricsKind::Http => MetricsResponse::Http(Self::http_page(req.page)),
-            MetricsKind::Timer => MetricsResponse::Timer(Self::timer_page(req.page)),
-            MetricsKind::Access => MetricsResponse::Access(Self::access_page(req.page)),
-            MetricsKind::Delegation => MetricsResponse::Delegation(Self::delegation_page(req.page)),
-            MetricsKind::RootCapability => {
-                MetricsResponse::RootCapability(Self::root_capability_page(req.page))
-            }
-            MetricsKind::CyclesFunding => {
-                MetricsResponse::CyclesFunding(Self::cycles_funding_page(req.page))
-            }
-            MetricsKind::Perf => MetricsResponse::Perf(Self::perf_page(req.page)),
-        }
+        let entries = Self::page(req.kind, req.page);
+
+        MetricsResponse { entries }
     }
 
     #[must_use]
-    pub fn system_snapshot() -> Vec<SystemMetricEntry> {
-        let snapshot = MetricsOps::system_snapshot();
-        let mut entries = SystemMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| a.kind.cmp(&b.kind));
-
-        entries
-    }
-
-    #[must_use]
-    pub fn icc_page(page: PageRequest) -> Page<IccMetricEntry> {
-        let snapshot = MetricsOps::icc_snapshot();
-        let mut entries = IccMetricEntryMapper::record_to_view(snapshot.entries);
-
+    pub fn page(kind: MetricsKind, page: PageRequest) -> Page<MetricEntry> {
+        let mut entries = MetricsOps::entries(kind);
         entries.sort_by(|a, b| {
-            a.target
-                .as_slice()
-                .cmp(b.target.as_slice())
-                .then_with(|| a.method.cmp(&b.method))
+            a.labels
+                .cmp(&b.labels)
+                .then_with(|| a.principal.cmp(&b.principal))
+                .then_with(|| a.count.cmp(&b.count))
+                .then_with(|| a.value_u64.cmp(&b.value_u64))
+                .then_with(|| a.value_u128.cmp(&b.value_u128))
         });
 
         paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn http_page(page: PageRequest) -> Page<HttpMetricEntry> {
-        let snapshot = MetricsOps::http_snapshot();
-        let mut entries = HttpMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| a.method.cmp(&b.method).then_with(|| a.label.cmp(&b.label)));
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn timer_page(page: PageRequest) -> Page<TimerMetricEntry> {
-        let snapshot = MetricsOps::timer_snapshot();
-        let mut entries = TimerMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| {
-            a.mode
-                .cmp(&b.mode)
-                .then_with(|| a.delay_ms.cmp(&b.delay_ms))
-                .then_with(|| a.label.cmp(&b.label))
-        });
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn access_page(page: PageRequest) -> Page<AccessMetricEntry> {
-        let snapshot = MetricsOps::access_snapshot();
-        let mut entries = AccessMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| {
-            a.endpoint
-                .cmp(&b.endpoint)
-                .then_with(|| a.kind.cmp(&b.kind))
-                .then_with(|| a.predicate.cmp(&b.predicate))
-        });
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn delegation_page(page: PageRequest) -> Page<DelegationMetricEntry> {
-        let snapshot = MetricsOps::delegation_snapshot();
-        let mut entries = DelegationMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| a.authority.as_slice().cmp(b.authority.as_slice()));
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn root_capability_page(page: PageRequest) -> Page<RootCapabilityMetricEntry> {
-        let snapshot = MetricsOps::root_capability_snapshot();
-        let mut entries = RootCapabilityMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| {
-            a.capability
-                .cmp(&b.capability)
-                .then_with(|| a.event_type.cmp(&b.event_type))
-                .then_with(|| a.outcome.cmp(&b.outcome))
-                .then_with(|| a.proof_mode.cmp(&b.proof_mode))
-        });
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn cycles_funding_page(page: PageRequest) -> Page<CyclesFundingMetricEntry> {
-        let snapshot = MetricsOps::cycles_funding_snapshot();
-        let mut entries = CyclesFundingMetricEntryMapper::record_to_view(snapshot.entries);
-
-        entries.sort_by(|a, b| {
-            a.metric
-                .cmp(&b.metric)
-                .then_with(|| a.child_principal.cmp(&b.child_principal))
-                .then_with(|| a.reason.cmp(&b.reason))
-        });
-
-        paginate_vec(entries, page)
-    }
-
-    #[must_use]
-    pub fn perf_page(page: PageRequest) -> Page<PerfEntry> {
-        let snapshot = PerfOps::snapshot();
-        paginate_vec(snapshot.entries, page)
     }
 }

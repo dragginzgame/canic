@@ -2,15 +2,6 @@ use crate::ops::prelude::*;
 use crate::storage::stable::cycles::CycleTracker;
 
 ///
-/// CycleTrackerSnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct CycleTrackerSnapshot {
-    pub entries: Vec<(u64, Cycles)>,
-}
-
-///
 /// CycleTrackerOps
 /// Stable storage wrapper for the cycle tracker.
 ///
@@ -28,9 +19,7 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn snapshot() -> CycleTrackerSnapshot {
-        let entries = CycleTracker::entries(0, usize::MAX);
-
-        CycleTrackerSnapshot { entries }
+    pub fn entries() -> Vec<(u64, Cycles)> {
+        CycleTracker::entries(0, usize::MAX)
     }
 }

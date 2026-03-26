@@ -405,12 +405,20 @@ pub enum DelegationProofEvictionClassRecord {
     Active,
 }
 
+///
+/// DelegationProofCacheStatsRecord
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegationProofCacheStatsRecord {
     pub size: usize,
     pub active_count: usize,
     pub capacity: usize,
 }
+
+///
+/// DelegationProofUpsertRecord
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegationProofUpsertRecord {
@@ -660,6 +668,10 @@ fn compare_proof_install_order(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    ///
+    /// DelegationStateRestore
+    ///
 
     struct DelegationStateRestore(DelegationStateRecord);
 

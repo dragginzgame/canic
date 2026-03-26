@@ -3,7 +3,6 @@ use crate::{
     storage::stable::env::Env,
 };
 use candid::CandidType;
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 
@@ -12,21 +11,34 @@ use std::cell::Cell;
 ///
 
 #[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, CandidType, Display, Serialize, Deserialize,
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, CandidType, Deserialize, Serialize,
 )]
 pub enum Level {
-    Debug, // least severe
+    Debug,
     Info,
     Ok,
     Warn,
-    Error, // most severe
+    Error,
+}
+
+impl Level {
+    #[must_use]
+    pub const fn ansi_label(self) -> &'static str {
+        match self {
+            Self::Debug => "DEBUG",
+            Self::Info => "\x1b[34mINFO \x1b[0m",
+            Self::Ok => "\x1b[32m OK  \x1b[0m",
+            Self::Warn => "\x1b[33mWARN \x1b[0m",
+            Self::Error => "\x1b[31mERROR\x1b[0m",
+        }
+    }
 }
 
 ///
 /// Topic
 ///
 
-#[derive(Clone, Copy, Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[remain::sorted]
 pub enum Topic {
     App,
@@ -46,6 +58,50 @@ pub enum Topic {
     Wasm,
 }
 
+impl Topic {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::App => "App",
+            Self::Auth => "Auth",
+            Self::CanisterLifecycle => "CanisterLifecycle",
+            Self::CanisterPool => "CanisterPool",
+            Self::Config => "Config",
+            Self::Cycles => "Cycles",
+            Self::Icrc => "Icrc",
+            Self::Init => "Init",
+            Self::Memory => "Memory",
+            Self::Perf => "Perf",
+            Self::Rpc => "Rpc",
+            Self::Sharding => "Sharding",
+            Self::Sync => "Sync",
+            Self::Topology => "Topology",
+            Self::Wasm => "Wasm",
+        }
+    }
+
+    #[must_use]
+    pub const fn log_label(self) -> &'static str {
+        match self {
+            Self::App => "app",
+            Self::Auth => "auth",
+            Self::CanisterLifecycle => "canister_lifecycle",
+            Self::CanisterPool => "canister_pool",
+            Self::Config => "config",
+            Self::Cycles => "cycles",
+            Self::Icrc => "icrc",
+            Self::Init => "init",
+            Self::Memory => "memory",
+            Self::Perf => "perf",
+            Self::Rpc => "rpc",
+            Self::Sharding => "sharding",
+            Self::Sync => "sync",
+            Self::Topology => "topology",
+            Self::Wasm => "wasm",
+        }
+    }
+}
+
 thread_local! {
     static LOG_READY: Cell<bool> = const { Cell::new(false) };
 }
@@ -61,53 +117,32 @@ pub fn is_ready() -> bool {
 
 #[macro_export]
 macro_rules! log {
-    // =========================================
-    // (1) With topic (normal + trailing comma)
-    // =========================================
     ($topic:expr, $level:ident, $fmt:expr $(, $arg:expr)* $(,)?) => {{
-        $crate::log!(@inner Some(&$topic.to_string()), $crate::log::Level::$level, $fmt $(, $arg)*);
+        $crate::log!(@inner Some($topic), $crate::log::Level::$level, $fmt $(, $arg)*);
     }};
 
-    // =========================================
-    // (2) No topic (normal + trailing comma)
-    // =========================================
     ($level:ident, $fmt:expr $(, $arg:expr)* $(,)?) => {{
-        $crate::log!(@inner None::<&str>, $crate::log::Level::$level, $fmt $(, $arg)*);
+        $crate::log!(@inner None::<$crate::log::Topic>, $crate::log::Level::$level, $fmt $(, $arg)*);
     }};
 
-    // =========================================
-    // INTERNAL
-    // =========================================
     (@inner $topic:expr, $level:expr, $fmt:expr $(, $arg:expr)*) => {{
         if $crate::log::is_ready() {
             let level = $level;
-            let topic_opt: Option<&str> = $topic;
+            let topic_opt: Option<$crate::log::Topic> = $topic;
             let message = format!($fmt $(, $arg)*);
 
-            // append entry
             let crate_name = env!("CARGO_PKG_NAME");
             $crate::log::__append_runtime_log(crate_name, topic_opt, level, &message);
 
-            let ty_raw = $crate::log::__canister_role_string().unwrap_or_else(|| "...".to_string());
-
-            let ty_disp = $crate::utils::format::ellipsize_middle(&ty_raw, 9, 4, 4);
-            let ty_centered = format!("{:^9}", ty_disp);
+            let ty_centered = format!("{:^12}", $crate::log::__canister_role_label());
 
             let final_msg = if let Some(t) = topic_opt {
-                format!("[{t}] {message}")
+                format!("[{}] {message}", t.as_str())
             } else {
                 message
             };
 
-            let (color, reset) = match level {
-                $crate::log::Level::Ok    => ("\x1b[32m", "\x1b[0m"),
-                $crate::log::Level::Info  => ("\x1b[34m", "\x1b[0m"),
-                $crate::log::Level::Warn  => ("\x1b[33m", "\x1b[0m"),
-                $crate::log::Level::Error => ("\x1b[31m", "\x1b[0m"),
-                $crate::log::Level::Debug => ("", ""),
-            };
-
-            let label = format!("{color}{:^5}{reset}", level.to_string().to_uppercase());
+            let label = level.ansi_label();
             let line = format!("{label}|{ty_centered}| {final_msg}");
 
             $crate::cdk::println!("{line}");
@@ -120,7 +155,7 @@ macro_rules! log {
 /// (should remain public)
 ///
 
-pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level, message: &str) {
+pub fn __append_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level, message: &str) {
     let created_at = IcOps::now_secs();
 
     if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
@@ -134,6 +169,9 @@ pub fn __append_runtime_log(crate_name: &str, topic: Option<&str>, level: Level,
 
 #[doc(hidden)]
 #[must_use]
-pub fn __canister_role_string() -> Option<String> {
-    Env::get_canister_role().map(|role| role.to_string())
+pub fn __canister_role_label() -> String {
+    Env::get_canister_role().map_or_else(
+        || "...".to_string(),
+        |role| crate::utils::format::truncate(role.as_str(), 12),
+    )
 }

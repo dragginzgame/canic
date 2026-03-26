@@ -6,15 +6,6 @@ thread_local! {
 }
 
 ///
-/// SystemMetricsSnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct SystemMetricsSnapshot {
-    pub entries: Vec<(SystemMetricKind, u64)>,
-}
-
-///
 /// SystemMetrics
 /// Thin facade over the action metrics counters.
 ///
@@ -31,13 +22,11 @@ impl SystemMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> SystemMetricsSnapshot {
-        let entries = SYSTEM_METRICS
+    pub fn snapshot() -> Vec<(SystemMetricKind, u64)> {
+        SYSTEM_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
-            .collect();
-
-        SystemMetricsSnapshot { entries }
+            .collect()
     }
 
     #[cfg(test)]
@@ -55,7 +44,7 @@ mod tests {
     use super::*;
 
     fn snapshot_map() -> HashMap<SystemMetricKind, u64> {
-        SystemMetrics::snapshot().entries.into_iter().collect()
+        SystemMetrics::snapshot().into_iter().collect()
     }
 
     #[test]
@@ -63,7 +52,7 @@ mod tests {
         SystemMetrics::reset();
 
         let snapshot = SystemMetrics::snapshot();
-        assert!(snapshot.entries.is_empty());
+        assert!(snapshot.is_empty());
     }
 
     #[test]
@@ -112,7 +101,7 @@ mod tests {
         SystemMetrics::reset();
 
         let snapshot = SystemMetrics::snapshot();
-        assert!(snapshot.entries.is_empty());
+        assert!(snapshot.is_empty());
     }
 
     #[test]

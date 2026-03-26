@@ -39,6 +39,10 @@ thread_local! {
 /// heartbeat, etc.) so that thread-local caches are in a fully-initialized state
 /// before the canister performs memory-dependent work.
 pub fn init_eager_tls() {
+    ///
+    /// RunningGuard
+    ///
+
     struct RunningGuard;
 
     impl Drop for RunningGuard {

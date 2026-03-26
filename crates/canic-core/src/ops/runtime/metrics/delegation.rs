@@ -6,15 +6,6 @@ thread_local! {
 }
 
 ///
-/// DelegationMetricsSnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct DelegationMetricsSnapshot {
-    pub entries: Vec<(Principal, u64)>,
-}
-
-///
 /// DelegationMetrics
 /// Records verified delegation authorities by signer principal.
 ///
@@ -30,13 +21,11 @@ impl DelegationMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> DelegationMetricsSnapshot {
-        let entries = DELEGATION_METRICS
+    pub fn snapshot() -> Vec<(Principal, u64)> {
+        DELEGATION_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
-            .collect();
-
-        DelegationMetricsSnapshot { entries }
+            .collect()
     }
 
     #[cfg(test)]
@@ -58,7 +47,7 @@ mod tests {
     }
 
     fn snapshot_map() -> HashMap<Principal, u64> {
-        DelegationMetrics::snapshot().entries.into_iter().collect()
+        DelegationMetrics::snapshot().into_iter().collect()
     }
 
     #[test]

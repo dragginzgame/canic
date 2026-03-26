@@ -89,6 +89,44 @@ pub enum BuiltinPredicate {
     },
 }
 
+impl BuiltinPredicate {
+    /// name
+    ///
+    /// Return the stable metrics/logging name for this builtin predicate.
+    fn name(self) -> &'static str {
+        self.evaluator().name()
+    }
+
+    /// metric_kind
+    ///
+    /// Return the metric family used to classify this builtin predicate.
+    fn metric_kind(self) -> AccessMetricKind {
+        self.evaluator().metric_kind()
+    }
+
+    /// required_scope
+    ///
+    /// Return the optional auth scope used by the authenticated predicate variant.
+    const fn required_scope(self) -> Option<&'static str> {
+        match self {
+            Self::Authenticated { required_scope } => required_scope,
+            _ => None,
+        }
+    }
+
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation responsible for this builtin variant.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::App(pred) => pred.evaluator(),
+            Self::Caller(pred) => pred.evaluator(),
+            Self::Environment(pred) => pred.evaluator(),
+            Self::Authenticated { .. } => &AUTHENTICATED_EVALUATOR,
+        }
+    }
+}
+
 ///
 /// AppPredicate
 ///
@@ -97,6 +135,18 @@ pub enum BuiltinPredicate {
 pub enum AppPredicate {
     AllowsUpdates,
     IsQueryable,
+}
+
+impl AppPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for app-mode predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::AllowsUpdates => &APP_ALLOWS_UPDATES_EVALUATOR,
+            Self::IsQueryable => &APP_IS_QUERYABLE_EVALUATOR,
+        }
+    }
 }
 
 ///
@@ -114,6 +164,23 @@ pub enum CallerPredicate {
     IsWhitelisted,
 }
 
+impl CallerPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for caller predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::IsController => &CALLER_IS_CONTROLLER_EVALUATOR,
+            Self::IsParent => &CALLER_IS_PARENT_EVALUATOR,
+            Self::IsChild => &CALLER_IS_CHILD_EVALUATOR,
+            Self::IsRoot => &CALLER_IS_ROOT_EVALUATOR,
+            Self::IsSameCanister => &CALLER_IS_SAME_CANISTER_EVALUATOR,
+            Self::IsRegisteredToSubnet => &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR,
+            Self::IsWhitelisted => &CALLER_IS_WHITELISTED_EVALUATOR,
+        }
+    }
+}
+
 ///
 /// EnvironmentPredicate
 ///
@@ -124,6 +191,20 @@ pub enum EnvironmentPredicate {
     SelfIsPrimeRoot,
     BuildIcOnly,
     BuildLocalOnly,
+}
+
+impl EnvironmentPredicate {
+    /// evaluator
+    ///
+    /// Resolve the evaluator implementation for environment predicates.
+    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
+        match self {
+            Self::SelfIsPrimeSubnet => &SELF_IS_PRIME_SUBNET_EVALUATOR,
+            Self::SelfIsPrimeRoot => &SELF_IS_PRIME_ROOT_EVALUATOR,
+            Self::BuildIcOnly => &BUILD_IC_ONLY_EVALUATOR,
+            Self::BuildLocalOnly => &BUILD_LOCAL_ONLY_EVALUATOR,
+        }
+    }
 }
 
 #[async_trait]
@@ -359,6 +440,10 @@ const fn builtin(pred: BuiltinPredicate) -> AccessExpr {
     AccessExpr::Pred(AccessPredicate::Builtin(pred))
 }
 
+///
+/// AccessFailure
+///
+
 #[derive(Debug)]
 struct AccessFailure {
     error: AccessError,
@@ -407,87 +492,6 @@ impl AccessFailure {
     fn with_context(mut self, context: &'static str) -> Self {
         self.context.get_or_insert(context);
         self
-    }
-}
-
-impl BuiltinPredicate {
-    /// name
-    ///
-    /// Return the stable metrics/logging name for this builtin predicate.
-    fn name(self) -> &'static str {
-        self.evaluator().name()
-    }
-
-    /// metric_kind
-    ///
-    /// Return the metric family used to classify this builtin predicate.
-    fn metric_kind(self) -> AccessMetricKind {
-        self.evaluator().metric_kind()
-    }
-
-    /// required_scope
-    ///
-    /// Return the optional auth scope used by the authenticated predicate variant.
-    const fn required_scope(self) -> Option<&'static str> {
-        match self {
-            Self::Authenticated { required_scope } => required_scope,
-            _ => None,
-        }
-    }
-
-    /// evaluator
-    ///
-    /// Resolve the evaluator implementation responsible for this builtin variant.
-    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
-        match self {
-            Self::App(pred) => pred.evaluator(),
-            Self::Caller(pred) => pred.evaluator(),
-            Self::Environment(pred) => pred.evaluator(),
-            Self::Authenticated { .. } => &AUTHENTICATED_EVALUATOR,
-        }
-    }
-}
-
-impl AppPredicate {
-    /// evaluator
-    ///
-    /// Resolve the evaluator implementation for app-mode predicates.
-    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
-        match self {
-            Self::AllowsUpdates => &APP_ALLOWS_UPDATES_EVALUATOR,
-            Self::IsQueryable => &APP_IS_QUERYABLE_EVALUATOR,
-        }
-    }
-}
-
-impl CallerPredicate {
-    /// evaluator
-    ///
-    /// Resolve the evaluator implementation for caller predicates.
-    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
-        match self {
-            Self::IsController => &CALLER_IS_CONTROLLER_EVALUATOR,
-            Self::IsParent => &CALLER_IS_PARENT_EVALUATOR,
-            Self::IsChild => &CALLER_IS_CHILD_EVALUATOR,
-            Self::IsRoot => &CALLER_IS_ROOT_EVALUATOR,
-            Self::IsSameCanister => &CALLER_IS_SAME_CANISTER_EVALUATOR,
-            Self::IsRegisteredToSubnet => &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR,
-            Self::IsWhitelisted => &CALLER_IS_WHITELISTED_EVALUATOR,
-        }
-    }
-}
-
-impl EnvironmentPredicate {
-    /// evaluator
-    ///
-    /// Resolve the evaluator implementation for environment predicates.
-    fn evaluator(self) -> &'static dyn BuiltinPredicateEvaluator {
-        match self {
-            Self::SelfIsPrimeSubnet => &SELF_IS_PRIME_SUBNET_EVALUATOR,
-            Self::SelfIsPrimeRoot => &SELF_IS_PRIME_ROOT_EVALUATOR,
-            Self::BuildIcOnly => &BUILD_IC_ONLY_EVALUATOR,
-            Self::BuildLocalOnly => &BUILD_LOCAL_ONLY_EVALUATOR,
-        }
     }
 }
 
@@ -915,6 +919,10 @@ mod tests {
         test::seams,
     };
 
+    ///
+    /// EnvRestore
+    ///
+
     struct EnvRestore(EnvRecord);
 
     impl Drop for EnvRestore {
@@ -922,6 +930,10 @@ mod tests {
             Env::import(self.0.clone());
         }
     }
+
+    ///
+    /// AppRestore
+    ///
 
     struct AppRestore(AppStateRecord);
 

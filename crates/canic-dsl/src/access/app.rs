@@ -1,5 +1,13 @@
+///
+/// AllowsUpdates
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct AllowsUpdates;
+
+///
+/// IsQueryable
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct IsQueryable;

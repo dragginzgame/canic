@@ -83,6 +83,10 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use std::borrow::Cow;
 
+    ///
+    /// Sample
+    ///
+
     #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
     struct Sample {
         v: u32,

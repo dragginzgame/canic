@@ -67,17 +67,17 @@ pub trait Rpc {
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError>;
 }
 
-///
-/// RpcOps
-///
-
-pub struct RpcOps;
-
 const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_SECONDS: u64 = 300;
 const DEFAULT_CAPABILITY_METADATA_TTL_SECONDS: u32 = 300;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 static ROOT_ATTESTATION_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
+
+///
+/// RpcOps
+///
+
+pub struct RpcOps;
 
 impl RpcOps {
     ///
@@ -196,6 +196,10 @@ fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetad
         ttl_seconds,
     }
 }
+
+///
+/// CapabilitySourceMetadata
+///
 
 #[derive(Clone, Copy)]
 struct CapabilitySourceMetadata {

@@ -17,8 +17,7 @@ use crate::{
         runtime::metrics::{
             cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
             root_capability::{
-                RootCapabilityAuthorizationOutcome, RootCapabilityExecutionOutcome,
-                RootCapabilityMetricKey, RootCapabilityMetrics, RootCapabilityReplayOutcome,
+                RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
             },
         },
         storage::registry::subnet::SubnetRegistryOps,
@@ -33,11 +32,6 @@ use sha2::{Digest, Sha256};
 ///
 
 pub struct NonrootCyclesCapabilityWorkflow;
-
-enum ReplayPreflight {
-    Fresh(ReplayPending),
-    Cached(CyclesResponse),
-}
 
 impl NonrootCyclesCapabilityWorkflow {
     /// Execute the non-root cycles capability path with replay-first semantics.
@@ -62,7 +56,7 @@ impl NonrootCyclesCapabilityWorkflow {
                 abort_replay(pending);
                 RootCapabilityMetrics::record_execution(
                     RootCapabilityMetricKey::RequestCycles,
-                    RootCapabilityExecutionOutcome::Error,
+                    RootCapabilityMetricOutcome::Error,
                 );
                 return Err(err);
             }
@@ -81,11 +75,16 @@ impl NonrootCyclesCapabilityWorkflow {
 
         RootCapabilityMetrics::record_execution(
             RootCapabilityMetricKey::RequestCycles,
-            RootCapabilityExecutionOutcome::Success,
+            RootCapabilityMetricOutcome::Success,
         );
 
         Ok(response)
     }
+}
+
+enum ReplayPreflight {
+    Fresh(ReplayPending),
+    Cached(CyclesResponse),
 }
 
 // Build the current root-like execution context for non-root cycles requests.
@@ -110,7 +109,7 @@ pub(super) fn authorize_request_cycles(
         Ok(()) => {
             RootCapabilityMetrics::record_authorization(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityAuthorizationOutcome::Accepted,
+                RootCapabilityMetricOutcome::Accepted,
             );
             log!(
                 Topic::Rpc,
@@ -124,7 +123,7 @@ pub(super) fn authorize_request_cycles(
         Err(err) => {
             RootCapabilityMetrics::record_authorization(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityAuthorizationOutcome::Denied,
+                RootCapabilityMetricOutcome::Denied,
             );
             log!(
                 Topic::Rpc,
@@ -314,35 +313,35 @@ fn check_cycles_replay(
                 .map_err(map_replay_reserve_error)?;
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::Accepted,
+                RootCapabilityMetricOutcome::Accepted,
             );
             Ok(ReplayPreflight::Fresh(pending))
         }
         ReplayDecision::DuplicateSame(cached) => {
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::DuplicateSame,
+                RootCapabilityMetricOutcome::DuplicateSame,
             );
             decode_cycles_response(&cached.response_candid).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::DuplicateSame,
+                RootCapabilityMetricOutcome::DuplicateSame,
             );
             Err(RpcWorkflowError::ReplayDuplicateSame("RequestCycles").into())
         }
         ReplayDecision::DuplicateConflict => {
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::DuplicateConflict,
+                RootCapabilityMetricOutcome::DuplicateConflict,
             );
             Err(RpcWorkflowError::ReplayConflict("RequestCycles").into())
         }
         ReplayDecision::Expired => {
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::Expired,
+                RootCapabilityMetricOutcome::Expired,
             );
             Err(RpcWorkflowError::ReplayExpired("RequestCycles").into())
         }
@@ -358,7 +357,7 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
         } => {
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityReplayOutcome::TtlExceeded,
+                RootCapabilityMetricOutcome::TtlExceeded,
             );
             RpcWorkflowError::InvalidReplayTtl {
                 ttl_seconds,

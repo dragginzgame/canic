@@ -4,6 +4,8 @@ mod constant;
 mod snake;
 mod title;
 
+pub use snake::to_snake_case;
+
 ///
 /// case
 ///

@@ -34,6 +34,7 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
   - High-level summary sections
   - Links to detailed notes
 - Root minor-line summary entries must use exactly one concise bullet per patch version.
+- Within each minor-line section, patch entries must be ordered newest first (`x.y.9` before `x.y.8` before `x.y.7`).
 
 ## 2.2 Detailed Minor Notes
 
@@ -50,6 +51,8 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
 
 All patch releases in the same minor line share one detailed notes file.
 Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](docs/changelog/0.33.md).
+
+Within a detailed minor notes file, patch sections must also be ordered newest first.
 
 The root changelog must link to the detailed file when present.
 
@@ -88,6 +91,7 @@ Rules:
 13. For a root minor-line entry (`<major>.<minor>.x`), use exactly one bullet per patch version listed in that minor line.
 14. Each root minor-line patch bullet must be a high-level summary sentence, not an exhaustive implementation list.
 15. If a patch bullet starts becoming a multi-clause internal inventory, shorten it and move detail to `docs/changelog/<major>.<minor>.md`.
+16. Root minor-line patch bullets must be listed in descending patch order, with the newest patch first.
 
 ## 3.1 Section Header Emoji Mapping
 
@@ -141,6 +145,7 @@ When preparing a release:
 8. Use the version specified by the release request or the existing latest changelog entry.
 9. Do not create a new version header if the newest entry already exists for the target version.
 10. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
+11. When appending to an existing minor line, insert the new patch bullet/section in newest-first order instead of adding it to the end.
 
 Agents must never:
 

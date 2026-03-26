@@ -1,6 +1,6 @@
 use crate::access::AccessError;
 use crate::dto::error::Error as PublicError;
-use derive_more::Display;
+use std::fmt;
 use thiserror::Error as ThisError;
 
 ///
@@ -102,7 +102,7 @@ impl From<AccessError> for InternalError {
 /// InternalErrorClass
 ///
 
-#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum InternalErrorClass {
     Access,
     Domain,
@@ -116,7 +116,7 @@ pub(crate) enum InternalErrorClass {
 /// InternalErrorOrigin
 ///
 
-#[derive(Clone, Copy, Debug, Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum InternalErrorOrigin {
     Access,
     Config,
@@ -125,4 +125,35 @@ pub(crate) enum InternalErrorOrigin {
     Ops,
     Storage,
     Workflow,
+}
+
+impl fmt::Display for InternalErrorClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Access => "Access",
+            Self::Domain => "Domain",
+            Self::Infra => "Infra",
+            Self::Ops => "Ops",
+            Self::Workflow => "Workflow",
+            Self::Invariant => "Invariant",
+        };
+
+        f.write_str(label)
+    }
+}
+
+impl fmt::Display for InternalErrorOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Access => "Access",
+            Self::Config => "Config",
+            Self::Domain => "Domain",
+            Self::Infra => "Infra",
+            Self::Ops => "Ops",
+            Self::Storage => "Storage",
+            Self::Workflow => "Workflow",
+        };
+
+        f.write_str(label)
+    }
 }

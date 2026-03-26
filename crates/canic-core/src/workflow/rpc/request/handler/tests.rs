@@ -37,6 +37,10 @@ fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
     }
 }
 
+///
+/// EnvRestore
+///
+
 struct EnvRestore(EnvRecord);
 
 impl Drop for EnvRestore {
@@ -63,7 +67,6 @@ fn cycles_funding_snapshot_map() -> HashMap<
     u128,
 > {
     CyclesFundingMetrics::snapshot()
-        .entries
         .into_iter()
         .map(|(metric, child, reason, cycles)| ((metric, child, reason), cycles))
         .collect()

@@ -16,29 +16,6 @@ use crate::{
 use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
 
 ///
-/// DelegationStateOps
-///
-/// WHY THIS FILE EXISTS
-/// --------------------
-/// This module defines the **only authorized access path** to persisted
-/// delegation state stored in stable memory.
-///
-/// It intentionally sits between:
-///   - access / auth logic
-///   - stable storage implementation details
-///
-/// Responsibilities:
-/// - Provide a narrow, explicit API for delegation state access
-/// - Prevent access-layer code from depending on storage internals
-/// - Serve as the choke point for future changes (migration, versioning)
-///
-/// This is a **security-sensitive boundary**:
-/// delegation state determines which signer authorities are trusted.
-///
-
-pub struct DelegationStateOps;
-
-///
 /// DelegatedSession
 ///
 
@@ -88,11 +65,19 @@ struct StoredDelegationProof {
     cert_sig: Vec<u8>,
 }
 
+///
+/// DelegationProofEvictionClass
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DelegationProofEvictionClass {
     Cold,
     Active,
 }
+
+///
+/// DelegationProofCacheStats
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegationProofCacheStats {
@@ -103,11 +88,38 @@ pub struct DelegationProofCacheStats {
     pub active_window_secs: u64,
 }
 
+///
+/// DelegationProofUpsertOutcome
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegationProofUpsertOutcome {
     pub stats: DelegationProofCacheStats,
     pub evicted: Option<DelegationProofEvictionClass>,
 }
+
+///
+/// DelegationStateOps
+///
+/// WHY THIS FILE EXISTS
+/// --------------------
+/// This module defines the **only authorized access path** to persisted
+/// delegation state stored in stable memory.
+///
+/// It intentionally sits between:
+///   - access / auth logic
+///   - stable storage implementation details
+///
+/// Responsibilities:
+/// - Provide a narrow, explicit API for delegation state access
+/// - Prevent access-layer code from depending on storage internals
+/// - Serve as the choke point for future changes (migration, versioning)
+///
+/// This is a **security-sensitive boundary**:
+/// delegation state determines which signer authorities are trusted.
+///
+
+pub struct DelegationStateOps;
 
 impl DelegationStateOps {
     /// Resolve the most recently installed keyed delegation proof for signer issuance.

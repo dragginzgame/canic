@@ -1,11 +1,27 @@
+///
+/// IsPrimeSubnet
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct IsPrimeSubnet;
+
+///
+/// IsPrimeRoot
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct IsPrimeRoot;
 
+///
+/// BuildIcOnly
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct BuildIcOnly;
+
+///
+/// BuildLocalOnly
+///
 
 #[derive(Clone, Copy, Debug)]
 pub struct BuildLocalOnly;
