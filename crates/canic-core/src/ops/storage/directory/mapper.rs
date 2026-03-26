@@ -1,6 +1,11 @@
 use crate::{
     cdk::types::Principal,
-    dto::topology::{AppDirectoryArgs, DirectoryEntryInput, SubnetDirectoryArgs},
+    dto::{
+        page::Page,
+        topology::{
+            AppDirectoryArgs, DirectoryEntryInput, DirectoryEntryResponse, SubnetDirectoryArgs,
+        },
+    },
     ids::CanisterRole,
     storage::stable::directory::{app::AppDirectoryRecord, subnet::SubnetDirectoryRecord},
 };
@@ -12,6 +17,16 @@ fn record_entries_to_dto(entries: Vec<(CanisterRole, Principal)>) -> Vec<Directo
     entries
         .into_iter()
         .map(|(role, pid)| DirectoryEntryInput { role, pid })
+        .collect()
+}
+
+// Map stored directory tuples into the public response entry shape.
+fn record_entries_to_response(
+    entries: Vec<(CanisterRole, Principal)>,
+) -> Vec<DirectoryEntryResponse> {
+    entries
+        .into_iter()
+        .map(|(role, pid)| DirectoryEntryResponse { role, pid })
         .collect()
 }
 
@@ -61,6 +76,24 @@ impl SubnetDirectoryRecordMapper {
         // TODO: mapping from DTO to storage record must remain in ops.
         SubnetDirectoryRecord {
             entries: dto_entries_to_record(view.0),
+        }
+    }
+}
+
+///
+/// DirectoryResponseMapper
+///
+
+pub struct DirectoryResponseMapper;
+
+impl DirectoryResponseMapper {
+    #[must_use]
+    pub fn record_page_to_response(
+        page: Page<(CanisterRole, Principal)>,
+    ) -> Page<DirectoryEntryResponse> {
+        Page {
+            entries: record_entries_to_response(page.entries),
+            total: page.total,
         }
     }
 }

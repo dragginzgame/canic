@@ -1,6 +1,9 @@
 use crate::{
     InternalError,
-    dto::log::LogEntry,
+    dto::{
+        log::LogEntry,
+        page::{Page, PageRequest},
+    },
     log::{Level, Topic},
     ops::{config::ConfigOps, runtime::RuntimeOpsError},
     storage::{
@@ -102,20 +105,30 @@ impl LogOps {
     /// This avoids allocating topic strings and DTO rows for entries that the
     /// query layer will immediately discard.
     #[must_use]
-    pub fn snapshot_filtered(
+    pub fn page_filtered(
         crate_name: Option<&str>,
         topic: Option<&str>,
         min_level: Option<Level>,
-    ) -> Vec<LogEntry> {
-        Log::snapshot()
-            .into_iter()
-            .filter(|entry| {
-                crate_name.is_none_or(|name| entry.crate_name == name)
-                    && topic.is_none_or(|needle| topic_matches(entry.topic, needle))
-                    && min_level.is_none_or(|min| entry.level >= min)
-            })
-            .map(record_to_entry)
-            .collect()
+        page: PageRequest,
+    ) -> Page<LogEntry> {
+        let mut entries = Vec::new();
+        let mut total = 0u64;
+        let offset = page.offset;
+        let limit = page.limit.min(1_000);
+
+        for entry in Log::snapshot().into_iter().rev() {
+            if !record_matches(&entry, crate_name, topic, min_level) {
+                continue;
+            }
+
+            if total >= offset && (entries.len() as u64) < limit {
+                entries.push(record_to_entry(entry));
+            }
+
+            total = total.saturating_add(1);
+        }
+
+        Page { entries, total }
     }
 }
 
@@ -128,6 +141,18 @@ fn record_to_entry(entry: LogEntryRecord) -> LogEntry {
         topic: entry.topic.map(|topic| topic.log_label().to_string()),
         message: entry.message,
     }
+}
+
+// Apply the public log filters to a stored log record.
+fn record_matches(
+    entry: &LogEntryRecord,
+    crate_name: Option<&str>,
+    topic: Option<&str>,
+    min_level: Option<Level>,
+) -> bool {
+    crate_name.is_none_or(|name| entry.crate_name == name)
+        && topic.is_none_or(|needle| topic_matches(entry.topic, needle))
+        && min_level.is_none_or(|min| entry.level >= min)
 }
 
 // Compare an optional stored topic against the query filter label.

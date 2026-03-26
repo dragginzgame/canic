@@ -1,4 +1,4 @@
-use crate::{ids::AccessMetricKind, ops::prelude::*};
+use crate::ids::AccessMetricKind;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -9,7 +9,7 @@ thread_local! {
 /// AccessMetricsSnapshot
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AccessMetricsSnapshot {
     pub entries: Vec<(AccessMetricKey, u64)>,
 }
@@ -19,7 +19,7 @@ pub struct AccessMetricsSnapshot {
 /// Uniquely identifies a rejected access attempt by endpoint + kind + predicate.
 ///
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct AccessMetricKey {
     pub endpoint: String,
     pub kind: AccessMetricKind,

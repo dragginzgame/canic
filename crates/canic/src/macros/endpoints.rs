@@ -154,9 +154,12 @@ macro_rules! canic_endpoints_metrics {
     () => {
         #[canic_query]
         fn canic_metrics(
-            req: ::canic::dto::metrics::MetricsRequest,
-        ) -> Result<::canic::dto::metrics::MetricsResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::metrics::MetricsQuery::dispatch(req))
+            kind: ::canic::dto::metrics::MetricsKind,
+            page: ::canic::dto::page::PageRequest,
+        ) -> Result<::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>, ::canic::Error> {
+            Ok($crate::__internal::core::api::metrics::MetricsQuery::page(
+                kind, page,
+            ))
         }
     };
 }

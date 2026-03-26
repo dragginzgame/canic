@@ -14,7 +14,7 @@ thread_local! {
 /// TimerMetricsSnapshot
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TimerMetricsSnapshot {
     pub entries: Vec<(TimerMetricKey, u64)>,
 }
@@ -23,7 +23,7 @@ pub struct TimerMetricsSnapshot {
 /// TimerMode
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TimerMode {
     Interval,
     Once,
@@ -33,7 +33,7 @@ pub enum TimerMode {
 /// TimerMetricKey
 ///
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
     pub delay_ms: u64,

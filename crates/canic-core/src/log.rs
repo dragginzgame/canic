@@ -130,22 +130,7 @@ macro_rules! log {
             let level = $level;
             let topic_opt: Option<$crate::log::Topic> = $topic;
             let message = format!($fmt $(, $arg)*);
-
-            let crate_name = env!("CARGO_PKG_NAME");
-            $crate::log::__append_runtime_log(crate_name, topic_opt, level, &message);
-
-            let ty_centered = format!("{:^12}", $crate::log::__canister_role_label());
-
-            let final_msg = if let Some(t) = topic_opt {
-                format!("[{}] {message}", t.as_str())
-            } else {
-                message
-            };
-
-            let label = level.ansi_label();
-            let line = format!("{label}|{ty_centered}| {final_msg}");
-
-            $crate::cdk::println!("{line}");
+            $crate::log::__emit_runtime_log(env!("CARGO_PKG_NAME"), topic_opt, level, &message);
         }
     }};
 }
@@ -165,6 +150,29 @@ pub fn __append_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level
         #[cfg(not(debug_assertions))]
         let _ = err;
     }
+}
+
+#[doc(hidden)]
+pub fn __emit_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level, message: &str) {
+    __append_runtime_log(crate_name, topic, level, message);
+
+    let line = __render_runtime_log_line(topic, level, message);
+    crate::cdk::println!("{line}");
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn __render_runtime_log_line(topic: Option<Topic>, level: Level, message: &str) -> String {
+    let role = __canister_role_label();
+    let topic_prefix = topic.map_or_else(String::new, |topic| format!("[{}] ", topic.as_str()));
+
+    format!(
+        "{}|{:^12}| {}{}",
+        level.ansi_label(),
+        role,
+        topic_prefix,
+        message
+    )
 }
 
 #[doc(hidden)]

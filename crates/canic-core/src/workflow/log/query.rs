@@ -5,7 +5,6 @@ use crate::{
     },
     log::Level,
     ops::runtime::log::LogOps,
-    workflow::view::paginate::paginate_vec,
 };
 
 ///
@@ -23,12 +22,6 @@ impl LogQuery {
         min_level: Option<Level>,
         page: PageRequest,
     ) -> Page<LogEntry> {
-        let mut entries =
-            LogOps::snapshot_filtered(crate_name.as_deref(), topic.as_deref(), min_level);
-
-        // Newest first
-        entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-
-        paginate_vec(entries, page)
+        LogOps::page_filtered(crate_name.as_deref(), topic.as_deref(), min_level, page)
     }
 }

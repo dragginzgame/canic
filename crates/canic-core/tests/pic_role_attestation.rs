@@ -15,8 +15,8 @@ use canic_core::dto::{
         RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
-    metrics::{MetricsKind, MetricsRequest, MetricsResponse},
-    page::PageRequest,
+    metrics::{MetricEntry, MetricValue, MetricsKind},
+    page::{Page, PageRequest},
     rpc::{CreateCanisterParent, CreateCanisterRequest},
     rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
@@ -2386,29 +2386,31 @@ fn access_metric_count(
     endpoint: &str,
     predicate: &str,
 ) -> u64 {
-    let response: Result<MetricsResponse, Error> = query_call_as(
+    let response: Result<Page<MetricEntry>, Error> = query_call_as(
         pic,
         canister_id,
         Principal::anonymous(),
         "canic_metrics",
-        (MetricsRequest {
-            kind: MetricsKind::Access,
-            page: PageRequest {
+        (
+            MetricsKind::Access,
+            PageRequest {
                 limit: 10_000,
                 offset: 0,
             },
-        },),
+        ),
     );
     let response = response.expect("query canic_metrics failed");
     response
-        .entries
         .entries
         .into_iter()
         .find_map(|entry| {
             if entry.labels.first().is_some_and(|label| label == endpoint)
                 && entry.labels.get(2).is_some_and(|label| label == predicate)
             {
-                Some(entry.count.unwrap_or(0))
+                Some(match entry.value {
+                    MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
+                    MetricValue::U128(_) => 0,
+                })
             } else {
                 None
             }

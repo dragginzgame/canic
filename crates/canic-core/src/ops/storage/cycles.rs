@@ -1,5 +1,8 @@
-use crate::ops::prelude::*;
 use crate::storage::stable::cycles::CycleTracker;
+use crate::{
+    dto::{cycles::CycleTrackerEntry, page::Page},
+    ops::prelude::*,
+};
 
 ///
 /// CycleTrackerOps
@@ -21,5 +24,20 @@ impl CycleTrackerOps {
     #[must_use]
     pub fn entries() -> Vec<(u64, Cycles)> {
         CycleTracker::entries(0, usize::MAX)
+    }
+
+    #[must_use]
+    pub fn page_to_response(page: Page<(u64, Cycles)>) -> Page<CycleTrackerEntry> {
+        Page {
+            entries: page
+                .entries
+                .into_iter()
+                .map(|(timestamp_secs, cycles)| CycleTrackerEntry {
+                    timestamp_secs,
+                    cycles,
+                })
+                .collect(),
+            total: page.total,
+        }
     }
 }

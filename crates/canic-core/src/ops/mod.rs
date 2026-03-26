@@ -46,7 +46,6 @@ pub mod prelude {
         log,
         log::Topic,
     };
-    pub use serde::{Deserialize, Serialize};
 }
 
 use crate::{InternalError, InternalErrorOrigin};

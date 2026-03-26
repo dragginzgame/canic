@@ -4,7 +4,7 @@ use crate::{dto::prelude::*, log::Level};
 /// LogEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct LogEntry {
     pub crate_name: String,
     pub created_at: u64,

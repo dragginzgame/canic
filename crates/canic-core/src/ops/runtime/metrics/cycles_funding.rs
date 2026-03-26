@@ -10,7 +10,7 @@ thread_local! {
 /// CyclesFundingMetricKey
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum CyclesFundingMetricKey {
     RequestedTotal,
     GrantedTotal,
@@ -40,7 +40,7 @@ impl CyclesFundingMetricKey {
 /// CyclesFundingDeniedReason
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum CyclesFundingDeniedReason {
     ChildNotFound,
     NotDirectChild,
@@ -70,7 +70,7 @@ impl CyclesFundingDeniedReason {
 /// CyclesFundingMetricStorageKey
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct CyclesFundingMetricStorageKey {
     metric: CyclesFundingMetricKey,
     child_principal: Option<Principal>,

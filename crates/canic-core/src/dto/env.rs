@@ -23,7 +23,7 @@ pub struct EnvBootstrapArgs {
 /// EnvSnapshotResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct EnvSnapshotResponse {
     // app
     pub prime_root_pid: Option<Principal>,

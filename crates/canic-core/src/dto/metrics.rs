@@ -1,7 +1,4 @@
-use crate::dto::{
-    page::{Page, PageRequest},
-    prelude::*,
-};
+use crate::dto::prelude::*;
 
 ///
 /// Metrics DTOs
@@ -29,12 +26,13 @@ use crate::dto::{
 /// Treat changes as **breaking API changes**.
 ///
 
+///
 /// MetricsKind
 ///
 /// Metric family selector for the unified metrics query endpoint.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Deserialize)]
 pub enum MetricsKind {
     System,
     Icc,
@@ -48,39 +46,14 @@ pub enum MetricsKind {
 }
 
 ///
-/// MetricsRequest
-///
-/// Unified metrics query request envelope.
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub struct MetricsRequest {
-    pub kind: MetricsKind,
-    pub page: PageRequest,
-}
-
-///
-/// MetricsResponse
-///
-/// Unified metrics query response envelope.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MetricsResponse {
-    pub entries: Page<MetricEntry>,
-}
-
-///
 /// MetricEntry
 ///
 /// Unified metrics row for all query families.
 ///
-/// The requested `MetricsKind` defines the meaning of the populated fields.
-/// Empty fields are intentionally omitted as `None` to keep one stable
-/// transport shape instead of many per-family DTO variants.
+/// The requested `MetricsKind` defines the meaning of `value`.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Deserialize)]
 pub struct MetricEntry {
     /// Ordered, low-cardinality labels for the requested metric family.
     pub labels: Vec<String>,
@@ -88,12 +61,17 @@ pub struct MetricEntry {
     /// Optional principal dimension.
     pub principal: Option<Principal>,
 
-    /// Optional count or event total.
-    pub count: Option<u64>,
+    /// Metric payload for the requested family.
+    pub value: MetricValue,
+}
 
-    /// Optional u64 value such as delay or total instructions.
-    pub value_u64: Option<u64>,
+///
+/// MetricValue
+///
 
-    /// Optional u128 value such as cycles totals.
-    pub value_u128: Option<u128>,
+#[derive(CandidType, Deserialize)]
+pub enum MetricValue {
+    Count(u64),
+    CountAndU64 { count: u64, value_u64: u64 },
+    U128(u128),
 }

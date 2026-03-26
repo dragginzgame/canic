@@ -16,7 +16,7 @@ thread_local! {
 /// IccMetricsSnapshot
 ///
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct IccMetricsSnapshot {
     pub entries: Vec<(IccMetricKey, u64)>,
 }
@@ -25,7 +25,7 @@ pub struct IccMetricsSnapshot {
 /// IccMetricKey
 ///
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct IccMetricKey {
     pub target: Principal,
     pub method: String,
