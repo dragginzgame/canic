@@ -9,6 +9,10 @@ use crate::{
 use candid::encode_one;
 use sha2::{Digest, Sha256};
 
+///
+/// TokenSigningPayload
+///
+
 #[derive(CandidType)]
 struct TokenSigningPayload {
     cert_hash: Vec<u8>,

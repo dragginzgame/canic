@@ -14,12 +14,6 @@ pub struct Error {
     pub message: String,
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{:?}] {}", self.code, self.message)
-    }
-}
-
 impl Error {
     #[must_use]
     pub const fn new(code: ErrorCode, message: String) -> Self {
@@ -74,6 +68,12 @@ impl Error {
     /// 503 – Service is temporarily unavailable due to runtime controls.
     pub fn unavailable(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unavailable, message.into())
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{:?}] {}", self.code, self.message)
     }
 }
 

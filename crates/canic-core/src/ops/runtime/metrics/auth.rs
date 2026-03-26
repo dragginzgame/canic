@@ -93,62 +93,6 @@ pub enum DelegationProvisionRole {
     Verifier,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum DelegationInstallNormalizationRejectReason {
-    SignerTarget,
-    RootTarget,
-    UnregisteredTarget,
-    TargetNotInAudience,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum DelegationInstallValidationFailureReason {
-    CacheKeys,
-    VerifyProof,
-    RepairMissingLocal,
-    RepairLocalMismatch,
-    TargetNotInAudience,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum VerifierProofCacheEvictionClass {
-    Cold,
-    Active,
-}
-
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthMetricPredicate {
-    DelegationPushFailed {
-        role: DelegationProvisionRole,
-        intent: DelegationProofInstallIntent,
-    },
-    DelegationInstallNormalizationRejected {
-        intent: DelegationProofInstallIntent,
-        reason: DelegationInstallNormalizationRejectReason,
-    },
-    DelegationInstallValidationFailed {
-        intent: DelegationProofInstallIntent,
-        reason: DelegationInstallValidationFailureReason,
-    },
-    ProofMiss,
-    ProofMismatch,
-    ProofCacheEviction {
-        class: VerifierProofCacheEvictionClass,
-    },
-    ProofCacheUtilization {
-        bucket: AuthProofCacheUtilizationBucket,
-    },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthProofCacheUtilizationBucket {
-    ZeroToFortyNine,
-    FiftyToEightyFour,
-    EightyFiveToNinetyFour,
-    NinetyFiveToOneHundred,
-}
-
 impl DelegationProvisionRole {
     const fn attempt_predicate(self, intent: DelegationProofInstallIntent) -> &'static str {
         match (self, intent) {
@@ -220,6 +164,108 @@ impl DelegationProvisionRole {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum DelegationInstallNormalizationRejectReason {
+    SignerTarget,
+    RootTarget,
+    UnregisteredTarget,
+    TargetNotInAudience,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum DelegationInstallValidationFailureReason {
+    CacheKeys,
+    VerifyProof,
+    RepairMissingLocal,
+    RepairLocalMismatch,
+    TargetNotInAudience,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum VerifierProofCacheEvictionClass {
+    Cold,
+    Active,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthMetricPredicate {
+    DelegationPushFailed {
+        role: DelegationProvisionRole,
+        intent: DelegationProofInstallIntent,
+    },
+    DelegationInstallNormalizationRejected {
+        intent: DelegationProofInstallIntent,
+        reason: DelegationInstallNormalizationRejectReason,
+    },
+    DelegationInstallValidationFailed {
+        intent: DelegationProofInstallIntent,
+        reason: DelegationInstallValidationFailureReason,
+    },
+    ProofMiss,
+    ProofMismatch,
+    ProofCacheEviction {
+        class: VerifierProofCacheEvictionClass,
+    },
+    ProofCacheUtilization {
+        bucket: AuthProofCacheUtilizationBucket,
+    },
+}
+
+impl AuthMetricPredicate {
+    #[must_use]
+    pub fn as_str(self) -> Cow<'static, str> {
+        match self {
+            Self::DelegationPushFailed { role, intent } => {
+                Cow::Borrowed(role.failed_predicate(intent))
+            }
+            Self::DelegationInstallNormalizationRejected { intent, reason } => Cow::Owned(format!(
+                "delegation_install_normalization_rejected{{intent=\"{}\",reason=\"{}\"}}",
+                install_intent_label(intent),
+                normalization_reject_reason_label(reason)
+            )),
+            Self::DelegationInstallValidationFailed { intent, reason } => Cow::Owned(format!(
+                "delegation_install_validation_failed{{intent=\"{}\",stage=\"post_normalization\",reason=\"{}\"}}",
+                install_intent_label(intent),
+                validation_failure_reason_label(reason)
+            )),
+            Self::ProofMiss => Cow::Borrowed(PRED_PROOF_MISS),
+            Self::ProofMismatch => Cow::Borrowed(PRED_PROOF_MISMATCH),
+            Self::ProofCacheEviction { class } => {
+                Cow::Borrowed(proof_cache_eviction_predicate(class))
+            }
+            Self::ProofCacheUtilization { bucket } => Cow::Owned(format!(
+                "proof_cache_utilization{{bucket=\"{}\"}}",
+                proof_cache_utilization_bucket_label(bucket)
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthProofCacheUtilizationBucket {
+    ZeroToFortyNine,
+    FiftyToEightyFour,
+    EightyFiveToNinetyFour,
+    NinetyFiveToOneHundred,
+}
+
+impl AuthProofCacheUtilizationBucket {
+    const fn from_size_and_capacity(size: usize, capacity: usize) -> Self {
+        if capacity == 0 {
+            return Self::ZeroToFortyNine;
+        }
+
+        let percent = size.saturating_mul(100) / capacity;
+        match percent {
+            0..=49 => Self::ZeroToFortyNine,
+            50..=84 => Self::FiftyToEightyFour,
+            85..=94 => Self::EightyFiveToNinetyFour,
+            _ => Self::NinetyFiveToOneHundred,
+        }
+    }
+}
+
 const fn complete_predicate(intent: DelegationProofInstallIntent) -> &'static str {
     match intent {
         DelegationProofInstallIntent::Provisioning => PRED_DELEGATION_PROVISION_COMPLETE,
@@ -284,52 +330,6 @@ const fn proof_cache_eviction_predicate(class: VerifierProofCacheEvictionClass) 
     match class {
         VerifierProofCacheEvictionClass::Cold => PRED_PROOF_CACHE_COLD_EVICTION,
         VerifierProofCacheEvictionClass::Active => PRED_PROOF_CACHE_ACTIVE_EVICTION,
-    }
-}
-
-impl AuthProofCacheUtilizationBucket {
-    const fn from_size_and_capacity(size: usize, capacity: usize) -> Self {
-        if capacity == 0 {
-            return Self::ZeroToFortyNine;
-        }
-
-        let percent = size.saturating_mul(100) / capacity;
-        match percent {
-            0..=49 => Self::ZeroToFortyNine,
-            50..=84 => Self::FiftyToEightyFour,
-            85..=94 => Self::EightyFiveToNinetyFour,
-            _ => Self::NinetyFiveToOneHundred,
-        }
-    }
-}
-
-impl AuthMetricPredicate {
-    #[must_use]
-    pub fn as_str(self) -> Cow<'static, str> {
-        match self {
-            Self::DelegationPushFailed { role, intent } => {
-                Cow::Borrowed(role.failed_predicate(intent))
-            }
-            Self::DelegationInstallNormalizationRejected { intent, reason } => Cow::Owned(format!(
-                "delegation_install_normalization_rejected{{intent=\"{}\",reason=\"{}\"}}",
-                install_intent_label(intent),
-                normalization_reject_reason_label(reason)
-            )),
-            Self::DelegationInstallValidationFailed { intent, reason } => Cow::Owned(format!(
-                "delegation_install_validation_failed{{intent=\"{}\",stage=\"post_normalization\",reason=\"{}\"}}",
-                install_intent_label(intent),
-                validation_failure_reason_label(reason)
-            )),
-            Self::ProofMiss => Cow::Borrowed(PRED_PROOF_MISS),
-            Self::ProofMismatch => Cow::Borrowed(PRED_PROOF_MISMATCH),
-            Self::ProofCacheEviction { class } => {
-                Cow::Borrowed(proof_cache_eviction_predicate(class))
-            }
-            Self::ProofCacheUtilization { bucket } => Cow::Owned(format!(
-                "proof_cache_utilization{{bucket=\"{}\"}}",
-                proof_cache_utilization_bucket_label(bucket)
-            )),
-        }
     }
 }
 

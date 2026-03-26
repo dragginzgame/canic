@@ -26,6 +26,10 @@ use crate::{
     workflow::auth::DelegationWorkflow,
 };
 
+///
+/// PreparedDelegationVerifierPush
+///
+
 struct PreparedDelegationVerifierPush {
     proof: DelegationProof,
     verifier_targets: Vec<Principal>,

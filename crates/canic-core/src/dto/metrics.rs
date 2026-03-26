@@ -1,10 +1,6 @@
-use crate::{
-    dto::{
-        page::{Page, PageRequest},
-        prelude::*,
-    },
-    ids::AccessMetricKind,
-    perf::PerfEntry,
+use crate::dto::{
+    page::{Page, PageRequest},
+    prelude::*,
 };
 
 ///
@@ -32,36 +28,6 @@ use crate::{
 ///
 /// Treat changes as **breaking API changes**.
 ///
-
-///
-/// AccessMetricEntry
-///
-/// Snapshot entry pairing an endpoint with an access denial kind.
-///
-/// Access metrics are emitted only on denial and represent the kind and
-/// predicate where access failed.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct AccessMetricEntry {
-    /// Normalized endpoint name.
-    ///
-    /// This value originates from the access-layer metrics façade
-    /// and must not include dynamic or user-derived data.
-    pub endpoint: String,
-
-    /// Access denial kind (guard, auth, env, rule, custom).
-    pub kind: AccessMetricKind,
-
-    /// Predicate name that denied access.
-    ///
-    /// This is either a built-in predicate name (e.g. "caller_is_root")
-    /// or a custom predicate name returned by user-defined access checks.
-    pub predicate: String,
-
-    /// Total count for this (endpoint, kind, predicate) tuple.
-    pub count: u64,
-}
 
 /// MetricsKind
 ///
@@ -100,160 +66,34 @@ pub struct MetricsRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum MetricsResponse {
-    System(Vec<SystemMetricEntry>),
-    Icc(Page<IccMetricEntry>),
-    Http(Page<HttpMetricEntry>),
-    Timer(Page<TimerMetricEntry>),
-    Access(Page<AccessMetricEntry>),
-    Delegation(Page<DelegationMetricEntry>),
-    RootCapability(Page<RootCapabilityMetricEntry>),
-    CyclesFunding(Page<CyclesFundingMetricEntry>),
-    Perf(Page<PerfEntry>),
+pub struct MetricsResponse {
+    pub entries: Page<MetricEntry>,
 }
 
 ///
-/// DelegationMetricEntry
+/// MetricEntry
 ///
-/// Snapshot entry pairing a delegation authority with its usage count.
+/// Unified metrics row for all query families.
 ///
-/// WHY THIS EXISTS:
-/// - Delegated authorization introduces multiple signing authorities.
-/// - This metric provides visibility into which authorities are active.
-/// - Cardinality is bounded by the number of configured delegation certs.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationMetricEntry {
-    /// Principal of the delegation authority (cert signer).
-    pub authority: Principal,
-
-    /// Number of successfully verified tokens attributed to this authority.
-    pub count: u64,
-}
-
-///
-/// RootCapabilityMetricEntry
-///
-/// Snapshot entry keyed by capability family + event type + proof mode.
-///
-/// Semantics:
-/// - `capability` is the internal root capability discriminant.
-/// - `event_type` identifies the pipeline stage (`Envelope`, `Proof`, etc.).
-/// - `outcome` identifies the stage outcome (`Accepted`, `Rejected`, etc.).
-/// - `proof_mode` identifies the proof class when relevant.
-/// - `count` is the cumulative counter for this tuple.
+/// The requested `MetricsKind` defines the meaning of the populated fields.
+/// Empty fields are intentionally omitted as `None` to keep one stable
+/// transport shape instead of many per-family DTO variants.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct RootCapabilityMetricEntry {
-    pub capability: String,
-    pub event_type: String,
-    pub outcome: String,
-    pub proof_mode: String,
-    pub count: u64,
-}
+pub struct MetricEntry {
+    /// Ordered, low-cardinality labels for the requested metric family.
+    pub labels: Vec<String>,
 
-///
-/// CyclesFundingMetricEntry
-///
-/// Snapshot entry for subtree cycles-funding observability.
-///
-/// Semantics:
-/// - `metric` is the stable metric name.
-/// - `child_principal` is present for child-scoped metrics.
-/// - `reason` is present for denied child-scoped metrics.
-/// - `cycles` is the accumulated cycles amount for the tuple.
-///
+    /// Optional principal dimension.
+    pub principal: Option<Principal>,
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CyclesFundingMetricEntry {
-    pub metric: String,
-    pub child_principal: Option<Principal>,
-    pub reason: Option<String>,
-    pub cycles: u128,
-}
+    /// Optional count or event total.
+    pub count: Option<u64>,
 
-/// HttpMetricEntry
-///
-/// Snapshot entry for HTTP ingress metrics.
-///
-/// Semantics:
-/// - `method` is the HTTP verb (GET, POST, etc.)
-/// - `label` is a low-cardinality classification
-///
-/// Labels MUST be controlled and finite.
-///
+    /// Optional u64 value such as delay or total instructions.
+    pub value_u64: Option<u64>,
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct HttpMetricEntry {
-    /// HTTP method (e.g. GET, POST).
-    pub method: String,
-
-    /// Controlled, low-cardinality label.
-    pub label: String,
-
-    /// Total count for this (method, label) pair.
-    pub count: u64,
-}
-
-///
-/// IccMetricEntry
-///
-/// Inter-canister call (ICC) metric entry.
-///
-/// Tracks outbound calls made by this canister.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct IccMetricEntry {
-    /// Target canister principal.
-    pub target: Principal,
-
-    /// Method name invoked on the target.
-    pub method: String,
-
-    /// Number of calls made.
-    pub count: u64,
-}
-
-///
-/// SystemMetricEntry
-///
-/// Snapshot entry for internal system-level metrics.
-///
-/// `kind` is intentionally a string to allow extension without
-/// schema changes, but MUST remain low-cardinality.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct SystemMetricEntry {
-    /// Metric kind identifier.
-    pub kind: String,
-
-    /// Count for this metric kind.
-    pub count: u64,
-}
-
-///
-/// TimerMetricEntry
-///
-/// Snapshot entry for timer-based execution metrics.
-///
-/// Used to observe scheduled or delayed execution behavior.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct TimerMetricEntry {
-    /// Timer mode (e.g. one-shot, interval).
-    pub mode: String,
-
-    /// Delay in milliseconds.
-    pub delay_ms: u64,
-
-    /// Controlled label describing timer purpose.
-    pub label: String,
-
-    /// Number of times this timer fired.
-    pub count: u64,
+    /// Optional u128 value such as cycles totals.
+    pub value_u128: Option<u128>,
 }

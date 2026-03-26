@@ -20,8 +20,7 @@ fn retention_uses_policy_cutoff_for_cycles() {
     let purged = CycleTrackerOps::purge_before(cutoff);
     assert_eq!(purged, 1);
 
-    let timestamps: Vec<u64> = CycleTrackerOps::snapshot()
-        .entries
+    let timestamps: Vec<u64> = CycleTrackerOps::entries()
         .into_iter()
         .map(|(ts, _)| ts)
         .collect();

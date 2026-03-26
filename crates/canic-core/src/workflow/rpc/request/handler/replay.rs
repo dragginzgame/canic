@@ -11,7 +11,7 @@ use crate::{
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
         runtime::metrics::root_capability::{
-            RootCapabilityMetricKey, RootCapabilityMetrics, RootCapabilityReplayOutcome,
+            RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
         },
     },
     workflow::rpc::RpcWorkflowError,
@@ -56,35 +56,35 @@ pub(super) fn check_replay(
                 .map_err(map_replay_reserve_error)?;
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::Accepted,
+                RootCapabilityMetricOutcome::Accepted,
             );
             Ok(ReplayPreflight::Fresh(pending))
         }
         ReplayDecision::DuplicateSame(cached) => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::DuplicateSame,
+                RootCapabilityMetricOutcome::DuplicateSame,
             );
             decode_replay_response(&cached.response_candid).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::DuplicateSame,
+                RootCapabilityMetricOutcome::DuplicateSame,
             );
             Err(RpcWorkflowError::ReplayDuplicateSame(capability_name).into())
         }
         ReplayDecision::DuplicateConflict => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::DuplicateConflict,
+                RootCapabilityMetricOutcome::DuplicateConflict,
             );
             Err(RpcWorkflowError::ReplayConflict(capability_name).into())
         }
         ReplayDecision::Expired => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::Expired,
+                RootCapabilityMetricOutcome::Expired,
             );
             Err(RpcWorkflowError::ReplayExpired(capability_name).into())
         }
@@ -105,7 +105,7 @@ fn map_replay_guard_error(
         } => {
             RootCapabilityMetrics::record_replay(
                 capability_key,
-                RootCapabilityReplayOutcome::TtlExceeded,
+                RootCapabilityMetricOutcome::TtlExceeded,
             );
             RpcWorkflowError::InvalidReplayTtl {
                 ttl_seconds,

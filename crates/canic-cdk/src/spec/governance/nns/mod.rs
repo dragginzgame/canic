@@ -20,6 +20,10 @@ pub struct GetSubnetForCanisterRequest {
 
 pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
 
+///
+/// GetSubnetForCanisterPayload
+///
+
 #[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterPayload {
     pub subnet_id: Option<Principal>,

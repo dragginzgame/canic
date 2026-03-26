@@ -32,27 +32,6 @@ macro_rules! sns_table {
             $($name,)+
         }
 
-        /// Alias to enable access like `SNS::OpenChat.ledger()`.
-        pub type SNS = SnsType;
-
-        static SNS_CANISTERS: OnceLock<HashMap<SnsType, SnsCanisters>> = OnceLock::new();
-
-        fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
-            let mut map = HashMap::new();
-            $(
-                map.insert(
-                    SnsType::$name,
-                    SnsCanisters {
-                        root: parse_principal(SnsType::$name, "root", $root),
-                        governance: parse_principal(SnsType::$name, "governance", $gov),
-                        index: parse_principal(SnsType::$name, "index", $idx),
-                        ledger: parse_principal(SnsType::$name, "ledger", $led),
-                    },
-                );
-            )+
-            map
-        }
-
         impl SnsType {
             fn canisters(self) -> &'static SnsCanisters {
                 SNS_CANISTERS
@@ -92,5 +71,27 @@ macro_rules! sns_table {
                 self.canisters().ledger
             }
         }
+
+        /// Alias to enable access like `SNS::OpenChat.ledger()`.
+        pub type SNS = SnsType;
+
+        static SNS_CANISTERS: OnceLock<HashMap<SnsType, SnsCanisters>> = OnceLock::new();
+
+        fn init_sns_canisters() -> HashMap<SnsType, SnsCanisters> {
+            let mut map = HashMap::new();
+            $(
+                map.insert(
+                    SnsType::$name,
+                    SnsCanisters {
+                        root: parse_principal(SnsType::$name, "root", $root),
+                        governance: parse_principal(SnsType::$name, "governance", $gov),
+                        index: parse_principal(SnsType::$name, "index", $idx),
+                        ledger: parse_principal(SnsType::$name, "ledger", $led),
+                    },
+                );
+            )+
+            map
+        }
+
     };
 }

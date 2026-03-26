@@ -100,20 +100,6 @@ pub struct Pic {
     _serial_guard: MutexGuard<'static, ()>,
 }
 
-impl Deref for Pic {
-    type Target = PocketIc;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for Pic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 impl Pic {
     /// Install a root canister with the default root init arguments.
     pub fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
@@ -250,6 +236,20 @@ impl Pic {
         for _ in 0..times {
             self.tick();
         }
+    }
+}
+
+impl Deref for Pic {
+    type Target = PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Pic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 

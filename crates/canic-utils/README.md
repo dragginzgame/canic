@@ -6,7 +6,7 @@ What you get:
 - Fast xxHash3 helpers for non-crypto hashing.
 - ChaCha20 PRNG seeded from the management canister `raw_rand` (reseeding recommended).
 - String casing helpers (snake/constant/title/etc.).
-- Small formatting helpers for logs/UI (`ellipsize_middle`, instruction suffixes).
+- Small formatting helpers for logs/UI (`truncate`, instruction suffixes).
 
 Quick hits
 ```rust
@@ -16,7 +16,7 @@ let digest = hash::hash_u64(b"tenant-123");      // fast sharding key
 rand::seed_from([7; 32]);                        // tests only; use raw_rand in canisters
 let sample = rand::next_u64().expect("seeded RNG");
 let bytes = rand::random_bytes(16).expect("seeded RNG");
-let short = format::ellipsize_middle("abcdef0123456789", 10, 4, 4);
+let short = format::truncate("abcdef0123456789", 10);
 let pretty = instructions::format_instructions(12_345_678);
 ```
 

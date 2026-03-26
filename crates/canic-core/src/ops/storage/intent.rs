@@ -516,6 +516,10 @@ mod tests {
 
     #[test]
     fn idempotent_ops_do_not_double_count() {
+        ///
+        /// Case
+        ///
+
         struct Case {
             name: &'static str,
             op: Option<Op>,

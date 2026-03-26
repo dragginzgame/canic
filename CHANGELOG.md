@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.17.x] - 2026-03-25 - Wasm Audit and Endpoint Surface Reduction
 
-- `0.17.0` starts the wasm audit line with a measured per-canister footprint baseline, renames the canonical baseline canister from `blank` to `minimal`, and trims optional scaling, sharding, delegated-auth, and `ICRC-21` endpoint exports behind compile-time config so disabled features stop inflating every build.
+- `0.17.2` continues the wasm audit line by slimming shared runtime, metrics, and observability paths, bringing the `minimal` raw release artifact down to `2460376` bytes while keeping the intended operator-facing feature set intact.
 - `0.17.1` cuts the shared wasm floor again by separating root-only capability verification from the non-root cycles path and by removing the old `ICTS` canister-status endpoint, bringing the `minimal` raw release artifact down to `2561000` bytes while keeping the intended runtime feature set intact.
+- `0.17.0` starts the wasm audit line with a measured per-canister footprint baseline, renames the canonical baseline canister from `blank` to `minimal`, and trims optional scaling, sharding, delegated-auth, and `ICRC-21` endpoint exports behind compile-time config so disabled features stop inflating every build.
 
 See detailed breakdown:
 [docs/changelog/0.17.md](docs/changelog/0.17.md)
@@ -17,9 +18,9 @@ See detailed breakdown:
 
 ## [0.16.x] - 2026-03-16 - Delegation Proof Evolution
 
-- `0.16.0` is reserved as a placeholder minor-line entry for delegation proof evolution follow-up work (deferred from `0.15` Phase 3), with implementation details tracked in the `0.16` design docs.
-- `0.16.1` hardens delegated-auth audience binding so verifier proof installs and delegated-session bootstrap reject out-of-scope audiences, while typed auth rollout metrics make prewarm/repair failures easier to track during the `0.16` auth refactor.
 - `0.16.2` hardens delegated-auth token handling by rejecting malformed or unusable lifetimes at both issuance and verification, making the zero-skew policy explicit, restoring ops-owned proof boundaries, and closing the `0.16` auth/proof line with remaining root/template architecture work handed off to `0.17` and `0.18`.
+- `0.16.1` hardens delegated-auth audience binding so verifier proof installs and delegated-session bootstrap reject out-of-scope audiences, while typed auth rollout metrics make prewarm/repair failures easier to track during the `0.16` auth refactor.
+- `0.16.0` is reserved as a placeholder minor-line entry for delegation proof evolution follow-up work (deferred from `0.15` Phase 3), with implementation details tracked in the `0.16` design docs.
 
 See detailed breakdown:
 [docs/changelog/0.16.md](docs/changelog/0.16.md)

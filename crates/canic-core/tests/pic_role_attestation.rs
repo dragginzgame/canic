@@ -42,6 +42,10 @@ static BUILD_ONCE: Once = Once::new();
 static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
+///
+/// SerialPic
+///
+
 struct SerialPic {
     pic: pocket_ic::PocketIc,
     _serial_guard: MutexGuard<'static, ()>,
@@ -2396,15 +2400,15 @@ fn access_metric_count(
         },),
     );
     let response = response.expect("query canic_metrics failed");
-    let MetricsResponse::Access(page) = response else {
-        panic!("expected access metrics response");
-    };
-
-    page.entries
+    response
+        .entries
+        .entries
         .into_iter()
         .find_map(|entry| {
-            if entry.endpoint == endpoint && entry.predicate == predicate {
-                Some(entry.count)
+            if entry.labels.first().is_some_and(|label| label == endpoint)
+                && entry.labels.get(2).is_some_and(|label| label == predicate)
+            {
+                Some(entry.count.unwrap_or(0))
             } else {
                 None
             }

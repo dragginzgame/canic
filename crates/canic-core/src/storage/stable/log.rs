@@ -7,6 +7,7 @@ use crate::{
         memory::VirtualMemory,
     },
     eager_static, ic_memory,
+    log::{Level, Topic},
     memory::impl_storable_unbounded,
     storage::{
         prelude::*,
@@ -29,8 +30,21 @@ type StableLog = StableLogImpl<
     VirtualMemory<DefaultMemoryImpl>,
 >;
 
+///
+/// LogIndexMemory
+///
+
 struct LogIndexMemory;
+
+///
+/// LogDataMemory
+///
+
 struct LogDataMemory;
+
+///
+/// LogMemory
+///
 
 #[derive(Clone)]
 struct LogMemory {
@@ -68,19 +82,6 @@ fn with_log_mut<R>(f: impl FnOnce(&mut StableLog) -> R) -> R {
 }
 
 ///
-/// LogLevelRecord
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub enum LogLevelRecord {
-    Debug,
-    Info,
-    Ok,
-    Warn,
-    Error,
-}
-
-///
 /// LogEntryRecord
 ///
 
@@ -88,8 +89,8 @@ pub enum LogLevelRecord {
 pub struct LogEntryRecord {
     pub crate_name: String,
     pub created_at: u64,
-    pub level: LogLevelRecord,
-    pub topic: Option<String>,
+    pub level: Level,
+    pub topic: Option<Topic>,
     pub message: String,
 }
 

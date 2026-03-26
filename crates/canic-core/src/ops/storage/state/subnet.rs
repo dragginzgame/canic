@@ -1,6 +1,6 @@
 use crate::{
-    dto::state::SubnetStateInput,
-    ops::storage::state::mapper::SubnetStateInputMapper,
+    dto::state::{SubnetStateInput, SubnetStateResponse},
+    ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{SubnetState, SubnetStateRecord},
 };
 
@@ -15,15 +15,16 @@ impl SubnetStateOps {
     // Canonical data access
     // -------------------------------------------------------------
 
-    #[must_use]
-    pub fn data() -> SubnetStateRecord {
-        SubnetState::export()
-    }
-
     /// Export the current subnet state as a DTO snapshot.
     #[must_use]
     pub fn snapshot_input() -> SubnetStateInput {
-        SubnetStateInputMapper::record_to_view(SubnetState::export())
+        SubnetStateMapper::record_to_input(SubnetState::export())
+    }
+
+    /// Export the current subnet state as a response snapshot.
+    #[must_use]
+    pub fn snapshot_response() -> SubnetStateResponse {
+        SubnetStateMapper::record_to_response(SubnetState::export())
     }
 
     #[expect(dead_code)]
@@ -32,7 +33,7 @@ impl SubnetStateOps {
     }
 
     pub fn import_input(view: SubnetStateInput) {
-        let record = SubnetStateInputMapper::dto_to_record(view);
+        let record = SubnetStateMapper::input_to_record(view);
         SubnetState::import(record);
     }
 }

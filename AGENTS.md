@@ -603,6 +603,9 @@ Rules:
 
 pub struct ConfigApi;
 ```
+* When a struct or enum has an inherent `impl` in the same module, that inherent `impl` must appear immediately below the item.
+* Do not place unrelated constants, enums, structs, helper types, trait impls, or functions between a struct/enum and its inherent `impl`.
+* If a struct or enum has both inherent and trait impls, the inherent `impl` comes first.
 * Prefer a blank line after any multi-line `///` doc comment block before the item it documents (in addition to the struct-specific rule above).
 * Keep comments directly adjacent
 * Use section banners for structure

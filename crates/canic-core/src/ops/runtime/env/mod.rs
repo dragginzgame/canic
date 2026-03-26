@@ -333,6 +333,10 @@ mod tests {
         test::seams,
     };
 
+    ///
+    /// EnvRestore
+    ///
+
     struct EnvRestore(EnvRecord);
 
     impl Drop for EnvRestore {

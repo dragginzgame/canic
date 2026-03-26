@@ -37,6 +37,17 @@ impl From<ConfigOpsError> for InternalError {
 }
 
 ///
+/// DelegationProofCachePolicy
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DelegationProofCachePolicy {
+    pub profile: DelegationProofCacheProfile,
+    pub capacity: usize,
+    pub active_window_secs: u64,
+}
+
+///
 /// ConfigOps
 ///
 /// Ops-layer façade for configuration access.
@@ -48,17 +59,6 @@ impl From<ConfigOpsError> for InternalError {
 ///
 
 pub struct ConfigOps;
-
-///
-/// DelegationProofCachePolicy
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegationProofCachePolicy {
-    pub profile: DelegationProofCacheProfile,
-    pub capacity: usize,
-    pub active_window_secs: u64,
-}
 
 impl ConfigOps {
     /// Export the full current configuration as TOML.

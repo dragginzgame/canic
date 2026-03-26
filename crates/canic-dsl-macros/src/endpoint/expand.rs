@@ -499,6 +499,10 @@ fn custom_has_app_state_is(tokens: &TokenStream2) -> bool {
     visitor.found
 }
 
+///
+/// AppStateVisitor
+///
+
 struct AppStateVisitor {
     found: bool,
 }

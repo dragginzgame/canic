@@ -111,12 +111,6 @@ pub struct CallResult {
     inner: IcResponse,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum WaitMode {
-    Bounded,
-    Unbounded,
-}
-
 impl CallResult {
     pub fn candid<R>(&self) -> Result<R, InfraError>
     where
@@ -138,6 +132,12 @@ impl CallResult {
             .map_err(IcInfraError::from)
             .map_err(InfraError::from)
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum WaitMode {
+    Bounded,
+    Unbounded,
 }
 
 #[cfg(test)]

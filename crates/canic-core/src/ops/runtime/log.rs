@@ -1,15 +1,30 @@
 use crate::{
     InternalError,
     dto::log::LogEntry,
-    log::Level,
+    log::{Level, Topic},
     ops::{config::ConfigOps, runtime::RuntimeOpsError},
     storage::{
         StorageError,
-        stable::log::{Log, LogEntryRecord, LogLevelRecord, RetentionSummary, apply_retention},
+        stable::log::{Log, LogEntryRecord, RetentionSummary, apply_retention},
     },
-    utils::case::{Case, Casing},
 };
 use thiserror::Error as ThisError;
+
+///
+/// LogOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum LogOpsError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+impl From<LogOpsError> for InternalError {
+    fn from(err: LogOpsError) -> Self {
+        RuntimeOpsError::LogOps(err).into()
+    }
+}
 
 ///
 /// LogOps
@@ -28,22 +43,6 @@ use thiserror::Error as ThisError;
 ///
 pub struct LogOps;
 
-///
-/// LogOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum LogOpsError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-}
-
-impl From<LogOpsError> for InternalError {
-    fn from(err: LogOpsError) -> Self {
-        RuntimeOpsError::LogOps(err).into()
-    }
-}
-
 impl LogOps {
     // ---------------------------------------------------------------------
     // Mutation
@@ -55,7 +54,7 @@ impl LogOps {
     /// from update / workflow contexts.
     pub fn append_runtime_log(
         crate_name: &str,
-        topic: Option<&str>,
+        topic: Option<Topic>,
         level: Level,
         message: &str,
         created_at: u64,
@@ -70,12 +69,11 @@ impl LogOps {
         let entry = LogEntryRecord {
             crate_name: crate_name.to_string(),
             created_at,
-            level: level_to_record(level),
-            topic: normalize_topic(topic),
+            level,
+            topic,
             message: message.to_string(),
         };
 
-        // This is a defensive size guard to protect runtime memory; workflow may also validate, but ops enforces the hard limit.
         let id = Log::append(max_entries, cfg.max_entry_bytes, entry).map_err(LogOpsError::from)?;
 
         Ok(id)
@@ -99,50 +97,40 @@ impl LogOps {
     // Read-only access
     // ---------------------------------------------------------------------
 
-    /// Return a point-in-time copy of all log entries.
+    /// Build a filtered point-in-time log view before DTO projection.
     ///
-    /// This is **not** a snapshot in the architectural sense:
-    /// - it is never imported
-    /// - it is never validated
-    /// - it is never persisted elsewhere
-    ///
-    /// Intended for read-only querying and view adaptation.
+    /// This avoids allocating topic strings and DTO rows for entries that the
+    /// query layer will immediately discard.
     #[must_use]
-    pub fn snapshot() -> Vec<LogEntry> {
+    pub fn snapshot_filtered(
+        crate_name: Option<&str>,
+        topic: Option<&str>,
+        min_level: Option<Level>,
+    ) -> Vec<LogEntry> {
         Log::snapshot()
             .into_iter()
-            .map(|entry| LogEntry {
-                crate_name: entry.crate_name,
-                created_at: entry.created_at,
-                level: record_to_level(entry.level),
-                topic: entry.topic,
-                message: entry.message,
+            .filter(|entry| {
+                crate_name.is_none_or(|name| entry.crate_name == name)
+                    && topic.is_none_or(|needle| topic_matches(entry.topic, needle))
+                    && min_level.is_none_or(|min| entry.level >= min)
             })
+            .map(record_to_entry)
             .collect()
     }
 }
 
-const fn level_to_record(level: Level) -> LogLevelRecord {
-    match level {
-        Level::Debug => LogLevelRecord::Debug,
-        Level::Info => LogLevelRecord::Info,
-        Level::Ok => LogLevelRecord::Ok,
-        Level::Warn => LogLevelRecord::Warn,
-        Level::Error => LogLevelRecord::Error,
+// Convert a stored log record into the public query DTO.
+fn record_to_entry(entry: LogEntryRecord) -> LogEntry {
+    LogEntry {
+        crate_name: entry.crate_name,
+        created_at: entry.created_at,
+        level: entry.level,
+        topic: entry.topic.map(|topic| topic.log_label().to_string()),
+        message: entry.message,
     }
 }
 
-const fn record_to_level(level: LogLevelRecord) -> Level {
-    match level {
-        LogLevelRecord::Debug => Level::Debug,
-        LogLevelRecord::Info => Level::Info,
-        LogLevelRecord::Ok => Level::Ok,
-        LogLevelRecord::Warn => Level::Warn,
-        LogLevelRecord::Error => Level::Error,
-    }
-}
-
-#[expect(clippy::single_option_map)]
-fn normalize_topic(topic: Option<&str>) -> Option<String> {
-    topic.map(|t| t.to_string().to_case(Case::Snake))
+// Compare an optional stored topic against the query filter label.
+fn topic_matches(topic: Option<Topic>, needle: &str) -> bool {
+    topic.is_some_and(|topic| topic.log_label() == needle)
 }

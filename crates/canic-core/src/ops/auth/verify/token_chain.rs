@@ -42,6 +42,10 @@ impl TokenTrustChainStage {
     }
 }
 
+///
+/// TokenTrustChainContext
+///
+
 #[derive(Clone, Copy)]
 struct TokenTrustChainContext {
     authority_pid: Principal,

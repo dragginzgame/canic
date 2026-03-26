@@ -16,8 +16,7 @@ pub struct CycleTrackerQuery;
 impl CycleTrackerQuery {
     #[must_use]
     pub fn page(page: PageRequest) -> Page<CycleTrackerEntry> {
-        let snapshot = CycleTrackerOps::snapshot();
-        let page = paginate_vec(snapshot.entries, page);
+        let page = paginate_vec(CycleTrackerOps::entries(), page);
         let entries = page
             .entries
             .into_iter()

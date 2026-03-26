@@ -1,29 +1,18 @@
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static ENDPOINT_ATTEMPT_METRICS: RefCell<HashMap<&'static str, EndpointAttemptCounts>> =
-        RefCell::new(HashMap::new());
-
-    static ENDPOINT_RESULT_METRICS: RefCell<HashMap<&'static str, EndpointResultCounts>> =
+    static ENDPOINT_METRICS: RefCell<HashMap<&'static str, EndpointMetricCounts>> =
         RefCell::new(HashMap::new());
 }
 
 ///
-/// EndpointAttemptCounts
+/// EndpointMetricCounts
 ///
 
 #[derive(Clone, Default)]
-pub struct EndpointAttemptCounts {
+struct EndpointMetricCounts {
     pub attempted: u64,
     pub completed: u64,
-}
-
-///
-/// EndpointResultCounts
-///
-
-#[derive(Clone, Default)]
-pub struct EndpointResultCounts {
     pub ok: u64,
     pub err: u64,
 }
@@ -38,14 +27,14 @@ pub struct EndpointAttemptMetrics;
 
 impl EndpointAttemptMetrics {
     pub fn increment_attempted(endpoint: &'static str) {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow_mut(|counts| {
+        ENDPOINT_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(endpoint).or_default();
             entry.attempted = entry.attempted.saturating_add(1);
         });
     }
 
     pub fn increment_completed(endpoint: &'static str) {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow_mut(|counts| {
+        ENDPOINT_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(endpoint).or_default();
             entry.completed = entry.completed.saturating_add(1);
         });
@@ -54,12 +43,25 @@ impl EndpointAttemptMetrics {
     #[cfg(test)]
     #[must_use]
     pub fn export_raw() -> HashMap<&'static str, EndpointAttemptCounts> {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow(std::clone::Clone::clone)
+        ENDPOINT_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(&endpoint, entry)| {
+                    (
+                        endpoint,
+                        EndpointAttemptCounts {
+                            attempted: entry.attempted,
+                            completed: entry.completed,
+                        },
+                    )
+                })
+                .collect()
+        })
     }
 
     #[cfg(test)]
     pub fn reset() {
-        ENDPOINT_ATTEMPT_METRICS.with_borrow_mut(HashMap::clear);
+        ENDPOINT_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -73,14 +75,14 @@ pub struct EndpointResultMetrics;
 
 impl EndpointResultMetrics {
     pub fn increment_ok(endpoint: &'static str) {
-        ENDPOINT_RESULT_METRICS.with_borrow_mut(|counts| {
+        ENDPOINT_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(endpoint).or_default();
             entry.ok = entry.ok.saturating_add(1);
         });
     }
 
     pub fn increment_err(endpoint: &'static str) {
-        ENDPOINT_RESULT_METRICS.with_borrow_mut(|counts| {
+        ENDPOINT_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(endpoint).or_default();
             entry.err = entry.err.saturating_add(1);
         });
@@ -89,13 +91,48 @@ impl EndpointResultMetrics {
     #[cfg(test)]
     #[must_use]
     pub fn export_raw() -> HashMap<&'static str, EndpointResultCounts> {
-        ENDPOINT_RESULT_METRICS.with_borrow(std::clone::Clone::clone)
+        ENDPOINT_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(&endpoint, entry)| {
+                    (
+                        endpoint,
+                        EndpointResultCounts {
+                            ok: entry.ok,
+                            err: entry.err,
+                        },
+                    )
+                })
+                .collect()
+        })
     }
 
     #[cfg(test)]
     pub fn reset() {
-        ENDPOINT_RESULT_METRICS.with_borrow_mut(HashMap::clear);
+        ENDPOINT_METRICS.with_borrow_mut(HashMap::clear);
     }
+}
+
+///
+/// EndpointAttemptCounts
+///
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct EndpointAttemptCounts {
+    pub attempted: u64,
+    pub completed: u64,
+}
+
+///
+/// EndpointResultCounts
+///
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct EndpointResultCounts {
+    pub ok: u64,
+    pub err: u64,
 }
 
 #[cfg(test)]

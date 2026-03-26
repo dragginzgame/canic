@@ -10,9 +10,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
-        runtime::metrics::root_capability::{
-            RootCapabilityAuthorizationOutcome, RootCapabilityMetrics,
-        },
+        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
         storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::rpc::RpcWorkflowError,
@@ -48,7 +46,7 @@ pub(super) fn authorize(
         Ok(()) => {
             RootCapabilityMetrics::record_authorization(
                 capability_key,
-                RootCapabilityAuthorizationOutcome::Accepted,
+                RootCapabilityMetricOutcome::Accepted,
             );
             log!(
                 Topic::Rpc,
@@ -62,7 +60,7 @@ pub(super) fn authorize(
         Err(err) => {
             RootCapabilityMetrics::record_authorization(
                 capability_key,
-                RootCapabilityAuthorizationOutcome::Denied,
+                RootCapabilityMetricOutcome::Denied,
             );
             log!(
                 Topic::Rpc,

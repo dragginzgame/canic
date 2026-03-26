@@ -20,36 +20,6 @@ pub enum Request {
     IssueRoleAttestation(RoleAttestationRequest),
 }
 
-///
-/// RequestFamily
-/// Stable capability family identifier for request dispatch logic.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RequestFamily {
-    Provision,
-    Upgrade,
-    RequestCycles,
-    IssueDelegation,
-    IssueRoleAttestation,
-}
-
-impl RequestFamily {
-    /// label
-    ///
-    /// Return the canonical family label used across capability checks and logs.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Provision => "Provision",
-            Self::Upgrade => "Upgrade",
-            Self::RequestCycles => "RequestCycles",
-            Self::IssueDelegation => "IssueDelegation",
-            Self::IssueRoleAttestation => "IssueRoleAttestation",
-        }
-    }
-}
-
 impl Request {
     /// create_canister
     ///
@@ -157,6 +127,36 @@ impl Request {
         match self {
             Self::UpgradeCanister(request) => Some(request),
             _ => None,
+        }
+    }
+}
+
+///
+/// RequestFamily
+/// Stable capability family identifier for request dispatch logic.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RequestFamily {
+    Provision,
+    Upgrade,
+    RequestCycles,
+    IssueDelegation,
+    IssueRoleAttestation,
+}
+
+impl RequestFamily {
+    /// label
+    ///
+    /// Return the canonical family label used across capability checks and logs.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Provision => "Provision",
+            Self::Upgrade => "Upgrade",
+            Self::RequestCycles => "RequestCycles",
+            Self::IssueDelegation => "IssueDelegation",
+            Self::IssueRoleAttestation => "IssueRoleAttestation",
         }
     }
 }

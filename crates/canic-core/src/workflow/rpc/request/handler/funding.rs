@@ -95,6 +95,10 @@ pub(super) enum FundingPolicyViolation {
     },
 }
 
+///
+/// FundingLedger
+///
+
 #[derive(Clone, Copy, Debug, Default)]
 struct FundingLedger {
     granted_total: u128,

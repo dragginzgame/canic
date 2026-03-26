@@ -23,18 +23,8 @@ impl LogQuery {
         min_level: Option<Level>,
         page: PageRequest,
     ) -> Page<LogEntry> {
-        let mut entries = LogOps::snapshot();
-
-        // Filter
-        if let Some(ref name) = crate_name {
-            entries.retain(|e| &e.crate_name == name);
-        }
-        if let Some(ref t) = topic {
-            entries.retain(|e| e.topic.as_deref() == Some(t.as_str()));
-        }
-        if let Some(min) = min_level {
-            entries.retain(|e| e.level >= min);
-        }
+        let mut entries =
+            LogOps::snapshot_filtered(crate_name.as_deref(), topic.as_deref(), min_level);
 
         // Newest first
         entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));

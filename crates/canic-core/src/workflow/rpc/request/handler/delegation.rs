@@ -48,6 +48,10 @@ mod tests {
         storage::stable::env::{Env, EnvRecord},
     };
 
+    ///
+    /// EnvRestore
+    ///
+
     struct EnvRestore(EnvRecord);
 
     impl Drop for EnvRestore {

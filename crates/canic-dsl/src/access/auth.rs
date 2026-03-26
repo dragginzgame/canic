@@ -1,3 +1,7 @@
+///
+/// Authenticated
+///
+
 #[derive(Clone, Copy, Debug)]
 pub struct Authenticated {
     pub required_scope: Option<&'static str>,

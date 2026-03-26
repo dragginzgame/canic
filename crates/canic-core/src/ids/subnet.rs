@@ -1,7 +1,6 @@
 use crate::{cdk::candid::CandidType, memory::impl_storable_bounded};
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, borrow::Cow, str::FromStr};
+use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
 
 ///
 /// SubnetRole
@@ -15,7 +14,7 @@ use std::{borrow::Borrow, borrow::Cow, str::FromStr};
 const PRIME_ROLE: &str = "prime";
 
 #[derive(
-    CandidType, Clone, Debug, Eq, Ord, Display, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
+    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
 #[serde(transparent)]
 pub struct SubnetRole(pub Cow<'static, str>);
@@ -92,6 +91,12 @@ impl AsRef<str> for SubnetRole {
 impl Borrow<str> for SubnetRole {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl fmt::Display for SubnetRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

@@ -400,6 +400,19 @@ pub struct DelegationProofCacheConfig {
     pub active_window_secs: u32,
 }
 
+impl DelegationProofCacheConfig {
+    pub fn resolved_profile(&self) -> DelegationProofCacheProfile {
+        self.profile.unwrap_or_else(|| {
+            DelegationProofCacheProfile::from_shard_count_hint(self.shard_count_hint)
+        })
+    }
+
+    pub fn resolved_capacity(&self) -> usize {
+        self.capacity_override
+            .map_or_else(|| self.resolved_profile().capacity(), usize::from)
+    }
+}
+
 const fn default_delegation_proof_cache_active_window_secs() -> u32 {
     10 * 60
 }
@@ -412,19 +425,6 @@ impl Default for DelegationProofCacheConfig {
             capacity_override: None,
             active_window_secs: default_delegation_proof_cache_active_window_secs(),
         }
-    }
-}
-
-impl DelegationProofCacheConfig {
-    pub fn resolved_profile(&self) -> DelegationProofCacheProfile {
-        self.profile.unwrap_or_else(|| {
-            DelegationProofCacheProfile::from_shard_count_hint(self.shard_count_hint)
-        })
-    }
-
-    pub fn resolved_capacity(&self) -> usize {
-        self.capacity_override
-            .map_or_else(|| self.resolved_profile().capacity(), usize::from)
     }
 }
 

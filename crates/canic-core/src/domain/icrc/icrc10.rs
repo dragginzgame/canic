@@ -1,37 +1,9 @@
-///
-/// ICRC 10
-/// formatting instructions for each standard
-///
-
-pub const ICRC_10_SUPPORTED_STANDARDS: &[(Icrc10Standard, &str, &str)] = &[
-    (
-        Icrc10Standard::Icrc10,
-        "ICRC-10",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10",
-    ),
-    (
-        Icrc10Standard::Icrc21,
-        "ICRC-21",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21",
-    ),
-    (
-        Icrc10Standard::Icrc103,
-        "ICRC-103",
-        "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-103",
-    ),
-];
-
-///
-/// Icrc10Standard
-/// Enumeration of well-known ICRC-10 standards with descriptive variants.
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Icrc10Standard {
-    Icrc10,  // supported standards
-    Icrc21,  // human readable representation of canister call
-    Icrc103, // enhanced allowance query mechanism
-}
+const ICRC10_NAME: &str = "ICRC-10";
+const ICRC10_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10";
+const ICRC21_NAME: &str = "ICRC-21";
+const ICRC21_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21";
+const ICRC103_NAME: &str = "ICRC-103";
+const ICRC103_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-103";
 
 ///
 /// Icrc10Registry
@@ -49,43 +21,25 @@ pub enum Icrc10Standard {
 pub struct Icrc10Registry;
 
 impl Icrc10Registry {
-    fn enabled_standards(icrc21_enabled: bool, icrc103_enabled: bool) -> Vec<Icrc10Standard> {
-        let mut supported = vec![Icrc10Standard::Icrc10];
-
-        if icrc21_enabled {
-            supported.push(Icrc10Standard::Icrc21);
-        }
-
-        if icrc103_enabled {
-            supported.push(Icrc10Standard::Icrc103);
-        }
-
-        supported
-    }
-
-    /// Checks whether the given standard is currently registered.
-    #[must_use]
-    pub fn is_registered(
-        standard: Icrc10Standard,
-        icrc21_enabled: bool,
-        icrc103_enabled: bool,
-    ) -> bool {
-        matches!(standard, Icrc10Standard::Icrc10)
-            || Self::enabled_standards(icrc21_enabled, icrc103_enabled).contains(&standard)
-    }
-
     /// Returns `(name, url)` for all supported standards from the static list.
     #[must_use]
     pub fn supported_standards(
         icrc21_enabled: bool,
         icrc103_enabled: bool,
     ) -> Vec<(String, String)> {
-        let reg = Self::enabled_standards(icrc21_enabled, icrc103_enabled);
+        let mut supported =
+            Vec::with_capacity(1 + usize::from(icrc21_enabled) + usize::from(icrc103_enabled));
 
-        ICRC_10_SUPPORTED_STANDARDS
-            .iter()
-            .filter(|(standard, _, _)| reg.contains(standard))
-            .map(|(_, name, url)| ((*name).to_string(), (*url).to_string()))
-            .collect()
+        supported.push((ICRC10_NAME.to_string(), ICRC10_URL.to_string()));
+
+        if icrc21_enabled {
+            supported.push((ICRC21_NAME.to_string(), ICRC21_URL.to_string()));
+        }
+
+        if icrc103_enabled {
+            supported.push((ICRC103_NAME.to_string(), ICRC103_URL.to_string()));
+        }
+
+        supported
     }
 }

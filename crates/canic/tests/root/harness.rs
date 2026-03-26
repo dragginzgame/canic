@@ -50,12 +50,20 @@ thread_local! {
     static ROOT_SETUP_CACHE: RefCell<Option<ManuallyDrop<RootSetupState>>> = const { RefCell::new(None) };
 }
 
+///
+/// RootSetupState
+///
+
 pub struct RootSetupState {
     pub pic: Pic,
     pub root_id: Principal,
     pub subnet_directory: HashMap<CanisterRole, Principal>,
     baseline_snapshots: Option<HashMap<Principal, BaselineSnapshot>>,
 }
+
+///
+/// BaselineSnapshot
+///
 
 struct BaselineSnapshot {
     snapshot_id: Vec<u8>,

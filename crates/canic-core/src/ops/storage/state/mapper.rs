@@ -10,27 +10,45 @@ use crate::{
     },
 };
 
+// --- Helpers ---------------------------------------------------------------
+
+// Map stored app mode values into the shared DTO enum.
+const fn app_mode_to_dto(mode: StorageAppMode) -> AppModeDto {
+    match mode {
+        StorageAppMode::Enabled => AppModeDto::Enabled,
+        StorageAppMode::Readonly => AppModeDto::Readonly,
+        StorageAppMode::Disabled => AppModeDto::Disabled,
+    }
+}
+
 ///
-/// AppStateInputMapper
+/// AppStateMapper
 ///
 
-pub struct AppStateInputMapper;
+pub struct AppStateMapper;
 
-impl AppStateInputMapper {
+impl AppStateMapper {
+    // Map a stored app-state snapshot into the DTO input shape.
     #[must_use]
-    pub const fn record_to_view(data: AppStateRecord) -> AppStateInput {
+    pub const fn record_to_input(data: AppStateRecord) -> AppStateInput {
         AppStateInput {
-            mode: match data.mode {
-                StorageAppMode::Enabled => AppModeDto::Enabled,
-                StorageAppMode::Readonly => AppModeDto::Readonly,
-                StorageAppMode::Disabled => AppModeDto::Disabled,
-            },
+            mode: app_mode_to_dto(data.mode),
             cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
 
+    // Map a stored app-state snapshot into the public response shape.
     #[must_use]
-    pub const fn dto_to_record(view: AppStateInput) -> AppStateRecord {
+    pub const fn record_to_response(data: AppStateRecord) -> AppStateResponse {
+        AppStateResponse {
+            mode: app_mode_to_dto(data.mode),
+            cycles_funding_enabled: data.cycles_funding_enabled,
+        }
+    }
+
+    // Map a DTO input snapshot back into the stored app-state record.
+    #[must_use]
+    pub const fn input_to_record(view: AppStateInput) -> AppStateRecord {
         // TODO: mapping from DTO to storage record must remain in ops.
         AppStateRecord {
             mode: match view.mode {
@@ -44,54 +62,29 @@ impl AppStateInputMapper {
 }
 
 ///
-/// AppStateResponseMapper
+/// SubnetStateMapper
 ///
 
-pub struct AppStateResponseMapper;
+pub struct SubnetStateMapper;
 
-impl AppStateResponseMapper {
+impl SubnetStateMapper {
+    // Map the stored subnet-state snapshot into the DTO input shape.
     #[must_use]
-    pub const fn record_to_view(data: AppStateRecord) -> AppStateResponse {
-        AppStateResponse {
-            mode: match data.mode {
-                StorageAppMode::Enabled => AppModeDto::Enabled,
-                StorageAppMode::Readonly => AppModeDto::Readonly,
-                StorageAppMode::Disabled => AppModeDto::Disabled,
-            },
-            cycles_funding_enabled: data.cycles_funding_enabled,
-        }
-    }
-}
-
-///
-/// SubnetStateInputMapper
-///
-
-pub struct SubnetStateInputMapper;
-
-impl SubnetStateInputMapper {
-    #[must_use]
-    pub const fn record_to_view(_: SubnetStateRecord) -> SubnetStateInput {
+    pub const fn record_to_input(_: SubnetStateRecord) -> SubnetStateInput {
         SubnetStateInput {}
     }
 
+    // Map the stored subnet-state snapshot into the public response shape.
     #[must_use]
-    pub const fn dto_to_record(_: SubnetStateInput) -> SubnetStateRecord {
+    pub const fn record_to_response(_: SubnetStateRecord) -> SubnetStateResponse {
+        SubnetStateResponse {}
+    }
+
+    // Map a DTO input snapshot back into the stored subnet-state record.
+    #[must_use]
+    pub const fn input_to_record(_: SubnetStateInput) -> SubnetStateRecord {
         // TODO: mapping from DTO to storage record must remain in ops.
         SubnetStateRecord {}
-    }
-}
-
-///
-/// SubnetStateResponseMapper
-///
-
-pub struct SubnetStateResponseMapper;
-
-impl SubnetStateResponseMapper {
-    #[must_use]
-    pub const fn record_to_view(_: SubnetStateRecord) -> SubnetStateResponse {
-        SubnetStateResponse {}
     }
 }
 

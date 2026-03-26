@@ -18,6 +18,7 @@ use crate::{
 pub struct CanisterChildrenQuery;
 
 impl CanisterChildrenQuery {
+    #[must_use]
     pub fn page(page: PageRequest) -> Page<CanisterInfo> {
         let entries = CanisterChildrenOps::infos();
 

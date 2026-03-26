@@ -6,9 +6,11 @@ use crate::{
     config::schema::{ConfigSchemaError, NAME_MAX_BYTES, Validate},
     ids::CanisterRole,
 };
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 mod defaults {
     use super::Cycles;
@@ -340,7 +342,7 @@ impl CanisterConfig {
 /// Do not encode parent relationships here; this is role-level intent only.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CanisterKind {
     Root,
@@ -348,6 +350,20 @@ pub enum CanisterKind {
     Replica,
     Shard,
     Tenant,
+}
+
+impl fmt::Display for CanisterKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Root => "root",
+            Self::Singleton => "singleton",
+            Self::Replica => "replica",
+            Self::Shard => "shard",
+            Self::Tenant => "tenant",
+        };
+
+        f.write_str(label)
+    }
 }
 
 ///

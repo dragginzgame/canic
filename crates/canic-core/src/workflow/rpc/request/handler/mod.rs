@@ -10,9 +10,7 @@ use crate::{
         ic::IcOps,
         replay::guard::ReplayPending,
         runtime::env::EnvOps,
-        runtime::metrics::root_capability::{
-            RootCapabilityExecutionOutcome, RootCapabilityMetrics,
-        },
+        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
 };
 
@@ -33,12 +31,6 @@ const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
 
 ///
-/// RootResponseWorkflow
-///
-
-pub struct RootResponseWorkflow;
-
-///
 /// RootContext
 ///
 
@@ -56,6 +48,12 @@ enum AuthorizationPipelineOrder {
     AuthorizeThenReplay,
     ReplayThenAuthorize,
 }
+
+///
+/// RootResponseWorkflow
+///
+
+pub struct RootResponseWorkflow;
 
 impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request and produce a [`Response`].
@@ -91,7 +89,7 @@ impl RootResponseWorkflow {
                 Self::abort_replay(pending);
                 RootCapabilityMetrics::record_execution(
                     capability_key,
-                    RootCapabilityExecutionOutcome::Error,
+                    RootCapabilityMetricOutcome::Error,
                 );
                 return Err(err);
             }
@@ -109,7 +107,7 @@ impl RootResponseWorkflow {
         }
         RootCapabilityMetrics::record_execution(
             capability_key,
-            RootCapabilityExecutionOutcome::Success,
+            RootCapabilityMetricOutcome::Success,
         );
 
         Ok(response)
