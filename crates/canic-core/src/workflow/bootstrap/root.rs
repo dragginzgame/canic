@@ -194,7 +194,7 @@ pub async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
             log!(
                 Topic::CanisterPool,
                 Warn,
-                "pool import skipped: missing subnet config ({err})"
+                "pool import skipped: no subnet cfg ({err})"
             );
             return;
         }
@@ -214,7 +214,7 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     log!(
         Topic::Init,
         Info,
-        "auto_create roles: {:?}",
+        "auto_create: {:?}",
         data.subnet_cfg.auto_create
     );
 
@@ -245,7 +245,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             log!(
                 Topic::CanisterPool,
                 Warn,
-                "pool import skipped: build network not set"
+                "pool import skipped: no build network"
             );
             return;
         }
@@ -263,7 +263,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import config: network={} minimum_size={} import.initial={} resolved_initial_limit={} wait_for_queued={}",
+        "pool import cfg: net={} min={} init={} limit={} wait={}",
         data.network.map_or("unknown", BuildNetwork::as_str),
         data.subnet_cfg.pool.minimum_size,
         initial_cfg,
@@ -285,7 +285,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         log!(
             Topic::CanisterPool,
             Warn,
-            "pool import initial=0 with auto_create enabled; canisters may be created before queued imports are ready"
+            "pool import init=0 with auto_create; queued imports may lag creation"
         );
     }
 
@@ -293,7 +293,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         log!(
             Topic::CanisterPool,
             Warn,
-            "pool import skipped: selected import list is empty for network={}",
+            "pool import skipped: empty list for net={}",
             data.network.map_or("unknown", BuildNetwork::as_str)
         );
         log_pool_stats("after-empty-import-skip", data.subnet_cfg.pool.minimum_size);
@@ -380,7 +380,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             log!(
                 Topic::CanisterPool,
                 Info,
-                "pool import queued async candidates={} pids={}",
+                "pool import queued async count={} pids={}",
                 queued_imports.len(),
                 summarize_principals(&queued_imports, 12)
             );
@@ -401,13 +401,13 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import immediate summary: configured={}, imported={imported}, skipped={immediate_skipped}, failed={immediate_failed}, present={immediate_already_present}",
+        "pool import now: cfg={} ok={imported} skip={immediate_skipped} fail={immediate_failed} present={immediate_already_present}",
         configured_initial
     );
     log!(
         Topic::CanisterPool,
         Info,
-        "pool import immediate pids: imported={} skipped={} failed={} present={}",
+        "pool import now pids: ok={} skip={} fail={} present={}",
         summarize_principals(&immediate_imported_pids, 12),
         summarize_principals(&immediate_skipped_pids, 12),
         summarize_principals(&immediate_failed_pids, 12),
@@ -419,14 +419,14 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             log!(
                 Topic::CanisterPool,
                 Warn,
-                "pool import queued summary: configured={}, failed={queued_failed}, present={queued_already_present}",
+                "pool import queued: cfg={} fail={queued_failed} present={queued_already_present}",
                 configured_queued
             );
         } else {
             log!(
                 Topic::CanisterPool,
                 Info,
-                "pool import queued summary: configured={}, added={queued_added}, requeued={queued_requeued}, skipped={queued_skipped}, present={queued_already_present}",
+                "pool import queued: cfg={} added={queued_added} requeued={queued_requeued} skip={queued_skipped} present={queued_already_present}",
                 configured_queued
             );
         }
@@ -435,7 +435,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             log!(
                 Topic::CanisterPool,
                 Info,
-                "pool import queued pids: added={} skipped={} failed={} present={}",
+                "pool import queued pids: added={} skip={} fail={} present={}",
                 summarize_principals(&queued_added_pids, 12),
                 summarize_principals(&queued_skipped_pids, 12),
                 summarize_principals(&queued_failed_pids, 12),
@@ -445,7 +445,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             log!(
                 Topic::CanisterPool,
                 Info,
-                "pool import queued pids (best-effort): present={} (added/requeued/skipped resolved by scheduler)",
+                "pool import queued pids: present={} (scheduler resolves added/requeued/skip)",
                 summarize_principals(&queued_present_pids, 12),
             );
         }
@@ -458,11 +458,7 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
     for role in &data.subnet_cfg.auto_create {
         // ALWAYS re-check live registry
         if SubnetRegistryOps::has_role(role) {
-            log!(
-                Topic::Init,
-                Info,
-                "auto_create: {role} already present in registry, skipping"
-            );
+            log!(Topic::Init, Info, "auto_create: {role} present; skip");
             continue;
         }
 
@@ -488,15 +484,11 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
     if SubnetRegistryOps::has_role(&role) {
-        log!(
-            Topic::Init,
-            Info,
-            "wasm_store: {role} already present in registry, skipping"
-        );
+        log!(Topic::Init, Info, "ws: {role} present; skip");
         return Ok(());
     }
 
-    log!(Topic::Init, Info, "wasm_store: creating {role}");
+    log!(Topic::Init, Info, "ws: create {role}");
 
     CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
         role,
@@ -511,11 +503,7 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
 async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
     WasmStorePublicationWorkflow::import_current_store_catalog().await?;
 
-    log!(
-        Topic::Init,
-        Info,
-        "WasmStore: imported default store catalog into root manifest state"
-    );
+    log!(Topic::Init, Info, "ws: imported default catalog");
 
     Ok(())
 }

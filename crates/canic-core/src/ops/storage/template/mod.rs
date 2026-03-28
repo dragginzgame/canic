@@ -27,54 +27,50 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum TemplateManifestOpsError {
-    #[error("approved manifest missing for role '{0}'")]
+    #[error("approved manifest missing for '{0}'")]
     ApprovedManifestMissing(CanisterRole),
 
-    #[error("multiple approved manifests found for role '{0}'")]
+    #[error("multiple approved manifests for '{0}'")]
     ApprovedManifestConflict(CanisterRole),
 
-    #[error("template chunk set missing for release '{0}'")]
+    #[error("chunk set missing for '{0}'")]
     TemplateChunkSetMissing(TemplateReleaseKey),
 
-    #[error("template chunk missing for key '{0}'")]
+    #[error("chunk missing for '{0}'")]
     TemplateChunkMissing(TemplateChunkKey),
 
-    #[error("template chunk set '{0}' must contain at least one chunk")]
+    #[error("chunk set '{0}' must contain at least one chunk")]
     TemplateChunkSetEmpty(TemplateReleaseKey),
 
-    #[error("template chunk set '{0}' payload hash mismatch")]
+    #[error("chunk set '{0}' payload hash mismatch")]
     PayloadHashMismatch(TemplateReleaseKey),
 
-    #[error("template chunk set '{0}' payload size mismatch")]
+    #[error("chunk set '{0}' payload size mismatch")]
     PayloadSizeMismatch(TemplateReleaseKey),
 
-    #[error("template chunk set '{0}' exceeds supported chunk indexing bounds")]
+    #[error("chunk set '{0}' exceeds chunk index bounds")]
     ChunkIndexOverflow(TemplateReleaseKey),
 
-    #[error("template chunk index {1} out of range for release '{0}'")]
+    #[error("chunk index {1} out of range for '{0}'")]
     TemplateChunkIndexOutOfRange(TemplateReleaseKey, u32),
 
-    #[error("template chunk '{0}' hash mismatch")]
+    #[error("chunk '{0}' hash mismatch")]
     TemplateChunkHashMismatch(TemplateChunkKey),
 
-    #[error(
-        "wasm store capacity exceeded: projected occupied bytes {projected_bytes} > max_store_bytes {max_store_bytes}"
-    )]
+    #[error("wasm store capacity exceeded: bytes {projected_bytes} > {max_store_bytes}")]
     WasmStoreCapacityExceeded {
         projected_bytes: u64,
         max_store_bytes: u64,
     },
 
-    #[error(
-        "wasm store template count exceeded: projected templates {projected_templates} > max_templates {max_templates}"
-    )]
+    #[error("wasm store template count exceeded: {projected_templates} > {max_templates}")]
     WasmStoreTemplateLimitExceeded {
         projected_templates: u32,
         max_templates: u32,
     },
 
     #[error(
-        "wasm store version retention exceeded for template '{template_id}': projected versions {projected_versions} > max_template_versions_per_template {max_template_versions_per_template}"
+        "wasm store version retention exceeded for '{template_id}': {projected_versions} > {max_template_versions_per_template}"
     )]
     WasmStoreVersionLimitExceeded {
         template_id: TemplateId,

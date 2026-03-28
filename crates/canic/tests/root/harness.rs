@@ -503,7 +503,7 @@ fn stage_root_wasm_store_bootstrap(pic: &Pic, root_id: Principal) {
     let staged_manifest: Result<(), Error> = pic
         .update_call(
             root_id,
-            protocol::WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN,
+            protocol::CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN,
             (manifest,),
         )
         .expect("bootstrap manifest staging call");
@@ -512,7 +512,7 @@ fn stage_root_wasm_store_bootstrap(pic: &Pic, root_id: Principal) {
     let prepared: Result<canic::dto::template::TemplateChunkSetInfoResponse, Error> = pic
         .update_call(
             root_id,
-            protocol::WASM_STORE_BOOTSTRAP_PREPARE_ADMIN,
+            protocol::CANIC_WASM_STORE_BOOTSTRAP_PREPARE_ADMIN,
             (TemplateChunkSetPrepareInput {
                 template_id: TemplateId::new(WASM_STORE_BOOTSTRAP_TEMPLATE_ID),
                 version: version.clone(),
@@ -528,7 +528,7 @@ fn stage_root_wasm_store_bootstrap(pic: &Pic, root_id: Principal) {
         let published: Result<(), Error> = pic
             .update_call(
                 root_id,
-                protocol::WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN,
+                protocol::CANIC_WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN,
                 (TemplateChunkInput {
                     template_id: TemplateId::new(WASM_STORE_BOOTSTRAP_TEMPLATE_ID),
                     version: version.clone(),
@@ -543,7 +543,7 @@ fn stage_root_wasm_store_bootstrap(pic: &Pic, root_id: Principal) {
     let resumed: Result<(), Error> = pic
         .update_call(
             root_id,
-            protocol::WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
+            protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
             (),
         )
         .expect("resume root bootstrap call");

@@ -121,9 +121,7 @@ impl WasmStorePublicationWorkflow {
         if Self::binding_is_reserved_for_publication(state, binding) {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                format!(
-                    "wasm store binding '{binding}' is reserved by detached/retired publication state and cannot be selected",
-                ),
+                format!("ws binding '{binding}' is detached/retired"),
             ));
         }
 
@@ -144,7 +142,7 @@ impl WasmStorePublicationWorkflow {
         log!(
             Topic::Wasm,
             Info,
-            "wasm_store.transition kind={} generation={} changed_at={} old_active={} old_detached={} old_retired={} new_active={} new_detached={} new_retired={}",
+            "ws.transition kind={} gen={} at={} old_a={} old_d={} old_r={} new_a={} new_d={} new_r={}",
             transition_kind,
             current.generation,
             changed_at,
@@ -164,7 +162,7 @@ impl WasmStorePublicationWorkflow {
         if state.detached_binding.is_some() && state.retired_binding.is_some() {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                "wasm store rollover blocked: finalize or delete the current retired binding before promoting another store".to_string(),
+                "ws rollover blocked: retired slot occupied".to_string(),
             ));
         }
 
@@ -178,7 +176,7 @@ impl WasmStorePublicationWorkflow {
         if state.retired_binding.is_some() {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                "wasm store retirement blocked: finalize or delete the current retired binding before retiring another store".to_string(),
+                "ws retirement blocked: retired slot occupied".to_string(),
             ));
         }
 
@@ -220,7 +218,7 @@ impl WasmStorePublicationWorkflow {
         log!(
             Topic::Wasm,
             Warn,
-            "wasm_store: prepared retired binding {} for gc generation={} retired_at={}",
+            "ws gc prepared {} gen={} retired_at={}",
             retired_binding,
             state.generation,
             state.retired_at
@@ -243,7 +241,7 @@ impl WasmStorePublicationWorkflow {
         log!(
             Topic::Wasm,
             Warn,
-            "wasm_store: began gc on retired binding {} generation={} retired_at={}",
+            "ws gc begin {} gen={} retired_at={}",
             retired_binding,
             state.generation,
             state.retired_at
@@ -266,7 +264,7 @@ impl WasmStorePublicationWorkflow {
         log!(
             Topic::Wasm,
             Warn,
-            "wasm_store: completed gc on retired binding {} generation={} retired_at={}",
+            "ws gc complete {} gen={} retired_at={}",
             retired_binding,
             state.generation,
             state.retired_at
@@ -290,7 +288,7 @@ impl WasmStorePublicationWorkflow {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "retired wasm store '{}' is not ready for finalization; gc mode is {:?}",
+                    "retired ws '{}' not ready for finalize; gc={:?}",
                     retired_binding, store.gc.mode
                 ),
             ));
@@ -312,7 +310,7 @@ impl WasmStorePublicationWorkflow {
             log!(
                 Topic::Wasm,
                 Warn,
-                "wasm_store: finalized retired binding {} ({})",
+                "ws finalized {} ({})",
                 binding,
                 finalized_store_pid
             );
@@ -334,7 +332,7 @@ impl WasmStorePublicationWorkflow {
         {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                format!("wasm store '{binding}' is still referenced by current publication state"),
+                format!("ws '{binding}' is still referenced"),
             ));
         }
 
@@ -344,7 +342,7 @@ impl WasmStorePublicationWorkflow {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "finalized wasm store '{}' is not ready for deletion; gc mode is {:?}",
+                    "finalized ws '{}' not ready for delete; gc={:?}",
                     binding, store.gc.mode
                 ),
             ));
@@ -355,7 +353,7 @@ impl WasmStorePublicationWorkflow {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "finalized wasm store '{}' is not empty after gc; occupied_bytes={} templates={} releases={}",
+                    "finalized ws '{}' not empty after gc; bytes={} templates={} releases={}",
                     binding, store.occupied_store_bytes, store.template_count, store.release_count
                 ),
             ));
@@ -363,13 +361,7 @@ impl WasmStorePublicationWorkflow {
 
         ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
 
-        log!(
-            Topic::Wasm,
-            Warn,
-            "wasm_store: deleted finalized retired store {} ({})",
-            binding,
-            store_pid
-        );
+        log!(Topic::Wasm, Warn, "ws deleted {} ({})", binding, store_pid);
 
         Ok(())
     }
@@ -393,12 +385,7 @@ impl WasmStorePublicationWorkflow {
                 &current,
                 changed_at,
             );
-            log!(
-                Topic::Wasm,
-                Warn,
-                "wasm_store: retired detached binding {}",
-                binding
-            );
+            log!(Topic::Wasm, Warn, "ws retired {}", binding);
         }
 
         retired
@@ -464,12 +451,7 @@ impl WasmStorePublicationWorkflow {
         let preferred_binding = match SubnetStateOps::publication_store_binding() {
             Some(binding) if ConfigOps::current_subnet_wasm_store(&binding).is_ok() => binding,
             Some(binding) => {
-                log!(
-                    Topic::Wasm,
-                    Warn,
-                    "wasm_store: clearing stale preferred binding {}",
-                    binding
-                );
+                log!(Topic::Wasm, Warn, "ws clear stale binding {}", binding);
                 let changed_at = IcOps::now_secs();
                 Self::ensure_retired_binding_slot_available_for_promotion()?;
                 let previous = SubnetStateOps::publication_store_state();
@@ -491,7 +473,7 @@ impl WasmStorePublicationWorkflow {
             log!(
                 Topic::Wasm,
                 Warn,
-                "wasm_store: skipping reserved publication binding {}",
+                "ws skip reserved binding {}",
                 preferred_binding
             );
         } else if Self::store_binding_accepts_publication(&preferred_binding).await? {
@@ -505,12 +487,7 @@ impl WasmStorePublicationWorkflow {
 
             let current_state = SubnetStateOps::publication_store_state();
             if Self::binding_is_reserved_for_publication(&current_state, &candidate) {
-                log!(
-                    Topic::Wasm,
-                    Warn,
-                    "wasm_store: skipping reserved publication binding {}",
-                    candidate
-                );
+                log!(Topic::Wasm, Warn, "ws skip reserved binding {}", candidate);
                 continue;
             }
 
@@ -518,7 +495,7 @@ impl WasmStorePublicationWorkflow {
                 log!(
                     Topic::Wasm,
                     Warn,
-                    "wasm_store: preferred binding {} within headroom, using {}",
+                    "ws preferred {} within headroom, using {}",
                     preferred_binding,
                     candidate
                 );
@@ -545,7 +522,7 @@ impl WasmStorePublicationWorkflow {
         Err(InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!(
-                "no publishable wasm store binding available on subnet; preferred binding '{preferred_binding}' is within configured headroom",
+                "no publishable ws binding; preferred '{preferred_binding}' is within headroom",
             ),
         ))
     }
@@ -560,9 +537,7 @@ impl WasmStorePublicationWorkflow {
         if status.within_headroom {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                format!(
-                    "wasm store binding '{store_binding}' at {store_pid} is within configured headroom",
-                ),
+                format!("ws binding '{store_binding}' at {store_pid} is within headroom",),
             ));
         }
 
@@ -602,7 +577,7 @@ impl WasmStorePublicationWorkflow {
             crate::log!(
                 crate::log::Topic::Wasm,
                 Info,
-                "📦 template.import: {} -> {} ({} bytes)",
+                "tpl.import {} -> {} ({} bytes)",
                 role,
                 template_id,
                 wasm.len()
@@ -676,7 +651,7 @@ impl WasmStorePublicationWorkflow {
             crate::log!(
                 crate::log::Topic::Wasm,
                 Info,
-                "📦 template.store.import: {} -> {} ({} bytes)",
+                "tpl.store.import {} -> {} ({} bytes)",
                 role,
                 template_id,
                 wasm.len()
@@ -811,7 +786,7 @@ impl WasmStorePublicationWorkflow {
                 InternalError::workflow(
                     InternalErrorOrigin::Workflow,
                     format!(
-                        "template '{}' exceeds supported chunk indexing bounds",
+                        "template '{}' exceeds chunk index bounds",
                         entry.template_id
                     ),
                 )
@@ -836,7 +811,7 @@ impl WasmStorePublicationWorkflow {
                     return Err(InternalError::workflow(
                         InternalErrorOrigin::Workflow,
                         format!(
-                            "template '{}' chunk {} uploaded hash mismatch for store {}",
+                            "template '{}' chunk {} hash mismatch for {}",
                             entry.template_id, chunk_index, target_store_pid
                         ),
                     ));
@@ -860,7 +835,7 @@ impl WasmStorePublicationWorkflow {
         crate::log!(
             crate::log::Topic::Wasm,
             Info,
-            "📦 template.publish: {} -> {} (store={}, chunks={})",
+            "tpl.publish {} -> {} (store={}, chunks={})",
             entry.role,
             entry.template_id,
             target_store_pid,

@@ -173,6 +173,7 @@ test-canisters:
 		( TMPDIR="$(TEST_TMPDIR)" RELEASE=0 dfx build --all ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
 		( TMPDIR="$(TEST_TMPDIR)" dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
+		( TMPDIR="$(TEST_TMPDIR)" bash scripts/app/stage_root_wasm_store_bootstrap.sh root ); \
 		( root_pid="$$(dfx canister id root)"; \
 		  TMPDIR="$(TEST_TMPDIR)" dfx canister install test --mode=reinstall -y --argument "(record { env = record { prime_root_pid = opt principal \"$$root_pid\"; subnet_role = opt \"prime\"; subnet_pid = opt principal \"$$root_pid\"; root_pid = opt principal \"$$root_pid\"; canister_role = opt \"test\"; parent_pid = opt principal \"$$root_pid\" }; app_directory = vec {}; subnet_directory = vec {} }, null)" ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx canister call test test ); \
