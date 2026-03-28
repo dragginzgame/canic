@@ -6,19 +6,20 @@
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_nonroot_lifecycle_core {
-    ($canister_role:expr) => {
+    ($canister_role:expr $(, $init:block)?) => {
         #[::canic::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister(
+            $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
-                args.clone(),
                 config_str,
                 config_path,
             );
 
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
             $crate::__canic_start_nonroot_user_timers!(args);
         }
 
@@ -26,12 +27,14 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn post_upgrade() {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister(
+            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
                 config_str,
                 config_path,
             );
 
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
             $crate::__canic_start_nonroot_upgrade_timers!();
         }
     };
@@ -41,17 +44,19 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_root_lifecycle_core {
-    () => {
+    ($( $init:block )?) => {
         #[::canic::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_root_canister(
+            $crate::__internal::core::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 identity,
                 config_str,
                 config_path,
             );
 
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             $crate::__canic_start_root_user_timers!();
         }
 
@@ -59,14 +64,24 @@ macro_rules! __canic_start_root_lifecycle_core {
         fn post_upgrade() {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_root_canister(
+            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config_str,
                 config_path,
             );
 
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
             $crate::__canic_start_root_upgrade_timers!();
         }
     };
+}
+
+// Run the optional synchronous init hook embedded in `start!` / `start_root!`.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_run_start_init_hook {
+    () => {};
+    ($init:block) => {{ $init }};
 }
 
 // User lifecycle timer bundle for non-root init.
@@ -169,8 +184,8 @@ macro_rules! __canic_start_root_capability_bundles {
 /// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
 #[macro_export]
 macro_rules! start {
-    ($canister_role:expr) => {
-        $crate::__canic_start_nonroot_lifecycle_core!($canister_role);
+    ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+        $crate::__canic_start_nonroot_lifecycle_core!($canister_role $(, $init)?);
         $crate::__canic_start_nonroot_capability_bundles!();
     };
 }
@@ -188,8 +203,8 @@ macro_rules! start {
 ///
 #[macro_export]
 macro_rules! start_root {
-    () => {
-        $crate::__canic_start_root_lifecycle_core!();
+    ($(init = $init:block)? $(,)?) => {
+        $crate::__canic_start_root_lifecycle_core!($($init)?);
         $crate::__canic_start_root_capability_bundles!();
     };
 }

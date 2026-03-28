@@ -45,6 +45,7 @@ pub mod pool;
 pub mod rpc;
 pub mod state;
 pub mod subnet;
+pub mod template;
 pub mod topology;
 pub mod validation;
 

@@ -3,10 +3,11 @@ use crate::{
         AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetStateInput,
         SubnetStateResponse,
     },
+    dto::template::WasmStorePublicationStateResponse,
     ops::storage::state::app::AppStateCommand,
     storage::stable::state::{
         app::{AppMode as StorageAppMode, AppStateRecord},
-        subnet::SubnetStateRecord,
+        subnet::{PublicationStoreStateRecord, SubnetStateRecord},
     },
 };
 
@@ -70,21 +71,47 @@ pub struct SubnetStateMapper;
 impl SubnetStateMapper {
     // Map the stored subnet-state snapshot into the DTO input shape.
     #[must_use]
-    pub const fn record_to_input(_: SubnetStateRecord) -> SubnetStateInput {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn record_to_input(_: SubnetStateRecord) -> SubnetStateInput {
         SubnetStateInput {}
     }
 
     // Map the stored subnet-state snapshot into the public response shape.
     #[must_use]
-    pub const fn record_to_response(_: SubnetStateRecord) -> SubnetStateResponse {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn record_to_response(_: SubnetStateRecord) -> SubnetStateResponse {
         SubnetStateResponse {}
+    }
+
+    // Map the stored publication lifecycle record into the template response shape.
+    #[must_use]
+    pub fn publication_store_record_to_response(
+        data: PublicationStoreStateRecord,
+    ) -> WasmStorePublicationStateResponse {
+        WasmStorePublicationStateResponse {
+            active_binding: data.active_binding,
+            detached_binding: data.detached_binding,
+            retired_binding: data.retired_binding,
+            generation: data.generation,
+            changed_at: data.changed_at,
+            retired_at: data.retired_at,
+        }
     }
 
     // Map a DTO input snapshot back into the stored subnet-state record.
     #[must_use]
     pub const fn input_to_record(_: SubnetStateInput) -> SubnetStateRecord {
         // TODO: mapping from DTO to storage record must remain in ops.
-        SubnetStateRecord {}
+        SubnetStateRecord {
+            publication_store: PublicationStoreStateRecord {
+                active_binding: None,
+                detached_binding: None,
+                retired_binding: None,
+                generation: 0,
+                changed_at: 0,
+                retired_at: 0,
+            },
+        }
     }
 }
 

@@ -79,9 +79,12 @@ If code conflicts with this document, **the code is wrong**.
   * `docs/changelog/x.y.md`
   * with one section per patch: `## x.y.z - YYYY-MM-DD - Short Title`
   * and `---` separators between patch sections.
+* Patch entries in both root and detailed changelogs must stay in chronological order:
+  * oldest patch first
+  * newest patch last
 * When adding a new patch in an existing minor line:
-  * append a new patch bullet to the existing root `x.y.x` section
-  * append/update the matching patch section in `docs/changelog/x.y.md`
+  * append the new patch bullet to the end of the existing root `x.y.x` section
+  * append/update the matching patch section at the end of `docs/changelog/x.y.md`
   * do not create a new root per-patch header.
 * Use this fixed emoji mapping for section headers (primarily in detailed notes):
   * `Added=➕`

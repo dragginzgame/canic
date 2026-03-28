@@ -1,6 +1,9 @@
 pub mod registry;
 
-use std::cell::{Cell, RefCell};
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 // -----------------------------------------------------------------------------
 // CANIC_EAGER_TLS
@@ -18,12 +21,8 @@ use std::cell::{Cell, RefCell};
 // `init_eager_tls()`.
 // -----------------------------------------------------------------------------
 
-thread_local! {
-    static CANIC_EAGER_TLS: RefCell<Vec<fn()>> = const {
-        RefCell::new(Vec::new())
-    };
-    static CANIC_EAGER_TLS_RUNNING: Cell<bool> = const { Cell::new(false) };
-}
+static CANIC_EAGER_TLS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
+static CANIC_EAGER_TLS_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Run all deferred TLS initializers and clear the registry.
 ///
@@ -47,20 +46,23 @@ pub fn init_eager_tls() {
 
     impl Drop for RunningGuard {
         fn drop(&mut self) {
-            CANIC_EAGER_TLS_RUNNING.with(|running| running.set(false));
+            CANIC_EAGER_TLS_RUNNING.store(false, Ordering::SeqCst);
         }
     }
 
-    CANIC_EAGER_TLS_RUNNING.with(|running| running.set(true));
+    CANIC_EAGER_TLS_RUNNING.store(true, Ordering::SeqCst);
     let _running_guard = RunningGuard;
 
-    let funcs = CANIC_EAGER_TLS.with(|v| {
-        let mut v = v.borrow_mut();
-        std::mem::take(&mut *v)
-    });
+    let funcs = {
+        let mut funcs = CANIC_EAGER_TLS.lock().expect("eager tls queue poisoned");
+        std::mem::take(&mut *funcs)
+    };
 
     debug_assert!(
-        CANIC_EAGER_TLS.with(|v| v.borrow().is_empty()),
+        CANIC_EAGER_TLS
+            .lock()
+            .expect("eager tls queue poisoned")
+            .is_empty(),
         "CANIC_EAGER_TLS was modified during init_eager_tls() execution"
     );
 
@@ -71,7 +73,7 @@ pub fn init_eager_tls() {
 
 #[must_use]
 pub fn is_eager_tls_initializing() -> bool {
-    CANIC_EAGER_TLS_RUNNING.with(Cell::get)
+    CANIC_EAGER_TLS_RUNNING.load(Ordering::SeqCst)
 }
 
 #[must_use]
@@ -95,7 +97,10 @@ pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
 /// must be a zero-argument function (`fn()`) that performs a `.with(|_| {})`
 /// on the thread-local static it is meant to initialize.
 pub fn defer_tls_initializer(f: fn()) {
-    CANIC_EAGER_TLS.with_borrow_mut(|v| v.push(f));
+    CANIC_EAGER_TLS
+        .lock()
+        .expect("eager tls queue poisoned")
+        .push(f);
 }
 
 ///
@@ -105,27 +110,28 @@ pub fn defer_tls_initializer(f: fn()) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
-    thread_local! {
-        static COUNT: Cell<u32> = const { Cell::new(0) };
-    }
+    static COUNT: AtomicU32 = AtomicU32::new(0);
 
     fn bump() {
-        COUNT.with(|c| c.set(c.get() + 1));
+        COUNT.fetch_add(1, Ordering::SeqCst);
     }
 
     #[test]
     fn init_eager_tls_runs_and_clears_queue() {
-        COUNT.with(|c| c.set(0));
-        CANIC_EAGER_TLS.with(|v| v.borrow_mut().push(bump));
+        COUNT.store(0, Ordering::SeqCst);
+        CANIC_EAGER_TLS
+            .lock()
+            .expect("eager tls queue poisoned")
+            .push(bump);
         init_eager_tls();
-        let first = COUNT.with(Cell::get);
+        let first = COUNT.load(Ordering::SeqCst);
         assert_eq!(first, 1);
 
         // second call sees empty queue
         init_eager_tls();
-        let second = COUNT.with(Cell::get);
+        let second = COUNT.load(Ordering::SeqCst);
         assert_eq!(second, 1);
     }
 }

@@ -26,11 +26,12 @@ members = [
     "crates/canisters/test",
     "crates/canisters/user_hub",
     "crates/canisters/user_shard",
+    "crates/canisters/wasm_store",
 ]
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.94.0"
+rust-version = "1.94.1"
 edition = "2024"
 version = "0.17.3"
 license = "MIT"
@@ -57,7 +58,7 @@ canic-testkit = { version = "0.17.3", path = "crates/canic-testkit" }
 canic-utils = { version = "0.17.3", path = "crates/canic-utils" }
 convert_case = "0.11"
 criterion = "0.8"
-ctor = "0.6"
+ctor = "0.8"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
 ic-cdk = "0.20.0"
 ic-cdk-management-canister = "0.1.0"
@@ -73,7 +74,7 @@ remain = "0.2"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 serde_cbor = "0.11"
-sha2 = "0.10"
+sha2 = "0.11"
 syn = "2.0"
 thiserror = "2.0"
 toml = "1.0"

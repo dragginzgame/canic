@@ -87,10 +87,12 @@ impl MemoryRegistryInitSummary {
 pub struct MemoryRegistryOps;
 
 impl MemoryRegistryOps {
+    // Run eager TLS touches before the registry initializes stable-memory slots.
     pub fn init_eager_tls() {
         init_eager_tls();
     }
 
+    // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
         let summary =
             MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))

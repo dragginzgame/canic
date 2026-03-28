@@ -30,7 +30,11 @@ use crate::{
 };
 use std::time::Duration;
 
-pub fn init_root_canister(identity: SubnetIdentity, config_str: &str, config_path: &str) {
+pub fn init_root_canister_before_bootstrap(
+    identity: SubnetIdentity,
+    config_str: &str,
+    config_path: &str,
+) {
     if let Err(err) = bootstrap::init_config(config_str) {
         lifecycle_trap(
             LifecyclePhase::Init,
@@ -42,8 +46,9 @@ pub fn init_root_canister(identity: SubnetIdentity, config_str: &str, config_pat
     if let Err(err) = workflow::runtime::init_root_canister(identity) {
         lifecycle_trap(LifecyclePhase::Init, err);
     }
+}
 
-    // Schedule async bootstrap immediately after init returns.
+pub fn schedule_init_root_bootstrap() {
     TimerWorkflow::set(
         Duration::ZERO,
         "canic:bootstrap:init_root_canister",
@@ -53,10 +58,9 @@ pub fn init_root_canister(identity: SubnetIdentity, config_str: &str, config_pat
     );
 }
 
-pub fn init_nonroot_canister(
+pub fn init_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     payload: CanisterInitPayload,
-    args: Option<Vec<u8>>,
     config_str: &str,
     config_path: &str,
 ) {
@@ -71,7 +75,9 @@ pub fn init_nonroot_canister(
     if let Err(err) = workflow::runtime::init_nonroot_canister(role, payload) {
         lifecycle_trap(LifecyclePhase::Init, err);
     }
+}
 
+pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
     // Schedule async bootstrap immediately after init returns.
     // Duration::ZERO ensures execution on the next tick without
     // blocking the init hook.

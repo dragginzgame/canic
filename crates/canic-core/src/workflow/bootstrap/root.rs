@@ -15,7 +15,7 @@ use crate::{
         ic::{IcOps, network::NetworkOps},
         runtime::env::EnvOps,
         runtime::ready::ReadyOps,
-        runtime::wasm::WasmOps,
+        storage::template::TemplateManifestOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
@@ -27,6 +27,7 @@ use crate::{
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::{PoolWorkflow, query::PoolQuery},
         prelude::*,
+        runtime::template::WasmStorePublicationWorkflow,
         topology::guard::TopologyGuard,
     },
 };
@@ -58,8 +59,12 @@ impl RootBootstrapContext {
 /// ---------------------------------------------------------------------------
 
 pub async fn bootstrap_init_root_canister() {
-    if let Err(err) = WasmOps::require_initialized() {
-        log!(Topic::Init, Error, "bootstrap (root:init) aborted: {err}");
+    if TemplateManifestOps::approved_for_role_response(&CanisterRole::WASM_STORE).is_err() {
+        log!(
+            Topic::Init,
+            Info,
+            "bootstrap (root:init) waiting for staged wasm_store template"
+        );
         return;
     }
 
@@ -108,11 +113,11 @@ pub async fn bootstrap_init_root_canister() {
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
-    if let Err(err) = WasmOps::require_initialized() {
+    if TemplateManifestOps::approved_for_role_response(&CanisterRole::WASM_STORE).is_err() {
         log!(
             Topic::Init,
-            Error,
-            "bootstrap (root:upgrade) aborted: {err}"
+            Info,
+            "bootstrap (root:upgrade) waiting for staged wasm_store template"
         );
         return;
     }
@@ -122,6 +127,10 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     root_set_subnet_id().await;
     // Keep post-upgrade non-blocking; queued imports continue in background.
     root_import_pool_from_config(false).await;
+    if let Err(err) = root_reconcile_wasm_store().await {
+        log!(Topic::Init, Error, "wasm store reconcile failed: {err}");
+        return;
+    }
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
 
     ReadyOps::mark_ready();
@@ -209,6 +218,8 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
         data.subnet_cfg.auto_create
     );
 
+    ensure_required_wasm_store_canister().await?;
+    import_default_wasm_store_catalog().await?;
     ensure_required_canisters(&data).await
 }
 
@@ -464,6 +475,47 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
         })
         .await?;
     }
+
+    Ok(())
+}
+
+async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
+    ensure_required_wasm_store_canister().await?;
+    import_default_wasm_store_catalog().await
+}
+
+async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
+    let role = CanisterRole::WASM_STORE;
+
+    if SubnetRegistryOps::has_role(&role) {
+        log!(
+            Topic::Init,
+            Info,
+            "wasm_store: {role} already present in registry, skipping"
+        );
+        return Ok(());
+    }
+
+    log!(Topic::Init, Info, "wasm_store: creating {role}");
+
+    CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
+        role,
+        parent: IcOps::canister_self(),
+        extra_arg: None,
+    })
+    .await?;
+
+    Ok(())
+}
+
+async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
+    WasmStorePublicationWorkflow::import_current_store_catalog().await?;
+
+    log!(
+        Topic::Init,
+        Info,
+        "WasmStore: imported default store catalog into root manifest state"
+    );
 
     Ok(())
 }

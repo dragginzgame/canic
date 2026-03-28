@@ -1,15 +1,16 @@
-/// Run `$body` during process start-up using `ctor`.
+/// Register one eager-init body for execution from the generated lifecycle hooks.
 ///
-/// The macro expands to a `ctor` hook so eager TLS initializers can register
-/// their work before any canister lifecycle hooks execute. Prefer wrapping
-/// the body in a separate function for larger initializers to keep the hook
-/// simple.
+/// The body runs synchronously after Canic has restored memory, config, and
+/// environment state, but before any zero-delay bootstrap timers fire.
 #[macro_export]
 macro_rules! eager_init {
     ($body:block) => {
-        #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]
-        fn __canic_eager_init() {
-            $body
+        macro_rules! __canic_run_registered_eager_init {
+            () => {{
+                if option_env!("CANIC_SKIP_EAGER_INIT").is_none() {
+                    $body
+                }
+            }};
         }
     };
 }
@@ -26,11 +27,15 @@ macro_rules! eager_static {
             $vis static $name: $ty = $init;
         }
 
-        $crate::eager_init!({
-            // Capture the TLS accessor and register a closure that forces initialization.
-            $crate::runtime::defer_tls_initializer(|| {
+        const _: () = {
+            fn __canic_touch_tls() {
                 $name.with(|_| {});
-            });
-        });
+            }
+
+            #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]
+            fn __canic_register_eager_tls() {
+                $crate::runtime::defer_tls_initializer(__canic_touch_tls);
+            }
+        };
     };
 }

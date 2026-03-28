@@ -3,8 +3,8 @@ pub mod cycles;
 pub mod intent;
 pub mod log;
 pub mod random;
+pub mod template;
 pub mod timer;
-pub mod wasm;
 
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,

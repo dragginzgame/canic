@@ -36,6 +36,12 @@ impl PropagationWorkflow {
     /// app/subnet state, cascades it to dependents, and finally re-asserts
     /// directory ↔ registry consistency.
     pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
+        // The implicit wasm_store does not consume app/subnet runtime state and has
+        // no dependents that require state cascade immediately after install.
+        if role.is_wasm_store() {
+            return Ok(());
+        }
+
         // Ensure newly created/adopted canisters inherit the current app
         // and subnet states
         let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?

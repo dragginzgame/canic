@@ -11,6 +11,7 @@ pub mod replay;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
+pub mod template;
 
 ///
 /// CANIC is only allowed to allocate within this inclusive range.
@@ -52,8 +53,9 @@ pub mod memory {
         pub const SUBNET_DIRECTORY_ID: u8 = 7;
         pub const APP_REGISTRY_ID: u8 = 8;
         pub const SUBNET_REGISTRY_ID: u8 = 9;
-
-        // Reserved: 10–12
+        pub const TEMPLATE_MANIFESTS_ID: u8 = 10;
+        pub const TEMPLATE_CHUNK_SETS_ID: u8 = 11;
+        pub const TEMPLATE_CHUNKS_ID: u8 = 12;
     }
 
     // ---------------------------------------------------------------------

@@ -370,15 +370,18 @@ macro_rules! canic_endpoints_root_auth_attestation {
         async fn canic_request_delegation(
             request: ::canic::dto::auth::DelegationRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::request_delegation(request).await
+            $crate::__internal::core::api::auth::DelegationApi::request_delegation_root(request)
+                .await
         }
 
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
         ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::request_role_attestation(request)
-                .await
+            $crate::__internal::core::api::auth::DelegationApi::request_role_attestation_root(
+                request,
+            )
+            .await
         }
 
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
@@ -393,6 +396,63 @@ macro_rules! canic_endpoints_root_auth_attestation {
         ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::admin(cmd).await
         }
+    };
+}
+
+// Root-only WasmStore bootstrap, publication, and retired-store GC control surface.
+#[macro_export]
+macro_rules! canic_endpoints_root_wasm_store {
+    () => {
+        #[canic_update(requires(caller::is_controller()))]
+        async fn wasm_store_bootstrap_stage_manifest_admin(
+            request: ::canic::dto::template::TemplateManifestInput,
+        ) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
+                request,
+            )
+        }
+
+        #[canic_update(requires(caller::is_controller()))]
+        async fn wasm_store_bootstrap_prepare_admin(
+            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
+        }
+
+        #[canic_update(requires(caller::is_controller()))]
+        async fn wasm_store_bootstrap_publish_chunk_admin(
+            request: ::canic::dto::template::TemplateChunkInput,
+        ) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
+        }
+
+        #[canic_update(requires(caller::is_controller()))]
+        async fn wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
+            ::canic::__internal::core::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+            Ok(())
+        }
+
+        #[canic_update(requires(caller::is_controller()))]
+        async fn canic_wasm_store_admin(
+            cmd: ::canic::dto::template::WasmStoreAdminCommand,
+        ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::admin(cmd).await
+        }
+
+        #[canic_query(requires(caller::is_controller()))]
+        async fn wasm_store_publication_status(
+        ) -> Result<::canic::dto::template::WasmStorePublicationStateResponse, ::canic::Error> {
+            Ok(::canic::api::canister::template::WasmStorePublicationApi::publication_store_state())
+        }
+
+        #[canic_query(requires(caller::is_controller()))]
+        async fn wasm_store_retirement_status(
+        ) -> Result<Option<::canic::dto::template::WasmStoreRetiredStoreStatusResponse>, ::canic::Error>
+        {
+            ::canic::api::canister::template::WasmStorePublicationApi::retired_publication_store_status()
+                .await
+        }
+
     };
 }
 
@@ -474,6 +534,7 @@ macro_rules! canic_endpoints_root {
     () => {
         $crate::canic_endpoints_root_admin!();
         $crate::canic_endpoints_root_auth_attestation!();
+        $crate::canic_endpoints_root_wasm_store!();
     };
 }
 

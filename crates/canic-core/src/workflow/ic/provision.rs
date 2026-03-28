@@ -19,17 +19,21 @@ use crate::{
             IcOps,
             mgmt::{CanisterInstallMode, MgmtOps},
         },
-        runtime::{env::EnvOps, wasm::WasmOps},
+        runtime::env::EnvOps,
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
+            template::TemplateManifestOps,
         },
         topology::{
             directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
             policy::mapper::RegistryPolicyInputMapper,
         },
     },
-    workflow::{cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*},
+    workflow::{
+        cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*,
+        runtime::template::TemplateInstallWorkflow,
+    },
 };
 
 ///
@@ -130,8 +134,8 @@ impl ProvisionWorkflow {
         parent_pid: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        // must have WASM module registered
-        WasmOps::try_get(role)?;
+        // must have one approved manifest before allocation begins
+        TemplateManifestOps::approved_for_role_response(role)?;
 
         // Phase 1: allocation
         let (pid, source) = allocate_canister(role).await?;
@@ -188,10 +192,13 @@ impl ProvisionWorkflow {
         // Phase 0: uninstall code
         MgmtOps::uninstall_code(pid).await?;
 
-        // Phase 1: delete the canister
+        // Phase 1: stop the canister before deletion.
+        MgmtOps::stop_canister(pid).await?;
+
+        // Phase 2: delete the canister
         MgmtOps::delete_canister(pid).await?;
 
-        // Phase 2: remove registry record
+        // Phase 3: remove registry record
         let removed_entry = SubnetRegistryOps::remove(&pid);
         match &removed_entry {
             Some(c) => log!(
@@ -311,11 +318,11 @@ async fn install_canister(
     parent_pid: Principal,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
-    // Fetch and register WASM
-    let wasm = WasmOps::try_get(role)?;
+    // Fetch the approved install manifest and register the target hash.
+    let manifest = TemplateManifestOps::approved_for_role_response(role)?;
 
     let payload = ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid)?;
-    let module_hash = wasm.module_hash();
+    let module_hash = manifest.payload_hash.clone();
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
@@ -344,10 +351,10 @@ async fn install_canister(
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;
 
-    if let Err(err) = MgmtOps::install_canister_with_payload(
+    if let Err(err) = TemplateInstallWorkflow::install_with_payload(
         CanisterInstallMode::Install,
         pid,
-        wasm.bytes(),
+        &manifest,
         payload,
         extra_arg,
     )
@@ -368,8 +375,10 @@ async fn install_canister(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ install_canister: {pid} ({role}, {:.2} KiB)",
-        wasm.len() as f64 / 1_024.0,
+        "⚡ install_canister: {pid} ({role}, template={}, {:.2} KiB, mode={:?})",
+        manifest.template_id,
+        manifest.payload_size_bytes as f64 / 1_024.0,
+        manifest.chunking_mode,
     );
 
     Ok(())

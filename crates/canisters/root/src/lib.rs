@@ -9,106 +9,46 @@
 #![allow(clippy::unused_async)]
 
 use canic::{
-    Error,
-    api::{canister::wasm::WasmApi, rpc::RpcApi},
-    dto::rpc::{CreateCanisterParent, CreateCanisterResponse},
+    Error, api::canister::template::WasmStoreBootstrapApi, dto::rpc::CreateCanisterResponse,
     prelude::*,
 };
+#[cfg(debug_assertions)]
+use canic::{api::rpc::RpcApi, dto::rpc::CreateCanisterParent};
 use canic_internal::canister;
+#[cfg(debug_assertions)]
 use std::collections::HashMap;
+
+include!(concat!(
+    env!("OUT_DIR"),
+    "/embedded_store_release_catalog.rs"
+));
 
 //
 // CANIC
 //
 
-canic::start_root!();
-
-// Populate the in-memory WASM registry during eager initialization.
-//
-// This runs before any Canic workflows (including bootstrap) on both
-// init and post-upgrade, ensuring provisioning invariants are satisfied.
-canic::eager_init!({
-    WasmApi::import_static(WASMS);
-});
+canic::start_root!(
+    init = {
+        WasmStoreBootstrapApi::import_embedded_release_catalog(
+            embedded_wasm_store_release_catalog(),
+        );
+    }
+);
 
 async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
-//
-// WASMS
-//
-
-#[cfg(target_arch = "wasm32")]
-const APP_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/app/app.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const APP_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const USER_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/user_hub/user_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const USER_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const USER_SHARD_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/user_shard/user_shard.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const USER_SHARD_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const MINIMAL_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/minimal/minimal.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const MINIMAL_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SCALE_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/scale_hub/scale_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SCALE_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SCALE_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/scale/scale.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SCALE_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SHARD_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SHARD_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SHARD_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SHARD_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const TEST_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const TEST_WASM: &[u8] = &[];
-
-pub static WASMS: &[(CanisterRole, &[u8])] = &[
-    (canister::APP, APP_WASM),
-    (canister::USER_HUB, USER_HUB_WASM),
-    (canister::USER_SHARD, USER_SHARD_WASM),
-    (canister::MINIMAL, MINIMAL_WASM),
-    (canister::SCALE_HUB, SCALE_HUB_WASM),
-    (canister::SCALE, SCALE_WASM),
-    (canister::SHARD_HUB, SHARD_HUB_WASM),
-    (canister::SHARD, SHARD_WASM),
-    (canister::TEST, TEST_WASM),
-];
-
 /// create_minimal
 /// Controller-only helper for local Canic testing.
 #[canic_update(requires(caller::is_controller()))]
 async fn create_minimal() -> Result<CreateCanisterResponse, Error> {
-    if !cfg!(debug_assertions) {
+    #[cfg(not(debug_assertions))]
+    {
         return Err(Error::forbidden("test-only canister"));
     }
 
+    #[cfg(debug_assertions)]
     RpcApi::create_canister_request::<()>(
         &canister::MINIMAL,
         CreateCanisterParent::ThisCanister,
@@ -121,13 +61,17 @@ async fn create_minimal() -> Result<CreateCanisterResponse, Error> {
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
 #[canic_update(requires(caller::is_controller()))]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
-    if !cfg!(debug_assertions) {
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = rounds;
         return Err(Error::forbidden("test-only canister"));
     }
 
+    #[cfg(debug_assertions)]
     Ok(stress_perf_compute(rounds))
 }
 
+#[cfg(debug_assertions)]
 fn stress_perf_compute(rounds: u32) -> u64 {
     let mut acc: u64 = 0;
     let mut map: HashMap<u64, u64> = HashMap::with_capacity(rounds as usize);

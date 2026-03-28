@@ -13,9 +13,11 @@ candid = { workspace = true }
 canic = { workspace = true }
 canic-internal = { workspace = true }
 ic-cdk = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 pocket-ic = { workspace = true }

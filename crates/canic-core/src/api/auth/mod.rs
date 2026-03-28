@@ -138,32 +138,14 @@ impl DelegationApi {
         request: DelegationRequest,
     ) -> Result<DelegationProvisionResponse, Error> {
         let request = metadata::with_root_request_metadata(request);
-        if EnvOps::is_root() {
-            let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
-                .await
-                .map_err(Self::map_delegation_error)?;
-
-            return match response {
-                RootCapabilityResponse::DelegationIssued(response) => Ok(response),
-                _ => Err(Error::internal(
-                    "invalid root response type for delegation request",
-                )),
-            };
-        }
-
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
-            .await
-            .map_err(Self::map_delegation_error)
+        Self::request_delegation_remote(request).await
     }
 
     pub async fn request_role_attestation(
         request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
         let request = metadata::with_root_attestation_request_metadata(request);
-        let response = RootResponseWorkflow::response(RootRequest::issue_role_attestation(request))
-            .await
-            .map_err(Self::map_delegation_error)?;
+        let response = Self::request_role_attestation_remote(request).await?;
 
         match response {
             RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),
@@ -301,7 +283,7 @@ impl DelegationApi {
     async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
         let request = Self::delegation_request_from_claims(claims)?;
         let required_verifier_targets = request.verifier_targets.clone();
-        let response = Self::request_delegation(request).await?;
+        let response = Self::request_delegation_remote(request).await?;
         Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
         Self::require_proof()
     }
@@ -413,6 +395,62 @@ impl DelegationApi {
     // 4. token acceptance on canister C requires C ∈ claims.aud.
     //
     // Keep ingress, fanout, install, and runtime checks aligned to this block.
+}
+
+impl DelegationApi {
+    // Execute one local root delegation provisioning request.
+    pub async fn request_delegation_root(
+        request: DelegationRequest,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let request = metadata::with_root_request_metadata(request);
+        let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
+            .await
+            .map_err(Self::map_delegation_error)?;
+
+        match response {
+            RootCapabilityResponse::DelegationIssued(response) => Ok(response),
+            _ => Err(Error::internal(
+                "invalid root response type for delegation request",
+            )),
+        }
+    }
+
+    // Route a canonical delegation provisioning request over RPC to root.
+    async fn request_delegation_remote(
+        request: DelegationRequest,
+    ) -> Result<DelegationProvisionResponse, Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
+            .await
+            .map_err(Self::map_delegation_error)
+    }
+
+    // Execute one local root role-attestation request.
+    pub async fn request_role_attestation_root(
+        request: RoleAttestationRequest,
+    ) -> Result<SignedRoleAttestation, Error> {
+        let request = metadata::with_root_attestation_request_metadata(request);
+        let response = RootResponseWorkflow::response(RootRequest::issue_role_attestation(request))
+            .await
+            .map_err(Self::map_delegation_error)?;
+
+        match response {
+            RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),
+            _ => Err(Error::internal(
+                "invalid root response type for role attestation request",
+            )),
+        }
+    }
+
+    // Route a canonical role-attestation request over RPC to root.
+    async fn request_role_attestation_remote(
+        request: RoleAttestationRequest,
+    ) -> Result<RootCapabilityResponse, Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
+            .await
+            .map_err(Self::map_delegation_error)
+    }
 }
 
 #[cfg(test)]

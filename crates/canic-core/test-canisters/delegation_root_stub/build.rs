@@ -20,8 +20,8 @@ fn main() {
         .expect("workspace root");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-    let target_dir = out_dir.join("signer_wasm_target");
-    fs::create_dir_all(&target_dir).expect("create signer wasm target dir");
+    let target_dir = out_dir.join("embedded_wasm_target");
+    fs::create_dir_all(&target_dir).expect("create embedded wasm target dir");
 
     let mut cmd = Command::new("cargo");
     cmd.current_dir(workspace_root);
@@ -36,11 +36,13 @@ fn main() {
         "wasm32-unknown-unknown",
         "-p",
         "delegation_signer_stub",
+        "-p",
+        "canister_wasm_store",
     ]);
-    let output = cmd.output().expect("build delegation_signer_stub");
+    let output = cmd.output().expect("build embedded root test canisters");
     assert!(
         output.status.success(),
-        "delegation_signer_stub build failed: {}",
+        "embedded root test canister build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -51,6 +53,13 @@ fn main() {
 
     let out_wasm = out_dir.join("delegation_signer_stub.wasm");
     fs::copy(&wasm_path, &out_wasm).expect("copy signer wasm");
+
+    let wasm_store_path = target_dir
+        .join("wasm32-unknown-unknown")
+        .join("release")
+        .join("canister_wasm_store.wasm");
+    let out_wasm_store = out_dir.join("canister_wasm_store.wasm");
+    fs::copy(&wasm_store_path, &out_wasm_store).expect("copy wasm_store wasm");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!(
@@ -69,6 +78,18 @@ fn main() {
         "cargo:rerun-if-changed={}",
         workspace_root
             .join("crates/canic-core/test-canisters/delegation_signer_stub/canic.toml")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root
+            .join("crates/canisters/wasm_store/Cargo.toml")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root
+            .join("crates/canisters/wasm_store/src/lib.rs")
             .display()
     );
 }

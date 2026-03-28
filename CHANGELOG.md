@@ -5,6 +5,23 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.18.x] - 2026-03-27 - Template Store and Chunked Install Cutover
+
+- `0.18.0` starts the wasm-store cutover by moving ordinary child payload ownership out of `root`, requiring store-backed chunked install for every role except bootstrap `wasm_store`, reducing the raw release `root` artifact to `4151294` bytes (`delta -10366542` vs `0.17.3`), simplifying setup with one implicit per-subnet `wasm_store` on a fixed 40 MB / 4 MB IC preset, and refreshing the workspace baseline to Rust `1.94.1` with `ctor 0.8` and `sha2 0.11`.
+
+```toml
+[subnets.prime]
+auto_create = ["app", "user_hub", "scale_hub", "shard_hub"]
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+```
+
+See detailed breakdown:
+[docs/changelog/0.18.md](docs/changelog/0.18.md)
+
+---
+
 ## [0.17.x] - 2026-03-25 - Wasm Audit and Endpoint Surface Reduction
 
 - `0.17.3` continues the wasm audit line by tightening `canic_metrics` and `canic_log`, completing the `0.17` root decomposition handoff to `0.18`, and reducing the `minimal` raw release artifact to `2433930` bytes (`delta -26446` vs `0.17.2`).

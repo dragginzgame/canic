@@ -1,7 +1,11 @@
+#[cfg(test)]
+use crate::storage::stable::state::subnet::SubnetStateRecord;
 use crate::{
     dto::state::{SubnetStateInput, SubnetStateResponse},
+    dto::template::WasmStorePublicationStateResponse,
+    ids::WasmStoreBinding,
     ops::storage::state::mapper::SubnetStateMapper,
-    storage::stable::state::subnet::{SubnetState, SubnetStateRecord},
+    storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState},
 };
 
 ///
@@ -27,7 +31,47 @@ impl SubnetStateOps {
         SubnetStateMapper::record_to_response(SubnetState::export())
     }
 
-    #[expect(dead_code)]
+    /// Return the current root-owned publication binding, if one is pinned.
+    #[must_use]
+    pub fn publication_store_binding() -> Option<WasmStoreBinding> {
+        SubnetState::publication_store_binding()
+    }
+
+    /// Return the current root-owned publication binding lifecycle state.
+    #[must_use]
+    pub fn publication_store_state() -> PublicationStoreStateRecord {
+        SubnetState::publication_store_state()
+    }
+
+    /// Return the current root-owned publication binding lifecycle state as a DTO response.
+    #[must_use]
+    pub fn publication_store_state_response() -> WasmStorePublicationStateResponse {
+        SubnetStateMapper::publication_store_record_to_response(
+            SubnetState::publication_store_state(),
+        )
+    }
+
+    /// Persist the current root-owned publication binding.
+    pub fn activate_publication_store_binding(binding: WasmStoreBinding, changed_at: u64) -> bool {
+        SubnetState::activate_publication_store_binding(binding, changed_at)
+    }
+
+    /// Clear the current root-owned publication binding.
+    pub fn clear_publication_store_binding(changed_at: u64) -> bool {
+        SubnetState::clear_publication_store_binding(changed_at)
+    }
+
+    /// Move the current detached binding into retired state.
+    pub fn retire_detached_publication_store_binding(changed_at: u64) -> Option<WasmStoreBinding> {
+        SubnetState::retire_detached_publication_store_binding(changed_at)
+    }
+
+    /// Clear the current retired binding after root verifies retirement is complete.
+    pub fn finalize_retired_publication_store_binding(changed_at: u64) -> Option<WasmStoreBinding> {
+        SubnetState::finalize_retired_publication_store_binding(changed_at)
+    }
+
+    #[cfg(test)]
     pub fn import(data: SubnetStateRecord) {
         SubnetState::import(data);
     }

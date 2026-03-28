@@ -2,12 +2,17 @@
 // This test relies on embedded production config by design.
 
 use canic::{
-    cdk::types::Principal,
+    Error,
+    cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
         page::{Page, PageRequest},
+        template::{TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateManifestInput},
         topology::DirectoryEntryResponse,
     },
-    ids::CanisterRole,
+    ids::{
+        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+        WasmStoreBinding,
+    },
     protocol,
 };
 use canic_testkit::pic::{Pic, pic};
@@ -29,8 +34,11 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
+const WASM_STORE_WASM_RELATIVE: &str = "../../.dfx/local/canisters/wasm_store/wasm_store.wasm.gz";
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
+const WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES: usize = 1_000_000;
+const WASM_STORE_BOOTSTRAP_TEMPLATE_ID: &str = "embedded:wasm_store";
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.
 // Enabling it can reintroduce hangs or flaky behavior from retained runtime state.
@@ -194,6 +202,7 @@ fn initialize_setup(root_wasm: Vec<u8>) -> RootSetupState {
                 .create_and_install_root_canister(wasm)
                 .expect("install root canister");
 
+            stage_root_wasm_store_bootstrap(&pic, root_id);
             wait_for_bootstrap(&pic, root_id);
 
             let subnet_directory = fetch_subnet_directory(&pic, root_id);
@@ -443,6 +452,7 @@ fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
         }
     }
 
+    dump_canister_debug(pic, root_id, "root bootstrap timeout");
     panic!("root bootstrap did not signal readiness after {BOOTSTRAP_TICK_LIMIT} ticks");
 }
 
@@ -463,6 +473,81 @@ fn wait_for_children_ready(pic: &Pic, subnet_directory: &HashMap<CanisterRole, P
     }
 
     panic!("children did not become ready after {BOOTSTRAP_TICK_LIMIT} ticks");
+}
+
+fn stage_root_wasm_store_bootstrap(pic: &Pic, root_id: Principal) {
+    let wasm = load_wasm_store_wasm().expect("load wasm_store wasm");
+    let version = TemplateVersion::new(env!("CARGO_PKG_VERSION"));
+    let payload_hash = get_wasm_hash(&wasm);
+    let chunks = wasm
+        .chunks(WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES)
+        .map(<[u8]>::to_vec)
+        .collect::<Vec<_>>();
+    let chunk_hashes = chunks
+        .iter()
+        .map(|chunk| get_wasm_hash(chunk))
+        .collect::<Vec<_>>();
+
+    let manifest = TemplateManifestInput {
+        template_id: TemplateId::new(WASM_STORE_BOOTSTRAP_TEMPLATE_ID),
+        role: CanisterRole::WASM_STORE,
+        version: version.clone(),
+        payload_hash: payload_hash.clone(),
+        payload_size_bytes: wasm.len() as u64,
+        store_binding: WasmStoreBinding::new("bootstrap"),
+        chunking_mode: TemplateChunkingMode::Chunked,
+        manifest_state: TemplateManifestState::Approved,
+        approved_at: None,
+        created_at: 0,
+    };
+    let staged_manifest: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN,
+            (manifest,),
+        )
+        .expect("bootstrap manifest staging call");
+    staged_manifest.expect("bootstrap manifest staging");
+
+    let prepared: Result<canic::dto::template::TemplateChunkSetInfoResponse, Error> = pic
+        .update_call(
+            root_id,
+            protocol::WASM_STORE_BOOTSTRAP_PREPARE_ADMIN,
+            (TemplateChunkSetPrepareInput {
+                template_id: TemplateId::new(WASM_STORE_BOOTSTRAP_TEMPLATE_ID),
+                version: version.clone(),
+                payload_hash,
+                payload_size_bytes: wasm.len() as u64,
+                chunk_hashes,
+            },),
+        )
+        .expect("bootstrap prepare call");
+    prepared.expect("bootstrap prepare");
+
+    for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+        let published: Result<(), Error> = pic
+            .update_call(
+                root_id,
+                protocol::WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN,
+                (TemplateChunkInput {
+                    template_id: TemplateId::new(WASM_STORE_BOOTSTRAP_TEMPLATE_ID),
+                    version: version.clone(),
+                    chunk_index: u32::try_from(chunk_index).expect("chunk index fits"),
+                    bytes,
+                },),
+            )
+            .expect("bootstrap publish chunk call");
+        published.expect("bootstrap publish chunk");
+    }
+
+    let resumed: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
+            (),
+        )
+        .expect("resume root bootstrap call");
+    resumed.expect("resume root bootstrap");
 }
 
 /// Load the compiled root canister wasm.
@@ -497,6 +582,44 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
     None
 }
 
+/// Load the compiled wasm_store canister wasm.
+fn load_wasm_store_wasm() -> Option<Vec<u8>> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let path = manifest_dir.join(WASM_STORE_WASM_RELATIVE);
+
+    match fs::read(&path) {
+        Ok(bytes) => Some(bytes),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => None,
+        Err(err) => panic!(
+            "failed to read wasm_store wasm at {}: {}",
+            path.display(),
+            err
+        ),
+    }
+}
+
+fn dump_canister_debug(pic: &Pic, canister_id: Principal, context: &str) {
+    eprintln!("{context}: debug for canister {canister_id}");
+
+    match pic.canister_status(canister_id, None) {
+        Ok(status) => eprintln!("canister_status: {status:?}"),
+        Err(err) => eprintln!("canister_status failed: {err:?}"),
+    }
+
+    match pic.fetch_canister_logs(canister_id, Principal::anonymous()) {
+        Ok(records) => {
+            if records.is_empty() {
+                eprintln!("canister logs: <empty>");
+            } else {
+                for record in records {
+                    eprintln!("canister log: {record:?}");
+                }
+            }
+        }
+        Err(err) => eprintln!("fetch_canister_logs failed: {err:?}"),
+    }
+}
+
 /// Fetch the subnet directory from root as a role → principal map.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
     let page: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
@@ -519,6 +642,11 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
 }
 
 fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
-    pic.query_call(canister_id, protocol::CANIC_READY, ())
-        .expect("query canic_ready")
+    match pic.query_call(canister_id, protocol::CANIC_READY, ()) {
+        Ok(ready) => ready,
+        Err(err) => {
+            dump_canister_debug(pic, canister_id, "query canic_ready failed");
+            panic!("query canic_ready failed: {err:?}");
+        }
+    }
 }

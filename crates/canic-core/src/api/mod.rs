@@ -20,9 +20,9 @@ pub mod pool;
 pub mod ready;
 pub mod rpc;
 pub mod state;
+pub mod template;
 pub mod timer;
 pub mod topology;
-pub mod wasm;
 
 ///
 /// Workflow Query Re-exports
