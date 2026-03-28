@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.18.x] - 2026-03-27 - Template Store and Chunked Install Cutover
 
 - `0.18.0` starts the wasm-store cutover by moving ordinary child payload ownership out of `root`, requiring store-backed chunked install for every role except bootstrap `wasm_store`, reducing the raw release `root` artifact to `4151294` bytes (`delta -10366542` vs `0.17.3`), simplifying setup with one implicit per-subnet `wasm_store` on a fixed 40 MB / 4 MB IC preset, and refreshing the workspace baseline to Rust `1.94.1` with `ctor 0.8` and `sha2 0.11`.
+- `0.18.1` completes the staged `wasm_store` bootstrap follow-up by fixing local `dfx` installs to stage the bootstrap payload before root becomes ready, restoring local compact-config compatibility, and trimming release-only exports so the raw `root` artifact drops further to `3554964` bytes.
 
 ```toml
 [subnets.prime]

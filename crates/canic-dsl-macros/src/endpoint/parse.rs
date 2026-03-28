@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 
 //
@@ -83,6 +84,7 @@ pub struct ParsedArgs {
     pub internal: bool,
 }
 
+#[expect(clippy::too_many_lines)]
 pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     if attr.is_empty() {
         return Ok(empty());
@@ -92,8 +94,10 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         .parse2(attr.clone())
         .map_err(|_| syn::Error::new_spanned(&attr, "expected requires(...)"))?;
 
+    let mut forwarded = Vec::new();
     let mut requires = Vec::new();
     let mut internal = false;
+    let mut saw_name = false;
 
     for meta in metas {
         match meta {
@@ -108,6 +112,35 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                     ));
                 }
                 internal = true;
+            }
+            Meta::NameValue(nv) if nv.path.is_ident("name") => {
+                if saw_name {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "endpoint export name must appear only once",
+                    ));
+                }
+
+                let value = match &nv.value {
+                    Expr::Lit(expr) => match &expr.lit {
+                        syn::Lit::Str(lit) => lit,
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                nv,
+                                "endpoint export name must be a string literal",
+                            ));
+                        }
+                    },
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            nv,
+                            "endpoint export name must be a string literal",
+                        ));
+                    }
+                };
+
+                forwarded.push(quote!(name = #value));
+                saw_name = true;
             }
             Meta::NameValue(nv) if nv.path.is_ident("internal") => {
                 if internal {
@@ -162,15 +195,18 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         }
     }
 
-    if requires.is_empty() && !internal {
-        return Err(syn::Error::new_spanned(attr, "expected requires(...)"));
+    if requires.is_empty() && !internal && forwarded.is_empty() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "expected requires(...), internal, or name = \"...\"",
+        ));
     }
 
     let requires_async = !requires.is_empty();
     let requires_fallible = !requires.is_empty();
 
     Ok(ParsedArgs {
-        forwarded: Vec::new(),
+        forwarded,
         requires,
         requires_async,
         requires_fallible,
@@ -461,6 +497,22 @@ fn path_ident(path: &Path) -> syn::Result<&Ident> {
 mod tests {
     use super::*;
     use quote::quote;
+
+    #[test]
+    fn name_only_is_forwarded_without_requires() {
+        let parsed = parse_args(quote!(name = "icrc10_supported_standards"))
+            .expect("name-only args should parse");
+
+        assert_eq!(parsed.forwarded.len(), 1);
+        assert!(parsed.requires.is_empty());
+        assert!(!parsed.internal);
+    }
+
+    #[test]
+    fn duplicate_name_is_rejected() {
+        let err = parse_args(quote!(name = "a", name = "b")).expect_err("duplicate name");
+        assert!(err.to_string().contains("must appear only once"));
+    }
 
     #[test]
     fn authenticated_allows_no_scope_argument() {

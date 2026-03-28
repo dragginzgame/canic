@@ -8,12 +8,12 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{
-    Error, api::canister::template::WasmStoreBootstrapApi, dto::rpc::CreateCanisterResponse,
-    prelude::*,
-};
 #[cfg(debug_assertions)]
-use canic::{api::rpc::RpcApi, dto::rpc::CreateCanisterParent};
+use canic::{
+    Error, api::rpc::RpcApi, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse,
+};
+use canic::{api::canister::template::WasmStoreBootstrapApi, prelude::*};
+#[cfg(debug_assertions)]
 use canic_internal::canister;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
@@ -39,16 +39,11 @@ async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
+#[cfg(debug_assertions)]
 /// create_minimal
 /// Controller-only helper for local Canic testing.
 #[canic_update(requires(caller::is_controller()))]
 async fn create_minimal() -> Result<CreateCanisterResponse, Error> {
-    #[cfg(not(debug_assertions))]
-    {
-        return Err(Error::forbidden("test-only canister"));
-    }
-
-    #[cfg(debug_assertions)]
     RpcApi::create_canister_request::<()>(
         &canister::MINIMAL,
         CreateCanisterParent::ThisCanister,
@@ -57,17 +52,11 @@ async fn create_minimal() -> Result<CreateCanisterResponse, Error> {
     .await
 }
 
+#[cfg(debug_assertions)]
 /// stress_perf
 /// Synthetic CPU-heavy endpoint to validate perf instrumentation.
 #[canic_update(requires(caller::is_controller()))]
 async fn stress_perf(rounds: u32) -> Result<u64, Error> {
-    #[cfg(not(debug_assertions))]
-    {
-        let _ = rounds;
-        return Err(Error::forbidden("test-only canister"));
-    }
-
-    #[cfg(debug_assertions)]
     Ok(stress_perf_compute(rounds))
 }
 
@@ -113,4 +102,5 @@ fn stress_perf_compute(rounds: u32) -> u64 {
     acc
 }
 
+#[cfg(debug_assertions)]
 export_candid!();

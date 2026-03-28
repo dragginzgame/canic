@@ -412,4 +412,5 @@ const EMBEDDED_WASM_STORE_RELEASE_SET: &[(CanisterRole, &[u8])] =
 const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] =
     &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
 
+#[cfg(debug_assertions)]
 export_candid!();

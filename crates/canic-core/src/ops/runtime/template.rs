@@ -84,7 +84,7 @@ impl EmbeddedTemplatePayloadOps {
         log!(
             Topic::Wasm,
             Info,
-            "📦 template.payload.import: {} ({} bytes)",
+            "tpl.payload.import {} ({} bytes)",
             template_id,
             bytes.len()
         );
@@ -116,7 +116,7 @@ impl WasmStoreCatalogOps {
         log!(
             Topic::Wasm,
             Info,
-            "📦 template.catalog.import: {} entries",
+            "tpl.catalog.import {} entries",
             Self::export().len()
         );
     }

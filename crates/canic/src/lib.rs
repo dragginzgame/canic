@@ -10,6 +10,7 @@
 //! Direct access to internal core modules is intentionally unsupported.
 
 mod macros; // private implementation boundary
+pub mod protocol;
 
 #[doc(hidden)]
 pub mod __internal {
@@ -22,9 +23,8 @@ pub mod __internal {
 // -----------------------------------------------------------------------------
 // Public data contracts
 // -----------------------------------------------------------------------------
-// DTOs, IDs, and protocol definitions are stable, versioned contracts intended
-// for downstream use (candid, RPC, tests, tooling).
-pub use canic_core::{dto, ids, protocol};
+// DTOs and IDs are stable, versioned contracts intended for downstream use.
+pub use canic_core::{dto, ids};
 
 // -----------------------------------------------------------------------------
 // Sub-crates

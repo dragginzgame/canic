@@ -205,4 +205,5 @@ async fn canic_wasm_store_chunk(
     WasmStoreApi::template_chunk(template_id, version, chunk_index)
 }
 
+#[cfg(debug_assertions)]
 export_candid!();

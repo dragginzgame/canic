@@ -61,6 +61,7 @@ macro_rules! __canic_build_internal {
 
         // Init Config
         let $cfg = $crate::__internal::core::bootstrap::init_config(&$cfg_str).expect("invalid canic config");
+        let compact_cfg = $crate::__internal::core::bootstrap::compact_config_source(&$cfg_str);
 
         // Run the extra body (per-canister or nothing)
         $body
@@ -171,7 +172,14 @@ macro_rules! __canic_build_internal {
             }
         }
 
-        let abs = $cfg_path.canonicalize().expect("canonicalize canic config path");
+        let out_dir =
+            std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
+        let compact_cfg_path = out_dir.join("canic.compact.toml");
+        std::fs::write(&compact_cfg_path, compact_cfg).expect("write compact canic config");
+
+        let abs = compact_cfg_path
+            .canonicalize()
+            .expect("canonicalize compact canic config path");
         println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", abs.display());
         println!("cargo:rerun-if-changed={}", abs.display());
     }};

@@ -52,7 +52,7 @@ impl WasmStoreBootstrapApi {
             Ok(())
         } else {
             Err(Error::invalid(format!(
-                "bootstrap staging only accepts template '{ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID}'"
+                "bootstrap only accepts template '{ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID}'"
             )))
         }
     }
@@ -63,7 +63,7 @@ impl WasmStoreBootstrapApi {
     ) -> Result<TemplateManifestInput, Error> {
         if request.role != CanisterRole::WASM_STORE {
             return Err(Error::invalid(format!(
-                "bootstrap staging only accepts role '{}'",
+                "bootstrap only accepts role '{}'",
                 CanisterRole::WASM_STORE
             )));
         }
