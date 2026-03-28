@@ -121,9 +121,11 @@ macro_rules! __canic_build_internal {
                 let mut has_icrc21 = false;
                 let mut has_scaling = false;
                 let mut has_sharding = false;
+                let role_id: $crate::__internal::core::ids::CanisterRole =
+                    role_name.to_string().into();
 
                 for subnet in $cfg.subnets.values() {
-                    if let Some(canister_cfg) = subnet.canisters.get(role_name) {
+                    if let Some(canister_cfg) = subnet.get_canister(&role_id) {
                         role_found = true;
                         accepts_signer_proof |= canister_cfg.delegated_auth.signer;
                         accepts_verifier_proof |= canister_cfg.delegated_auth.verifier;

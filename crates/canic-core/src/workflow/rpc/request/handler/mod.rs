@@ -14,6 +14,9 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+mod tests;
+
 mod authorize;
 mod capability;
 mod delegation;
@@ -22,6 +25,7 @@ mod funding;
 mod nonroot_cycles;
 mod replay;
 use capability::RootCapability;
+
 pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
@@ -42,6 +46,10 @@ struct RootContext {
     subnet_id: Principal,
     now: u64,
 }
+
+///
+/// AuthorizationPipelineOrder
+///
 
 #[derive(Clone, Copy, Debug)]
 enum AuthorizationPipelineOrder {
@@ -193,6 +201,3 @@ impl RootResponseWorkflow {
 fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     replay::hash_domain_separated(domain, payload)
 }
-
-#[cfg(test)]
-mod tests;

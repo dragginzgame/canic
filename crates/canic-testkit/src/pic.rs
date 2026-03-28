@@ -14,6 +14,7 @@ use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
 use std::{
     ops::{Deref, DerefMut},
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{Mutex, MutexGuard},
 };
 
@@ -124,8 +125,26 @@ impl Pic {
     fn create_funded_and_install(&self, wasm: Vec<u8>, init_bytes: Vec<u8>) -> Principal {
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, INSTALL_CYCLES);
-        self.inner
-            .install_canister(canister_id, wasm, init_bytes, None);
+
+        let install = catch_unwind(AssertUnwindSafe(|| {
+            self.inner
+                .install_canister(canister_id, wasm, init_bytes, None);
+        }));
+        if let Err(err) = install {
+            eprintln!("install_canister trapped for {canister_id}");
+            if let Ok(status) = self.inner.canister_status(canister_id, None) {
+                eprintln!("canister_status for {canister_id}: {status:?}");
+            }
+            if let Ok(logs) = self
+                .inner
+                .fetch_canister_logs(canister_id, Principal::anonymous())
+            {
+                for record in logs {
+                    eprintln!("canister_log {canister_id}: {record:?}");
+                }
+            }
+            std::panic::resume_unwind(err);
+        }
 
         canister_id
     }

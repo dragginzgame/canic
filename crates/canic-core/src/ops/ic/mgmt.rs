@@ -4,18 +4,14 @@
 //! Adds metrics, logging, and normalizes errors into `InternalError`.
 
 use crate::{
-    InternalError,
-    cdk::{
-        self,
-        mgmt::{
-            CanisterStatusResult, CanisterStatusType as CdkCanisterStatusType,
-            DefiniteCanisterSettings, EnvironmentVariable as CdkEnvironmentVariable,
-            LogVisibility as CdkLogVisibility, MemoryMetrics as CdkMemoryMetrics,
-            QueryStats as CdkQueryStats,
-        },
-    },
+    InternalError, cdk,
     ids::SystemMetricKind,
-    infra::ic::mgmt::MgmtInfra,
+    infra::ic::mgmt::{
+        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
+        InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEnvironmentVariable,
+        InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraUpdateSettingsArgs,
+        InfraUpgradeFlags, MgmtInfra,
+    },
     ops::{ic::IcOpsError, prelude::*, runtime::metrics::system::SystemMetrics},
 };
 use candid::{Nat, utils::ArgumentEncoder};
@@ -242,29 +238,26 @@ impl MgmtOps {
     // ────────────────────────────── INSTALL / UNINSTALL ──────────────────────────
     //
 
-    /// Install or reinstall a *Canic-style* canister using the standard
-    /// `(payload, Option<Vec<u8>>)` argument convention.
-    pub async fn install_canister_with_payload<P: CandidType>(
+    /// Install or upgrade a canister from chunks stored in one same-subnet store canister.
+    pub async fn install_chunked_code<T: ArgumentEncoder>(
         mode: CanisterInstallMode,
-        canister_pid: Principal,
-        wasm: &[u8],
-        payload: P,
-        extra_arg: Option<Vec<u8>>,
-    ) -> Result<(), InternalError> {
-        Self::install_code(mode, canister_pid, wasm, (payload, extra_arg)).await
-    }
-
-    /// Installs or upgrades a canister with the given wasm + args and records metrics.
-    pub async fn install_code<T: ArgumentEncoder>(
-        mode: CanisterInstallMode,
-        canister_pid: Principal,
-        wasm: &[u8],
+        target_canister: Principal,
+        store_canister: Principal,
+        chunk_hashes_list: Vec<Vec<u8>>,
+        wasm_module_hash: Vec<u8>,
         args: T,
     ) -> Result<(), InternalError> {
-        let cdk_mode = install_mode_to_cdk(mode);
-        MgmtInfra::install_code(cdk_mode, canister_pid, wasm, args)
-            .await
-            .map_err(IcOpsError::from)?;
+        let chunk_count = chunk_hashes_list.len();
+        MgmtInfra::install_chunked_code(
+            install_mode_to_infra(mode),
+            target_canister,
+            store_canister,
+            chunk_hashes_list,
+            wasm_module_hash,
+            args,
+        )
+        .await
+        .map_err(IcOpsError::from)?;
 
         let metric_kind = match mode {
             CanisterInstallMode::Install => SystemMetricKind::InstallCode,
@@ -273,34 +266,74 @@ impl MgmtOps {
         };
         SystemMetrics::increment(metric_kind);
 
-        #[expect(clippy::cast_precision_loss)]
-        let bytes_kb = wasm.len() as f64 / 1_000.0;
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "install_code: {canister_pid} mode={mode:?} ({bytes_kb} KB)"
+            "install_chunked_code: {target_canister} mode={mode:?} store={store_canister} chunks={chunk_count}"
         );
 
         Ok(())
     }
 
-    /// Upgrades a canister to the provided wasm.
-    pub async fn upgrade_canister(
-        canister_pid: Principal,
-        wasm: &[u8],
+    /// Install or reinstall a Canic-style canister from chunk-store-backed wasm.
+    pub async fn install_chunked_canister_with_payload<P: CandidType>(
+        mode: CanisterInstallMode,
+        target_canister: Principal,
+        store_canister: Principal,
+        chunk_hashes_list: Vec<Vec<u8>>,
+        wasm_module_hash: Vec<u8>,
+        payload: P,
+        extra_arg: Option<Vec<u8>>,
     ) -> Result<(), InternalError> {
-        MgmtInfra::upgrade_canister(canister_pid, wasm)
+        Self::install_chunked_code(
+            mode,
+            target_canister,
+            store_canister,
+            chunk_hashes_list,
+            wasm_module_hash,
+            (payload, extra_arg),
+        )
+        .await
+    }
+
+    /// Upload one wasm chunk into a canister's chunk store.
+    pub async fn upload_chunk(
+        canister_pid: Principal,
+        chunk: Vec<u8>,
+    ) -> Result<Vec<u8>, InternalError> {
+        let chunk_len = chunk.len();
+        let hash = MgmtInfra::upload_chunk(canister_pid, chunk)
             .await
             .map_err(IcOpsError::from)?;
 
-        SystemMetrics::increment(SystemMetricKind::UpgradeCode);
-
         #[expect(clippy::cast_precision_loss)]
-        let bytes_kb = wasm.len() as f64 / 1_000.0;
+        let bytes_kb = chunk_len as f64 / 1_000.0;
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "canister_upgrade: {canister_pid} ({bytes_kb} KB) upgraded"
+            "upload_chunk: {canister_pid} ({bytes_kb} KB)"
+        );
+
+        Ok(hash)
+    }
+
+    /// List the chunk hashes currently stored in one canister's chunk store.
+    pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InternalError> {
+        Ok(MgmtInfra::stored_chunks(canister_pid)
+            .await
+            .map_err(IcOpsError::from)?)
+    }
+
+    /// Clear the chunk store of one canister.
+    pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InternalError> {
+        MgmtInfra::clear_chunk_store(canister_pid)
+            .await
+            .map_err(IcOpsError::from)?;
+
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "clear_chunk_store: {canister_pid}"
         );
 
         Ok(())
@@ -318,6 +351,21 @@ impl MgmtOps {
             Topic::CanisterLifecycle,
             Ok,
             "🗑️ uninstall_code: {canister_pid}"
+        );
+
+        Ok(())
+    }
+
+    /// Stops a canister via the management canister.
+    pub async fn stop_canister(canister_pid: Principal) -> Result<(), InternalError> {
+        MgmtInfra::stop_canister(canister_pid)
+            .await
+            .map_err(IcOpsError::from)?;
+
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "stop_canister: {canister_pid}"
         );
 
         Ok(())
@@ -353,8 +401,8 @@ impl MgmtOps {
 
     /// Updates canister settings via the management canister and records metrics.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InternalError> {
-        let cdk_args = update_settings_to_cdk(args);
-        MgmtInfra::update_settings(&cdk_args)
+        let infra_args = update_settings_to_infra(args);
+        MgmtInfra::update_settings(&infra_args)
             .await
             .map_err(IcOpsError::from)?;
 
@@ -368,7 +416,7 @@ impl MgmtOps {
 /// Infra Adapters
 ///
 
-fn canister_status_from_infra(status: CanisterStatusResult) -> CanisterStatus {
+fn canister_status_from_infra(status: InfraCanisterStatusResult) -> CanisterStatus {
     CanisterStatus {
         status: status_type_from_infra(status.status),
         settings: settings_from_infra(status.settings),
@@ -382,15 +430,15 @@ fn canister_status_from_infra(status: CanisterStatusResult) -> CanisterStatus {
     }
 }
 
-const fn status_type_from_infra(status: CdkCanisterStatusType) -> CanisterStatusType {
+const fn status_type_from_infra(status: InfraCanisterStatusType) -> CanisterStatusType {
     match status {
-        CdkCanisterStatusType::Running => CanisterStatusType::Running,
-        CdkCanisterStatusType::Stopping => CanisterStatusType::Stopping,
-        CdkCanisterStatusType::Stopped => CanisterStatusType::Stopped,
+        InfraCanisterStatusType::Running => CanisterStatusType::Running,
+        InfraCanisterStatusType::Stopping => CanisterStatusType::Stopping,
+        InfraCanisterStatusType::Stopped => CanisterStatusType::Stopped,
     }
 }
 
-fn settings_from_infra(settings: DefiniteCanisterSettings) -> CanisterSettingsSnapshot {
+fn settings_from_infra(settings: InfraDefiniteCanisterSettings) -> CanisterSettingsSnapshot {
     CanisterSettingsSnapshot {
         controllers: settings.controllers,
         compute_allocation: settings.compute_allocation,
@@ -409,22 +457,22 @@ fn settings_from_infra(settings: DefiniteCanisterSettings) -> CanisterSettingsSn
     }
 }
 
-fn log_visibility_from_infra(log_visibility: CdkLogVisibility) -> LogVisibility {
+fn log_visibility_from_infra(log_visibility: InfraLogVisibility) -> LogVisibility {
     match log_visibility {
-        CdkLogVisibility::Controllers => LogVisibility::Controllers,
-        CdkLogVisibility::Public => LogVisibility::Public,
-        CdkLogVisibility::AllowedViewers(viewers) => LogVisibility::AllowedViewers(viewers),
+        InfraLogVisibility::Controllers => LogVisibility::Controllers,
+        InfraLogVisibility::Public => LogVisibility::Public,
+        InfraLogVisibility::AllowedViewers(viewers) => LogVisibility::AllowedViewers(viewers),
     }
 }
 
-fn environment_variable_from_infra(variable: CdkEnvironmentVariable) -> EnvironmentVariable {
+fn environment_variable_from_infra(variable: InfraEnvironmentVariable) -> EnvironmentVariable {
     EnvironmentVariable {
         name: variable.name,
         value: variable.value,
     }
 }
 
-fn memory_metrics_from_infra(metrics: CdkMemoryMetrics) -> MemoryMetricsSnapshot {
+fn memory_metrics_from_infra(metrics: InfraMemoryMetrics) -> MemoryMetricsSnapshot {
     MemoryMetricsSnapshot {
         wasm_memory_size: metrics.wasm_memory_size,
         stable_memory_size: metrics.stable_memory_size,
@@ -437,7 +485,7 @@ fn memory_metrics_from_infra(metrics: CdkMemoryMetrics) -> MemoryMetricsSnapshot
     }
 }
 
-fn query_stats_from_infra(stats: CdkQueryStats) -> QueryStatsSnapshot {
+fn query_stats_from_infra(stats: InfraQueryStats) -> QueryStatsSnapshot {
     QueryStatsSnapshot {
         num_calls_total: stats.num_calls_total,
         num_instructions_total: stats.num_instructions_total,
@@ -446,61 +494,63 @@ fn query_stats_from_infra(stats: CdkQueryStats) -> QueryStatsSnapshot {
     }
 }
 
-// --- Ops → CDK adapters -------------------------------------------------
+// --- Ops → Infra adapters -----------------------------------------------
 
-fn install_mode_to_cdk(mode: CanisterInstallMode) -> cdk::mgmt::CanisterInstallMode {
+fn install_mode_to_infra(mode: CanisterInstallMode) -> InfraCanisterInstallMode {
     match mode {
-        CanisterInstallMode::Install => cdk::mgmt::CanisterInstallMode::Install,
-        CanisterInstallMode::Reinstall => cdk::mgmt::CanisterInstallMode::Reinstall,
+        CanisterInstallMode::Install => InfraCanisterInstallMode::Install,
+        CanisterInstallMode::Reinstall => InfraCanisterInstallMode::Reinstall,
         CanisterInstallMode::Upgrade(flags) => {
-            cdk::mgmt::CanisterInstallMode::Upgrade(flags.map(upgrade_flags_to_cdk))
+            InfraCanisterInstallMode::Upgrade(flags.map(upgrade_flags_to_infra))
         }
     }
 }
 
-const fn upgrade_flags_to_cdk(flags: UpgradeFlags) -> cdk::mgmt::UpgradeFlags {
-    cdk::mgmt::UpgradeFlags {
+const fn upgrade_flags_to_infra(flags: UpgradeFlags) -> InfraUpgradeFlags {
+    InfraUpgradeFlags {
         skip_pre_upgrade: flags.skip_pre_upgrade,
         wasm_memory_persistence: None,
     }
 }
 
-fn settings_to_cdk(settings: &CanisterSettings) -> cdk::mgmt::CanisterSettings {
-    cdk::mgmt::CanisterSettings {
+fn settings_to_infra(settings: &CanisterSettings) -> InfraCanisterSettings {
+    InfraCanisterSettings {
         controllers: settings.controllers.clone(),
         compute_allocation: settings.compute_allocation.clone(),
         memory_allocation: settings.memory_allocation.clone(),
         freezing_threshold: settings.freezing_threshold.clone(),
         reserved_cycles_limit: settings.reserved_cycles_limit.clone(),
-        log_visibility: settings.log_visibility.clone().map(log_visibility_to_cdk),
+        log_visibility: settings.log_visibility.clone().map(log_visibility_to_infra),
         log_memory_limit: settings.log_memory_limit.clone(),
         wasm_memory_limit: settings.wasm_memory_limit.clone(),
         wasm_memory_threshold: settings.wasm_memory_threshold.clone(),
-        environment_variables: settings
-            .environment_variables
-            .clone()
-            .map(|vars| vars.into_iter().map(environment_variable_to_cdk).collect()),
+        environment_variables: settings.environment_variables.clone().map(|vars| {
+            vars.into_iter()
+                .map(environment_variable_to_infra)
+                .collect()
+        }),
     }
 }
 
-fn log_visibility_to_cdk(setting: LogVisibility) -> cdk::mgmt::LogVisibility {
+fn log_visibility_to_infra(setting: LogVisibility) -> InfraLogVisibility {
     match setting {
-        LogVisibility::Controllers => cdk::mgmt::LogVisibility::Controllers,
-        LogVisibility::Public => cdk::mgmt::LogVisibility::Public,
-        LogVisibility::AllowedViewers(viewers) => cdk::mgmt::LogVisibility::AllowedViewers(viewers),
+        LogVisibility::Controllers => InfraLogVisibility::Controllers,
+        LogVisibility::Public => InfraLogVisibility::Public,
+        LogVisibility::AllowedViewers(viewers) => InfraLogVisibility::AllowedViewers(viewers),
     }
 }
 
-fn environment_variable_to_cdk(variable: EnvironmentVariable) -> cdk::mgmt::EnvironmentVariable {
-    cdk::mgmt::EnvironmentVariable {
+fn environment_variable_to_infra(variable: EnvironmentVariable) -> InfraEnvironmentVariable {
+    InfraEnvironmentVariable {
         name: variable.name,
         value: variable.value,
     }
 }
 
-fn update_settings_to_cdk(args: &UpdateSettingsArgs) -> cdk::mgmt::UpdateSettingsArgs {
-    cdk::mgmt::UpdateSettingsArgs {
+fn update_settings_to_infra(args: &UpdateSettingsArgs) -> InfraUpdateSettingsArgs {
+    InfraUpdateSettingsArgs {
         canister_id: args.canister_id,
-        settings: settings_to_cdk(&args.settings),
+        settings: settings_to_infra(&args.settings),
+        sender_canister_version: Some(cdk::api::canister_version()),
     }
 }

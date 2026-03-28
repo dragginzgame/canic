@@ -662,6 +662,8 @@ fn compare_proof_install_order(
 ) -> std::cmp::Ordering {
     a.installed_at
         .cmp(&b.installed_at)
+        .then_with(|| a.proof.cert.issued_at.cmp(&b.proof.cert.issued_at))
+        .then_with(|| a.proof.cert.expires_at.cmp(&b.proof.cert.expires_at))
         .then_with(|| compare_proof_keys(&a.key, &b.key))
 }
 
@@ -809,7 +811,27 @@ mod tests {
     }
 
     #[test]
-    fn latest_proof_entry_breaks_install_ties_deterministically_by_key() {
+    fn latest_proof_entry_breaks_install_ties_by_proof_freshness_before_key() {
+        let _restore =
+            DelegationStateRestore(DELEGATION_STATE.with_borrow(|cell| cell.get().clone()));
+
+        DELEGATION_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let mut older = entry(21, 400, None);
+            older.proof.cert.expires_at = 450;
+            let mut newer = entry(22, 400, None);
+            newer.proof.cert.expires_at = 550;
+            data.proofs = vec![older, newer];
+            cell.set(data);
+        });
+
+        let latest = DelegationState::get_latest_proof_entry().expect("latest proof must exist");
+        assert_eq!(latest.key.shard_pid, p(22));
+        assert_eq!(latest.key.cert_hash, [22; 32]);
+    }
+
+    #[test]
+    fn latest_proof_entry_breaks_full_ties_deterministically_by_key() {
         let _restore =
             DelegationStateRestore(DELEGATION_STATE.with_borrow(|cell| cell.get().clone()));
 

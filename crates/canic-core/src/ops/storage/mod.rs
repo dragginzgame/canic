@@ -8,6 +8,7 @@ pub mod pool;
 pub mod registry;
 pub mod replay;
 pub mod state;
+pub mod template;
 
 use crate::{InternalError, ops::OpsError};
 use thiserror::Error as ThisError;
@@ -33,6 +34,9 @@ pub enum StorageOpsError {
 
     #[error(transparent)]
     SubnetRegistryOps(#[from] registry::subnet::SubnetRegistryOpsError),
+
+    #[error(transparent)]
+    TemplateManifestOps(#[from] template::TemplateManifestOpsError),
 }
 
 impl From<StorageOpsError> for InternalError {

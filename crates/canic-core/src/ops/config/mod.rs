@@ -4,15 +4,18 @@ use crate::{
         Config, ConfigError, ConfigModel,
         schema::{
             AppInitMode, CanisterConfig, DelegatedTokenConfig, DelegationProofCacheProfile,
-            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig,
+            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig, WasmStoreConfig,
         },
     },
-    ids::SubnetRole,
+    ids::{CanisterRole, SubnetRole, WasmStoreBinding},
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::app::AppMode,
 };
 use std::sync::Arc;
 use thiserror::Error as ThisError;
+
+const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
+const IMPLICIT_WASM_STORE_BINDING: WasmStoreBinding = WasmStoreBinding::new("primary");
 
 ///
 /// ConfigOpsError
@@ -28,6 +31,12 @@ pub enum ConfigOpsError {
 
     #[error("canister {0} not defined in subnet {1}")]
     CanisterNotFound(String, String),
+
+    #[error("current canister {0} is not configured as a wasm store")]
+    CurrentCanisterNotWasmStore(String),
+
+    #[error("wasm store binding {0} not configured for subnet {1}")]
+    WasmStoreBindingNotConfigured(String, String),
 }
 
 impl From<ConfigOpsError> for InternalError {
@@ -61,6 +70,10 @@ pub struct DelegationProofCachePolicy {
 pub struct ConfigOps;
 
 impl ConfigOps {
+    fn is_wasm_store_role(role: &CanisterRole) -> bool {
+        *role == IMPLICIT_WASM_STORE_ROLE
+    }
+
     /// Export the full current configuration as TOML.
     /// Intended for diagnostics and tooling only.
     pub fn export_toml() -> Result<String, InternalError> {
@@ -171,5 +184,66 @@ impl ConfigOps {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)
+    }
+
+    /// Return all configured wasm-store bindings for the current subnet.
+    pub(crate) fn current_subnet_wasm_store_bindings() -> Vec<WasmStoreBinding> {
+        vec![IMPLICIT_WASM_STORE_BINDING]
+    }
+
+    /// Return the default wasm-store binding for the current subnet.
+    pub(crate) const fn current_subnet_default_wasm_store_binding() -> WasmStoreBinding {
+        IMPLICIT_WASM_STORE_BINDING
+    }
+
+    /// Return one wasm-store config by logical binding in the current subnet.
+    pub(crate) fn current_subnet_wasm_store(
+        binding: &WasmStoreBinding,
+    ) -> Result<WasmStoreConfig, InternalError> {
+        let subnet_role = EnvOps::subnet_role()?;
+
+        if binding == &IMPLICIT_WASM_STORE_BINDING {
+            Ok(WasmStoreConfig::implicit())
+        } else {
+            Err(ConfigOpsError::WasmStoreBindingNotConfigured(
+                binding.to_string(),
+                subnet_role.to_string(),
+            )
+            .into())
+        }
+    }
+
+    /// Return the configured binding for one wasm-store canister role in the current subnet.
+    pub(crate) fn current_subnet_wasm_store_binding_for_role(
+        role: &CanisterRole,
+    ) -> Result<WasmStoreBinding, InternalError> {
+        let subnet_role = EnvOps::subnet_role()?;
+
+        if Self::is_wasm_store_role(role) {
+            Ok(IMPLICIT_WASM_STORE_BINDING)
+        } else {
+            Err(ConfigOpsError::WasmStoreBindingNotConfigured(
+                role.to_string(),
+                subnet_role.to_string(),
+            )
+            .into())
+        }
+    }
+
+    /// Return the wasm-store config for the current canister.
+    pub(crate) fn current_wasm_store() -> Result<WasmStoreConfig, InternalError> {
+        let canister_role = EnvOps::canister_role()?;
+
+        if Self::is_wasm_store_role(&canister_role) {
+            Ok(WasmStoreConfig::implicit())
+        } else {
+            Err(ConfigOpsError::CurrentCanisterNotWasmStore(canister_role.to_string()).into())
+        }
+    }
+
+    /// Return the logical binding for the current wasm-store canister.
+    pub(crate) fn current_wasm_store_binding() -> Result<WasmStoreBinding, InternalError> {
+        let canister_role = EnvOps::canister_role()?;
+        Self::current_subnet_wasm_store_binding_for_role(&canister_role)
     }
 }

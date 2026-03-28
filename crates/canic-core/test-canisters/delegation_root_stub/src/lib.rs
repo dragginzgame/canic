@@ -5,11 +5,18 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    api::canister::{CanisterRole, wasm::WasmApi},
+    api::canister::{
+        CanisterRole,
+        template::{EmbeddedTemplateApi, WasmStoreBootstrapApi},
+    },
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
         DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
         RoleAttestationRequest, SignedRoleAttestation,
+    },
+    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateManifestInput},
+    ids::{
+        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
     prelude::*,
 };
@@ -24,6 +31,7 @@ const TEST_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_DELEGATION_CERT_V1";
 const TEST_DELEGATED_TOKEN_DOMAIN: &[u8] = b"CANIC_DELEGATED_TOKEN_V1";
 const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
+const BOOTSTRAP_CHUNK_BYTES: usize = 1_000_000;
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 ///
@@ -36,13 +44,12 @@ struct TestTokenSigningPayload {
     claims: DelegatedTokenClaims,
 }
 
-canic::start_root!();
-
-// Populate the in-memory WASM registry during eager initialization so root
-// bootstrap can proceed under minimal test configs.
-canic::eager_init!({
-    WasmApi::import_static(WASMS);
-});
+canic::start_root!(
+    init = {
+        EmbeddedTemplateApi::import_embedded_release_set(EMBEDDED_WASM_STORE_RELEASE_SET);
+        seed_chunked_bootstrap_release_set(CHUNKED_BOOTSTRAP_RELEASE_SET);
+    }
+);
 
 async fn canic_setup() {}
 async fn canic_install() {}
@@ -339,12 +346,70 @@ fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
+fn stage_chunked_bootstrap_release(role: CanisterRole, bytes: &'static [u8]) {
+    let version = TemplateVersion::new(env!("CARGO_PKG_VERSION"));
+    let template_id = TemplateId::owned(format!("embedded:{role}"));
+    let payload_hash = Sha256::digest(bytes).to_vec();
+    let now_secs = ic_cdk::api::time() / 1_000_000_000;
+    let chunks = bytes
+        .chunks(BOOTSTRAP_CHUNK_BYTES)
+        .map(<[u8]>::to_vec)
+        .collect::<Vec<_>>();
+    let chunk_hashes = chunks
+        .iter()
+        .map(|chunk| Sha256::digest(chunk).to_vec())
+        .collect::<Vec<_>>();
+
+    WasmStoreBootstrapApi::stage_manifest(TemplateManifestInput {
+        template_id: template_id.clone(),
+        role,
+        version: version.clone(),
+        payload_hash: payload_hash.clone(),
+        payload_size_bytes: bytes.len() as u64,
+        store_binding: WasmStoreBinding::new("bootstrap"),
+        chunking_mode: TemplateChunkingMode::Chunked,
+        manifest_state: TemplateManifestState::Approved,
+        approved_at: Some(now_secs),
+        created_at: now_secs,
+    });
+
+    WasmStoreBootstrapApi::prepare_chunk_set(TemplateChunkSetPrepareInput {
+        template_id: template_id.clone(),
+        version: version.clone(),
+        payload_hash,
+        payload_size_bytes: bytes.len() as u64,
+        chunk_hashes,
+    })
+    .expect("prepare chunked bootstrap release");
+
+    for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+        WasmStoreBootstrapApi::publish_chunk(TemplateChunkInput {
+            template_id: template_id.clone(),
+            version: version.clone(),
+            chunk_index: u32::try_from(chunk_index).expect("chunk index fits"),
+            bytes,
+        })
+        .expect("publish chunked bootstrap release chunk");
+    }
+}
+
+fn seed_chunked_bootstrap_release_set(releases: &'static [(CanisterRole, &[u8])]) {
+    for (role, bytes) in releases {
+        stage_chunked_bootstrap_release(role.clone(), bytes);
+    }
+}
+
 // WASM registry entry to satisfy bootstrap invariants and allow
 // auto-create of a non-root canister for delegation tests.
+const WASM_STORE_ROLE: CanisterRole = CanisterRole::new("wasm_store");
 const SIGNER_ROLE: CanisterRole = CanisterRole::new("signer");
 const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
+const WASM_STORE_WASM: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/canister_wasm_store.wasm"));
 const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
-const WASMS: &[(CanisterRole, &[u8])] =
+const EMBEDDED_WASM_STORE_RELEASE_SET: &[(CanisterRole, &[u8])] =
+    &[(WASM_STORE_ROLE, WASM_STORE_WASM)];
+const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] =
     &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
 
 export_candid!();

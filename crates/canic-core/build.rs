@@ -7,6 +7,7 @@ fn main() {
     // Register and optionally enable the test-only delegation-material cfg.
     // This stays disabled in normal builds unless explicitly requested.
     println!("cargo:rustc-check-cfg=cfg(canic_test_delegation_material)");
+    println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
     if env::var_os("CANIC_TEST_DELEGATION_MATERIAL").is_some() {
         println!("cargo:rustc-cfg=canic_test_delegation_material");
     }

@@ -20,6 +20,10 @@ mod defaults {
     }
 }
 
+const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
+const IMPLICIT_WASM_STORE_MAX_STORE_BYTES: u64 = 40_000_000;
+const IMPLICIT_WASM_STORE_HEADROOM_BYTES: u64 = 4_000_000;
+
 fn validate_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
     if role.as_ref().len() > NAME_MAX_BYTES {
         return Err(ConfigSchemaError::ValidationError(format!(
@@ -54,7 +58,13 @@ impl SubnetConfig {
     /// Get a canister configuration by role.
     #[must_use]
     pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {
-        self.canisters.get(role).cloned()
+        self.canisters.get(role).cloned().or_else(|| {
+            if *role == IMPLICIT_WASM_STORE_ROLE {
+                Some(WasmStoreConfig::implicit_canister_config())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -84,6 +94,13 @@ impl Validate for SubnetConfig {
                     "subnet directory canister '{role}' must have kind = \"singleton\"",
                 )));
             }
+        }
+
+        if self.canisters.contains_key(&IMPLICIT_WASM_STORE_ROLE) {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "{} is implicit and must not be configured under subnets.<name>.canisters",
+                CanisterRole::WASM_STORE
+            )));
         }
 
         for (role, cfg) in &self.canisters {
@@ -135,6 +152,93 @@ pub struct CanisterPool {
     pub minimum_size: u8,
     #[serde(default)]
     pub import: PoolImport,
+}
+
+///
+/// WasmStoreConfig
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WasmStoreConfig {
+    pub canister_role: CanisterRole,
+
+    #[serde(default)]
+    pub policy: WasmStorePolicy,
+}
+
+impl WasmStoreConfig {
+    /// Build the one implicit wasm-store preset used on every subnet.
+    #[must_use]
+    pub const fn implicit() -> Self {
+        Self {
+            canister_role: IMPLICIT_WASM_STORE_ROLE,
+            policy: WasmStorePolicy {
+                max_store_bytes: IMPLICIT_WASM_STORE_MAX_STORE_BYTES,
+                headroom_bytes: Some(IMPLICIT_WASM_STORE_HEADROOM_BYTES),
+                max_templates: None,
+                max_template_versions_per_template: None,
+            },
+        }
+    }
+
+    /// Build the implicit canister config for the mandatory wasm-store role.
+    #[must_use]
+    pub fn implicit_canister_config() -> CanisterConfig {
+        CanisterConfig {
+            kind: CanisterKind::Singleton,
+            initial_cycles: defaults::initial_cycles(),
+            topup_policy: None,
+            randomness: RandomnessConfig::default(),
+            scaling: None,
+            sharding: None,
+            delegated_auth: DelegatedAuthCanisterConfig::default(),
+            standards: StandardsCanisterConfig::default(),
+        }
+    }
+
+    /// Return the configured hard occupied-byte ceiling for this store.
+    #[must_use]
+    pub const fn max_store_bytes(&self) -> u64 {
+        self.policy.max_store_bytes
+    }
+
+    /// Return the configured logical template ceiling for this store, if any.
+    #[must_use]
+    pub const fn max_templates(&self) -> Option<u32> {
+        self.policy.max_templates
+    }
+
+    /// Return the configured reserve headroom threshold for this store, if any.
+    #[must_use]
+    pub const fn headroom_bytes(&self) -> Option<u64> {
+        self.policy.headroom_bytes
+    }
+
+    /// Return the configured retained-version ceiling per template, if any.
+    #[must_use]
+    pub const fn max_template_versions_per_template(&self) -> Option<u16> {
+        self.policy.max_template_versions_per_template
+    }
+}
+
+///
+/// WasmStorePolicy
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WasmStorePolicy {
+    pub max_store_bytes: u64,
+
+    #[serde(default)]
+    pub headroom_bytes: Option<u64>,
+
+    #[serde(default)]
+    pub max_templates: Option<u32>,
+
+    #[serde(default)]
+    pub max_template_versions_per_template: Option<u16>,
 }
 
 ///
@@ -793,6 +897,46 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid randomness interval to fail");
+    }
+
+    #[test]
+    fn wasm_store_canister_config_is_implicit() {
+        let subnet = SubnetConfig::default();
+        let cfg = subnet
+            .get_canister(&CanisterRole::WASM_STORE)
+            .expect("expected implicit wasm_store canister");
+
+        assert_eq!(cfg.kind, CanisterKind::Singleton);
+        assert_eq!(cfg.initial_cycles, defaults::initial_cycles());
+    }
+
+    #[test]
+    fn explicit_wasm_store_canister_config_is_rejected() {
+        let mut canisters = BTreeMap::new();
+        canisters.insert(
+            CanisterRole::WASM_STORE,
+            base_canister_config(CanisterKind::Singleton),
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected explicit wasm_store config to fail");
+    }
+
+    #[test]
+    fn wasm_store_policy_is_the_implicit_ic_preset() {
+        let store = WasmStoreConfig::implicit();
+
+        assert_eq!(store.canister_role, CanisterRole::WASM_STORE);
+        assert_eq!(store.max_store_bytes(), 40_000_000);
+        assert_eq!(store.headroom_bytes(), Some(4_000_000));
+        assert_eq!(store.max_templates(), None);
+        assert_eq!(store.max_template_versions_per_template(), None);
     }
 
     #[test]

@@ -22,12 +22,12 @@ use crate::{
     ops::runtime::{env::EnvOps, timer::TimerOps},
     workflow,
 };
-use core::time::Duration;
+use std::time::Duration;
 
 /// Post-upgrade entrypoint for the root canister.
 ///
 /// Root identity and subnet context are restored from stable state.
-pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
+pub fn post_upgrade_root_canister_before_bootstrap(config_str: &str, config_path: &str) {
     if let Err(err) = bootstrap::init_config(config_str) {
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
@@ -52,8 +52,9 @@ pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
     {
         lifecycle_trap(LifecyclePhase::PostUpgrade, err);
     }
+}
 
-    // Delegate to async bootstrap workflow
+pub fn schedule_post_upgrade_root_bootstrap() {
     TimerOps::set(
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_root_canister",
@@ -67,7 +68,11 @@ pub fn post_upgrade_root_canister(config_str: &str, config_path: &str) {
 ///
 /// Environment state is expected to be persisted across upgrade;
 /// only role context needs to be restored before delegating.
-pub fn post_upgrade_nonroot_canister(role: CanisterRole, config_str: &str, config_path: &str) {
+pub fn post_upgrade_nonroot_canister_before_bootstrap(
+    role: CanisterRole,
+    config_str: &str,
+    config_path: &str,
+) {
     if let Err(err) = bootstrap::init_config(config_str) {
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
@@ -88,8 +93,9 @@ pub fn post_upgrade_nonroot_canister(role: CanisterRole, config_str: &str, confi
         );
     }
     workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(role, memory_summary);
+}
 
-    // Delegate to async bootstrap workflow
+pub fn schedule_post_upgrade_nonroot_bootstrap() {
     TimerOps::set(
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",

@@ -7,6 +7,7 @@ At a high level the file describes:
 - Global cluster settings (`controllers`, `app_directory`, `standards`, `app`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
+- Subnet-local wasm-store topology and capacity policy for chunk-store-backed installs.
 
 All fields are validated when `canic::build!` or `canic::build_root!` run, so configuration drift fails fast at compile time.
 
@@ -115,6 +116,27 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 - `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `kind = "singleton"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
+### Implicit `wasm_store`
+
+Every subnet always has one mandatory same-subnet `wasm_store`.
+It is bootstrapped implicitly and must not be declared in `canic.toml`.
+
+Fixed `0.18` preset:
+
+- canister role: `wasm_store`
+- kind: implicit `singleton`
+- `max_store_bytes = 40000000`
+- `headroom_bytes = 4000000`
+- `max_templates = none`
+- `max_template_versions_per_template = none`
+
+Rules:
+
+- do not define `subnets.<name>.wasm_stores.*`
+- do not define `subnets.<name>.canisters.wasm_store`
+- ordinary deployable roles install from published chunked manifests in this store
+- inline install is reserved for bootstrapping `wasm_store` itself
+
 ### `[subnets.<name>.canisters.<role>]`
 
 Each child table configures a logical canister role within the subnet. The role is derived
@@ -137,6 +159,9 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
   - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
+
+The `wasm_store` role is reserved and implicit.
+Do not add it under `canisters.*`.
 
 #### Scaling Pools
 
@@ -259,9 +284,39 @@ kind = "tenant"
 
 [subnets.general]
 
-[subnets.general.canisters.blank]
+[subnets.general.canisters.minimal]
 kind = "replica"
 initial_cycles = "3T"
 ```
 
-This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters.
+This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters. Each subnet also gets one implicit `wasm_store` automatically.
+
+---
+
+## Runtime Release Metadata vs Static Config
+
+`canic.toml` no longer defines wasm-store topology or capacity policy.
+It does not enumerate every published template release.
+
+Static config owns:
+
+- user-defined canister roles and policies
+- subnet bootstrap/directory policy
+
+Root-authoritative runtime state owns:
+
+- approved manifest records
+- logical template release metadata (`template_id`, `version`, `role`, `payload_hash`, `payload_size_bytes`, `chunking_mode`)
+- publication binding / store placement state used for install resolution
+
+Template stores own:
+
+- chunk sets
+- deterministic chunk metadata
+- template-version storage data
+
+This separation is deliberate:
+
+- config defines the user-managed topology only
+- root-approved manifest/runtime state defines what is installable and which implicit store is active
+- wasm stores hold the bytes and deterministic chunk-set metadata only

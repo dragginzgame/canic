@@ -17,6 +17,7 @@ use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
 ///
 
 const ROOT_ROLE: &str = "root";
+const WASM_STORE_ROLE: &str = "wasm_store";
 
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
@@ -26,6 +27,7 @@ pub struct CanisterRole(pub Cow<'static, str>);
 
 impl CanisterRole {
     pub const ROOT: Self = Self(Cow::Borrowed(ROOT_ROLE));
+    pub const WASM_STORE: Self = Self(Cow::Borrowed(WASM_STORE_ROLE));
 
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
@@ -46,6 +48,12 @@ impl CanisterRole {
     #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.as_ref() == ROOT_ROLE
+    }
+
+    /// Returns true if this role represents the built-in wasm store canister.
+    #[must_use]
+    pub fn is_wasm_store(&self) -> bool {
+        self.0.as_ref() == WASM_STORE_ROLE
     }
 
     /// Convert into an owned string (avoids an extra allocation for owned variants).

@@ -149,8 +149,10 @@ pub mod api {
             };
         }
 
-        pub mod wasm {
-            pub use crate::__internal::core::api::wasm::WasmApi;
+        pub mod template {
+            pub use crate::__internal::core::api::template::{
+                EmbeddedTemplateApi, WasmStoreApi, WasmStoreBootstrapApi, WasmStorePublicationApi,
+            };
         }
     }
 

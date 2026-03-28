@@ -7,12 +7,13 @@ use crate::{
         upgrade::plan_upgrade,
     },
     ops::{
-        ic::mgmt::MgmtOps, runtime::wasm::WasmOps, storage::registry::subnet::SubnetRegistryOps,
+        ic::mgmt::{CanisterInstallMode, MgmtOps},
+        storage::{registry::subnet::SubnetRegistryOps, template::TemplateManifestOps},
         topology::policy::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,
-        prelude::*,
+        prelude::*, runtime::template::TemplateInstallWorkflow,
     },
 };
 
@@ -84,8 +85,10 @@ impl CanisterLifecycleWorkflow {
         let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
         TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent)?;
 
-        PropagationWorkflow::propagate_topology(pid).await?;
-        PropagationWorkflow::propagate_state(&role).await?;
+        if !role.is_wasm_store() {
+            PropagationWorkflow::propagate_topology(pid).await?;
+            PropagationWorkflow::propagate_state(&role).await?;
+        }
 
         Ok(CanisterLifecycleResult::created(pid))
     }
@@ -99,8 +102,8 @@ impl CanisterLifecycleWorkflow {
         let record = SubnetRegistryOps::get(pid)
             .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
 
-        let wasm = WasmOps::try_get(&record.role)?;
-        let target_hash = wasm.module_hash();
+        let manifest = TemplateManifestOps::approved_for_role_response(&record.role)?;
+        let target_hash = manifest.payload_hash.clone();
 
         let status = MgmtOps::canister_status(pid).await?;
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
@@ -126,7 +129,13 @@ impl CanisterLifecycleWorkflow {
             return Ok(CanisterLifecycleResult::default());
         }
 
-        MgmtOps::upgrade_canister(pid, wasm.bytes()).await?;
+        TemplateInstallWorkflow::install_code(
+            CanisterInstallMode::Upgrade(None),
+            pid,
+            &manifest,
+            (),
+        )
+        .await?;
         SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
 
         let registry_data = SubnetRegistryOps::data();

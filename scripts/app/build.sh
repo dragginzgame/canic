@@ -3,6 +3,8 @@
 # don't allow errors
 set -e
 
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 # Set up environment
 source "$(dirname "$0")/../env.sh"
 cd "$SCRIPTS"
@@ -14,12 +16,51 @@ if [ $# -eq 0 ]; then
 fi
 CAN=$1
 
+# Build dependent canisters first when this helper is invoked directly.
+# DFX handles dependency ordering itself, but these guards keep standalone
+# `scripts/app/build.sh <canister>` calls from failing on missing `.wasm.gz`
+# artifacts consumed by bundle canisters.
+ensure_canister_artifact() {
+    local dep="$1"
+    local artifact="$ROOT/.dfx/local/canisters/$dep/$dep.wasm.gz"
+
+    if [ -f "$artifact" ]; then
+        return
+    fi
+
+    "$SELF" "$dep"
+}
+
+case "$CAN" in
+    user_hub)
+        ensure_canister_artifact "user_shard"
+        ;;
+    scale_hub)
+        ensure_canister_artifact "scale"
+        ;;
+    shard_hub)
+        ensure_canister_artifact "shard"
+        ;;
+    wasm_store)
+        ensure_canister_artifact "app"
+        ensure_canister_artifact "minimal"
+        ensure_canister_artifact "user_hub"
+        ensure_canister_artifact "scale_hub"
+        ensure_canister_artifact "shard_hub"
+        ensure_canister_artifact "test"
+        ;;
+    root)
+        ensure_canister_artifact "wasm_store"
+        ;;
+esac
+
 ##
 ## Build Wasm
 ##
 
 mkdir -p "$ROOT/.dfx/local/canisters/$CAN"
 WASM_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm"
+WASM_GZ_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm.gz"
 
 # Build in release mode by default to keep wasm artifacts small.
 # Set RELEASE=0 to force a debug build.
@@ -32,8 +73,13 @@ fi
 
 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
 cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
+gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
+
+# Build an extractor-only Wasm with eager init disabled so `candid-extractor`
+# can instantiate bundle canisters without executing runtime startup hooks.
+CANIC_SKIP_EAGER_INIT=1 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
 
 # extract candid
 
-candid-extractor "$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm" \
+candid-extractor "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" \
     > "$ROOT/.dfx/local/canisters/$CAN/$CAN.did"

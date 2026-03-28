@@ -17,6 +17,7 @@ mod intent;
 mod metrics;
 mod network;
 mod subnet;
+mod template;
 
 pub use canister::CanisterRole;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
@@ -24,3 +25,7 @@ pub use intent::IntentResourceKey;
 pub use metrics::{AccessMetricKind, SystemMetricKind};
 pub use network::BuildNetwork;
 pub use subnet::SubnetRole;
+pub use template::{
+    TemplateChunkKey, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
+    TemplateVersion, WasmStoreBinding, WasmStoreGcMode, WasmStoreGcStatus,
+};
