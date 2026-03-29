@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -238,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "derive_more",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "async-trait",
  "candid",
@@ -277,11 +277,11 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl"
-version = "0.18.2"
+version = "0.18.3"
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "canic-dsl",
  "proc-macro2",
@@ -291,14 +291,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "canic-utils"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "convert_case 0.11.0",
  "derive_more",
@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "canister_minimal"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -365,7 +365,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "canister_shard_hub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "canister_wasm_store"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -762,7 +762,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -774,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -1667,7 +1667,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic-core",
@@ -1676,7 +1676,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1684,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2743,7 +2743,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.18.2"
+version = "0.18.3"
 dependencies = [
  "candid",
  "canic",
@@ -3867,18 +3867,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.47"
+version = "0.8.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
+checksum = "eed437bf9d6692032087e337407a86f04cd8d6a16a37199ed57949d415bd68e9"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.47"
+version = "0.8.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
+checksum = "70e3cd084b1788766f53af483dd21f93881ff30d7320490ec3ef7526d203bad4"
 dependencies = [
  "proc-macro2",
  "quote",
