@@ -273,7 +273,7 @@ mod tests {
             manifest(),
         );
         TemplateManifestStateStore::upsert(
-            TemplateReleaseKey::new(TemplateId::new("two"), TemplateVersion::new("0.18.1")),
+            TemplateReleaseKey::new(TemplateId::new("two"), TemplateVersion::new("0.18.2")),
             TemplateManifestRecord {
                 role: CanisterRole::new("scale"),
                 store_binding: WasmStoreBinding::new("secondary"),
