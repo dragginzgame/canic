@@ -75,11 +75,13 @@ cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
 cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
 gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
 
-# Build an extractor-only Wasm with eager init disabled so `candid-extractor`
-# can instantiate bundle canisters without executing runtime startup hooks.
-CANIC_SKIP_EAGER_INIT=1 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
+# Build a debug extractor-only Wasm with eager init disabled so
+# `candid-extractor` can instantiate bundle canisters without executing
+# runtime startup hooks. The debug profile keeps `get_candid_pointer`
+# exported through `canic::export_candid!()`.
+CANIC_SKIP_EAGER_INIT=1 cargo build --target wasm32-unknown-unknown -p "canister_$CAN"
 
 # extract candid
 
-candid-extractor "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" \
+candid-extractor "$ROOT/target/wasm32-unknown-unknown/debug/canister_$CAN.wasm" \
     > "$ROOT/.dfx/local/canisters/$CAN/$CAN.did"
