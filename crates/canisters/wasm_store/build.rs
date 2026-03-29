@@ -48,6 +48,11 @@ fn dfx_network_dir() -> &'static str {
     }
 }
 
+// Keep strict artifact enforcement only for the real canister bundle build path.
+fn require_release_artifacts() -> bool {
+    env::var_os("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_some()
+}
+
 // Generate the embedded release table seeded by the local wasm_store canister.
 fn write_embedded_release_set(roles: &[String], manifest_dir: &Path, out_dir: &Path) {
     let repo_root = workspace_root(manifest_dir);
@@ -55,6 +60,7 @@ fn write_embedded_release_set(roles: &[String], manifest_dir: &Path, out_dir: &P
     let mut body = String::from(
         "pub static EMBEDDED_RELEASE_SET: &[(canic::ids::CanisterRole, &[u8])] = &[\n",
     );
+    let require_artifacts = require_release_artifacts();
 
     for role in roles {
         let wasm_path = repo_root
@@ -65,11 +71,20 @@ fn write_embedded_release_set(roles: &[String], manifest_dir: &Path, out_dir: &P
             .join(format!("{role}.wasm.gz"));
         println!("cargo:rerun-if-changed={}", wasm_path.display());
 
-        assert!(
-            wasm_path.is_file(),
-            "configured release artifact for role '{role}' is missing at {}",
-            wasm_path.display()
-        );
+        if !wasm_path.is_file() {
+            if require_artifacts {
+                panic!(
+                    "configured release artifact for role '{role}' is missing at {}",
+                    wasm_path.display()
+                );
+            }
+
+            println!(
+                "cargo:warning=skipping embedded release entry for role '{role}'; artifact missing at {}",
+                wasm_path.display()
+            );
+            continue;
+        }
 
         let wasm_literal = wasm_path.display();
         let _ = writeln!(
