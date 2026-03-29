@@ -5,10 +5,7 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    api::canister::{
-        CanisterRole,
-        template::{EmbeddedTemplateApi, WasmStoreBootstrapApi},
-    },
+    api::canister::{CanisterRole, template::WasmStoreBootstrapApi},
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
         DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
@@ -31,9 +28,9 @@ const TEST_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_DELEGATION_CERT_V1";
 const TEST_DELEGATED_TOKEN_DOMAIN: &[u8] = b"CANIC_DELEGATED_TOKEN_V1";
 const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
-// Most we can send while staying under IC ingress limits; keeps bootstrap
-// chunk publication sane while minimizing call count.
-const BOOTSTRAP_CHUNK_BYTES: usize = (9 * 1024 * 1024) / 5;
+// Maximum management-canister chunk-store payload accepted per call. Use the
+// full 1 MiB limit to keep bootstrap round-trips low without exceeding bounds.
+const BOOTSTRAP_CHUNK_BYTES: usize = 1024 * 1024;
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 ///
@@ -48,7 +45,6 @@ struct TestTokenSigningPayload {
 
 canic::start_root!(
     init = {
-        EmbeddedTemplateApi::import_embedded_release_set(EMBEDDED_WASM_STORE_RELEASE_SET);
         seed_chunked_bootstrap_release_set(CHUNKED_BOOTSTRAP_RELEASE_SET);
     }
 );
@@ -409,9 +405,11 @@ const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
 const WASM_STORE_WASM: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/canister_wasm_store.wasm"));
 const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
-const EMBEDDED_WASM_STORE_RELEASE_SET: &[(CanisterRole, &[u8])] =
-    &[(WASM_STORE_ROLE, WASM_STORE_WASM)];
-const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] =
-    &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
+const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
+    (WASM_STORE_ROLE, WASM_STORE_WASM),
+    (SIGNER_ROLE, SIGNER_WASM),
+    (PROJECT_HUB_ROLE, SIGNER_WASM),
+];
 
+#[cfg(debug_assertions)]
 canic::export_candid!();

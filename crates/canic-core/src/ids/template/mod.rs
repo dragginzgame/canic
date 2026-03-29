@@ -1,5 +1,8 @@
 use crate::memory::impl_storable_bounded;
-use candid::CandidType;
+use candid::{
+    CandidType,
+    types::{Serializer, Type},
+};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, fmt};
 
@@ -66,9 +69,7 @@ impl_storable_bounded!(TemplateId, 160, false);
 /// TemplateVersion
 ///
 
-#[derive(
-    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
-)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct TemplateVersion(pub Cow<'static, str>);
 
@@ -114,8 +115,24 @@ impl Borrow<str> for TemplateVersion {
 }
 
 impl fmt::Display for TemplateVersion {
+    // Render the semantic version exactly as the stored string value.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+impl CandidType for TemplateVersion {
+    // Expose `TemplateVersion` as plain Candid `text` on public canister boundaries.
+    fn _ty() -> Type {
+        String::ty()
+    }
+
+    // Serialize the wrapped semantic version using the same Candid encoding as `String`.
+    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
+    where
+        S: Serializer,
+    {
+        self.as_str().idl_serialize(serializer)
     }
 }
 
@@ -239,6 +256,21 @@ impl fmt::Display for TemplateChunkKey {
 }
 
 impl_storable_bounded!(TemplateChunkKey, 320, false);
+
+#[cfg(test)]
+mod tests {
+    use super::TemplateVersion;
+    use candid::{CandidType, Encode};
+
+    // Keep the public wire format aligned with plain Candid `text`.
+    #[test]
+    fn template_version_uses_string_candid_encoding() {
+        let version = TemplateVersion::new("0.18.5");
+
+        assert_eq!(TemplateVersion::ty(), String::ty());
+        assert_eq!(Encode!(&version).unwrap(), Encode!(&"0.18.5").unwrap());
+    }
+}
 
 ///
 /// TemplateChunkingMode

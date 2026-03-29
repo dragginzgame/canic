@@ -81,7 +81,7 @@ Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar)
 
 `eager_static!` and `eager_init!` make TLS setup a deliberate part of startup instead of a hidden first-use side effect.
 
-If you are using the full Canic facade (`canic::start!` / `canic::start_root!`), you do not need to call anything extra: Canic runs eager TLS, executes registered `eager_init!` blocks, and then flushes the memory registry during synchronous lifecycle bootstrap.
+If you are using the full Canic facade (`canic::start!` / `canic::start_root!`), you do not need to call anything extra: Canic runs eager TLS, executes registered `eager_init!` blocks, and then flushes the memory registry during synchronous lifecycle bootstrap. This work happens during real lifecycle execution, so debug-only Candid extraction can reuse the same artifact without a separate eager-init build variant.
 
 If you are using `canic-memory` standalone without Canic lifecycle wiring, the startup order is: `init_eager_tls()` → run `eager_init!` work → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
 

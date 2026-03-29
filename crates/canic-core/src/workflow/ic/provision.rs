@@ -30,6 +30,7 @@ use crate::{
             policy::mapper::RegistryPolicyInputMapper,
         },
     },
+    utils::format::byte_size,
     workflow::{
         cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*,
         runtime::template::TemplateInstallWorkflow,
@@ -268,25 +269,21 @@ async fn allocate_canister(
         log!(
             Topic::CanisterPool,
             Ok,
-            "⚡ allocate_canister: reusing {pid} from pool (current {current})"
+            "⚡ allocate_canister: reusing {pid} role={role} from pool (current {current})"
         );
 
         return Ok((pid, AllocationSource::Pool));
     }
 
     // Create new canister
-    let pid = create_canister_with_configured_controllers(target).await?;
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "⚡ allocate_canister: pool empty"
-    );
+    let pid = create_canister_with_configured_controllers(role, target).await?;
 
     Ok((pid, AllocationSource::New))
 }
 
 /// Create a fresh canister on the IC with the configured controllers.
 async fn create_canister_with_configured_controllers(
+    role: &CanisterRole,
     cycles: Cycles,
 ) -> Result<Principal, InternalError> {
     let root = IcOps::canister_self();
@@ -298,7 +295,7 @@ async fn create_canister_with_configured_controllers(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ create_canister: {pid} ({cycles})"
+        "⚡ create_canister: {pid} role={role} cycles={cycles} source=new (pool empty)"
     );
 
     Ok(pid)
@@ -311,7 +308,6 @@ async fn create_canister_with_configured_controllers(
 //
 
 /// Install WASM and initial state into a new canister.
-#[expect(clippy::cast_precision_loss)]
 async fn install_canister(
     pid: Principal,
     role: &CanisterRole,
@@ -375,9 +371,9 @@ async fn install_canister(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ install_canister: {pid} ({role}, template={}, {:.2} KiB, mode={:?})",
+        "⚡ install_canister: {pid} ({role}, template={}, size={}, mode={:?})",
         manifest.template_id,
-        manifest.payload_size_bytes as f64 / 1_024.0,
+        byte_size(manifest.payload_size_bytes),
         manifest.chunking_mode,
     );
 

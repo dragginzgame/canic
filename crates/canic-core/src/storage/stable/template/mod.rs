@@ -13,7 +13,7 @@ use crate::{
     memory::{impl_storable_bounded, impl_storable_unbounded},
     storage::prelude::*,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::BTreeMap as StdBTreeMap};
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
@@ -207,6 +207,22 @@ impl TemplateChunkStore {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
                 .collect()
+        })
+    }
+
+    // Count staged chunks by release without cloning chunk payload bytes.
+    #[must_use]
+    pub(crate) fn count_by_release() -> StdBTreeMap<TemplateReleaseKey, u32> {
+        TEMPLATE_CHUNKS.with_borrow(|map| {
+            let mut counts: StdBTreeMap<TemplateReleaseKey, u32> = StdBTreeMap::new();
+
+            for entry in map.iter() {
+                let release = entry.key().release.clone();
+                let count = counts.entry(release).or_insert(0);
+                *count = u32::saturating_add(*count, 1);
+            }
+
+            counts
         })
     }
 

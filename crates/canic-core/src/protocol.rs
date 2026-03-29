@@ -25,6 +25,7 @@ pub const CANIC_WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN: &str =
     "canic_wasm_store_bootstrap_publish_chunk_admin";
 pub const CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN: &str =
     "canic_wasm_store_bootstrap_resume_root_admin";
+pub const CANIC_WASM_STORE_BOOTSTRAP_DEBUG: &str = "canic_wasm_store_bootstrap_debug";
 pub const CANIC_WASM_STORE_OVERVIEW: &str = "canic_wasm_store_overview";
 
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";

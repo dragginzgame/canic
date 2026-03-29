@@ -175,17 +175,11 @@ impl MgmtOps {
         controllers: Vec<Principal>,
         cycles: Cycles,
     ) -> Result<Principal, InternalError> {
-        let cycles_snapshot = cycles.clone();
         let pid = MgmtInfra::create_canister(controllers, cycles)
             .await
             .map_err(IcOpsError::from)?;
 
         SystemMetrics::increment(SystemMetricKind::CreateCanister);
-        log!(
-            Topic::CanisterLifecycle,
-            Ok,
-            "canister_create: {pid} cycles={cycles_snapshot}"
-        );
 
         Ok(pid)
     }

@@ -7,9 +7,7 @@ macro_rules! eager_init {
     ($body:block) => {
         const _: () = {
             fn __canic_registered_eager_init_body() {
-                if option_env!("CANIC_SKIP_EAGER_INIT").is_none() {
-                    $body
-                }
+                $body
             }
 
             #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]

@@ -24,7 +24,6 @@ macro_rules! log {
 #[macro_export]
 macro_rules! export_candid {
     () => {
-        #[cfg(debug_assertions)]
         $crate::cdk::export_candid!();
     };
 }

@@ -1,8 +1,5 @@
 use super::call_store_result;
-use super::{
-    DEFAULT_WASM_STORE_PUBLISH_CHUNK_BYTES, WASM_STORE_BOOTSTRAP_BINDING, WASM_STORE_ROLE,
-    embedded_template_id, split_chunks,
-};
+use super::{WASM_STORE_BOOTSTRAP_BINDING, WASM_STORE_ROLE, embedded_template_id, local_chunks};
 use super::{
     store_begin_gc, store_binding_for_pid, store_catalog, store_chunk_set_info, store_chunks,
     store_complete_gc, store_pid_for_binding, store_prepare_gc, store_status,
@@ -11,9 +8,9 @@ use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     cdk::types::{Principal, WasmModule},
     dto::template::{
-        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetInput,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-        WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
+        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput, WasmStoreAdminCommand, WasmStoreAdminResponse,
+        WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
     },
     ids::{
         CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateVersion,
@@ -27,9 +24,8 @@ use crate::{
         ic::mgmt::MgmtOps,
         runtime::template::EmbeddedTemplatePayloadOps,
         storage::{
-            registry::subnet::SubnetRegistryOps,
-            state::subnet::SubnetStateOps,
-            template::{TemplateManifestOps, WasmStoreLimits},
+            registry::subnet::SubnetRegistryOps, state::subnet::SubnetStateOps,
+            template::TemplateManifestOps,
         },
     },
     protocol,
@@ -86,7 +82,7 @@ impl WasmStorePublicationWorkflow {
             SubnetRegistryOps::get(pid).map_or_else(IcOps::now_secs, |record| record.created_at);
         let _ = SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at);
 
-        log!(Topic::Wasm, Warn, "ws created {} ({})", binding, pid);
+        log!(Topic::Wasm, Ok, "ws created {} ({})", binding, pid);
 
         Ok(binding)
     }
@@ -246,7 +242,7 @@ impl WasmStorePublicationWorkflow {
 
         log!(
             Topic::Wasm,
-            Warn,
+            Ok,
             "ws gc prepared {} gen={} retired_at={}",
             retired_binding,
             state.generation,
@@ -274,7 +270,7 @@ impl WasmStorePublicationWorkflow {
 
         log!(
             Topic::Wasm,
-            Warn,
+            Ok,
             "ws gc begin {} gen={} retired_at={}",
             retired_binding,
             state.generation,
@@ -302,7 +298,7 @@ impl WasmStorePublicationWorkflow {
 
         log!(
             Topic::Wasm,
-            Warn,
+            Ok,
             "ws gc complete {} gen={} retired_at={}",
             retired_binding,
             state.generation,
@@ -348,7 +344,7 @@ impl WasmStorePublicationWorkflow {
             );
             log!(
                 Topic::Wasm,
-                Warn,
+                Ok,
                 "ws finalized {} ({})",
                 binding,
                 finalized_store_pid
@@ -401,7 +397,7 @@ impl WasmStorePublicationWorkflow {
         ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
         let _ = SubnetStateOps::remove_wasm_store(&binding);
 
-        log!(Topic::Wasm, Warn, "ws deleted {} ({})", binding, store_pid);
+        log!(Topic::Wasm, Ok, "ws deleted {} ({})", binding, store_pid);
 
         Ok(())
     }
@@ -425,7 +421,7 @@ impl WasmStorePublicationWorkflow {
                 &current,
                 changed_at,
             );
-            log!(Topic::Wasm, Warn, "ws retired {}", binding);
+            log!(Topic::Wasm, Ok, "ws retired {}", binding);
         }
 
         retired
@@ -586,7 +582,7 @@ impl WasmStorePublicationWorkflow {
         if Self::binding_is_reserved_for_publication(&current_state, &preferred_binding) {
             log!(
                 Topic::Wasm,
-                Warn,
+                Info,
                 "ws skip reserved binding {}",
                 preferred_binding
             );
@@ -604,14 +600,14 @@ impl WasmStorePublicationWorkflow {
 
             let current_state = SubnetStateOps::publication_store_state();
             if Self::binding_is_reserved_for_publication(&current_state, &candidate) {
-                log!(Topic::Wasm, Warn, "ws skip reserved binding {}", candidate);
+                log!(Topic::Wasm, Info, "ws skip reserved binding {}", candidate);
                 continue;
             }
 
             if Self::store_binding_accepts_publication(&candidate).await? {
                 log!(
                     Topic::Wasm,
-                    Warn,
+                    Info,
                     "ws preferred {} within headroom, using {}",
                     preferred_binding,
                     candidate
@@ -628,7 +624,7 @@ impl WasmStorePublicationWorkflow {
         Self::promote_publication_binding(binding.clone(), "promote_new_publication_binding")?;
         log!(
             Topic::Wasm,
-            Warn,
+            Info,
             "ws preferred {} within headroom, created {}",
             preferred_binding,
             binding
@@ -694,80 +690,6 @@ impl WasmStorePublicationWorkflow {
         }
     }
 
-    // Seed one local wasm store from its embedded release table.
-    pub fn import_embedded_release_set_to_local_store(wasms: &'static [(CanisterRole, &[u8])]) {
-        if !cfg!(target_arch = "wasm32") {
-            return;
-        }
-
-        let version = TemplateVersion::new(VERSION);
-        let now_secs = IcOps::now_secs();
-        let store_binding = ConfigOps::current_wasm_store_binding()
-            .unwrap_or_else(|err| panic!("wasm store binding missing for embedded import: {err}"));
-        let limits = ConfigOps::current_wasm_store().map_or_else(
-            |err| panic!("wasm store config missing for embedded import: {err}"),
-            |store| WasmStoreLimits {
-                max_store_bytes: store.max_store_bytes(),
-                max_templates: store.max_templates(),
-                max_template_versions_per_template: store.max_template_versions_per_template(),
-            },
-        );
-
-        for (role, bytes) in wasms {
-            if *role == WASM_STORE_ROLE {
-                continue;
-            }
-
-            let wasm = WasmModule::new(bytes);
-            let payload_hash = wasm.module_hash();
-            let template_id = embedded_template_id(role);
-            let chunks = split_chunks(wasm.bytes(), DEFAULT_WASM_STORE_PUBLISH_CHUNK_BYTES);
-
-            TemplateManifestOps::replace_approved_in_store_from_input(
-                TemplateManifestInput {
-                    template_id: template_id.clone(),
-                    role: role.clone(),
-                    version: version.clone(),
-                    payload_hash: payload_hash.clone(),
-                    payload_size_bytes: wasm.len() as u64,
-                    store_binding: store_binding.clone(),
-                    chunking_mode: TemplateChunkingMode::Chunked,
-                    manifest_state: TemplateManifestState::Approved,
-                    approved_at: Some(now_secs),
-                    created_at: now_secs,
-                },
-                limits,
-            )
-            .unwrap_or_else(|err| {
-                panic!("wasm store embedded manifest import failed for {role}: {err}")
-            });
-
-            TemplateManifestOps::publish_chunk_set_in_store_from_input(
-                TemplateChunkSetInput {
-                    template_id: template_id.clone(),
-                    version: version.clone(),
-                    payload_hash,
-                    payload_size_bytes: wasm.len() as u64,
-                    chunks,
-                },
-                now_secs,
-                limits,
-            )
-            .unwrap_or_else(|err| {
-                panic!("wasm store embedded chunk import failed for {role}: {err}")
-            });
-
-            crate::log!(
-                crate::log::Topic::Wasm,
-                Info,
-                "tpl.store.import {} -> {} ({} bytes)",
-                role,
-                template_id,
-                wasm.len()
-            );
-        }
-    }
-
     // Import one store catalog into root-owned manifest state for one selected store.
     pub fn import_store_catalog(
         binding: WasmStoreBinding,
@@ -789,6 +711,37 @@ impl WasmStorePublicationWorkflow {
                 created_at: now_secs,
             });
         }
+    }
+
+    // Publish all root-local staged releases into the current subnet's selected wasm store.
+    pub async fn publish_staged_release_set_to_current_store() -> Result<(), InternalError> {
+        let target_store_binding = Self::resolve_current_publication_store_binding().await?;
+        let target_store_pid = store_pid_for_binding(&target_store_binding)?;
+        Self::ensure_store_accepts_publication(&target_store_binding, target_store_pid).await?;
+        let manifests = TemplateManifestOps::approved_manifests_response()
+            .into_iter()
+            .filter(|manifest| {
+                manifest.role != WASM_STORE_ROLE
+                    && manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING
+                    && manifest.chunking_mode == TemplateChunkingMode::Chunked
+            })
+            .collect::<Vec<_>>();
+
+        // Fail closed before any store writes if one staged release is incomplete.
+        for manifest in &manifests {
+            TemplateManifestOps::validate_staged_release(manifest)?;
+        }
+
+        for manifest in manifests {
+            Self::publish_bootstrap_release_to_store(
+                target_store_pid,
+                target_store_binding.clone(),
+                manifest,
+            )
+            .await?;
+        }
+
+        Ok(())
     }
 
     // Publish the current release set from the current default store into one subnet-local wasm store.
@@ -945,6 +898,92 @@ impl WasmStorePublicationWorkflow {
             "tpl.publish {} -> {} (store={}, chunks={})",
             entry.role,
             entry.template_id,
+            target_store_pid,
+            chunk_hashes.len()
+        );
+
+        Ok(())
+    }
+
+    // Publish one root-local staged release into a target store and promote root manifest state.
+    async fn publish_bootstrap_release_to_store(
+        target_store_pid: Principal,
+        target_store_binding: WasmStoreBinding,
+        manifest: crate::dto::template::TemplateManifestResponse,
+    ) -> Result<(), InternalError> {
+        let info =
+            TemplateManifestOps::chunk_set_info_response(&manifest.template_id, &manifest.version)?;
+        let chunks = local_chunks(
+            &manifest.template_id,
+            &manifest.version,
+            info.chunk_hashes.len(),
+        )?;
+        let chunk_hashes = info.chunk_hashes.clone();
+        let existing_hashes = MgmtOps::stored_chunks(target_store_pid)
+            .await?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+        let _: TemplateChunkSetInfoResponse = call_store_result(
+            target_store_pid,
+            protocol::CANIC_WASM_STORE_PREPARE,
+            (TemplateChunkSetPrepareInput {
+                template_id: manifest.template_id.clone(),
+                version: manifest.version.clone(),
+                payload_hash: manifest.payload_hash.clone(),
+                payload_size_bytes: manifest.payload_size_bytes,
+                chunk_hashes: chunk_hashes.clone(),
+            },),
+        )
+        .await?;
+
+        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+            let chunk_index = u32::try_from(chunk_index).map_err(|_| {
+                InternalError::workflow(
+                    InternalErrorOrigin::Workflow,
+                    format!(
+                        "template '{}' exceeds chunk index bounds",
+                        manifest.template_id
+                    ),
+                )
+            })?;
+
+            if existing_hashes.contains(&chunk_hashes[chunk_index as usize]) {
+                continue;
+            }
+
+            call_store_result::<(), _>(
+                target_store_pid,
+                protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                (TemplateChunkInput {
+                    template_id: manifest.template_id.clone(),
+                    version: manifest.version.clone(),
+                    chunk_index,
+                    bytes,
+                },),
+            )
+            .await?;
+        }
+
+        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
+            template_id: manifest.template_id.clone(),
+            role: manifest.role.clone(),
+            version: manifest.version.clone(),
+            payload_hash: manifest.payload_hash,
+            payload_size_bytes: manifest.payload_size_bytes,
+            store_binding: target_store_binding.clone(),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(IcOps::now_secs()),
+            created_at: manifest.created_at,
+        });
+
+        log!(
+            Topic::Wasm,
+            Ok,
+            "tpl.publish {} -> {} (store={}, chunks={})",
+            manifest.role,
+            manifest.template_id,
             target_store_pid,
             chunk_hashes.len()
         );

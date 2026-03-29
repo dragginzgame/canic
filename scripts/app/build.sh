@@ -25,79 +25,153 @@ if [ "${RELEASE:-1}" = "0" ]; then
     PROFILE_DIR="debug"
 fi
 
+IS_RELEASE_BUILD=1
+if [ "$PROFILE_DIR" = "debug" ]; then
+    IS_RELEASE_BUILD=0
+fi
+
 artifact_profile_path() {
     local canister="$1"
     printf '%s\n' "$ROOT/.dfx/local/canisters/$canister/.build-profile"
 }
 
-dependencies_for_canister() {
+source_did_path() {
     local canister="$1"
-
-    case "$canister" in
-        user_hub)
-            printf '%s\n' "user_shard"
-            ;;
-        scale_hub)
-            printf '%s\n' "scale"
-            ;;
-        shard_hub)
-            printf '%s\n' "shard"
-            ;;
-        wasm_store)
-            printf '%s\n' "app" "minimal" "user_hub" "scale_hub" "shard_hub" "test"
-            ;;
-        root)
-            printf '%s\n' "wasm_store"
-            ;;
-    esac
+    printf '%s\n' "$ROOT/crates/canisters/$canister/$canister.did"
 }
 
-canister_artifact_is_current() {
+artifact_did_path() {
     local canister="$1"
-    local artifact="$ROOT/.dfx/local/canisters/$canister/$canister.wasm.gz"
-    local profile_file
-    profile_file="$(artifact_profile_path "$canister")"
-
-    if [ ! -f "$artifact" ] || [ ! -f "$profile_file" ]; then
-        return 1
-    fi
-
-    local built_profile
-    built_profile="$(cat "$profile_file")"
-    if [ "$built_profile" != "$PROFILE_DIR" ]; then
-        return 1
-    fi
-
-    local dep
-    while IFS= read -r dep; do
-        [ -n "$dep" ] || continue
-        canister_artifact_is_current "$dep" || return 1
-    done < <(dependencies_for_canister "$canister")
-
-    return 0
+    printf '%s\n' "$ROOT/.dfx/local/canisters/$canister/$canister.did"
 }
 
-# Build dependent canisters first when this helper is invoked directly.
-# DFX handles dependency ordering itself, but these guards keep standalone
-# `scripts/app/build.sh <canister>` calls from failing on missing `.wasm.gz`
-# artifacts consumed by bundle canisters.
-ensure_canister_artifact() {
-    local dep="$1"
-    if canister_artifact_is_current "$dep"; then
+ALL_CANISTERS=(
+    app
+    minimal
+    root
+    scale
+    scale_hub
+    shard
+    shard_hub
+    test
+    user_hub
+    user_shard
+    wasm_store
+)
+
+workspace_wasm_build_stamp() {
+    local profile_dir="$1"
+    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build-$profile_dir.stamp"
+}
+
+workspace_wasm_build_lock() {
+    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build.lock"
+}
+
+newest_workspace_input_epoch() {
+    find \
+        "$ROOT/Cargo.toml" \
+        "$ROOT/Cargo.lock" \
+        "$ROOT/dfx.json" \
+        "$ROOT/scripts/app/build.sh" \
+        "$ROOT/crates" \
+        -type f -printf '%T@\n' 2>/dev/null | sort -nr | head -1
+}
+
+source_did_is_current() {
+    local canister="$1"
+    local source_did
+    source_did="$(source_did_path "$canister")"
+
+    [ -f "$source_did" ] || return 1
+
+    local newest_input
+    newest_input="$(newest_workspace_input_epoch)"
+    [ -n "$newest_input" ] || return 1
+
+    local did_epoch
+    did_epoch="$(stat -c '%Y' "$source_did")"
+
+    awk "BEGIN { exit !($did_epoch >= $newest_input) }"
+}
+
+workspace_wasm_target_path() {
+    local canister="$1"
+    local profile_dir="$2"
+    printf '%s\n' "$ROOT/target/wasm32-unknown-unknown/$profile_dir/canister_$canister.wasm"
+}
+
+workspace_wasm_build_is_current() {
+    local profile_dir="$1"
+    local stamp
+    stamp="$(workspace_wasm_build_stamp "$profile_dir")"
+
+    [ -f "$stamp" ] || return 1
+
+    local canister
+    for canister in "${ALL_CANISTERS[@]}"; do
+        [ -f "$(workspace_wasm_target_path "$canister" "$profile_dir")" ] || return 1
+    done
+
+    local newest_input
+    newest_input="$(newest_workspace_input_epoch)"
+    [ -n "$newest_input" ] || return 1
+
+    local stamp_epoch
+    stamp_epoch="$(stat -c '%Y' "$stamp")"
+
+    awk "BEGIN { exit !($stamp_epoch >= $newest_input) }"
+}
+
+ensure_workspace_wasm_build() {
+    local profile_dir="$1"
+    mkdir -p "$ROOT/.dfx/local/canisters"
+
+    local lock_file
+    lock_file="$(workspace_wasm_build_lock)"
+
+    exec 9>"$lock_file"
+    flock 9
+
+    if workspace_wasm_build_is_current "$profile_dir"; then
+        flock -u 9
+        exec 9>&-
         return
     fi
 
-    RELEASE="${RELEASE:-1}" "$SELF" "$dep"
+    local cargo_args=(
+        build
+        --target wasm32-unknown-unknown
+    )
+
+    if [ "$profile_dir" = "release" ]; then
+        cargo_args+=(--release)
+    fi
+
+    local canister
+    for canister in "${ALL_CANISTERS[@]}"; do
+        cargo_args+=(-p "canister_$canister")
+    done
+
+    CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 cargo "${cargo_args[@]}"
+    touch "$(workspace_wasm_build_stamp "$profile_dir")"
+
+    flock -u 9
+    exec 9>&-
 }
 
-case "$CAN" in
-    user_hub|scale_hub|shard_hub|wasm_store|root)
-        while IFS= read -r dep; do
-            [ -n "$dep" ] || continue
-            ensure_canister_artifact "$dep"
-        done < <(dependencies_for_canister "$CAN")
-        ;;
-esac
+extract_and_cache_did_from_debug_artifact() {
+    local canister="$1"
+    local source_did
+    local artifact_did
+
+    source_did="$(source_did_path "$canister")"
+    artifact_did="$(artifact_did_path "$canister")"
+
+    ensure_workspace_wasm_build "debug"
+    candid-extractor "$(workspace_wasm_target_path "$canister" "debug")" > "$source_did"
+    cp -f "$source_did" "$artifact_did"
+}
 
 ##
 ## Build Wasm
@@ -107,21 +181,24 @@ mkdir -p "$ROOT/.dfx/local/canisters/$CAN"
 WASM_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm"
 WASM_GZ_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm.gz"
 PROFILE_FILE="$(artifact_profile_path "$CAN")"
+SOURCE_DID="$(source_did_path "$CAN")"
+ARTIFACT_DID="$(artifact_did_path "$CAN")"
 
-CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 \
-cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
-cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
+ensure_workspace_wasm_build "$PROFILE_DIR"
+cp -f "$(workspace_wasm_target_path "$CAN" "$PROFILE_DIR")" "$WASM_TARGET"
 gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
 printf '%s\n' "$PROFILE_DIR" > "$PROFILE_FILE"
 
-# Build a debug extractor-only Wasm with eager init disabled so
-# `candid-extractor` can instantiate bundle canisters without executing
-# runtime startup hooks. The debug profile keeps `get_candid_pointer`
-# exported through `canic::export_candid!()`.
-CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 CANIC_SKIP_EAGER_INIT=1 \
-cargo build --target wasm32-unknown-unknown -p "canister_$CAN"
-
-# extract candid
-
-candid-extractor "$ROOT/target/wasm32-unknown-unknown/debug/canister_$CAN.wasm" \
-    > "$ROOT/.dfx/local/canisters/$CAN/$CAN.did"
+if [ "$IS_RELEASE_BUILD" = "1" ]; then
+    echo "Building release (no candid extraction)"
+    if source_did_is_current "$CAN"; then
+        cp -f "$SOURCE_DID" "$ARTIFACT_DID"
+    else
+        echo "Source .did missing or stale; regenerating and caching it from a debug fallback"
+        extract_and_cache_did_from_debug_artifact "$CAN"
+    fi
+else
+    echo "Building debug (with candid extraction)"
+    echo "Running candid extraction on same artifact"
+    extract_and_cache_did_from_debug_artifact "$CAN"
+fi
