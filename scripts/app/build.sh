@@ -75,7 +75,26 @@ newest_workspace_input_epoch() {
         "$ROOT/dfx.json" \
         "$ROOT/scripts/app/build.sh" \
         "$ROOT/crates" \
-        -type f -printf '%T@\n' 2>/dev/null | sort -nr | head -1
+        -type f \
+        ! -name '*.did' \
+        -printf '%T@\n' 2>/dev/null | sort -nr | head -1
+}
+
+newest_canister_interface_input_epoch() {
+    local canister="$1"
+    find \
+        "$ROOT/Cargo.toml" \
+        "$ROOT/Cargo.lock" \
+        "$ROOT/scripts/app/build.sh" \
+        "$ROOT/crates/canisters/$canister" \
+        "$ROOT/crates/canic" \
+        "$ROOT/crates/canic-core" \
+        "$ROOT/crates/canic-cdk" \
+        "$ROOT/crates/canic-memory" \
+        "$ROOT/crates/canic-internal" \
+        -type f \
+        ! -name '*.did' \
+        -printf '%T@\n' 2>/dev/null | sort -nr | head -1
 }
 
 source_did_is_current() {
@@ -86,7 +105,7 @@ source_did_is_current() {
     [ -f "$source_did" ] || return 1
 
     local newest_input
-    newest_input="$(newest_workspace_input_epoch)"
+    newest_input="$(newest_canister_interface_input_epoch "$canister")"
     [ -n "$newest_input" ] || return 1
 
     local did_epoch
