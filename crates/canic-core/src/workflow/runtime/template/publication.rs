@@ -260,6 +260,11 @@ impl WasmStorePublicationWorkflow {
 
         let store_pid = store_pid_for_binding(&retired_binding)?;
         store_prepare_gc(store_pid).await?;
+        let _ = SubnetStateOps::transition_wasm_store_gc(
+            &retired_binding,
+            WasmStoreGcMode::Prepared,
+            IcOps::now_secs(),
+        );
 
         log!(
             Topic::Wasm,
@@ -283,6 +288,11 @@ impl WasmStorePublicationWorkflow {
 
         let store_pid = store_pid_for_binding(&retired_binding)?;
         store_begin_gc(store_pid).await?;
+        let _ = SubnetStateOps::transition_wasm_store_gc(
+            &retired_binding,
+            WasmStoreGcMode::InProgress,
+            IcOps::now_secs(),
+        );
 
         log!(
             Topic::Wasm,
@@ -306,6 +316,11 @@ impl WasmStorePublicationWorkflow {
 
         let store_pid = store_pid_for_binding(&retired_binding)?;
         store_complete_gc(store_pid).await?;
+        let _ = SubnetStateOps::transition_wasm_store_gc(
+            &retired_binding,
+            WasmStoreGcMode::Complete,
+            IcOps::now_secs(),
+        );
 
         log!(
             Topic::Wasm,

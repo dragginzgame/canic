@@ -85,10 +85,8 @@ impl CanisterLifecycleWorkflow {
         let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
         TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent)?;
 
-        if !role.is_wasm_store() {
-            PropagationWorkflow::propagate_topology(pid).await?;
-            PropagationWorkflow::propagate_state(&role).await?;
-        }
+        PropagationWorkflow::propagate_topology(pid).await?;
+        PropagationWorkflow::propagate_state(&role).await?;
 
         Ok(CanisterLifecycleResult::created(pid))
     }

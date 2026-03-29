@@ -8,7 +8,7 @@ use canic_internal::canister;
 use root::{
     assertions::{
         assert_child_env, assert_children_match_registry, assert_directories_consistent,
-        assert_registry_parents,
+        assert_registry_parents, registry_pid_for_role,
     },
     harness::setup_root,
     workers::{count_workers, create_worker},
@@ -27,11 +27,21 @@ fn root_builds_hierarchy_and_exposes_env() {
         setup.root_id,
         &[
             (CanisterRole::ROOT, None),
+            (canister::WASM_STORE, Some(setup.root_id)),
             (canister::APP, Some(setup.root_id)),
             (canister::USER_HUB, Some(setup.root_id)),
             (canister::SCALE_HUB, Some(setup.root_id)),
             (canister::SHARD_HUB, Some(setup.root_id)),
         ],
+    );
+
+    let wasm_store_pid =
+        registry_pid_for_role(&setup.pic, setup.root_id, &CanisterRole::WASM_STORE);
+    assert_child_env(
+        &setup.pic,
+        wasm_store_pid,
+        CanisterRole::WASM_STORE,
+        setup.root_id,
     );
 
     for (role, pid) in &setup.subnet_directory {

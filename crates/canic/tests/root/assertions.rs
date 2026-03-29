@@ -39,6 +39,20 @@ pub fn assert_registry_parents(
     }
 }
 
+/// Look up one canister principal by role in the root subnet registry.
+pub fn registry_pid_for_role(pic: &Pic, root_id: Principal, role: &CanisterRole) -> Principal {
+    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query registry transport");
+    let registry = registry.expect("query registry application").0;
+
+    registry
+        .iter()
+        .find(|entry| &entry.role == role)
+        .map(|entry| entry.pid)
+        .unwrap_or_else(|| panic!("missing {role} entry in registry"))
+}
+
 /// Assert that a child canister exposes a correct EnvSnapshotResponse.
 pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, root_id: Principal) {
     let env: Result<EnvSnapshotResponse, canic::Error> = pic

@@ -153,6 +153,50 @@ pub struct WasmStoreStatusResponse {
 }
 
 ///
+/// WasmStorePublicationSlotResponse
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStorePublicationSlotResponse {
+    Active,
+    Detached,
+    Retired,
+}
+
+///
+/// WasmStoreOverviewStoreResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreOverviewStoreResponse {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+    pub publication_slot: Option<WasmStorePublicationSlotResponse>,
+    pub gc: WasmStoreGcStatusResponse,
+    pub payload_bytes: u64,
+    pub max_store_bytes: u64,
+    pub remaining_payload_bytes: u64,
+    pub headroom_bytes: Option<u64>,
+    pub within_headroom: bool,
+    pub template_count: u32,
+    pub max_templates: Option<u32>,
+    pub release_count: u32,
+    pub max_template_versions_per_template: Option<u16>,
+    pub templates: Vec<WasmStoreTemplateStatusResponse>,
+}
+
+///
+/// WasmStoreOverviewResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreOverviewResponse {
+    pub publication: WasmStorePublicationStateResponse,
+    pub stores: Vec<WasmStoreOverviewStoreResponse>,
+}
+
+///
 /// WasmStorePublicationStateResponse
 ///
 

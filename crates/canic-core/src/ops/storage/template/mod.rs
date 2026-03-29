@@ -6,11 +6,12 @@ use crate::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
         TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreGcStatusResponse,
-        WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
+        WasmStoreOverviewStoreResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
+        WasmStoreTemplateStatusResponse,
     },
     ids::{
         CanisterRole, TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey,
-        TemplateVersion, WasmStoreGcStatus,
+        TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
     ops::{OpsError, ic::mgmt::MgmtOps, storage::StorageOpsError},
     storage::stable::template::{
@@ -191,6 +192,77 @@ impl TemplateManifestOps {
             occupied_store_bytes,
             max_store_bytes: limits.max_store_bytes,
             remaining_store_bytes,
+            headroom_bytes,
+            within_headroom,
+            template_count,
+            max_templates: limits.max_templates,
+            release_count,
+            max_template_versions_per_template: limits.max_template_versions_per_template,
+            templates,
+        }
+    }
+
+    // Return the root-owned overview snapshot for one tracked runtime wasm store.
+    #[must_use]
+    pub fn root_store_overview_response(
+        store_binding: &WasmStoreBinding,
+        store_pid: crate::cdk::types::Principal,
+        created_at: u64,
+        limits: WasmStoreLimits,
+        headroom_bytes: Option<u64>,
+        gc: WasmStoreGcStatus,
+        publication_slot: Option<WasmStorePublicationSlotResponse>,
+    ) -> WasmStoreOverviewStoreResponse {
+        let manifests = TemplateManifestStateStore::export()
+            .entries
+            .into_iter()
+            .filter(|(_, record)| {
+                record.manifest_state == TemplateManifestState::Approved
+                    && &record.store_binding == store_binding
+            })
+            .collect::<Vec<_>>();
+
+        let payload_bytes = manifests
+            .iter()
+            .map(|(_, record)| record.payload_size_bytes)
+            .sum::<u64>();
+        let remaining_payload_bytes = limits.max_store_bytes.saturating_sub(payload_bytes);
+        let within_headroom =
+            headroom_bytes.is_some_and(|threshold| remaining_payload_bytes <= threshold);
+        let template_versions = projected_template_versions_for_manifests(&manifests);
+        let release_count = u32::try_from(
+            template_versions
+                .values()
+                .map(std::collections::BTreeSet::len)
+                .sum::<usize>(),
+        )
+        .unwrap_or(u32::MAX);
+        let template_count = u32::try_from(template_versions.len()).unwrap_or(u32::MAX);
+        let mut templates = template_versions
+            .into_iter()
+            .map(|(template_id, versions)| WasmStoreTemplateStatusResponse {
+                template_id,
+                versions: u16::try_from(versions.len()).unwrap_or(u16::MAX),
+            })
+            .collect::<Vec<_>>();
+        templates.sort_by(|left, right| left.template_id.cmp(&right.template_id));
+
+        WasmStoreOverviewStoreResponse {
+            binding: store_binding.clone(),
+            pid: store_pid,
+            created_at,
+            publication_slot,
+            gc: WasmStoreGcStatusResponse {
+                mode: gc.mode,
+                changed_at: gc.changed_at,
+                prepared_at: gc.prepared_at,
+                started_at: gc.started_at,
+                completed_at: gc.completed_at,
+                runs_completed: gc.runs_completed,
+            },
+            payload_bytes,
+            max_store_bytes: limits.max_store_bytes,
+            remaining_payload_bytes,
             headroom_bytes,
             within_headroom,
             template_count,
@@ -736,6 +808,21 @@ fn projected_template_versions(
             .entry(chunk_key.release.template_id.clone())
             .or_default()
             .insert(chunk_key.release.version.clone());
+    }
+
+    template_versions
+}
+
+fn projected_template_versions_for_manifests(
+    manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
+) -> BTreeMap<TemplateId, BTreeSet<TemplateVersion>> {
+    let mut template_versions = BTreeMap::<TemplateId, BTreeSet<TemplateVersion>>::new();
+
+    for (release, _) in manifests {
+        template_versions
+            .entry(release.template_id.clone())
+            .or_default()
+            .insert(release.version.clone());
     }
 
     template_versions

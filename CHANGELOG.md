@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.18.x] - 2026-03-27 - Template Store and Chunked Install Cutover
 
+- `0.18.4` gives `root` a controller-facing `canic_wasm_store_overview` endpoint built entirely from root-owned state so operators can inspect all tracked wasm stores without direct store queries, while tightening the local release flow so `make patch` / `make minor` skip PocketIC-heavy tests, rely on an already-running `dfx`, and stop failing plain Cargo/clippy builds when `.dfx` release artifacts have not been generated yet.
 - `0.18.3` makes `root` bootstrap its first `wasm_store` automatically again, updates the `canic-memory` eager-init contract so `canic::start!` consumes it seamlessly without extra user wiring, and hardens local `dfx` test flows by starting clean replicas and removing the now-stale manual bootstrap staging step from `make test` and `make patch`.
 - `0.18.2` makes the `root` and `wasm_store` release flow fully config-driven from `canic.toml`, moves live wasm-store inventory into runtime subnet state so `root` can create and promote stores dynamically instead of relying on static bindings, and standardizes debug-only Candid export behind `canic::export_candid!()`.
 - `0.18.1` completes the staged `wasm_store` bootstrap follow-up by fixing local `dfx` installs to stage the bootstrap payload before root becomes ready, restoring local compact-config compatibility, and trimming release-only exports so the raw `root` artifact drops further to `3554964` bytes.
