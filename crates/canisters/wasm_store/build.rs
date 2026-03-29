@@ -72,12 +72,11 @@ fn write_embedded_release_set(roles: &[String], manifest_dir: &Path, out_dir: &P
         println!("cargo:rerun-if-changed={}", wasm_path.display());
 
         if !wasm_path.is_file() {
-            if require_artifacts {
-                panic!(
-                    "configured release artifact for role '{role}' is missing at {}",
-                    wasm_path.display()
-                );
-            }
+            assert!(
+                !require_artifacts,
+                "configured release artifact for role '{role}' is missing at {}",
+                wasm_path.display()
+            );
 
             println!(
                 "cargo:warning=skipping embedded release entry for role '{role}'; artifact missing at {}",
