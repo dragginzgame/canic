@@ -1034,7 +1034,7 @@ mod tests {
         .unwrap();
 
         let err = TemplateManifestOps::replace_approved_in_store_from_input(
-            approved_input_with_version("embedded:app", "app", "0.18.1"),
+            approved_input_with_version("embedded:app", "app", "0.18.2"),
             WasmStoreLimits {
                 max_store_bytes: 10_000,
                 max_templates: None,
@@ -1060,7 +1060,7 @@ mod tests {
         )
         .unwrap();
         TemplateManifestOps::replace_approved_in_store_from_input(
-            approved_input_with_version("embedded:app", "app", "0.18.1"),
+            approved_input_with_version("embedded:app", "app", "0.18.2"),
             WasmStoreLimits {
                 max_store_bytes: 10_000,
                 max_templates: Some(4),
