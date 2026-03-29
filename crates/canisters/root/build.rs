@@ -66,6 +66,11 @@ fn dfx_network_dir() -> &'static str {
     }
 }
 
+// Keep strict artifact enforcement only for the real canister bundle build path.
+fn require_release_artifacts() -> bool {
+    env::var_os("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_some()
+}
+
 // Resolve one built wasm artifact path for a config role or bootstrap canister.
 fn built_wasm_path(manifest_dir: &Path, role: &str) -> PathBuf {
     workspace_root(manifest_dir)
@@ -86,17 +91,28 @@ fn write_embedded_wasm_store_release_catalog(
     let mut body = String::from(
         "#[must_use]\npub fn embedded_wasm_store_release_catalog() -> Vec<canic::dto::template::WasmStoreCatalogEntryResponse> {\n    vec![\n",
     );
+    let require_artifacts = require_release_artifacts();
 
     for role in roles {
         let wasm_path = built_wasm_path(manifest_dir, role);
         println!("cargo:rerun-if-changed={}", wasm_path.display());
 
-        let bytes = fs::read(&wasm_path).unwrap_or_else(|err| {
-            panic!(
-                "failed to read configured release artifact for role '{role}' at {}: {err}",
-                wasm_path.display()
-            )
-        });
+        let bytes = match fs::read(&wasm_path) {
+            Ok(bytes) => bytes,
+            Err(err) if !require_artifacts => {
+                println!(
+                    "cargo:warning=skipping release catalog entry for role '{role}'; artifact missing at {}: {err}",
+                    wasm_path.display()
+                );
+                continue;
+            }
+            Err(err) => {
+                panic!(
+                    "failed to read configured release artifact for role '{role}' at {}: {err}",
+                    wasm_path.display()
+                )
+            }
+        };
         let payload_size_bytes = bytes.len();
         let payload_hash = Sha256::digest(&bytes);
         let hash_bytes = payload_hash
@@ -123,16 +139,24 @@ fn write_embedded_wasm_store_bootstrap_release_set(manifest_dir: &Path, out_dir:
     let wasm_path = built_wasm_path(manifest_dir, "wasm_store");
     println!("cargo:rerun-if-changed={}", wasm_path.display());
 
-    assert!(
-        wasm_path.is_file(),
-        "bootstrap wasm_store artifact is missing at {}",
-        wasm_path.display()
-    );
-
-    let body = format!(
-        "pub static EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET: &[(canic::ids::CanisterRole, &[u8])] = &[\n    (canic::ids::CanisterRole::new(\"wasm_store\"), include_bytes!(r#\"{}\"#) as &[u8]),\n];\n",
-        wasm_path.display()
-    );
+    let body = if wasm_path.is_file() {
+        format!(
+            "pub static EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET: &[(canic::ids::CanisterRole, &[u8])] = &[\n    (canic::ids::CanisterRole::new(\"wasm_store\"), include_bytes!(r#\"{}\"#) as &[u8]),\n];\n",
+            wasm_path.display()
+        )
+    } else if require_release_artifacts() {
+        panic!(
+            "bootstrap wasm_store artifact is missing at {}",
+            wasm_path.display()
+        );
+    } else {
+        println!(
+            "cargo:warning=skipping embedded wasm_store bootstrap payload; artifact missing at {}",
+            wasm_path.display()
+        );
+        "pub static EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET: &[(canic::ids::CanisterRole, &[u8])] = &[];\n"
+            .to_string()
+    };
 
     fs::write(
         out_dir.join("embedded_wasm_store_bootstrap_release_set.rs"),

@@ -71,6 +71,7 @@ if [ "${RELEASE:-1}" = "0" ]; then
     PROFILE_DIR="debug"
 fi
 
+CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 \
 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
 cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
 gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
@@ -79,7 +80,8 @@ gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
 # `candid-extractor` can instantiate bundle canisters without executing
 # runtime startup hooks. The debug profile keeps `get_candid_pointer`
 # exported through `canic::export_candid!()`.
-CANIC_SKIP_EAGER_INIT=1 cargo build --target wasm32-unknown-unknown -p "canister_$CAN"
+CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 CANIC_SKIP_EAGER_INIT=1 \
+cargo build --target wasm32-unknown-unknown -p "canister_$CAN"
 
 # extract candid
 
