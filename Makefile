@@ -169,6 +169,8 @@ test-unit-fast:
 test-canisters:
 	@if command -v dfx >/dev/null 2>&1; then \
 		mkdir -p "$(TEST_TMPDIR)"; \
+		( TMPDIR="$(TEST_TMPDIR)" dfx stop ) || true; \
+		( TMPDIR="$(TEST_TMPDIR)" dfx start --clean --background --system-canisters ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx canister create --all -qq ); \
 		( TMPDIR="$(TEST_TMPDIR)" RELEASE=0 dfx build --all ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
