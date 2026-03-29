@@ -1,4 +1,4 @@
-use crate::ids::WasmStoreBinding;
+use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     cdk::types::Principal,
@@ -36,11 +36,26 @@ pub struct PublicationStoreStateRecord {
 /// WasmStoreRecord
 ///
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WasmStoreGcRecord {
+    pub mode: WasmStoreGcMode,
+    pub changed_at: u64,
+    pub prepared_at: Option<u64>,
+    pub started_at: Option<u64>,
+    pub completed_at: Option<u64>,
+    pub runs_completed: u32,
+}
+
+///
+/// WasmStoreRecord
+///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WasmStoreRecord {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
     pub created_at: u64,
+    pub gc: WasmStoreGcRecord,
 }
 
 ///
@@ -257,9 +272,58 @@ impl SubnetState {
                 binding,
                 pid,
                 created_at,
+                gc: WasmStoreGcRecord::default(),
             });
             data.wasm_stores
                 .sort_by(|left, right| left.binding.cmp(&right.binding));
+            cell.set(data);
+            true
+        })
+    }
+
+    pub(crate) fn transition_wasm_store_gc(
+        binding: &WasmStoreBinding,
+        next: WasmStoreGcMode,
+        changed_at: u64,
+    ) -> bool {
+        SUBNET_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let Some(record) = data
+                .wasm_stores
+                .iter_mut()
+                .find(|record| &record.binding == binding)
+            else {
+                return false;
+            };
+
+            if record.gc.mode == next {
+                return false;
+            }
+
+            record.gc.mode = next;
+            record.gc.changed_at = changed_at;
+
+            match next {
+                WasmStoreGcMode::Normal => {
+                    record.gc.prepared_at = None;
+                    record.gc.started_at = None;
+                    record.gc.completed_at = None;
+                }
+                WasmStoreGcMode::Prepared => {
+                    record.gc.prepared_at = Some(changed_at);
+                    record.gc.started_at = None;
+                    record.gc.completed_at = None;
+                }
+                WasmStoreGcMode::InProgress => {
+                    record.gc.started_at = Some(changed_at);
+                    record.gc.completed_at = None;
+                }
+                WasmStoreGcMode::Complete => {
+                    record.gc.completed_at = Some(changed_at);
+                    record.gc.runs_completed = record.gc.runs_completed.saturating_add(1);
+                }
+            }
+
             cell.set(data);
             true
         })

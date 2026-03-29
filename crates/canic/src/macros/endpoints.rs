@@ -446,6 +446,12 @@ macro_rules! canic_endpoints_root_wasm_store {
         }
 
         #[canic_query(requires(caller::is_controller()))]
+        async fn canic_wasm_store_overview(
+        ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::overview()
+        }
+
+        #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_retirement_status(
         ) -> Result<Option<::canic::dto::template::WasmStoreRetiredStoreStatusResponse>, ::canic::Error>
         {

@@ -7,7 +7,9 @@ use crate::{
     ops::storage::state::app::AppStateCommand,
     storage::stable::state::{
         app::{AppMode as StorageAppMode, AppStateRecord},
-        subnet::{PublicationStoreStateRecord, SubnetStateRecord, WasmStoreRecord},
+        subnet::{
+            PublicationStoreStateRecord, SubnetStateRecord, WasmStoreGcRecord, WasmStoreRecord,
+        },
     },
 };
 
@@ -96,6 +98,7 @@ impl SubnetStateMapper {
             binding: data.binding,
             pid: data.pid,
             created_at: data.created_at,
+            gc: WasmStoreGcRecord::default(),
         }
     }
 

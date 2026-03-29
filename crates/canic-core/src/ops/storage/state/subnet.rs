@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::state::{SubnetStateInput, SubnetStateResponse},
     dto::template::WasmStorePublicationStateResponse,
-    ids::WasmStoreBinding,
+    ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState, WasmStoreRecord},
 };
@@ -70,6 +70,15 @@ impl SubnetStateOps {
     /// Remove one runtime-managed wasm store record by binding.
     pub fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
         SubnetState::remove_wasm_store(binding)
+    }
+
+    /// Persist one GC lifecycle transition for a runtime-managed wasm store.
+    pub fn transition_wasm_store_gc(
+        binding: &WasmStoreBinding,
+        next: WasmStoreGcMode,
+        changed_at: u64,
+    ) -> bool {
+        SubnetState::transition_wasm_store_gc(binding, next, changed_at)
     }
 
     /// Return the current root-owned publication binding lifecycle state as a DTO response.

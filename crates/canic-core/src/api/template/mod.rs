@@ -5,9 +5,9 @@ use crate::{
         template::{
             TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
             TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-            WasmStoreAdminResponse, WasmStoreCatalogEntryResponse,
-            WasmStorePublicationStateResponse, WasmStoreRetiredStoreStatusResponse,
-            WasmStoreStatusResponse,
+            WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse,
+            WasmStorePublicationSlotResponse, WasmStorePublicationStateResponse,
+            WasmStoreRetiredStoreStatusResponse, WasmStoreStatusResponse,
         },
     },
     ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
@@ -179,6 +179,50 @@ impl WasmStorePublicationApi {
     #[must_use]
     pub fn publication_store_state() -> WasmStorePublicationStateResponse {
         SubnetStateOps::publication_store_state_response()
+    }
+
+    // Return one root-owned overview for every tracked runtime-managed wasm store.
+    pub fn overview() -> Result<WasmStoreOverviewResponse, Error> {
+        let publication = SubnetStateOps::publication_store_state_response();
+        let limits = WasmStoreApi::current_store_limits()?;
+        let headroom_bytes = WasmStoreApi::current_store_headroom_bytes()?;
+        let stores = SubnetStateOps::wasm_stores()
+            .into_iter()
+            .map(|store| {
+                let publication_slot =
+                    if publication.active_binding.as_ref() == Some(&store.binding) {
+                        Some(WasmStorePublicationSlotResponse::Active)
+                    } else if publication.detached_binding.as_ref() == Some(&store.binding) {
+                        Some(WasmStorePublicationSlotResponse::Detached)
+                    } else if publication.retired_binding.as_ref() == Some(&store.binding) {
+                        Some(WasmStorePublicationSlotResponse::Retired)
+                    } else {
+                        None
+                    };
+
+                TemplateManifestOps::root_store_overview_response(
+                    &store.binding,
+                    store.pid,
+                    store.created_at,
+                    limits,
+                    headroom_bytes,
+                    crate::ids::WasmStoreGcStatus {
+                        mode: store.gc.mode,
+                        changed_at: store.gc.changed_at,
+                        prepared_at: store.gc.prepared_at,
+                        started_at: store.gc.started_at,
+                        completed_at: store.gc.completed_at,
+                        runs_completed: store.gc.runs_completed,
+                    },
+                    publication_slot,
+                )
+            })
+            .collect();
+
+        Ok(WasmStoreOverviewResponse {
+            publication,
+            stores,
+        })
     }
 
     // Return retired-store GC planning status for the current subnet, if any store is retired.
