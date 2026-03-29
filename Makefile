@@ -1,5 +1,5 @@
 .PHONY: help version tags patch minor major release package publish \
-        test test-wasm build check clippy fmt fmt-check clean install-dev \
+        test test-wasm test-release build check clippy fmt fmt-check clean install-dev \
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
@@ -125,10 +125,10 @@ version:
 tags:
 	@git tag --sort=-version:refname | head -10
 
-patch: ensure-clean fmt test
+patch: ensure-clean fmt test-release
 	@scripts/ci/bump-version.sh patch
 
-minor: ensure-clean fmt clippy
+minor: ensure-clean fmt test-release
 	@scripts/ci/bump-version.sh minor
 
 major: ensure-clean fmt clippy
@@ -155,6 +155,11 @@ test: clippy test-canisters test-unit
 # `tests/`, which is where the PocketIC-heavy suites live today.
 test-wasm: clippy test-unit-fast
 
+# Release/version bump gate.
+# Keeps clippy plus the local dfx canister smoke path, but skips PocketIC-heavy
+# integration tests under `tests/` by using the fast unit/lib/bin workspace run.
+test-release: clippy test-canisters test-unit-fast
+
 # Keep rust test execution single-threaded for PocketIC stability.
 # Parallel test threads can trigger PocketIC panics like:
 # `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
@@ -175,7 +180,6 @@ test-canisters:
 		( TMPDIR="$(TEST_TMPDIR)" RELEASE=0 dfx build --all ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 ) || true; \
 		( TMPDIR="$(TEST_TMPDIR)" dfx canister install root --mode=reinstall -y --argument '(variant { Prime })' ); \
-		( TMPDIR="$(TEST_TMPDIR)" bash scripts/app/stage_root_wasm_store_bootstrap.sh root ); \
 		( root_pid="$$(dfx canister id root)"; \
 		  TMPDIR="$(TEST_TMPDIR)" dfx canister install test --mode=reinstall -y --argument "(record { env = record { prime_root_pid = opt principal \"$$root_pid\"; subnet_role = opt \"prime\"; subnet_pid = opt principal \"$$root_pid\"; root_pid = opt principal \"$$root_pid\"; canister_role = opt \"test\"; parent_pid = opt principal \"$$root_pid\" }; app_directory = vec {}; subnet_directory = vec {} }, null)" ); \
 		( TMPDIR="$(TEST_TMPDIR)" dfx canister call test test ); \
