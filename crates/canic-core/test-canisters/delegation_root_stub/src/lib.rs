@@ -31,7 +31,9 @@ const TEST_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_DELEGATION_CERT_V1";
 const TEST_DELEGATED_TOKEN_DOMAIN: &[u8] = b"CANIC_DELEGATED_TOKEN_V1";
 const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
-const BOOTSTRAP_CHUNK_BYTES: usize = 1_000_000;
+// Most we can send while staying under IC ingress limits; keeps bootstrap
+// chunk publication sane while minimizing call count.
+const BOOTSTRAP_CHUNK_BYTES: usize = (9 * 1024 * 1024) / 5;
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 ///

@@ -116,7 +116,7 @@ with audit logs; new coverage test ensures idempotency.
 
 ## [0.5.3] - 2025-08-25
 - did a few patches to fix bugs
-- added ICTS standards to endpoints
+- added Canic standards to endpoints
 
 ## [0.5.0] - Interface & Spec
 - ok now we're really getting into the IC frame of mind, started wrapping as much as we could and

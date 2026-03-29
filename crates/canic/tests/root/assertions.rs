@@ -7,6 +7,7 @@ use canic::{
         canister::CanisterInfo,
         env::EnvSnapshotResponse,
         page::{Page, PageRequest},
+        state::{AppStateResponse, SubnetStateResponse},
         topology::DirectoryEntryResponse,
     },
     ids::{CanisterRole, SubnetRole},
@@ -213,5 +214,49 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     assert_eq!(
         page.entries, expected,
         "child list from endpoint must match registry"
+    );
+}
+
+/// Assert that root serves state snapshots and ordinary children do not export them.
+pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
+    let app_state: Result<AppStateResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_APP_STATE, ())
+        .expect("root app state transport");
+    app_state.expect("root app state application");
+
+    let subnet_state: Result<SubnetStateResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_SUBNET_STATE, ())
+        .expect("root subnet state transport");
+    subnet_state.expect("root subnet state application");
+
+    let child_app_state: Result<Result<AppStateResponse, canic::Error>, canic::Error> =
+        pic.query_call(child_pid, protocol::CANIC_APP_STATE, ());
+    let Err(err) = child_app_state else {
+        panic!("child app state endpoint should be absent")
+    };
+    assert_missing_method(&err, protocol::CANIC_APP_STATE);
+
+    let child_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, canic::Error> =
+        pic.query_call(child_pid, protocol::CANIC_SUBNET_STATE, ());
+    let Err(err) = child_subnet_state else {
+        panic!("child subnet state endpoint should be absent")
+    };
+    assert_missing_method(&err, protocol::CANIC_SUBNET_STATE);
+}
+
+// Match PocketIC missing-method failures without depending on one exact transport string.
+fn assert_missing_method(err: &canic::Error, method: &str) {
+    let message = err.message.as_str();
+
+    assert!(
+        message.contains(method),
+        "missing-method error should mention {method}: {message}"
+    );
+    assert!(
+        message.contains("not found")
+            || message.contains("has no method")
+            || message.contains("unknown method")
+            || message.contains("did not find method"),
+        "expected missing-method transport failure for {method}, got: {message}"
     );
 }

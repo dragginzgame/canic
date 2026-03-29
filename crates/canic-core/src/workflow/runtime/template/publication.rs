@@ -14,7 +14,6 @@ use crate::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetInput,
         TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
         WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
-        WasmStoreRetiredStoreStatusResponse,
     },
     ids::{
         CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateVersion,
@@ -227,27 +226,6 @@ impl WasmStorePublicationWorkflow {
         }
 
         Ok(())
-    }
-
-    // Return retired-store GC planning status by combining root lifecycle state with store-local status.
-    pub async fn retired_publication_store_status()
-    -> Result<Option<WasmStoreRetiredStoreStatusResponse>, InternalError> {
-        let state = SubnetStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        let store = store_status(store_pid).await?;
-
-        Ok(Some(WasmStoreRetiredStoreStatusResponse {
-            retired_binding,
-            generation: state.generation,
-            retired_at: state.retired_at,
-            gc_ready: store.gc.mode == WasmStoreGcMode::Prepared,
-            reclaimable_store_bytes: store.occupied_store_bytes,
-            store,
-        }))
     }
 
     // Mark the current retired publication store as prepared for store-local GC execution.

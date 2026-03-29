@@ -6,8 +6,7 @@ use crate::{
             TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
             TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
             WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse,
-            WasmStorePublicationSlotResponse, WasmStorePublicationStateResponse,
-            WasmStoreRetiredStoreStatusResponse, WasmStoreStatusResponse,
+            WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
         },
     },
     ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
@@ -137,6 +136,20 @@ impl WasmStoreBootstrapApi {
 pub struct WasmStorePublicationApi;
 
 impl WasmStorePublicationApi {
+    fn current_overview_store_limits() -> WasmStoreLimits {
+        let store = ConfigOps::current_subnet_default_wasm_store();
+
+        WasmStoreLimits {
+            max_store_bytes: store.max_store_bytes(),
+            max_templates: store.max_templates(),
+            max_template_versions_per_template: store.max_template_versions_per_template(),
+        }
+    }
+
+    fn current_overview_store_headroom_bytes() -> Option<u64> {
+        ConfigOps::current_subnet_default_wasm_store().headroom_bytes()
+    }
+
     // Execute one typed root-owned WasmStore publication or lifecycle admin command.
     pub async fn admin(cmd: WasmStoreAdminCommand) -> Result<WasmStoreAdminResponse, Error> {
         WasmStorePublicationWorkflow::handle_admin(cmd)
@@ -175,17 +188,11 @@ impl WasmStorePublicationApi {
         WasmStorePublicationWorkflow::retire_detached_publication_store_binding()
     }
 
-    // Return the current publication-store lifecycle state for the current subnet.
-    #[must_use]
-    pub fn publication_store_state() -> WasmStorePublicationStateResponse {
-        SubnetStateOps::publication_store_state_response()
-    }
-
     // Return one root-owned overview for every tracked runtime-managed wasm store.
     pub fn overview() -> Result<WasmStoreOverviewResponse, Error> {
         let publication = SubnetStateOps::publication_store_state_response();
-        let limits = WasmStoreApi::current_store_limits()?;
-        let headroom_bytes = WasmStoreApi::current_store_headroom_bytes()?;
+        let limits = Self::current_overview_store_limits();
+        let headroom_bytes = Self::current_overview_store_headroom_bytes();
         let stores = SubnetStateOps::wasm_stores()
             .into_iter()
             .map(|store| {
@@ -223,14 +230,6 @@ impl WasmStorePublicationApi {
             publication,
             stores,
         })
-    }
-
-    // Return retired-store GC planning status for the current subnet, if any store is retired.
-    pub async fn retired_publication_store_status()
-    -> Result<Option<WasmStoreRetiredStoreStatusResponse>, Error> {
-        WasmStorePublicationWorkflow::retired_publication_store_status()
-            .await
-            .map_err(Error::from)
     }
 
     // Mark the current retired publication store as prepared for store-local GC execution.
