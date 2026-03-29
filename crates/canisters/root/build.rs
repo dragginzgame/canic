@@ -66,6 +66,16 @@ fn dfx_network_dir() -> &'static str {
     }
 }
 
+// Resolve one built wasm artifact path for a config role or bootstrap canister.
+fn built_wasm_path(manifest_dir: &Path, role: &str) -> PathBuf {
+    workspace_root(manifest_dir)
+        .join(".dfx")
+        .join(dfx_network_dir())
+        .join("canisters")
+        .join(role)
+        .join(format!("{role}.wasm.gz"))
+}
+
 // Generate a compact manifest-only WasmStore release catalog for root bootstrap.
 fn write_embedded_wasm_store_release_catalog(
     roles: &[String],
@@ -73,20 +83,12 @@ fn write_embedded_wasm_store_release_catalog(
     out_dir: &Path,
     version: &str,
 ) {
-    let repo_root = workspace_root(manifest_dir);
-    let network_dir = dfx_network_dir();
-
     let mut body = String::from(
         "#[must_use]\npub fn embedded_wasm_store_release_catalog() -> Vec<canic::dto::template::WasmStoreCatalogEntryResponse> {\n    vec![\n",
     );
 
     for role in roles {
-        let wasm_path = repo_root
-            .join(".dfx")
-            .join(network_dir)
-            .join("canisters")
-            .join(role)
-            .join(format!("{role}.wasm.gz"));
+        let wasm_path = built_wasm_path(manifest_dir, role);
         println!("cargo:rerun-if-changed={}", wasm_path.display());
 
         let bytes = fs::read(&wasm_path).unwrap_or_else(|err| {
@@ -116,6 +118,29 @@ fn write_embedded_wasm_store_release_catalog(
         .expect("write embedded WasmStore release catalog");
 }
 
+// Generate the root-local inline bootstrap payload for the first `wasm_store`.
+fn write_embedded_wasm_store_bootstrap_release_set(manifest_dir: &Path, out_dir: &Path) {
+    let wasm_path = built_wasm_path(manifest_dir, "wasm_store");
+    println!("cargo:rerun-if-changed={}", wasm_path.display());
+
+    assert!(
+        wasm_path.is_file(),
+        "bootstrap wasm_store artifact is missing at {}",
+        wasm_path.display()
+    );
+
+    let body = format!(
+        "pub static EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET: &[(canic::ids::CanisterRole, &[u8])] = &[\n    (canic::ids::CanisterRole::new(\"wasm_store\"), include_bytes!(r#\"{}\"#) as &[u8]),\n];\n",
+        wasm_path.display()
+    );
+
+    fs::write(
+        out_dir.join("embedded_wasm_store_bootstrap_release_set.rs"),
+        body,
+    )
+    .expect("write embedded wasm_store bootstrap release set");
+}
+
 fn main() {
     canic::build_root_with!("../canic.toml", |_cfg_str, _cfg_path, cfg| {
         let manifest_dir =
@@ -125,5 +150,6 @@ fn main() {
         let roles = collect_release_roles!(cfg);
 
         write_embedded_wasm_store_release_catalog(&roles, &manifest_dir, &out_dir, &version);
+        write_embedded_wasm_store_bootstrap_release_set(&manifest_dir, &out_dir);
     });
 }

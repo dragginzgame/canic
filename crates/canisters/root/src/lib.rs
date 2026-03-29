@@ -12,7 +12,10 @@
 use canic::{
     Error, api::rpc::RpcApi, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse,
 };
-use canic::{api::canister::template::WasmStoreBootstrapApi, prelude::*};
+use canic::{
+    api::canister::template::{EmbeddedTemplateApi, WasmStoreBootstrapApi},
+    prelude::*,
+};
 #[cfg(debug_assertions)]
 use canic_internal::canister;
 #[cfg(debug_assertions)]
@@ -22,6 +25,10 @@ include!(concat!(
     env!("OUT_DIR"),
     "/embedded_store_release_catalog.rs"
 ));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/embedded_wasm_store_bootstrap_release_set.rs"
+));
 
 //
 // CANIC
@@ -29,6 +36,7 @@ include!(concat!(
 
 canic::start_root!(
     init = {
+        EmbeddedTemplateApi::import_embedded_release_set(EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET);
         WasmStoreBootstrapApi::import_embedded_release_catalog(
             embedded_wasm_store_release_catalog(),
         );

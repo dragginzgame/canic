@@ -107,6 +107,13 @@ impl MemoryRegistryOps {
         Ok(MemoryRegistryInitSummary::from_raw(summary))
     }
 
+    // Run the full synchronous Canic memory bootstrap and return the committed layout.
+    pub fn bootstrap_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
+        Self::init_eager_tls();
+        Self::run_registered_eager_init();
+        Self::init_registry()
+    }
+
     #[cfg(target_arch = "wasm32")]
     #[must_use]
     pub fn is_initialized() -> bool {
@@ -115,13 +122,11 @@ impl MemoryRegistryOps {
 
     #[cfg(target_arch = "wasm32")]
     pub fn ensure_bootstrap() -> Result<(), InternalError> {
-        Self::init_eager_tls();
-        Self::run_registered_eager_init();
         if Self::is_initialized() {
             return Ok(());
         }
 
-        let _ = Self::init_registry()?;
+        let _ = Self::bootstrap_registry()?;
         Ok(())
     }
 
