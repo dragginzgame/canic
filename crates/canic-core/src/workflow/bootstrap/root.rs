@@ -462,6 +462,15 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             continue;
         }
 
+        if !TemplateManifestOps::has_approved_for_role(role)? {
+            log!(
+                Topic::Init,
+                Warn,
+                "auto_create: skipping {role}; approved manifest not staged"
+            );
+            continue;
+        }
+
         log!(Topic::Init, Info, "auto_create: creating {role}");
 
         CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
@@ -483,7 +492,8 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
 async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
-    if SubnetRegistryOps::has_role(&role) {
+    let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
+    if !existing_bindings.is_empty() {
         log!(Topic::Init, Info, "ws: {role} present; skip");
         return Ok(());
     }
@@ -496,6 +506,7 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
         extra_arg: None,
     })
     .await?;
+    let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
 
     Ok(())
 }

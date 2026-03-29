@@ -11,11 +11,19 @@
 #[macro_export]
 macro_rules! build {
     ($file:expr) => {{
+        $crate::build_with!($file, |cfg_str, cfg_path, cfg| {
+            let _ = (&cfg_str, &cfg_path, &cfg);
+        })
+    }};
+}
+
+/// Embed the shared Canic configuration and run extra build-time generation.
+#[macro_export]
+macro_rules! build_with {
+    ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         $crate::__canic_build_internal! {
             $file,
-            |cfg_str, cfg_path, cfg| {
-                let _ = (&cfg_str, &cfg_path, &cfg);
-            }
+            |$cfg_str, $cfg_path, $cfg| $body
         }
     }};
 }
@@ -25,14 +33,21 @@ macro_rules! build {
 /// Performs the same validation as [`macro@build`].
 #[macro_export]
 macro_rules! build_root {
-    ($file:expr) => {{
+    ($file:expr) => {{ $crate::build_root_with!($file, |_cfg_str, _cfg_path, _cfg| {}) }};
+}
+
+/// Embed the shared root configuration and run extra build-time generation.
+#[macro_export]
+macro_rules! build_root_with {
+    ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         $crate::__canic_build_internal! {
             $file,
-            |_cfg_str, _cfg_path, _cfg| {
+            |$cfg_str, $cfg_path, $cfg| {
                 // `start_root!` must always compile the root-only capability
                 // surface, even for test/support crates whose package names do
                 // not follow the `canister_root` naming convention.
                 println!("cargo:rustc-cfg=canic_is_root");
+                $body
             }
         }
     }};
@@ -47,6 +62,7 @@ macro_rules! __canic_build_internal {
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
         let $cfg_path = std::path::PathBuf::from(manifest_dir).join($file);
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
+        println!("cargo:rerun-if-env-changed=DFX_NETWORK");
         if let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
         }

@@ -21,5 +21,4 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

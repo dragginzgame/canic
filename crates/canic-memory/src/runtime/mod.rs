@@ -23,6 +23,7 @@ use std::sync::{
 
 static CANIC_EAGER_TLS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
 static CANIC_EAGER_TLS_RUNNING: AtomicBool = AtomicBool::new(false);
+static CANIC_EAGER_INIT: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
 
 /// Run all deferred TLS initializers and clear the registry.
 ///
@@ -71,6 +72,30 @@ pub fn init_eager_tls() {
     }
 }
 
+/// Run all registered eager-init hooks and clear the registry.
+///
+/// This drains the internal queue of eager-init functions and invokes each
+/// exactly once. Canic uses this during synchronous lifecycle bootstrap after
+/// eager TLS initialization and before the memory registry is committed.
+pub fn run_registered_eager_init() {
+    let funcs = {
+        let mut funcs = CANIC_EAGER_INIT.lock().expect("eager init queue poisoned");
+        std::mem::take(&mut *funcs)
+    };
+
+    debug_assert!(
+        CANIC_EAGER_INIT
+            .lock()
+            .expect("eager init queue poisoned")
+            .is_empty(),
+        "CANIC_EAGER_INIT was modified during eager init execution"
+    );
+
+    for f in funcs {
+        f();
+    }
+}
+
 #[must_use]
 pub fn is_eager_tls_initializing() -> bool {
     CANIC_EAGER_TLS_RUNNING.load(Ordering::SeqCst)
@@ -103,6 +128,14 @@ pub fn defer_tls_initializer(f: fn()) {
         .push(f);
 }
 
+/// Register an eager-init function for lifecycle bootstrap execution.
+pub fn defer_eager_init(f: fn()) {
+    CANIC_EAGER_INIT
+        .lock()
+        .expect("eager init queue poisoned")
+        .push(f);
+}
+
 ///
 /// TESTS
 ///
@@ -131,6 +164,23 @@ mod tests {
 
         // second call sees empty queue
         init_eager_tls();
+        let second = COUNT.load(Ordering::SeqCst);
+        assert_eq!(second, 1);
+    }
+
+    #[test]
+    fn run_registered_eager_init_runs_and_clears_queue() {
+        COUNT.store(0, Ordering::SeqCst);
+        CANIC_EAGER_INIT
+            .lock()
+            .expect("eager init queue poisoned")
+            .push(bump);
+        run_registered_eager_init();
+        let first = COUNT.load(Ordering::SeqCst);
+        assert_eq!(first, 1);
+
+        // second call sees empty queue
+        run_registered_eager_init();
         let second = COUNT.load(Ordering::SeqCst);
         assert_eq!(second, 1);
     }

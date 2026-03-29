@@ -1,11 +1,12 @@
 #[cfg(test)]
 use crate::storage::stable::state::subnet::SubnetStateRecord;
 use crate::{
+    cdk::types::Principal,
     dto::state::{SubnetStateInput, SubnetStateResponse},
     dto::template::WasmStorePublicationStateResponse,
     ids::WasmStoreBinding,
     ops::storage::state::mapper::SubnetStateMapper,
-    storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState},
+    storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState, WasmStoreRecord},
 };
 
 ///
@@ -41,6 +42,34 @@ impl SubnetStateOps {
     #[must_use]
     pub fn publication_store_state() -> PublicationStoreStateRecord {
         SubnetState::publication_store_state()
+    }
+
+    /// Return all known runtime-managed wasm stores for the current subnet.
+    #[must_use]
+    pub fn wasm_stores() -> Vec<WasmStoreRecord> {
+        SubnetState::wasm_stores()
+    }
+
+    /// Resolve one runtime-managed wasm store principal by logical binding.
+    #[must_use]
+    pub fn wasm_store_pid(binding: &WasmStoreBinding) -> Option<Principal> {
+        SubnetState::wasm_store_pid(binding)
+    }
+
+    /// Resolve one runtime-managed wasm store binding by canister principal.
+    #[must_use]
+    pub fn wasm_store_binding_for_pid(pid: Principal) -> Option<WasmStoreBinding> {
+        SubnetState::wasm_store_binding_for_pid(pid)
+    }
+
+    /// Persist one runtime-managed wasm store record.
+    pub fn upsert_wasm_store(binding: WasmStoreBinding, pid: Principal, created_at: u64) -> bool {
+        SubnetState::upsert_wasm_store(binding, pid, created_at)
+    }
+
+    /// Remove one runtime-managed wasm store record by binding.
+    pub fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
+        SubnetState::remove_wasm_store(binding)
     }
 
     /// Return the current root-owned publication binding lifecycle state as a DTO response.

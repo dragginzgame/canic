@@ -19,6 +19,8 @@ use canic::{
 };
 use canic_internal::canister;
 
+include!(concat!(env!("OUT_DIR"), "/embedded_release_set.rs"));
+
 // Seed the local store from embedded releases before bootstrap timers fire.
 //
 // CANIC
@@ -38,72 +40,6 @@ async fn canic_upgrade() {}
 //
 // ENDPOINTS
 //
-
-//
-// EMBEDDED RELEASE TABLE
-//
-
-#[cfg(target_arch = "wasm32")]
-const APP_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/app/app.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const APP_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const USER_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/user_hub/user_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const USER_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const USER_SHARD_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/user_shard/user_shard.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const USER_SHARD_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const MINIMAL_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/minimal/minimal.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const MINIMAL_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SCALE_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/scale_hub/scale_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SCALE_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SCALE_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/scale/scale.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SCALE_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SHARD_HUB_WASM: &[u8] =
-    include_bytes!("../../../../.dfx/local/canisters/shard_hub/shard_hub.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SHARD_HUB_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const SHARD_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/shard/shard.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const SHARD_WASM: &[u8] = &[];
-
-#[cfg(target_arch = "wasm32")]
-const TEST_WASM: &[u8] = include_bytes!("../../../../.dfx/local/canisters/test/test.wasm.gz");
-#[cfg(not(target_arch = "wasm32"))]
-const TEST_WASM: &[u8] = &[];
-
-const EMBEDDED_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
-    (canister::APP, APP_WASM),
-    (canister::USER_HUB, USER_HUB_WASM),
-    (canister::USER_SHARD, USER_SHARD_WASM),
-    (canister::MINIMAL, MINIMAL_WASM),
-    (canister::SCALE_HUB, SCALE_HUB_WASM),
-    (canister::SCALE, SCALE_WASM),
-    (canister::SHARD_HUB, SHARD_HUB_WASM),
-    (canister::SHARD, SHARD_WASM),
-    (canister::TEST, TEST_WASM),
-];
 
 /// canic_wasm_store_catalog
 /// Return the approved embedded release catalog for this local wasm store.
@@ -205,5 +141,4 @@ async fn canic_wasm_store_chunk(
     WasmStoreApi::template_chunk(template_id, version, chunk_index)
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

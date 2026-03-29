@@ -39,5 +39,4 @@ async fn create_account(pid: Principal) -> Result<Principal, Error> {
     ShardingApi::assign_to_pool(POOL_NAME, pid.to_string()).await
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

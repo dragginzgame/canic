@@ -81,7 +81,6 @@ pub mod prelude {
         cdk::{
             api::{canister_self, msg_caller},
             candid::CandidType,
-            export_candid,
         },
     };
 

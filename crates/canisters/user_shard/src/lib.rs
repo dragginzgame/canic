@@ -50,5 +50,4 @@ async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

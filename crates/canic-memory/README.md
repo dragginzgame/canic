@@ -79,7 +79,11 @@ Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar)
 - memory allocations happening under a user call instead of during init,
 - possible panics if the registry/ranges were not flushed yet.
 
-`eager_static!` and `eager_init!` make TLS setup a deliberate part of your init flow: run `init_eager_tls()` → run `eager_init!` blocks → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
+`eager_static!` and `eager_init!` make TLS setup a deliberate part of startup instead of a hidden first-use side effect.
+
+If you are using the full Canic facade (`canic::start!` / `canic::start_root!`), you do not need to call anything extra: Canic runs eager TLS, executes registered `eager_init!` blocks, and then flushes the memory registry during synchronous lifecycle bootstrap.
+
+If you are using `canic-memory` standalone without Canic lifecycle wiring, the startup order is: `init_eager_tls()` → run `eager_init!` work → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
 
 ```rust
 use canic_memory::{eager_init, eager_static, runtime::init_eager_tls};
@@ -95,7 +99,7 @@ eager_init!({
 });
 
 fn init() {
-    // force eager TLS initialization first
+    // standalone canisters should force eager TLS initialization first
     init_eager_tls();
     // then flush memory registrations
     MemoryRegistryRuntime::init(None).unwrap();

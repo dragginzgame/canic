@@ -164,8 +164,8 @@ impl StateCascadeWorkflow {
             AppStateOps::import_input(app);
         }
 
-        if let Some(subnet_data) = snapshot.subnet_state {
-            SubnetStateOps::import_input(subnet_data);
+        if let Some(subnet_data) = &snapshot.subnet_state {
+            SubnetStateOps::import_input(subnet_data.clone());
         }
 
         if let Some(dir) = &snapshot.app_directory {

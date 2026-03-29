@@ -24,9 +24,6 @@ pub enum SubnetRegistryOpsError {
     #[error("role '{0}' not found in subnet registry")]
     RoleNotFound(CanisterRole),
 
-    #[error("role '{0}' is not unique in subnet registry ({1} entries)")]
-    RoleNotUnique(CanisterRole, usize),
-
     #[error("parent chain contains a cycle at {0}")]
     ParentChainCycle(Principal),
 
@@ -203,15 +200,12 @@ impl SubnetRegistryOps {
         roles
     }
 
-    /// Resolve the single registered canister id for one role.
-    pub fn unique_pid_for_role(role: &CanisterRole) -> Result<Principal, InternalError> {
-        let pids = Self::role_index()
+    /// Resolve all registered canister ids for one role in deterministic order.
+    pub fn pids_for_role(role: &CanisterRole) -> Result<Vec<Principal>, InternalError> {
+        let mut pids = Self::role_index()
             .remove(role)
             .ok_or_else(|| SubnetRegistryOpsError::RoleNotFound(role.clone()))?;
-
-        match pids.as_slice() {
-            [pid] => Ok(*pid),
-            _ => Err(SubnetRegistryOpsError::RoleNotUnique(role.clone(), pids.len()).into()),
-        }
+        pids.sort();
+        Ok(pids)
     }
 }
