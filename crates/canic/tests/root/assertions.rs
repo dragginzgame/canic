@@ -49,8 +49,10 @@ pub fn registry_pid_for_role(pic: &Pic, root_id: Principal, role: &CanisterRole)
     registry
         .iter()
         .find(|entry| &entry.role == role)
-        .map(|entry| entry.pid)
-        .unwrap_or_else(|| panic!("missing {role} entry in registry"))
+        .map_or_else(
+            || panic!("missing {role} entry in registry"),
+            |entry| entry.pid,
+        )
 }
 
 /// Assert that a child canister exposes a correct EnvSnapshotResponse.
