@@ -57,28 +57,13 @@ macro_rules! canic_endpoints_standards_icrc {
     };
 }
 
-// ICTS metadata/status surface shared by all Canic canisters.
+// Canic standards metadata surface shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_standards_icts {
+macro_rules! canic_endpoints_standards_canic {
     () => {
         #[canic_query(internal)]
-        fn icts_name() -> String {
-            $crate::__internal::core::api::icts::IctsApi::name()
-        }
-
-        #[canic_query(internal)]
-        fn icts_version() -> String {
-            $crate::__internal::core::api::icts::IctsApi::version()
-        }
-
-        #[canic_query(internal)]
-        fn icts_description() -> String {
-            $crate::__internal::core::api::icts::IctsApi::description()
-        }
-
-        #[canic_query(internal)]
-        fn icts_metadata() -> ::canic::dto::icts::CanisterMetadataResponse {
-            $crate::__internal::core::api::icts::IctsApi::metadata()
+        fn canic_standards() -> ::canic::dto::standards::CanicStandardsResponse {
+            $crate::__internal::core::api::standards::CanicStandardsApi::metadata()
         }
     };
 }
@@ -89,8 +74,8 @@ macro_rules! canic_endpoints_standards {
     () => {
         #[cfg(not(canic_disable_bundle_standards_icrc))]
         $crate::canic_endpoints_standards_icrc!();
-        #[cfg(not(canic_disable_bundle_standards_icts))]
-        $crate::canic_endpoints_standards_icts!();
+        #[cfg(not(canic_disable_bundle_standards_canic))]
+        $crate::canic_endpoints_standards_canic!();
     };
 }
 
@@ -191,11 +176,13 @@ macro_rules! canic_endpoints_auth_attestation {
 #[macro_export]
 macro_rules! canic_endpoints_topology_state {
     () => {
+        #[cfg(canic_is_root)]
         #[canic_query]
         fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
         }
 
+        #[cfg(canic_is_root)]
         #[canic_query]
         fn canic_subnet_state() -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error>
         {
@@ -440,23 +427,9 @@ macro_rules! canic_endpoints_root_wasm_store {
         }
 
         #[canic_query(requires(caller::is_controller()))]
-        async fn canic_wasm_store_publication_status(
-        ) -> Result<::canic::dto::template::WasmStorePublicationStateResponse, ::canic::Error> {
-            Ok(::canic::api::canister::template::WasmStorePublicationApi::publication_store_state())
-        }
-
-        #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_overview(
         ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStorePublicationApi::overview()
-        }
-
-        #[canic_query(requires(caller::is_controller()))]
-        async fn canic_wasm_store_retirement_status(
-        ) -> Result<Option<::canic::dto::template::WasmStoreRetiredStoreStatusResponse>, ::canic::Error>
-        {
-            ::canic::api::canister::template::WasmStorePublicationApi::retired_publication_store_status()
-                .await
         }
 
     };

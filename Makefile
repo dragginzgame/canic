@@ -1,5 +1,5 @@
 .PHONY: help version tags patch minor major release package publish \
-        test test-wasm test-release build check clippy fmt fmt-check clean install-dev \
+        test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
         test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
@@ -125,13 +125,13 @@ version:
 tags:
 	@git tag --sort=-version:refname | head -10
 
-patch: ensure-clean fmt test-release
+patch: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh patch
 
-minor: ensure-clean fmt test-release
+minor: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh minor
 
-major: ensure-clean fmt clippy
+major: ensure-clean fmt test
 	@scripts/ci/bump-version.sh major
 
 release: ensure-clean
@@ -155,10 +155,10 @@ test: clippy test-canisters test-unit
 # `tests/`, which is where the PocketIC-heavy suites live today.
 test-wasm: clippy test-unit-fast
 
-# Release/version bump gate.
+# Version-bump gate.
 # Keeps clippy plus the local dfx canister smoke path, but skips PocketIC-heavy
 # integration tests under `tests/` by using the fast unit/lib/bin workspace run.
-test-release: clippy test-canisters test-unit-fast
+test-bump: clippy test-canisters test-unit-fast
 
 # Keep rust test execution single-threaded for PocketIC stability.
 # Parallel test threads can trigger PocketIC panics like:

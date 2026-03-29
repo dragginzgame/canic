@@ -200,6 +200,11 @@ impl ConfigOps {
             .unwrap_or_else(|| WasmStoreBinding::new("primary"))
     }
 
+    /// Return the default wasm-store config for the current subnet.
+    pub(crate) const fn current_subnet_default_wasm_store() -> WasmStoreConfig {
+        WasmStoreConfig::implicit()
+    }
+
     /// Return the configured binding for one wasm-store canister role in the current subnet.
     pub(crate) fn current_subnet_wasm_store_binding_for_role(
         role: &CanisterRole,

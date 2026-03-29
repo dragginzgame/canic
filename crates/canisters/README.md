@@ -13,6 +13,7 @@ try features end-to-end without touching production code.
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `minimal/` – minimal canister used as the shared runtime baseline canister.
 - `test/` – timer and update/query coverage used by `make test-canisters`.
+- `wasm_store/` – subnet-local template store used for chunked WASM publication and install flows.
 
 The shared demo topology lives in `crates/canisters/canic.toml` and is referenced by each canister’s `build.rs`.
 

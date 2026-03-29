@@ -8,7 +8,7 @@ use canic_internal::canister;
 use root::{
     assertions::{
         assert_child_env, assert_children_match_registry, assert_directories_consistent,
-        assert_registry_parents, registry_pid_for_role,
+        assert_registry_parents, assert_state_endpoints_are_root_only, registry_pid_for_role,
     },
     harness::setup_root,
     workers::{count_workers, create_worker},
@@ -63,6 +63,19 @@ fn subnet_children_matches_registry_on_root() {
     let setup = setup_root();
 
     assert_children_match_registry(&setup.pic, setup.root_id);
+}
+
+#[test]
+fn state_endpoints_are_root_only() {
+    let setup = setup_root();
+
+    let app_pid = setup
+        .subnet_directory
+        .get(&canister::APP)
+        .copied()
+        .expect("app must exist in subnet directory");
+
+    assert_state_endpoints_are_root_only(&setup.pic, setup.root_id, app_pid);
 }
 
 #[test]

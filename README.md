@@ -19,7 +19,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 🧠 **State layers** – opinionated separation for stable memory, volatile state, orchestration logic, and public endpoints.
 * 🗺️ **Topology‑aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 * 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per‑node direct children, validate roots/cycles, and fail fast to avoid quadratic fan‑out.
-* 🔐 **Auth utilities** – composable guards (`auth_require_any!`, `auth_require_all!`) for controllers, parents, whitelist principals, and more.
+* 🔐 **Auth utilities** – composable `requires(...)` expressions with `all(...)`, `any(...)`, and `not(...)` for controllers, parents, whitelist principals, and more.
 * 🔏 **Delegated auth model** – root-anchored delegated token flow (`root -> shard -> user token`) with direct caller binding (`sub == caller`), explicit audience/scope checks, and local verification.
 * 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 * 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
@@ -32,21 +32,26 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `assets/` – documentation media (logo and shared imagery).
 * `crates/` – workspace crates.
 * `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-dsl-macros`, `canic-cdk`, `canic-memory`, and `canic-utils` for consumers.
+
+  * `src/macros/` – public macro entrypoints (`canic::start!`, `canic::start_root!`, `canic::build!`, endpoint bundles, timer helpers).
+  * `src/protocol.rs` – shared protocol method names and exported endpoint IDs.
 * `crates/canic-core/` – orchestration crate used inside canisters.
 
   * `src/access/` – boundary helpers (authorization, guards, endpoint‑adjacent policy). Must not depend on concrete model types.
+  * `src/api/` – public runtime APIs re-exported through the `canic` facade.
+  * `src/bootstrap.rs` – config bootstrap and embedded-config helpers.
   * `src/config/` – configuration loaders, validators, and schema helpers.
-  * `src/dispatch.rs` – endpoint routing helpers used by the macros.
+  * `src/dispatch/` – endpoint routing helpers used by the macros.
+  * `src/domain/` – pure domain and policy logic.
   * `src/dto/` – candid‑friendly DTOs for paging and exports.
   * `src/ids/` – strongly‑typed role identifiers (`CanisterRole`, `SubnetRole`, etc.).
   * `src/infra/` – low‑level IC capability bindings (no domain logic).
   * `src/log.rs` – logging macros.
-  * `src/macros/` – public macro entrypoints (`canic::start!`, `canic_endpoints_*`, memory helpers).
-  * `src/model/` – stable‑memory registries plus volatile state caches that back the ops layer.
+  * `src/lifecycle/` – synchronous lifecycle adapters that restore env and schedule async bootstrap.
   * `src/ops/` – application services bridging model to endpoints (includes single‑step IC/timer façades).
-  * `src/policy/` – pure decision logic for eligibility, placement, scaling, sharding.
+  * `src/storage/` – persisted schemas and storage helpers backing stable memory.
+  * `src/view/` – internal read‑only projections used by workflow/policy/ops.
   * `src/workflow/` – orchestration, retries, cascades, and multi‑step behaviors.
-  * `benches/` – criterion benchmarks for MiniCBOR serialization.
 * `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
@@ -61,8 +66,9 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `user_hub/`, `user_shard/` – delegated signing pool (hub provisions shards).
   * `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
-  * `blank/` – minimal canister template.
+  * `minimal/` – minimal runtime baseline canister.
   * `test/` – workspace‑only test canister used by host‑side fixtures.
+  * `wasm_store/` – chunk-store-backed WASM publication and install support canister.
 * `scripts/` – build, release, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.
@@ -80,9 +86,20 @@ Inside your workspace:
 
 ```bash
 cargo add canic
+cargo add canic --build
 ```
 
-Or reference the workspace path if you pulled the repository directly.
+The `build.rs` macros (`canic::build!` / `canic::build_root!`) run in the build script, so `canic` must be present in both `[dependencies]` and `[build-dependencies]`.
+
+Or reference the workspace path if you pulled the repository directly:
+
+```toml
+[dependencies]
+canic = { path = "/path/to/canic/crates/canic" }
+
+[build-dependencies]
+canic = { path = "/path/to/canic/crates/canic" }
+```
 
 ### 2. Configure `build.rs`
 
@@ -125,19 +142,18 @@ See `crates/canisters/root` and the hub/shard reference canisters under `crates/
 
 ### 4. Define your topology
 
-Populate `canic.toml` with subnet definitions, directory membership, and per‑canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top‑up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `pool` (renamed from `reserve` in older configs), `log`, and `standards` shape the overall cluster. The `[log]` block controls ring/age retention and per‑entry size caps. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
+Populate `canic.toml` with subnet definitions, directory membership, and per‑canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top‑up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `app`, `auth`, `log`, and `standards` shape the overall cluster, while per-subnet warm-pool policy lives under `[subnets.<name>.pool]` (older configs may still refer to this as `reserve`). The `[log]` block controls ring/age retention and per‑entry size caps. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
 
 ## Layered Architecture
 
 Canic follows a strict layered design to keep boundaries stable and refactors cheap. Dependencies must flow inward; boundary code must not depend on concrete storage representations.
 
-* `access/` – boundary helpers (auth, guards, endpoint‑adjacent policy). These components translate requests and enforce access rules and **must not depend on concrete `model` types**.
-* `model::memory` – stable data backed by `ic-stable-structures` (e.g. shard registries, pool entries).
-* `model::*` (non‑memory) – volatile in‑process registries and caches that reset on upgrade (e.g. WASM registry, metrics registries).
-* `ops/` – application services that bridge model to boundary code via views and projections; single‑step IC/timer façades are allowed.
-* `policy/` – pure decision logic (no mutation, no IC calls).
-* `workflow/` – orchestration and multi‑step behavior over time.
-* `endpoints/` – macro‑generated IC entrypoints that deserialize inputs, invoke access helpers, and delegate to `workflow` or `ops`.
+* `storage/` – authoritative persisted state and storage helpers for stable memory.
+* `view/` – internal read-only projections used by workflow, ops, and policy.
+* `ops/` – deterministic application services over storage plus approved single-step platform effects.
+* `domain/policy` – pure decision logic (no mutation, no IC calls).
+* `workflow/` – orchestration and multi-step behavior over time.
+* `access/` plus macro-generated endpoints – request guards and system-boundary wiring that delegate immediately to `workflow` or `ops`.
 
 ## Capabilities & Endpoints
 
@@ -158,17 +174,17 @@ Reference contracts:
 
 ### Sharding 📦
 
-Sharding is configured via `canic.toml` and executed through the ops layer. The base endpoint bundle exposes a controller‑only registry query for operator visibility:
+Sharding is configured via `canic.toml` and executed through the ops layer. Canisters only export sharding registry endpoints when their validated role config includes sharding support.
 
 ```rust
 canic_sharding_registry()
-    -> Result<canic::dto::placement::ShardingRegistryResponse, canic::Error>
+    -> Result<canic::dto::placement::sharding::ShardingRegistryResponse, canic::Error>
 ```
 
 ### Scaling & Pool Capacity ⚖️
 
-* `canic_scaling_registry()` provides controller insight into scaling pools via the shared endpoint bundle.
-* Root canisters manage spare capacity through `canic_pool_list()` and the controller‑only `canic_pool_admin(cmd)` endpoint.
+* `canic_scaling_registry()` is exported only for roles whose config enables scaling.
+* `canic_pool_list()` and the controller‑only `canic_pool_admin(cmd)` are root-only endpoints for spare-capacity management.
 
 ### Directory Listings 📇
 
@@ -184,10 +200,11 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Check (type‑check only): `make check`
 * Lint: `make clippy`
 * Test: `make test`
-* Build release WASMs: `make build`
+* Build workspace release artifacts: `make build`
+* Build local canister WASMs through `dfx`: `dfx build --all`
 * Build example targets: `cargo build -p canic --examples`
-* Delegated auth PocketIC flow: `cargo test -p canic-core --test pic_delegation_provision -- --nocapture`
-* Root replay dispatcher coverage: `cargo test -p canic --test root_replay --locked delegation_issuance_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
+* Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation role_attestation_issue_and_verify_happy_path -- --nocapture`
+* Root replay dispatcher coverage: `cargo test -p canic --test root_replay --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

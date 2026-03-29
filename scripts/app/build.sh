@@ -16,41 +16,86 @@ if [ $# -eq 0 ]; then
 fi
 CAN=$1
 
+# Build in release mode by default to keep wasm artifacts small.
+# Set RELEASE=0 to force a debug build.
+PROFILE_FLAG="--release"
+PROFILE_DIR="release"
+if [ "${RELEASE:-1}" = "0" ]; then
+    PROFILE_FLAG=""
+    PROFILE_DIR="debug"
+fi
+
+artifact_profile_path() {
+    local canister="$1"
+    printf '%s\n' "$ROOT/.dfx/local/canisters/$canister/.build-profile"
+}
+
+dependencies_for_canister() {
+    local canister="$1"
+
+    case "$canister" in
+        user_hub)
+            printf '%s\n' "user_shard"
+            ;;
+        scale_hub)
+            printf '%s\n' "scale"
+            ;;
+        shard_hub)
+            printf '%s\n' "shard"
+            ;;
+        wasm_store)
+            printf '%s\n' "app" "minimal" "user_hub" "scale_hub" "shard_hub" "test"
+            ;;
+        root)
+            printf '%s\n' "wasm_store"
+            ;;
+    esac
+}
+
+canister_artifact_is_current() {
+    local canister="$1"
+    local artifact="$ROOT/.dfx/local/canisters/$canister/$canister.wasm.gz"
+    local profile_file
+    profile_file="$(artifact_profile_path "$canister")"
+
+    if [ ! -f "$artifact" ] || [ ! -f "$profile_file" ]; then
+        return 1
+    fi
+
+    local built_profile
+    built_profile="$(cat "$profile_file")"
+    if [ "$built_profile" != "$PROFILE_DIR" ]; then
+        return 1
+    fi
+
+    local dep
+    while IFS= read -r dep; do
+        [ -n "$dep" ] || continue
+        canister_artifact_is_current "$dep" || return 1
+    done < <(dependencies_for_canister "$canister")
+
+    return 0
+}
+
 # Build dependent canisters first when this helper is invoked directly.
 # DFX handles dependency ordering itself, but these guards keep standalone
 # `scripts/app/build.sh <canister>` calls from failing on missing `.wasm.gz`
 # artifacts consumed by bundle canisters.
 ensure_canister_artifact() {
     local dep="$1"
-    local artifact="$ROOT/.dfx/local/canisters/$dep/$dep.wasm.gz"
-
-    if [ -f "$artifact" ]; then
+    if canister_artifact_is_current "$dep"; then
         return
     fi
 
-    "$SELF" "$dep"
+    RELEASE="${RELEASE:-1}" "$SELF" "$dep"
 }
 
 case "$CAN" in
-    user_hub)
-        ensure_canister_artifact "user_shard"
-        ;;
-    scale_hub)
-        ensure_canister_artifact "scale"
-        ;;
-    shard_hub)
-        ensure_canister_artifact "shard"
-        ;;
-    wasm_store)
-        ensure_canister_artifact "app"
-        ensure_canister_artifact "minimal"
-        ensure_canister_artifact "user_hub"
-        ensure_canister_artifact "scale_hub"
-        ensure_canister_artifact "shard_hub"
-        ensure_canister_artifact "test"
-        ;;
-    root)
-        ensure_canister_artifact "wasm_store"
+    user_hub|scale_hub|shard_hub|wasm_store|root)
+        while IFS= read -r dep; do
+            [ -n "$dep" ] || continue
+            ensure_canister_artifact "$dep"
+        done < <(dependencies_for_canister "$CAN")
         ;;
 esac
 
@@ -61,20 +106,13 @@ esac
 mkdir -p "$ROOT/.dfx/local/canisters/$CAN"
 WASM_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm"
 WASM_GZ_TARGET="$ROOT/.dfx/local/canisters/$CAN/$CAN.wasm.gz"
-
-# Build in release mode by default to keep wasm artifacts small.
-# Set RELEASE=0 to force a debug build.
-PROFILE_FLAG="--release"
-PROFILE_DIR="release"
-if [ "${RELEASE:-1}" = "0" ]; then
-    PROFILE_FLAG=""
-    PROFILE_DIR="debug"
-fi
+PROFILE_FILE="$(artifact_profile_path "$CAN")"
 
 CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 \
 cargo build --target wasm32-unknown-unknown -p "canister_$CAN" $PROFILE_FLAG
 cp -f "$ROOT/target/wasm32-unknown-unknown/$PROFILE_DIR/canister_$CAN.wasm" "$WASM_TARGET"
 gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
+printf '%s\n' "$PROFILE_DIR" > "$PROFILE_FILE"
 
 # Build a debug extractor-only Wasm with eager init disabled so
 # `candid-extractor` can instantiate bundle canisters without executing
