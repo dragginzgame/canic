@@ -1,4 +1,5 @@
 use crate::dto::prelude::*;
+use crate::ids::WasmStoreBinding;
 
 ///
 /// AppCommand
@@ -56,12 +57,34 @@ pub struct AppStateResponse {
 /// SubnetStateInput
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub struct SubnetStateInput {}
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreStateInput {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+}
+
+///
+/// SubnetStateInput
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SubnetStateInput {
+    pub wasm_stores: Option<Vec<WasmStoreStateInput>>,
+}
 
 ///
 /// SubnetStateResponse
 ///
 
-#[derive(CandidType, Deserialize)]
-pub struct SubnetStateResponse {}
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreStateResponse {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SubnetStateResponse {
+    pub wasm_stores: Vec<WasmStoreStateResponse>,
+}

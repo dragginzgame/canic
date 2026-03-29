@@ -105,6 +105,7 @@ fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
 
 fn init_post_upgrade_memory_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
     MemoryRegistryOps::init_eager_tls();
+    MemoryRegistryOps::run_registered_eager_init();
     MemoryRegistryOps::init_registry().map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
@@ -121,6 +122,7 @@ fn init_post_upgrade_memory_registry() -> Result<MemoryRegistryInitSummary, Inte
 pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
+    MemoryRegistryOps::run_registered_eager_init();
     let memory_summary = match MemoryRegistryOps::init_registry() {
         Ok(summary) => summary,
         Err(err) => {
@@ -241,6 +243,7 @@ pub fn init_nonroot_canister(
 ) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::init_eager_tls();
+    MemoryRegistryOps::run_registered_eager_init();
     let memory_summary = MemoryRegistryOps::init_registry().map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,

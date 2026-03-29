@@ -101,5 +101,4 @@ async fn signer_guard_is_registered_to_subnet() -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

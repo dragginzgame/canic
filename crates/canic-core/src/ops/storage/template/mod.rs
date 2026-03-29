@@ -220,6 +220,23 @@ impl TemplateManifestOps {
         }
     }
 
+    // Return whether exactly one approved manifest exists for this role.
+    pub fn has_approved_for_role(role: &CanisterRole) -> Result<bool, InternalError> {
+        let approved_count = TemplateManifestStateStore::export()
+            .entries
+            .into_iter()
+            .filter(|(_, record)| {
+                record.role == *role && record.manifest_state == TemplateManifestState::Approved
+            })
+            .count();
+
+        match approved_count {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(TemplateManifestOpsError::ApprovedManifestConflict(role.clone()).into()),
+        }
+    }
+
     // Replace the approved manifest for a role while deprecating older approved entries.
     pub fn replace_approved_from_input(input: TemplateManifestInput) {
         let role = input.role.clone();
@@ -882,6 +899,17 @@ mod tests {
                 .template_id,
             TemplateId::new("two")
         );
+    }
+
+    #[test]
+    fn has_approved_for_role_reports_presence() {
+        reset_store();
+
+        assert!(!TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
+
+        TemplateManifestOps::replace_approved_from_input(approved_input("one", "app"));
+
+        assert!(TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
     }
 
     #[test]

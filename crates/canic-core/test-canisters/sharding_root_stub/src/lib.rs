@@ -102,5 +102,4 @@ async fn create_canister() -> Result<cdk::types::Principal, Error> {
     Ok(res.canister_id)
 }
 
-#[cfg(debug_assertions)]
-cdk::export_candid!();
+canic::export_candid!();

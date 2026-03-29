@@ -16,10 +16,9 @@ use crate::{
     },
     ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding},
     ops::{
-        config::ConfigOps,
         ic::{IcOps, call::CallOps, mgmt::MgmtOps},
         runtime::template::EmbeddedTemplatePayloadOps,
-        storage::{registry::subnet::SubnetRegistryOps, template::TemplateManifestOps},
+        storage::{state::subnet::SubnetStateOps, template::TemplateManifestOps},
     },
     protocol,
 };
@@ -311,22 +310,22 @@ async fn ensure_store_chunk_hashes_present(
 
 // Resolve the currently configured store canister id for one approved binding.
 fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, InternalError> {
-    let store_role = ConfigOps::current_subnet_wasm_store(binding)?.canister_role;
-    SubnetRegistryOps::unique_pid_for_role(&store_role)
+    SubnetStateOps::wasm_store_pid(binding).ok_or_else(|| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("wasm store binding '{binding}' is not registered"),
+        )
+    })
 }
 
 // Resolve the configured logical binding for one registered store canister id.
 fn store_binding_for_pid(store_pid: Principal) -> Result<WasmStoreBinding, InternalError> {
-    let role = SubnetRegistryOps::get(store_pid)
-        .ok_or_else(|| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("wasm store {store_pid} is not registered"),
-            )
-        })?
-        .role;
-
-    ConfigOps::current_subnet_wasm_store_binding_for_role(&role)
+    SubnetStateOps::wasm_store_binding_for_pid(store_pid).ok_or_else(|| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("wasm store {store_pid} is not registered"),
+        )
+    })
 }
 
 // Split a wasm module into deterministic fixed-size chunks for store publication.

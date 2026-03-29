@@ -102,5 +102,4 @@ fn stress_perf_compute(rounds: u32) -> u64 {
     acc
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

@@ -35,7 +35,10 @@ use crate::{
     },
     protocol,
     storage::stable::state::subnet::PublicationStoreStateRecord,
-    workflow::ic::provision::ProvisionWorkflow,
+    workflow::{
+        canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
+        ic::provision::ProvisionWorkflow,
+    },
 };
 use std::collections::BTreeSet;
 
@@ -46,6 +49,49 @@ use std::collections::BTreeSet;
 pub struct WasmStorePublicationWorkflow;
 
 impl WasmStorePublicationWorkflow {
+    // Build the canonical runtime-managed binding for one wasm store canister id.
+    fn binding_for_store_pid(store_pid: Principal) -> WasmStoreBinding {
+        WasmStoreBinding::owned(store_pid.to_text())
+    }
+
+    // Import any already-registered wasm stores into runtime subnet state.
+    pub fn sync_registered_wasm_store_inventory() -> Vec<WasmStoreBinding> {
+        let mut bindings = Vec::new();
+
+        for pid in SubnetRegistryOps::pids_for_role(&WASM_STORE_ROLE).unwrap_or_default() {
+            let binding = Self::binding_for_store_pid(pid);
+            let created_at = SubnetRegistryOps::get(pid).map_or(0, |record| record.created_at);
+            let _ = SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at);
+            bindings.push(binding);
+        }
+
+        bindings
+    }
+
+    // Create one new wasm store canister and register its runtime-managed binding.
+    async fn create_publication_store() -> Result<WasmStoreBinding, InternalError> {
+        let result = CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
+            role: WASM_STORE_ROLE,
+            parent: IcOps::canister_self(),
+            extra_arg: None,
+        })
+        .await?;
+        let pid = result.new_canister_pid.ok_or_else(|| {
+            InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                "wasm store creation did not return a pid",
+            )
+        })?;
+        let binding = Self::binding_for_store_pid(pid);
+        let created_at =
+            SubnetRegistryOps::get(pid).map_or_else(IcOps::now_secs, |record| record.created_at);
+        let _ = SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at);
+
+        log!(Topic::Wasm, Warn, "ws created {} ({})", binding, pid);
+
+        Ok(binding)
+    }
+
     // Execute one typed root-owned WasmStore publication or lifecycle admin command.
     pub async fn handle_admin(
         cmd: WasmStoreAdminCommand,
@@ -360,6 +406,7 @@ impl WasmStorePublicationWorkflow {
         }
 
         ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
+        let _ = SubnetStateOps::remove_wasm_store(&binding);
 
         log!(Topic::Wasm, Warn, "ws deleted {} ({})", binding, store_pid);
 
@@ -395,7 +442,7 @@ impl WasmStorePublicationWorkflow {
     pub fn set_current_publication_store_binding(
         binding: WasmStoreBinding,
     ) -> Result<(), InternalError> {
-        ConfigOps::current_subnet_wasm_store(&binding)?;
+        let _ = store_pid_for_binding(&binding)?;
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let previous = SubnetStateOps::publication_store_state();
         Self::ensure_binding_is_selectable_for_publication(&previous, &binding)?;
@@ -435,6 +482,96 @@ impl WasmStorePublicationWorkflow {
         }
     }
 
+    // Return the oldest known runtime-managed wasm-store binding for this subnet.
+    fn oldest_registered_store_binding() -> Option<WasmStoreBinding> {
+        SubnetStateOps::wasm_stores()
+            .into_iter()
+            .min_by(|left, right| left.created_at.cmp(&right.created_at))
+            .map(|record| record.binding)
+    }
+
+    // Clear one stale publication binding and fall back to the oldest known runtime store.
+    fn clear_stale_publication_binding(
+        binding: WasmStoreBinding,
+    ) -> Result<WasmStoreBinding, InternalError> {
+        log!(Topic::Wasm, Warn, "ws clear stale binding {}", binding);
+        let changed_at = IcOps::now_secs();
+        Self::ensure_retired_binding_slot_available_for_promotion()?;
+        let previous = SubnetStateOps::publication_store_state();
+        let _ = SubnetStateOps::clear_publication_store_binding(changed_at);
+        let current = SubnetStateOps::publication_store_state();
+        Self::log_publication_state_transition(
+            "clear_stale_publication_binding",
+            &previous,
+            &current,
+            changed_at,
+        );
+
+        Self::oldest_registered_store_binding().ok_or_else(|| {
+            InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                "no registered wasm stores after clearing stale publication binding",
+            )
+        })
+    }
+
+    // Create the first runtime-managed store and promote it into the active publication slot.
+    async fn create_and_activate_first_publication_store() -> Result<WasmStoreBinding, InternalError>
+    {
+        let binding = Self::create_publication_store().await?;
+        Self::ensure_retired_binding_slot_available_for_promotion()?;
+        let changed_at = IcOps::now_secs();
+        let previous = SubnetStateOps::publication_store_state();
+        let _ = SubnetStateOps::activate_publication_store_binding(binding.clone(), changed_at);
+        let current = SubnetStateOps::publication_store_state();
+        Self::log_publication_state_transition(
+            "activate_first_publication_binding",
+            &previous,
+            &current,
+            changed_at,
+        );
+
+        Ok(binding)
+    }
+
+    // Promote one existing or newly-created runtime store into the active publication slot.
+    fn promote_publication_binding(
+        binding: WasmStoreBinding,
+        transition_kind: &str,
+    ) -> Result<(), InternalError> {
+        let changed_at = IcOps::now_secs();
+        Self::ensure_retired_binding_slot_available_for_promotion()?;
+        let previous = SubnetStateOps::publication_store_state();
+        let promoted = SubnetStateOps::activate_publication_store_binding(binding, changed_at);
+
+        if promoted {
+            let current = SubnetStateOps::publication_store_state();
+            Self::log_publication_state_transition(
+                transition_kind,
+                &previous,
+                &current,
+                changed_at,
+            );
+        }
+
+        Ok(())
+    }
+
+    // Pick the preferred active publication binding before capacity checks run.
+    async fn preferred_publication_binding() -> Result<WasmStoreBinding, InternalError> {
+        match SubnetStateOps::publication_store_binding() {
+            Some(binding) if store_pid_for_binding(&binding).is_ok() => Ok(binding),
+            Some(binding) => Self::clear_stale_publication_binding(binding),
+            None => {
+                if let Some(record) = Self::oldest_registered_store_binding() {
+                    Ok(record)
+                } else {
+                    Self::create_and_activate_first_publication_store().await
+                }
+            }
+        }
+    }
+
     // Return true when a bound store is still outside its reserved publication headroom.
     async fn store_binding_accepts_publication(
         store_binding: &WasmStoreBinding,
@@ -448,25 +585,9 @@ impl WasmStorePublicationWorkflow {
     // Resolve the deterministic current publication target for this subnet.
     async fn resolve_current_publication_store_binding() -> Result<WasmStoreBinding, InternalError>
     {
-        let preferred_binding = match SubnetStateOps::publication_store_binding() {
-            Some(binding) if ConfigOps::current_subnet_wasm_store(&binding).is_ok() => binding,
-            Some(binding) => {
-                log!(Topic::Wasm, Warn, "ws clear stale binding {}", binding);
-                let changed_at = IcOps::now_secs();
-                Self::ensure_retired_binding_slot_available_for_promotion()?;
-                let previous = SubnetStateOps::publication_store_state();
-                let _ = SubnetStateOps::clear_publication_store_binding(changed_at);
-                let current = SubnetStateOps::publication_store_state();
-                Self::log_publication_state_transition(
-                    "clear_stale_publication_binding",
-                    &previous,
-                    &current,
-                    changed_at,
-                );
-                ConfigOps::current_subnet_default_wasm_store_binding()
-            }
-            None => ConfigOps::current_subnet_default_wasm_store_binding(),
-        };
+        Self::sync_registered_wasm_store_inventory();
+
+        let preferred_binding = Self::preferred_publication_binding().await?;
 
         let current_state = SubnetStateOps::publication_store_state();
         if Self::binding_is_reserved_for_publication(&current_state, &preferred_binding) {
@@ -480,7 +601,10 @@ impl WasmStorePublicationWorkflow {
             return Ok(preferred_binding);
         }
 
-        for candidate in ConfigOps::current_subnet_wasm_store_bindings() {
+        for candidate in SubnetStateOps::wasm_stores()
+            .into_iter()
+            .map(|record| record.binding)
+        {
             if candidate == preferred_binding {
                 continue;
             }
@@ -499,32 +623,24 @@ impl WasmStorePublicationWorkflow {
                     preferred_binding,
                     candidate
                 );
-                let changed_at = IcOps::now_secs();
-                Self::ensure_retired_binding_slot_available_for_promotion()?;
-                let previous = SubnetStateOps::publication_store_state();
-                let promoted = SubnetStateOps::activate_publication_store_binding(
+                Self::promote_publication_binding(
                     candidate.clone(),
-                    changed_at,
-                );
-                if promoted {
-                    let current = SubnetStateOps::publication_store_state();
-                    Self::log_publication_state_transition(
-                        "promote_publication_binding",
-                        &previous,
-                        &current,
-                        changed_at,
-                    );
-                }
+                    "promote_publication_binding",
+                )?;
                 return Ok(candidate);
             }
         }
 
-        Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "no publishable ws binding; preferred '{preferred_binding}' is within headroom",
-            ),
-        ))
+        let binding = Self::create_publication_store().await?;
+        Self::promote_publication_binding(binding.clone(), "promote_new_publication_binding")?;
+        log!(
+            Topic::Wasm,
+            Warn,
+            "ws preferred {} within headroom, created {}",
+            preferred_binding,
+            binding
+        );
+        Ok(binding)
     }
 
     // Fail closed when a selected publication target is already inside reserved headroom.
@@ -687,9 +803,7 @@ impl WasmStorePublicationWorkflow {
         target_store_pid: Principal,
     ) -> Result<(), InternalError> {
         let source_store_binding = ConfigOps::current_subnet_default_wasm_store_binding();
-        let source_store_role =
-            ConfigOps::current_subnet_wasm_store(&source_store_binding)?.canister_role;
-        let source_store_pid = SubnetRegistryOps::unique_pid_for_role(&source_store_role)?;
+        let source_store_pid = store_pid_for_binding(&source_store_binding)?;
         let target_store_binding = store_binding_for_pid(target_store_pid)?;
         Self::ensure_store_accepts_publication(&target_store_binding, target_store_pid).await?;
         let entries = store_catalog(source_store_pid).await?;
@@ -713,9 +827,9 @@ impl WasmStorePublicationWorkflow {
 
     // Import the current default store catalog into root-owned approved manifest state.
     pub async fn import_current_store_catalog() -> Result<(), InternalError> {
+        Self::sync_registered_wasm_store_inventory();
         let store_binding = ConfigOps::current_subnet_default_wasm_store_binding();
-        let store_role = ConfigOps::current_subnet_wasm_store(&store_binding)?.canister_role;
-        let store_pid = SubnetRegistryOps::unique_pid_for_role(&store_role)?;
+        let store_pid = store_pid_for_binding(&store_binding)?;
         let entries = store_catalog(store_pid).await?;
 
         Self::import_store_catalog(store_binding, entries);
@@ -866,6 +980,7 @@ mod tests {
                 changed_at: 30,
                 retired_at: 20,
             },
+            wasm_stores: Vec::new(),
         });
 
         let err =
@@ -886,6 +1001,7 @@ mod tests {
                 changed_at: 30,
                 retired_at: 20,
             },
+            wasm_stores: Vec::new(),
         });
 
         let err =

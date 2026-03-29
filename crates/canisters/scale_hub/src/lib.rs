@@ -51,5 +51,4 @@ async fn plan_create_worker() -> Result<bool, Error> {
     ScalingApi::plan_create_worker(POOL_NAME)
 }
 
-#[cfg(debug_assertions)]
-export_candid!();
+canic::export_candid!();

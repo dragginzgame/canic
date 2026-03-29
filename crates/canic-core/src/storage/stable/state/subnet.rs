@@ -1,6 +1,7 @@
 use crate::ids::WasmStoreBinding;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::types::Principal,
     storage::{prelude::*, stable::memory::state::SUBNET_STATE_ID},
 };
 use std::cell::RefCell;
@@ -32,15 +33,27 @@ pub struct PublicationStoreStateRecord {
 }
 
 ///
+/// WasmStoreRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WasmStoreRecord {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+}
+
+///
 /// SubnetStateRecord
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SubnetStateRecord {
     pub publication_store: PublicationStoreStateRecord,
+    pub wasm_stores: Vec<WasmStoreRecord>,
 }
 
-impl_storable_bounded!(SubnetStateRecord, 512, true);
+impl_storable_bounded!(SubnetStateRecord, 16_384, true);
 
 enum PublicationStoreTransition {
     Activate(WasmStoreBinding),
@@ -197,6 +210,74 @@ impl SubnetState {
         Self::export().publication_store
     }
 
+    #[must_use]
+    pub(crate) fn wasm_stores() -> Vec<WasmStoreRecord> {
+        Self::export().wasm_stores
+    }
+
+    #[must_use]
+    pub(crate) fn wasm_store_pid(binding: &WasmStoreBinding) -> Option<Principal> {
+        Self::export()
+            .wasm_stores
+            .into_iter()
+            .find(|record| &record.binding == binding)
+            .map(|record| record.pid)
+    }
+
+    #[must_use]
+    pub(crate) fn wasm_store_binding_for_pid(pid: Principal) -> Option<WasmStoreBinding> {
+        Self::export()
+            .wasm_stores
+            .into_iter()
+            .find(|record| record.pid == pid)
+            .map(|record| record.binding)
+    }
+
+    pub(crate) fn upsert_wasm_store(
+        binding: WasmStoreBinding,
+        pid: Principal,
+        created_at: u64,
+    ) -> bool {
+        SUBNET_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+
+            if let Some(existing) = data
+                .wasm_stores
+                .iter()
+                .find(|record| record.binding == binding || record.pid == pid)
+            {
+                if existing.binding == binding && existing.pid == pid {
+                    return false;
+                }
+
+                panic!("wasm store inventory conflict for binding '{binding}' / pid {pid}");
+            }
+
+            data.wasm_stores.push(WasmStoreRecord {
+                binding,
+                pid,
+                created_at,
+            });
+            data.wasm_stores
+                .sort_by(|left, right| left.binding.cmp(&right.binding));
+            cell.set(data);
+            true
+        })
+    }
+
+    pub(crate) fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
+        SUBNET_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let index = data
+                .wasm_stores
+                .iter()
+                .position(|record| &record.binding == binding)?;
+            let removed = data.wasm_stores.remove(index);
+            cell.set(data);
+            Some(removed)
+        })
+    }
+
     pub(crate) fn activate_publication_store_binding(
         binding: WasmStoreBinding,
         changed_at: u64,
@@ -239,6 +320,20 @@ impl SubnetState {
 
     pub(crate) fn import(data: SubnetStateRecord) {
         Self::validate_publication_store_state(&data.publication_store);
+        let mut seen_bindings = std::collections::BTreeSet::new();
+        let mut seen_pids = std::collections::BTreeSet::new();
+        for record in &data.wasm_stores {
+            assert!(
+                seen_bindings.insert(record.binding.clone()),
+                "duplicate wasm store binding '{}'",
+                record.binding
+            );
+            assert!(
+                seen_pids.insert(record.pid),
+                "duplicate wasm store pid '{}'",
+                record.pid
+            );
+        }
         SUBNET_STATE.with_borrow_mut(|cell| cell.set(data));
     }
 
@@ -358,6 +453,7 @@ mod tests {
                 changed_at: 10,
                 retired_at: 0,
             },
+            wasm_stores: Vec::new(),
         });
     }
 
@@ -375,6 +471,7 @@ mod tests {
                 changed_at: 10,
                 retired_at: 0,
             },
+            wasm_stores: Vec::new(),
         });
     }
 }

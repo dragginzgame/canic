@@ -1,18 +1,31 @@
 use sha2::{Digest, Sha256};
-use std::{env, fmt::Write as _, fs, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    env,
+    fmt::Write as _,
+    fs,
+    path::{Path, PathBuf},
+};
 
-const RELEASE_ROLES: &[&str] = &[
-    "app",
-    "user_hub",
-    "user_shard",
-    "minimal",
-    "scale_hub",
-    "scale",
-    "shard_hub",
-    "shard",
-    "test",
-];
+macro_rules! collect_release_roles {
+    ($cfg:expr) => {{
+        let mut roles = BTreeSet::new();
 
+        for subnet in $cfg.subnets.values() {
+            for (role, canister_cfg) in &subnet.canisters {
+                if canister_cfg.kind.to_string() == "root" {
+                    continue;
+                }
+
+                roles.insert(role.as_str().to_string());
+            }
+        }
+
+        roles.into_iter().collect::<Vec<_>>()
+    }};
+}
+
+// Format one usize as a grouped Rust `u64` literal for generated source.
 fn format_u64_literal(value: usize) -> String {
     let digits = value.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 4);
@@ -29,29 +42,59 @@ fn format_u64_literal(value: usize) -> String {
     out
 }
 
-// Generate a compact manifest-only WasmStore release catalog for root bootstrap.
-fn write_embedded_wasm_store_release_catalog() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir
+// Resolve the workspace root so generated code can address built `.dfx` artifacts.
+fn workspace_root(manifest_dir: &Path) -> PathBuf {
+    manifest_dir
         .ancestors()
-        .nth(3)
-        .expect("workspace root must exist");
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-    let version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
+        .find(|dir| {
+            let cargo_toml = dir.join("Cargo.toml");
+            cargo_toml.is_file()
+                && fs::read_to_string(&cargo_toml)
+                    .is_ok_and(|contents| contents.contains("[workspace]"))
+        })
+        .map(Path::to_path_buf)
+        .expect("workspace root must contain Cargo.toml with [workspace]")
+}
+
+// Select the built artifact namespace used for generated template release input.
+fn dfx_network_dir() -> &'static str {
+    match env::var("DFX_NETWORK") {
+        Ok(value) if value == "ic" => "ic",
+        Ok(value) if value == "local" => "local",
+        Ok(value) => panic!("unsupported DFX_NETWORK '{value}'; expected 'local' or 'ic'"),
+        Err(_) => "local",
+    }
+}
+
+// Generate a compact manifest-only WasmStore release catalog for root bootstrap.
+fn write_embedded_wasm_store_release_catalog(
+    roles: &[String],
+    manifest_dir: &Path,
+    out_dir: &Path,
+    version: &str,
+) {
+    let repo_root = workspace_root(manifest_dir);
+    let network_dir = dfx_network_dir();
 
     let mut body = String::from(
         "#[must_use]\npub fn embedded_wasm_store_release_catalog() -> Vec<canic::dto::template::WasmStoreCatalogEntryResponse> {\n    vec![\n",
     );
 
-    for role in RELEASE_ROLES {
+    for role in roles {
         let wasm_path = repo_root
-            .join(".dfx/local/canisters")
+            .join(".dfx")
+            .join(network_dir)
+            .join("canisters")
             .join(role)
             .join(format!("{role}.wasm.gz"));
         println!("cargo:rerun-if-changed={}", wasm_path.display());
 
-        let bytes = fs::read(&wasm_path)
-            .unwrap_or_else(|err| panic!("failed to read {}: {err}", wasm_path.display()));
+        let bytes = fs::read(&wasm_path).unwrap_or_else(|err| {
+            panic!(
+                "failed to read configured release artifact for role '{role}' at {}: {err}",
+                wasm_path.display()
+            )
+        });
         let payload_size_bytes = bytes.len();
         let payload_hash = Sha256::digest(&bytes);
         let hash_bytes = payload_hash
@@ -59,12 +102,11 @@ fn write_embedded_wasm_store_release_catalog() {
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ");
-        let role_const = role.to_ascii_uppercase();
         let payload_size_literal = format_u64_literal(payload_size_bytes);
 
         let _ = writeln!(
             body,
-            "        canic::dto::template::WasmStoreCatalogEntryResponse {{ role: canic_internal::canister::{role_const}, template_id: canic::ids::TemplateId::new(\"embedded:{role}\"), version: canic::ids::TemplateVersion::new(\"{version}\"), payload_hash: vec![{hash_bytes}], payload_size_bytes: {payload_size_literal} }},"
+            "        canic::dto::template::WasmStoreCatalogEntryResponse {{ role: canic::ids::CanisterRole::new(\"{role}\"), template_id: canic::ids::TemplateId::new(\"embedded:{role}\"), version: canic::ids::TemplateVersion::new(\"{version}\"), payload_hash: vec![{hash_bytes}], payload_size_bytes: {payload_size_literal} }},"
         );
     }
 
@@ -75,6 +117,13 @@ fn write_embedded_wasm_store_release_catalog() {
 }
 
 fn main() {
-    canic::build_root!("../canic.toml");
-    write_embedded_wasm_store_release_catalog();
+    canic::build_root_with!("../canic.toml", |_cfg_str, _cfg_path, cfg| {
+        let manifest_dir =
+            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+        let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+        let version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
+        let roles = collect_release_roles!(cfg);
+
+        write_embedded_wasm_store_release_catalog(&roles, &manifest_dir, &out_dir, &version);
+    });
 }

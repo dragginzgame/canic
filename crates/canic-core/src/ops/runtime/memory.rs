@@ -12,6 +12,7 @@ use canic_memory::{
     runtime::{
         init_eager_tls,
         registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
+        run_registered_eager_init,
     },
 };
 use thiserror::Error as ThisError;
@@ -92,6 +93,11 @@ impl MemoryRegistryOps {
         init_eager_tls();
     }
 
+    // Run registered eager-init hooks before the registry commits deferred items.
+    pub fn run_registered_eager_init() {
+        run_registered_eager_init();
+    }
+
     // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
         let summary =
@@ -110,6 +116,7 @@ impl MemoryRegistryOps {
     #[cfg(target_arch = "wasm32")]
     pub fn ensure_bootstrap() -> Result<(), InternalError> {
         Self::init_eager_tls();
+        Self::run_registered_eager_init();
         if Self::is_initialized() {
             return Ok(());
         }
