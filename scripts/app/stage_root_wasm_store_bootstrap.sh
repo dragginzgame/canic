@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_CANISTER="${1:-root}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-WASM_PATH="${WASM_STORE_WASM:-${ROOT_DIR}/.dfx/local/canisters/wasm_store/wasm_store.wasm}"
+WASM_PATH="${WASM_STORE_WASM:-${ROOT_DIR}/.dfx/local/canisters/wasm_store/wasm_store.wasm.gz}"
 CHUNK_BYTES="${WASM_STORE_BOOTSTRAP_CHUNK_BYTES:-1000000}"
 TMP_STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-ws-bootstrap.XXXXXX")"
 
@@ -14,6 +14,22 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+format_bytes() {
+    python3 - "$1" <<'PY'
+import sys
+
+value = float(sys.argv[1])
+units = ["B", "KiB", "MiB", "GiB", "TiB"]
+unit = 0
+
+while value >= 1024.0 and unit < len(units) - 1:
+    value /= 1024.0
+    unit += 1
+
+print(f"{value:.2f} {units[unit]}")
+PY
+}
 
 if [ ! -f "${WASM_PATH}" ]; then
     echo "missing wasm_store wasm at ${WASM_PATH}" >&2
@@ -128,7 +144,8 @@ call_root_method() {
     return 1
 }
 
-echo "Staging wasm_store bootstrap into ${ROOT_CANISTER} from ${WASM_PATH}"
+echo "Staging gzipped wasm_store bootstrap into ${ROOT_CANISTER} from ${WASM_PATH}"
+echo "Bootstrap payload size: $(format_bytes "$(stat -c '%s' "${WASM_PATH}")")"
 
 call_root_method \
     "canic_wasm_store_bootstrap_stage_manifest_admin" \

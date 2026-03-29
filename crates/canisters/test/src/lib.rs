@@ -64,4 +64,5 @@ async fn timer_interval() {
     let _ = 1 + 1;
 }
 
+#[cfg(debug_assertions)]
 canic::export_candid!();

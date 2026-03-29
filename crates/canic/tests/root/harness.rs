@@ -37,9 +37,9 @@ const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const WASM_STORE_WASM_RELATIVE: &str = "../../.dfx/local/canisters/wasm_store/wasm_store.wasm.gz";
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
-// Most we can send while staying under IC ingress limits; keeps bootstrap
-// chunk publication sane while minimizing call count.
-const WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES: usize = (9 * 1024 * 1024) / 5;
+// Maximum management-canister chunk-store payload accepted per call. Use the
+// full 1 MiB limit to keep bootstrap round-trips low without exceeding bounds.
+const WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES: usize = 1024 * 1024;
 const WASM_STORE_BOOTSTRAP_TEMPLATE_ID: &str = "embedded:wasm_store";
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.

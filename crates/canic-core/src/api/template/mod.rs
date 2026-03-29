@@ -5,15 +5,14 @@ use crate::{
         template::{
             TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
             TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-            WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse,
-            WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
+            WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
+            WasmStoreOverviewResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
         },
     },
     ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
     ops::{
         config::ConfigOps,
         ic::IcOps,
-        runtime::template::WasmStoreCatalogOps,
         storage::{
             state::subnet::SubnetStateOps,
             template::{TemplateManifestOps, WasmStoreGcExecutionStats, WasmStoreLimits},
@@ -85,11 +84,6 @@ impl WasmStoreBootstrapApi {
         })
     }
 
-    // Seed the compact embedded release catalog used for root manifest bootstrap.
-    pub fn import_embedded_release_catalog(entries: Vec<WasmStoreCatalogEntryResponse>) {
-        WasmStoreCatalogOps::import_embedded(entries);
-    }
-
     // Stage the normalized root-local bootstrap manifest for `embedded:wasm_store`.
     pub fn stage_root_wasm_store_manifest(request: TemplateManifestInput) -> Result<(), Error> {
         Self::stage_manifest(Self::normalize_root_wasm_store_bootstrap_manifest(request)?);
@@ -126,6 +120,19 @@ impl WasmStoreBootstrapApi {
     // Stage one chunk into the current canister's local bootstrap source.
     pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
         TemplateManifestOps::publish_chunk_from_input(request).map_err(Error::from)
+    }
+
+    // Publish all root-local staged releases into the current subnet's selected wasm store.
+    pub async fn publish_staged_release_set_to_current_store() -> Result<(), Error> {
+        WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store()
+            .await
+            .map_err(Error::from)
+    }
+
+    // Return root-owned staged bootstrap visibility for the bootstrap role and current release buffer.
+    pub fn debug_bootstrap() -> Result<WasmStoreBootstrapDebugResponse, Error> {
+        TemplateManifestOps::bootstrap_debug_response(&CanisterRole::WASM_STORE)
+            .map_err(Error::from)
     }
 }
 
@@ -293,11 +300,6 @@ impl WasmStoreApi {
 
     fn current_store_headroom_bytes() -> Result<Option<u64>, Error> {
         Ok(ConfigOps::current_wasm_store()?.headroom_bytes())
-    }
-
-    // Import the embedded template release set into this local store canister.
-    pub fn import_embedded_release_set(wasms: &'static [(CanisterRole, &[u8])]) {
-        WasmStorePublicationWorkflow::import_embedded_release_set_to_local_store(wasms);
     }
 
     // Return the approved template release catalog for this local store.

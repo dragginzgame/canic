@@ -18,20 +18,11 @@ use canic::{
     prelude::*,
 };
 use canic_internal::canister;
-
-include!(concat!(env!("OUT_DIR"), "/embedded_release_set.rs"));
-
-// Seed the local store from embedded releases before bootstrap timers fire.
 //
 // CANIC
 //
 
-canic::start!(
-    canister::WASM_STORE,
-    init = {
-        WasmStoreApi::import_embedded_release_set(EMBEDDED_RELEASE_SET);
-    }
-);
+canic::start!(canister::WASM_STORE);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
@@ -141,4 +132,5 @@ async fn canic_wasm_store_chunk(
     WasmStoreApi::template_chunk(template_id, version, chunk_index)
 }
 
+#[cfg(debug_assertions)]
 canic::export_candid!();

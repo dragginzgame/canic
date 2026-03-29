@@ -141,9 +141,13 @@ pub struct WasmStoreGcStatusResponse {
 pub struct WasmStoreStatusResponse {
     pub gc: WasmStoreGcStatusResponse,
     pub occupied_store_bytes: u64,
+    pub occupied_store_size: String,
     pub max_store_bytes: u64,
+    pub max_store_size: String,
     pub remaining_store_bytes: u64,
+    pub remaining_store_size: String,
     pub headroom_bytes: Option<u64>,
+    pub headroom_size: Option<String>,
     pub within_headroom: bool,
     pub template_count: u32,
     pub max_templates: Option<u32>,
@@ -175,9 +179,13 @@ pub struct WasmStoreOverviewStoreResponse {
     pub publication_slot: Option<WasmStorePublicationSlotResponse>,
     pub gc: WasmStoreGcStatusResponse,
     pub payload_bytes: u64,
+    pub payload_size: String,
     pub max_store_bytes: u64,
+    pub max_store_size: String,
     pub remaining_payload_bytes: u64,
+    pub remaining_payload_size: String,
     pub headroom_bytes: Option<u64>,
+    pub headroom_size: Option<String>,
     pub within_headroom: bool,
     pub template_count: u32,
     pub max_templates: Option<u32>,
@@ -194,6 +202,36 @@ pub struct WasmStoreOverviewStoreResponse {
 pub struct WasmStoreOverviewResponse {
     pub publication: WasmStorePublicationStateResponse,
     pub stores: Vec<WasmStoreOverviewStoreResponse>,
+}
+
+///
+/// TemplateStagingStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateStagingStatusResponse {
+    pub role: CanisterRole,
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub store_binding: WasmStoreBinding,
+    pub chunking_mode: TemplateChunkingMode,
+    pub payload_size_bytes: u64,
+    pub payload_size: String,
+    pub chunk_set_present: bool,
+    pub expected_chunk_count: u32,
+    pub stored_chunk_count: u32,
+    pub publishable: bool,
+}
+
+///
+/// WasmStoreBootstrapDebugResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreBootstrapDebugResponse {
+    pub ready_for_bootstrap: bool,
+    pub bootstrap: Option<TemplateStagingStatusResponse>,
+    pub staged: Vec<TemplateStagingStatusResponse>,
 }
 
 ///

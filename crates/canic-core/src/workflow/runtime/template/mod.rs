@@ -25,9 +25,9 @@ use crate::{
 use candid::utils::ArgumentEncoder;
 use std::collections::BTreeSet;
 
-// Most we can send while staying under IC ingress limits; keeps chunk count low
-// without pushing each publish call to an unsafe edge.
-const DEFAULT_WASM_STORE_PUBLISH_CHUNK_BYTES: usize = (9 * 1024 * 1024) / 5;
+// Maximum management-canister chunk-store payload accepted per call. Use the
+// full 1 MiB limit to minimize round-trips without exceeding install bounds.
+const DEFAULT_WASM_STORE_PUBLISH_CHUNK_BYTES: usize = 1024 * 1024;
 const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
 

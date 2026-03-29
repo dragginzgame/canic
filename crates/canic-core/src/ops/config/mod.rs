@@ -8,16 +8,14 @@ use crate::{
         },
     },
     ids::{CanisterRole, SubnetRole, WasmStoreBinding},
-    ops::{
-        OpsError, ic::IcOps, prelude::*, runtime::env::EnvOps,
-        storage::state::subnet::SubnetStateOps,
-    },
+    ops::{OpsError, prelude::*, runtime::env::EnvOps, storage::state::subnet::SubnetStateOps},
     storage::stable::state::app::AppMode,
 };
 use std::sync::Arc;
 use thiserror::Error as ThisError;
 
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
+
 ///
 /// ConfigOpsError
 ///
@@ -35,9 +33,6 @@ pub enum ConfigOpsError {
 
     #[error("current canister {0} is not configured as a wasm store")]
     CurrentCanisterNotWasmStore(String),
-
-    #[error("wasm store binding {0} not configured for subnet {1}")]
-    WasmStoreBindingNotConfigured(String, String),
 }
 
 impl From<ConfigOpsError> for InternalError {
@@ -205,18 +200,6 @@ impl ConfigOps {
         WasmStoreConfig::implicit()
     }
 
-    /// Return the configured binding for one wasm-store canister role in the current subnet.
-    pub(crate) fn current_subnet_wasm_store_binding_for_role(
-        role: &CanisterRole,
-    ) -> Result<WasmStoreBinding, InternalError> {
-        let subnet_role = EnvOps::subnet_role()?;
-        Err(ConfigOpsError::WasmStoreBindingNotConfigured(
-            role.to_string(),
-            subnet_role.to_string(),
-        )
-        .into())
-    }
-
     /// Return the wasm-store config for the current canister.
     pub(crate) fn current_wasm_store() -> Result<WasmStoreConfig, InternalError> {
         let canister_role = EnvOps::canister_role()?;
@@ -225,19 +208,6 @@ impl ConfigOps {
             Ok(WasmStoreConfig::implicit())
         } else {
             Err(ConfigOpsError::CurrentCanisterNotWasmStore(canister_role.to_string()).into())
-        }
-    }
-
-    /// Return the logical binding for the current wasm-store canister.
-    pub(crate) fn current_wasm_store_binding() -> Result<WasmStoreBinding, InternalError> {
-        let canister_role = EnvOps::canister_role()?;
-
-        if Self::is_wasm_store_role(&canister_role) {
-            let pid = IcOps::canister_self();
-            Ok(SubnetStateOps::wasm_store_binding_for_pid(pid)
-                .unwrap_or_else(|| WasmStoreBinding::owned(pid.to_text())))
-        } else {
-            Self::current_subnet_wasm_store_binding_for_role(&canister_role)
         }
     }
 }

@@ -58,12 +58,28 @@ impl RootBootstrapContext {
 /// Root bootstrap entrypoints
 /// ---------------------------------------------------------------------------
 
+fn root_has_publishable_wasm_store_bootstrap() -> Result<bool, InternalError> {
+    TemplateManifestOps::has_publishable_chunked_approved_for_role(&CanisterRole::WASM_STORE)
+}
+
 pub async fn bootstrap_init_root_canister() {
-    if TemplateManifestOps::approved_for_role_response(&CanisterRole::WASM_STORE).is_err() {
+    let has_bootstrap = match root_has_publishable_wasm_store_bootstrap() {
+        Ok(ready) => ready,
+        Err(err) => {
+            log!(
+                Topic::Init,
+                Error,
+                "bootstrap (root:init) bootstrap preflight failed: {err}"
+            );
+            return;
+        }
+    };
+
+    if !has_bootstrap {
         log!(
             Topic::Init,
             Info,
-            "bootstrap (root:init) waiting for staged wasm_store template"
+            "bootstrap (root:init) waiting for staged wasm_store manifest + chunks"
         );
         return;
     }
@@ -113,11 +129,23 @@ pub async fn bootstrap_init_root_canister() {
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
-    if TemplateManifestOps::approved_for_role_response(&CanisterRole::WASM_STORE).is_err() {
+    let has_bootstrap = match root_has_publishable_wasm_store_bootstrap() {
+        Ok(ready) => ready,
+        Err(err) => {
+            log!(
+                Topic::Init,
+                Error,
+                "bootstrap (root:upgrade) bootstrap preflight failed: {err}"
+            );
+            return;
+        }
+    };
+
+    if !has_bootstrap {
         log!(
             Topic::Init,
             Info,
-            "bootstrap (root:upgrade) waiting for staged wasm_store template"
+            "bootstrap (root:upgrade) waiting for staged wasm_store manifest + chunks"
         );
         return;
     }
@@ -219,6 +247,7 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     );
 
     ensure_required_wasm_store_canister().await?;
+    WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
     import_default_wasm_store_catalog().await?;
     ensure_required_canisters(&data).await
 }

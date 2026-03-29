@@ -178,12 +178,12 @@ test-canisters:
 	}
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" dfx canister create --all -qq
-	TMPDIR="$(TEST_TMPDIR)" RELEASE=0 dfx build --all
+	TMPDIR="$(TEST_TMPDIR)" RELEASE=1 dfx build --all
 	TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 || true
 	TMPDIR="$(TEST_TMPDIR)" dfx canister install root --mode=reinstall -y --argument '(variant { Prime })'
-	root_pid="$$(dfx canister id root)"; \
-	TMPDIR="$(TEST_TMPDIR)" dfx canister install test --mode=reinstall -y --argument "(record { env = record { prime_root_pid = opt principal \"$$root_pid\"; subnet_role = opt \"prime\"; subnet_pid = opt principal \"$$root_pid\"; root_pid = opt principal \"$$root_pid\"; canister_role = opt \"test\"; parent_pid = opt principal \"$$root_pid\" }; app_directory = vec {}; subnet_directory = vec {} }, null)"
-	TMPDIR="$(TEST_TMPDIR)" dfx canister call test test
+	TMPDIR="$(TEST_TMPDIR)" scripts/app/stage_root_release_set.sh root
+	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(entry["pid"] for entry in data["Ok"] if entry["role"]=="test"))')"; \
+	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
 
 #
 # Development commands

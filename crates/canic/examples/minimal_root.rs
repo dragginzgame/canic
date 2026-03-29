@@ -22,6 +22,7 @@ mod canister {
         Ok("pong".to_string())
     }
 
+    #[cfg(debug_assertions)]
     canic::export_candid!();
 }
 

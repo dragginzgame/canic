@@ -8,40 +8,21 @@
 
 #![allow(clippy::unused_async)]
 
+use canic::prelude::*;
 #[cfg(debug_assertions)]
 use canic::{
     Error, api::rpc::RpcApi, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse,
-};
-use canic::{
-    api::canister::template::{EmbeddedTemplateApi, WasmStoreBootstrapApi},
-    prelude::*,
 };
 #[cfg(debug_assertions)]
 use canic_internal::canister;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
 
-include!(concat!(
-    env!("OUT_DIR"),
-    "/embedded_store_release_catalog.rs"
-));
-include!(concat!(
-    env!("OUT_DIR"),
-    "/embedded_wasm_store_bootstrap_release_set.rs"
-));
-
 //
 // CANIC
 //
 
-canic::start_root!(
-    init = {
-        EmbeddedTemplateApi::import_embedded_release_set(EMBEDDED_WASM_STORE_BOOTSTRAP_RELEASE_SET);
-        WasmStoreBootstrapApi::import_embedded_release_catalog(
-            embedded_wasm_store_release_catalog(),
-        );
-    }
-);
+canic::start_root!();
 
 async fn canic_setup() {}
 async fn canic_install() {}
@@ -110,4 +91,5 @@ fn stress_perf_compute(rounds: u32) -> u64 {
     acc
 }
 
+#[cfg(debug_assertions)]
 canic::export_candid!();

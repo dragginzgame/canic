@@ -51,4 +51,5 @@ async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
     Ok(format!("{plan:?}"))
 }
 
+#[cfg(debug_assertions)]
 canic::export_candid!();

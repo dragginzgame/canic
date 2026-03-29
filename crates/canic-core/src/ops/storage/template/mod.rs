@@ -5,19 +5,20 @@ use crate::{
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
-        TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreGcStatusResponse,
-        WasmStoreOverviewStoreResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
-        WasmStoreTemplateStatusResponse,
+        TemplateManifestResponse, TemplateStagingStatusResponse, WasmStoreBootstrapDebugResponse,
+        WasmStoreCatalogEntryResponse, WasmStoreGcStatusResponse, WasmStoreOverviewStoreResponse,
+        WasmStorePublicationSlotResponse, WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
     },
     ids::{
-        CanisterRole, TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey,
-        TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
+        CanisterRole, TemplateChunkKey, TemplateChunkingMode, TemplateId, TemplateManifestState,
+        TemplateReleaseKey, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
     ops::{OpsError, ic::mgmt::MgmtOps, storage::StorageOpsError},
     storage::stable::template::{
         TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore,
         TemplateChunkStore, TemplateManifestRecord, TemplateManifestStateStore,
     },
+    utils::format::byte_size,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -44,9 +45,11 @@ pub enum TemplateManifestOpsError {
     TemplateChunkSetEmpty(TemplateReleaseKey),
 
     #[error("chunk set '{0}' payload hash mismatch")]
+    #[allow(dead_code)]
     PayloadHashMismatch(TemplateReleaseKey),
 
     #[error("chunk set '{0}' payload size mismatch")]
+    #[allow(dead_code)]
     PayloadSizeMismatch(TemplateReleaseKey),
 
     #[error("chunk set '{0}' exceeds chunk index bounds")]
@@ -148,6 +151,37 @@ impl TemplateManifestOps {
             .collect()
     }
 
+    // Return staged-release status for every approved manifest in deterministic role order.
+    #[must_use]
+    pub fn approved_staging_status_responses() -> Vec<TemplateStagingStatusResponse> {
+        let chunk_counts = TemplateChunkStore::count_by_release();
+        let mut staged = Self::approved_manifests_response()
+            .into_iter()
+            .map(|manifest| Self::staging_status_response(&manifest, &chunk_counts))
+            .collect::<Vec<_>>();
+
+        staged.sort_by(|left, right| left.role.cmp(&right.role));
+        staged
+    }
+
+    // Return a root-owned bootstrap debug snapshot for the staged bootstrap role and release set.
+    pub fn bootstrap_debug_response(
+        bootstrap_role: &CanisterRole,
+    ) -> Result<WasmStoreBootstrapDebugResponse, InternalError> {
+        let staged = Self::approved_staging_status_responses();
+        let bootstrap = staged
+            .iter()
+            .find(|entry| entry.role == *bootstrap_role)
+            .cloned();
+        let ready_for_bootstrap = Self::has_publishable_chunked_approved_for_role(bootstrap_role)?;
+
+        Ok(WasmStoreBootstrapDebugResponse {
+            ready_for_bootstrap,
+            bootstrap,
+            staged,
+        })
+    }
+
     // Return current occupied-byte and template-retention state for this local store.
     #[must_use]
     pub fn store_status_response(
@@ -190,9 +224,13 @@ impl TemplateManifestOps {
                 runs_completed: gc.runs_completed,
             },
             occupied_store_bytes,
+            occupied_store_size: byte_size(occupied_store_bytes),
             max_store_bytes: limits.max_store_bytes,
+            max_store_size: byte_size(limits.max_store_bytes),
             remaining_store_bytes,
+            remaining_store_size: byte_size(remaining_store_bytes),
             headroom_bytes,
+            headroom_size: headroom_bytes.map(byte_size),
             within_headroom,
             template_count,
             max_templates: limits.max_templates,
@@ -261,9 +299,13 @@ impl TemplateManifestOps {
                 runs_completed: gc.runs_completed,
             },
             payload_bytes,
+            payload_size: byte_size(payload_bytes),
             max_store_bytes: limits.max_store_bytes,
+            max_store_size: byte_size(limits.max_store_bytes),
             remaining_payload_bytes,
+            remaining_payload_size: byte_size(remaining_payload_bytes),
             headroom_bytes,
+            headroom_size: headroom_bytes.map(byte_size),
             within_headroom,
             template_count,
             max_templates: limits.max_templates,
@@ -309,6 +351,53 @@ impl TemplateManifestOps {
         }
     }
 
+    // Return whether one approved chunked manifest is fully staged and ready for publication.
+    pub fn has_publishable_chunked_approved_for_role(
+        role: &CanisterRole,
+    ) -> Result<bool, InternalError> {
+        if !Self::has_approved_for_role(role)? {
+            return Ok(false);
+        }
+
+        let manifest = Self::approved_for_role_response(role)?;
+
+        if manifest.chunking_mode != TemplateChunkingMode::Chunked {
+            return Ok(false);
+        }
+
+        Ok(Self::validate_staged_release(&manifest).is_ok())
+    }
+
+    // Return deterministic staged-chunk progress for one approved manifest.
+    #[must_use]
+    pub fn staging_status_response(
+        manifest: &TemplateManifestResponse,
+        chunk_counts: &BTreeMap<TemplateReleaseKey, u32>,
+    ) -> TemplateStagingStatusResponse {
+        let release =
+            TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
+        let chunk_set = TemplateChunkSetStateStore::get(&release);
+        let expected_chunk_count = chunk_set.as_ref().map_or(0, |record| record.chunk_count);
+        let stored_chunk_count = chunk_counts.get(&release).copied().unwrap_or(0);
+        let publishable = manifest.chunking_mode == TemplateChunkingMode::Chunked
+            && chunk_set.is_some()
+            && stored_chunk_count == expected_chunk_count;
+
+        TemplateStagingStatusResponse {
+            role: manifest.role.clone(),
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            store_binding: manifest.store_binding.clone(),
+            chunking_mode: manifest.chunking_mode,
+            payload_size_bytes: manifest.payload_size_bytes,
+            payload_size: byte_size(manifest.payload_size_bytes),
+            chunk_set_present: chunk_set.is_some(),
+            expected_chunk_count,
+            stored_chunk_count,
+            publishable,
+        }
+    }
+
     // Replace the approved manifest for a role while deprecating older approved entries.
     pub fn replace_approved_from_input(input: TemplateManifestInput) {
         let role = input.role.clone();
@@ -333,6 +422,7 @@ impl TemplateManifestOps {
     }
 
     // Replace the approved manifest for a local wasm store with capacity enforcement.
+    #[allow(dead_code)]
     pub fn replace_approved_in_store_from_input(
         input: TemplateManifestInput,
         limits: WasmStoreLimits,
@@ -352,6 +442,7 @@ impl TemplateManifestOps {
     }
 
     // Publish one complete chunk set into the local wasm store.
+    #[allow(dead_code)]
     pub fn publish_chunk_set_from_input(
         input: TemplateChunkSetInput,
         created_at: u64,
@@ -408,6 +499,7 @@ impl TemplateManifestOps {
     }
 
     // Publish one complete chunk set into a local store with capacity enforcement.
+    #[allow(dead_code)]
     pub fn publish_chunk_set_in_store_from_input(
         input: TemplateChunkSetInput,
         created_at: u64,
@@ -638,6 +730,46 @@ impl TemplateManifestOps {
         })
     }
 
+    // Verify that one approved chunked manifest has a complete staged payload with matching hashes.
+    pub fn validate_staged_release(
+        manifest: &TemplateManifestResponse,
+    ) -> Result<(), InternalError> {
+        let info = Self::chunk_set_info_response(&manifest.template_id, &manifest.version)?;
+        let release =
+            TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
+
+        if info.chunk_hashes.is_empty() {
+            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
+        }
+
+        let mut payload = Vec::new();
+
+        for (chunk_index, expected_hash) in info.chunk_hashes.iter().enumerate() {
+            let chunk_index = u32::try_from(chunk_index)
+                .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
+            let response =
+                Self::chunk_response(&manifest.template_id, &manifest.version, chunk_index)?;
+            let actual_hash = get_wasm_hash(&response.bytes);
+            let chunk_key = TemplateChunkKey::new(release.clone(), chunk_index);
+
+            if &actual_hash != expected_hash {
+                return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
+            }
+
+            payload.extend_from_slice(&response.bytes);
+        }
+
+        if payload.len() as u64 != manifest.payload_size_bytes {
+            return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
+        }
+
+        if get_wasm_hash(&payload) != manifest.payload_hash {
+            return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
+        }
+
+        Ok(())
+    }
+
     // Clear all local template metadata and chunk bytes for store-local GC execution.
     pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, InternalError> {
         let manifests = TemplateManifestStateStore::export().entries;
@@ -828,6 +960,7 @@ fn projected_template_versions_for_manifests(
     template_versions
 }
 
+#[allow(dead_code)]
 fn projected_manifests_after_replace(
     input: &TemplateManifestInput,
 ) -> Vec<(TemplateReleaseKey, TemplateManifestRecord)> {
