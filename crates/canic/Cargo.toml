@@ -16,6 +16,7 @@ publish = true
 [features]
 default = []
 control-plane = ["dep:canic-control-plane"]
+sharding = ["dep:canic-sharding-runtime"]
 
 [dependencies]
 candid = { workspace = true }
@@ -24,6 +25,7 @@ canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-dsl-macros = { workspace = true }
 canic-memory = { workspace = true }
+canic-sharding-runtime = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

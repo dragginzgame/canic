@@ -264,7 +264,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
-            Ok(::canic_sharding_runtime::api::ShardingApi::registry())
+            Ok($crate::__internal::sharding::api::ShardingApi::registry())
         }
 
         #[cfg(canic_has_sharding)]
@@ -273,7 +273,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
         ) -> Result<::canic::dto::placement::sharding::ShardingPartitionKeysResponse, ::canic::Error> {
-            Ok(::canic_sharding_runtime::api::ShardingApi::partition_keys(&pool, shard_pid))
+            Ok($crate::__internal::sharding::api::ShardingApi::partition_keys(&pool, shard_pid))
         }
     };
 }
