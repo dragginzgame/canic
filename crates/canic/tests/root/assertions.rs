@@ -7,13 +7,12 @@ use canic::{
         canister::CanisterInfo,
         env::EnvSnapshotResponse,
         page::{Page, PageRequest},
-        state::AppStateResponse,
+        state::{AppStateResponse, SubnetStateResponse},
         topology::DirectoryEntryResponse,
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
 };
-use canic_control_plane::dto::state::SubnetStateResponse;
 use canic_testkit::pic::Pic;
 use std::collections::HashMap;
 

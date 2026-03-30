@@ -1,15 +1,14 @@
 use crate::{
-    ids::CanisterRole,
+    dto::template::{
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
+        WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
+        WasmStoreOverviewResponse, WasmStoreStatusResponse,
+    },
+    ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
     support::{self, WasmStoreGcExecutionStats},
 };
 use canic_core::{cdk::types::Principal, dto::error::Error};
-use canic_template_types::dto::template::{
-    TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-    TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-    WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-    WasmStoreOverviewResponse, WasmStoreStatusResponse,
-};
-use canic_template_types::{TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus};
 
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
 const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");

@@ -3,6 +3,12 @@ use super::call_store_result;
 use super::store_pid_for_binding;
 use crate::{
     config,
+    dto::template::{
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateManifestInput, TemplateManifestResponse,
+        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreCatalogEntryResponse,
+        WasmStoreFinalizedStoreResponse, WasmStoreStatusResponse,
+    },
     ids::{
         CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
         WasmStoreBinding, WasmStoreGcMode,
@@ -14,12 +20,6 @@ use crate::{
     storage::stable::state::subnet::PublicationStoreStateRecord,
 };
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
-use canic_template_types::dto::template::{
-    TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-    TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-    WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
-    WasmStoreStatusResponse,
-};
 use cp_core::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -980,7 +980,7 @@ impl WasmStorePublicationWorkflow {
     async fn publish_bootstrap_release_to_store(
         target_store_pid: Principal,
         target_store_binding: WasmStoreBinding,
-        manifest: canic_template_types::dto::template::TemplateManifestResponse,
+        manifest: TemplateManifestResponse,
     ) -> Result<(), InternalError> {
         let info =
             TemplateChunkedOps::chunk_set_info_response(&manifest.template_id, &manifest.version)?;

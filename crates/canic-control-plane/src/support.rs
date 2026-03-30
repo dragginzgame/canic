@@ -3,6 +3,12 @@ pub use canic_core::api::runtime::install::ApprovedModuleSource;
 
 use crate::{
     config,
+    dto::template::{
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
+        WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
+        WasmStoreOverviewResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
+    },
     ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
     ops::storage::{
         state::subnet::SubnetStateOps,
@@ -11,12 +17,6 @@ use crate::{
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 use canic_core::{__control_plane_core as cp_core, dto::error::Error};
-use canic_template_types::dto::template::{
-    TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-    TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-    WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-    WasmStoreOverviewResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
-};
 use cp_core::{cdk::types::Principal, ops::ic::IcOps};
 
 /// Return the current replica time in whole seconds.

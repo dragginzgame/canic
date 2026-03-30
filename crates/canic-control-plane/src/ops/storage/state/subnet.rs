@@ -1,13 +1,12 @@
 #[cfg(test)]
 use crate::storage::stable::state::subnet::SubnetStateRecord;
 use crate::{
-    dto::state::SubnetStateResponse,
+    dto::{state::SubnetStateResponse, template::WasmStorePublicationStateResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState, WasmStoreRecord},
 };
 use canic_cdk::types::Principal;
-use canic_template_types::dto::template::WasmStorePublicationStateResponse;
 
 ///
 /// SubnetStateOps

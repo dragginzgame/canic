@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Workflow Query Re-export
-pub use crate::workflow::state::query::AppStateQuery;
+pub use crate::workflow::state::query::{AppStateQuery, SubnetStateQuery};
 
 ///
 /// AppStateApi

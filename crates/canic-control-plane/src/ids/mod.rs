@@ -2,8 +2,8 @@ use candid::{
     CandidType,
     types::{Serializer, Type},
 };
+pub use canic_core::ids::{BuildNetwork, CanisterRole};
 use canic_memory::impl_storable_bounded;
-pub use canic_types::CanisterRole;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, fmt};
 

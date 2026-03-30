@@ -42,7 +42,6 @@ pub mod ids {
 // Sub-crates
 // -----------------------------------------------------------------------------
 pub use canic_cdk as cdk;
-pub use canic_dsl as dsl;
 pub use canic_memory as memory;
 
 // -----------------------------------------------------------------------------

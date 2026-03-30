@@ -3,6 +3,7 @@ pub mod publication;
 pub use publication::WasmStorePublicationWorkflow;
 
 use crate::{
+    dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
     ids::{TemplateId, TemplateVersion, WasmStoreBinding},
     ops::storage::{
         state::subnet::SubnetStateOps,
@@ -12,7 +13,6 @@ use crate::{
 use candid::utils::ArgumentEncoder;
 use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::{__control_plane_core as cp_core, dto::error::Error};
-use canic_template_types::dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse};
 use cp_core::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,

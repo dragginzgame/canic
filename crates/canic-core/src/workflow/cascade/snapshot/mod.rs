@@ -13,12 +13,15 @@ use crate::{
     InternalError,
     dto::{
         cascade::StateSnapshotInput,
-        state::AppStateInput,
+        state::{AppStateInput, SubnetStateInput},
         topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     },
     ops::{
         runtime::env::EnvOps,
-        storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
+        storage::{
+            registry::subnet::SubnetRegistryOps,
+            state::{app::AppStateOps, subnet::SubnetStateOps},
+        },
         topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
     },
     workflow::prelude::*,
@@ -33,6 +36,7 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct StateSnapshot {
     pub app_state: Option<AppStateInput>,
+    pub subnet_state: Option<SubnetStateInput>,
     pub app_directory: Option<AppDirectoryArgs>,
     pub subnet_directory: Option<SubnetDirectoryArgs>,
 }
@@ -64,6 +68,12 @@ impl StateSnapshotBuilder {
         self
     }
 
+    #[must_use]
+    pub fn with_subnet_state(mut self) -> Self {
+        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot_input());
+        self
+    }
+
     pub fn with_app_directory(mut self) -> Result<Self, InternalError> {
         self.snapshot.app_directory = Some(AppDirectoryResolver::resolve_input()?);
         Ok(self)
@@ -84,6 +94,7 @@ impl From<StateSnapshotInput> for StateSnapshot {
     fn from(snapshot: StateSnapshotInput) -> Self {
         Self {
             app_state: snapshot.app_state,
+            subnet_state: snapshot.subnet_state,
             app_directory: snapshot.app_directory,
             subnet_directory: snapshot.subnet_directory,
         }
@@ -184,6 +195,7 @@ impl TopologySnapshotBuilder {
 #[must_use]
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
     snapshot.app_state.is_none()
+        && snapshot.subnet_state.is_none()
         && snapshot.app_directory.is_none()
         && snapshot.subnet_directory.is_none()
 }
@@ -195,9 +207,31 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
     }
 
     format!(
-        "[{} {} {}]",
+        "[{} {} {} {}]",
         fmt(snapshot.app_state.is_some(), "as"),
+        fmt(snapshot.subnet_state.is_some(), "ss"),
         fmt(snapshot.app_directory.is_some(), "ad"),
         fmt(snapshot.subnet_directory.is_some(), "sd"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StateSnapshot;
+    use crate::dto::state::{AppMode, AppStateInput, SubnetStateInput};
+
+    #[test]
+    fn state_snapshot_debug_includes_subnet_state_slot() {
+        let snapshot = StateSnapshot {
+            app_state: Some(AppStateInput {
+                mode: AppMode::Enabled,
+                cycles_funding_enabled: true,
+            }),
+            subnet_state: Some(SubnetStateInput),
+            app_directory: None,
+            subnet_directory: None,
+        };
+
+        assert_eq!(super::state_snapshot_debug(&snapshot), "[as ss .. ..]");
+    }
 }

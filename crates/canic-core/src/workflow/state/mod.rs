@@ -30,7 +30,10 @@ impl AppStateWorkflow {
         EnvOps::require_root()?;
         AppStateOps::apply_command(cmd)?;
 
-        let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();
+        let snapshot = StateSnapshotBuilder::new()?
+            .with_app_state()
+            .with_subnet_state()
+            .build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         Ok(())

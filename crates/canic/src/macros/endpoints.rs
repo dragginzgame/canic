@@ -189,9 +189,9 @@ macro_rules! canic_emit_topology_state_endpoints {
 
         #[cfg(canic_is_root)]
         #[canic_query]
-        fn canic_subnet_state()
-        -> Result<::canic_control_plane::dto::state::SubnetStateResponse, ::canic::Error> {
-            Ok(::canic_control_plane::api::state::SubnetStateQuery::snapshot())
+        fn canic_subnet_state() -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error>
+        {
+            Ok($crate::__internal::core::api::state::SubnetStateQuery::snapshot())
         }
     };
 }

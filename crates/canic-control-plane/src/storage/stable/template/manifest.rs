@@ -1,9 +1,9 @@
-use canic_cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
-use canic_memory::{eager_static, ic_memory, impl_storable_bounded};
-use canic_template_types::ids::{
+use crate::ids::{
     CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
     WasmStoreBinding,
 };
+use canic_cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
+use canic_memory::{eager_static, ic_memory, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -84,6 +84,7 @@ impl TemplateManifestStateStore {
     }
 
     // Clear the manifest store for isolated unit tests.
+    #[cfg(test)]
     pub fn clear_for_test() {
         Self::clear();
     }
@@ -92,7 +93,7 @@ impl TemplateManifestStateStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_template_types::ids::TemplateId;
+    use crate::ids::TemplateId;
 
     fn manifest() -> TemplateManifestRecord {
         TemplateManifestRecord {

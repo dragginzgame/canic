@@ -30,7 +30,7 @@ impl PropagationWorkflow {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
-    /// Propagate application state and directory views to newly created or adopted canisters.
+    /// Propagate application/subnet state and directory views to newly created or adopted canisters.
     ///
     /// This rebuilds directory snapshots from the registry, applies current
     /// app state, cascades it to dependents, and finally re-asserts
@@ -47,6 +47,7 @@ impl PropagationWorkflow {
         // state and directory projections.
         let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
             .with_app_state()
+            .with_subnet_state()
             .build();
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;

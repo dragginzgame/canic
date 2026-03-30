@@ -1,7 +1,13 @@
 use crate::{
-    dto::state::{AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse},
+    dto::state::{
+        AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetStateInput,
+        SubnetStateResponse,
+    },
     ops::storage::state::app::AppStateCommand,
-    storage::stable::state::app::{AppMode as StorageAppMode, AppStateRecord},
+    storage::stable::state::{
+        app::{AppMode as StorageAppMode, AppStateRecord},
+        subnet::SubnetStateRecord,
+    },
 };
 
 // --- Helpers ---------------------------------------------------------------
@@ -70,5 +76,31 @@ impl AppStateCommandMapper {
                 AppStateCommand::SetCyclesFundingEnabled(enabled)
             }
         }
+    }
+}
+
+///
+/// SubnetStateMapper
+///
+
+pub struct SubnetStateMapper;
+
+impl SubnetStateMapper {
+    // Map a stored subnet-state snapshot into the DTO input shape.
+    #[must_use]
+    pub const fn record_to_input(_: SubnetStateRecord) -> SubnetStateInput {
+        SubnetStateInput
+    }
+
+    // Map a stored subnet-state snapshot into the public response shape.
+    #[must_use]
+    pub const fn record_to_response(_: SubnetStateRecord) -> SubnetStateResponse {
+        SubnetStateResponse
+    }
+
+    // Map a DTO input snapshot back into the stored subnet-state record.
+    #[must_use]
+    pub const fn input_to_record(_: SubnetStateInput) -> SubnetStateRecord {
+        SubnetStateRecord
     }
 }

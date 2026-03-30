@@ -21,7 +21,7 @@ use crate::{
             children::CanisterChildrenOps,
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
-            state::app::AppStateOps,
+            state::{app::AppStateOps, subnet::SubnetStateOps},
         },
     },
     workflow::{
@@ -162,6 +162,10 @@ impl StateCascadeWorkflow {
 
         if let Some(app) = snapshot.app_state {
             AppStateOps::import_input(app);
+        }
+
+        if let Some(subnet) = snapshot.subnet_state {
+            SubnetStateOps::import_input(subnet);
         }
 
         if let Some(dir) = &snapshot.app_directory {

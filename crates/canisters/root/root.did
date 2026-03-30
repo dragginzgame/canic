@@ -545,12 +545,11 @@ type Result_2 = variant { Ok : vec AppRegistryEntry; Err : Error };
 type Result_20 = variant { Ok : SignedRoleAttestation; Err : Error };
 type Result_21 = variant { Ok : RootCapabilityResponseV1; Err : Error };
 type Result_22 = variant { Ok : vec SubnetRegistryEntry; Err : Error };
-type Result_23 = variant { Ok : SubnetStateResponse; Err : Error };
-type Result_24 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_25 = variant { Ok : WasmStoreAdminResponse; Err : Error };
-type Result_26 = variant { Ok : WasmStoreBootstrapDebugResponse; Err : Error };
-type Result_27 = variant { Ok : WasmStoreOverviewResponse; Err : Error };
-type Result_28 = variant { Ok : CreateCanisterResponse; Err : Error };
+type Result_23 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_24 = variant { Ok : WasmStoreAdminResponse; Err : Error };
+type Result_25 = variant { Ok : WasmStoreBootstrapDebugResponse; Err : Error };
+type Result_26 = variant { Ok : WasmStoreOverviewResponse; Err : Error };
+type Result_27 = variant { Ok : CreateCanisterResponse; Err : Error };
 type Result_3 = variant { Ok : AppStateResponse; Err : Error };
 type Result_4 = variant { Ok : AttestationKeySet; Err : Error };
 type Result_5 = variant { Ok : Page_1; Err : Error };
@@ -636,10 +635,6 @@ type SubnetRegistryEntry = record {
   role : text;
   "record" : CanisterInfo;
 };
-// 
-// SubnetStateResponse
-// 
-type SubnetStateResponse = record { wasm_stores : vec WasmStoreStateResponse };
 // 
 // TemplateChunkInput
 // 
@@ -819,14 +814,6 @@ type WasmStorePublicationStateResponse = record {
   detached_binding : opt text;
 };
 // 
-// WasmStoreStateResponse
-// 
-type WasmStoreStateResponse = record {
-  pid : principal;
-  created_at : nat64;
-  binding : text;
-};
-// 
 // WasmStoreTemplateStatusResponse
 // 
 type WasmStoreTemplateStatusResponse = record {
@@ -861,16 +848,16 @@ service : (SubnetIdentity) -> {
   canic_standards : () -> (CanicStandardsResponse) query;
   canic_subnet_directory : (PageRequest) -> (Result_1) query;
   canic_subnet_registry : () -> (Result_22) query;
-  canic_subnet_state : () -> (Result_23) query;
-  canic_template_prepare_admin : (TemplateChunkSetPrepareInput) -> (Result_24);
+  canic_subnet_state : () -> (Result) query;
+  canic_template_prepare_admin : (TemplateChunkSetPrepareInput) -> (Result_23);
   canic_template_publish_chunk_admin : (TemplateChunkInput) -> (Result);
   canic_template_publish_to_current_store_admin : () -> (Result);
   canic_template_stage_manifest_admin : (TemplateManifestInput) -> (Result);
   canic_time : () -> (Result_9) query;
-  canic_wasm_store_admin : (WasmStoreAdminCommand) -> (Result_25);
-  canic_wasm_store_bootstrap_debug : () -> (Result_26) query;
+  canic_wasm_store_admin : (WasmStoreAdminCommand) -> (Result_24);
+  canic_wasm_store_bootstrap_debug : () -> (Result_25) query;
   canic_wasm_store_bootstrap_prepare_admin : (TemplateChunkSetPrepareInput) -> (
-      Result_24,
+      Result_23,
     );
   canic_wasm_store_bootstrap_publish_chunk_admin : (TemplateChunkInput) -> (
       Result,
@@ -879,10 +866,10 @@ service : (SubnetIdentity) -> {
   canic_wasm_store_bootstrap_stage_manifest_admin : (TemplateManifestInput) -> (
       Result,
     );
-  canic_wasm_store_overview : () -> (Result_27) query;
+  canic_wasm_store_overview : () -> (Result_26) query;
   // create_minimal
   // Controller-only helper for local Canic testing.
-  create_minimal : () -> (Result_28);
+  create_minimal : () -> (Result_27);
   icrc10_supported_standards : () -> (vec record { text; text }) query;
   // stress_perf
   // Synthetic CPU-heavy endpoint to validate perf instrumentation.
