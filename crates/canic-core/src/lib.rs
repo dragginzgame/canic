@@ -17,6 +17,10 @@
 //!
 //! The default flow is: endpoints → workflow → policy → ops → model.
 
+#[doc(hidden)]
+pub mod __control_plane_core;
+#[doc(hidden)]
+pub mod __sharding_core;
 pub mod access;
 pub mod api;
 pub mod bootstrap;
@@ -25,6 +29,7 @@ pub mod dispatch;
 pub mod domain;
 pub mod dto;
 pub mod error;
+mod format;
 pub mod ids;
 pub mod log;
 pub mod perf;
@@ -44,7 +49,6 @@ pub use {
     ::canic_cdk as cdk,
     ::canic_memory as memory,
     ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
-    ::canic_utils as utils,
 };
 
 pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};

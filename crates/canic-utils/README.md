@@ -24,15 +24,15 @@ Determinism notes
 - Hashing: xxHash3 is **not** cryptographic. Use it for sharding, cache keys, and fingerprints—not for signatures or certified data.
 - RNG: ChaCha20 PRNG seeded from `raw_rand` and deterministic between reseeds. Use frequent reseeding for sensitive randomness, seed in init + post_upgrade (Canic runtime schedules this automatically), and call RNG helpers from update methods so state advances.
 
+Testing
+- RNG has basic sanity checks (not a statistical entropy test).
+
 Casing helper
 ```rust
 use canic_utils::case::{Case, Casing};
 assert_eq!("hello_world".to_case(Case::Constant), "HELLO_WORLD");
 assert!("Title Case".is_case(Case::Title));
 ```
-
-Testing
-- RNG has basic sanity checks (not a statistical entropy test).
 
 Layout
 ```

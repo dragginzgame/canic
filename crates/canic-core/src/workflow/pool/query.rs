@@ -15,6 +15,7 @@ pub struct PoolQuery;
 
 impl PoolQuery {
     /// Return a view of a single pool entry (if present).
+    #[must_use]
     pub fn pool_entry(pid: Principal) -> Option<CanisterPoolEntry> {
         let data = PoolOps::data();
 

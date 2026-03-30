@@ -10,6 +10,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    api::runtime::install::{ApprovedModuleSource, ModuleSourceRuntimeApi},
     config::Config,
     domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
@@ -23,17 +24,15 @@ use crate::{
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
-            template::TemplateManifestOps,
         },
         topology::{
             directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
             policy::mapper::RegistryPolicyInputMapper,
         },
     },
-    utils::format::byte_size,
     workflow::{
         cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*,
-        runtime::template::TemplateInstallWorkflow,
+        runtime::install::ModuleInstallWorkflow,
     },
 };
 
@@ -135,14 +134,14 @@ impl ProvisionWorkflow {
         parent_pid: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        // must have one approved manifest before allocation begins
-        TemplateManifestOps::approved_for_role_response(role)?;
+        // Resolve the approved install source before allocation begins.
+        let module_source = ModuleSourceRuntimeApi::approved_module_source(role).await?;
 
         // Phase 1: allocation
         let (pid, source) = allocate_canister(role).await?;
 
         // Phase 2: installation
-        if let Err(err) = install_canister(pid, role, parent_pid, extra_arg).await {
+        if let Err(err) = install_canister(pid, role, parent_pid, &module_source, extra_arg).await {
             log!(
                 Topic::CanisterLifecycle,
                 Error,
@@ -312,13 +311,11 @@ async fn install_canister(
     pid: Principal,
     role: &CanisterRole,
     parent_pid: Principal,
+    module_source: &ApprovedModuleSource,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
-    // Fetch the approved install manifest and register the target hash.
-    let manifest = TemplateManifestOps::approved_for_role_response(role)?;
-
     let payload = ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid)?;
-    let module_hash = manifest.payload_hash.clone();
+    let module_hash = module_source.module_hash.clone();
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
@@ -347,10 +344,10 @@ async fn install_canister(
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;
 
-    if let Err(err) = TemplateInstallWorkflow::install_with_payload(
+    if let Err(err) = ModuleInstallWorkflow::install_with_payload(
         CanisterInstallMode::Install,
         pid,
-        &manifest,
+        module_source,
         payload,
         extra_arg,
     )
@@ -371,10 +368,10 @@ async fn install_canister(
     log!(
         Topic::CanisterLifecycle,
         Ok,
-        "⚡ install_canister: {pid} ({role}, template={}, size={}, mode={:?})",
-        manifest.template_id,
-        byte_size(manifest.payload_size_bytes),
-        manifest.chunking_mode,
+        "⚡ install_canister: {pid} ({role}, source={}, size={}, chunks={})",
+        module_source.source_label,
+        module_source.payload_size(),
+        module_source.chunk_hashes.len(),
     );
 
     Ok(())

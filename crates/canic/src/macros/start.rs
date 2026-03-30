@@ -7,18 +7,31 @@
 #[macro_export]
 macro_rules! __canic_start_nonroot_lifecycle_core {
     ($canister_role:expr $(, $init:block)?) => {
+        #[doc(hidden)]
+        fn __canic_compiled_config() -> (
+            $crate::__internal::core::bootstrap::compiled::ConfigModel,
+            &'static str,
+            &'static str,
+        ) {
+            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
+            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
+            let config_path = env!("CANIC_CONFIG_PATH");
+            (config_model, config_source, config_path)
+        }
+
         #[::canic::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
-            let (config_str, config_path) = $crate::__canic_load_config!();
+            let (config, config_source, config_path) = __canic_compiled_config();
 
             #[cfg(any(
                 canic_accepts_delegation_signer_proof,
                 canic_accepts_delegation_verifier_proof
             ))]
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister_before_bootstrap_with_attestation_cache(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap_with_attestation_cache(
                 $canister_role,
                 payload,
-                config_str,
+                config,
+                config_source,
                 config_path,
             );
 
@@ -26,29 +39,31 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 canic_accepts_delegation_signer_proof,
                 canic_accepts_delegation_verifier_proof
             )))]
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister_before_bootstrap(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
-                config_str,
+                config,
+                config_source,
                 config_path,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
             $crate::__canic_start_nonroot_user_timers!(args);
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config_str, config_path) = $crate::__canic_load_config!();
+            let (config, config_source, config_path) = __canic_compiled_config();
 
             #[cfg(any(
                 canic_accepts_delegation_signer_proof,
                 canic_accepts_delegation_verifier_proof
             ))]
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
                 $canister_role,
-                config_str,
+                config,
+                config_source,
                 config_path,
             );
 
@@ -56,14 +71,15 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 canic_accepts_delegation_signer_proof,
                 canic_accepts_delegation_verifier_proof
             )))]
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
-                config_str,
+                config,
+                config_source,
                 config_path,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
             $crate::__canic_start_nonroot_upgrade_timers!();
         }
     };
@@ -74,32 +90,46 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 #[macro_export]
 macro_rules! __canic_start_root_lifecycle_core {
     ($( $init:block )?) => {
+        #[doc(hidden)]
+        fn __canic_compiled_config() -> (
+            $crate::__internal::core::bootstrap::compiled::ConfigModel,
+            &'static str,
+            &'static str,
+        ) {
+            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
+            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
+            let config_path = env!("CANIC_CONFIG_PATH");
+            (config_model, config_source, config_path)
+        }
+
         #[::canic::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
-            let (config_str, config_path) = $crate::__canic_load_config!();
+            let (config, config_source, config_path) = __canic_compiled_config();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
+            ::canic_control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 identity,
-                config_str,
+                config,
+                config_source,
                 config_path,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             $crate::__canic_start_root_user_timers!();
         }
 
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config_str, config_path) = $crate::__canic_load_config!();
+            let (config, config_source, config_path) = __canic_compiled_config();
 
-            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
-                config_str,
+            ::canic_control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                config,
+                config_source,
                 config_path,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
+            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
             $crate::__canic_start_root_upgrade_timers!();
         }
     };
@@ -182,8 +212,8 @@ macro_rules! __canic_start_root_upgrade_timers {
 #[macro_export]
 macro_rules! __canic_start_nonroot_capability_bundles {
     () => {
-        $crate::canic_endpoints!();
-        $crate::canic_endpoints_nonroot!();
+        $crate::canic_bundle_shared_runtime_endpoints!();
+        $crate::canic_bundle_nonroot_only_endpoints!();
     };
 }
 
@@ -192,8 +222,8 @@ macro_rules! __canic_start_nonroot_capability_bundles {
 #[macro_export]
 macro_rules! __canic_start_root_capability_bundles {
     () => {
-        $crate::canic_endpoints!();
-        $crate::canic_endpoints_root!();
+        $crate::canic_bundle_shared_runtime_endpoints!();
+        $crate::canic_bundle_root_only_endpoints!();
     };
 }
 
@@ -239,18 +269,19 @@ macro_rules! start_root {
 }
 
 ///
-/// Load the embedded configuration during init and upgrade hooks.
+/// Load the build-produced configuration artifacts during init and upgrade hooks.
 ///
-/// This macro exists solely to embed and load the TOML configuration file
-/// at compile time (`CANIC_CONFIG_PATH`). It is used internally by
-/// [`macro@canic::start`] and [`macro@canic::start_root`].
+/// This macro exists solely for backwards-compatible macro internals and is no
+/// longer used by the lifecycle entrypoints, which now load a generated config
+/// model plus the compact embedded TOML source. It remains as a thin source-only
+/// loader for any legacy macro internals that still need the canonical text.
 
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_load_config {
     () => {{
         let config_path = env!("CANIC_CONFIG_PATH");
-        let config_str = include_str!(env!("CANIC_CONFIG_PATH"));
+        let config_str = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
         (config_str, config_path)
     }};
 }

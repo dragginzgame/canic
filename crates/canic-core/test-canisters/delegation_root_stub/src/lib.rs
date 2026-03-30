@@ -5,17 +5,20 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    api::canister::{CanisterRole, template::WasmStoreBootstrapApi},
+    api::canister::CanisterRole,
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
         DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
         RoleAttestationRequest, SignedRoleAttestation,
     },
+    prelude::*,
+};
+use canic_control_plane::{
+    api::template::WasmStoreBootstrapApi,
     dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateManifestInput},
     ids::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
-    prelude::*,
 };
 use ic_cdk::api::msg_caller;
 use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
@@ -411,5 +414,4 @@ const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
     (PROJECT_HUB_ROLE, SIGNER_WASM),
 ];
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

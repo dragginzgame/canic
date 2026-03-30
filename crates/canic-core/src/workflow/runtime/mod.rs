@@ -1,9 +1,8 @@
 pub mod attestation;
 pub mod cycles;
+pub mod install;
 pub mod intent;
 pub mod log;
-pub mod random;
-pub mod template;
 pub mod timer;
 
 use crate::{
@@ -37,9 +36,7 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start timers that should run on all non-root canisters.
     pub fn start_all() {
-        workflow::runtime::intent::IntentCleanupWorkflow::start();
         workflow::runtime::log::LogRetentionWorkflow::start();
-        workflow::runtime::random::RandomWorkflow::start();
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
     }
 

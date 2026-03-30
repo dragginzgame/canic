@@ -1,5 +1,6 @@
 pub mod registry;
 
+use crate::registry::MemoryRegistryError;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},
@@ -134,6 +135,25 @@ pub fn defer_eager_init(f: fn()) {
         .lock()
         .expect("eager init queue poisoned")
         .push(f);
+}
+
+///
+/// MemoryRuntimeApi
+///
+
+pub struct MemoryRuntimeApi;
+
+impl MemoryRuntimeApi {
+    /// Bootstrap eager TLS, eager-init hooks, and the memory registry for the given owner range.
+    pub fn bootstrap_registry(
+        crate_name: &'static str,
+        start: u8,
+        end: u8,
+    ) -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
+        init_eager_tls();
+        run_registered_eager_init();
+        registry::MemoryRegistryRuntime::init(Some((crate_name, start, end)))
+    }
 }
 
 ///

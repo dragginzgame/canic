@@ -81,6 +81,7 @@ impl PoolOps {
         PoolStore::contains(pid)
     }
 
+    #[must_use]
     pub fn has_pending_reset() -> bool {
         PoolStore::has_status(PoolStatus::PendingReset)
     }

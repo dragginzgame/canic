@@ -19,7 +19,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 #[error("{message}")]
-pub(crate) struct InternalError {
+pub struct InternalError {
     class: InternalErrorClass,
     origin: InternalErrorOrigin,
     message: String,
@@ -40,6 +40,7 @@ impl InternalError {
         }
     }
 
+    #[must_use]
     pub fn public(err: PublicError) -> Self {
         Self {
             class: InternalErrorClass::Domain,
@@ -69,10 +70,12 @@ impl InternalError {
         Self::new(InternalErrorClass::Workflow, origin, message)
     }
 
+    #[must_use]
     pub const fn class(&self) -> InternalErrorClass {
         self.class
     }
 
+    #[must_use]
     pub const fn origin(&self) -> InternalErrorOrigin {
         self.origin
     }
@@ -103,7 +106,7 @@ impl From<AccessError> for InternalError {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum InternalErrorClass {
+pub enum InternalErrorClass {
     Access,
     Domain,
     Infra,
@@ -117,7 +120,7 @@ pub(crate) enum InternalErrorClass {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum InternalErrorOrigin {
+pub enum InternalErrorOrigin {
     Access,
     Config,
     Domain,

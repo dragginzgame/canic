@@ -37,9 +37,9 @@ async fn canic_upgrade() {}
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn user_shard_issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
-    // Test-only guard: keep this endpoint out of production flows.
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    // Test-only guard: keep this endpoint out of non-local flows.
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     DelegationApi::issue_token(claims).await
@@ -50,5 +50,4 @@ async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

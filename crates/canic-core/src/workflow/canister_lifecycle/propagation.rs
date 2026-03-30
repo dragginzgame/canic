@@ -30,10 +30,10 @@ impl PropagationWorkflow {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
-    /// Propagate application and subnet state to newly created or adopted canisters.
+    /// Propagate application state and directory views to newly created or adopted canisters.
     ///
     /// This rebuilds directory snapshots from the registry, applies current
-    /// app/subnet state, cascades it to dependents, and finally re-asserts
+    /// app state, cascades it to dependents, and finally re-asserts
     /// directory ↔ registry consistency.
     pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
         // The implicit wasm_store receives the normal topology cascade, but its
@@ -44,10 +44,9 @@ impl PropagationWorkflow {
         }
 
         // Ensure newly created/adopted canisters inherit the current app
-        // and subnet states
+        // state and directory projections.
         let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
             .with_app_state()
-            .with_subnet_state()
             .build();
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;

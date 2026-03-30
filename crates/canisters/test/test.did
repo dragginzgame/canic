@@ -450,15 +450,10 @@ type SignedRoleAttestation = record {
 // Pure DTO.
 // 
 type StateSnapshotInput = record {
-  subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
   subnet_directory : opt vec DirectoryEntryInput;
   app_directory : opt vec DirectoryEntryInput;
 };
-// 
-// SubnetStateInput
-// 
-type SubnetStateInput = record { wasm_stores : opt vec WasmStoreStateInput };
 // 
 // TopologyChildren
 // Parent-keyed children list used in topology cascades.
@@ -504,14 +499,6 @@ type TopologySnapshotInput = record {
 type UpgradeCanisterRequest = record {
   canister_pid : principal;
   metadata : opt RootRequestMetadata;
-};
-// 
-// SubnetStateInput
-// 
-type WasmStoreStateInput = record {
-  pid : principal;
-  created_at : nat64;
-  binding : text;
 };
 service : (CanisterInitPayload, opt blob) -> {
   canic_app_directory : (PageRequest) -> (Result) query;

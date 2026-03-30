@@ -80,14 +80,37 @@ fn main() {
 
     // Validate the config early so failures are caught at build time.
     let config_str = std::fs::read_to_string(&cfg_path).expect("read canic config for validation");
-    canic_core::bootstrap::init_config(&config_str).expect("invalid canic config");
+    let config =
+        canic_core::bootstrap::parse_config_model(&config_str).expect("invalid canic config");
+    let compact_config = canic_core::bootstrap::compact_config_source(&config_str);
+    let compiled_config = canic_core::bootstrap::emit_config_model_source(&config);
 
-    // Export the canonicalized path for compile-time use.
+    // Emit the same generated artifacts that downstream canister build scripts use so
+    // examples inside the facade crate can compile with `start!` / `start_root!`.
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
+    let compact_cfg_path = out_dir.join("canic.compact.toml");
+    let compiled_cfg_path = out_dir.join("canic.compiled.rs");
+    std::fs::write(&compact_cfg_path, compact_config).expect("write compact canic config");
+    std::fs::write(&compiled_cfg_path, compiled_config).expect("write compiled canic config");
+
+    // Export the canonicalized paths for compile-time use.
+    let compact_abs = compact_cfg_path
+        .canonicalize()
+        .expect("canonicalize compact canic config path");
+    let compiled_abs = compiled_cfg_path
+        .canonicalize()
+        .expect("canonicalize compiled canic config path");
+    let source_abs = cfg_path
+        .canonicalize()
+        .expect("canonicalize canic config path");
+
+    println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", source_abs.display());
     println!(
-        "cargo:rustc-env=CANIC_CONFIG_PATH={}",
-        cfg_path
-            .canonicalize()
-            .expect("canonicalize canic config path")
-            .display()
+        "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
+        compact_abs.display()
+    );
+    println!(
+        "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
+        compiled_abs.display()
     );
 }

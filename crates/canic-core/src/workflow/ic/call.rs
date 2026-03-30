@@ -8,7 +8,7 @@ use crate::{
         },
         storage::intent::IntentStoreOps,
     },
-    workflow::prelude::*,
+    workflow::{prelude::*, runtime::intent::IntentCleanupWorkflow},
 };
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use serde::de::DeserializeOwned;
@@ -150,6 +150,8 @@ impl CallBuilder {
                 format!("intent key invalid: {err}"),
             )
         })?;
+
+        IntentCleanupWorkflow::ensure_started();
 
         if let Some(max_in_flight) = intent.max_in_flight {
             let totals = IntentStoreOps::totals_at(&resource_key, now);

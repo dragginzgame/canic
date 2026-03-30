@@ -1,0 +1,62 @@
+use crate::workflow::{ShardingWorkflow, query::ShardingQuery};
+use canic_core::{
+    cdk::types::Principal,
+    dto::{
+        error::Error,
+        placement::sharding::{
+            ShardingPartitionKeysResponse, ShardingPlanStateResponse, ShardingRegistryResponse,
+        },
+    },
+};
+
+///
+/// ShardingApi
+///
+
+pub struct ShardingApi;
+
+impl ShardingApi {
+    /// Lookup the shard assigned to a partition_key in a pool, if any.
+    #[must_use]
+    pub fn lookup_partition_key(pool: &str, partition_key: &str) -> Option<Principal> {
+        ShardingQuery::lookup_partition_key(pool, partition_key)
+    }
+
+    /// Return the shard for a partition_key, or an Error if unassigned.
+    pub fn resolve_shard_for_key(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<Principal, Error> {
+        ShardingQuery::resolve_shard_for_key(pool, partition_key.as_ref()).map_err(Error::from)
+    }
+
+    /// Return a view of the full sharding registry.
+    #[must_use]
+    pub fn registry() -> ShardingRegistryResponse {
+        ShardingQuery::registry()
+    }
+
+    /// Return all partition_keys currently assigned to a shard.
+    #[must_use]
+    pub fn partition_keys(pool: &str, shard: Principal) -> ShardingPartitionKeysResponse {
+        ShardingQuery::partition_keys(pool, shard)
+    }
+
+    /// Assign a partition_key to a shard in the given pool.
+    pub async fn assign_to_pool(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<Principal, Error> {
+        ShardingWorkflow::assign_to_pool(pool, partition_key)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Perform a dry-run shard assignment and return the resulting plan.
+    pub fn plan_assign_to_pool(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<ShardingPlanStateResponse, Error> {
+        ShardingWorkflow::plan_assign_to_pool(pool, partition_key).map_err(Error::from)
+    }
+}

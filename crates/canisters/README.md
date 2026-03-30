@@ -21,8 +21,10 @@ The shared demo topology lives in `crates/canisters/canic.toml` and is reference
 
 These canisters are wired through `dfx.json` (custom build steps call `scripts/app/build.sh`).
 
-- Start a clean local replica: `scripts/app/dfx_start.sh`
-- Create/build canisters (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
+- Start a clean local replica in another terminal: `scripts/app/dfx_start.sh`
+- Install the full local reference topology: `make demo-install`
+- Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
 - Run the scripted end-to-end flow: `make test-canisters` (or `make test`)
 
-Note: dfx `build` uses `gzip=true`, so `.dfx/local/canisters/<name>/<name>.wasm.gz` is produced and embedded by the root canister as the “child WASM bundle”.
+Note: `make demo-install` and `make test-canisters` assume `dfx` is already
+running. They fail fast if the local replica is not available.

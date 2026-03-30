@@ -15,7 +15,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 ## Highlights
 
 * 🧩 **Bootstrap macros** – `canic::start!`, `canic::start_root!`, `canic::build!`, and `canic::build_root!` wire init/upgrade hooks, export endpoints, and validate config at compile time.
-* 🪶 **Runtime utilities** – use `canic::api::ops::{log, perf}` for observability, `canic::cdk::types` for bounded types, and `canic::utils` for helpers.
+* 🪶 **Runtime utilities** – use `canic::api::ops::{log, perf}` for observability and `canic::cdk::types` for bounded types.
 * 🧠 **State layers** – opinionated separation for stable memory, volatile state, orchestration logic, and public endpoints.
 * 🗺️ **Topology‑aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 * 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per‑node direct children, validate roots/cycles, and fail fast to avoid quadratic fan‑out.
@@ -31,7 +31,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 * `assets/` – documentation media (logo and shared imagery).
 * `crates/` – workspace crates.
-* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-dsl-macros`, `canic-cdk`, `canic-memory`, and `canic-utils` for consumers.
+* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-dsl-macros`, `canic-cdk`, and `canic-memory` for consumers.
 
   * `src/macros/` – public macro entrypoints (`canic::start!`, `canic::start_root!`, `canic::build!`, endpoint bundles, timer helpers).
   * `src/protocol.rs` – shared protocol method names and exported endpoint IDs.
@@ -55,7 +55,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
-* `crates/canic-utils/` – small deterministic helpers (casing, formatting, xxHash3 hashing, simple RNG).
+* `crates/canic-utils/` – standalone helper crate for small deterministic utilities used by the workspace and downstream crates; it is not re-exported by `canic`.
 * `crates/canic-dsl/` – symbolic DSL tokens for endpoint macros (auth/env/guard symbols).
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by `canic`, `canic-core`, and `canic-utils` (management, timers, stable‑structures glue).

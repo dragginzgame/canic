@@ -1,0 +1,37 @@
+use crate::{
+    bootstrap,
+    config::schema::ConfigModel,
+    lifecycle::{LifecyclePhase, lifecycle_trap},
+    ops::runtime::env::EnvOps,
+    workflow,
+};
+
+pub fn post_upgrade_root_canister_before_bootstrap(
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) {
+    if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
+    let memory_summary = match workflow::runtime::init_memory_registry_post_upgrade() {
+        Ok(summary) => summary,
+        Err(err) => lifecycle_trap(LifecyclePhase::PostUpgrade, err),
+    };
+
+    if let Err(err) = EnvOps::restore_root() {
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("env restore failed (root upgrade): {err}"),
+        );
+    }
+    if let Err(err) =
+        workflow::runtime::post_upgrade_root_canister_after_memory_init(memory_summary)
+    {
+        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
+    }
+}

@@ -217,18 +217,10 @@ fn request_metadata(request: &Request) -> Option<CapabilitySourceMetadata> {
 }
 
 fn generate_capability_nonce() -> [u8; 16] {
-    if let Ok(bytes) = crate::utils::rand::random_bytes(16)
-        && bytes.len() == 16
-    {
-        let mut out = [0u8; 16];
-        out.copy_from_slice(&bytes);
-        return out;
-    }
-
     let nonce = ROOT_CAPABILITY_METADATA_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = IcOps::now_secs();
-    let caller = IcOps::msg_caller();
-    let canister = IcOps::canister_self();
+    let caller = IcOps::metadata_entropy_caller();
+    let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
     hasher.update(now.to_be_bytes());
@@ -273,18 +265,10 @@ fn new_root_attestation_request_metadata() -> RootRequestMetadata {
 }
 
 fn generate_root_attestation_request_id() -> [u8; 32] {
-    if let Ok(bytes) = crate::utils::rand::random_bytes(32)
-        && bytes.len() == 32
-    {
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&bytes);
-        return out;
-    }
-
     let nonce = ROOT_ATTESTATION_REQUEST_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = IcOps::now_secs();
-    let caller = IcOps::msg_caller();
-    let canister = IcOps::canister_self();
+    let caller = IcOps::metadata_entropy_caller();
+    let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
     hasher.update(now.to_be_bytes());
@@ -306,8 +290,6 @@ mod tests {
     #[test]
     #[expect(clippy::cast_possible_truncation)]
     fn capability_metadata_from_request_uses_request_id_prefix_and_ttl_clamp() {
-        crate::utils::rand::seed_from([7u8; 32]);
-
         let request_id = std::array::from_fn(|i| i as u8);
         let request = Request::cycles(CyclesRequest {
             cycles: 1,
@@ -331,8 +313,6 @@ mod tests {
 
     #[test]
     fn capability_metadata_from_request_defaults_when_missing() {
-        crate::utils::rand::seed_from([9u8; 32]);
-
         let request = Request::cycles(CyclesRequest {
             cycles: 1,
             metadata: None,

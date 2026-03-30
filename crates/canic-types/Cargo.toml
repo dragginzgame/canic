@@ -1,0 +1,22 @@
+[package]
+name = "canic-types"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Shared core identifier types for Canic"
+readme = "README.md"
+documentation = "https://docs.rs/canic-types"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+candid = { workspace = true }
+canic-memory = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

@@ -7,12 +7,13 @@ use canic::{
         canister::CanisterInfo,
         env::EnvSnapshotResponse,
         page::{Page, PageRequest},
-        state::{AppStateResponse, SubnetStateResponse},
+        state::AppStateResponse,
         topology::DirectoryEntryResponse,
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
 };
+use canic_control_plane::dto::state::SubnetStateResponse;
 use canic_testkit::pic::Pic;
 use std::collections::HashMap;
 
@@ -255,6 +256,8 @@ fn assert_missing_method(err: &canic::Error, method: &str) {
     assert!(
         message.contains("not found")
             || message.contains("has no method")
+            || message.contains("has no query method")
+            || message.contains("has no update method")
             || message.contains("unknown method")
             || message.contains("did not find method"),
         "expected missing-method transport failure for {method}, got: {message}"

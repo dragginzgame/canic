@@ -120,6 +120,22 @@ workspace_wasm_target_path() {
     printf '%s\n' "$ROOT/target/wasm32-unknown-unknown/$profile_dir/canister_$canister.wasm"
 }
 
+maybe_shrink_wasm_artifact() {
+    local wasm_path="$1"
+
+    if ! command -v ic-wasm >/dev/null 2>&1; then
+        return
+    fi
+
+    local shrunk_path="${wasm_path}.shrunk"
+
+    if ic-wasm "$wasm_path" -o "$shrunk_path" shrink >/dev/null 2>&1; then
+        mv -f "$shrunk_path" "$wasm_path"
+    else
+        rm -f "$shrunk_path"
+    fi
+}
+
 workspace_wasm_build_is_current() {
     local profile_dir="$1"
     local stamp
@@ -205,7 +221,8 @@ ARTIFACT_DID="$(artifact_did_path "$CAN")"
 
 ensure_workspace_wasm_build "$PROFILE_DIR"
 cp -f "$(workspace_wasm_target_path "$CAN" "$PROFILE_DIR")" "$WASM_TARGET"
-gzip -n -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
+maybe_shrink_wasm_artifact "$WASM_TARGET"
+gzip -n -9 -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
 printf '%s\n' "$PROFILE_DIR" > "$PROFILE_FILE"
 
 if [ "$IS_RELEASE_BUILD" = "1" ]; then

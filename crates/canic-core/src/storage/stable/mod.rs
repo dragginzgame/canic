@@ -11,14 +11,23 @@ pub mod replay;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
-pub mod template;
 
 ///
-/// CANIC is only allowed to allocate within this inclusive range.
+/// CANIC reserves its primary contiguous range during bootstrap.
 ///
 
-pub const CANIC_MEMORY_MIN: u8 = 5;
-pub const CANIC_MEMORY_MAX: u8 = 60;
+pub const CANIC_MEMORY_MIN: u8 = 13;
+pub const CANIC_MEMORY_MAX: u8 = 59;
+
+const _: () = {
+    #[canic_memory::__reexports::ctor::ctor(
+        anonymous,
+        crate_path = canic_memory::__reexports::ctor
+    )]
+    fn __canic_reserve_topology_memory_range() {
+        canic_memory::ic_memory_range!(5, 9);
+    }
+};
 
 ///
 /// CANIC stable memory IDs
@@ -42,7 +51,7 @@ pub mod memory {
     // =====================================================================
 
     // ---------------------------------------------------------------------
-    // Topology & discovery state (5–12)
+    // Topology & discovery state (5–9)
     //
     // Expected growth: low
     // ---------------------------------------------------------------------
@@ -53,9 +62,8 @@ pub mod memory {
         pub const SUBNET_DIRECTORY_ID: u8 = 7;
         pub const APP_REGISTRY_ID: u8 = 8;
         pub const SUBNET_REGISTRY_ID: u8 = 9;
-        pub const TEMPLATE_MANIFESTS_ID: u8 = 10;
-        pub const TEMPLATE_CHUNK_SETS_ID: u8 = 11;
-        pub const TEMPLATE_CHUNKS_ID: u8 = 12;
+
+        // 10–12 are owned by `canic-template-runtime`.
     }
 
     // ---------------------------------------------------------------------
@@ -145,18 +153,19 @@ pub mod memory {
     }
 
     // ---------------------------------------------------------------------
-    // Application / subnet runtime boundary (59–60)
+    // Application runtime boundary (59)
     //
     // Ownership:
     // - CANIC-controlled runtime state
     // - Upper bound of CANIC ABI
     //
     // Expected growth: low
+    //
+    // 60 is owned by `canic-control-plane`.
     // ---------------------------------------------------------------------
 
     pub mod state {
         pub const APP_STATE_ID: u8 = 59;
-        pub const SUBNET_STATE_ID: u8 = 60;
     }
 }
 

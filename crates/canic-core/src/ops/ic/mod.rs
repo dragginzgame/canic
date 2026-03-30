@@ -94,6 +94,42 @@ impl IcOps {
         cdk::api::msg_caller()
     }
 
+    /// Return a metadata-hash caller principal on both IC and host targets.
+    #[must_use]
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "wasm path delegates to ic0-backed caller lookup, which is not const"
+    )]
+    pub(crate) fn metadata_entropy_caller() -> Principal {
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self::msg_caller()
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Principal::anonymous()
+        }
+    }
+
+    /// Return a metadata-hash canister principal on both IC and host targets.
+    #[must_use]
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "wasm path delegates to ic0-backed canister lookup, which is not const"
+    )]
+    pub(crate) fn metadata_entropy_canister() -> Principal {
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self::canister_self()
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Principal::management_canister()
+        }
+    }
+
     /// Return the current UNIX epoch time in seconds.
     #[must_use]
     pub fn now_secs() -> u64 {
@@ -102,14 +138,12 @@ impl IcOps {
 
     /// Return the current UNIX epoch time in milliseconds.
     #[must_use]
-    #[expect(dead_code)]
     pub fn now_millis() -> u64 {
         cdk::utils::time::now_millis()
     }
 
     /// Return the current UNIX epoch time in microseconds.
     #[must_use]
-    #[expect(dead_code)]
     pub fn now_micros() -> u64 {
         cdk::utils::time::now_micros()
     }

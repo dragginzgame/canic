@@ -3,13 +3,18 @@
 // -----------------------------------------------------------------------------
 
 // Macros that generate public IC endpoints for Canic canisters.
-// These bundles define the compile-time capability surface for `start!` and
-// `start_root!`. The default compositions intentionally preserve the current
-// feature set; bundle boundaries exist to make linker policy explicit.
+// These emitters and bundles define the compile-time capability surface for
+// `start!` and `start_root!`. The default compositions intentionally preserve
+// the current feature set; bundle boundaries exist to make linker policy
+// explicit.
 
-// Lifecycle/runtime core shared by all Canic canisters.
+// -----------------------------------------------------------------------------
+// Leaf endpoint emitters
+// -----------------------------------------------------------------------------
+
+// Leaf emitter for the lifecycle/runtime core shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_lifecycle_core {
+macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
         #[canic_update(internal)]
         fn canic_ic_cycles_accept(max_amount: u128) -> u128 {
@@ -38,9 +43,9 @@ macro_rules! canic_endpoints_lifecycle_core {
     };
 }
 
-// ICRC standards-facing query/update surface shared by all Canic canisters.
+// Leaf emitter for the ICRC standards-facing surface shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_standards_icrc {
+macro_rules! canic_emit_icrc_standards_endpoints {
     () => {
         #[canic_query(internal)]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
@@ -57,9 +62,9 @@ macro_rules! canic_endpoints_standards_icrc {
     };
 }
 
-// Canic standards metadata surface shared by all Canic canisters.
+// Leaf emitter for Canic metadata shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_standards_canic {
+macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
         #[canic_query(internal)]
         fn canic_standards() -> ::canic::dto::standards::CanicStandardsResponse {
@@ -68,20 +73,20 @@ macro_rules! canic_endpoints_standards_canic {
     };
 }
 
-// Combined standards-facing surface preserved for the default Canic runtime.
+// Bundle composer for the standards-facing surface preserved by the default runtime.
 #[macro_export]
-macro_rules! canic_endpoints_standards {
+macro_rules! canic_bundle_standards_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_standards_icrc))]
-        $crate::canic_endpoints_standards_icrc!();
+        $crate::canic_emit_icrc_standards_endpoints!();
         #[cfg(not(canic_disable_bundle_standards_canic))]
-        $crate::canic_endpoints_standards_canic!();
+        $crate::canic_emit_canic_metadata_endpoints!();
     };
 }
 
-// Runtime memory-registry diagnostics shared by all Canic canisters.
+// Leaf emitter for runtime memory-registry diagnostics shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_observability_memory {
+macro_rules! canic_emit_memory_observability_endpoints {
     () => {
         #[canic_query]
         fn canic_memory_registry()
@@ -91,9 +96,9 @@ macro_rules! canic_endpoints_observability_memory {
     };
 }
 
-// Environment snapshot diagnostics shared by all Canic canisters.
+// Leaf emitter for environment snapshot diagnostics shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_observability_env {
+macro_rules! canic_emit_env_observability_endpoints {
     () => {
         #[canic_query]
         fn canic_env() -> Result<::canic::dto::env::EnvSnapshotResponse, ::canic::Error> {
@@ -102,9 +107,9 @@ macro_rules! canic_endpoints_observability_env {
     };
 }
 
-// Runtime log diagnostics shared by all Canic canisters.
+// Leaf emitter for runtime log diagnostics shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_observability_log {
+macro_rules! canic_emit_log_observability_endpoints {
     () => {
         #[canic_query]
         fn canic_log(
@@ -120,22 +125,22 @@ macro_rules! canic_endpoints_observability_log {
     };
 }
 
-// Combined observability and operator-facing diagnostics shared by all Canic canisters.
+// Bundle composer for shared observability and operator-facing diagnostics.
 #[macro_export]
-macro_rules! canic_endpoints_observability {
+macro_rules! canic_bundle_observability_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_observability_memory))]
-        $crate::canic_endpoints_observability_memory!();
+        $crate::canic_emit_memory_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_env))]
-        $crate::canic_endpoints_observability_env!();
+        $crate::canic_emit_env_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_log))]
-        $crate::canic_endpoints_observability_log!();
+        $crate::canic_emit_log_observability_endpoints!();
     };
 }
 
-// Metrics query surface shared by all Canic canisters.
+// Leaf emitter for the metrics query surface shared by all Canic canisters.
 #[macro_export]
-macro_rules! canic_endpoints_metrics {
+macro_rules! canic_emit_metrics_endpoints {
     () => {
         #[canic_query]
         fn canic_metrics(
@@ -149,9 +154,9 @@ macro_rules! canic_endpoints_metrics {
     };
 }
 
-// Response capability and trust-chain runtime shared by all Canic canisters.
+// Leaf emitter for the response-capability and trust-chain runtime.
 #[macro_export]
-macro_rules! canic_endpoints_auth_attestation {
+macro_rules! canic_emit_auth_attestation_endpoints {
     () => {
         #[cfg(canic_is_root)]
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
@@ -172,9 +177,9 @@ macro_rules! canic_endpoints_auth_attestation {
     };
 }
 
-// Shared state snapshots.
+// Leaf emitter for shared state snapshots.
 #[macro_export]
-macro_rules! canic_endpoints_topology_state {
+macro_rules! canic_emit_topology_state_endpoints {
     () => {
         #[cfg(canic_is_root)]
         #[canic_query]
@@ -184,16 +189,16 @@ macro_rules! canic_endpoints_topology_state {
 
         #[cfg(canic_is_root)]
         #[canic_query]
-        fn canic_subnet_state() -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error>
-        {
-            Ok($crate::__internal::core::api::state::SubnetStateQuery::snapshot())
+        fn canic_subnet_state()
+        -> Result<::canic_control_plane::dto::state::SubnetStateResponse, ::canic::Error> {
+            Ok(::canic_control_plane::api::state::SubnetStateQuery::snapshot())
         }
     };
 }
 
-// Shared directory views.
+// Leaf emitter for shared directory views.
 #[macro_export]
-macro_rules! canic_endpoints_topology_directory {
+macro_rules! canic_emit_topology_directory_endpoints {
     () => {
         #[canic_query]
         fn canic_app_directory(
@@ -217,9 +222,9 @@ macro_rules! canic_endpoints_topology_directory {
     };
 }
 
-// Shared topology children view.
+// Leaf emitter for the shared topology-children view.
 #[macro_export]
-macro_rules! canic_endpoints_topology_children {
+macro_rules! canic_emit_topology_children_endpoints {
     () => {
         #[canic_query]
         fn canic_canister_children(
@@ -231,9 +236,9 @@ macro_rules! canic_endpoints_topology_children {
     };
 }
 
-// Shared cycle-tracker view.
+// Leaf emitter for the shared cycle-tracker view.
 #[macro_export]
-macro_rules! canic_endpoints_topology_cycles {
+macro_rules! canic_emit_topology_cycles_endpoints {
     () => {
         #[canic_query]
         fn canic_cycle_tracker(
@@ -244,9 +249,9 @@ macro_rules! canic_endpoints_topology_cycles {
     };
 }
 
-// Shared scaling/sharding placement views.
+// Leaf emitter for shared scaling/sharding placement views.
 #[macro_export]
-macro_rules! canic_endpoints_topology_placement {
+macro_rules! canic_emit_topology_placement_endpoints {
     () => {
         #[cfg(canic_has_scaling)]
         #[canic_query(requires(caller::is_controller()))]
@@ -259,7 +264,7 @@ macro_rules! canic_endpoints_topology_placement {
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry())
+            Ok(::canic_sharding_runtime::api::ShardingApi::registry())
         }
 
         #[cfg(canic_has_sharding)]
@@ -268,31 +273,31 @@ macro_rules! canic_endpoints_topology_placement {
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
         ) -> Result<::canic::dto::placement::sharding::ShardingPartitionKeysResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::partition_keys(&pool, shard_pid))
+            Ok(::canic_sharding_runtime::api::ShardingApi::partition_keys(&pool, shard_pid))
         }
     };
 }
 
-// Combined state, directory, topology, and placement views.
+// Bundle composer for shared state, directory, topology, and placement views.
 #[macro_export]
-macro_rules! canic_endpoints_topology_views {
+macro_rules! canic_bundle_topology_views_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_topology_state))]
-        $crate::canic_endpoints_topology_state!();
+        $crate::canic_emit_topology_state_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_directory))]
-        $crate::canic_endpoints_topology_directory!();
+        $crate::canic_emit_topology_directory_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_children))]
-        $crate::canic_endpoints_topology_children!();
+        $crate::canic_emit_topology_children_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_cycles))]
-        $crate::canic_endpoints_topology_cycles!();
+        $crate::canic_emit_topology_cycles_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_placement))]
-        $crate::canic_endpoints_topology_placement!();
+        $crate::canic_emit_topology_placement_endpoints!();
     };
 }
 
-// Root-only control-plane, registry, and operator admin surface.
+// Leaf emitter for the root-only control-plane, registry, and operator admin surface.
 #[macro_export]
-macro_rules! canic_endpoints_root_admin {
+macro_rules! canic_emit_root_admin_endpoints {
     () => {
         #[canic_update(internal, requires(caller::is_controller()))]
         async fn canic_app(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error> {
@@ -349,9 +354,9 @@ macro_rules! canic_endpoints_root_admin {
     };
 }
 
-// Root-only auth, delegation, and attestation authority surface.
+// Leaf emitter for the root-only auth, delegation, and attestation authority surface.
 #[macro_export]
-macro_rules! canic_endpoints_root_auth_attestation {
+macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
         #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_delegation(
@@ -386,91 +391,91 @@ macro_rules! canic_endpoints_root_auth_attestation {
     };
 }
 
-// Root-only WasmStore bootstrap, publication, and retired-store GC control surface.
+// Leaf emitter for the root-only WasmStore bootstrap/publication control surface.
 #[macro_export]
-macro_rules! canic_endpoints_root_wasm_store {
+macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_stage_manifest_admin(
-            request: ::canic::dto::template::TemplateManifestInput,
+            request: ::canic_control_plane::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
                 request,
             )
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_prepare_admin(
-            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
+            request: ::canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic_control_plane::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_publish_chunk_admin(
-            request: ::canic::dto::template::TemplateChunkInput,
+            request: ::canic_control_plane::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
-            ::canic::__internal::core::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             Ok(())
         }
 
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_debug(
-        ) -> Result<::canic::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::debug_bootstrap()
+        ) -> Result<::canic_control_plane::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::debug_bootstrap()
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_stage_manifest_admin(
-            request: ::canic::dto::template::TemplateManifestInput,
+            request: ::canic_control_plane::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_manifest(request);
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::stage_manifest(request);
             Ok(())
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_prepare_admin(
-            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
+            request: ::canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic_control_plane::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_chunk_admin(
-            request: ::canic::dto::template::TemplateChunkInput,
+            request: ::canic_control_plane::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_chunk(request)
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_chunk(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_to_current_store_admin() -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
+            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_admin(
-            cmd: ::canic::dto::template::WasmStoreAdminCommand,
-        ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::admin(cmd).await
+            cmd: ::canic_control_plane::dto::template::WasmStoreAdminCommand,
+        ) -> Result<::canic_control_plane::dto::template::WasmStoreAdminResponse, ::canic::Error> {
+            ::canic_control_plane::api::template::WasmStorePublicationApi::admin(cmd).await
         }
 
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_overview(
-        ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::overview()
+        ) -> Result<::canic_control_plane::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
+            ::canic_control_plane::api::template::WasmStorePublicationApi::overview()
         }
 
     };
 }
 
-// Non-root sync surface for state and topology propagation.
+// Leaf emitter for the non-root sync surface used for state/topology propagation.
 #[macro_export]
-macro_rules! canic_endpoints_nonroot_sync_topology {
+macro_rules! canic_emit_nonroot_sync_topology_endpoints {
     () => {
         #[canic_update(internal, requires(caller::is_parent()))]
         async fn canic_sync_state(
@@ -488,9 +493,9 @@ macro_rules! canic_endpoints_nonroot_sync_topology {
     };
 }
 
-// Non-root auth/attestation provisioning surface.
+// Leaf emitter for the non-root auth/attestation provisioning surface.
 #[macro_export]
-macro_rules! canic_endpoints_nonroot_auth_attestation {
+macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
     () => {
         #[cfg(canic_accepts_delegation_signer_proof)]
         #[canic_update(internal, requires(caller::is_root()))]
@@ -525,37 +530,239 @@ macro_rules! canic_endpoints_nonroot_auth_attestation {
     };
 }
 
-// Default shared endpoint surface for all Canic canisters.
+// -----------------------------------------------------------------------------
+// Bundle composers
+// -----------------------------------------------------------------------------
+
+// Bundle composer for the default shared runtime surface on all Canic canisters.
+#[macro_export]
+macro_rules! canic_bundle_shared_runtime_endpoints {
+    () => {
+        $crate::canic_emit_lifecycle_core_endpoints!();
+        $crate::canic_bundle_standards_endpoints!();
+        $crate::canic_bundle_observability_endpoints!();
+        #[cfg(not(canic_disable_bundle_metrics))]
+        $crate::canic_emit_metrics_endpoints!();
+        #[cfg(not(canic_disable_bundle_auth_attestation))]
+        $crate::canic_emit_auth_attestation_endpoints!();
+        $crate::canic_bundle_topology_views_endpoints!();
+    };
+}
+
+// Bundle composer for the root-only runtime surface.
+#[macro_export]
+macro_rules! canic_bundle_root_only_endpoints {
+    () => {
+        $crate::canic_emit_root_admin_endpoints!();
+        $crate::canic_emit_root_auth_attestation_endpoints!();
+        $crate::canic_emit_root_wasm_store_endpoints!();
+    };
+}
+
+// Bundle composer for the non-root-only runtime surface.
+#[macro_export]
+macro_rules! canic_bundle_nonroot_only_endpoints {
+    () => {
+        #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
+        $crate::canic_emit_nonroot_sync_topology_endpoints!();
+        $crate::canic_emit_nonroot_auth_attestation_endpoints!();
+    };
+}
+
+// -----------------------------------------------------------------------------
+// Backwards-compatible exported aliases
+// -----------------------------------------------------------------------------
+
+// Preserve the previous macro names for downstream crates while the clearer
+// emit_/bundle_ names become the primary surface.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_lifecycle_core {
+    () => {
+        $crate::canic_emit_lifecycle_core_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_standards_icrc {
+    () => {
+        $crate::canic_emit_icrc_standards_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_standards_canic {
+    () => {
+        $crate::canic_emit_canic_metadata_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_standards {
+    () => {
+        $crate::canic_bundle_standards_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_observability_memory {
+    () => {
+        $crate::canic_emit_memory_observability_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_observability_env {
+    () => {
+        $crate::canic_emit_env_observability_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_observability_log {
+    () => {
+        $crate::canic_emit_log_observability_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_observability {
+    () => {
+        $crate::canic_bundle_observability_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_metrics {
+    () => {
+        $crate::canic_emit_metrics_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_auth_attestation {
+    () => {
+        $crate::canic_emit_auth_attestation_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_state {
+    () => {
+        $crate::canic_emit_topology_state_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_directory {
+    () => {
+        $crate::canic_emit_topology_directory_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_children {
+    () => {
+        $crate::canic_emit_topology_children_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_cycles {
+    () => {
+        $crate::canic_emit_topology_cycles_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_placement {
+    () => {
+        $crate::canic_emit_topology_placement_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_topology_views {
+    () => {
+        $crate::canic_bundle_topology_views_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_root_admin {
+    () => {
+        $crate::canic_emit_root_admin_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_root_auth_attestation {
+    () => {
+        $crate::canic_emit_root_auth_attestation_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_root_wasm_store {
+    () => {
+        $crate::canic_emit_root_wasm_store_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_nonroot_sync_topology {
+    () => {
+        $crate::canic_emit_nonroot_sync_topology_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_nonroot_auth_attestation {
+    () => {
+        $crate::canic_emit_nonroot_auth_attestation_endpoints!();
+    };
+}
+
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints {
     () => {
-        $crate::canic_endpoints_lifecycle_core!();
-        $crate::canic_endpoints_standards!();
-        $crate::canic_endpoints_observability!();
-        #[cfg(not(canic_disable_bundle_metrics))]
-        $crate::canic_endpoints_metrics!();
-        #[cfg(not(canic_disable_bundle_auth_attestation))]
-        $crate::canic_endpoints_auth_attestation!();
-        $crate::canic_endpoints_topology_views!();
+        $crate::canic_bundle_shared_runtime_endpoints!();
     };
 }
 
-// Default root-only endpoint surface.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints_root {
     () => {
-        $crate::canic_endpoints_root_admin!();
-        $crate::canic_endpoints_root_auth_attestation!();
-        $crate::canic_endpoints_root_wasm_store!();
+        $crate::canic_bundle_root_only_endpoints!();
     };
 }
 
-// Default non-root-only endpoint surface.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! canic_endpoints_nonroot {
     () => {
-        #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
-        $crate::canic_endpoints_nonroot_sync_topology!();
-        $crate::canic_endpoints_nonroot_auth_attestation!();
+        $crate::canic_bundle_nonroot_only_endpoints!();
     };
 }

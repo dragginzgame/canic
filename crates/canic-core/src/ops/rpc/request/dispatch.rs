@@ -175,19 +175,10 @@ fn new_request_metadata() -> RootRequestMetadata {
 }
 
 fn generate_request_id() -> [u8; 32] {
-    if let Ok(bytes) = crate::utils::rand::random_bytes(32)
-        && bytes.len() == 32
-    {
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&bytes);
-        return out;
-    }
-
-    // Fallback when RNG is not yet seeded: deterministic but collision-resistant.
     let nonce = ROOT_REQUEST_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = IcOps::now_secs();
-    let caller = IcOps::msg_caller();
-    let canister = IcOps::canister_self();
+    let caller = IcOps::metadata_entropy_caller();
+    let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
     hasher.update(now.to_be_bytes());

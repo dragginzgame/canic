@@ -4,3 +4,4 @@
 //! helpers used by the workspace reference canisters and integration scaffolding.
 
 pub mod canister;
+pub mod reference;

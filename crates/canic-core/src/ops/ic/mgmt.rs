@@ -21,7 +21,6 @@ use candid::{Nat, utils::ArgumentEncoder};
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[expect(dead_code)]
 pub enum CanisterInstallMode {
     Install,
     Reinstall,

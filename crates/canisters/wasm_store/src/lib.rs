@@ -7,22 +7,20 @@
 
 mod gc_state;
 
-use canic::{
-    Error,
-    api::canister::template::WasmStoreApi,
+use canic::{Error, api::canister::CanisterRole, prelude::*};
+use canic_control_plane::{
+    api::template::WasmStoreApi,
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetPrepareInput, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
-    prelude::*,
 };
-use canic_internal::canister;
 //
 // CANIC
 //
 
-canic::start!(canister::WASM_STORE);
+canic::start!(CanisterRole::WASM_STORE);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
@@ -33,7 +31,7 @@ async fn canic_upgrade() {}
 //
 
 /// canic_wasm_store_catalog
-/// Return the approved embedded release catalog for this local wasm store.
+/// Return the approved release catalog for this local wasm store.
 #[canic_query(internal, requires(caller::is_root()))]
 async fn canic_wasm_store_catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
     WasmStoreApi::template_catalog()
@@ -93,11 +91,11 @@ async fn canic_wasm_store_complete_gc() -> Result<(), Error> {
     let now_secs = canic::cdk::api::time() / 1_000_000_000;
     let current = gc_state::status();
 
-    if current.mode == canic::ids::WasmStoreGcMode::Complete {
+    if current.mode == canic_control_plane::ids::WasmStoreGcMode::Complete {
         return Ok(());
     }
 
-    if current.mode != canic::ids::WasmStoreGcMode::InProgress {
+    if current.mode != canic_control_plane::ids::WasmStoreGcMode::InProgress {
         return Err(Error::conflict(format!(
             "wasm store gc transition {:?} -> Complete is not allowed",
             current.mode
@@ -109,7 +107,7 @@ async fn canic_wasm_store_complete_gc() -> Result<(), Error> {
 
     canic::log!(
         canic::api::ops::log::Topic::Wasm,
-        Warn,
+        Ok,
         "wasm_store: gc complete reclaimed_bytes={} cleared_templates={} cleared_releases={} cleared_chunks={} cleared_chunk_hashes={}",
         stats.reclaimed_store_bytes,
         stats.cleared_template_count,
@@ -132,5 +130,4 @@ async fn canic_wasm_store_chunk(
     WasmStoreApi::template_chunk(template_id, version, chunk_index)
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

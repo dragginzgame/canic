@@ -22,7 +22,7 @@ pub struct IntentCleanupWorkflow;
 
 impl IntentCleanupWorkflow {
     /// Start periodic intent cleanup sweeps.
-    pub fn start() {
+    pub fn ensure_started() {
         let _ = TimerWorkflow::set_guarded_interval(
             &INTENT_CLEANUP_TIMER,
             WORKFLOW_INIT_DELAY,

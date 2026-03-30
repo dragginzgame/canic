@@ -26,7 +26,7 @@ impl ReadyOps {
         READY.with(Cell::get)
     }
 
-    pub(crate) fn mark_ready() {
+    pub fn mark_ready() {
         READY.with(|ready| {
             if !ready.get() {
                 ready.set(true);

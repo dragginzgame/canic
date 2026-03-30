@@ -17,18 +17,6 @@ macro_rules! log {
 }
 
 // -----------------------------------------------------------------------------
-// Candid export macro
-// -----------------------------------------------------------------------------
-
-/// Export Candid only in debug builds.
-#[macro_export]
-macro_rules! export_candid {
-    () => {
-        $crate::cdk::export_candid!();
-    };
-}
-
-// -----------------------------------------------------------------------------
 // Perf macro
 // -----------------------------------------------------------------------------
 
@@ -61,8 +49,8 @@ macro_rules! perf {
 
             // Format label + pretty-print counters.
             let label = format!($($label)*);
-            let delta_fmt = $crate::utils::instructions::format_instructions(delta);
-            let now_fmt = $crate::utils::instructions::format_instructions(now);
+            let delta_fmt = $crate::__internal::instructions::format_instructions(delta);
+            let now_fmt = $crate::__internal::instructions::format_instructions(now);
 
             // ❌ NO structured recording here
             // ✔️ Debug log only

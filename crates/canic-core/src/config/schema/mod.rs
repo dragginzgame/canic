@@ -56,8 +56,10 @@ pub enum ConfigSchemaError {
 /// - Keeps stable storage keys predictable
 /// - Avoids accidental abuse via extremely long role names
 ///
+#[cfg(any(not(target_arch = "wasm32"), test))]
 pub const NAME_MAX_BYTES: usize = 40;
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 fn validate_canister_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
     if role.as_ref().len() > NAME_MAX_BYTES {
         return Err(ConfigSchemaError::ValidationError(format!(
@@ -67,6 +69,7 @@ fn validate_canister_role_len(role: &CanisterRole, context: &str) -> Result<(), 
     Ok(())
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), ConfigSchemaError> {
     if role.as_ref().len() > NAME_MAX_BYTES {
         return Err(ConfigSchemaError::ValidationError(format!(
@@ -96,6 +99,7 @@ impl From<ConfigSchemaError> for InternalError {
 /// - Non-recursive unless explicitly called
 /// - Guaranteed to run before config is used
 ///
+#[cfg(any(not(target_arch = "wasm32"), test))]
 pub trait Validate {
     fn validate(&self) -> Result<(), ConfigSchemaError>;
 }
@@ -197,6 +201,7 @@ impl ConfigModel {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for ConfigModel {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         // Validation order is intentional to surface the most meaningful
@@ -299,6 +304,7 @@ impl Default for AppConfig {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for AppConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if let Some(list) = &self.whitelist {
@@ -339,6 +345,7 @@ pub struct AuthConfig {
     pub role_attestation: RoleAttestationConfig,
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         self.delegated_tokens.validate()?;
@@ -355,6 +362,7 @@ pub enum DelegationProofCacheProfile {
 }
 
 impl DelegationProofCacheProfile {
+    #[must_use]
     pub const fn capacity(self) -> usize {
         match self {
             Self::Small => 64,
@@ -363,6 +371,7 @@ impl DelegationProofCacheProfile {
         }
     }
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Small => "small",
@@ -401,6 +410,7 @@ pub struct DelegationProofCacheConfig {
 }
 
 impl DelegationProofCacheConfig {
+    #[must_use]
     pub fn resolved_profile(&self) -> DelegationProofCacheProfile {
         self.profile.unwrap_or_else(|| {
             DelegationProofCacheProfile::from_shard_count_hint(self.shard_count_hint)
@@ -428,6 +438,7 @@ impl Default for DelegationProofCacheConfig {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for DelegationProofCacheConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if matches!(self.shard_count_hint, Some(0)) {
@@ -511,6 +522,7 @@ impl Default for DelegatedTokenConfig {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for DelegatedTokenConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if self.ecdsa_key_name.trim().is_empty() {
@@ -568,6 +580,7 @@ impl Default for RoleAttestationConfig {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for RoleAttestationConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if self.ecdsa_key_name.trim().is_empty() {
@@ -608,6 +621,7 @@ pub struct Whitelist {
     pub principals: BTreeSet<String>,
 }
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
 impl Validate for Whitelist {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         for (i, s) in self.principals.iter().enumerate() {

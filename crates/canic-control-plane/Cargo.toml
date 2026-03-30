@@ -1,0 +1,28 @@
+[package]
+name = "canic-control-plane"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = "README.md"
+documentation = "https://docs.rs/canic-control-plane"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+async-trait = { workspace = true }
+candid = { workspace = true }
+canic-cdk = { workspace = true }
+canic-core = { workspace = true }
+canic-memory = { workspace = true }
+canic-template-runtime = { workspace = true }
+canic-template-types = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

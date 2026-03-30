@@ -17,6 +17,7 @@ impl ShardingLifecycleOps {
     }
 
     #[cfg(test)]
+    #[expect(dead_code)]
     pub(crate) fn clear_for_test() {
         ShardingLifecycle::clear();
     }

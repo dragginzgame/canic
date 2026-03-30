@@ -9,7 +9,10 @@
 #![allow(clippy::unused_async)]
 
 use canic::prelude::*;
-use canic_internal::canister::SHARD;
+use canic_internal::{
+    canister::SHARD,
+    reference::empty_shell::{canic_install, canic_setup, canic_upgrade},
+};
 
 //
 // CANIC
@@ -17,9 +20,4 @@ use canic_internal::canister::SHARD;
 
 canic::start!(SHARD);
 
-async fn canic_setup() {}
-async fn canic_install(_: Option<Vec<u8>>) {}
-async fn canic_upgrade() {}
-
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();
