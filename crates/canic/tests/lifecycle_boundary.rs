@@ -9,14 +9,17 @@ use canic::{
         topology::{AppDirectoryArgs, DirectoryEntryInput, SubnetDirectoryArgs},
     },
     ids::{CanisterRole, SubnetRole},
-    protocol,
 };
 use canic_internal::canister::{APP, SCALE_HUB, SHARD_HUB, TEST, USER_HUB};
-use canic_testkit::pic::{Pic, pic};
+use canic_testkit::{
+    artifacts::{
+        WasmBuildProfile, build_wasm_canisters, prebuilt_wasm_dir, read_wasm, test_target_dir,
+        wasm_artifacts_ready, workspace_root_for,
+    },
+    pic::pic,
+};
 use std::{
-    env, fs,
     path::{Path, PathBuf},
-    process::Command,
     sync::Once,
 };
 
@@ -33,10 +36,21 @@ const fn p(id: u8) -> Principal {
 #[test]
 fn lifecycle_boundary_traps_are_phase_correct() {
     let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&workspace_root, "canister_test");
-    let authority_wasm = read_wasm(&workspace_root, "intent_authority");
+    let canic_wasm = read_wasm(
+        &target_dir,
+        "canister_test",
+        WasmBuildProfile::Release,
+        PREBUILT_WASM_DIR_ENV,
+    );
+    let authority_wasm = read_wasm(
+        &target_dir,
+        "intent_authority",
+        WasmBuildProfile::Release,
+        PREBUILT_WASM_DIR_ENV,
+    );
     let pic = pic();
 
     let canic_id = pic.create_canister();
@@ -76,9 +90,15 @@ fn lifecycle_boundary_traps_are_phase_correct() {
 #[test]
 fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
     let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&workspace_root, "canister_test");
+    let canic_wasm = read_wasm(
+        &target_dir,
+        "canister_test",
+        WasmBuildProfile::Release,
+        PREBUILT_WASM_DIR_ENV,
+    );
     let pic = pic();
 
     let canic_id = pic.create_canister();
@@ -86,7 +106,7 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
     let init_args = encode_init_args(init_payload(canic_id));
 
     pic.install_canister(canic_id, canic_wasm.clone(), init_args, None);
-    wait_for_ready(&pic, canic_id, "install");
+    pic.wait_for_ready(canic_id, READY_TICK_LIMIT, "install");
 
     for attempt in 1..=3 {
         pic.upgrade_canister(
@@ -97,17 +117,28 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
         )
         .unwrap_or_else(|err| panic!("upgrade attempt {attempt} should succeed: {err}"));
 
-        wait_for_ready(&pic, canic_id, "post_upgrade");
+        pic.wait_for_ready(canic_id, READY_TICK_LIMIT, "post_upgrade");
     }
 }
 
 #[test]
 fn non_root_post_upgrade_failure_reports_phase_error() {
     let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&workspace_root, "canister_test");
-    let authority_wasm = read_wasm(&workspace_root, "intent_authority");
+    let canic_wasm = read_wasm(
+        &target_dir,
+        "canister_test",
+        WasmBuildProfile::Release,
+        PREBUILT_WASM_DIR_ENV,
+    );
+    let authority_wasm = read_wasm(
+        &target_dir,
+        "intent_authority",
+        WasmBuildProfile::Release,
+        PREBUILT_WASM_DIR_ENV,
+    );
     let pic = pic();
 
     let authority_id = pic.create_canister();
@@ -140,22 +171,6 @@ fn assert_phase_error(phase: &str, err: &impl ToString) {
     assert!(
         !message.contains("Internal"),
         "unexpected internal error: {message}"
-    );
-}
-
-fn wait_for_ready(pic: &Pic, canister_id: Principal, phase: &str) {
-    for _ in 0..READY_TICK_LIMIT {
-        pic.tick();
-        let ready: bool = pic
-            .query_call(canister_id, protocol::CANIC_READY, ())
-            .expect("query canic_ready");
-        if ready {
-            return;
-        }
-    }
-
-    panic!(
-        "{phase} did not reach ready state after {READY_TICK_LIMIT} ticks for canister {canister_id}"
     );
 }
 
@@ -244,67 +259,31 @@ fn directory_entries(
     entries
 }
 
-fn build_canisters_once(workspace_root: &PathBuf) {
+fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
-        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTERS) {
+        let target_dir = test_target_dir(workspace_root, "pic-wasm");
+
+        if prebuilt_wasm_dir(PREBUILT_WASM_DIR_ENV).is_some()
+            || wasm_artifacts_ready(
+                &target_dir,
+                &CANISTERS,
+                WasmBuildProfile::Release,
+                PREBUILT_WASM_DIR_ENV,
+            )
+        {
             return;
         }
 
-        let target_dir = test_target_dir(workspace_root);
-        let mut cmd = Command::new("cargo");
-        cmd.current_dir(workspace_root);
-        cmd.env("CARGO_TARGET_DIR", &target_dir);
-        cmd.env("DFX_NETWORK", "local");
-        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
-        for name in CANISTERS {
-            cmd.args(["-p", name]);
-        }
-
-        let output = cmd.output().expect("failed to run cargo build");
-        assert!(
-            output.status.success(),
-            "cargo build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        build_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &CANISTERS,
+            WasmBuildProfile::Release,
+            &[],
         );
     });
 }
 
-fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
-    canisters
-        .iter()
-        .all(|name| wasm_path(workspace_root, name).is_file())
-}
-
-fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path(workspace_root, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
-    if let Some(dir) = prebuilt_wasm_dir() {
-        return dir.join(format!("{crate_name}.wasm"));
-    }
-
-    let target_dir = test_target_dir(workspace_root);
-
-    target_dir
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join(format!("{crate_name}.wasm"))
-}
-
-fn prebuilt_wasm_dir() -> Option<PathBuf> {
-    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
-}
-
-fn test_target_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("pic-wasm")
-}
-
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .expect("workspace root")
+    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }

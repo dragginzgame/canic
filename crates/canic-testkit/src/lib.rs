@@ -4,6 +4,7 @@
 //! PocketIC) and provides small helpers for generating stable dummy principals
 //! and accounts.
 
+pub mod artifacts;
 pub mod pic;
 
 use canic::cdk::types::{Account, Principal};

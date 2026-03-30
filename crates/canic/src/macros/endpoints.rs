@@ -397,77 +397,77 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_stage_manifest_admin(
-            request: ::canic_control_plane::dto::template::TemplateManifestInput,
+            request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
+            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
                 request,
             )
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_prepare_admin(
-            request: ::canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic_control_plane::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
+            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_publish_chunk_admin(
-            request: ::canic_control_plane::dto::template::TemplateChunkInput,
+            request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
+            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             Ok(())
         }
 
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_debug(
-        ) -> Result<::canic_control_plane::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::debug_bootstrap()
+        ) -> Result<::canic::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::debug_bootstrap()
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_stage_manifest_admin(
-            request: ::canic_control_plane::dto::template::TemplateManifestInput,
+            request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::stage_manifest(request);
+            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_manifest(request);
             Ok(())
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_prepare_admin(
-            request: ::canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic_control_plane::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
+            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_chunk_admin(
-            request: ::canic_control_plane::dto::template::TemplateChunkInput,
+            request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_chunk(request)
+            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_chunk(request)
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_to_current_store_admin() -> Result<(), ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
+            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
         }
 
         #[canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_admin(
-            cmd: ::canic_control_plane::dto::template::WasmStoreAdminCommand,
-        ) -> Result<::canic_control_plane::dto::template::WasmStoreAdminResponse, ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStorePublicationApi::admin(cmd).await
+            cmd: ::canic::dto::template::WasmStoreAdminCommand,
+        ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::admin(cmd).await
         }
 
         #[canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_overview(
-        ) -> Result<::canic_control_plane::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
-            ::canic_control_plane::api::template::WasmStorePublicationApi::overview()
+        ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::overview()
         }
 
     };

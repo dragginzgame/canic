@@ -13,9 +13,14 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[features]
+default = []
+control-plane = ["dep:canic-control-plane"]
+
 [dependencies]
 candid = { workspace = true }
 canic-cdk = { workspace = true }
+canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-dsl-macros = { workspace = true }
 canic-memory = { workspace = true }
