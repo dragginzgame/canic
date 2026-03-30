@@ -5,7 +5,7 @@ rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
-readme = "README.md"
+readme = false
 keywords = { workspace = true }
 categories = { workspace = true }
 publish = false
