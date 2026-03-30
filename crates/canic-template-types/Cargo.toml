@@ -5,7 +5,7 @@ rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = "Shared template and wasm-store identifier types for Canic"
-readme = "README.md"
+readme = false
 documentation = "https://docs.rs/canic-template-types"
 homepage = { workspace = true }
 repository = { workspace = true }
