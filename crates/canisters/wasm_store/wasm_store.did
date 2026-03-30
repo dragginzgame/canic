@@ -60,13 +60,7 @@ type CapabilityRequestMetadata = record {
 // 
 // CapabilityService
 // 
-type CapabilityService = variant {
-  ProjectRegistry;
-  Root;
-  CanisterLifecycle;
-  ProjectInstance;
-  Cycles;
-};
+type CapabilityService = variant { Root };
 // 
 // CreateCanisterParent
 // Parent-location choices for a new canister
