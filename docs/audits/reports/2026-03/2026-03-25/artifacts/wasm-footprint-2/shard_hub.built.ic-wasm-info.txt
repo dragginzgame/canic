@@ -1,0 +1,86 @@
+Number of types: 79
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 233264 bytes
+
+Number of functions: 5583
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_5547)",
+    "canister_post_upgrade (func_5548)",
+    "canister_query canic_app_directory (func_5549)",
+    "canister_query canic_app_state (func_5550)",
+    "canister_query canic_canister_children (func_5551)",
+    "canister_query canic_canister_cycle_balance (func_5552)",
+    "canister_query canic_canister_version (func_5553)",
+    "canister_query canic_cycle_tracker (func_5554)",
+    "canister_query canic_env (func_5555)",
+    "canister_query canic_log (func_5556)",
+    "canister_query canic_memory_registry (func_5557)",
+    "canister_query canic_metrics (func_5558)",
+    "canister_query canic_ready (func_5559)",
+    "canister_query canic_sharding_partition_keys (func_5560)",
+    "canister_query canic_sharding_registry (func_5561)",
+    "canister_query canic_subnet_directory (func_5562)",
+    "canister_query canic_subnet_state (func_5563)",
+    "canister_query canic_time (func_5564)",
+    "canister_query icrc10_supported_standards (func_5565)",
+    "canister_query icrc21_canister_call_consent_message (func_5566)",
+    "canister_query icts_description (func_5567)",
+    "canister_query icts_metadata (func_5568)",
+    "canister_query icts_name (func_5569)",
+    "canister_query icts_version (func_5570)",
+    "canister_query plan_register_principal (func_5571)",
+    "canister_update canic_delegation_set_signer_proof (func_5572)",
+    "canister_update canic_delegation_set_verifier_proof (func_5573)",
+    "canister_update canic_response_capability_v1 (func_5574)",
+    "canister_update canic_sync_state (func_5575)",
+    "canister_update canic_sync_topology (func_5576)",
+    "canister_update ic_cycles_accept (func_5577)",
+    "canister_update icts_canister_status (func_5578)",
+    "canister_update register_principal (func_5579)",
+    "get_candid_pointer (func_5580)",
+    "canister_global_timer (func_5581)",
+    "canister_update <ic-cdk internal> timer_executor (func_5582)",
+]
+
+Imported IC0 System API: [
+    "canister_version",
+    "cost_sign_with_ecdsa",
+    "cost_create_canister",
+    "msg_reply_data_append",
+    "msg_reply",
+    "time",
+    "msg_cycles_accept128",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+    "debug_print",
+    "performance_counter",
+    "trap",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+]
+
+Custom sections with size: []

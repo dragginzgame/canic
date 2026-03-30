@@ -1,0 +1,2 @@
+canister	kind	built_wasm_bytes	built_wasm_gz_bytes	shrunk_wasm_bytes	shrunk_wasm_gz_bytes	shrink_delta_bytes	shrink_delta_percent	built_functions	shrunk_functions	built_exports	shrunk_exports
+root	bundle-canister	15606460	13103938	10262971	7763782	5343489	34.24	6005	6005	54	54

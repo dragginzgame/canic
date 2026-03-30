@@ -6,7 +6,6 @@
 
 pub mod artifacts;
 pub mod pic;
-
 use canic::cdk::types::{Account, Principal};
 
 ///
