@@ -45,6 +45,20 @@ impl LifecycleApi {
         );
     }
 
+    pub fn init_nonroot_canister_before_bootstrap_with_attestation_cache(
+        role: CanisterRole,
+        payload: CanisterInitPayload,
+        config_str: &str,
+        config_path: &str,
+    ) {
+        lifecycle::init::init_nonroot_canister_before_bootstrap_with_attestation_cache(
+            role,
+            payload,
+            config_str,
+            config_path,
+        );
+    }
+
     pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
         lifecycle::init::schedule_init_nonroot_bootstrap(args);
     }
@@ -55,6 +69,18 @@ impl LifecycleApi {
         config_path: &str,
     ) {
         lifecycle::upgrade::post_upgrade_nonroot_canister_before_bootstrap(
+            role,
+            config_str,
+            config_path,
+        );
+    }
+
+    pub fn post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
+        role: CanisterRole,
+        config_str: &str,
+        config_path: &str,
+    ) {
+        lifecycle::upgrade::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
             role,
             config_str,
             config_path,

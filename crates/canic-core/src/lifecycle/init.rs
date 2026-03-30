@@ -77,6 +77,26 @@ pub fn init_nonroot_canister_before_bootstrap(
     }
 }
 
+pub fn init_nonroot_canister_before_bootstrap_with_attestation_cache(
+    role: CanisterRole,
+    payload: CanisterInitPayload,
+    config_str: &str,
+    config_path: &str,
+) {
+    if let Err(err) = bootstrap::init_config(config_str) {
+        lifecycle_trap(
+            LifecyclePhase::Init,
+            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+        );
+    }
+
+    // Perform minimal synchronous runtime seeding during IC init.
+    if let Err(err) = workflow::runtime::init_nonroot_canister_with_attestation_cache(role, payload)
+    {
+        lifecycle_trap(LifecyclePhase::Init, err);
+    }
+}
+
 pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
     // Schedule async bootstrap immediately after init returns.
     // Duration::ZERO ensures execution on the next tick without

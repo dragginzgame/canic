@@ -53,11 +53,12 @@ struct RoleAttestationVerifier;
 impl CapabilityProofVerifier for RoleAttestationVerifier {
     /// Verify hash binding first, then run delegated attestation verification.
     async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let CapabilityProof::RoleAttestation(proof) = input.proof else {
+        let CapabilityProof::RoleAttestation(blob) = input.proof else {
             return Err(Error::internal(
                 "role attestation verifier received non-attestation proof",
             ));
         };
+        let proof = super::proof::decode_role_attestation_blob(blob)?;
 
         super::proof::verify_capability_hash_binding(
             input.target_canister,
@@ -80,11 +81,12 @@ struct DelegatedGrantVerifier;
 impl CapabilityProofVerifier for DelegatedGrantVerifier {
     /// Keep existing delegated-grant verification ordering unchanged.
     async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let CapabilityProof::DelegatedGrant(proof) = input.proof else {
+        let CapabilityProof::DelegatedGrant(blob) = input.proof else {
             return Err(Error::internal(
                 "delegated grant verifier received non-grant proof",
             ));
         };
+        let proof = super::proof::decode_delegated_grant_blob(blob)?;
 
         super::proof::verify_capability_hash_binding(
             input.target_canister,
@@ -92,10 +94,10 @@ impl CapabilityProofVerifier for DelegatedGrantVerifier {
             input.capability,
             proof.capability_hash,
         )?;
-        super::verify_delegated_grant_hash_binding(proof)?;
+        super::verify_delegated_grant_hash_binding(&proof)?;
         super::verify_root_delegated_grant_proof(
             input.capability,
-            proof,
+            &proof,
             input.caller,
             input.target_canister,
             input.now_secs,

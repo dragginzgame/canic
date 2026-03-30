@@ -5,9 +5,8 @@ use crate::{
     dto::{
         auth::{RoleAttestationRequest, SignedRoleAttestation},
         capability::{
-            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-            PROOF_VERSION_V1, RoleAttestationProof, RootCapabilityEnvelopeV1,
-            RootCapabilityResponseV1,
+            CAPABILITY_VERSION_V1, CapabilityRequestMetadata, CapabilityService, PROOF_VERSION_V1,
+            RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
         rpc::RootRequestMetadata,
@@ -158,15 +157,18 @@ impl RpcOps {
     ) -> Result<Response, InternalError> {
         let dto_request: crate::dto::rpc::Request = request.clone();
         let capability_hash = root_capability_hash(target_pid, &dto_request)?;
+        let proof = RoleAttestationProof {
+            proof_version: PROOF_VERSION_V1,
+            capability_hash,
+            attestation,
+        }
+        .try_into()
+        .map_err(InternalError::public)?;
         let envelope = RootCapabilityEnvelopeV1 {
             service: CapabilityService::Root,
             capability_version: CAPABILITY_VERSION_V1,
             capability: dto_request,
-            proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
-                proof_version: PROOF_VERSION_V1,
-                capability_hash,
-                attestation,
-            }),
+            proof,
             metadata: capability_metadata_from_request(&request),
         };
 

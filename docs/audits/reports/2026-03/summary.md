@@ -10,12 +10,16 @@ Monthly index of audit report runs under `docs/audits/reports/2026-03/`.
 - [2026-03-16](2026-03-16/summary.md)
 - [2026-03-24](2026-03-24/summary.md)
 - [2026-03-25](2026-03-25/summary.md)
+- [2026-03-29](2026-03-29/summary.md)
 
 ## Month Status
 
 - Status: `partial` (month in progress)
-- Latest note: `2026-03-25` first `wasm-footprint` baseline for `0.17` recorded a heavy shared-runtime floor across leaf canisters and a clear `root` bundle-canister outlier (`11267613` shrunk bytes), establishing the measurement base for root payload decomposition and `0.18` cutover inputs.
+- Latest note: `2026-03-29` `capability-surface-2` rerun tightened the method, refreshed all generated `.did` files, reduced the day risk score to `2 / 10`, and isolated the remaining notable signal to the `CapabilityProofBlob` compatibility change plus the persistent `root`/`wasm_store` outliers.
 - Carry-forward follow-up:
+  - document the `CapabilityProofBlob` wire-shape change in release or migration notes
+  - track `minimal.did` shared-method count and `root.did` admin count as explicit capability-surface guardrails in future runs
+  - keep new control-plane additions root-local unless they clearly need to widen shared DTO/protocol families
   - keep token trust-chain stage order fixed (`structure -> current_proof -> signatures`) in the next `token-trust-chain` recurring run
   - keep shrinking direct `DelegationProof` dependence outside explicit boundary seams
   - keep `api/auth/mod.rs` from re-accumulating pure trust helpers now that those decisions live in ops

@@ -162,7 +162,7 @@ macro_rules! canic_endpoints_auth_attestation {
         }
 
         #[cfg(not(canic_is_root))]
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[canic_update(internal, requires(caller::is_root()))]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {

@@ -5,9 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.19.x] - 2026-03-30 - Audit Baseline Reset
+
+- `0.19.0` starts the next audit line with a clean baseline after the `0.18` bootstrap/build/capability cleanup, recording the current release wasm footprint (`minimal`/`app`/`scale`/`shard` at `2489858` bytes, `root` at `3730865`, `wasm_store` at `2823075`) and the refreshed capability-surface baseline before further reductions begin.
+
+See detailed breakdown:
+[docs/changelog/0.19.md](docs/changelog/0.19.md)
+
+---
+
 ## [0.18.x] - 2026-03-27 - Template Store and Chunked Install Cutover
 
-- `0.18.7` stops stale non-root canisters from spamming root with failed attestation-key refreshes after they fall out of the subnet registry, and fixes the cached `.did` invalidation rules so per-canister release builds stop retriggering whole-workspace rebuilds during `dfx build --all`.
+- `0.18.7` stops stale non-root canisters from spamming root with failed attestation-key refreshes after they fall out of the subnet registry, fixes cached `.did` invalidation so per-canister release builds stop retriggering whole-workspace rebuilds during `dfx build --all`, and compacts shared capability-proof wire payloads behind `CapabilityProofBlob` so non-root interfaces carry less proof-shape fan-out.
 - `0.18.6` removes the remaining env-driven eager-init build split, keeps release builds single-pass while caching `.did` files independently of release wasm, stages the full config-defined release set into `root` before local smoke/bootstrap flows continue, adds root-owned bootstrap debug visibility with human-readable wasm sizes, and fixes the local smoke path so it calls the `test` canister that `root` actually created and registered.
 - `0.18.5` keeps `ICRC-21` behind role-scoped compile-time gating, trims the shared generated surface by making `canic_app_state` and `canic_subnet_state` root-only, removes embedded release payloads from both `root` and `wasm_store`, and hardens bundle builds so profile-mismatched `.dfx/local` artifacts are no longer silently reused when the AA pipeline stages releases through `root`.
 - `0.18.4` gives `root` a single controller-facing `canic_wasm_store_overview` read endpoint built entirely from root-owned state so operators can inspect all tracked wasm stores without direct store queries, consolidates the older split wasm-store status queries into that overview surface, and tightens the local release flow so `make patch` / `make minor` skip PocketIC-heavy tests, rely on an already-running `dfx`, and stop failing plain Cargo/clippy builds when `.dfx` release artifacts have not been generated yet.

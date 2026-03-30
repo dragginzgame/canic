@@ -35,14 +35,19 @@ use crate::{
 pub struct RuntimeWorkflow;
 
 impl RuntimeWorkflow {
-    /// Start timers that should run on all canisters.
+    /// Start timers that should run on all non-root canisters.
     pub fn start_all() {
-        log_delegation_proof_cache_policy();
-        workflow::runtime::attestation::AttestationKeyCacheWorkflow::start();
-        workflow::runtime::cycles::CycleTrackerWorkflow::start();
         workflow::runtime::intent::IntentCleanupWorkflow::start();
         workflow::runtime::log::LogRetentionWorkflow::start();
         workflow::runtime::random::RandomWorkflow::start();
+        workflow::runtime::cycles::CycleTrackerWorkflow::start();
+    }
+
+    /// Start timers that should run on delegated-auth-aware non-root canisters.
+    pub fn start_all_with_attestation_cache() {
+        log_delegation_proof_cache_policy();
+        workflow::runtime::attestation::AttestationKeyCacheWorkflow::start();
+        Self::start_all();
     }
 
     /// Start timers that should run only on root canisters.
@@ -237,6 +242,22 @@ pub fn init_nonroot_canister(
     canister_role: CanisterRole,
     payload: CanisterInitPayload,
 ) -> Result<(), InternalError> {
+    init_nonroot_canister_internal(canister_role, payload, false)
+}
+
+pub fn init_nonroot_canister_with_attestation_cache(
+    canister_role: CanisterRole,
+    payload: CanisterInitPayload,
+) -> Result<(), InternalError> {
+    init_nonroot_canister_internal(canister_role, payload, true)
+}
+
+// Initialize a non-root canister and start only the runtime services it needs.
+fn init_nonroot_canister_internal(
+    canister_role: CanisterRole,
+    payload: CanisterInitPayload,
+    with_attestation_cache: bool,
+) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     let memory_summary = MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
@@ -278,7 +299,11 @@ pub fn init_nonroot_canister(
     AppStateOps::init_mode(app_mode);
 
     // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all();
+    if with_attestation_cache {
+        RuntimeWorkflow::start_all_with_attestation_cache();
+    } else {
+        RuntimeWorkflow::start_all();
+    }
 
     Ok(())
 }
@@ -290,6 +315,22 @@ pub fn init_nonroot_canister(
 pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     memory_summary: MemoryRegistryInitSummary,
+) {
+    post_upgrade_nonroot_canister_after_memory_init_internal(canister_role, memory_summary, false);
+}
+
+pub fn post_upgrade_nonroot_canister_after_memory_init_with_attestation_cache(
+    canister_role: CanisterRole,
+    memory_summary: MemoryRegistryInitSummary,
+) {
+    post_upgrade_nonroot_canister_after_memory_init_internal(canister_role, memory_summary, true);
+}
+
+// Restore post-upgrade runtime services for a non-root canister.
+fn post_upgrade_nonroot_canister_after_memory_init_internal(
+    canister_role: CanisterRole,
+    memory_summary: MemoryRegistryInitSummary,
+    with_attestation_cache: bool,
 ) {
     crate::log::set_ready();
     crate::log!(
@@ -303,7 +344,11 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
 
     // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all();
+    if with_attestation_cache {
+        RuntimeWorkflow::start_all_with_attestation_cache();
+    } else {
+        RuntimeWorkflow::start_all();
+    }
 }
 
 pub fn init_memory_registry_post_upgrade() -> Result<MemoryRegistryInitSummary, InternalError> {
