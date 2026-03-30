@@ -1,0 +1,9 @@
+mod dfx;
+mod wasm;
+mod workspace;
+
+pub use dfx::{artifact_is_fresh_against_inputs, build_dfx_all, dfx_artifact_ready};
+pub use wasm::{
+    WasmBuildProfile, build_wasm_canisters, read_wasm, wasm_artifacts_ready, wasm_path,
+};
+pub use workspace::{prebuilt_wasm_dir, test_target_dir, workspace_root_for};

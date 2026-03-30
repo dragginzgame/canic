@@ -35,5 +35,5 @@ perf.data.old
 
 .env
 .tmp
-artifacts
+/artifacts/
 target/*

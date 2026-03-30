@@ -1,0 +1,116 @@
+{
+  "scope": "wasm-footprint",
+  "profile": "wasm-release",
+  "canisters": [
+    {
+      "canister": "app",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3214731,
+      "built_wasm_gz_bytes": 922237,
+      "shrunk_wasm_bytes": 3214731,
+      "shrunk_wasm_gz_bytes": 922237,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "blank",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3231312,
+      "built_wasm_gz_bytes": 929185,
+      "shrunk_wasm_bytes": 3231312,
+      "shrunk_wasm_gz_bytes": 929185,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3295124,
+      "built_wasm_gz_bytes": 955472,
+      "shrunk_wasm_bytes": 3295124,
+      "shrunk_wasm_gz_bytes": 955472,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_shard",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3244688,
+      "built_wasm_gz_bytes": 933616,
+      "shrunk_wasm_bytes": 3244688,
+      "shrunk_wasm_gz_bytes": 933616,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3239196,
+      "built_wasm_gz_bytes": 931578,
+      "shrunk_wasm_bytes": 3239196,
+      "shrunk_wasm_gz_bytes": 931578,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3214731,
+      "built_wasm_gz_bytes": 921951,
+      "shrunk_wasm_bytes": 3214731,
+      "shrunk_wasm_gz_bytes": 921951,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "shard_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3299910,
+      "built_wasm_gz_bytes": 955333,
+      "shrunk_wasm_bytes": 3299910,
+      "shrunk_wasm_gz_bytes": 955333,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "shard",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3214731,
+      "built_wasm_gz_bytes": 921652,
+      "shrunk_wasm_bytes": 3214731,
+      "shrunk_wasm_gz_bytes": 921652,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "test",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3224575,
+      "built_wasm_gz_bytes": 924153,
+      "shrunk_wasm_bytes": 3224575,
+      "shrunk_wasm_gz_bytes": 924153,
+      "shrink_delta_bytes": 0,
+      "shrink_delta_percent": 0.00,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "root",
+      "kind": "bundle-canister",
+      "built_wasm_bytes": 11893405,
+      "built_wasm_gz_bytes": 9360373,
+      "shrunk_wasm_bytes": 11267613,
+      "shrunk_wasm_gz_bytes": 8725891,
+      "shrink_delta_bytes": 625792,
+      "shrink_delta_percent": 5.26,
+      "baseline_delta_bytes": "N/A"
+    }
+  ]
+}
