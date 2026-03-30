@@ -17,18 +17,20 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
-use canic_testkit::pic::{Pic, pic};
+use canic_testkit::{
+    artifacts::{WasmBuildProfile, build_dfx_all, dfx_artifact_ready, workspace_root_for},
+    pic::{ControllerSnapshots, Pic, pic},
+};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     env, fs, io,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
-    process::Command,
+    path::PathBuf,
     sync::{Mutex, MutexGuard, Once, TryLockError},
     thread,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 /// Environment variable override for providing a pre-built root canister wasm.
@@ -36,6 +38,7 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
+const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const CANISTER_WASM_ROOT_RELATIVE: &str = "../../.dfx/local/canisters";
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
@@ -70,16 +73,7 @@ pub struct RootSetupState {
     pub pic: Pic,
     pub root_id: Principal,
     pub subnet_directory: HashMap<CanisterRole, Principal>,
-    baseline_snapshots: Option<HashMap<Principal, BaselineSnapshot>>,
-}
-
-///
-/// BaselineSnapshot
-///
-
-struct BaselineSnapshot {
-    snapshot_id: Vec<u8>,
-    sender: Option<Principal>,
+    baseline_snapshots: Option<ControllerSnapshots>,
 }
 
 ///
@@ -212,7 +206,10 @@ fn initialize_setup(root_wasm: Vec<u8>) -> RootSetupState {
             let subnet_directory = fetch_subnet_directory(&pic, root_id);
             wait_for_children_ready(&pic, &subnet_directory);
             let baseline_snapshots = if root_setup_cache_enabled() {
-                capture_baseline_snapshots(&pic, root_id, &subnet_directory)
+                pic.capture_controller_snapshots(
+                    root_id,
+                    std::iter::once(root_id).chain(subnet_directory.values().copied()),
+                )
             } else {
                 None
             };
@@ -245,102 +242,11 @@ fn restore_cached_setup(state: &RootSetupState) {
         return;
     };
 
-    for (canister_id, baseline) in baselines {
-        restore_canister_snapshot_with_sender(&state.pic, state.root_id, *canister_id, baseline);
-    }
-
+    state
+        .pic
+        .restore_controller_snapshots(state.root_id, baselines);
     wait_for_bootstrap(&state.pic, state.root_id);
     wait_for_children_ready(&state.pic, &state.subnet_directory);
-}
-
-fn capture_baseline_snapshots(
-    pic: &Pic,
-    root_id: Principal,
-    subnet_directory: &HashMap<CanisterRole, Principal>,
-) -> Option<HashMap<Principal, BaselineSnapshot>> {
-    let mut tracked = HashSet::new();
-    tracked.insert(root_id);
-    tracked.extend(subnet_directory.values().copied());
-
-    let mut snapshots = HashMap::new();
-    for canister_id in tracked {
-        let Some(baseline) = try_take_canister_snapshot_with_sender(pic, root_id, canister_id)
-        else {
-            eprintln!(
-                "setup_root: snapshot capture unavailable for {canister_id}; disabling root setup cache"
-            );
-            return None;
-        };
-        snapshots.insert(canister_id, baseline);
-    }
-
-    Some(snapshots)
-}
-
-fn try_take_canister_snapshot_with_sender(
-    pic: &Pic,
-    root_id: Principal,
-    canister_id: Principal,
-) -> Option<BaselineSnapshot> {
-    let candidates = snapshot_sender_candidates(root_id, canister_id);
-    let mut last_err = None;
-
-    for sender in candidates {
-        match pic.take_canister_snapshot(canister_id, sender, None) {
-            Ok(snapshot) => {
-                return Some(BaselineSnapshot {
-                    snapshot_id: snapshot.id,
-                    sender,
-                });
-            }
-            Err(err) => last_err = Some((sender, err)),
-        }
-    }
-
-    if let Some((sender, err)) = last_err {
-        eprintln!(
-            "failed to capture canister snapshot for {canister_id} using sender {sender:?}: {err}"
-        );
-    }
-    None
-}
-
-// Prefer the likely controller sender first to avoid expected management-call
-// rejections being printed by PocketIC during snapshot capture.
-fn snapshot_sender_candidates(
-    root_id: Principal,
-    canister_id: Principal,
-) -> [Option<Principal>; 2] {
-    if canister_id == root_id {
-        [None, Some(root_id)]
-    } else {
-        [Some(root_id), None]
-    }
-}
-
-fn restore_canister_snapshot_with_sender(
-    pic: &Pic,
-    root_id: Principal,
-    canister_id: Principal,
-    baseline: &BaselineSnapshot,
-) {
-    let fallback_sender = if baseline.sender.is_some() {
-        None
-    } else {
-        Some(root_id)
-    };
-    let candidates = [baseline.sender, fallback_sender];
-    let mut last_err = None;
-
-    for sender in candidates {
-        match pic.load_canister_snapshot(canister_id, sender, baseline.snapshot_id.clone()) {
-            Ok(()) => return,
-            Err(err) => last_err = Some((sender, err)),
-        }
-    }
-
-    let (sender, err) = last_err.expect("snapshot restore must have at least one sender attempt");
-    panic!("failed to restore canister snapshot for {canister_id} using sender {sender:?}: {err}");
 }
 
 fn ensure_local_artifacts_built() {
@@ -349,134 +255,40 @@ fn ensure_local_artifacts_built() {
 
         // `make test` already builds canisters before `cargo test`; avoid redundant
         // `dfx build --all` work unless artifacts are missing.
-        if local_artifacts_ready(&workspace_root) {
+        if dfx_artifact_ready(
+            &workspace_root,
+            ROOT_WASM_ARTIFACT_RELATIVE,
+            ROOT_WASM_WATCH_PATHS,
+        ) {
             return;
         }
 
-        let output = run_dfx_build_with_lock(&workspace_root);
-        assert!(
-            output.status.success(),
-            "dfx build --all failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        build_dfx_all(
+            &workspace_root,
+            DFX_BUILD_LOCK_RELATIVE,
+            "local",
+            WasmBuildProfile::Debug,
         );
     });
 }
 
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .expect("workspace root")
-}
-
-fn local_artifacts_ready(workspace_root: &Path) -> bool {
-    let root_wasm = workspace_root.join(".dfx/local/canisters/root/root.wasm.gz");
-    match fs::metadata(&root_wasm) {
-        Ok(meta) if meta.is_file() && meta.len() > 0 => {
-            artifact_is_fresh(workspace_root, &root_wasm).unwrap_or(false)
-        }
-        _ => false,
-    }
-}
-
-// Treat prebuilt `.dfx` artifacts as valid only when they are newer than the
-// source/config inputs that shape the installed root topology.
-fn artifact_is_fresh(workspace_root: &Path, artifact_path: &Path) -> io::Result<bool> {
-    let artifact_mtime = fs::metadata(artifact_path)?.modified()?;
-    let newest_input = newest_watched_input_mtime(workspace_root)?;
-    Ok(newest_input <= artifact_mtime)
-}
-
-// Walk the watched root build inputs and return the newest modification time.
-fn newest_watched_input_mtime(workspace_root: &Path) -> io::Result<SystemTime> {
-    let mut newest = SystemTime::UNIX_EPOCH;
-
-    for relative in ROOT_WASM_WATCH_PATHS {
-        let path = workspace_root.join(relative);
-        newest = newest.max(newest_path_mtime(&path)?);
-    }
-
-    Ok(newest)
-}
-
-// Recursively compute the newest modification time under a watched file or directory.
-fn newest_path_mtime(path: &Path) -> io::Result<SystemTime> {
-    let metadata = fs::metadata(path)?;
-    let mut newest = metadata.modified()?;
-
-    if metadata.is_dir() {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            newest = newest.max(newest_path_mtime(&entry.path())?);
-        }
-    }
-
-    Ok(newest)
-}
-
-fn run_dfx_build_with_lock(workspace_root: &Path) -> std::process::Output {
-    let lock_file = workspace_root.join(DFX_BUILD_LOCK_RELATIVE);
-    if let Some(parent) = lock_file.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-
-    // Use a file lock so multiple integration-test binaries do not race on
-    // `.dfx` artifacts and Cargo's shared target directories.
-    match Command::new("flock")
-        .current_dir(workspace_root)
-        .arg(lock_file.as_os_str())
-        .arg("dfx")
-        .env("DFX_NETWORK", "local")
-        .env("RELEASE", "0")
-        .args(["build", "--all"])
-        .output()
-    {
-        Ok(output) => output,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => run_dfx_build(workspace_root),
-        Err(err) => panic!("failed to run `flock` for `dfx build --all`: {err}"),
-    }
-}
-
-fn run_dfx_build(workspace_root: &Path) -> std::process::Output {
-    Command::new("dfx")
-        .current_dir(workspace_root)
-        .env("DFX_NETWORK", "local")
-        .env("RELEASE", "0")
-        .args(["build", "--all"])
-        .output()
-        .expect("failed to run `dfx build --all`")
+    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {
-    for _ in 0..BOOTSTRAP_TICK_LIMIT {
-        pic.tick();
-        if fetch_ready(pic, root_id) {
-            return;
-        }
-    }
-
-    dump_canister_debug(pic, root_id, "root bootstrap timeout");
-    panic!("root bootstrap did not signal readiness after {BOOTSTRAP_TICK_LIMIT} ticks");
+    pic.wait_for_ready(root_id, BOOTSTRAP_TICK_LIMIT, "root bootstrap");
 }
 
 fn wait_for_children_ready(pic: &Pic, subnet_directory: &HashMap<CanisterRole, Principal>) {
-    let child_pids: Vec<Principal> = subnet_directory
-        .iter()
-        .filter(|(role, _)| !role.is_root())
-        .map(|(_, pid)| *pid)
-        .collect();
-
-    for _ in 0..BOOTSTRAP_TICK_LIMIT {
-        pic.tick();
-        let all_children_ready = child_pids.iter().all(|pid| fetch_ready(pic, *pid));
-
-        if all_children_ready {
-            return;
-        }
-    }
-
-    panic!("children did not become ready after {BOOTSTRAP_TICK_LIMIT} ticks");
+    pic.wait_for_all_ready(
+        subnet_directory
+            .iter()
+            .filter(|(role, _)| !role.is_root())
+            .map(|(_, pid)| *pid),
+        BOOTSTRAP_TICK_LIMIT,
+        "root children bootstrap",
+    );
 }
 
 fn stage_root_release_set(pic: &Pic, root_id: Principal) {
@@ -660,45 +472,6 @@ fn load_release_set_artifacts() -> Vec<(CanisterRole, Vec<u8>)> {
     artifacts
 }
 
-fn load_wasm_store_wasm() -> Option<Vec<u8>> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let path = manifest_dir
-        .join(CANISTER_WASM_ROOT_RELATIVE)
-        .join("wasm_store/wasm_store.wasm.gz");
-
-    match fs::read(&path) {
-        Ok(bytes) => Some(bytes),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => None,
-        Err(err) => panic!(
-            "failed to read wasm_store wasm at {}: {}",
-            path.display(),
-            err
-        ),
-    }
-}
-
-fn dump_canister_debug(pic: &Pic, canister_id: Principal, context: &str) {
-    eprintln!("{context}: debug for canister {canister_id}");
-
-    match pic.canister_status(canister_id, None) {
-        Ok(status) => eprintln!("canister_status: {status:?}"),
-        Err(err) => eprintln!("canister_status failed: {err:?}"),
-    }
-
-    match pic.fetch_canister_logs(canister_id, Principal::anonymous()) {
-        Ok(records) => {
-            if records.is_empty() {
-                eprintln!("canister logs: <empty>");
-            } else {
-                for record in records {
-                    eprintln!("canister log: {record:?}");
-                }
-            }
-        }
-        Err(err) => eprintln!("fetch_canister_logs failed: {err:?}"),
-    }
-}
-
 /// Fetch the subnet directory from root as a role → principal map.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
     let page: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
@@ -718,14 +491,4 @@ fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole
         .into_iter()
         .map(|entry| (entry.role, entry.pid))
         .collect()
-}
-
-fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
-    match pic.query_call(canister_id, protocol::CANIC_READY, ()) {
-        Ok(ready) => ready,
-        Err(err) => {
-            dump_canister_debug(pic, canister_id, "query canic_ready failed");
-            panic!("query canic_ready failed: {err:?}");
-        }
-    }
 }

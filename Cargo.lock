@@ -372,7 +372,6 @@ version = "0.19.2"
 dependencies = [
  "candid",
  "canic",
- "canic-control-plane",
  "canic-internal",
  "ic-cdk",
  "pocket-ic",
@@ -459,7 +458,6 @@ version = "0.19.2"
 dependencies = [
  "candid",
  "canic",
- "canic-control-plane",
  "ic-cdk",
  "serde",
 ]

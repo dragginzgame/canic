@@ -1,9 +1,10 @@
 use canic::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     dto::error::Error,
-    eager_static, ic_memory, impl_storable_bounded,
+    eager_static, ic_memory,
+    ids::{WasmStoreGcMode, WasmStoreGcStatus},
+    impl_storable_bounded,
 };
-use canic_control_plane::ids::{WasmStoreGcMode, WasmStoreGcStatus};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -138,7 +139,7 @@ fn transition_record(
 mod tests {
     use super::{WasmStoreGcStateRecord, transition_record};
     use canic::dto::error::ErrorCode;
-    use canic_control_plane::ids::WasmStoreGcMode;
+    use canic::ids::WasmStoreGcMode;
 
     #[test]
     fn transition_record_advances_monotonically() {

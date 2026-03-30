@@ -106,7 +106,7 @@ macro_rules! __canic_start_root_lifecycle_core {
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            ::canic_control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 identity,
                 config,
                 config_source,
@@ -114,7 +114,7 @@ macro_rules! __canic_start_root_lifecycle_core {
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             $crate::__canic_start_root_user_timers!();
         }
 
@@ -122,14 +122,14 @@ macro_rules! __canic_start_root_lifecycle_core {
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            ::canic_control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,
                 config_source,
                 config_path,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
-            ::canic_control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
             $crate::__canic_start_root_upgrade_timers!();
         }
     };

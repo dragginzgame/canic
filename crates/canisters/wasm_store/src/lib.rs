@@ -8,13 +8,13 @@
 mod gc_state;
 
 use canic::{Error, api::canister::CanisterRole, prelude::*};
-use canic_control_plane::{
-    api::template::WasmStoreApi,
+use canic::{
+    api::canister::template::WasmStoreApi,
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetPrepareInput, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
     },
-    ids::{TemplateId, TemplateVersion},
+    ids::{TemplateId, TemplateVersion, WasmStoreGcMode},
 };
 //
 // CANIC
@@ -91,11 +91,11 @@ async fn canic_wasm_store_complete_gc() -> Result<(), Error> {
     let now_secs = canic::cdk::api::time() / 1_000_000_000;
     let current = gc_state::status();
 
-    if current.mode == canic_control_plane::ids::WasmStoreGcMode::Complete {
+    if current.mode == WasmStoreGcMode::Complete {
         return Ok(());
     }
 
-    if current.mode != canic_control_plane::ids::WasmStoreGcMode::InProgress {
+    if current.mode != WasmStoreGcMode::InProgress {
         return Err(Error::conflict(format!(
             "wasm store gc transition {:?} -> Complete is not allowed",
             current.mode

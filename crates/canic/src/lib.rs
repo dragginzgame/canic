@@ -18,6 +18,8 @@ pub mod __internal {
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
+    #[cfg(feature = "control-plane")]
+    pub use canic_control_plane as control_plane;
     pub use canic_core as core;
 
     pub mod instructions {
@@ -29,12 +31,24 @@ pub mod __internal {
 // Public data contracts
 // -----------------------------------------------------------------------------
 // DTOs and IDs are stable, versioned contracts intended for downstream use.
-pub use canic_core::dto;
+pub mod dto {
+    pub use canic_core::dto::*;
+
+    #[cfg(feature = "control-plane")]
+    pub mod template {
+        pub use canic_control_plane::dto::template::*;
+    }
+}
 
 pub mod ids {
     pub use crate::__internal::core::ids::{
         AccessMetricKind, BuildNetwork, CanisterRole, EndpointCall, EndpointCallKind, EndpointId,
         IntentResourceKey, SubnetRole, SystemMetricKind, cap,
+    };
+
+    #[cfg(feature = "control-plane")]
+    pub use canic_control_plane::ids::{
+        TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode, WasmStoreGcStatus,
     };
 }
 
@@ -154,6 +168,14 @@ pub mod api {
 
         pub mod placement {
             pub use crate::__internal::core::api::placement::scaling::ScalingApi;
+        }
+
+        #[cfg(feature = "control-plane")]
+        pub mod template {
+            pub use canic_control_plane::api::template::WasmStoreApi as EmbeddedTemplateApi;
+            pub use canic_control_plane::api::template::{
+                WasmStoreApi, WasmStoreBootstrapApi, WasmStorePublicationApi,
+            };
         }
     }
 
