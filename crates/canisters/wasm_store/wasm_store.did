@@ -37,8 +37,16 @@ type CanisterInitPayload = record {
 // 
 type CapabilityProof = variant {
   Structural;
-  DelegatedGrant : DelegatedGrantProof;
-  RoleAttestation : RoleAttestationProof;
+  DelegatedGrant : CapabilityProofBlob;
+  RoleAttestation : CapabilityProofBlob;
+};
+// 
+// CapabilityProofBlob
+// 
+type CapabilityProofBlob = record {
+  capability_hash : blob;
+  proof_version : nat16;
+  payload : blob;
 };
 // 
 // CapabilityRequestMetadata
@@ -104,37 +112,6 @@ type CyclesRequest = record {
 // Result of transferring cycles to a child canister
 // 
 type CyclesResponse = record { cycles_transferred : nat };
-// 
-// DelegatedGrant
-// 
-type DelegatedGrant = record {
-  issued_at : nat64;
-  subject : principal;
-  quota : nat64;
-  audience : vec principal;
-  epoch : nat64;
-  scope : DelegatedGrantScope;
-  issuer : principal;
-  capability_hash : blob;
-  expires_at : nat64;
-};
-// 
-// DelegatedGrantProof
-// 
-type DelegatedGrantProof = record {
-  grant_sig : blob;
-  key_id : nat32;
-  grant : DelegatedGrant;
-  capability_hash : blob;
-  proof_version : nat16;
-};
-// 
-// DelegatedGrantScope
-// 
-type DelegatedGrantScope = record {
-  "service" : CapabilityService;
-  capability_family : text;
-};
 // 
 // DelegationCert
 // 
@@ -410,14 +387,6 @@ type RoleAttestation = record {
   audience : opt principal;
   epoch : nat64;
   expires_at : nat64;
-};
-// 
-// RoleAttestationProof
-// 
-type RoleAttestationProof = record {
-  attestation : SignedRoleAttestation;
-  capability_hash : blob;
-  proof_version : nat16;
 };
 // 
 // RoleAttestationRequest

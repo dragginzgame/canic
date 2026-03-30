@@ -34,27 +34,33 @@ impl CycleTrackerWorkflow {
     /// Start recurring cycle tracking.
     /// Safe to call multiple times.
     pub fn start() {
+        Self::start_internal(true);
+    }
+
+    // Start the recurring cycle tracker with the requested policy surface.
+    fn start_internal(with_auto_topup: bool) {
         let _ = TimerWorkflow::set_guarded_interval(
             &TIMER,
             WORKFLOW_INIT_DELAY,
             "cycles:init",
-            || async {
-                Self::track();
+            move || async move {
+                Self::track_internal(with_auto_topup);
             },
             TRACKER_INTERVAL,
             "cycles:interval",
-            || async {
-                Self::track();
+            move || async move {
+                Self::track_internal(with_auto_topup);
                 let _ = Self::purge();
             },
         );
     }
 
-    pub fn track() {
+    // Record cycle balance and optionally evaluate auto-top-up policy.
+    fn track_internal(with_auto_topup: bool) {
         let ts = IcOps::now_secs();
         let cycles = MgmtOps::canister_cycle_balance();
 
-        if !EnvOps::is_root() {
+        if with_auto_topup && !EnvOps::is_root() {
             Self::evaluate_policies(cycles.clone());
         }
 

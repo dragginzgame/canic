@@ -3,7 +3,8 @@ use crate::{
     dto::{
         auth::{RoleAttestation, SignedRoleAttestation},
         capability::{
-            CAPABILITY_VERSION_V1, DelegatedGrant, DelegatedGrantScope, PROOF_VERSION_V1,
+            CAPABILITY_VERSION_V1, CapabilityProof, DelegatedGrant, DelegatedGrantProof,
+            DelegatedGrantScope, PROOF_VERSION_V1, RoleAttestationProof,
         },
         rpc::{CyclesRequest, RootRequestMetadata},
     },
@@ -171,6 +172,22 @@ fn sample_delegated_grant_proof(
     }
 }
 
+fn role_attestation_capability_proof(proof_version: u16) -> CapabilityProof {
+    RoleAttestationProof {
+        proof_version,
+        capability_hash: [0u8; 32],
+        attestation: sample_signed_attestation(),
+    }
+    .try_into()
+    .expect("role attestation proof should encode")
+}
+
+fn delegated_grant_capability_proof(proof: DelegatedGrantProof) -> CapabilityProof {
+    proof
+        .try_into()
+        .expect("delegated grant proof should encode")
+}
+
 fn sign_delegated_grant(seed: u8, grant: &DelegatedGrant) -> (Vec<u8>, Vec<u8>) {
     let signing_key = SigningKey::from_bytes((&[seed; 32]).into()).expect("signing key");
     let signature: Signature = signing_key
@@ -185,14 +202,29 @@ fn sign_delegated_grant(seed: u8, grant: &DelegatedGrant) -> (Vec<u8>, Vec<u8>) 
 }
 
 #[test]
-fn validate_root_capability_envelope_rejects_service_mismatch() {
-    let err = validate_root_capability_envelope(
-        CapabilityService::Cycles,
-        CAPABILITY_VERSION_V1,
-        &CapabilityProof::Structural,
-    )
-    .expect_err("service mismatch must fail");
-    assert!(err.message.contains("service"));
+fn role_attestation_blob_round_trips() {
+    let proof = RoleAttestationProof {
+        proof_version: PROOF_VERSION_V1,
+        capability_hash: [7u8; 32],
+        attestation: sample_signed_attestation(),
+    };
+
+    let blob = super::proof::encode_role_attestation_blob(&proof).expect("encode blob");
+    let decoded = super::proof::decode_role_attestation_blob(&blob).expect("decode blob");
+
+    assert_eq!(decoded, proof);
+}
+
+#[test]
+fn delegated_grant_blob_rejects_header_mismatch() {
+    let request = sample_request(10);
+    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    let mut blob = super::proof::encode_delegated_grant_blob(&proof).expect("encode blob");
+    blob.capability_hash = [9u8; 32];
+
+    let err =
+        super::proof::decode_delegated_grant_blob(&blob).expect_err("header mismatch must fail");
+    assert!(err.message.contains("wire header"));
 }
 
 #[test]
@@ -237,11 +269,7 @@ fn validate_nonroot_cycles_envelope_rejects_non_structural_proof() {
         CapabilityService::Root,
         CAPABILITY_VERSION_V1,
         &sample_request(10),
-        &CapabilityProof::RoleAttestation(crate::dto::capability::RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: [0u8; 32],
-            attestation: sample_signed_attestation(),
-        }),
+        &role_attestation_capability_proof(PROOF_VERSION_V1),
     )
     .expect_err("non-root path must reject non-structural proof");
     assert!(err.message.contains("only supports structural proof mode"));
@@ -263,11 +291,7 @@ fn validate_root_capability_envelope_rejects_role_attestation_proof_version_mism
     let err = validate_root_capability_envelope(
         CapabilityService::Root,
         CAPABILITY_VERSION_V1,
-        &CapabilityProof::RoleAttestation(crate::dto::capability::RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1 + 1,
-            capability_hash: [0u8; 32],
-            attestation: sample_signed_attestation(),
-        }),
+        &role_attestation_capability_proof(PROOF_VERSION_V1 + 1),
     )
     .expect_err("unsupported role proof version must fail");
     assert!(err.message.contains("proof_version"));
@@ -282,7 +306,7 @@ fn validate_root_capability_envelope_rejects_delegated_grant_proof_version_misma
     let err = validate_root_capability_envelope(
         CapabilityService::Root,
         CAPABILITY_VERSION_V1,
-        &CapabilityProof::DelegatedGrant(proof),
+        &delegated_grant_capability_proof(proof),
     )
     .expect_err("unsupported delegated grant proof version must fail");
     assert!(err.message.contains("proof_version"));

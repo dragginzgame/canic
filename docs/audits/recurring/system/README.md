@@ -1,0 +1,43 @@
+# System Audit Suite
+
+This directory contains recurring architecture and drift audits for the core
+Canic system.
+
+## Standard Starter Set
+
+Use this set for repeatable "code cleanliness / architecture health" audit
+rounds:
+
+1. [layer-violations.md](layer-violations.md)
+2. [capability-surface.md](capability-surface.md)
+3. [complexity-accretion.md](complexity-accretion.md)
+4. [wasm-footprint.md](wasm-footprint.md)
+
+These four audits cover:
+
+- layering and dependency direction
+- public/internal capability surface growth
+- branch/enum/concept accretion
+- shipped wasm output and retained-size drift
+
+## Additional System Audits
+
+- [bootstrap-lifecycle-symmetry.md](bootstrap-lifecycle-symmetry.md)
+- [change-friction.md](change-friction.md)
+
+## Usage Guidance
+
+- Use the standard starter set for broad architectural review rounds.
+- Use `bootstrap-lifecycle-symmetry` after lifecycle/bootstrap changes.
+- Use `change-friction` during refactor planning or release-hardening windows.
+
+## Reporting Discipline
+
+Store outputs under:
+
+- `docs/audits/reports/YYYY-MM/YYYY-MM-DD/<scope>.md`
+
+Follow:
+
+- [../../AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+- [../../META-AUDIT.md](../../META-AUDIT.md)

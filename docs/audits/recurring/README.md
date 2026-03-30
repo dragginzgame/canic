@@ -29,3 +29,16 @@ All recurring audit templates must require:
 Structural hotspot and hub-pressure sections must be grounded in repository scans
 and include command evidence (for example `rg '^use '`, cross-layer import scans,
 `git log --name-only -n 20`, and symbol discovery scans).
+
+## Recommended Starter Bundle
+
+For general architecture-health audit rounds, start with:
+
+- [system/layer-violations.md](system/layer-violations.md)
+- [system/capability-surface.md](system/capability-surface.md)
+- [system/complexity-accretion.md](system/complexity-accretion.md)
+- [system/wasm-footprint.md](system/wasm-footprint.md)
+
+See also:
+
+- [system/README.md](system/README.md)

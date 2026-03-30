@@ -65,6 +65,18 @@ impl DerefMut for SerialPic {
     }
 }
 
+fn encode_role_attestation_capability_proof(proof: RoleAttestationProof) -> CapabilityProof {
+    proof
+        .try_into()
+        .expect("role attestation proof should encode")
+}
+
+fn encode_delegated_grant_capability_proof(proof: DelegatedGrantProof) -> CapabilityProof {
+    proof
+        .try_into()
+        .expect("delegated grant proof should encode")
+}
+
 #[test]
 fn role_attestation_issue_and_verify_happy_path() {
     let workspace_root = workspace_root();
@@ -815,7 +827,7 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: create_verifier_request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &create_verifier_request),
             attestation: issued_attestation,
@@ -1037,7 +1049,7 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued_attestation.clone(),
@@ -1503,7 +1515,7 @@ fn capability_endpoint_role_attestation_proof_happy_path() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1554,7 +1566,7 @@ fn capability_endpoint_rejects_expired_role_attestation() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1605,7 +1617,7 @@ fn capability_endpoint_rejects_audience_mismatch() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1661,7 +1673,7 @@ fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1717,7 +1729,7 @@ fn capability_endpoint_policy_denial_is_not_replay_cached() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued.clone(),
@@ -1728,7 +1740,7 @@ fn capability_endpoint_policy_denial_is_not_replay_cached() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1802,7 +1814,7 @@ fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -1855,7 +1867,7 @@ fn capability_endpoint_rejects_tampered_signature() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,
@@ -2008,7 +2020,7 @@ fn capability_endpoint_rejects_delegated_grant_scope_mismatch() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request,
-        proof: CapabilityProof::DelegatedGrant(DelegatedGrantProof {
+        proof: encode_delegated_grant_capability_proof(DelegatedGrantProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash,
             grant: DelegatedGrant {
@@ -2073,7 +2085,7 @@ fn capability_endpoint_rejects_capability_hash_mismatch() {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request,
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: [0u8; 32],
             attestation: issued,
@@ -2440,7 +2452,7 @@ fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Pr
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(RoleAttestationProof {
+        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: root_capability_hash(root_id, &request),
             attestation: issued,

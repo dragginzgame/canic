@@ -11,6 +11,21 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
+            #[cfg(any(
+                canic_accepts_delegation_signer_proof,
+                canic_accepts_delegation_verifier_proof
+            ))]
+            $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister_before_bootstrap_with_attestation_cache(
+                $canister_role,
+                payload,
+                config_str,
+                config_path,
+            );
+
+            #[cfg(not(any(
+                canic_accepts_delegation_signer_proof,
+                canic_accepts_delegation_verifier_proof
+            )))]
             $crate::__internal::core::api::lifecycle::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
@@ -27,6 +42,20 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn post_upgrade() {
             let (config_str, config_path) = $crate::__canic_load_config!();
 
+            #[cfg(any(
+                canic_accepts_delegation_signer_proof,
+                canic_accepts_delegation_verifier_proof
+            ))]
+            $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
+                $canister_role,
+                config_str,
+                config_path,
+            );
+
+            #[cfg(not(any(
+                canic_accepts_delegation_signer_proof,
+                canic_accepts_delegation_verifier_proof
+            )))]
             $crate::__internal::core::api::lifecycle::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
                 config_str,
