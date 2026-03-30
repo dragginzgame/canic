@@ -1,29 +1,33 @@
 pub mod schema;
 
 use crate::{InternalError, InternalErrorOrigin};
-use schema::{ConfigSchemaError, Validate};
+use schema::ConfigSchemaError;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
 pub use schema::ConfigModel;
+#[cfg(any(not(target_arch = "wasm32"), test))]
+use schema::Validate;
 
 //
 // CONFIG
 //
-// Even though a canister executes single‑threaded, there are a few practical reasons to favor Arc:
+// Even though a canister executes single-threaded, there are a few practical reasons to favor Arc:
 // APIs & trait bounds: Lots of ecosystem code (caches, services, executors, middleware) takes
 // Arc<T> or requires Send + Sync. Rc<T> is neither Send nor Sync, so it won’t fit.
 //
-// Host-side tests & tools: Your crate likely builds for non‑wasm targets too (integration tests,
-// benches, local tooling). Those can be multi‑threaded; Arc “just works” across targets without
-// cfg gymnastics.
+// Host-side tests & tools: The crate also builds for host targets (integration tests, benches,
+// build scripts). Arc works across targets without cfg gymnastics.
 //
-// Globals need Sync: If you ever move away from thread_local! or want to tuck the config behind
-// a global static, Rc can’t participate; Arc<T> is Sync (when T: Send + Sync).
-//
+// Globals need Sync: If config storage ever moves away from thread_local!, Arc<T> can participate.
+
+struct InstalledConfig {
+    model: Arc<ConfigModel>,
+    source_toml: Arc<str>,
+}
 
 thread_local! {
-    static CONFIG: RefCell<Option<Arc<ConfigModel>>> = const { RefCell::new(None) };
+    static CONFIG: RefCell<Option<InstalledConfig>> = const { RefCell::new(None) };
 }
 
 /// Errors related to configuration lifecycle and parsing.
@@ -57,10 +61,11 @@ impl From<ConfigError> for InternalError {
 pub struct Config {}
 
 impl Config {
+    // Return the installed configuration model or initialize a test default when allowed.
     pub(crate) fn get() -> Result<Arc<ConfigModel>, InternalError> {
         CONFIG.with(|cfg| {
             if let Some(config) = cfg.borrow().as_ref() {
-                return Ok(config.clone());
+                return Ok(config.model.clone());
             }
 
             #[cfg(test)]
@@ -75,11 +80,12 @@ impl Config {
         })
     }
 
+    // Return the installed configuration model when available.
     #[must_use]
     pub(crate) fn try_get() -> Option<Arc<ConfigModel>> {
         CONFIG.with(|cfg| {
             if let Some(config) = cfg.borrow().as_ref() {
-                return Some(config.clone());
+                return Some(config.model.clone());
             }
 
             #[cfg(test)]
@@ -94,54 +100,59 @@ impl Config {
         })
     }
 
-    /// Initialize the global configuration from a TOML string.
-    /// return the config as it is read at build time
-    pub fn init_from_toml(config_str: &str) -> Result<(), ConfigError> {
+    // Parse and validate a TOML configuration document on host targets.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
+    pub fn parse_toml(config_str: &str) -> Result<ConfigModel, ConfigError> {
         let config: ConfigModel =
             toml::from_str(config_str).map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
 
-        // validate
         config.validate().map_err(ConfigError::from)?;
+        Ok(config)
+    }
 
+    // Install a trusted configuration model plus its canonical TOML source.
+    pub(crate) fn init_from_model(
+        config: ConfigModel,
+        source_toml: &str,
+    ) -> Result<Arc<ConfigModel>, ConfigError> {
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if borrow.is_some() {
                 return Err(ConfigError::AlreadyInitialized);
             }
-            let arc = Arc::new(config);
-            *borrow = Some(arc);
 
-            Ok(())
+            let model = Arc::new(config);
+            *borrow = Some(InstalledConfig {
+                model: model.clone(),
+                source_toml: Arc::<str>::from(source_toml),
+            });
+
+            Ok(model)
         })
     }
 
-    /// Test-only: initialize the global configuration from an in-memory model.
+    // Test-only: initialize the global configuration from an in-memory model.
     #[cfg(test)]
     pub fn init_from_model_for_tests(config: ConfigModel) -> Result<Arc<ConfigModel>, ConfigError> {
         config.validate().map_err(ConfigError::from)?;
 
+        let source_toml = toml::to_string_pretty(&config)
+            .map_err(|e| ConfigError::CannotParseToml(e.to_string()))?;
+
+        Self::init_from_model(config, &source_toml)
+    }
+
+    // Return the canonical TOML source embedded for the current configuration.
+    pub(crate) fn to_toml() -> Result<String, InternalError> {
         CONFIG.with(|cfg| {
-            let mut borrow = cfg.borrow_mut();
-            if borrow.is_some() {
-                return Err(ConfigError::AlreadyInitialized);
-            }
-
-            let arc = Arc::new(config);
-            *borrow = Some(arc.clone());
-
-            Ok(arc)
+            cfg.borrow()
+                .as_ref()
+                .map(|config| config.source_toml.to_string())
+                .ok_or_else(|| ConfigError::NotInitialized.into())
         })
     }
 
-    /// Return the current config as a TOML string.
-    pub(crate) fn to_toml() -> Result<String, InternalError> {
-        let cfg = Self::get()?;
-
-        toml::to_string_pretty(&*cfg)
-            .map_err(|e| ConfigError::CannotParseToml(e.to_string()).into())
-    }
-
-    /// Test-only: reset the global config so tests can reinitialize with a fresh TOML.
+    // Test-only: reset the global config so tests can reinitialize with a fresh model.
     #[cfg(test)]
     pub fn reset_for_tests() {
         CONFIG.with(|cfg| {
@@ -149,22 +160,26 @@ impl Config {
         });
     }
 
-    /// Test-only: ensure a minimal validated config is available.
+    // Test-only: ensure a minimal validated config is available.
     #[cfg(test)]
     #[must_use]
     pub fn init_for_tests() -> Arc<ConfigModel> {
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if let Some(existing) = borrow.as_ref() {
-                return existing.clone();
+                return existing.model.clone();
             }
 
             let config = ConfigModel::test_default();
             config.validate().expect("test config must validate");
 
-            let arc = Arc::new(config);
-            *borrow = Some(arc.clone());
-            arc
+            let model = Arc::new(config);
+            *borrow = Some(InstalledConfig {
+                model: model.clone(),
+                source_toml: Arc::<str>::from(""),
+            });
+
+            model
         })
     }
 }

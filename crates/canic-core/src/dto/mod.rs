@@ -45,7 +45,6 @@ pub mod rpc;
 pub mod standards;
 pub mod state;
 pub mod subnet;
-pub mod template;
 pub mod topology;
 pub mod validation;
 

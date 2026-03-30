@@ -427,15 +427,10 @@ type SignedRoleAttestation = record {
 // Pure DTO.
 // 
 type StateSnapshotInput = record {
-  subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
   subnet_directory : opt vec DirectoryEntryInput;
   app_directory : opt vec DirectoryEntryInput;
 };
-// 
-// SubnetStateInput
-// 
-type SubnetStateInput = record { wasm_stores : opt vec WasmStoreStateInput };
 // 
 // TemplateChunkInput
 // 
@@ -535,14 +530,6 @@ type WasmStoreGcStatusResponse = record {
   started_at : opt nat64;
 };
 // 
-// SubnetStateInput
-// 
-type WasmStoreStateInput = record {
-  pid : principal;
-  created_at : nat64;
-  binding : text;
-};
-// 
 // WasmStoreStatusResponse
 // 
 type WasmStoreStatusResponse = record {
@@ -591,7 +578,7 @@ service : (CanisterInitPayload, opt blob) -> {
   // Mark this local wasm store as actively executing store-local GC.
   canic_wasm_store_begin_gc : () -> (Result_10);
   // canic_wasm_store_catalog
-  // Return the approved embedded release catalog for this local wasm store.
+  // Return the approved release catalog for this local wasm store.
   canic_wasm_store_catalog : () -> (Result_11) query;
   // canic_wasm_store_chunk
   // Return one deterministic chunk for one local template release.

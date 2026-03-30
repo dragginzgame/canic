@@ -21,6 +21,7 @@ use crate::{
     workflow::{
         pool::{query::PoolQuery, scheduler::PoolSchedulerWorkflow},
         prelude::*,
+        runtime::intent::IntentCleanupWorkflow,
     },
 };
 
@@ -76,10 +77,12 @@ impl PoolWorkflow {
     // Selection
     // -------------------------------------------------------------------------
 
+    #[must_use]
     pub fn pop_oldest_ready() -> Option<Principal> {
         PoolOps::pop_oldest_ready_pid()
     }
 
+    #[must_use]
     pub fn pop_oldest_pending_reset() -> Option<Principal> {
         PoolOps::pop_oldest_pending_reset_pid()
     }
@@ -122,6 +125,7 @@ impl PoolWorkflow {
         let intent_key = pool_import_intent_key(pid)?;
         let now_secs = IcOps::now_secs();
         let created_at = now_secs;
+        IntentCleanupWorkflow::ensure_started();
         let _ = IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None, now_secs)?;
 
         // Invariant: mark_pending_reset must remain synchronous and non-trapping.

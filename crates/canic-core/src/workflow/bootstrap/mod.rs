@@ -11,4 +11,3 @@
 //! - import directory snapshots outside explicit bootstrap rebuilds
 
 pub mod nonroot;
-pub mod root;

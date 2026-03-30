@@ -1,0 +1,23 @@
+[package]
+name = "canic-template-runtime"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+readme = "README.md"
+documentation = "https://docs.rs/canic-template-runtime"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+canic-cdk = { workspace = true }
+canic-memory = { workspace = true }
+canic-template-types = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 .PHONY: help version tags patch minor major release package publish \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
-        test-watch all ensure-clean security-check check-versioning \
+        demo-install test-watch all ensure-clean security-check check-versioning \
         ensure-hooks install-hooks
 
 # in case we need to use this
@@ -63,6 +63,7 @@ help:
 	@echo "  publish          Publish crates to registry"
 	@echo ""
 	@echo "Development:"
+	@echo "  demo-install    Install the full local reference topology (assumes dfx is already running)"
 	@echo "  test             Run clippy + all tests"
 	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
@@ -79,6 +80,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
+	@echo "  make demo-install # Build + install the local reference topology"
 	@echo "  make test        # Run clippy and tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
@@ -148,6 +150,10 @@ publish: ensure-clean
 # create the canisters first, or the unit tests will fail
 #
 
+demo-install:
+	@mkdir -p "$(TEST_TMPDIR)"
+	TMPDIR="$(TEST_TMPDIR)" scripts/app/install_reference_topology.sh root
+
 test: clippy test-canisters test-unit
 
 # Fast iteration path for wasm work.
@@ -171,17 +177,7 @@ test-unit-fast:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace --lib --bins -- --test-threads=1
 
-test-canisters:
-	@command -v dfx >/dev/null 2>&1 || { \
-		echo "dfx is required for test-canisters; start your replica separately and rerun."; \
-		exit 1; \
-	}
-	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" dfx canister create --all -qq
-	TMPDIR="$(TEST_TMPDIR)" RELEASE=1 dfx build --all
-	TMPDIR="$(TEST_TMPDIR)" dfx ledger fabricate-cycles --canister root --cycles 9000000000000000 || true
-	TMPDIR="$(TEST_TMPDIR)" dfx canister install root --mode=reinstall -y --argument '(variant { Prime })'
-	TMPDIR="$(TEST_TMPDIR)" scripts/app/stage_root_release_set.sh root
+test-canisters: demo-install
 	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(entry["pid"] for entry in data["Ok"] if entry["role"]=="test"))')"; \
 	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
 

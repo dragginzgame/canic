@@ -136,7 +136,7 @@ impl SubnetRegistryOps {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn get(pid: Principal) -> Option<CanisterRecord> {
+    pub fn get(pid: Principal) -> Option<CanisterRecord> {
         SubnetRegistry::get(pid)
     }
 

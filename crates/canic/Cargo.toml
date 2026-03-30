@@ -20,13 +20,13 @@ canic-core = { workspace = true }
 canic-dsl = { workspace = true }
 canic-dsl-macros = { workspace = true }
 canic-memory = { workspace = true }
-canic-utils = { workspace = true }
 ic-cdk = { workspace = true }
 
 [build-dependencies]
 canic-core = { workspace = true }
 
 [dev-dependencies]
+canic-control-plane = { workspace = true }
 canic-internal = { path = "../canic-internal" }
 canic-testkit = { path = "../canic-testkit" }
 serde = { workspace = true }

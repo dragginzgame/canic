@@ -180,6 +180,6 @@ pub fn __render_runtime_log_line(topic: Option<Topic>, level: Level, message: &s
 pub fn __canister_role_label() -> String {
     Env::get_canister_role().map_or_else(
         || "...".to_string(),
-        |role| crate::utils::format::truncate(role.as_str(), 12),
+        |role| crate::format::truncate(role.as_str(), 12),
     )
 }

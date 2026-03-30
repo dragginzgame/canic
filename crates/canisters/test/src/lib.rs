@@ -35,8 +35,8 @@ async fn canic_upgrade() {}
 /// main test endpoint for things that can fail
 #[canic_update]
 async fn test() -> Result<(), Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     Ok(())
@@ -46,8 +46,8 @@ async fn test() -> Result<(), Error> {
 /// Verifies delegated tokens using the access guard.
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
 async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     Ok(())
@@ -64,5 +64,4 @@ async fn timer_interval() {
     let _ = 1 + 1;
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

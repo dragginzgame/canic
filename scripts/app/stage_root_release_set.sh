@@ -138,12 +138,12 @@ call_root_method() {
     if [ -n "${arg_file}" ]; then
         dfx canister call "${ROOT_CANISTER}" "${method}" --argument-file "${arg_file}" >/dev/null
     else
-        dfx canister call "${ROOT_CANISTER}" "${method}" '()' >/dev/null
+        dfx canister call "${ROOT_CANISTER}" "${method}" >/dev/null
     fi
 }
 
-echo "Submitting config-driven release set to ${ROOT_CANISTER} for wasm_store publication from ${CONFIG_PATH}"
-echo "Including bootstrap exception role 'wasm_store' ahead of the config-defined release set"
+echo "Submitting staged release inputs to ${ROOT_CANISTER} from ${CONFIG_PATH}"
+echo "Bootstrap exception: 'wasm_store' is staged in root stable memory first; it is not baked into root.wasm and is not published into the live wasm_store catalog"
 
 stage_role_dir() {
     local role_dir="$1"
@@ -158,9 +158,8 @@ stage_role_dir() {
     payload_size="$(format_bytes "${payload_size_bytes}")"
     chunk_count="$(find "${role_dir}" -name 'chunk-*.did' | wc -l | tr -d ' ')"
 
-    echo "Submitting role '${role}' to ${ROOT_CANISTER} for wasm_store publication (${payload_size}, ${chunk_count} chunks)"
-
     if [ "${role}" = "wasm_store" ]; then
+        echo "Staging bootstrap role '${role}' in root stable memory for first-store install (${payload_size}, ${chunk_count} chunks)"
         call_root_method "canic_wasm_store_bootstrap_stage_manifest_admin" "${role_dir}/manifest.did"
         call_root_method "canic_wasm_store_bootstrap_prepare_admin" "${role_dir}/prepare.did"
 
@@ -170,6 +169,8 @@ stage_role_dir() {
 
         return
     fi
+
+    echo "Staging role '${role}' in root stable memory for later live wasm_store publication (${payload_size}, ${chunk_count} chunks)"
 
     call_root_method "canic_template_stage_manifest_admin" "${role_dir}/manifest.did"
     call_root_method "canic_template_prepare_admin" "${role_dir}/prepare.did"
@@ -181,7 +182,7 @@ stage_role_dir() {
 
 WASM_STORE_ROLE_DIR="${TMP_STAGE_DIR}/wasm_store"
 if [ -d "${WASM_STORE_ROLE_DIR}" ]; then
-    echo "Submitting bootstrap role first so root can leave bootstrap wait state"
+    echo "Staging bootstrap role first so root can create the first live wasm_store"
     stage_role_dir "${WASM_STORE_ROLE_DIR}"
 fi
 
@@ -190,28 +191,28 @@ while IFS= read -r role_dir; do
     stage_role_dir "${role_dir}"
 done < <(find "${TMP_STAGE_DIR}" -mindepth 1 -maxdepth 1 -type d | sort)
 
-echo "Resuming root bootstrap after full release set staging"
+echo "Resuming root bootstrap after release staging so root can publish ordinary roles into the live wasm_store"
 call_root_method "canic_wasm_store_bootstrap_resume_root_admin"
 
 echo "Waiting for ${ROOT_CANISTER} to reach READY"
 attempt=0
 for _ in $(seq 1 300); do
-    if dfx canister call "${ROOT_CANISTER}" canic_ready '()' 2>/dev/null | grep -q "true"; then
+    if dfx canister call "${ROOT_CANISTER}" canic_ready 2>/dev/null | grep -q "true"; then
         echo "Root bootstrap resumed and reached READY"
         exit 0
     fi
     attempt=$((attempt + 1))
     if [ $((attempt % 10)) -eq 0 ]; then
         echo "Still waiting for ${ROOT_CANISTER} to reach READY; debug with:"
-        echo "  dfx canister call ${ROOT_CANISTER} canic_wasm_store_bootstrap_debug '()'"
-        echo "  dfx canister call ${ROOT_CANISTER} canic_wasm_store_overview '()'"
+        echo "  dfx canister call ${ROOT_CANISTER} canic_wasm_store_bootstrap_debug"
+        echo "  dfx canister call ${ROOT_CANISTER} canic_wasm_store_overview"
     fi
     sleep 1
 done
 
 echo "Root bootstrap resumed but did not reach READY within 300s" >&2
 echo "Bootstrap debug:" >&2
-dfx canister call "${ROOT_CANISTER}" canic_wasm_store_bootstrap_debug '()' || true
+dfx canister call "${ROOT_CANISTER}" canic_wasm_store_bootstrap_debug || true
 echo "Wasm store overview:" >&2
-dfx canister call "${ROOT_CANISTER}" canic_wasm_store_overview '()' || true
+dfx canister call "${ROOT_CANISTER}" canic_wasm_store_overview || true
 exit 1

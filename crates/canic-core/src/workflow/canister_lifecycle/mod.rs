@@ -2,18 +2,19 @@ mod propagation;
 
 use crate::{
     InternalError,
+    api::runtime::install::ModuleSourceRuntimeApi,
     domain::policy::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
     ops::{
         ic::mgmt::{CanisterInstallMode, MgmtOps},
-        storage::{registry::subnet::SubnetRegistryOps, template::TemplateManifestOps},
+        storage::registry::subnet::SubnetRegistryOps,
         topology::policy::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,
-        prelude::*, runtime::template::TemplateInstallWorkflow,
+        prelude::*, runtime::install::ModuleInstallWorkflow,
     },
 };
 
@@ -54,7 +55,7 @@ impl CanisterLifecycleResult {
 pub struct CanisterLifecycleWorkflow;
 
 impl CanisterLifecycleWorkflow {
-    pub(crate) async fn apply(
+    pub async fn apply(
         event: CanisterLifecycleEvent,
     ) -> Result<CanisterLifecycleResult, InternalError> {
         match event {
@@ -100,8 +101,8 @@ impl CanisterLifecycleWorkflow {
         let record = SubnetRegistryOps::get(pid)
             .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
 
-        let manifest = TemplateManifestOps::approved_for_role_response(&record.role)?;
-        let target_hash = manifest.payload_hash.clone();
+        let module_source = ModuleSourceRuntimeApi::approved_module_source(&record.role).await?;
+        let target_hash = module_source.module_hash.clone();
 
         let status = MgmtOps::canister_status(pid).await?;
         let plan = plan_upgrade(status.module_hash, target_hash.clone());
@@ -127,10 +128,10 @@ impl CanisterLifecycleWorkflow {
             return Ok(CanisterLifecycleResult::default());
         }
 
-        TemplateInstallWorkflow::install_code(
+        ModuleInstallWorkflow::install_code(
             CanisterInstallMode::Upgrade(None),
             pid,
-            &manifest,
+            &module_source,
             (),
         )
         .await?;

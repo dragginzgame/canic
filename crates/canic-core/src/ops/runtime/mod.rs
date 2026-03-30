@@ -3,7 +3,6 @@ pub mod log;
 pub mod memory;
 pub mod metrics;
 pub mod ready;
-pub mod template;
 pub mod timer;
 
 use crate::{InternalError, ops::OpsError};
@@ -23,9 +22,6 @@ pub enum RuntimeOpsError {
 
     #[error(transparent)]
     MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),
-
-    #[error(transparent)]
-    EmbeddedTemplatePayloadOps(#[from] template::EmbeddedTemplatePayloadOpsError),
 }
 
 impl From<RuntimeOpsError> for InternalError {

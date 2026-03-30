@@ -23,6 +23,15 @@ pub use ic_cdk_management_canister as mgmt;
 pub use ic_cdk_timers as timers;
 pub use icrc_ledger_types;
 
+/// Export Candid only in debug builds.
+#[macro_export]
+macro_rules! export_candid_debug {
+    () => {
+        #[cfg(debug_assertions)]
+        $crate::export_candid!();
+    };
+}
+
 pub mod env;
 pub mod spec;
 pub mod structures;

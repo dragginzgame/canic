@@ -27,9 +27,6 @@ pub enum PolicyError {
 
     #[error(transparent)]
     ScalingPolicy(#[from] placement::scaling::ScalingPolicyError),
-
-    #[error(transparent)]
-    ShardingPolicy(#[from] placement::sharding::ShardingPolicyError),
 }
 
 impl From<PolicyError> for InternalError {

@@ -4,17 +4,15 @@ use crate::{
         Config, ConfigError, ConfigModel,
         schema::{
             AppInitMode, CanisterConfig, DelegatedTokenConfig, DelegationProofCacheProfile,
-            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig, WasmStoreConfig,
+            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
-    ids::{CanisterRole, SubnetRole, WasmStoreBinding},
-    ops::{OpsError, prelude::*, runtime::env::EnvOps, storage::state::subnet::SubnetStateOps},
+    ids::{CanisterRole, SubnetRole},
+    ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::app::AppMode,
 };
 use std::sync::Arc;
 use thiserror::Error as ThisError;
-
-const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
 ///
 /// ConfigOpsError
@@ -30,9 +28,6 @@ pub enum ConfigOpsError {
 
     #[error("canister {0} not defined in subnet {1}")]
     CanisterNotFound(String, String),
-
-    #[error("current canister {0} is not configured as a wasm store")]
-    CurrentCanisterNotWasmStore(String),
 }
 
 impl From<ConfigOpsError> for InternalError {
@@ -66,10 +61,6 @@ pub struct DelegationProofCachePolicy {
 pub struct ConfigOps;
 
 impl ConfigOps {
-    fn is_wasm_store_role(role: &CanisterRole) -> bool {
-        *role == IMPLICIT_WASM_STORE_ROLE
-    }
-
     /// Export the full current configuration as TOML.
     /// Intended for diagnostics and tooling only.
     pub fn export_toml() -> Result<String, InternalError> {
@@ -154,7 +145,7 @@ impl ConfigOps {
     /// Fetch the configuration record for the *current* subnet.
     ///
     /// Requires that environment initialization has completed.
-    pub(crate) fn current_subnet() -> Result<SubnetConfig, InternalError> {
+    pub fn current_subnet() -> Result<SubnetConfig, InternalError> {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_subnet(&subnet_role)
@@ -180,34 +171,5 @@ impl ConfigOps {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)
-    }
-
-    /// Return the default wasm-store binding for the current subnet.
-    pub(crate) fn current_subnet_default_wasm_store_binding() -> WasmStoreBinding {
-        SubnetStateOps::publication_store_binding()
-            .filter(|binding| SubnetStateOps::wasm_store_pid(binding).is_some())
-            .or_else(|| {
-                SubnetStateOps::wasm_stores()
-                    .into_iter()
-                    .min_by(|left, right| left.created_at.cmp(&right.created_at))
-                    .map(|record| record.binding)
-            })
-            .unwrap_or_else(|| WasmStoreBinding::new("primary"))
-    }
-
-    /// Return the default wasm-store config for the current subnet.
-    pub(crate) const fn current_subnet_default_wasm_store() -> WasmStoreConfig {
-        WasmStoreConfig::implicit()
-    }
-
-    /// Return the wasm-store config for the current canister.
-    pub(crate) fn current_wasm_store() -> Result<WasmStoreConfig, InternalError> {
-        let canister_role = EnvOps::canister_role()?;
-
-        if Self::is_wasm_store_role(&canister_role) {
-            Ok(WasmStoreConfig::implicit())
-        } else {
-            Err(ConfigOpsError::CurrentCanisterNotWasmStore(canister_role.to_string()).into())
-        }
     }
 }

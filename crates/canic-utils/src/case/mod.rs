@@ -17,16 +17,16 @@ pub use snake::to_snake_case;
 #[derive(Clone, Copy, Debug, Display)]
 pub enum Case {
     Camel,
-    Constant, // adheres to rust constant rules, more strict than UPPER_SNAKE
+    Constant,
     Kebab,
     Lower,
     Sentence,
     Snake,
     Title,
     Upper,
-    UpperCamel, // or PascalCase
-    UpperSnake, // or SCREAMING_SNAKE
-    UpperKebab, // or TRAIN-CASE
+    UpperCamel,
+    UpperSnake,
+    UpperKebab,
 }
 
 ///
@@ -42,25 +42,17 @@ impl<T: std::fmt::Display> Casing<T> for T
 where
     String: PartialEq<T>,
 {
-    // to_case
-    // don't use convert_case:: Lower and Upper because they add spaces, and other
-    // unexpected behaviour
     fn to_case(&self, case: Case) -> String {
         use convert_case as cc;
         let s = &self.to_string();
 
         match case {
-            // rust
             Case::Lower => s.to_lowercase(),
             Case::Upper => s.to_uppercase(),
-
-            // custom
             Case::Title => title::to_title_case(s),
             Case::Snake => snake::to_snake_case(s),
             Case::UpperSnake => snake::to_snake_case(s).to_uppercase(),
             Case::Constant => constant::to_constant_case(s).to_uppercase(),
-
-            // convert_case
             Case::Camel => cc::Casing::to_case(s, cc::Case::Camel),
             Case::Kebab => cc::Casing::to_case(s, cc::Case::Kebab),
             Case::Sentence => cc::Casing::to_case(s, cc::Case::Sentence),
@@ -69,7 +61,6 @@ where
         }
     }
 
-    // is_case
     fn is_case(&self, case: Case) -> bool {
         &self.to_case(case) == self
     }

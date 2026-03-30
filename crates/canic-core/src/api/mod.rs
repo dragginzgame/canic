@@ -21,7 +21,6 @@ pub mod rpc;
 pub mod runtime;
 pub mod standards;
 pub mod state;
-pub mod template;
 pub mod timer;
 pub mod topology;
 

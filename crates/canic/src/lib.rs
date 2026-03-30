@@ -6,9 +6,10 @@
 //! - `build!` / `build_root!` for `build.rs` (validate/embed `canic.toml`)
 //! - `start!` / `start_root!` for `lib.rs` (wire lifecycle hooks and export endpoints)
 //!
-//! For lower-level access, use the `api`, `cdk`, `memory`, and `utils` modules.
+//! For lower-level access, use the `api`, `cdk`, and `memory` modules.
 //! Direct access to internal core modules is intentionally unsupported.
 
+mod instructions;
 mod macros; // private implementation boundary
 pub mod protocol;
 
@@ -18,13 +19,24 @@ pub mod __internal {
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
     pub use canic_core as core;
+
+    pub mod instructions {
+        pub use crate::instructions::format_instructions;
+    }
 }
 
 // -----------------------------------------------------------------------------
 // Public data contracts
 // -----------------------------------------------------------------------------
 // DTOs and IDs are stable, versioned contracts intended for downstream use.
-pub use canic_core::{dto, ids};
+pub use canic_core::dto;
+
+pub mod ids {
+    pub use crate::__internal::core::ids::{
+        AccessMetricKind, BuildNetwork, CanisterRole, EndpointCall, EndpointCallKind, EndpointId,
+        IntentResourceKey, SubnetRole, SystemMetricKind, cap,
+    };
+}
 
 // -----------------------------------------------------------------------------
 // Sub-crates
@@ -32,7 +44,6 @@ pub use canic_core::{dto, ids};
 pub use canic_cdk as cdk;
 pub use canic_dsl as dsl;
 pub use canic_memory as memory;
-pub use canic_utils as utils;
 
 // -----------------------------------------------------------------------------
 // Re-exports
@@ -143,15 +154,7 @@ pub mod api {
         }
 
         pub mod placement {
-            pub use crate::__internal::core::api::placement::{
-                scaling::ScalingApi, sharding::ShardingApi,
-            };
-        }
-
-        pub mod template {
-            pub use crate::__internal::core::api::template::{
-                EmbeddedTemplateApi, WasmStoreApi, WasmStoreBootstrapApi, WasmStorePublicationApi,
-            };
+            pub use crate::__internal::core::api::placement::scaling::ScalingApi;
         }
     }
 

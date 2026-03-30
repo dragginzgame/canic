@@ -8,8 +8,9 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{Error, api::canister::placement::ShardingApi, cdk::types::Principal, prelude::*};
+use canic::{Error, cdk::types::Principal, prelude::*};
 use canic_internal::canister::SHARD_HUB;
+use canic_sharding_runtime::api::ShardingApi;
 
 const POOL_NAME: &str = "shards";
 
@@ -30,8 +31,8 @@ async fn canic_upgrade() {}
 // don't need authentication as this is a local canic test
 #[canic_update]
 async fn register_principal(pid: Principal) -> Result<Principal, Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     let shard_pid = ShardingApi::assign_to_pool(POOL_NAME, pid.to_string()).await?;
@@ -42,8 +43,8 @@ async fn register_principal(pid: Principal) -> Result<Principal, Error> {
 /// Dry-run the player registration decision using config-driven policy.
 #[canic_query]
 async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
@@ -51,5 +52,4 @@ async fn plan_register_principal(pid: Principal) -> Result<String, Error> {
     Ok(format!("{plan:?}"))
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

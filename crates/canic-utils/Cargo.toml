@@ -13,11 +13,16 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[features]
+default = ["case", "rand"]
+case = ["dep:convert_case", "dep:derive_more"]
+rand = ["dep:rand_chacha", "dep:thiserror"]
+
 [dependencies]
-convert_case = { workspace = true }
-derive_more = { workspace = true }
-rand_chacha = { workspace = true }
-thiserror = { workspace = true }
+convert_case = { workspace = true, optional = true }
+derive_more = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
 xxhash-rust = { workspace = true }
 
 [lints]

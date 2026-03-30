@@ -223,13 +223,13 @@ version = "0.19.0"
 dependencies = [
  "candid",
  "canic-cdk",
+ "canic-control-plane",
  "canic-core",
  "canic-dsl",
  "canic-dsl-macros",
  "canic-internal",
  "canic-memory",
  "canic-testkit",
- "canic-utils",
  "ic-cdk",
  "serde",
  "serde_bytes",
@@ -253,6 +253,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-control-plane"
+version = "0.19.0"
+dependencies = [
+ "async-trait",
+ "candid",
+ "canic-cdk",
+ "canic-core",
+ "canic-memory",
+ "canic-template-runtime",
+ "canic-template-types",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "canic-core"
 version = "0.19.0"
 dependencies = [
@@ -260,13 +275,15 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-memory",
- "canic-utils",
+ "canic-types",
  "criterion",
  "ctor",
  "derive_more",
  "futures",
  "k256",
  "pocket-ic",
+ "proc-macro2",
+ "quote",
  "remain",
  "serde",
  "serde_bytes",
@@ -309,6 +326,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-sharding-runtime"
+version = "0.19.0"
+dependencies = [
+ "canic-core",
+ "thiserror 2.0.18",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "canic-template-runtime"
+version = "0.19.0"
+dependencies = [
+ "canic-cdk",
+ "canic-memory",
+ "canic-template-types",
+ "serde",
+]
+
+[[package]]
+name = "canic-template-types"
+version = "0.19.0"
+dependencies = [
+ "candid",
+ "canic-memory",
+ "canic-types",
+ "serde",
+]
+
+[[package]]
 name = "canic-testkit"
 version = "0.19.0"
 dependencies = [
@@ -316,6 +362,15 @@ dependencies = [
  "canic",
  "derive_more",
  "pocket-ic",
+ "serde",
+]
+
+[[package]]
+name = "canic-types"
+version = "0.19.0"
+dependencies = [
+ "candid",
+ "canic-memory",
  "serde",
 ]
 
@@ -356,6 +411,7 @@ version = "0.19.0"
 dependencies = [
  "candid",
  "canic",
+ "canic-control-plane",
  "canic-internal",
  "ic-cdk",
  "pocket-ic",
@@ -400,6 +456,7 @@ dependencies = [
  "candid",
  "canic",
  "canic-internal",
+ "canic-sharding-runtime",
  "ic-cdk",
 ]
 
@@ -421,6 +478,7 @@ dependencies = [
  "candid",
  "canic",
  "canic-internal",
+ "canic-sharding-runtime",
  "ic-cdk",
 ]
 
@@ -440,7 +498,7 @@ version = "0.19.0"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-control-plane",
  "ic-cdk",
  "serde",
 ]
@@ -766,6 +824,7 @@ version = "0.19.0"
 dependencies = [
  "candid",
  "canic",
+ "canic-control-plane",
  "ic-cdk",
  "k256",
  "serde",

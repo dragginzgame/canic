@@ -31,8 +31,8 @@ async fn canic_upgrade() {}
 /// no authentication needed as for canic testing
 #[canic_update]
 async fn create_worker() -> Result<Principal, Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     let worker_pid = ScalingApi::create_worker(POOL_NAME).await?;
@@ -44,12 +44,11 @@ async fn create_worker() -> Result<Principal, Error> {
 /// no authentication needed as for canic testing
 #[canic_query]
 async fn plan_create_worker() -> Result<bool, Error> {
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     ScalingApi::plan_create_worker(POOL_NAME)
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

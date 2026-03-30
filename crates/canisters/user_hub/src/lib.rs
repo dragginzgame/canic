@@ -8,8 +8,9 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{Error, api::canister::placement::ShardingApi, cdk::types::Principal, prelude::*};
+use canic::{Error, cdk::types::Principal, prelude::*};
 use canic_internal::canister::USER_HUB;
+use canic_sharding_runtime::api::ShardingApi;
 
 const POOL_NAME: &str = "user_shards";
 
@@ -31,13 +32,12 @@ async fn canic_upgrade() {}
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn create_account(pid: Principal) -> Result<Principal, Error> {
-    // Test-only guard: keep this endpoint out of production flows.
-    if !cfg!(debug_assertions) {
-        return Err(Error::forbidden("test-only canister"));
+    // Test-only guard: keep this endpoint out of non-local flows.
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
     }
 
     ShardingApi::assign_to_pool(POOL_NAME, pid.to_string()).await
 }
 
-#[cfg(debug_assertions)]
-canic::export_candid!();
+canic::cdk::export_candid_debug!();

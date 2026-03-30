@@ -636,6 +636,9 @@ type SubnetRegistryEntry = record {
   role : text;
   "record" : CanisterInfo;
 };
+// 
+// SubnetStateResponse
+// 
 type SubnetStateResponse = record { wasm_stores : vec WasmStoreStateResponse };
 // 
 // TemplateChunkInput
@@ -816,7 +819,7 @@ type WasmStorePublicationStateResponse = record {
   detached_binding : opt text;
 };
 // 
-// SubnetStateResponse
+// WasmStoreStateResponse
 // 
 type WasmStoreStateResponse = record {
   pid : principal;

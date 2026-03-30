@@ -16,6 +16,24 @@ scripts/app/dfx_start.sh
 
 This runs `dfx` (`dfx stop` then `dfx start --clean --system-canisters`).
 
+Keep that replica running in a separate terminal. The install/build commands
+below assume `dfx` is already running and fail if it is not.
+
+## Install the Reference Topology
+
+From the repo root:
+
+```bash
+make demo-install
+```
+
+This one command:
+- creates the reference canisters in `dfx`
+- builds the release artifacts
+- reinstalls `root` in `Prime` mode
+- stages the bootstrap `wasm_store` plus the config-defined release set
+- waits for `root` to report `READY`
+
 ## Build Canisters
 
 From the repo root:

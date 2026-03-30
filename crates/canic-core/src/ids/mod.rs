@@ -9,7 +9,6 @@
 //! - Policy decisions
 //! - Storage-backed types
 
-mod canister;
 pub mod capability;
 pub use capability as cap;
 mod endpoint;
@@ -17,15 +16,10 @@ mod intent;
 mod metrics;
 mod network;
 mod subnet;
-mod template;
 
-pub use canister::CanisterRole;
+pub use canic_types::CanisterRole;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use intent::IntentResourceKey;
 pub use metrics::{AccessMetricKind, SystemMetricKind};
 pub use network::BuildNetwork;
 pub use subnet::SubnetRole;
-pub use template::{
-    TemplateChunkKey, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
-    TemplateVersion, WasmStoreBinding, WasmStoreGcMode, WasmStoreGcStatus,
-};

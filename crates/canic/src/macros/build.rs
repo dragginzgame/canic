@@ -5,8 +5,8 @@
 /// Embed the shared Canic configuration into a canister crate's build script.
 ///
 /// Reads the provided TOML file (relative to the crate manifest dir), validates it
-/// using [`Config`](crate::__internal::core::config::Config), and sets
-/// `CANIC_CONFIG_PATH` for later use by `include_str!`. Canister crates typically
+/// using the shared config schema, and emits both a compact source copy and a
+/// generated Rust config model for runtime bootstrap. Canister crates typically
 /// invoke this from `build.rs`.
 #[macro_export]
 macro_rules! build {
@@ -75,9 +75,14 @@ macro_rules! __canic_build_internal {
             Err(e) => panic!("Failed to read {}: {}", $cfg_path.display(), e),
         };
 
-        // Init Config
-        let $cfg = $crate::__internal::core::bootstrap::init_config(&$cfg_str).expect("invalid canic config");
+        // Validate once on the host, then emit a precompiled runtime model.
+        let $cfg = ::std::sync::Arc::new(
+            $crate::__internal::core::bootstrap::parse_config_model(&$cfg_str)
+                .expect("invalid canic config")
+        );
         let compact_cfg = $crate::__internal::core::bootstrap::compact_config_source(&$cfg_str);
+        let compiled_cfg =
+            $crate::__internal::core::bootstrap::emit_config_model_source($cfg.as_ref());
 
         // Run the extra body (per-canister or nothing)
         $body
@@ -191,12 +196,30 @@ macro_rules! __canic_build_internal {
         let out_dir =
             std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
         let compact_cfg_path = out_dir.join("canic.compact.toml");
+        let compiled_cfg_path = out_dir.join("canic.compiled.rs");
         std::fs::write(&compact_cfg_path, compact_cfg).expect("write compact canic config");
+        std::fs::write(&compiled_cfg_path, compiled_cfg).expect("write compiled canic config");
 
-        let abs = compact_cfg_path
+        let compact_abs = compact_cfg_path
             .canonicalize()
             .expect("canonicalize compact canic config path");
-        println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", abs.display());
-        println!("cargo:rerun-if-changed={}", abs.display());
+        let compiled_abs = compiled_cfg_path
+            .canonicalize()
+            .expect("canonicalize compiled canic config path");
+        let source_abs = $cfg_path
+            .canonicalize()
+            .expect("canonicalize source canic config path");
+
+        println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", source_abs.display());
+        println!(
+            "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
+            compact_abs.display()
+        );
+        println!(
+            "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
+            compiled_abs.display()
+        );
+        println!("cargo:rerun-if-changed={}", compact_abs.display());
+        println!("cargo:rerun-if-changed={}", compiled_abs.display());
     }};
 }

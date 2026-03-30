@@ -125,7 +125,7 @@ call_root_method() {
             return 0
         fi
     else
-        if output="$(dfx canister call "${ROOT_CANISTER}" "${preferred}" '()' 2>&1)"; then
+        if output="$(dfx canister call "${ROOT_CANISTER}" "${preferred}" 2>&1)"; then
             printf '%s\n' "${output}"
             return 0
         fi
@@ -135,7 +135,7 @@ call_root_method() {
         if [ -n "${arg_file}" ]; then
             dfx canister call "${ROOT_CANISTER}" "${fallback}" --argument-file "${arg_file}"
         else
-            dfx canister call "${ROOT_CANISTER}" "${fallback}" '()'
+            dfx canister call "${ROOT_CANISTER}" "${fallback}"
         fi
         return 0
     fi
