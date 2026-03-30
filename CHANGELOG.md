@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.19.x] - 2026-03-30 - Library Lane Cleanup and Crate Graph Simplification
 
-- `0.19.4` rounds out the downstream facade story by adding a feature-gated `sharding` lane on `canic`, so sharding coordinator canisters can keep using `canic::api::canister::placement::ShardingApi` and `start!()` without depending on `canic-sharding-runtime` directly, while `root` and `wasm_store` continue to use the existing `control-plane` feature.
+- `0.19.5` rounds out the downstream facade story by adding a feature-gated `sharding` lane on `canic`, so sharding coordinator canisters can keep using `canic::api::canister::placement::ShardingApi` and `start!()` without depending on `canic-sharding-runtime` directly, while `root` and `wasm_store` continue to use the existing `control-plane` feature.
 - `0.19.3` restores a feature-gated `canic` control-plane lane so downstream `root` and `wasm_store` crates can keep using the facade-owned root lifecycle and template/store API paths without making ordinary leaf canisters pull control-plane code by default.
 - `0.19.2` simplifies the workspace crate graph by merging the temporary template helper crates into `canic-control-plane`, deleting the dead `canic-dsl` and `canic-utils` crates, and restoring an empty shared `SubnetState` so the generic state cascade shape is `[as ss ad sd]` again without reintroducing root-owned publication inventory into non-root sync.
 - `0.19.1` finishes the library/reference split by moving template/store and sharding implementation lanes out of the default `canic` path, compiling `canic.toml` into the canister instead of parsing TOML at runtime, collapsing the temporary template helper crates back into `canic-control-plane`, removing the dead `canic::dsl` / `canic-utils` crates, standardizing debug-only Candid export on `canic::cdk::export_candid_debug!()`, and hardening the staged `wasm_store`/`root` reference install flow behind `make demo-install` once `dfx` is already running.
 - `0.19.0` starts the `0.19` line with a clean post-`0.18` audit baseline, recording the release wasm footprint (`minimal`/`app`/`scale`/`shard` at `2489858` bytes, `root` at `3730865`, `wasm_store` at `2823075`) and the refreshed capability-surface baseline before the next reduction pass begins.
 
 ```toml
-canic = { version = "0.19.4", features = ["control-plane", "sharding"] }
+canic = { version = "0.19.5", features = ["control-plane", "sharding"] }
 ```
 
 See detailed breakdown:
