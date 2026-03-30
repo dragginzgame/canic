@@ -2,21 +2,23 @@ use super::{
     TemplateManifestOps, TemplateManifestOpsError, WasmStoreGcExecutionStats, WasmStoreLimits,
     input_to_record,
 };
-use crate::ids::{
-    CanisterRole, TemplateChunkKey, TemplateChunkingMode, TemplateId, TemplateManifestState,
-    TemplateReleaseKey, TemplateVersion, WasmStoreGcStatus,
+use crate::{
+    dto::template::{
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
+        TemplateManifestResponse, TemplateStagingStatusResponse, WasmStoreBootstrapDebugResponse,
+        WasmStoreGcStatusResponse, WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
+    },
+    ids::{
+        CanisterRole, TemplateChunkKey, TemplateChunkingMode, TemplateId, TemplateManifestState,
+        TemplateReleaseKey, TemplateVersion, WasmStoreGcStatus,
+    },
+    storage::stable::template::{
+        TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore,
+        TemplateChunkStore, TemplateManifestRecord, TemplateManifestStateStore,
+    },
 };
 use canic_core::__control_plane_core as cp_core;
-use canic_template_runtime::storage::template::{
-    TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
-    TemplateManifestRecord, TemplateManifestStateStore,
-};
-use canic_template_types::dto::template::{
-    TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetInput,
-    TemplateChunkSetPrepareInput, TemplateManifestInput, TemplateManifestResponse,
-    TemplateStagingStatusResponse, WasmStoreBootstrapDebugResponse, WasmStoreGcStatusResponse,
-    WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
-};
 use cp_core::{
     InternalError,
     cdk::{api::canister_self, structures::storable::Storable, utils::wasm::get_wasm_hash},

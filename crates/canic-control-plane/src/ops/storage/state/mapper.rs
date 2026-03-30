@@ -1,10 +1,12 @@
 use crate::{
-    dto::state::{SubnetStateResponse, WasmStoreStateResponse},
+    dto::{
+        state::{SubnetStateResponse, WasmStoreStateResponse},
+        template::WasmStorePublicationStateResponse,
+    },
     storage::stable::state::subnet::{
         PublicationStoreStateRecord, SubnetStateRecord, WasmStoreRecord,
     },
 };
-use canic_template_types::dto::template::WasmStorePublicationStateResponse;
 
 ///
 /// SubnetStateMapper

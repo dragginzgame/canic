@@ -1,6 +1,6 @@
+use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
 use canic_memory::{eager_static, ic_memory, impl_storable_unbounded};
-use canic_template_types::ids::{TemplateChunkKey, TemplateReleaseKey};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap as StdBTreeMap};
 
@@ -85,6 +85,7 @@ impl TemplateChunkSetStateStore {
     }
 
     // Clear the chunk-set metadata store for isolated unit tests.
+    #[cfg(test)]
     pub fn clear_for_test() {
         Self::clear();
     }
@@ -142,6 +143,7 @@ impl TemplateChunkStore {
     }
 
     // Clear the chunk store for isolated unit tests.
+    #[cfg(test)]
     pub fn clear_for_test() {
         Self::clear();
     }
@@ -150,7 +152,7 @@ impl TemplateChunkStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_template_types::ids::{TemplateId, TemplateVersion};
+    use crate::ids::{TemplateId, TemplateVersion};
 
     fn release() -> TemplateReleaseKey {
         TemplateReleaseKey::new(

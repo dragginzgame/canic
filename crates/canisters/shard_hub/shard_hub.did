@@ -440,6 +440,7 @@ type SignedRoleAttestation = record {
 // Pure DTO.
 // 
 type StateSnapshotInput = record {
+  subnet_state : opt null;
   app_state : opt AppStateInput;
   subnet_directory : opt vec DirectoryEntryInput;
   app_directory : opt vec DirectoryEntryInput;

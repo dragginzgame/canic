@@ -63,7 +63,7 @@ pub mod memory {
         pub const APP_REGISTRY_ID: u8 = 8;
         pub const SUBNET_REGISTRY_ID: u8 = 9;
 
-        // 10–12 are owned by `canic-template-runtime`.
+        // 10–12 are owned by `canic-control-plane`.
     }
 
     // ---------------------------------------------------------------------
@@ -74,8 +74,9 @@ pub mod memory {
 
     pub mod env {
         pub const ENV_ID: u8 = 13;
+        pub const SUBNET_STATE_ID: u8 = 14;
 
-        // Reserved: 14–15
+        // Reserved: 15
     }
 
     // ---------------------------------------------------------------------

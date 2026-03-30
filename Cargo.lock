@@ -225,7 +225,6 @@ dependencies = [
  "canic-cdk",
  "canic-control-plane",
  "canic-core",
- "canic-dsl",
  "canic-dsl-macros",
  "canic-internal",
  "canic-memory",
@@ -261,8 +260,6 @@ dependencies = [
  "canic-cdk",
  "canic-core",
  "canic-memory",
- "canic-template-runtime",
- "canic-template-types",
  "serde",
  "thiserror 2.0.18",
 ]
@@ -293,14 +290,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-dsl"
-version = "0.19.1"
-
-[[package]]
 name = "canic-dsl-macros"
 version = "0.19.1"
 dependencies = [
- "canic-dsl",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -335,26 +327,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-template-runtime"
-version = "0.19.1"
-dependencies = [
- "canic-cdk",
- "canic-memory",
- "canic-template-types",
- "serde",
-]
-
-[[package]]
-name = "canic-template-types"
-version = "0.19.1"
-dependencies = [
- "candid",
- "canic-memory",
- "canic-types",
- "serde",
-]
-
-[[package]]
 name = "canic-testkit"
 version = "0.19.1"
 dependencies = [
@@ -372,17 +344,6 @@ dependencies = [
  "candid",
  "canic-memory",
  "serde",
-]
-
-[[package]]
-name = "canic-utils"
-version = "0.19.1"
-dependencies = [
- "convert_case 0.11.0",
- "derive_more",
- "rand_chacha 0.10.0",
- "thiserror 2.0.18",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -600,15 +561,6 @@ name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
-name = "convert_case"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -875,7 +827,7 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
 dependencies = [
- "convert_case 0.10.0",
+ "convert_case",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -2311,16 +2263,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_chacha"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
-dependencies = [
- "ppv-lite86",
- "rand_core 0.10.0",
-]
-
-[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2337,12 +2279,6 @@ checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
  "getrandom 0.3.4",
 ]
-
-[[package]]
-name = "rand_core"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
 
 [[package]]
 name = "rayon"

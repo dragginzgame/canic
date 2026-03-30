@@ -3,19 +3,19 @@ mod chunked;
 pub use chunked::TemplateChunkedOps;
 
 use crate::ids::TemplateChunkKey;
-use crate::ids::{
-    CanisterRole, TemplateId, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
-    WasmStoreBinding, WasmStoreGcStatus,
+use crate::{
+    dto::template::{
+        TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
+        WasmStoreGcStatusResponse, WasmStoreOverviewStoreResponse,
+        WasmStorePublicationSlotResponse, WasmStoreTemplateStatusResponse,
+    },
+    ids::{
+        CanisterRole, TemplateId, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
+        WasmStoreBinding, WasmStoreGcStatus,
+    },
+    storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
 use canic_core::__control_plane_core as cp_core;
-use canic_template_runtime::storage::template::{
-    TemplateManifestRecord, TemplateManifestStateStore,
-};
-use canic_template_types::dto::template::{
-    TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
-    WasmStoreGcStatusResponse, WasmStoreOverviewStoreResponse, WasmStorePublicationSlotResponse,
-    WasmStoreTemplateStatusResponse,
-};
 use cp_core::{InternalError, InternalErrorOrigin, format::byte_size};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -335,14 +335,12 @@ fn projected_template_versions_for_manifests(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcMode};
+    use crate::{
+        dto::template::{TemplateChunkInput, TemplateChunkSetInput, TemplateChunkSetPrepareInput},
+        ids::{TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcMode},
+        storage::stable::template::{TemplateChunkSetStateStore, TemplateChunkStore},
+    };
     use canic_core::cdk::utils::wasm::get_wasm_hash;
-    use canic_template_runtime::storage::template::{
-        TemplateChunkSetStateStore, TemplateChunkStore,
-    };
-    use canic_template_types::dto::template::{
-        TemplateChunkInput, TemplateChunkSetInput, TemplateChunkSetPrepareInput,
-    };
 
     fn approved_input(template_id: &'static str, role: &'static str) -> TemplateManifestInput {
         TemplateManifestInput {

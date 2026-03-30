@@ -1,7 +1,6 @@
 mod endpoint;
 
 use crate::endpoint::{EndpointKind, expand_entry};
-use canic_dsl as _;
 use proc_macro::TokenStream;
 
 /// Define a Canic query endpoint.

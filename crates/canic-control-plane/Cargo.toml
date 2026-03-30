@@ -19,8 +19,6 @@ candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-core = { workspace = true }
 canic-memory = { workspace = true }
-canic-template-runtime = { workspace = true }
-canic-template-types = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

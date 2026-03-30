@@ -5,17 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.19.x] - 2026-03-30 - Library Lane Cleanup and Reference Install
+## [0.19.x] - 2026-03-30 - Library Lane Cleanup and Crate Graph Simplification
 
-- `0.19.1` finishes the library/reference split by moving template/store and sharding implementation lanes out of the default `canic` path, compiling `canic.toml` into the canister instead of parsing TOML at runtime, keeping `canic-utils` off the public facade, standardizing debug-only Candid export on `canic::cdk::export_candid_debug!()`, and hardening the staged `wasm_store`/`root` reference install flow behind `make demo-install` once `dfx` is already running.
+- `0.19.2` simplifies the workspace crate graph by merging the temporary template helper crates into `canic-control-plane`, deleting the dead `canic-dsl` and `canic-utils` crates, and restoring an empty shared `SubnetState` so the generic state cascade shape is `[as ss ad sd]` again without reintroducing root-owned publication inventory into non-root sync.
+- `0.19.1` finishes the library/reference split by moving template/store and sharding implementation lanes out of the default `canic` path, compiling `canic.toml` into the canister instead of parsing TOML at runtime, collapsing the temporary template helper crates back into `canic-control-plane`, removing the dead `canic::dsl` / `canic-utils` crates, standardizing debug-only Candid export on `canic::cdk::export_candid_debug!()`, and hardening the staged `wasm_store`/`root` reference install flow behind `make demo-install` once `dfx` is already running.
 - `0.19.0` starts the `0.19` line with a clean post-`0.18` audit baseline, recording the release wasm footprint (`minimal`/`app`/`scale`/`shard` at `2489858` bytes, `root` at `3730865`, `wasm_store` at `2823075`) and the refreshed capability-surface baseline before the next reduction pass begins.
 
-```bash
-# terminal 1
-scripts/app/dfx_start.sh
-
-# terminal 2
-make demo-install
+```rust
+use canic_control_plane::dto::template::TemplateManifestInput;
+use canic_control_plane::ids::{TemplateId, TemplateVersion};
 ```
 
 See detailed breakdown:
