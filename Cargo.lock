@@ -359,6 +359,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-wasm-store"
+version = "0.20.6"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "canister_app"
 version = "0.20.6"
 dependencies = [
@@ -439,15 +448,6 @@ dependencies = [
  "candid",
  "canic",
  "canic-internal",
- "ic-cdk",
-]
-
-[[package]]
-name = "canister_wasm_store"
-version = "0.20.6"
-dependencies = [
- "candid",
- "canic",
  "ic-cdk",
 ]
 

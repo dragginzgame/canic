@@ -1,0 +1,29 @@
+[package]
+name = "canic-wasm-store"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Canonical Canic wasm_store canister crate"
+readme = "README.md"
+documentation = "https://docs.rs/canic-wasm-store"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[lib]
+name = "canister_wasm_store"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["control-plane"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true }
+
+[lints]
+workspace = true

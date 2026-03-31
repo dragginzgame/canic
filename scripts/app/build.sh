@@ -37,12 +37,75 @@ artifact_profile_path() {
 
 source_did_path() {
     local canister="$1"
+    if [ "$canister" = "wasm_store" ]; then
+        printf '%s\n' "$(canonical_wasm_store_source_root)/wasm_store.did"
+        return
+    fi
+
     printf '%s\n' "$ROOT/canisters/$canister/$canister.did"
 }
 
 artifact_did_path() {
     local canister="$1"
     printf '%s\n' "$ROOT/.dfx/local/canisters/$canister/$canister.did"
+}
+
+canonical_wasm_store_manifest_path() {
+    local workspace_manifest="$ROOT/crates/canic-wasm-store/Cargo.toml"
+    if [ -f "$workspace_manifest" ]; then
+        printf '%s\n' "$workspace_manifest"
+        return
+    fi
+
+    cargo metadata --format-version=1 | python3 -c '
+import json, sys
+from pathlib import Path
+
+data = json.load(sys.stdin)
+packages = data.get("packages", [])
+
+for package in packages:
+    if package.get("name") == "canic-wasm-store":
+        print(package["manifest_path"])
+        raise SystemExit(0)
+
+for package in packages:
+    if package.get("name") != "canic":
+        continue
+
+    manifest_path = Path(package["manifest_path"]).resolve()
+    version = package.get("version")
+
+    # Local path/git checkouts of the Canic repo keep `canic` under `crates/canic`.
+    sibling_manifest = manifest_path.parent.parent / "canic-wasm-store" / "Cargo.toml"
+    if sibling_manifest.is_file():
+        print(sibling_manifest)
+        raise SystemExit(0)
+
+    # Published crates land side-by-side in the cargo registry source tree.
+    if version:
+        registry_sibling = manifest_path.parent.parent / f"canic-wasm-store-{version}" / "Cargo.toml"
+        if registry_sibling.is_file():
+            print(registry_sibling)
+            raise SystemExit(0)
+
+raise SystemExit(
+    "unable to locate canonical '\''canic-wasm-store'\'' package; resolved '\''canic'\'' but found no sibling source checkout or registry crate. Downstreams should depend on the matching published '\''canic'\'' version and let the build helper discover '\''canic-wasm-store'\'' automatically."
+)
+'
+}
+
+canonical_wasm_store_source_root() {
+    dirname "$(canonical_wasm_store_manifest_path)"
+}
+
+canonical_wasm_store_config_path() {
+    if [ -n "${CANIC_CONFIG_PATH:-}" ]; then
+        printf '%s\n' "$CANIC_CONFIG_PATH"
+        return
+    fi
+
+    printf '%s\n' "$ROOT/canisters/canic.toml"
 }
 
 NONROOT_CANISTERS=(
@@ -80,11 +143,17 @@ newest_workspace_input_epoch() {
 
 newest_canister_interface_input_epoch() {
     local canister="$1"
+    local canister_source_root
+    canister_source_root="$ROOT/canisters/$canister"
+    if [ "$canister" = "wasm_store" ]; then
+        canister_source_root="$(canonical_wasm_store_source_root)"
+    fi
+
     find \
         "$ROOT/Cargo.toml" \
         "$ROOT/Cargo.lock" \
         "$ROOT/scripts/app/build.sh" \
-        "$ROOT/canisters/$canister" \
+        "$canister_source_root" \
         "$ROOT/crates/canic" \
         "$ROOT/crates/canic-core" \
         "$ROOT/crates/canic-cdk" \
@@ -162,6 +231,26 @@ workspace_wasm_build_is_current() {
 build_requested_canisters() {
     local profile_dir="$1"
     shift
+
+    if [ "$#" -eq 1 ] && [ "$1" = "wasm_store" ]; then
+        local wasm_store_manifest
+        wasm_store_manifest="$(canonical_wasm_store_manifest_path)"
+        local config_path
+        config_path="$(canonical_wasm_store_config_path)"
+
+        local cargo_args=(
+            build
+            --manifest-path "$wasm_store_manifest"
+            --target wasm32-unknown-unknown
+        )
+
+        if [ "$profile_dir" = "release" ]; then
+            cargo_args+=(--release)
+        fi
+
+        CANIC_CONFIG_PATH="$config_path" cargo "${cargo_args[@]}"
+        return
+    fi
 
     local cargo_args=(
         build

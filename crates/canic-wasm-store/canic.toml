@@ -1,0 +1,16 @@
+controllers = []
+app_directory = []
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]
+
+[auth.delegated_tokens]
+enabled = false
+
+[subnets.prime]
+pool.minimum_size = 1
+
+[subnets.prime.canisters.root]
+kind = "root"
