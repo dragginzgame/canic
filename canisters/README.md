@@ -4,6 +4,12 @@ The canisters in this directory exist purely for tests, demos, and examples.
 Each crate exercises a different portion of the Canic stack so contributors can
 try features end-to-end without touching production code.
 
+The implicit `wasm_store` is no longer sourced from this directory. Its
+canonical canister crate now lives at `crates/canic-wasm-store/` so downstreams
+build the same store from published Canic sources instead of carrying a
+local `wasm_store` crate. The local build helper discovers the matching
+canonical store source from the resolved `canic` package automatically.
+
 ## What’s Here
 
 - `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.

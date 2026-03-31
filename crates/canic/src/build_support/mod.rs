@@ -74,7 +74,7 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
         .expect("canonicalize copied embedded wasm_store bootstrap artifact");
     let metadata = inspect_embedded_artifact(&artifact_path, &embedded_asset_path);
     println!(
-        "cargo:warning=embedding build-produced wasm_store bootstrap artifact from {} into {} (kind={} size={} sha256={})",
+        "cargo:warning=root bootstrap artifact: role=wasm_store source={} embedded={} kind={} size={} sha256={}",
         artifact_path.display(),
         embedded_asset_path.display(),
         metadata.artifact_kind,

@@ -20,6 +20,7 @@ PUBLISH_ORDER=(
     canic-sharding-runtime
     canic-dsl-macros
     canic
+    canic-wasm-store
     canic-testkit
 )
 
