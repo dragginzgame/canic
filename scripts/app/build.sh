@@ -45,10 +45,9 @@ artifact_did_path() {
     printf '%s\n' "$ROOT/.dfx/local/canisters/$canister/$canister.did"
 }
 
-ALL_CANISTERS=(
+NONROOT_CANISTERS=(
     app
     minimal
-    root
     scale
     scale_hub
     test
@@ -58,7 +57,8 @@ ALL_CANISTERS=(
 
 workspace_wasm_build_stamp() {
     local profile_dir="$1"
-    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build-$profile_dir.stamp"
+    local scope="$2"
+    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build-$scope-$profile_dir.stamp"
 }
 
 workspace_wasm_build_lock() {
@@ -137,13 +137,15 @@ maybe_shrink_wasm_artifact() {
 
 workspace_wasm_build_is_current() {
     local profile_dir="$1"
+    local scope="$2"
+    shift 2
     local stamp
-    stamp="$(workspace_wasm_build_stamp "$profile_dir")"
+    stamp="$(workspace_wasm_build_stamp "$profile_dir" "$scope")"
 
     [ -f "$stamp" ] || return 1
 
     local canister
-    for canister in "${ALL_CANISTERS[@]}"; do
+    for canister in "$@"; do
         [ -f "$(workspace_wasm_target_path "$canister" "$profile_dir")" ] || return 1
     done
 
@@ -157,21 +159,9 @@ workspace_wasm_build_is_current() {
     awk "BEGIN { exit !($stamp_epoch >= $newest_input) }"
 }
 
-ensure_workspace_wasm_build() {
+build_requested_canisters() {
     local profile_dir="$1"
-    mkdir -p "$ROOT/.dfx/local/canisters"
-
-    local lock_file
-    lock_file="$(workspace_wasm_build_lock)"
-
-    exec 9>"$lock_file"
-    flock 9
-
-    if workspace_wasm_build_is_current "$profile_dir"; then
-        flock -u 9
-        exec 9>&-
-        return
-    fi
+    shift
 
     local cargo_args=(
         build
@@ -183,12 +173,34 @@ ensure_workspace_wasm_build() {
     fi
 
     local canister
-    for canister in "${ALL_CANISTERS[@]}"; do
+    for canister in "$@"; do
         cargo_args+=(-p "canister_$canister")
     done
 
     cargo "${cargo_args[@]}"
-    touch "$(workspace_wasm_build_stamp "$profile_dir")"
+}
+
+ensure_workspace_wasm_build() {
+    local profile_dir="$1"
+    local scope="$2"
+    shift 2
+
+    mkdir -p "$ROOT/.dfx/local/canisters"
+
+    local lock_file
+    lock_file="$(workspace_wasm_build_lock)"
+
+    exec 9>"$lock_file"
+    flock 9
+
+    if workspace_wasm_build_is_current "$profile_dir" "$scope" "$@"; then
+        flock -u 9
+        exec 9>&-
+        return
+    fi
+
+    build_requested_canisters "$profile_dir" "$@"
+    touch "$(workspace_wasm_build_stamp "$profile_dir" "$scope")"
 
     flock -u 9
     exec 9>&-
@@ -202,7 +214,7 @@ extract_and_cache_did_from_debug_artifact() {
     source_did="$(source_did_path "$canister")"
     artifact_did="$(artifact_did_path "$canister")"
 
-    ensure_workspace_wasm_build "debug"
+    build_requested_canisters "debug" "$canister"
     candid-extractor "$(workspace_wasm_target_path "$canister" "debug")" > "$source_did"
     cp -f "$source_did" "$artifact_did"
 }
@@ -218,7 +230,11 @@ PROFILE_FILE="$(artifact_profile_path "$CAN")"
 SOURCE_DID="$(source_did_path "$CAN")"
 ARTIFACT_DID="$(artifact_did_path "$CAN")"
 
-ensure_workspace_wasm_build "$PROFILE_DIR"
+if [ "$CAN" = "root" ]; then
+    build_requested_canisters "$PROFILE_DIR" root
+else
+    ensure_workspace_wasm_build "$PROFILE_DIR" "nonroot" "${NONROOT_CANISTERS[@]}"
+fi
 cp -f "$(workspace_wasm_target_path "$CAN" "$PROFILE_DIR")" "$WASM_TARGET"
 maybe_shrink_wasm_artifact "$WASM_TARGET"
 gzip -n -9 -c "$WASM_TARGET" > "$WASM_GZ_TARGET"
