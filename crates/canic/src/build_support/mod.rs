@@ -72,17 +72,21 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     let embedded_asset_path = embedded_asset_path
         .canonicalize()
         .expect("canonicalize copied embedded wasm_store bootstrap artifact");
-    let metadata = inspect_embedded_artifact(&embedded_asset_path);
+    let metadata = inspect_embedded_artifact(&artifact_path, &embedded_asset_path);
     println!(
-        "cargo:warning=embedding build-produced wasm_store bootstrap artifact from {} (kind={} size={} sha256={})",
+        "cargo:warning=embedding build-produced wasm_store bootstrap artifact from {} into {} (kind={} size={} sha256={})",
         artifact_path.display(),
+        embedded_asset_path.display(),
         metadata.artifact_kind,
         metadata.artifact_size_bytes,
         metadata.artifact_sha256_hex,
     );
 
-    let generated =
-        render_root_wasm_store_bootstrap_release_set_source(&embedded_asset_path, &metadata);
+    let generated = render_root_wasm_store_bootstrap_release_set_source(
+        &artifact_path,
+        &embedded_asset_path,
+        &metadata,
+    );
     fs::write(&generated_path, generated)
         .expect("write embedded wasm_store bootstrap release set source");
 
@@ -247,10 +251,12 @@ fn render_root_release_bundle_source(entries: &[(String, PathBuf)]) -> String {
 }
 
 fn render_root_wasm_store_bootstrap_release_set_source(
-    artifact_path: &Path,
+    source_artifact_path: &Path,
+    embedded_artifact_path: &Path,
     metadata: &EmbeddedArtifactMetadata,
 ) -> String {
-    let path = artifact_path.to_string_lossy();
+    let source_path = source_artifact_path.to_string_lossy();
+    let embedded_path = embedded_artifact_path.to_string_lossy();
     let mut rendered = String::from("&[\n");
 
     rendered.push_str("    canic::__internal::core::bootstrap::EmbeddedRootBootstrapEntry {\n");
@@ -258,8 +264,15 @@ fn render_root_wasm_store_bootstrap_release_set_source(
         rendered,
         "        role: {ROOT_WASM_STORE_BOOTSTRAP_ROLE:?},"
     );
-    let _ = writeln!(rendered, "        wasm_module: include_bytes!({path:?}),");
-    let _ = writeln!(rendered, "        artifact_path: {path:?},");
+    let _ = writeln!(
+        rendered,
+        "        wasm_module: include_bytes!({embedded_path:?}),"
+    );
+    let _ = writeln!(rendered, "        artifact_path: {source_path:?},");
+    let _ = writeln!(
+        rendered,
+        "        embedded_artifact_path: {embedded_path:?},"
+    );
     let _ = writeln!(
         rendered,
         "        artifact_kind: {:?},",
@@ -297,11 +310,14 @@ fn render_root_wasm_store_bootstrap_release_set_source(
     rendered
 }
 
-fn inspect_embedded_artifact(artifact_path: &Path) -> EmbeddedArtifactMetadata {
-    let bytes = fs::read(artifact_path).unwrap_or_else(|err| {
+fn inspect_embedded_artifact(
+    source_artifact_path: &Path,
+    embedded_artifact_path: &Path,
+) -> EmbeddedArtifactMetadata {
+    let bytes = fs::read(embedded_artifact_path).unwrap_or_else(|err| {
         panic!(
             "read embedded artifact metadata from {} failed: {err}",
-            artifact_path.display()
+            embedded_artifact_path.display()
         )
     });
 
@@ -314,10 +330,18 @@ fn inspect_embedded_artifact(artifact_path: &Path) -> EmbeddedArtifactMetadata {
     };
 
     let decompressed = if artifact_kind == "gzip" {
-        Some(decompress_gzip(&bytes, artifact_path))
+        Some(decompress_gzip(&bytes, embedded_artifact_path))
     } else {
         None
     };
+
+    validate_embedded_bootstrap_artifact(
+        source_artifact_path,
+        embedded_artifact_path,
+        artifact_kind,
+        &bytes,
+        decompressed.as_deref(),
+    );
 
     EmbeddedArtifactMetadata {
         artifact_kind,
@@ -326,6 +350,47 @@ fn inspect_embedded_artifact(artifact_path: &Path) -> EmbeddedArtifactMetadata {
         decompressed_size_bytes: decompressed.as_ref().map(|decoded| decoded.len() as u64),
         decompressed_sha256_hex: decompressed.as_ref().map(|decoded| sha256_hex(decoded)),
     }
+}
+
+fn validate_embedded_bootstrap_artifact(
+    source_artifact_path: &Path,
+    embedded_artifact_path: &Path,
+    artifact_kind: &str,
+    artifact_bytes: &[u8],
+    decompressed_bytes: Option<&[u8]>,
+) {
+    assert!(
+        artifact_kind == "gzip",
+        "root bootstrap requires the build-produced gzip artifact at {} (embedded copy {}), but found {} bytes with head {} and sha256={}",
+        source_artifact_path.display(),
+        embedded_artifact_path.display(),
+        artifact_kind,
+        hex_head(artifact_bytes),
+        sha256_hex(artifact_bytes),
+    );
+
+    let decompressed_bytes = decompressed_bytes
+        .expect("gzip artifact metadata must include decompressed bytes for validation");
+
+    assert!(
+        !decompressed_bytes.is_empty(),
+        "root bootstrap artifact at {} (embedded copy {}) is invalid: gzip payload decompresses to zero bytes; compressed_size={} compressed_sha256={} compressed_head={}",
+        source_artifact_path.display(),
+        embedded_artifact_path.display(),
+        artifact_bytes.len(),
+        sha256_hex(artifact_bytes),
+        hex_head(artifact_bytes),
+    );
+
+    assert!(
+        is_raw_wasm(decompressed_bytes),
+        "root bootstrap artifact at {} (embedded copy {}) is invalid: gzip payload does not decompress to a wasm module; decompressed_size={} decompressed_sha256={} decompressed_head={}",
+        source_artifact_path.display(),
+        embedded_artifact_path.display(),
+        decompressed_bytes.len(),
+        sha256_hex(decompressed_bytes),
+        hex_head(decompressed_bytes),
+    );
 }
 
 fn decompress_gzip(bytes: &[u8], artifact_path: &Path) -> Vec<u8> {
@@ -364,6 +429,15 @@ fn render_u64_literal(value: u64) -> String {
         rendered.push(digit);
     }
 
+    rendered
+}
+
+fn hex_head(bytes: &[u8]) -> String {
+    let head = &bytes[..bytes.len().min(16)];
+    let mut rendered = String::with_capacity(head.len() * 2);
+    for byte in head {
+        let _ = write!(rendered, "{byte:02x}");
+    }
     rendered
 }
 

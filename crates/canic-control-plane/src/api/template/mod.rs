@@ -63,8 +63,9 @@ impl WasmStoreBootstrapApi {
         log!(
             Topic::Init,
             Info,
-            "ws bootstrap artifact: path={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
+            "ws bootstrap artifact: source_path={} embedded_path={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
             entry.artifact_path,
+            entry.embedded_artifact_path,
             entry.artifact_kind,
             entry.artifact_size_bytes,
             entry.artifact_sha256_hex,
