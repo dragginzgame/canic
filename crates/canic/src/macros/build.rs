@@ -48,6 +48,10 @@ macro_rules! build_root_with {
                 // not follow the `canister_root` naming convention.
                 println!("cargo:rustc-cfg=canic_is_root");
                 println!("cargo:rustc-check-cfg=cfg(canic_has_root_release_bundle)");
+                println!("cargo:rustc-check-cfg=cfg(canic_has_root_wasm_store_bootstrap_release_set)");
+                if $crate::__build::emit_root_wasm_store_bootstrap_release_set(&$cfg_path) {
+                    println!("cargo:rustc-cfg=canic_has_root_wasm_store_bootstrap_release_set");
+                }
                 if $crate::__build::emit_root_release_bundle(&$cfg_path, $cfg.as_ref()) {
                     println!("cargo:rustc-cfg=canic_has_root_release_bundle");
                 }

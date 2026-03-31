@@ -17,12 +17,12 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_module: &'static [u8],
+        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootReleaseEntry],
         embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
         embedded_release_version: &str,
     ) {
-        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
-            embedded_wasm_store_module,
+        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
+            embedded_wasm_store_bootstrap_release_set,
         );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
@@ -54,12 +54,12 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_module: &'static [u8],
+        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootReleaseEntry],
         embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
         embedded_release_version: &str,
     ) {
-        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
-            embedded_wasm_store_module,
+        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
+            embedded_wasm_store_bootstrap_release_set,
         );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(

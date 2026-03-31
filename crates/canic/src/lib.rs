@@ -9,8 +9,6 @@
 //! For lower-level access, use the `api`, `cdk`, and `memory` modules.
 //! Direct access to internal core modules is intentionally unsupported.
 
-#[cfg(feature = "control-plane")]
-mod bootstrap;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod build_support;
 mod instructions;
@@ -28,11 +26,6 @@ pub mod __internal {
     #[cfg(feature = "sharding")]
     pub use canic_sharding_runtime as sharding;
 
-    #[cfg(feature = "control-plane")]
-    pub mod bootstrap {
-        pub use crate::bootstrap::root_wasm_store_wasm;
-    }
-
     pub mod instructions {
         pub use crate::instructions::format_instructions;
     }
@@ -42,6 +35,7 @@ pub mod __internal {
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub mod __build {
     pub use crate::build_support::emit_root_release_bundle;
+    pub use crate::build_support::emit_root_wasm_store_bootstrap_release_set;
 }
 
 // -----------------------------------------------------------------------------

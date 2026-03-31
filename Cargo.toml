@@ -9,6 +9,7 @@ members = [
     "canisters/test",
     "canisters/user_hub",
     "canisters/user_shard",
+    "canisters/wasm_store",
     "crates/canic",
     "crates/canic-cdk",
     "crates/canic-control-plane",

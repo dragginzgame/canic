@@ -116,11 +116,25 @@ macro_rules! __canic_start_root_lifecycle_core {
             &[]
         }
 
+        #[doc(hidden)]
+        #[cfg(canic_has_root_wasm_store_bootstrap_release_set)]
+        fn __canic_embedded_root_wasm_store_bootstrap_release_set(
+        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
+            include!(env!("CANIC_ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_PATH"))
+        }
+
+        #[doc(hidden)]
+        #[cfg(not(canic_has_root_wasm_store_bootstrap_release_set))]
+        fn __canic_embedded_root_wasm_store_bootstrap_release_set(
+        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
+            &[]
+        }
+
         #[::canic::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             let (config, config_source, config_path) = __canic_compiled_config();
-            let embedded_wasm_store_module =
-                $crate::__internal::bootstrap::root_wasm_store_wasm();
+            let embedded_wasm_store_bootstrap_release_set =
+                __canic_embedded_root_wasm_store_bootstrap_release_set();
             let embedded_release_bundle = __canic_embedded_root_release_bundle();
             let embedded_release_version = env!("CARGO_PKG_VERSION");
 
@@ -129,7 +143,7 @@ macro_rules! __canic_start_root_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                embedded_wasm_store_module,
+                embedded_wasm_store_bootstrap_release_set,
                 embedded_release_bundle,
                 embedded_release_version,
             );
@@ -142,8 +156,8 @@ macro_rules! __canic_start_root_lifecycle_core {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
-            let embedded_wasm_store_module =
-                $crate::__internal::bootstrap::root_wasm_store_wasm();
+            let embedded_wasm_store_bootstrap_release_set =
+                __canic_embedded_root_wasm_store_bootstrap_release_set();
             let embedded_release_bundle = __canic_embedded_root_release_bundle();
             let embedded_release_version = env!("CARGO_PKG_VERSION");
 
@@ -151,7 +165,7 @@ macro_rules! __canic_start_root_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                embedded_wasm_store_module,
+                embedded_wasm_store_bootstrap_release_set,
                 embedded_release_bundle,
                 embedded_release_version,
             );

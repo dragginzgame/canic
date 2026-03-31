@@ -11,6 +11,7 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_root_release_bundle)");
+    println!("cargo:rustc-check-cfg=cfg(canic_has_root_wasm_store_bootstrap_release_set)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_icrc)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_canic)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
