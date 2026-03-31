@@ -39,6 +39,7 @@ pub struct EmbeddedRootBootstrapEntry {
     pub role: &'static str,
     pub wasm_module: &'static [u8],
     pub artifact_path: &'static str,
+    pub embedded_artifact_path: &'static str,
     pub artifact_kind: &'static str,
     pub artifact_size_bytes: u64,
     pub artifact_sha256_hex: &'static str,

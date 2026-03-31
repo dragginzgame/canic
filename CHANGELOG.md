@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.20.x] - 2026-03-31 - Cleanup and Optimization
 
+- `0.20.6` hardens the embedded `wasm_store` bootstrap contract by rejecting empty or non-wasm `.wasm.gz` artifacts during the root build itself, and expands the bootstrap provenance log to include both the original DFX source path and the copied embedded path so downstream artifact bugs fail early and read clearly.
 - `0.20.5` fixes the embedded `wasm_store` bootstrap source so `root` now installs the current DFX-built `.wasm.gz` artifact instead of drifting back to a stale checked-in payload, and logs the exact embedded bootstrap provenance during root init so bootstrap mismatches are visible immediately.
 - `0.20.4` makes ordinary child-role publication an internal root bootstrap detail by embedding the release bundle into `root` during the normal `dfx build --all` flow, so reinstalling `root` is sufficient again in local deployments and the old external release-staging scripts are gone.
 - `0.20.3` stabilizes the `0.20` perf tooling by turning the instruction audit into a real repeated baseline instead of a one-off harness, adding production `perf!` checkpoints across the critical root/auth/replay/scaling/sharding flows, measuring root template-staging admin updates directly, and hardening the audit/build path so unrelated local `dfx` and Cargo state no longer invalidate the report runner.
