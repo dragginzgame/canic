@@ -143,8 +143,6 @@ canisters/                  # Reference/deployable canisters
 ├─ app/                     # Example application
 ├─ user_hub/                # User signup + provisioning coordinator
 ├─ user_shard/              # Delegated signing shard
-├─ shard/                   # Shard implementation
-├─ shard_hub/               # Shard coordinator
 ├─ scale/                   # Scaling worker
 ├─ scale_hub/               # Scaling coordinator
 ├─ minimal/                 # Minimal baseline canister

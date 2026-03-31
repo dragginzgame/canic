@@ -103,8 +103,6 @@ Default scope is the full reference canister set in `dfx.json`:
 - `user_shard`
 - `scale_hub`
 - `scale`
-- `shard_hub`
-- `shard`
 - `test`
 - `root`
 

@@ -51,8 +51,6 @@ ALL_CANISTERS=(
     root
     scale
     scale_hub
-    shard
-    shard_hub
     test
     user_hub
     user_shard

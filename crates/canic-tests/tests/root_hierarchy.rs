@@ -31,7 +31,6 @@ fn root_builds_hierarchy_and_exposes_env() {
             (canister::APP, Some(setup.root_id)),
             (canister::USER_HUB, Some(setup.root_id)),
             (canister::SCALE_HUB, Some(setup.root_id)),
-            (canister::SHARD_HUB, Some(setup.root_id)),
         ],
     );
 

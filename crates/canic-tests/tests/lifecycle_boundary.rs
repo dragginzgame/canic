@@ -10,7 +10,7 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_internal::canister::{APP, SCALE_HUB, SHARD_HUB, TEST, USER_HUB};
+use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::{
     artifacts::{
         WasmBuildProfile, build_wasm_canisters, prebuilt_wasm_dir, read_wasm, test_target_dir,
@@ -218,12 +218,12 @@ fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
 }
 
 fn app_directory_args() -> AppDirectoryArgs {
-    let roles = [USER_HUB, SCALE_HUB, SHARD_HUB];
+    let roles = [USER_HUB, SCALE_HUB];
     AppDirectoryArgs(directory_entries(&roles, None, 10))
 }
 
 fn subnet_directory_args(canister_id: Principal) -> SubnetDirectoryArgs {
-    let roles = [APP, USER_HUB, SCALE_HUB, SHARD_HUB, TEST];
+    let roles = [APP, USER_HUB, SCALE_HUB, TEST];
     let override_role = Some((TEST, canister_id));
     SubnetDirectoryArgs(directory_entries(&roles, override_role, 20))
 }

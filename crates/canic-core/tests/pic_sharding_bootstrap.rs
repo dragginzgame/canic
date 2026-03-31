@@ -23,9 +23,9 @@ use std::{
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
-const SHARD_HUB_INSTALL_CYCLES: u128 = 20_000_000_000_000;
-const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_shard_hub"];
-const POOL_NAME: &str = "shards";
+const USER_HUB_INSTALL_CYCLES: u128 = 20_000_000_000_000;
+const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_user_hub"];
+const POOL_NAME: &str = "user_shards";
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
@@ -59,7 +59,7 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     build_canisters_once(&workspace_root);
 
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
+    let user_hub_wasm = read_wasm(&workspace_root, "canister_user_hub");
 
     let pic = build_pic();
 
@@ -67,22 +67,22 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
 
-    let shard_hub_id = pic.create_canister();
-    pic.add_cycles(shard_hub_id, SHARD_HUB_INSTALL_CYCLES);
+    let user_hub_id = pic.create_canister();
+    pic.add_cycles(user_hub_id, USER_HUB_INSTALL_CYCLES);
     pic.install_canister(
-        shard_hub_id,
-        shard_hub_wasm,
-        shard_hub_init_args(root_id),
+        user_hub_id,
+        user_hub_wasm,
+        user_hub_init_args(root_id),
         None,
     );
 
     let partition_key = Principal::from_slice(&[10; 29]);
     let shard_pid: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (partition_key,));
-    let shard_pid = shard_pid.expect("register_principal failed");
+        update_call(&pic, user_hub_id, "create_account", (partition_key,));
+    let shard_pid = shard_pid.expect("create_account failed");
 
     let registry: Result<ShardingRegistryResponse, Error> =
-        query_call(&pic, shard_hub_id, "canic_sharding_registry", ());
+        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
     let pool_entries: Vec<_> = registry
@@ -96,7 +96,7 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
 
     let partition_keys: Result<ShardingPartitionKeysResponse, Error> = query_call(
         &pic,
-        shard_hub_id,
+        user_hub_id,
         "canic_sharding_partition_keys",
         (POOL_NAME.to_string(), shard_pid),
     );
@@ -110,7 +110,7 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     build_canisters_once(&workspace_root);
 
     let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let shard_hub_wasm = read_wasm(&workspace_root, "canister_shard_hub");
+    let user_hub_wasm = read_wasm(&workspace_root, "canister_user_hub");
 
     let pic = build_pic();
 
@@ -118,12 +118,12 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
 
-    let shard_hub_id = pic.create_canister();
-    pic.add_cycles(shard_hub_id, SHARD_HUB_INSTALL_CYCLES);
+    let user_hub_id = pic.create_canister();
+    pic.add_cycles(user_hub_id, USER_HUB_INSTALL_CYCLES);
     pic.install_canister(
-        shard_hub_id,
-        shard_hub_wasm,
-        shard_hub_init_args(root_id),
+        user_hub_id,
+        user_hub_wasm,
+        user_hub_init_args(root_id),
         None,
     );
 
@@ -131,17 +131,17 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let partition_key_b = Principal::from_slice(&[11; 29]);
 
     let first: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (partition_key_a,));
-    let first = first.expect("register_principal partition_key_a failed");
+        update_call(&pic, user_hub_id, "create_account", (partition_key_a,));
+    let first = first.expect("create_account partition_key_a failed");
 
     let second: Result<Principal, Error> =
-        update_call(&pic, shard_hub_id, "register_principal", (partition_key_b,));
-    let second = second.expect("register_principal partition_key_b failed");
+        update_call(&pic, user_hub_id, "create_account", (partition_key_b,));
+    let second = second.expect("create_account partition_key_b failed");
 
     assert_eq!(first, second);
 
     let registry: Result<ShardingRegistryResponse, Error> =
-        query_call(&pic, shard_hub_id, "canic_sharding_registry", ());
+        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
     let pool_count = registry
@@ -153,13 +153,13 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     assert_eq!(pool_count, 1);
 }
 
-fn shard_hub_init_args(root_pid: Principal) -> Vec<u8> {
+fn user_hub_init_args(root_pid: Principal) -> Vec<u8> {
     let env = EnvBootstrapArgs {
         prime_root_pid: Some(root_pid),
         subnet_role: Some(SubnetRole::PRIME),
         subnet_pid: Some(root_pid),
         root_pid: Some(root_pid),
-        canister_role: Some(CanisterRole::from("shard_hub")),
+        canister_role: Some(CanisterRole::from("user_hub")),
         parent_pid: Some(root_pid),
     };
 

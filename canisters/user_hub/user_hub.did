@@ -358,6 +358,7 @@ type Result_10 = variant { Ok : vec text; Err : Error };
 type Result_11 = variant { Ok : vec ShardingRegistryEntry; Err : Error };
 type Result_12 = variant { Ok; Err : Error };
 type Result_13 = variant { Ok : principal; Err : Error };
+type Result_14 = variant { Ok : text; Err : Error };
 type Result_2 = variant { Ok : nat; Err : Error };
 type Result_3 = variant { Ok : nat64; Err : Error };
 type Result_4 = variant { Ok : Page_2; Err : Error };
@@ -514,4 +515,7 @@ service : (CanisterInitPayload, opt blob) -> {
   // Test-only: no public auth guarantees; intended for local/dev Canic tests.
   create_account : (principal) -> (Result_13);
   icrc10_supported_standards : () -> (vec record { text; text }) query;
+  // plan_create_account
+  // Dry-run the user-shard placement decision using config-driven policy.
+  plan_create_account : (principal) -> (Result_14) query;
 }

@@ -17,7 +17,6 @@
                 "minimal",
                 "user_hub",
                 "scale_hub",
-                "shard_hub",
                 "test",
                 "wasm_store"
             ]
@@ -106,35 +105,6 @@
                 }
             ]
         },
-        "shard_hub": {
-            "type": "custom",
-            "candid": ".dfx/local/canisters/shard_hub/shard_hub.did",
-            "build": "bash -c 'scripts/app/build.sh shard_hub'",
-            "wasm": ".dfx/local/canisters/shard_hub/shard_hub.wasm",
-            "shrink": true,
-            "gzip": true,
-            "metadata": [
-                {
-                    "name": "candid:service"
-                }
-            ],
-            "dependencies": [
-                "shard"
-            ]
-        },
-        "shard": {
-            "type": "custom",
-            "candid": ".dfx/local/canisters/shard/shard.did",
-            "build": "bash -c 'scripts/app/build.sh shard'",
-            "wasm": ".dfx/local/canisters/shard/shard.wasm",
-            "shrink": true,
-            "gzip": true,
-            "metadata": [
-                {
-                    "name": "candid:service"
-                }
-            ]
-        },
         "test": {
             "type": "custom",
             "candid": ".dfx/local/canisters/test/test.did",
@@ -165,7 +135,6 @@
                 "minimal",
                 "user_hub",
                 "scale_hub",
-                "shard_hub",
                 "test"
             ]
         }

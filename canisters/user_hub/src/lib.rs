@@ -1,5 +1,5 @@
 //!
-//! User hub canister that initiates user shard provisioning for placement only.
+//! User hub canister that exercises sharding placement and delegated auth flows.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target. Its endpoints may intentionally omit
@@ -38,6 +38,19 @@ async fn create_account(pid: Principal) -> Result<Principal, Error> {
     }
 
     ShardingApi::assign_to_pool(POOL_NAME, pid.to_string()).await
+}
+
+/// plan_create_account
+/// Dry-run the user-shard placement decision using config-driven policy.
+#[canic_query]
+async fn plan_create_account(pid: Principal) -> Result<String, Error> {
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
+    }
+
+    let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
+
+    Ok(format!("{plan:?}"))
 }
 
 canic::cdk::export_candid_debug!();
