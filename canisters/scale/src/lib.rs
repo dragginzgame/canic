@@ -8,7 +8,6 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::prelude::*;
 use canic_internal::{
     canister::SCALE,
     reference::empty_shell::{canic_install, canic_setup, canic_upgrade},

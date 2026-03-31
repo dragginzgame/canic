@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.20.x] - 2026-03-31 - Cleanup and Optimization
 
-- `0.20.1` makes `wasm_store` an internal root bootstrap detail instead of a user-managed reference canister: `start_root!()` now installs the first live store from a built-in `canic` asset, ordinary release staging no longer requires a separate `wasm_store` artifact, and the demo/test surfaces drop the old `dfx.json` / `canisters/wasm_store` configuration burden.
+- `0.20.2` makes `wasm_store` an internal root bootstrap detail instead of a user-managed reference canister, removes the old `shard` / `shard_hub` reference roles, consolidates the sharding demo and test lane on `user_hub` / `user_shard`, and hardens root release staging so stale local `.dfx` artifacts cannot silently republish deleted roles.
 - `0.20.0` opens the cleanup and optimization line, using recurring wasm-footprint and instruction-footprint audits to drive shared wasm reduction, lower `perf!` and endpoint instruction counts, catch regressions before they spread across the runtime floor, keep publishable crates free of workspace-only integration-test baggage, and round out the `canic` control-plane facade so downstreams can keep dropping direct `canic-control-plane` imports.
 
 See detailed breakdown:

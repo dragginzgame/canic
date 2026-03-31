@@ -8,8 +8,8 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::prelude::*;
 #[cfg(debug_assertions)]
+use canic::prelude::*;
 use canic::{
     Error, api::rpc::RpcApi, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse,
 };
