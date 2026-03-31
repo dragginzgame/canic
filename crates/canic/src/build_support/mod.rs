@@ -111,18 +111,29 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> boo
     let workspace_root = discover_workspace_root(&manifest_dir);
     let artifact_root = discover_release_artifact_root(&workspace_root);
     let asset_dir = out_dir.join(ROOT_RELEASE_ASSET_DIR);
+    let strict_artifacts =
+        env::var("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_ok_and(|value| value == "1");
 
     fs::create_dir_all(&asset_dir).expect("create embedded root release asset dir");
 
     println!("cargo:rerun-if-changed={}", workspace_root.display());
     println!("cargo:rerun-if-changed={}", config_path.display());
     println!("cargo:rerun-if-changed={}", artifact_root.display());
+    println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS");
 
     let mut built_entries = Vec::new();
 
     for role_name in configured_release_roles(config) {
         let artifact_path = resolve_release_wasm_path(&workspace_root, &artifact_root, &role_name);
         if !artifact_path.is_file() {
+            assert!(
+                !strict_artifacts,
+                "root release bundle requires the build-produced gzip artifact for role '{role_name}' at {}; build the child canisters through the normal DFX/custom build path first",
+                artifact_root
+                    .join(&role_name)
+                    .join(format!("{role_name}.wasm.gz"))
+                    .display()
+            );
             println!(
                 "cargo:warning=canic root bundle skipped role '{role_name}': missing built artifact at {}; build dependencies first if this role should bootstrap automatically",
                 artifact_path.display()
@@ -130,7 +141,18 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> boo
             continue;
         }
 
-        let out_wasm = asset_dir.join(format!("{role_name}.wasm"));
+        assert!(
+            !strict_artifacts || artifact_path.extension().is_some_and(|ext| ext == "gz"),
+            "root release bundle requires the build-produced gzip artifact for role '{role_name}', but resolved {}; remove the raw fallback from the real build path",
+            artifact_path.display()
+        );
+
+        let extension = if artifact_path.extension().is_some_and(|ext| ext == "gz") {
+            "wasm.gz"
+        } else {
+            "wasm"
+        };
+        let out_wasm = asset_dir.join(format!("{role_name}.{extension}"));
         fs::copy(&artifact_path, &out_wasm).unwrap_or_else(|err| {
             panic!(
                 "copy embedded release wasm for role '{role_name}' from {} to {} failed: {err}",
@@ -221,6 +243,13 @@ fn resolve_release_wasm_path(
     artifact_root: &Path,
     role_name: &str,
 ) -> PathBuf {
+    let dfx_gzip_path = artifact_root
+        .join(role_name)
+        .join(format!("{role_name}.wasm.gz"));
+    if dfx_gzip_path.is_file() {
+        return dfx_gzip_path;
+    }
+
     let dfx_path = artifact_root
         .join(role_name)
         .join(format!("{role_name}.wasm"));
