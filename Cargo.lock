@@ -226,15 +226,9 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-dsl-macros",
- "canic-internal",
  "canic-memory",
  "canic-sharding-runtime",
- "canic-testkit",
  "ic-cdk",
- "serde",
- "serde_bytes",
- "serde_cbor",
- "serde_json",
  "toml",
 ]
 
@@ -338,6 +332,19 @@ dependencies = [
  "derive_more",
  "pocket-ic",
  "serde",
+]
+
+[[package]]
+name = "canic-tests"
+version = "0.20.0"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-control-plane",
+ "canic-internal",
+ "canic-testkit",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

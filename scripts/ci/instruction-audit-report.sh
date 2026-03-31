@@ -49,5 +49,5 @@ export CANIC_INSTRUCTION_AUDIT_WORKTREE="$WORKTREE"
 export CANIC_INSTRUCTION_AUDIT_TIMESTAMP_UTC="$RUN_TIMESTAMP_UTC"
 
 echo "Running instruction audit report into $REPORT_PATH"
-cargo test -p canic --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture
+cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture
 echo "Wrote $REPORT_PATH"

@@ -1,0 +1,114 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SELF_DIR/../.." && pwd)"
+cd "$ROOT_DIR"
+
+PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN:-0}"
+PUBLISH_FROM="${PUBLISH_FROM:-}"
+PUBLISH_POLL_SECS="${PUBLISH_POLL_SECS:-10}"
+PUBLISH_TIMEOUT_SECS="${PUBLISH_TIMEOUT_SECS:-300}"
+
+PUBLISH_ORDER=(
+    canic-cdk
+    canic-memory
+    canic-types
+    canic-core
+    canic-control-plane
+    canic-sharding-runtime
+    canic-dsl-macros
+    canic
+    canic-testkit
+)
+
+# Extracts the current workspace version from the root manifest.
+workspace_version() {
+    awk '
+        /^\[workspace.package\]/ { in_section = 1; next }
+        /^\[/ && in_section { exit }
+        in_section && $1 == "version" {
+            gsub(/"/, "", $3);
+            print $3;
+            exit;
+        }
+    ' Cargo.toml
+}
+
+# Returns success once crates.io reports the expected version for a crate.
+registry_has_version() {
+    local crate="$1"
+    local version="$2"
+
+    cargo search "$crate" --limit 20 2>/dev/null |
+        awk -v crate="$crate" -v version="$version" '
+            $1 == crate {
+                gsub(/"/, "", $3);
+                if ($3 == version) {
+                    found = 1;
+                    exit 0;
+                }
+            }
+            END { exit(found ? 0 : 1) }
+        '
+}
+
+# Waits until crates.io exposes the freshly published version.
+wait_for_registry_version() {
+    local crate="$1"
+    local version="$2"
+    local deadline=$((SECONDS + PUBLISH_TIMEOUT_SECS))
+
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        if registry_has_version "$crate" "$version"; then
+            echo "Observed $crate $version on crates.io"
+            return 0
+        fi
+
+        echo "Waiting for crates.io to expose $crate $version..."
+        sleep "$PUBLISH_POLL_SECS"
+    done
+
+    echo "Timed out waiting for $crate $version to appear on crates.io" >&2
+    return 1
+}
+
+version="$(workspace_version)"
+if [ -z "$version" ]; then
+    echo "Failed to determine workspace version from Cargo.toml" >&2
+    exit 1
+fi
+
+started=0
+matched_from=0
+if [ -z "$PUBLISH_FROM" ]; then
+    started=1
+fi
+
+for crate in "${PUBLISH_ORDER[@]}"; do
+    if [ "$started" -eq 0 ]; then
+        if [ "$crate" != "$PUBLISH_FROM" ]; then
+            continue
+        fi
+        started=1
+        matched_from=1
+    fi
+
+    echo "Publishing $crate $version"
+    publish_args=(publish -p "$crate" --locked)
+    if [ "$PUBLISH_DRY_RUN" = "1" ]; then
+        publish_args+=(--dry-run)
+    fi
+
+    cargo "${publish_args[@]}"
+
+    if [ "$PUBLISH_DRY_RUN" != "1" ]; then
+        wait_for_registry_version "$crate" "$version"
+    fi
+done
+
+if [ -n "$PUBLISH_FROM" ] && [ "$matched_from" -eq 0 ]; then
+    echo "PUBLISH_FROM=$PUBLISH_FROM is not in the publish order" >&2
+    exit 1
+fi

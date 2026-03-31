@@ -269,7 +269,7 @@ For each notable endpoint family, determine:
 Suggested scans:
 
 ```bash
-rg -n 'canic_<family>' crates/canic-core/src crates/canic/src crates/canic/tests -g '*.rs'
+rg -n 'canic_<family>' crates/canic-core/src crates/canic/src crates/canic-tests/tests -g '*.rs'
 ```
 
 Classify each family as:

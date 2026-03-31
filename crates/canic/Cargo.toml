@@ -32,13 +32,6 @@ ic-cdk = { workspace = true }
 canic-core = { workspace = true }
 
 [dev-dependencies]
-canic-control-plane = { workspace = true }
-canic-internal = { workspace = true }
-canic-testkit = { workspace = true }
-serde = { workspace = true }
-serde_bytes = { workspace = true }
-serde_cbor = { workspace = true }
-serde_json = { workspace = true }
 toml = { workspace = true }
 
 [lints]

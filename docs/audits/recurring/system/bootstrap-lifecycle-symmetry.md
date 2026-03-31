@@ -203,7 +203,7 @@ phase semantics.
 Suggested scans:
 
 ```bash
-rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' crates/canic/tests crates/canic-core/tests -g '*.rs'
+rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' crates/canic-tests/tests crates/canic-core/tests -g '*.rs'
 ```
 
 - [ ] Lifecycle boundary tests exist
