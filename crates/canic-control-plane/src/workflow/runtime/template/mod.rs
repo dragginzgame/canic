@@ -47,24 +47,24 @@ pub async fn approved_module_source_from_manifest(
             if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
                 let (store_pid, info) = resolved_bootstrap_chunk_set_for_manifest(manifest).await?;
 
-                return Ok(ApprovedModuleSource {
-                    source_canister: store_pid,
-                    source_label: manifest.template_id.as_str().to_string(),
-                    module_hash: manifest.payload_hash.clone(),
-                    chunk_hashes: info.chunk_hashes,
-                    payload_size_bytes: manifest.payload_size_bytes,
-                });
+                return Ok(ApprovedModuleSource::chunked(
+                    store_pid,
+                    manifest.template_id.as_str().to_string(),
+                    manifest.payload_hash.clone(),
+                    info.chunk_hashes,
+                    manifest.payload_size_bytes,
+                ));
             }
 
             let (store_pid, info) = resolved_store_chunk_set_for_manifest(manifest).await?;
 
-            Ok(ApprovedModuleSource {
-                source_canister: store_pid,
-                source_label: manifest.template_id.as_str().to_string(),
-                module_hash: manifest.payload_hash.clone(),
-                chunk_hashes: info.chunk_hashes,
-                payload_size_bytes: manifest.payload_size_bytes,
-            })
+            Ok(ApprovedModuleSource::chunked(
+                store_pid,
+                manifest.template_id.as_str().to_string(),
+                manifest.payload_hash.clone(),
+                info.chunk_hashes,
+                manifest.payload_size_bytes,
+            ))
         }
     }
 }

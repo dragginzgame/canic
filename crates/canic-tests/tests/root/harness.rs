@@ -46,14 +46,12 @@ const RELEASE_SET_ROLES: &[&str] = &[
     "test",
     "user_hub",
     "user_shard",
-    "wasm_store",
 ];
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 // Maximum management-canister chunk-store payload accepted per call. Use the
 // full 1 MiB limit to keep bootstrap round-trips low without exceeding bounds.
 const WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES: usize = 1024 * 1024;
-const WASM_STORE_BOOTSTRAP_TEMPLATE_ID: &str = "embedded:wasm_store";
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.
 // Enabling it can reintroduce hangs or flaky behavior from retained runtime state.
@@ -275,14 +273,6 @@ fn stage_root_release_set(pic: &Pic, root_id: Principal) {
     let mut role_artifacts = load_release_set_artifacts();
     role_artifacts.sort_by(|(left, _), (right, _)| left.as_ref().cmp(right.as_ref()));
 
-    if let Some(index) = role_artifacts
-        .iter()
-        .position(|(role, _)| role == &CanisterRole::WASM_STORE)
-    {
-        let bootstrap = role_artifacts.remove(index);
-        stage_release_role(pic, root_id, &bootstrap.0, bootstrap.1);
-    }
-
     for (role, wasm) in role_artifacts {
         stage_release_role(pic, root_id, &role, wasm);
     }
@@ -324,11 +314,7 @@ fn stage_release_role(pic: &Pic, root_id: Principal, role: &CanisterRole, wasm: 
     let staged_manifest: Result<(), Error> = pic
         .update_call(
             root_id,
-            if role.is_wasm_store() {
-                protocol::CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN
-            } else {
-                protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN
-            },
+            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
             (manifest,),
         )
         .expect("manifest staging call");
@@ -337,11 +323,7 @@ fn stage_release_role(pic: &Pic, root_id: Principal, role: &CanisterRole, wasm: 
     let prepared: Result<canic_control_plane::dto::template::TemplateChunkSetInfoResponse, Error> =
         pic.update_call(
             root_id,
-            if role.is_wasm_store() {
-                protocol::CANIC_WASM_STORE_BOOTSTRAP_PREPARE_ADMIN
-            } else {
-                protocol::CANIC_TEMPLATE_PREPARE_ADMIN
-            },
+            protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
             (TemplateChunkSetPrepareInput {
                 template_id: TemplateId::from(format!("embedded:{role}")),
                 version: version.clone(),
@@ -357,11 +339,7 @@ fn stage_release_role(pic: &Pic, root_id: Principal, role: &CanisterRole, wasm: 
         let published: Result<(), Error> = pic
             .update_call(
                 root_id,
-                if role.is_wasm_store() {
-                    protocol::CANIC_WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN
-                } else {
-                    protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN
-                },
+                protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
                 (TemplateChunkInput {
                     template_id: TemplateId::from(format!("embedded:{role}")),
                     version: version.clone(),
@@ -406,7 +384,7 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
     None
 }
 
-/// Load the compiled wasm_store canister wasm.
+/// Load the compiled staged release-set artifacts for the current topology.
 fn load_release_set_artifacts() -> Vec<(CanisterRole, Vec<u8>)> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let wasm_root = manifest_dir.join(CANISTER_WASM_ROOT_RELATIVE);
@@ -443,14 +421,6 @@ fn load_release_set_artifacts() -> Vec<(CanisterRole, Vec<u8>)> {
             .unwrap_or_else(|err| panic!("failed to read wasm at {}: {err}", wasm_path.display()));
         artifacts.push((CanisterRole::from(role), bytes));
     }
-
-    assert!(
-        artifacts
-            .iter()
-            .any(|(role, _)| role == &CanisterRole::WASM_STORE),
-        "release-set staging requires a wasm_store artifact under {}",
-        wasm_root.display()
-    );
 
     artifacts
 }

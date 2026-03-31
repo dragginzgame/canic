@@ -1,97 +1,62 @@
-use canic::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    dto::error::Error,
-    eager_static, ic_memory,
+use crate::{
     ids::{WasmStoreGcMode, WasmStoreGcStatus},
-    impl_storable_bounded,
+    storage::stable::template::{WasmStoreGcStateRecord, WasmStoreGcStateStore},
 };
-use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-
-const WASM_STORE_GC_STATE_ID: u8 = 62;
-
-const _: () = {
-    #[canic::memory::__reexports::ctor::ctor(
-        anonymous,
-        crate_path = canic::memory::__reexports::ctor
-    )]
-    fn __canic_reserve_wasm_store_memory_range() {
-        canic::ic_memory_range!(62, 62);
-    }
-};
-
-eager_static! {
-    static WASM_STORE_GC_STATE: RefCell<
-        Cell<WasmStoreGcStateRecord, VirtualMemory<DefaultMemoryImpl>>
-    > = RefCell::new(Cell::init(
-        ic_memory!(WasmStoreGcStateRecord, WASM_STORE_GC_STATE_ID),
-        WasmStoreGcStateRecord::default(),
-    ));
-}
+use canic_core::dto::error::Error;
 
 ///
-/// WasmStoreGcStateRecord
+/// WasmStoreGcOps
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct WasmStoreGcStateRecord {
-    pub mode: WasmStoreGcMode,
-    pub changed_at: u64,
-    pub prepared_at: Option<u64>,
-    pub started_at: Option<u64>,
-    pub completed_at: Option<u64>,
-    pub runs_completed: u32,
-}
+pub struct WasmStoreGcOps;
 
-impl_storable_bounded!(WasmStoreGcStateRecord, 64, true);
-
-// Return the current local wasm-store GC mode and changed-at timestamp.
-#[must_use]
-pub fn status() -> WasmStoreGcStateRecord {
-    WASM_STORE_GC_STATE.with_borrow(|cell| cell.get().clone())
-}
-
-// Return the current local wasm-store GC status in a shared boundary-safe shape.
-#[must_use]
-pub fn snapshot() -> WasmStoreGcStatus {
-    let current = status();
-
-    WasmStoreGcStatus {
-        mode: current.mode,
-        changed_at: current.changed_at,
-        prepared_at: current.prepared_at,
-        started_at: current.started_at,
-        completed_at: current.completed_at,
-        runs_completed: current.runs_completed,
+impl WasmStoreGcOps {
+    // Return the current local wasm-store GC state record.
+    #[must_use]
+    pub fn status() -> WasmStoreGcStateRecord {
+        WasmStoreGcStateStore::get()
     }
-}
 
-// Mark this local wasm store as prepared for store-local GC execution.
-pub fn prepare(changed_at: u64) -> Result<(), Error> {
-    transition_to(WasmStoreGcMode::Prepared, changed_at)
-}
+    // Return the current local wasm-store GC state in a boundary-safe response shape.
+    #[must_use]
+    pub fn snapshot() -> WasmStoreGcStatus {
+        let current = Self::status();
 
-// Mark this local wasm store as actively executing store-local GC work.
-pub fn begin(changed_at: u64) -> Result<(), Error> {
-    transition_to(WasmStoreGcMode::InProgress, changed_at)
-}
+        WasmStoreGcStatus {
+            mode: current.mode,
+            changed_at: current.changed_at,
+            prepared_at: current.prepared_at,
+            started_at: current.started_at,
+            completed_at: current.completed_at,
+            runs_completed: current.runs_completed,
+        }
+    }
 
-// Mark this local wasm store as having completed the current local GC pass.
-pub fn complete(changed_at: u64) -> Result<(), Error> {
-    transition_to(WasmStoreGcMode::Complete, changed_at)
-}
+    // Mark this local wasm store as prepared for store-local GC execution.
+    pub fn prepare(changed_at: u64) -> Result<(), Error> {
+        Self::transition_to(WasmStoreGcMode::Prepared, changed_at)
+    }
 
-// Apply one monotonic local GC mode transition.
-fn transition_to(next: WasmStoreGcMode, changed_at: u64) -> Result<(), Error> {
-    WASM_STORE_GC_STATE.with_borrow_mut(|cell| {
-        let current = cell.get().clone();
+    // Mark this local wasm store as actively executing store-local GC work.
+    pub fn begin(changed_at: u64) -> Result<(), Error> {
+        Self::transition_to(WasmStoreGcMode::InProgress, changed_at)
+    }
+
+    // Mark this local wasm store as having completed the current local GC pass.
+    pub fn complete(changed_at: u64) -> Result<(), Error> {
+        Self::transition_to(WasmStoreGcMode::Complete, changed_at)
+    }
+
+    // Apply one validated local GC mode transition.
+    fn transition_to(next: WasmStoreGcMode, changed_at: u64) -> Result<(), Error> {
+        let current = Self::status();
         let updated = transition_record(&current, next, changed_at)?;
-        cell.set(updated);
+        WasmStoreGcStateStore::set(updated);
         Ok(())
-    })
+    }
 }
 
-// Validate one local GC mode transition without touching stable state.
+// Validate one local wasm-store GC mode transition without touching stable state.
 fn transition_record(
     current: &WasmStoreGcStateRecord,
     next: WasmStoreGcMode,
@@ -137,9 +102,12 @@ fn transition_record(
 
 #[cfg(test)]
 mod tests {
-    use super::{WasmStoreGcStateRecord, transition_record};
-    use canic::dto::error::ErrorCode;
-    use canic::ids::WasmStoreGcMode;
+    use super::{WasmStoreGcOps, transition_record};
+    use crate::{
+        ids::WasmStoreGcMode,
+        storage::stable::template::{WasmStoreGcStateRecord, WasmStoreGcStateStore},
+    };
+    use canic_core::dto::error::ErrorCode;
 
     #[test]
     fn transition_record_advances_monotonically() {
@@ -204,5 +172,15 @@ mod tests {
 
         assert_eq!(err.code, ErrorCode::Conflict);
         assert!(err.message.contains("not allowed"));
+    }
+
+    #[test]
+    fn snapshot_reflects_persisted_state() {
+        WasmStoreGcStateStore::clear_for_test();
+        WasmStoreGcOps::prepare(10).expect("prepare must succeed");
+        let snapshot = WasmStoreGcOps::snapshot();
+        assert_eq!(snapshot.mode, WasmStoreGcMode::Prepared);
+        assert_eq!(snapshot.prepared_at, Some(10));
+        WasmStoreGcStateStore::clear_for_test();
     }
 }

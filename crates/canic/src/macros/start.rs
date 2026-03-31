@@ -105,12 +105,15 @@ macro_rules! __canic_start_root_lifecycle_core {
         #[::canic::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             let (config, config_source, config_path) = __canic_compiled_config();
+            let embedded_wasm_store_module =
+                $crate::__internal::bootstrap::root_wasm_store_wasm();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 identity,
                 config,
                 config_source,
                 config_path,
+                embedded_wasm_store_module,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
@@ -121,11 +124,14 @@ macro_rules! __canic_start_root_lifecycle_core {
         #[::canic::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
+            let embedded_wasm_store_module =
+                $crate::__internal::bootstrap::root_wasm_store_wasm();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,
                 config_source,
                 config_path,
+                embedded_wasm_store_module,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
@@ -265,6 +271,28 @@ macro_rules! start_root {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_start_root_lifecycle_core!($($init)?);
         $crate::__canic_start_root_capability_bundles!();
+    };
+}
+
+/// Configure lifecycle hooks and the canonical endpoint bundle for a subnet-local
+/// `wasm_store` canister.
+///
+/// This specialized macro exists so downstreams can use the built-in Canic
+/// `wasm_store` role without copying the reference canister implementation.
+#[macro_export]
+macro_rules! start_wasm_store {
+    ($(init = $init:block)? $(,)?) => {
+        #[allow(clippy::unused_async)]
+        async fn canic_setup() {}
+
+        #[allow(clippy::unused_async)]
+        async fn canic_install(_: Option<Vec<u8>>) {}
+
+        #[allow(clippy::unused_async)]
+        async fn canic_upgrade() {}
+
+        $crate::start!($crate::api::canister::CanisterRole::WASM_STORE $(, init = $init)?);
+        $crate::canic_emit_local_wasm_store_endpoints!();
     };
 }
 

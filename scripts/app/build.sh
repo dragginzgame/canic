@@ -54,7 +54,6 @@ ALL_CANISTERS=(
     test
     user_hub
     user_shard
-    wasm_store
 )
 
 workspace_wasm_build_stamp() {

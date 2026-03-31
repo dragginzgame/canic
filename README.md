@@ -59,13 +59,12 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
 * `canisters/` – reference canisters that exercise the library end to end:
 
-  * `root/` orchestrator tying together shards, scaling, and pool flows.
+  * `root/` orchestrator tying together shards, scaling, pool flows, and the implicit bootstrap `wasm_store`.
   * `app/` – sample application canister used in integration flows.
   * `user_hub/`, `user_shard/` – sharding placement and delegated signing pool.
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   * `minimal/` – minimal runtime baseline canister.
   * `test/` – workspace‑only test canister used by host‑side fixtures.
-  * `wasm_store/` – chunk-store-backed WASM publication and install support canister.
 * `scripts/` – build, release, audit, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.

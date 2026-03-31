@@ -36,8 +36,6 @@ fn main() {
         "wasm32-unknown-unknown",
         "-p",
         "delegation_signer_stub",
-        "-p",
-        "canister_wasm_store",
     ]);
     let output = cmd.output().expect("build embedded root test canisters");
     assert!(
@@ -53,13 +51,6 @@ fn main() {
 
     let out_wasm = out_dir.join("delegation_signer_stub.wasm");
     fs::copy(&wasm_path, &out_wasm).expect("copy signer wasm");
-
-    let wasm_store_path = target_dir
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join("canister_wasm_store.wasm");
-    let out_wasm_store = out_dir.join("canister_wasm_store.wasm");
-    fs::copy(&wasm_store_path, &out_wasm_store).expect("copy wasm_store wasm");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!(
@@ -78,18 +69,6 @@ fn main() {
         "cargo:rerun-if-changed={}",
         workspace_root
             .join("crates/canic-core/test-canisters/delegation_signer_stub/canic.toml")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        workspace_root
-            .join("canisters/wasm_store/Cargo.toml")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        workspace_root
-            .join("canisters/wasm_store/src/lib.rs")
             .display()
     );
 }

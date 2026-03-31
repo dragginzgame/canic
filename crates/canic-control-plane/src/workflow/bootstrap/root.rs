@@ -9,6 +9,7 @@ use crate::{
     ops::storage::template::{TemplateChunkedOps, TemplateManifestOps},
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
+use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
 use cp_core::{
     InternalError,
@@ -62,13 +63,40 @@ impl RootBootstrapContext {
 /// Root bootstrap entrypoints
 /// ---------------------------------------------------------------------------
 
-fn root_has_publishable_wasm_store_bootstrap() -> Result<bool, InternalError> {
-    TemplateChunkedOps::has_publishable_chunked_approved_for_role(&CanisterRole::WASM_STORE)
+fn root_has_embedded_wasm_store_bootstrap() -> bool {
+    ModuleSourceRuntimeApi::has_embedded_module_source(&CanisterRole::WASM_STORE)
+}
+
+fn root_missing_staged_release_roles(
+    data: &RootBootstrapContext,
+) -> Result<Vec<CanisterRole>, InternalError> {
+    let mut missing = Vec::new();
+
+    for role in &data.subnet_cfg.auto_create {
+        if role.is_wasm_store() {
+            continue;
+        }
+
+        if !TemplateChunkedOps::has_publishable_chunked_approved_for_role(role)? {
+            missing.push(role.clone());
+        }
+    }
+
+    Ok(missing)
 }
 
 pub async fn bootstrap_init_root_canister() {
-    let has_bootstrap = match root_has_publishable_wasm_store_bootstrap() {
-        Ok(ready) => ready,
+    if !root_has_embedded_wasm_store_bootstrap() {
+        log!(
+            Topic::Init,
+            Error,
+            "bootstrap (root:init) embedded wasm_store bootstrap module is not registered"
+        );
+        return;
+    }
+
+    let data = match RootBootstrapContext::load() {
+        Ok(data) => data,
         Err(err) => {
             log!(
                 Topic::Init,
@@ -79,11 +107,24 @@ pub async fn bootstrap_init_root_canister() {
         }
     };
 
-    if !has_bootstrap {
+    let missing_roles = match root_missing_staged_release_roles(&data) {
+        Ok(missing_roles) => missing_roles,
+        Err(err) => {
+            log!(
+                Topic::Init,
+                Error,
+                "bootstrap (root:init) release-set preflight failed: {err}"
+            );
+            return;
+        }
+    };
+
+    if !missing_roles.is_empty() {
         log!(
             Topic::Init,
             Info,
-            "bootstrap (root:init) waiting for staged wasm_store manifest + chunks"
+            "bootstrap (root:init) waiting for staged release roles: {:?}",
+            missing_roles
         );
         return;
     }
@@ -133,8 +174,17 @@ pub async fn bootstrap_init_root_canister() {
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
-    let has_bootstrap = match root_has_publishable_wasm_store_bootstrap() {
-        Ok(ready) => ready,
+    if !root_has_embedded_wasm_store_bootstrap() {
+        log!(
+            Topic::Init,
+            Error,
+            "bootstrap (root:upgrade) embedded wasm_store bootstrap module is not registered"
+        );
+        return;
+    }
+
+    let data = match RootBootstrapContext::load() {
+        Ok(data) => data,
         Err(err) => {
             log!(
                 Topic::Init,
@@ -145,11 +195,24 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         }
     };
 
-    if !has_bootstrap {
+    let missing_roles = match root_missing_staged_release_roles(&data) {
+        Ok(missing_roles) => missing_roles,
+        Err(err) => {
+            log!(
+                Topic::Init,
+                Error,
+                "bootstrap (root:upgrade) release-set preflight failed: {err}"
+            );
+            return;
+        }
+    };
+
+    if !missing_roles.is_empty() {
         log!(
             Topic::Init,
             Info,
-            "bootstrap (root:upgrade) waiting for staged wasm_store manifest + chunks"
+            "bootstrap (root:upgrade) waiting for staged release roles: {:?}",
+            missing_roles
         );
         return;
     }

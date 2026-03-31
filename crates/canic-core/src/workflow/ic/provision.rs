@@ -315,7 +315,7 @@ async fn install_canister(
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
     let payload = ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid)?;
-    let module_hash = module_source.module_hash.clone();
+    let module_hash = module_source.module_hash().to_vec();
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
@@ -369,9 +369,9 @@ async fn install_canister(
         Topic::CanisterLifecycle,
         Ok,
         "⚡ install_canister: {pid} ({role}, source={}, size={}, chunks={})",
-        module_source.source_label,
+        module_source.source_label(),
         module_source.payload_size(),
-        module_source.chunk_hashes.len(),
+        module_source.chunk_count(),
     );
 
     Ok(())
