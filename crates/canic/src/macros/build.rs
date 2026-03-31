@@ -47,6 +47,7 @@ macro_rules! build_root_with {
                 // surface, even for test/support crates whose package names do
                 // not follow the `canister_root` naming convention.
                 println!("cargo:rustc-cfg=canic_is_root");
+                $crate::__build::emit_root_release_bundle(&$cfg_path, $cfg.as_ref());
                 $body
             }
         }

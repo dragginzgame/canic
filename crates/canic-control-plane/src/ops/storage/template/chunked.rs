@@ -34,6 +34,13 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct TemplateChunkedOps;
 
 impl TemplateChunkedOps {
+    // Clear all locally staged manifest and chunk data before reseeding bootstrap releases.
+    pub fn clear_release_buffer() {
+        TemplateManifestStateStore::clear();
+        TemplateChunkSetStateStore::clear();
+        TemplateChunkStore::clear();
+    }
+
     // Return staged-release status for every approved manifest in deterministic role order.
     #[must_use]
     pub fn approved_staging_status_responses() -> Vec<TemplateStagingStatusResponse> {

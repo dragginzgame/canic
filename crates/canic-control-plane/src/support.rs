@@ -5,19 +5,30 @@ use crate::{
     config,
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-        WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-        WasmStoreOverviewResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
+        TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
+        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
+        WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
+        WasmStoreStatusResponse,
     },
-    ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
+    ids::{
+        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+        WasmStoreBinding, WasmStoreGcStatus,
+    },
     ops::storage::{
         state::subnet::SubnetStateOps,
         template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
     },
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-use canic_core::{__control_plane_core as cp_core, dto::error::Error};
-use cp_core::{cdk::types::Principal, ops::ic::IcOps};
+use canic_core::{
+    __control_plane_core as cp_core, bootstrap::EmbeddedRootReleaseEntry, dto::error::Error,
+};
+use cp_core::{
+    cdk::{types::Principal, utils::wasm::get_wasm_hash},
+    ops::ic::IcOps,
+};
+
+const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
 
 /// Return the current replica time in whole seconds.
 #[must_use]
@@ -28,6 +39,56 @@ pub fn now_secs() -> u64 {
 /// Stage one approved manifest in the current canister's local bootstrap source.
 pub fn stage_manifest(input: TemplateManifestInput) {
     TemplateManifestOps::replace_approved_from_input(input);
+}
+
+/// Seed the root-local ordinary release buffer from one embedded build-time bundle.
+pub fn seed_embedded_root_release_bundle(
+    entries: &'static [EmbeddedRootReleaseEntry],
+    version: &str,
+) -> Result<(), Error> {
+    let now_secs = now_secs();
+    let version = TemplateVersion::owned(version.to_string());
+
+    TemplateChunkedOps::clear_release_buffer();
+
+    for entry in entries {
+        let role = CanisterRole::new(entry.role);
+        let template_id = TemplateId::owned(format!("embedded:{role}"));
+        let payload_hash = get_wasm_hash(entry.wasm_module);
+        let payload_size_bytes = entry.wasm_module.len() as u64;
+        let chunks = entry
+            .wasm_module
+            .chunks(ROOT_RELEASE_CHUNK_BYTES)
+            .map(<[u8]>::to_vec)
+            .collect::<Vec<_>>();
+
+        TemplateChunkedOps::publish_chunk_set_from_input(
+            TemplateChunkSetInput {
+                template_id: template_id.clone(),
+                version: version.clone(),
+                payload_hash: payload_hash.clone(),
+                payload_size_bytes,
+                chunks,
+            },
+            now_secs,
+        )
+        .map_err(Error::from)?;
+
+        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
+            template_id,
+            role,
+            version: version.clone(),
+            payload_hash,
+            payload_size_bytes,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(now_secs),
+            created_at: now_secs,
+        });
+    }
+
+    Ok(())
 }
 
 /// Prepare one local chunk set for chunk-by-chunk staging in the current canister.

@@ -2,20 +2,13 @@
 // This test relies on embedded production config by design.
 
 use canic::{
-    Error,
-    cdk::{types::Principal, utils::wasm::get_wasm_hash},
+    cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
         topology::DirectoryEntryResponse,
     },
     ids::CanisterRole,
     protocol,
-};
-use canic_control_plane::{
-    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateManifestInput},
-    ids::{
-        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-    },
 };
 use canic_testkit::{
     artifacts::{WasmBuildProfile, build_dfx_all, dfx_artifact_ready, workspace_root_for},
@@ -37,21 +30,8 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
-const CANISTER_WASM_ROOT_RELATIVE: &str = "../../.dfx/local/canisters";
-const RELEASE_SET_ROLES: &[&str] = &[
-    "app",
-    "minimal",
-    "scale",
-    "scale_hub",
-    "test",
-    "user_hub",
-    "user_shard",
-];
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
-// Maximum management-canister chunk-store payload accepted per call. Use the
-// full 1 MiB limit to keep bootstrap round-trips low without exceeding bounds.
-const WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES: usize = 1024 * 1024;
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.
 // Enabling it can reintroduce hangs or flaky behavior from retained runtime state.
@@ -178,7 +158,6 @@ fn initialize_setup(root_wasm: Vec<u8>) -> RootSetupState {
                 .create_and_install_root_canister(wasm)
                 .expect("install root canister");
 
-            stage_root_release_set(&pic, root_id);
             wait_for_bootstrap(&pic, root_id);
 
             let subnet_directory = fetch_subnet_directory(&pic, root_id);
@@ -269,89 +248,6 @@ fn wait_for_children_ready(pic: &Pic, subnet_directory: &HashMap<CanisterRole, P
     );
 }
 
-fn stage_root_release_set(pic: &Pic, root_id: Principal) {
-    let mut role_artifacts = load_release_set_artifacts();
-    role_artifacts.sort_by(|(left, _), (right, _)| left.as_ref().cmp(right.as_ref()));
-
-    for (role, wasm) in role_artifacts {
-        stage_release_role(pic, root_id, &role, wasm);
-    }
-
-    let resumed: Result<(), Error> = pic
-        .update_call(
-            root_id,
-            protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
-            (),
-        )
-        .expect("resume root bootstrap call");
-    resumed.expect("resume root bootstrap");
-}
-
-fn stage_release_role(pic: &Pic, root_id: Principal, role: &CanisterRole, wasm: Vec<u8>) {
-    let version = TemplateVersion::new(env!("CARGO_PKG_VERSION"));
-    let payload_hash = get_wasm_hash(&wasm);
-    let chunks = wasm
-        .chunks(WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_BYTES)
-        .map(<[u8]>::to_vec)
-        .collect::<Vec<_>>();
-    let chunk_hashes = chunks
-        .iter()
-        .map(|chunk| get_wasm_hash(chunk))
-        .collect::<Vec<_>>();
-
-    let manifest = TemplateManifestInput {
-        template_id: TemplateId::from(format!("embedded:{role}")),
-        role: role.clone(),
-        version: version.clone(),
-        payload_hash: payload_hash.clone(),
-        payload_size_bytes: wasm.len() as u64,
-        store_binding: WasmStoreBinding::new("bootstrap"),
-        chunking_mode: TemplateChunkingMode::Chunked,
-        manifest_state: TemplateManifestState::Approved,
-        approved_at: None,
-        created_at: 0,
-    };
-    let staged_manifest: Result<(), Error> = pic
-        .update_call(
-            root_id,
-            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            (manifest,),
-        )
-        .expect("manifest staging call");
-    staged_manifest.expect("manifest staging");
-
-    let prepared: Result<canic_control_plane::dto::template::TemplateChunkSetInfoResponse, Error> =
-        pic.update_call(
-            root_id,
-            protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
-            (TemplateChunkSetPrepareInput {
-                template_id: TemplateId::from(format!("embedded:{role}")),
-                version: version.clone(),
-                payload_hash,
-                payload_size_bytes: wasm.len() as u64,
-                chunk_hashes,
-            },),
-        )
-        .expect("prepare call");
-    prepared.expect("prepare");
-
-    for (chunk_index, bytes) in chunks.into_iter().enumerate() {
-        let published: Result<(), Error> = pic
-            .update_call(
-                root_id,
-                protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-                (TemplateChunkInput {
-                    template_id: TemplateId::from(format!("embedded:{role}")),
-                    version: version.clone(),
-                    chunk_index: u32::try_from(chunk_index).expect("chunk index fits"),
-                    bytes,
-                },),
-            )
-            .expect("publish chunk call");
-        published.expect("publish chunk");
-    }
-}
-
 /// Load the compiled root canister wasm.
 fn load_root_wasm() -> Option<Vec<u8>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -382,47 +278,6 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
     }
 
     None
-}
-
-/// Load the compiled staged release-set artifacts for the current topology.
-fn load_release_set_artifacts() -> Vec<(CanisterRole, Vec<u8>)> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let wasm_root = manifest_dir.join(CANISTER_WASM_ROOT_RELATIVE);
-    let mut artifacts = Vec::new();
-
-    let entries = fs::read_dir(&wasm_root)
-        .unwrap_or_else(|err| panic!("read_dir {}: {err}", wasm_root.display()));
-
-    for entry in entries {
-        let entry =
-            entry.unwrap_or_else(|err| panic!("read_dir entry {}: {err}", wasm_root.display()));
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-
-        let Some(role_os) = path.file_name() else {
-            continue;
-        };
-        let role = role_os.to_string_lossy().to_string();
-        if role == "root" {
-            continue;
-        }
-        if !RELEASE_SET_ROLES.contains(&role.as_str()) {
-            continue;
-        }
-
-        let wasm_path = path.join(format!("{role}.wasm.gz"));
-        if !wasm_path.is_file() {
-            continue;
-        }
-
-        let bytes = fs::read(&wasm_path)
-            .unwrap_or_else(|err| panic!("failed to read wasm at {}: {err}", wasm_path.display()));
-        artifacts.push((CanisterRole::from(role), bytes));
-    }
-
-    artifacts
 }
 
 /// Fetch the subnet directory from root as a role → principal map.

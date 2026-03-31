@@ -53,24 +53,9 @@ dfx build --all
 `dfx.json` sets `"gzip": true`, so dfx 0.30.2 also writes a gzipped artifact:
 `.dfx/local/canisters/<name>/<name>.wasm.gz`.
 
-The local bootstrap flow stages these gzipped artifacts through `root` into
-root-local stable memory and then publishes ordinary roles into the live
-`wasm_store`. Only the bootstrap `wasm_store` module itself is embedded into
-`root.wasm`; ordinary roles are not.
+The normal local bootstrap path now embeds the ordinary release bundle into
+`root.wasm` from the already-built child canister artifacts under
+`.dfx/$DFX_NETWORK/canisters`. After `dfx build --all`, reinstalling `root`
+is enough; no separate release staging or bootstrap resume step is required.
 
-## Generic Root Bootstrap Helper
-
-Downstream Canic projects can reuse the same host-side release staging flow with:
-
-```bash
-CANIC_CONFIG_PATH=/path/to/canic.toml \
-CANIC_STAGE_WASM_DIR=/path/to/.dfx/local/canisters \
-bash /path/to/canic/scripts/canic/bootstrap_root_release_set.sh root
-```
-
-Useful environment variables:
-
-- `CANIC_CONFIG_PATH`: path to the downstream project `canic.toml`
-- `CANIC_STAGE_WASM_DIR`: path to the built `.wasm.gz` artifacts; defaults to `.dfx/$DFX_NETWORK/canisters`
-- `CANIC_TEMPLATE_STAGE_VERSION`: override the staged template version if the project version is not discoverable from `Cargo.toml`; the helper stages each ordinary role as `embedded:<role>@<version>`
-- `CANIC_PROJECT_ROOT`: override project-root discovery if the helper cannot infer it from `canic.toml` or `dfx.json`
+There is no separate release-staging helper in the normal install path anymore.
