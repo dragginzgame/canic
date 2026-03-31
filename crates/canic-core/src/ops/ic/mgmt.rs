@@ -268,6 +268,39 @@ impl MgmtOps {
         Ok(())
     }
 
+    /// Install or upgrade a canister from an embedded wasm payload.
+    pub async fn install_code<T: ArgumentEncoder>(
+        mode: CanisterInstallMode,
+        target_canister: Principal,
+        wasm_module: Vec<u8>,
+        args: T,
+    ) -> Result<(), InternalError> {
+        let payload_size_bytes = wasm_module.len();
+        MgmtInfra::install_code(
+            install_mode_to_infra(mode),
+            target_canister,
+            wasm_module,
+            args,
+        )
+        .await
+        .map_err(IcOpsError::from)?;
+
+        let metric_kind = match mode {
+            CanisterInstallMode::Install => SystemMetricKind::InstallCode,
+            CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
+            CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
+        };
+        SystemMetrics::increment(metric_kind);
+
+        log!(
+            Topic::CanisterLifecycle,
+            Ok,
+            "install_code: {target_canister} mode={mode:?} embedded_bytes={payload_size_bytes}"
+        );
+
+        Ok(())
+    }
+
     /// Install or reinstall a Canic-style canister from chunk-store-backed wasm.
     pub async fn install_chunked_canister_with_payload<P: CandidType>(
         mode: CanisterInstallMode,
@@ -287,6 +320,17 @@ impl MgmtOps {
             (payload, extra_arg),
         )
         .await
+    }
+
+    /// Install or reinstall a Canic-style canister from an embedded wasm payload.
+    pub async fn install_embedded_canister_with_payload<P: CandidType>(
+        mode: CanisterInstallMode,
+        target_canister: Principal,
+        wasm_module: Vec<u8>,
+        payload: P,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<(), InternalError> {
+        Self::install_code(mode, target_canister, wasm_module, (payload, extra_arg)).await
     }
 
     /// Upload one wasm chunk into a canister's chunk store.

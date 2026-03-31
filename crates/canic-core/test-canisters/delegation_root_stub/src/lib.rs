@@ -400,18 +400,12 @@ fn seed_chunked_bootstrap_release_set(releases: &'static [(CanisterRole, &[u8])]
     }
 }
 
-// WASM registry entry to satisfy bootstrap invariants and allow
-// auto-create of a non-root canister for delegation tests.
-const WASM_STORE_ROLE: CanisterRole = CanisterRole::new("wasm_store");
+// Staged non-root releases used by the root stub after the built-in bootstrap
+// wasm_store comes up.
 const SIGNER_ROLE: CanisterRole = CanisterRole::new("signer");
 const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
-const WASM_STORE_WASM: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/canister_wasm_store.wasm"));
 const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
-const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
-    (WASM_STORE_ROLE, WASM_STORE_WASM),
-    (SIGNER_ROLE, SIGNER_WASM),
-    (PROJECT_HUB_ROLE, SIGNER_WASM),
-];
+const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] =
+    &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
 
 canic::cdk::export_candid_debug!();

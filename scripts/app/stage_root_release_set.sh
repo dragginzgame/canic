@@ -67,11 +67,6 @@ for subnet in config.get("subnets", {}).values():
         if role != "root":
             roles.add(role)
 
-# The first wasm_store is still the bootstrap exception: it is not part of the
-# ordinary config-defined release set because the store does not exist yet, but
-# root still needs a staged bootstrap payload for it.
-roles.add("wasm_store")
-
 def blob_literal(data: bytes) -> str:
     return 'blob "' + "".join(f"\\{byte:02x}" for byte in data) + '"'
 
@@ -143,7 +138,7 @@ call_root_method() {
 }
 
 echo "Submitting staged release inputs to ${ROOT_CANISTER} from ${CONFIG_PATH}"
-echo "Bootstrap exception: 'wasm_store' is staged in root stable memory first; it is not baked into root.wasm and is not published into the live wasm_store catalog"
+echo "Root embeds the bootstrap wasm_store module; only ordinary release roles are staged into root stable memory for later live wasm_store publication"
 
 stage_role_dir() {
     local role_dir="$1"
@@ -158,18 +153,6 @@ stage_role_dir() {
     payload_size="$(format_bytes "${payload_size_bytes}")"
     chunk_count="$(find "${role_dir}" -name 'chunk-*.did' | wc -l | tr -d ' ')"
 
-    if [ "${role}" = "wasm_store" ]; then
-        echo "Staging bootstrap role '${role}' in root stable memory for first-store install (${payload_size}, ${chunk_count} chunks)"
-        call_root_method "canic_wasm_store_bootstrap_stage_manifest_admin" "${role_dir}/manifest.did"
-        call_root_method "canic_wasm_store_bootstrap_prepare_admin" "${role_dir}/prepare.did"
-
-        while IFS= read -r chunk_file; do
-            call_root_method "canic_wasm_store_bootstrap_publish_chunk_admin" "${chunk_file}"
-        done < <(find "${role_dir}" -name 'chunk-*.did' | sort)
-
-        return
-    fi
-
     echo "Staging role '${role}' in root stable memory for later live wasm_store publication (${payload_size}, ${chunk_count} chunks)"
 
     call_root_method "canic_template_stage_manifest_admin" "${role_dir}/manifest.did"
@@ -180,14 +163,7 @@ stage_role_dir() {
     done < <(find "${role_dir}" -name 'chunk-*.did' | sort)
 }
 
-WASM_STORE_ROLE_DIR="${TMP_STAGE_DIR}/wasm_store"
-if [ -d "${WASM_STORE_ROLE_DIR}" ]; then
-    echo "Staging bootstrap role first so root can create the first live wasm_store"
-    stage_role_dir "${WASM_STORE_ROLE_DIR}"
-fi
-
 while IFS= read -r role_dir; do
-    [ "${role_dir}" = "${WASM_STORE_ROLE_DIR}" ] && continue
     stage_role_dir "${role_dir}"
 done < <(find "${TMP_STAGE_DIR}" -mindepth 1 -maxdepth 1 -type d | sort)
 

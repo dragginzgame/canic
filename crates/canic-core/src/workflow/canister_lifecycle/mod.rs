@@ -102,7 +102,7 @@ impl CanisterLifecycleWorkflow {
             .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
 
         let module_source = ModuleSourceRuntimeApi::approved_module_source(&record.role).await?;
-        let target_hash = module_source.module_hash.clone();
+        let target_hash = module_source.module_hash().to_vec();
 
         let status = MgmtOps::canister_status(pid).await?;
         let plan = plan_upgrade(status.module_hash, target_hash.clone());

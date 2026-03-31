@@ -31,7 +31,7 @@ This one command:
 - creates the reference canisters in `dfx`
 - builds the release artifacts
 - reinstalls `root` in `Prime` mode
-- stages the bootstrap `wasm_store` plus the config-defined release set
+- stages the config-defined release set for later publication into the live `wasm_store`
 - waits for `root` to report `READY`
 
 ## Build Canisters
@@ -55,4 +55,5 @@ dfx build --all
 
 The local bootstrap flow stages these gzipped artifacts through `root` into
 root-local stable memory and then publishes ordinary roles into the live
-`wasm_store`. They are no longer embedded directly into `root.wasm`.
+`wasm_store`. Only the bootstrap `wasm_store` module itself is embedded into
+`root.wasm`; ordinary roles are not.

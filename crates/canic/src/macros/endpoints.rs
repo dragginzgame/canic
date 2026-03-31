@@ -16,27 +16,27 @@
 #[macro_export]
 macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
-        #[canic_update(internal)]
+        #[$crate::canic_update(internal)]
         fn canic_ic_cycles_accept(max_amount: u128) -> u128 {
             $crate::cdk::api::msg_cycles_accept(max_amount)
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_canister_cycle_balance() -> Result<u128, ::canic::Error> {
             Ok($crate::cdk::api::canister_cycle_balance())
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_canister_version() -> Result<u64, ::canic::Error> {
             Ok($crate::cdk::api::canister_version())
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_time() -> Result<u64, ::canic::Error> {
             Ok($crate::cdk::api::time())
         }
 
-        #[canic_query(internal)]
+        #[$crate::canic_query(internal)]
         fn canic_ready() -> bool {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()
         }
@@ -47,13 +47,13 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
 #[macro_export]
 macro_rules! canic_emit_icrc_standards_endpoints {
     () => {
-        #[canic_query(internal)]
+        #[$crate::canic_query(internal)]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
             $crate::__internal::core::api::icrc::Icrc10Query::supported_standards()
         }
 
         #[cfg(canic_icrc21_enabled)]
-        #[canic_query(internal)]
+        #[$crate::canic_query(internal)]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageResponse {
@@ -66,7 +66,7 @@ macro_rules! canic_emit_icrc_standards_endpoints {
 #[macro_export]
 macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
-        #[canic_query(internal)]
+        #[$crate::canic_query(internal)]
         fn canic_standards() -> ::canic::dto::standards::CanicStandardsResponse {
             $crate::__internal::core::api::standards::CanicStandardsApi::metadata()
         }
@@ -88,7 +88,7 @@ macro_rules! canic_bundle_standards_endpoints {
 #[macro_export]
 macro_rules! canic_emit_memory_observability_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_memory_registry()
         -> Result<::canic::dto::memory::MemoryRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::memory::MemoryQuery::registry())
@@ -100,7 +100,7 @@ macro_rules! canic_emit_memory_observability_endpoints {
 #[macro_export]
 macro_rules! canic_emit_env_observability_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_env() -> Result<::canic::dto::env::EnvSnapshotResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::env::EnvQuery::snapshot())
         }
@@ -111,7 +111,7 @@ macro_rules! canic_emit_env_observability_endpoints {
 #[macro_export]
 macro_rules! canic_emit_log_observability_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_log(
             crate_name: Option<String>,
             topic: Option<String>,
@@ -142,7 +142,7 @@ macro_rules! canic_bundle_observability_endpoints {
 #[macro_export]
 macro_rules! canic_emit_metrics_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_metrics(
             kind: ::canic::dto::metrics::MetricsKind,
             page: ::canic::dto::page::PageRequest,
@@ -159,7 +159,7 @@ macro_rules! canic_emit_metrics_endpoints {
 macro_rules! canic_emit_auth_attestation_endpoints {
     () => {
         #[cfg(canic_is_root)]
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
@@ -167,7 +167,7 @@ macro_rules! canic_emit_auth_attestation_endpoints {
         }
 
         #[cfg(not(canic_is_root))]
-        #[canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
@@ -182,13 +182,13 @@ macro_rules! canic_emit_auth_attestation_endpoints {
 macro_rules! canic_emit_topology_state_endpoints {
     () => {
         #[cfg(canic_is_root)]
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
         }
 
         #[cfg(canic_is_root)]
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_subnet_state() -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error>
         {
             Ok($crate::__internal::core::api::state::SubnetStateQuery::snapshot())
@@ -200,7 +200,7 @@ macro_rules! canic_emit_topology_state_endpoints {
 #[macro_export]
 macro_rules! canic_emit_topology_directory_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_app_directory(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
@@ -210,7 +210,7 @@ macro_rules! canic_emit_topology_directory_endpoints {
             Ok($crate::__internal::core::api::topology::directory::AppDirectoryApi::page(page))
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_subnet_directory(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
@@ -226,7 +226,7 @@ macro_rules! canic_emit_topology_directory_endpoints {
 #[macro_export]
 macro_rules! canic_emit_topology_children_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_canister_children(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error>
@@ -240,7 +240,7 @@ macro_rules! canic_emit_topology_children_endpoints {
 #[macro_export]
 macro_rules! canic_emit_topology_cycles_endpoints {
     () => {
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_cycle_tracker(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>, ::canic::Error> {
@@ -254,21 +254,21 @@ macro_rules! canic_emit_topology_cycles_endpoints {
 macro_rules! canic_emit_topology_placement_endpoints {
     () => {
         #[cfg(canic_has_scaling)]
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_scaling_registry()
         -> Result<::canic::dto::placement::scaling::ScalingRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::placement::scaling::ScalingApi::registry())
         }
 
         #[cfg(canic_has_sharding)]
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::sharding::api::ShardingApi::registry())
         }
 
         #[cfg(canic_has_sharding)]
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_partition_keys(
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
@@ -299,12 +299,12 @@ macro_rules! canic_bundle_topology_views_endpoints {
 #[macro_export]
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
-        #[canic_update(internal, requires(caller::is_controller()))]
+        #[$crate::canic_update(internal, requires(caller::is_controller()))]
         async fn canic_app(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::state::AppStateApi::execute_command(cmd).await
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_canister_upgrade(
             canister_pid: ::candid::Principal,
         ) -> Result<::canic::dto::rpc::UpgradeCanisterResponse, ::canic::Error> {
@@ -315,37 +315,37 @@ macro_rules! canic_emit_root_admin_endpoints {
             Ok(res)
         }
 
-        #[canic_update(requires(caller::is_root(), caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_root(), caller::is_controller()))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(pid).await
         }
 
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_config() -> Result<String, ::canic::Error> {
             $crate::__internal::core::api::config::ConfigApi::export_toml()
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_app_registry()
         -> Result<::canic::dto::topology::AppRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::topology::registry::AppRegistryApi::registry())
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         fn canic_subnet_registry()
         -> Result<::canic::dto::topology::SubnetRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::topology::registry::SubnetRegistryApi::registry())
         }
 
-        #[canic_query]
+        #[$crate::canic_query]
         async fn canic_pool_list()
         -> Result<::canic::dto::pool::CanisterPoolResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::pool::CanisterPoolApi::list())
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_pool_admin(
             cmd: ::canic::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::dto::pool::PoolAdminResponse, ::canic::Error> {
@@ -358,7 +358,7 @@ macro_rules! canic_emit_root_admin_endpoints {
 #[macro_export]
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_delegation(
             request: ::canic::dto::auth::DelegationRequest,
         ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
@@ -366,7 +366,7 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
                 .await
         }
 
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
         ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
@@ -376,13 +376,13 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             .await
         }
 
-        #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_attestation_key_set()
         -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_delegation_admin(
             cmd: ::canic::dto::auth::DelegationAdminCommand,
         ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
@@ -395,7 +395,7 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
 #[macro_export]
 macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_stage_manifest_admin(
             request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
@@ -404,33 +404,33 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
             )
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_prepare_admin(
             request: ::canic::dto::template::TemplateChunkSetPrepareInput,
         ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_publish_chunk_admin(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             Ok(())
         }
 
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_debug(
         ) -> Result<::canic::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::debug_bootstrap()
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_template_stage_manifest_admin(
             request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
@@ -438,33 +438,33 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
             Ok(())
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_template_prepare_admin(
             request: ::canic::dto::template::TemplateChunkSetPrepareInput,
         ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_chunk_admin(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::publish_chunk(request)
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_template_publish_to_current_store_admin() -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
         }
 
-        #[canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_admin(
             cmd: ::canic::dto::template::WasmStoreAdminCommand,
         ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStorePublicationApi::admin(cmd).await
         }
 
-        #[canic_query(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_overview(
         ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStorePublicationApi::overview()
@@ -477,14 +477,14 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
 #[macro_export]
 macro_rules! canic_emit_nonroot_sync_topology_endpoints {
     () => {
-        #[canic_update(internal, requires(caller::is_parent()))]
+        #[$crate::canic_update(internal, requires(caller::is_parent()))]
         async fn canic_sync_state(
             snapshot: ::canic::dto::cascade::StateSnapshotInput,
         ) -> Result<(), ::canic::Error> {
             $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await
         }
 
-        #[canic_update(internal, requires(caller::is_parent()))]
+        #[$crate::canic_update(internal, requires(caller::is_parent()))]
         async fn canic_sync_topology(
             snapshot: ::canic::dto::cascade::TopologySnapshotInput,
         ) -> Result<(), ::canic::Error> {
@@ -498,7 +498,7 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
     () => {
         #[cfg(canic_accepts_delegation_signer_proof)]
-        #[canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_signer_proof(
             request: ::canic::dto::auth::DelegationProofInstallRequest,
         ) -> Result<(), ::canic::Error> {
@@ -517,7 +517,7 @@ macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
         }
 
         #[cfg(canic_accepts_delegation_verifier_proof)]
-        #[canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_verifier_proof(
             request: ::canic::dto::auth::DelegationProofInstallRequest,
         ) -> Result<(), ::canic::Error> {
@@ -526,6 +526,74 @@ macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
                 ::canic::dto::auth::DelegationProvisionTargetKind::Verifier,
             )
             .await
+        }
+    };
+}
+
+// Leaf emitter for the canonical local wasm-store canister surface.
+#[macro_export]
+macro_rules! canic_emit_local_wasm_store_endpoints {
+    () => {
+        #[$crate::canic_query(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_catalog()
+        -> Result<Vec<::canic::dto::template::WasmStoreCatalogEntryResponse>, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_prepare(
+            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
+        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::prepare(request)
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_publish_chunk(
+            request: ::canic::dto::template::TemplateChunkInput,
+        ) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_info(
+            template_id: ::canic::ids::TemplateId,
+            version: ::canic::ids::TemplateVersion,
+        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::info(template_id, version)
+        }
+
+        #[$crate::canic_query(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_status()
+        -> Result<::canic::dto::template::WasmStoreStatusResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::status()
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_prepare_gc() -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::prepare_gc()
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_begin_gc() -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::begin_gc()
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_complete_gc() -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::complete_gc().await
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_chunk(
+            template_id: ::canic::ids::TemplateId,
+            version: ::canic::ids::TemplateVersion,
+            chunk_index: u32,
+        ) -> Result<::canic::dto::template::TemplateChunkResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::chunk(
+                template_id,
+                version,
+                chunk_index,
+            )
         }
     };
 }
@@ -740,6 +808,14 @@ macro_rules! canic_endpoints_nonroot_sync_topology {
 macro_rules! canic_endpoints_nonroot_auth_attestation {
     () => {
         $crate::canic_emit_nonroot_auth_attestation_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_local_wasm_store {
+    () => {
+        $crate::canic_emit_local_wasm_store_endpoints!();
     };
 }
 

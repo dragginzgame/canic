@@ -1,0 +1,32 @@
+[
+  {
+    "flow_name": "root capability dispatch",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/rpc/request/handler/mod.rs"
+  },
+  {
+    "flow_name": "delegated auth issuance/verification",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/auth.rs"
+  },
+  {
+    "flow_name": "replay/cached-response path",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/rpc/request/handler/replay.rs"
+  },
+  {
+    "flow_name": "sharding assignment/query flow",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-sharding-runtime/src/workflow/mod.rs"
+  },
+  {
+    "flow_name": "scaling/provisioning flow",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/placement/scaling/mod.rs"
+  },
+  {
+    "flow_name": "bootstrap/install/publication flow",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-tests/tests/root/harness.rs"
+  }
+]

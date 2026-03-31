@@ -146,8 +146,7 @@ canisters/                  # Reference/deployable canisters
 ├─ scale/                   # Scaling worker
 ├─ scale_hub/               # Scaling coordinator
 ├─ minimal/                 # Minimal baseline canister
-├─ test/                    # Test/demo helper canister
-└─ wasm_store/              # WASM store role
+└─ test/                    # Test/demo helper canister
 scripts/                    # CI / release helpers
 .github/workflows/          # CI pipelines
 dfx.json                    # Local IC topology

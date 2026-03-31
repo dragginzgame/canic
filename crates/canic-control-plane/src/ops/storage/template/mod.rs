@@ -1,6 +1,8 @@
 mod chunked;
+mod gc;
 
 pub use chunked::TemplateChunkedOps;
+pub use gc::WasmStoreGcOps;
 
 use crate::ids::TemplateChunkKey;
 use crate::{

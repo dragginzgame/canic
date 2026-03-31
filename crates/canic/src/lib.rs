@@ -9,6 +9,8 @@
 //! For lower-level access, use the `api`, `cdk`, and `memory` modules.
 //! Direct access to internal core modules is intentionally unsupported.
 
+#[cfg(feature = "control-plane")]
+mod bootstrap;
 mod instructions;
 mod macros; // private implementation boundary
 pub mod protocol;
@@ -23,6 +25,11 @@ pub mod __internal {
     pub use canic_core as core;
     #[cfg(feature = "sharding")]
     pub use canic_sharding_runtime as sharding;
+
+    #[cfg(feature = "control-plane")]
+    pub mod bootstrap {
+        pub use crate::bootstrap::root_wasm_store_wasm;
+    }
 
     pub mod instructions {
         pub use crate::instructions::format_instructions;
@@ -50,7 +57,8 @@ pub mod ids {
 
     #[cfg(feature = "control-plane")]
     pub use canic_control_plane::ids::{
-        TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode, WasmStoreGcStatus,
+        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
+        WasmStoreGcMode, WasmStoreGcStatus,
     };
 }
 
@@ -179,7 +187,7 @@ pub mod api {
         pub mod template {
             pub use canic_control_plane::api::template::WasmStoreApi as EmbeddedTemplateApi;
             pub use canic_control_plane::api::template::{
-                WasmStoreApi, WasmStoreBootstrapApi, WasmStorePublicationApi,
+                WasmStoreApi, WasmStoreBootstrapApi, WasmStoreCanisterApi, WasmStorePublicationApi,
             };
         }
     }

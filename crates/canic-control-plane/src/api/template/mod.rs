@@ -5,10 +5,17 @@ use crate::{
         WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
         WasmStoreOverviewResponse, WasmStoreStatusResponse,
     },
-    ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
+    ids::{
+        CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
+        WasmStoreGcStatus,
+    },
+    ops::storage::template::WasmStoreGcOps,
     support::{self, WasmStoreGcExecutionStats},
 };
-use canic_core::{cdk::types::Principal, dto::error::Error};
+use canic_core::{
+    api::runtime::install::ModuleSourceRuntimeApi, cdk::types::Principal, dto::error::Error, log,
+    log::Topic,
+};
 
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
 const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
@@ -20,6 +27,15 @@ const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::ne
 pub struct WasmStoreBootstrapApi;
 
 impl WasmStoreBootstrapApi {
+    // Register the built-in bootstrap wasm module used for the first live store install.
+    pub fn register_embedded_root_wasm_store_module(wasm_module: &'static [u8]) {
+        ModuleSourceRuntimeApi::register_embedded_module_wasm(
+            CanisterRole::WASM_STORE,
+            ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID.as_str().to_string(),
+            wasm_module,
+        );
+    }
+
     // Validate that one staged template request targets the root-local WasmStore bootstrap source.
     fn ensure_root_wasm_store_bootstrap_template(template_id: &TemplateId) -> Result<(), Error> {
         if template_id == &ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID {
@@ -232,5 +248,95 @@ impl WasmStoreApi {
         chunk_index: u32,
     ) -> Result<TemplateChunkResponse, Error> {
         support::local_template_chunk(template_id, version, chunk_index)
+    }
+}
+
+///
+/// WasmStoreCanisterApi
+///
+
+pub struct WasmStoreCanisterApi;
+
+impl WasmStoreCanisterApi {
+    // Return the current approved release catalog stored in this local wasm store.
+    pub fn catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
+        WasmStoreApi::template_catalog()
+    }
+
+    // Prepare one approved template release for chunk-by-chunk publication.
+    pub fn prepare(
+        request: TemplateChunkSetPrepareInput,
+    ) -> Result<TemplateChunkSetInfoResponse, Error> {
+        WasmStoreApi::prepare_chunk_set(request)
+    }
+
+    // Publish one deterministic chunk into an already prepared local template release.
+    pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
+        WasmStoreApi::publish_chunk(request)
+    }
+
+    // Return deterministic chunk-set metadata for one local template release.
+    pub fn info(
+        template_id: TemplateId,
+        version: TemplateVersion,
+    ) -> Result<TemplateChunkSetInfoResponse, Error> {
+        WasmStoreApi::template_info(template_id, version)
+    }
+
+    // Return occupied-byte and retention state for this local wasm store.
+    pub fn status() -> Result<WasmStoreStatusResponse, Error> {
+        WasmStoreApi::template_status(WasmStoreGcOps::snapshot())
+    }
+
+    // Mark this local wasm store as prepared for store-local GC execution.
+    pub fn prepare_gc() -> Result<(), Error> {
+        WasmStoreGcOps::prepare(support::now_secs())
+    }
+
+    // Mark this local wasm store as actively executing store-local GC.
+    pub fn begin_gc() -> Result<(), Error> {
+        WasmStoreGcOps::begin(support::now_secs())
+    }
+
+    // Mark this local wasm store as having completed the current local GC pass.
+    pub async fn complete_gc() -> Result<(), Error> {
+        let now_secs = support::now_secs();
+        let current = WasmStoreGcOps::status();
+
+        if current.mode == WasmStoreGcMode::Complete {
+            return Ok(());
+        }
+
+        if current.mode != WasmStoreGcMode::InProgress {
+            return Err(Error::conflict(format!(
+                "wasm store gc transition {:?} -> Complete is not allowed",
+                current.mode
+            )));
+        }
+
+        let stats = WasmStoreApi::execute_local_store_gc().await?;
+        WasmStoreGcOps::complete(now_secs)?;
+
+        log!(
+            Topic::Wasm,
+            Ok,
+            "wasm_store: gc complete reclaimed_bytes={} cleared_templates={} cleared_releases={} cleared_chunks={} cleared_chunk_hashes={}",
+            stats.reclaimed_store_bytes,
+            stats.cleared_template_count,
+            stats.cleared_release_count,
+            stats.cleared_chunk_count,
+            stats.cleared_chunk_store_hash_count
+        );
+
+        Ok(())
+    }
+
+    // Return one deterministic chunk for one local template release.
+    pub fn chunk(
+        template_id: TemplateId,
+        version: TemplateVersion,
+        chunk_index: u32,
+    ) -> Result<TemplateChunkResponse, Error> {
+        WasmStoreApi::template_chunk(template_id, version, chunk_index)
     }
 }

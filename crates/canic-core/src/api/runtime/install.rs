@@ -1,9 +1,31 @@
 use crate::{
-    InternalError, InternalErrorOrigin, cdk::types::Principal, dto::error::Error,
-    format::byte_size, ids::CanisterRole,
+    InternalError, InternalErrorOrigin,
+    cdk::{types::Principal, utils::wasm::get_wasm_hash},
+    dto::error::Error,
+    format::byte_size,
+    ids::CanisterRole,
 };
 use async_trait::async_trait;
-use std::sync::OnceLock;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+    sync::{Mutex, OnceLock},
+};
+
+///
+/// ApprovedModulePayload
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ApprovedModulePayload {
+    Chunked {
+        source_canister: Principal,
+        chunk_hashes: Vec<Vec<u8>>,
+    },
+    Embedded {
+        wasm_module: Cow<'static, [u8]>,
+    },
+}
 
 ///
 /// ApprovedModuleSource
@@ -11,18 +33,85 @@ use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovedModuleSource {
-    pub source_canister: Principal,
-    pub source_label: String,
-    pub module_hash: Vec<u8>,
-    pub chunk_hashes: Vec<Vec<u8>>,
-    pub payload_size_bytes: u64,
+    source_label: String,
+    module_hash: Vec<u8>,
+    payload_size_bytes: u64,
+    payload: ApprovedModulePayload,
 }
 
 impl ApprovedModuleSource {
+    /// Construct one chunk-store-backed module source.
+    #[must_use]
+    pub fn chunked(
+        source_canister: Principal,
+        source_label: String,
+        module_hash: Vec<u8>,
+        chunk_hashes: Vec<Vec<u8>>,
+        payload_size_bytes: u64,
+    ) -> Self {
+        Self {
+            source_label,
+            module_hash,
+            payload_size_bytes,
+            payload: ApprovedModulePayload::Chunked {
+                source_canister,
+                chunk_hashes,
+            },
+        }
+    }
+
+    /// Construct one embedded module source from already packaged wasm bytes.
+    #[must_use]
+    pub fn embedded(source_label: String, wasm_module: &'static [u8]) -> Self {
+        let payload_size_bytes = wasm_module.len() as u64;
+
+        Self {
+            source_label,
+            module_hash: get_wasm_hash(wasm_module),
+            payload_size_bytes,
+            payload: ApprovedModulePayload::Embedded {
+                wasm_module: Cow::Borrowed(wasm_module),
+            },
+        }
+    }
+
+    /// Return the logical source label used for logs and status output.
+    #[must_use]
+    pub fn source_label(&self) -> &str {
+        &self.source_label
+    }
+
+    /// Return the installable wasm module hash.
+    #[must_use]
+    pub fn module_hash(&self) -> &[u8] {
+        &self.module_hash
+    }
+
     /// Return the formatted module payload size for logs and status output.
     #[must_use]
     pub fn payload_size(&self) -> String {
         byte_size(self.payload_size_bytes)
+    }
+
+    /// Return the raw payload size in bytes.
+    #[must_use]
+    pub const fn payload_size_bytes(&self) -> u64 {
+        self.payload_size_bytes
+    }
+
+    /// Return the chunk count when the source is chunk-store-backed.
+    #[must_use]
+    pub fn chunk_count(&self) -> usize {
+        match &self.payload {
+            ApprovedModulePayload::Chunked { chunk_hashes, .. } => chunk_hashes.len(),
+            ApprovedModulePayload::Embedded { .. } => 0,
+        }
+    }
+
+    /// Return the underlying payload representation.
+    #[must_use]
+    pub const fn payload(&self) -> &ApprovedModulePayload {
+        &self.payload
     }
 }
 
@@ -40,6 +129,8 @@ pub trait ModuleSourceResolver: Send + Sync {
 }
 
 static MODULE_SOURCE_RESOLVER: OnceLock<&'static dyn ModuleSourceResolver> = OnceLock::new();
+static EMBEDDED_MODULE_SOURCES: OnceLock<Mutex<BTreeMap<CanisterRole, ApprovedModuleSource>>> =
+    OnceLock::new();
 
 ///
 /// ModuleSourceRuntimeApi
@@ -48,15 +139,69 @@ static MODULE_SOURCE_RESOLVER: OnceLock<&'static dyn ModuleSourceResolver> = Onc
 pub struct ModuleSourceRuntimeApi;
 
 impl ModuleSourceRuntimeApi {
+    /// Register one built-in module source override for the current process.
+    pub fn register_embedded_module_source(role: CanisterRole, source: ApprovedModuleSource) {
+        let sources = EMBEDDED_MODULE_SOURCES.get_or_init(|| Mutex::new(BTreeMap::new()));
+        let mut sources = sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        match sources.get(&role) {
+            Some(existing) if existing == &source => {}
+            Some(existing) => {
+                panic!(
+                    "embedded module source for role '{role}' was already registered with a different payload: existing='{}' new='{}'",
+                    existing.source_label(),
+                    source.source_label()
+                );
+            }
+            None => {
+                sources.insert(role, source);
+            }
+        }
+    }
+
+    /// Register one embedded wasm payload as the built-in install source for one role.
+    pub fn register_embedded_module_wasm(
+        role: CanisterRole,
+        source_label: impl Into<String>,
+        wasm_module: &'static [u8],
+    ) {
+        Self::register_embedded_module_source(
+            role,
+            ApprovedModuleSource::embedded(source_label.into(), wasm_module),
+        );
+    }
+
     /// Register the control-plane resolver used by root-owned installation flows.
     pub fn register_module_source_resolver(resolver: &'static dyn ModuleSourceResolver) {
         let _ = MODULE_SOURCE_RESOLVER.set(resolver);
+    }
+
+    /// Return whether one embedded module source override has been registered.
+    #[must_use]
+    pub fn has_embedded_module_source(role: &CanisterRole) -> bool {
+        EMBEDDED_MODULE_SOURCES.get().is_some_and(|sources| {
+            let sources = sources
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            sources.contains_key(role)
+        })
     }
 
     /// Resolve the approved install source for one canister role through the registered driver.
     pub(crate) async fn approved_module_source(
         role: &CanisterRole,
     ) -> Result<ApprovedModuleSource, InternalError> {
+        if let Some(source) = EMBEDDED_MODULE_SOURCES.get().and_then(|sources| {
+            let sources = sources
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            sources.get(role).cloned()
+        }) {
+            return Ok(source);
+        }
+
         let resolver = MODULE_SOURCE_RESOLVER.get().ok_or_else(|| {
             InternalError::workflow(
                 InternalErrorOrigin::Workflow,

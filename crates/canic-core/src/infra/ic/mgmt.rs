@@ -160,6 +160,19 @@ struct InfraInstallChunkedCodeArgs {
 }
 
 ///
+/// InfraInstallCodeArgs
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct InfraInstallCodeArgs {
+    mode: InfraCanisterInstallMode,
+    canister_id: Principal,
+    wasm_module: Vec<u8>,
+    arg: Vec<u8>,
+    sender_canister_version: Option<u64>,
+}
+
+///
 /// InfraUpdateSettingsArgs
 ///
 
@@ -440,6 +453,30 @@ impl MgmtInfra {
         };
 
         Call::bounded_wait(Principal::management_canister(), "install_chunked_code")
+            .with_arg(install_args)?
+            .execute()
+            .await?;
+
+        Ok(())
+    }
+
+    /// Install or upgrade a canister from an embedded wasm payload.
+    pub async fn install_code<T: ArgumentEncoder>(
+        mode: InfraCanisterInstallMode,
+        canister_id: Principal,
+        wasm_module: Vec<u8>,
+        args: T,
+    ) -> Result<(), InfraError> {
+        let arg = encode_args(args).map_err(IcInfraError::from)?;
+        let install_args = InfraInstallCodeArgs {
+            mode,
+            canister_id,
+            wasm_module,
+            arg,
+            sender_canister_version: Some(api::canister_version()),
+        };
+
+        Call::bounded_wait(Principal::management_canister(), "install_code")
             .with_arg(install_args)?
             .execute()
             .await?;

@@ -14,7 +14,11 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
+        embedded_wasm_store_module: &'static [u8],
     ) {
+        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
+            embedded_wasm_store_module,
+        );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             identity,
@@ -40,7 +44,11 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
+        embedded_wasm_store_module: &'static [u8],
     ) {
+        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
+            embedded_wasm_store_module,
+        );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
             config,
