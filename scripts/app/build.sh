@@ -231,7 +231,7 @@ if [ "$IS_RELEASE_BUILD" = "1" ]; then
     if source_did_is_current "$CAN"; then
         cp -f "$SOURCE_DID" "$ARTIFACT_DID"
     else
-        echo "Source .did missing or stale; regenerating and caching it from a debug fallback"
+        echo "Source .did missing or stale: $SOURCE_DID; regenerating and caching it into $ARTIFACT_DID from a debug fallback"
         extract_and_cache_did_from_debug_artifact "$CAN"
     fi
 else
