@@ -2,7 +2,7 @@
 
 ## Report Preamble
 
-- Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability/**`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `crates/canisters/**`
+- Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability/**`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `canisters/**`
 - Compared baseline report path: `docs/audits/reports/2026-03/2026-03-29/capability-surface.md`
 - Code snapshot identifier: `f26eccd6`
 - Method tag/version: `Method V2.0`
@@ -41,7 +41,7 @@ Metrics whose interpretation changed due refreshed `.did` artifacts or new requi
 
 | Hard Check | Result | Evidence |
 | --- | --- | --- |
-| Root-only admin endpoints stay root-only | PASS | `11` `*_admin` methods, all under [root.did](/home/adam/projects/canic/crates/canisters/root/root.did) |
+| Root-only admin endpoints stay root-only | PASS | `11` `*_admin` methods, all under [root.did](/home/adam/projects/canic/canisters/root/root.did) |
 | Shared parent/cycles receiver exists where expected | PASS | `canic_response_capability_v1` present on all `11` generated `.did` files |
 | Root-only wasm-store operator read surface stays root-only | PASS | `canic_wasm_store_overview` appears only on `root` |
 | No protocol constant removals or renames detected in this run | PASS | `protocol.rs` constant count remains `23`; canonical names still present |
@@ -200,7 +200,7 @@ These no longer fan out into every generated interface; the public wire form now
 | --- | --- | --- | --- |
 | protocol constants | no rename/removal in this run | count remains `23` | additive |
 | `dto::rpc::{Request,Response}` | no variant growth or removal in this run | `5` / `5` variants | additive |
-| `CapabilityProof` wire payload shape | generated `.did` payload changed from concrete proof records to `CapabilityProofBlob` | [minimal.did](/home/adam/projects/canic/crates/canisters/minimal/minimal.did), [root.did](/home/adam/projects/canic/crates/canisters/root/root.did) | breaking risk |
+| `CapabilityProof` wire payload shape | generated `.did` payload changed from concrete proof records to `CapabilityProofBlob` | [minimal.did](/home/adam/projects/canic/canisters/minimal/minimal.did), [root.did](/home/adam/projects/canic/canisters/root/root.did) | breaking risk |
 | endpoint families | no family rename/removal detected | same method names remain present | additive |
 
 ## Early Warning Signals
@@ -208,7 +208,7 @@ These no longer fan out into every generated interface; the public wire form now
 | Signal | Location | Evidence | Risk |
 | --- | --- | --- | --- |
 | endpoint inventory drift | [endpoints.rs](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs) | generated method count increased `47 -> 48` | Low |
-| root admin clustering | [root.did](/home/adam/projects/canic/crates/canisters/root/root.did) | all `11` `*_admin` methods remain root-only | Medium |
+| root admin clustering | [root.did](/home/adam/projects/canic/canisters/root/root.did) | all `11` `*_admin` methods remain root-only | Medium |
 | shared DTO fan-out, compacted but still global | [dto/capability/mod.rs](/home/adam/projects/canic/crates/canic-core/src/dto/capability/mod.rs) | `CapabilityProofBlob` and `CapabilityService` still appear in all `11` `.did` files | Low |
 | latent root-only operator query | [endpoints.rs](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs) | `canic_wasm_store_overview` has no in-repo caller beyond declaration | Low |
 
@@ -257,8 +257,8 @@ Low structural risk under the stricter method. The main remaining pressure is co
 | --- | --- | --- |
 | endpoint inventory `python3` scan over `crates/canic/src/macros/endpoints.rs` | PASS | captured `23` bundle macros, `48` generated methods, admin/controller/internal counts |
 | wire surface `python3` scan over `crates/canic-core/src/protocol.rs`, `dto/rpc.rs`, and `dto/capability/mod.rs` | PASS | constant and enum-variant baselines captured |
-| per-canister `.did` scans over `crates/canisters/*/*.did` | PASS | refreshed per-canister surface counts and family spread captured |
-| `rg -n '^  canic_.*_admin :' crates/canisters -g '*.did'` | PASS | root-only admin clustering confirmed |
+| per-canister `.did` scans over `canisters/*/*.did` | PASS | refreshed per-canister surface counts and family spread captured |
+| `rg -n '^  canic_.*_admin :' canisters -g '*.did'` | PASS | root-only admin clustering confirmed |
 | `rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src crates/canic/tests -g '*.rs'` | PASS | usage alignment captured for active versus latent families |
 | `CARGO_TARGET_DIR=/tmp/canic-capability-audit-ws-clippy cargo clippy --workspace --all-targets --all-features -- -D warnings` | PASS | workspace lint-clean on warmed target dir |
 

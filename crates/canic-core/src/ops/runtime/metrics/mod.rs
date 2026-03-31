@@ -199,6 +199,9 @@ fn perf_entries() -> Vec<MetricEntry> {
             let labels = match entry.key {
                 PerfKey::Endpoint(label) => vec!["endpoint".to_string(), label],
                 PerfKey::Timer(label) => vec!["timer".to_string(), label],
+                PerfKey::Checkpoint { scope, label } => {
+                    vec!["checkpoint".to_string(), scope, label]
+                }
             };
 
             MetricEntry {

@@ -26,8 +26,8 @@ Canic already has two instruction-observability mechanisms:
 
 1. endpoint/timer aggregation in `canic-core::perf`, surfaced through
    `canic_metrics(MetricsKind::Perf, ...)`
-2. manual `perf!` checkpoints that log `Topic::Perf` entries inside a single
-   call context
+2. manual `perf!` checkpoints that now both record structured checkpoint rows
+   and log `Topic::Perf` entries inside a single call context
 
 That means this audit must do more than "time a request":
 
@@ -147,21 +147,23 @@ Current interpretation:
 
 ### `perf!` Checkpoints
 
-`perf!` is a debug/logging checkpoint mechanism only.
+`perf!` is a checkpoint mechanism for within-flow attribution.
 
 It:
 
 - reads `performance_counter(1)`
 - computes delta since the last checkpoint in the current thread/call
+- records a structured checkpoint row in the shared perf table
 - emits a `Topic::Perf` log line
-- does not write structured perf rows by itself
 
 Checkpoint consequences:
 
 - checkpoint order matters
 - comparisons require the same checkpoint names and placement
-- reports must capture raw `Topic::Perf` lines or explicitly mark the flow
-  coverage as missing
+- reports should prefer structured checkpoint rows when they exist
+- raw `Topic::Perf` lines remain useful supporting evidence when log context
+  matters
+- flows without checkpoint callsites must still be reported as coverage gaps
 
 ### Accounting Rule: Endpoint Totals vs Checkpoint Deltas
 
@@ -172,7 +174,7 @@ Current accounting model:
 
 - endpoint perf rows are recorded from the perf stack as exclusive endpoint
   totals
-- `perf!` checkpoint deltas are inclusive call-context deltas from
+- `perf!` checkpoint rows/logs are inclusive call-context deltas from
   `performance_counter(1)` between two named checkpoints
 
 Audit rule:

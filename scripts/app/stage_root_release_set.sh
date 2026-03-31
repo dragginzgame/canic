@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_CANISTER="${1:-root}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-CONFIG_PATH="${CANIC_CONFIG_PATH:-${ROOT_DIR}/crates/canisters/canic.toml}"
+CONFIG_PATH="${CANIC_CONFIG_PATH:-${ROOT_DIR}/canisters/canic.toml}"
 WASM_ROOT="${CANIC_STAGE_WASM_DIR:-${ROOT_DIR}/.dfx/local/canisters}"
 CHUNK_BYTES="${CANIC_TEMPLATE_STAGE_CHUNK_BYTES:-1048576}"
 TMP_STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-stage.XXXXXX")"

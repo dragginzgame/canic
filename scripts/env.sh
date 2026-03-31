@@ -19,7 +19,7 @@ case "$DFX_NETWORK" in
 esac
 
 # Canic config path: default to the repo config.
-CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$ROOT/crates/canisters/canic.toml}"
+CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$ROOT/canisters/canic.toml}"
 
 # Export so other commands see them
 export ROOT SCRIPTS NETWORK ENV DFX_NETWORK CANIC_CONFIG_PATH

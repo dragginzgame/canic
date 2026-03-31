@@ -186,7 +186,7 @@
     },
     "defaults": {
         "build": {
-            "output": "canisters/"
+            "output": ".dfx/build/"
         }
     },
     "metadata": [

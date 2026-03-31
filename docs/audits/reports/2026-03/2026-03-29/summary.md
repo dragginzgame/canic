@@ -55,8 +55,8 @@ Overall day posture: **improved after the rerun. The initial baseline overstated
 | --- | --- | --- |
 | endpoint inventory `python3` scan over `crates/canic/src/macros/endpoints.rs` | PASS | bundle, endpoint, admin, controller-only, and internal counts captured |
 | RPC/protocol `python3` scan over `crates/canic-core/src/dto/{rpc,capability}.rs` and `protocol.rs` | PASS | constant and enum-variant baselines captured |
-| generated `.did` scans over `crates/canisters/*/*.did` | PASS | per-canister surface counts and endpoint-family spread captured |
-| `rg -n '^  canic_.*_admin :' crates/canisters -g '*.did'` | PASS | root-only admin clustering confirmed |
+| generated `.did` scans over `canisters/*/*.did` | PASS | per-canister surface counts and endpoint-family spread captured |
+| `rg -n '^  canic_.*_admin :' canisters -g '*.did'` | PASS | root-only admin clustering confirmed |
 | churn scan via `git log --format='' --name-only -n 20 -- ...` | PASS | hotspot pressure confirmed in `endpoints.rs` and `protocol.rs` |
 | refreshed `.did` rerun inventory with full canister build loop | PASS | stale proof-tree types no longer present in generated non-root `.did` files |
 | `CARGO_TARGET_DIR=/tmp/canic-capability-audit-ws-clippy cargo clippy --workspace --all-targets --all-features -- -D warnings` | PASS | warmed-target workspace clippy passed |

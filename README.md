@@ -31,7 +31,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 * `assets/` – documentation media (logo and shared imagery).
 * `crates/` – workspace crates.
-* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl`, `canic-dsl-macros`, `canic-cdk`, and `canic-memory` for consumers.
+* `crates/canic/` – thin façade re‑exporting the public API plus `canic-dsl-macros`, `canic-cdk`, `canic-memory`, and the optional control-plane / sharding lanes for consumers.
 
   * `src/macros/` – public macro entrypoints (`canic::start!`, `canic::start_root!`, `canic::build!`, endpoint bundles, timer helpers).
   * `src/protocol.rs` – shared protocol method names and exported endpoint IDs.
@@ -57,7 +57,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
-* `crates/canisters/` – reference canisters that exercise the library end to end:
+* `canisters/` – reference canisters that exercise the library end to end:
 
   * `root/` orchestrator tying together shards, scaling, and pool flows.
   * `app/` – sample application canister used in integration flows.
@@ -67,14 +67,14 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `minimal/` – minimal runtime baseline canister.
   * `test/` – workspace‑only test canister used by host‑side fixtures.
   * `wasm_store/` – chunk-store-backed WASM publication and install support canister.
-* `scripts/` – build, release, and environment helpers.
+* `scripts/` – build, release, audit, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.
   * `bench/` – local benchmarking helpers.
-  * `ci/` – version bumping and security checks used by CI.
+  * `ci/` – version bumping and recurring audit helpers used by CI and local maintenance flows.
   * `env/` – local environment utilities (e.g., shared env updates).
   * `env.sh` – shared environment bootstrap for scripts and tooling.
-* `.github/workflows/` – CI pipelines (fmt, clippy, tests, release).
+* `.github/workflows/` – CI checks and tag-driven build workflows.
 
 ## Getting Started
 
@@ -136,7 +136,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `crates/canisters/root` and the hub/shard reference canisters under `crates/canisters/*` for end‑to‑end patterns, including WASM registries and endpoint exports.
+See `canisters/root` and the hub/shard reference canisters under `canisters/*` for end‑to‑end patterns, including WASM registries and endpoint exports.
 
 ### 4. Define your topology
 

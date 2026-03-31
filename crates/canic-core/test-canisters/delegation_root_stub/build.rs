@@ -83,13 +83,13 @@ fn main() {
     println!(
         "cargo:rerun-if-changed={}",
         workspace_root
-            .join("crates/canisters/wasm_store/Cargo.toml")
+            .join("canisters/wasm_store/Cargo.toml")
             .display()
     );
     println!(
         "cargo:rerun-if-changed={}",
         workspace_root
-            .join("crates/canisters/wasm_store/src/lib.rs")
+            .join("canisters/wasm_store/src/lib.rs")
             .display()
     );
 }
