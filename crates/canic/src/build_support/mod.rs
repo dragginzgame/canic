@@ -8,7 +8,7 @@ use std::{
 
 const ROOT_RELEASE_ASSET_DIR: &str = "embedded_root_release_bundle";
 
-pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) {
+pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> bool {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set for root build"),
     );
@@ -60,6 +60,7 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) {
         generated_abs.display()
     );
     println!("cargo:rerun-if-changed={}", generated_abs.display());
+    true
 }
 
 fn discover_workspace_root(manifest_dir: &Path) -> PathBuf {

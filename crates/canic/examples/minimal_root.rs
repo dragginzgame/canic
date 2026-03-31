@@ -1,7 +1,8 @@
-#![allow(clippy::unused_async)]
+#![cfg_attr(feature = "control-plane", allow(clippy::unused_async))]
 // Example: minimal root canister scaffold.
-// Compile this example with `cargo build -p canic --example minimal_root`.
+// Compile this example with `cargo build -p canic --example minimal_root --features control-plane`.
 
+#[cfg(feature = "control-plane")]
 mod canister {
     use canic::prelude::*;
 
@@ -25,6 +26,12 @@ mod canister {
     canic::cdk::export_candid_debug!();
 }
 
+#[cfg(feature = "control-plane")]
 fn main() {
     println!("minimal_root example");
+}
+
+#[cfg(not(feature = "control-plane"))]
+fn main() {
+    println!("minimal_root example requires --features control-plane");
 }
