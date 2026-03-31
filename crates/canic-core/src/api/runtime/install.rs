@@ -42,7 +42,7 @@ pub struct ApprovedModuleSource {
 impl ApprovedModuleSource {
     /// Construct one chunk-store-backed module source.
     #[must_use]
-    pub fn chunked(
+    pub const fn chunked(
         source_canister: Principal,
         source_label: String,
         module_hash: Vec<u8>,
@@ -101,7 +101,7 @@ impl ApprovedModuleSource {
 
     /// Return the chunk count when the source is chunk-store-backed.
     #[must_use]
-    pub fn chunk_count(&self) -> usize {
+    pub const fn chunk_count(&self) -> usize {
         match &self.payload {
             ApprovedModulePayload::Chunked { chunk_hashes, .. } => chunk_hashes.len(),
             ApprovedModulePayload::Embedded { .. } => 0,
