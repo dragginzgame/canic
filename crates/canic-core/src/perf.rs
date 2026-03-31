@@ -51,7 +51,7 @@ thread_local! {
 /// For fine-grained, single-slice profiling (e.g., hot loops), use
 /// `ic0.performance_counter(0)` instead.
 #[must_use]
-pub fn perf_counter() -> u64 {
+pub const fn perf_counter() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
         crate::cdk::api::performance_counter(1)
