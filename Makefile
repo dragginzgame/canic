@@ -1,4 +1,4 @@
-.PHONY: help version tags patch minor major package publish \
+.PHONY: help version tags patch patch-quick minor major package publish \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
         demo-install test-watch all ensure-clean \
         ensure-hooks install-hooks
@@ -56,6 +56,7 @@ help:
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
 	@echo "  patch            Bump patch version (0.0.x)"
+	@echo "  patch-quick      Bump patch version with cargo check instead of test-bump"
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
 	@echo "  package          Build a publishable crate tarball"
@@ -78,6 +79,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
+	@echo "  make patch-quick # Fast patch bump using cargo check"
 	@echo "  make demo-install # Build + install the local reference topology"
 	@echo "  make test        # Run clippy and tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
@@ -128,6 +130,9 @@ tags:
 patch: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh patch
 
+patch-quick: ensure-clean fmt quick-bump
+	@scripts/ci/bump-version.sh patch
+
 minor: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh minor
 
@@ -160,6 +165,9 @@ test-wasm: clippy test-unit-fast
 # Keeps clippy plus the local dfx canister smoke path, but skips PocketIC-heavy
 # integration tests under `tests/` by using the fast unit/lib/bin workspace run.
 test-bump: clippy test-canisters test-unit-fast
+
+quick-bump:
+	$(CARGO_ENV) cargo check --workspace
 
 # Keep rust test execution single-threaded for PocketIC stability.
 # Parallel test threads can trigger PocketIC panics like:
