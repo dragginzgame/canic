@@ -1,4 +1,7 @@
-use canic_core::{bootstrap::compiled::ConfigModel, dto::subnet::SubnetIdentity};
+use canic_core::{
+    bootstrap::{EmbeddedRootReleaseEntry, compiled::ConfigModel},
+    dto::subnet::SubnetIdentity,
+};
 use std::time::Duration;
 
 ///
@@ -15,6 +18,8 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
         embedded_wasm_store_module: &'static [u8],
+        embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
+        embedded_release_version: &str,
     ) {
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
             embedded_wasm_store_module,
@@ -26,6 +31,11 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
+            embedded_release_bundle,
+            embedded_release_version,
+        )
+        .expect("seed embedded root release bundle");
     }
 
     /// Delegate root init-time bootstrap scheduling to the current core implementation.
@@ -45,6 +55,8 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
         embedded_wasm_store_module: &'static [u8],
+        embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
+        embedded_release_version: &str,
     ) {
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_module(
             embedded_wasm_store_module,
@@ -55,6 +67,11 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
+            embedded_release_bundle,
+            embedded_release_version,
+        )
+        .expect("seed embedded root release bundle");
     }
 
     /// Delegate root post-upgrade bootstrap scheduling to the current core implementation.

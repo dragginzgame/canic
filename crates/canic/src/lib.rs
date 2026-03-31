@@ -11,6 +11,8 @@
 
 #[cfg(feature = "control-plane")]
 mod bootstrap;
+#[cfg(any(not(target_arch = "wasm32"), test))]
+mod build_support;
 mod instructions;
 mod macros; // private implementation boundary
 pub mod protocol;
@@ -34,6 +36,12 @@ pub mod __internal {
     pub mod instructions {
         pub use crate::instructions::format_instructions;
     }
+}
+
+#[doc(hidden)]
+#[cfg(any(not(target_arch = "wasm32"), test))]
+pub mod __build {
+    pub use crate::build_support::emit_root_release_bundle;
 }
 
 // -----------------------------------------------------------------------------

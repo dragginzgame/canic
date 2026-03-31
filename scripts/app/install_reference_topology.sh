@@ -26,7 +26,6 @@ dfx canister create --all -qq
 RELEASE=1 dfx build --all
 dfx ledger fabricate-cycles --canister "${ROOT_CANISTER}" --cycles 9000000000000000 || true
 dfx canister install "${ROOT_CANISTER}" --mode=reinstall -y --argument '(variant { Prime })'
-"${SCRIPT_DIR}/stage_root_release_set.sh" "${ROOT_CANISTER}"
 
 echo "Reference topology installed successfully"
 echo "Smoke check: dfx canister call ${ROOT_CANISTER} canic_ready"

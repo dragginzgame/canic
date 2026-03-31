@@ -21,7 +21,7 @@ These canisters are wired through `dfx.json` (custom build steps call `scripts/a
 
 - Start a clean local replica in another terminal: `scripts/app/dfx_start.sh`
 - Install the full local reference topology: `make demo-install`
-- Reuse the generic host-side root bootstrap helper in another project: `scripts/canic/bootstrap_root_release_set.sh`
+- The normal `root` install path no longer needs a separate release-staging helper; `dfx build --all` plus `dfx canister install root` is sufficient when the child role artifacts are present.
 - Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
 - Run the scripted end-to-end flow: `make test-canisters` (or `make test`)
 
