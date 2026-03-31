@@ -228,7 +228,9 @@ dependencies = [
  "canic-dsl-macros",
  "canic-memory",
  "canic-sharding-runtime",
+ "flate2",
  "ic-cdk",
+ "sha2 0.11.0",
  "toml",
 ]
 

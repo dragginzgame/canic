@@ -20,6 +20,30 @@ require_dfx_running() {
     fi
 }
 
+print_recent_root_logs() {
+    local page_args='(null, null, null, record { limit = 8; offset = 0 })'
+    local logs_json
+
+    if ! logs_json="$(dfx canister call "${ROOT_CANISTER}" canic_log "${page_args}" --output json 2>/dev/null)"; then
+        return
+    fi
+
+    printf '%s\n' "${logs_json}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+entries = data.get("Ok", {}).get("entries", [])
+if not entries:
+    print("  <no runtime log entries>")
+    raise SystemExit(0)
+for entry in reversed(entries):
+    topic = entry.get("topic")
+    topic_prefix = f"[{topic}] " if topic else ""
+    level = entry.get("level", "Info")
+    message = str(entry.get("message", "")).replace("\n", "\\n")
+    print(f"  {level} {topic_prefix}{message}")
+'
+}
+
 wait_for_root_ready() {
     local deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
     local start_time=$SECONDS
@@ -41,7 +65,7 @@ wait_for_root_ready() {
             fi
 
             echo "Recent root logs:"
-            dfx canister logs "${ROOT_CANISTER}" 2>/dev/null | tail -n 8 || true
+            print_recent_root_logs
             next_report=$((SECONDS + 5))
         fi
 
@@ -55,8 +79,8 @@ wait_for_root_ready() {
     dfx canister call "${ROOT_CANISTER}" canic_wasm_store_bootstrap_debug >&2 || true
     echo "Diagnostic: dfx canister call ${ROOT_CANISTER} canic_wasm_store_overview" >&2
     dfx canister call "${ROOT_CANISTER}" canic_wasm_store_overview >&2 || true
-    echo "Diagnostic: dfx canister logs ${ROOT_CANISTER}" >&2
-    dfx canister logs "${ROOT_CANISTER}" >&2 || true
+    echo "Diagnostic: dfx canister call ${ROOT_CANISTER} canic_log" >&2
+    print_recent_root_logs >&2 || true
     return 1
 }
 

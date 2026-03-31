@@ -119,14 +119,14 @@ macro_rules! __canic_start_root_lifecycle_core {
         #[doc(hidden)]
         #[cfg(canic_has_root_wasm_store_bootstrap_release_set)]
         fn __canic_embedded_root_wasm_store_bootstrap_release_set(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
+        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootBootstrapEntry] {
             include!(env!("CANIC_ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_PATH"))
         }
 
         #[doc(hidden)]
         #[cfg(not(canic_has_root_wasm_store_bootstrap_release_set))]
         fn __canic_embedded_root_wasm_store_bootstrap_release_set(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
+        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootBootstrapEntry] {
             &[]
         }
 
