@@ -17,6 +17,7 @@ pub const CANIC_WASM_STORE_COMPLETE_GC: &str = "canic_wasm_store_complete_gc";
 pub const CANIC_WASM_STORE_PREPARE: &str = "canic_wasm_store_prepare";
 pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
 pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
+pub const CANIC_WASM_STORE_STAGE_MANIFEST: &str = "canic_wasm_store_stage_manifest";
 pub const CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN: &str =
     "canic_wasm_store_bootstrap_stage_manifest_admin";
 pub const CANIC_WASM_STORE_BOOTSTRAP_PREPARE_ADMIN: &str =

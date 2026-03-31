@@ -231,6 +231,11 @@ impl WasmStoreApi {
         support::local_prepare_chunk_set(request)
     }
 
+    // Stage one approved manifest in this local wasm store.
+    pub fn stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
+        support::local_stage_manifest(request)
+    }
+
     // Publish one deterministic chunk into an already prepared local template release.
     pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
         support::local_publish_chunk(request)
@@ -276,6 +281,11 @@ impl WasmStoreCanisterApi {
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
         WasmStoreApi::prepare_chunk_set(request)
+    }
+
+    // Stage one approved manifest in this local wasm store.
+    pub fn stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
+        WasmStoreApi::stage_manifest(request)
     }
 
     // Publish one deterministic chunk into an already prepared local template release.

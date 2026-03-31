@@ -548,6 +548,13 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_stage_manifest(
+            request: ::canic::dto::template::TemplateManifestInput,
+        ) -> Result<(), ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_publish_chunk(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
