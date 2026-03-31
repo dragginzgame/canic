@@ -68,6 +68,19 @@ pub(super) async fn store_status(
     call_store_result(store_pid, protocol::CANIC_WASM_STORE_STATUS, ()).await
 }
 
+// Stage one approved manifest into one live wasm store.
+pub(super) async fn store_stage_manifest(
+    store_pid: Principal,
+    request: TemplateManifestInput,
+) -> Result<(), InternalError> {
+    call_store_result(
+        store_pid,
+        protocol::CANIC_WASM_STORE_STAGE_MANIFEST,
+        (request,),
+    )
+    .await
+}
+
 // Mark one local wasm store as prepared for store-local GC execution.
 pub(super) async fn store_prepare_gc(store_pid: Principal) -> Result<(), InternalError> {
     call_store_result(store_pid, protocol::CANIC_WASM_STORE_PREPARE_GC, ()).await
@@ -877,6 +890,28 @@ impl WasmStorePublicationWorkflow {
         Ok(())
     }
 
+    // Stage one approved manifest into the target store and mirror it into root-owned state.
+    async fn promote_manifest_to_target_store(
+        target_store_pid: Principal,
+        target_store_binding: WasmStoreBinding,
+        manifest: TemplateManifestInput,
+    ) -> Result<(), InternalError> {
+        store_stage_manifest(
+            target_store_pid,
+            TemplateManifestInput {
+                store_binding: target_store_binding.clone(),
+                ..manifest.clone()
+            },
+        )
+        .await?;
+        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
+            store_binding: target_store_binding,
+            ..manifest
+        });
+
+        Ok(())
+    }
+
     // Publish one catalog-defined release from a source store into a target store.
     async fn publish_release_to_store(
         source_store_pid: Principal,
@@ -952,18 +987,23 @@ impl WasmStorePublicationWorkflow {
             }
         }
 
-        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
-            template_id: entry.template_id.clone(),
-            role: entry.role.clone(),
-            version: entry.version.clone(),
-            payload_hash: entry.payload_hash.clone(),
-            payload_size_bytes: entry.payload_size_bytes,
-            store_binding: target_store_binding,
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: Some(IcOps::now_secs()),
-            created_at: IcOps::now_secs(),
-        });
+        Self::promote_manifest_to_target_store(
+            target_store_pid,
+            target_store_binding,
+            TemplateManifestInput {
+                template_id: entry.template_id.clone(),
+                role: entry.role.clone(),
+                version: entry.version.clone(),
+                payload_hash: entry.payload_hash.clone(),
+                payload_size_bytes: entry.payload_size_bytes,
+                store_binding: WASM_STORE_BOOTSTRAP_BINDING,
+                chunking_mode: TemplateChunkingMode::Chunked,
+                manifest_state: TemplateManifestState::Approved,
+                approved_at: Some(IcOps::now_secs()),
+                created_at: IcOps::now_secs(),
+            },
+        )
+        .await?;
         canic_core::perf!("publish_promote_manifest");
 
         log!(
@@ -1042,18 +1082,23 @@ impl WasmStorePublicationWorkflow {
             canic_core::perf!("publish_push_bootstrap_chunk");
         }
 
-        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
-            template_id: manifest.template_id.clone(),
-            role: manifest.role.clone(),
-            version: manifest.version.clone(),
-            payload_hash: manifest.payload_hash,
-            payload_size_bytes: manifest.payload_size_bytes,
-            store_binding: target_store_binding.clone(),
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: Some(IcOps::now_secs()),
-            created_at: manifest.created_at,
-        });
+        Self::promote_manifest_to_target_store(
+            target_store_pid,
+            target_store_binding,
+            TemplateManifestInput {
+                template_id: manifest.template_id.clone(),
+                role: manifest.role.clone(),
+                version: manifest.version.clone(),
+                payload_hash: manifest.payload_hash,
+                payload_size_bytes: manifest.payload_size_bytes,
+                store_binding: WASM_STORE_BOOTSTRAP_BINDING,
+                chunking_mode: TemplateChunkingMode::Chunked,
+                manifest_state: TemplateManifestState::Approved,
+                approved_at: Some(IcOps::now_secs()),
+                created_at: manifest.created_at,
+            },
+        )
+        .await?;
         canic_core::perf!("publish_promote_bootstrap_manifest");
 
         log!(

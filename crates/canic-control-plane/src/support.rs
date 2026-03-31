@@ -290,6 +290,17 @@ pub fn local_prepare_chunk_set(
         .map_err(Error::from)
 }
 
+/// Stage one approved manifest in this local wasm store.
+pub fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
+    let store = config::current_wasm_store().map_err(Error::from)?;
+    let limits = WasmStoreLimits {
+        max_store_bytes: store.max_store_bytes(),
+        max_templates: store.max_templates(),
+        max_template_versions_per_template: store.max_template_versions_per_template(),
+    };
+    TemplateChunkedOps::replace_approved_in_store_from_input(request, limits).map_err(Error::from)
+}
+
 /// Publish one deterministic chunk into an already prepared local template release.
 pub fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;

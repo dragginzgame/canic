@@ -173,7 +173,9 @@ test-unit-fast:
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace --lib --bins -- --test-threads=1
 
 test-canisters: demo-install
-	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(entry["pid"] for entry in data["Ok"] if entry["role"]=="test"))')"; \
+	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[entry["pid"] for entry in data.get("Ok", []) if entry.get("role")=="test"]; \
+if not matches: raise SystemExit("root canic_subnet_registry did not contain role '\''test'\''"); \
+print(matches[0])')"; \
 	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
 
 #
