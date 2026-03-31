@@ -1,0 +1,6 @@
+{
+  "method_tag": "Method V1",
+  "normalization": "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes produce comparable persisted deltas; successful query lanes currently do not persist `PERF_TABLE` deltas and are reported as method-limited rather than true zero-cost rows.",
+  "freshness_rule": "One fresh `setup_root()` topology per measured scenario; baseline and post-call perf tables sampled inside that isolated topology.",
+  "checkpoint_rule": "Checkpoint deltas are unavailable until real `perf!` call sites exist; flows are reported as coverage gaps rather than inferred."
+}

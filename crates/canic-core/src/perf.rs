@@ -52,7 +52,15 @@ thread_local! {
 /// `ic0.performance_counter(0)` instead.
 #[must_use]
 pub fn perf_counter() -> u64 {
-    crate::cdk::api::performance_counter(1)
+    #[cfg(target_arch = "wasm32")]
+    {
+        crate::cdk::api::performance_counter(1)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        0
+    }
 }
 
 ///
