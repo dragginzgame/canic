@@ -38,6 +38,8 @@ wait_for_root_ready() {
     dfx canister call "${ROOT_CANISTER}" canic_wasm_store_bootstrap_debug >&2 || true
     echo "Diagnostic: dfx canister call ${ROOT_CANISTER} canic_wasm_store_overview" >&2
     dfx canister call "${ROOT_CANISTER}" canic_wasm_store_overview >&2 || true
+    echo "Diagnostic: dfx canister logs ${ROOT_CANISTER}" >&2
+    dfx canister logs "${ROOT_CANISTER}" >&2 || true
     return 1
 }
 
