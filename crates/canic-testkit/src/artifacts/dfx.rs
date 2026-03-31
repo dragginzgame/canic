@@ -80,7 +80,8 @@ fn newest_path_mtime(path: &Path) -> io::Result<SystemTime> {
     Ok(newest)
 }
 
-// Invoke `dfx build --all` under a file lock when `flock` is available.
+// Invoke `dfx canister create --all` and `dfx build --all` under one file lock when `flock`
+// is available.
 fn run_dfx_build_with_lock(
     workspace_root: &Path,
     lock_relative_path: &str,
@@ -88,17 +89,24 @@ fn run_dfx_build_with_lock(
     profile: WasmBuildProfile,
 ) -> Output {
     let lock_file = workspace_root.join(lock_relative_path);
+    let target_dir = workspace_root.join("target/dfx-build");
     if let Some(parent) = lock_file.parent() {
         let _ = fs::create_dir_all(parent);
     }
+    let _ = fs::create_dir_all(&target_dir);
 
     match Command::new("flock")
         .current_dir(workspace_root)
         .arg(lock_file.as_os_str())
-        .arg("dfx")
+        .arg("bash")
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
-        .args(["build", "--all"])
+        .env("CARGO_TARGET_DIR", &target_dir)
+        .args([
+            "-lc",
+            "dfx canister create --all -qq >/dev/null 2>&1 || true\n\
+             dfx build --all",
+        ])
         .output()
     {
         Ok(output) => output,
@@ -109,12 +117,25 @@ fn run_dfx_build_with_lock(
     }
 }
 
-// Invoke `dfx build --all` directly when `flock` is unavailable.
+// Invoke `dfx canister create --all` and `dfx build --all` directly when `flock` is
+// unavailable.
 fn run_dfx_build(workspace_root: &Path, network: &str, profile: WasmBuildProfile) -> Output {
+    let target_dir = workspace_root.join("target/dfx-build");
+    let _ = fs::create_dir_all(&target_dir);
+
+    let _ = Command::new("dfx")
+        .current_dir(workspace_root)
+        .env("DFX_NETWORK", network)
+        .env("RELEASE", profile.dfx_release_value())
+        .env("CARGO_TARGET_DIR", &target_dir)
+        .args(["canister", "create", "--all", "-qq"])
+        .output();
+
     Command::new("dfx")
         .current_dir(workspace_root)
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
+        .env("CARGO_TARGET_DIR", &target_dir)
         .args(["build", "--all"])
         .output()
         .expect("failed to run `dfx build --all`")

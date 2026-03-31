@@ -911,6 +911,7 @@ impl WasmStorePublicationWorkflow {
             },),
         )
         .await?;
+        canic_core::perf!("publish_prepare_store");
 
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             let chunk_index = u32::try_from(chunk_index).map_err(|_| {
@@ -935,6 +936,7 @@ impl WasmStorePublicationWorkflow {
                 },),
             )
             .await?;
+            canic_core::perf!("publish_push_store_chunk");
 
             if !existing_hashes.contains(&expected_hash) {
                 let uploaded_hash = MgmtOps::upload_chunk(target_store_pid, bytes).await?;
@@ -962,13 +964,15 @@ impl WasmStorePublicationWorkflow {
             approved_at: Some(IcOps::now_secs()),
             created_at: IcOps::now_secs(),
         });
+        canic_core::perf!("publish_promote_manifest");
 
         log!(
             Topic::Wasm,
             Info,
-            "tpl.publish {} -> {} (store={}, chunks={})",
+            "tpl.publish {} -> {}@{} (store={}, chunks={})",
             entry.role,
             entry.template_id,
+            entry.version,
             target_store_pid,
             chunk_hashes.len()
         );
@@ -1007,6 +1011,7 @@ impl WasmStorePublicationWorkflow {
             },),
         )
         .await?;
+        canic_core::perf!("publish_prepare_bootstrap");
 
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             let chunk_index = u32::try_from(chunk_index).map_err(|_| {
@@ -1034,6 +1039,7 @@ impl WasmStorePublicationWorkflow {
                 },),
             )
             .await?;
+            canic_core::perf!("publish_push_bootstrap_chunk");
         }
 
         TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
@@ -1048,13 +1054,15 @@ impl WasmStorePublicationWorkflow {
             approved_at: Some(IcOps::now_secs()),
             created_at: manifest.created_at,
         });
+        canic_core::perf!("publish_promote_bootstrap_manifest");
 
         log!(
             Topic::Wasm,
             Ok,
-            "tpl.publish {} -> {} (store={}, chunks={})",
+            "tpl.publish {} -> {}@{} (store={}, chunks={})",
             manifest.role,
             manifest.template_id,
+            manifest.version,
             target_store_pid,
             chunk_hashes.len()
         );

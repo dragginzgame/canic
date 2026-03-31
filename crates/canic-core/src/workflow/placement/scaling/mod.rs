@@ -33,6 +33,7 @@ impl ScalingWorkflow {
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
         let scaling = ConfigOps::current_scaling_config()?;
+        crate::perf!("observe_state");
 
         // 1. Evaluate policy
         let ScalingPlan {
@@ -40,6 +41,7 @@ impl ScalingWorkflow {
             reason,
             worker_entry,
         } = ScalingPolicy::plan_create_worker(pool, worker_count, scaling)?;
+        crate::perf!("plan_spawn");
 
         if !should_spawn {
             return Err(InternalError::domain(InternalErrorOrigin::Workflow, reason));
@@ -59,10 +61,12 @@ impl ScalingWorkflow {
             RequestOps::create_canister::<()>(&role, CreateCanisterParent::ThisCanister, None)
                 .await?
                 .new_canister_pid;
+        crate::perf!("create_canister");
 
         // 4. Register in memory
         let created_at_secs = IcOps::now_secs();
         ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
+        crate::perf!("register_worker");
 
         Ok(pid)
     }
@@ -73,7 +77,9 @@ impl ScalingWorkflow {
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
 
         let scaling = ConfigOps::current_scaling_config()?;
+        crate::perf!("observe_state");
         let plan = ScalingPolicy::plan_create_worker(pool, worker_count, scaling)?;
+        crate::perf!("plan_spawn");
 
         Ok(plan.should_spawn)
     }

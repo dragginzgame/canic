@@ -6,7 +6,7 @@ try features end-to-end without touching production code.
 
 ## What’s Here
 
-- `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, imports child WASMs, and exposes root admin endpoints.
+- `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.
 - `app/` – minimal “application” canister used as a placeholder service.
 - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow (hub does placement only; shard initiates delegation with root).
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
@@ -21,6 +21,7 @@ These canisters are wired through `dfx.json` (custom build steps call `scripts/a
 
 - Start a clean local replica in another terminal: `scripts/app/dfx_start.sh`
 - Install the full local reference topology: `make demo-install`
+- Reuse the generic host-side root bootstrap helper in another project: `scripts/canic/bootstrap_root_release_set.sh`
 - Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
 - Run the scripted end-to-end flow: `make test-canisters` (or `make test`)
 

@@ -122,6 +122,7 @@ impl DelegationWorkflow {
     ) -> Result<DelegationProvisionResponse, InternalError> {
         record_delegation_install_total(DelegationProofInstallIntent::Provisioning);
         let proof = Self::issue_delegation(request.cert).await?;
+        crate::perf!("issue_proof");
         log!(
             Topic::Auth,
             Info,
@@ -142,6 +143,7 @@ impl DelegationWorkflow {
             .await;
             results.push(result);
         }
+        crate::perf!("push_signers");
 
         for target in request.verifier_targets {
             let result = Self::push_proof(
@@ -153,6 +155,7 @@ impl DelegationWorkflow {
             .await;
             results.push(result);
         }
+        crate::perf!("push_verifiers");
 
         record_delegation_push_complete(DelegationProofInstallIntent::Provisioning);
         Ok(DelegationProvisionResponse { proof, results })
@@ -246,6 +249,7 @@ impl DelegationWorkflow {
                 return response;
             }
         };
+        crate::perf!("prepare_call");
 
         let result = match call.execute().await {
             Ok(result) => result,
@@ -256,6 +260,7 @@ impl DelegationWorkflow {
                 return response;
             }
         };
+        crate::perf!("execute_call");
 
         let response: Result<(), ErrorDto> = match result.candid() {
             Ok(response) => response,
@@ -266,6 +271,7 @@ impl DelegationWorkflow {
                 return response;
             }
         };
+        crate::perf!("decode_response");
 
         let response = match response {
             Ok(()) => DelegationProvisionTargetResponse {
@@ -276,6 +282,7 @@ impl DelegationWorkflow {
             },
             Err(err) => Self::failure(target, kind, err),
         };
+        crate::perf!("finalize_result");
 
         Self::record_push_result_metric(role, origin, response.status);
         Self::log_push_result(&response, origin);

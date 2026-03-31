@@ -35,10 +35,6 @@ async fn canic_upgrade() {}
 /// main test endpoint for things that can fail
 #[canic_update]
 async fn test() -> Result<(), Error> {
-    if let Err(err) = canic::access::env::build_network_local() {
-        return Err(Error::forbidden(err.to_string()));
-    }
-
     Ok(())
 }
 

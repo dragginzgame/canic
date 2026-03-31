@@ -120,6 +120,7 @@ impl ShardingWorkflow {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
         let mut active = ShardingLifecycleOps::active_shards();
+        canic_core::perf!("load_active_shards");
         if active.is_empty() {
             Self::bootstrap_empty_active(
                 canister_role,
@@ -130,6 +131,7 @@ impl ShardingWorkflow {
             )
             .await?;
             active = ShardingLifecycleOps::active_shards();
+            canic_core::perf!("bootstrap_empty_active");
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
@@ -155,6 +157,7 @@ impl ShardingWorkflow {
                 ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
             })
             .collect();
+        canic_core::perf!("collect_registry");
 
         let state = ShardingState {
             pool,
@@ -168,9 +171,11 @@ impl ShardingWorkflow {
         };
 
         let plan = ShardingPolicy::plan_assign(&state, partition_key, None);
+        canic_core::perf!("plan_assign");
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
+                canic_core::perf!("already_assigned");
                 let slot = plan
                     .target_slot
                     .or_else(|| ShardingRegistryOps::slot_for_shard(pool, pid));
@@ -186,6 +191,7 @@ impl ShardingWorkflow {
 
             ShardingPlanState::UseExisting { pid } => {
                 ShardingRegistryOps::assign(pool, partition_key, pid)?;
+                canic_core::perf!("assign_existing");
 
                 let slot = plan
                     .target_slot
@@ -207,8 +213,10 @@ impl ShardingWorkflow {
 
                 let pid =
                     Self::allocate_and_admit(pool, slot, canister_role, &policy, extra_arg).await?;
+                canic_core::perf!("allocate_shard");
 
                 ShardingRegistryOps::assign(pool, partition_key, pid)?;
+                canic_core::perf!("assign_created");
 
                 canic_core::log!(
                     Topic::Sharding,
@@ -220,6 +228,7 @@ impl ShardingWorkflow {
             }
 
             ShardingPlanState::CreateBlocked { reason } => {
+                canic_core::perf!("create_blocked");
                 Err(Self::blocked(reason, pool, partition_key))
             }
         }
