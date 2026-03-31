@@ -28,9 +28,7 @@ use std::{
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
     path::PathBuf,
-    sync::{Mutex, MutexGuard, Once, TryLockError},
-    thread,
-    time::{Duration, Instant},
+    sync::{Mutex, MutexGuard, Once},
 };
 
 /// Environment variable override for providing a pre-built root canister wasm.
@@ -146,39 +144,11 @@ pub fn setup_root() -> RootSetup {
     }
 }
 
-// Acquire the global setup lock with a bounded wait so blocked tests fail fast.
+// Serialize full root PocketIC usage to avoid concurrent runtime contention.
 fn acquire_root_setup_serial_guard() -> MutexGuard<'static, ()> {
-    const WAIT_STEP: Duration = Duration::from_millis(100);
-    const WAIT_WARN: Duration = Duration::from_secs(5);
-    const WAIT_TIMEOUT: Duration = Duration::from_secs(120);
-
-    let started = Instant::now();
-    let mut warned = false;
-
-    loop {
-        match ROOT_SETUP_SERIAL.try_lock() {
-            Ok(guard) => return guard,
-            Err(TryLockError::Poisoned(err)) => return err.into_inner(),
-            Err(TryLockError::WouldBlock) => {
-                let elapsed = started.elapsed();
-                if !warned && elapsed >= WAIT_WARN {
-                    warned = true;
-                    eprintln!(
-                        "setup_root: waiting for setup lock (>{}s); another root test is still active",
-                        WAIT_WARN.as_secs()
-                    );
-                }
-
-                assert!(
-                    elapsed < WAIT_TIMEOUT,
-                    "setup_root: timed out after {}s waiting for setup lock",
-                    WAIT_TIMEOUT.as_secs()
-                );
-
-                thread::sleep(WAIT_STEP);
-            }
-        }
-    }
+    ROOT_SETUP_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 // WARNING: DO NOT ENABLE THIS IN CI OR SHARED TEST RUNNERS.

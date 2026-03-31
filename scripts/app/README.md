@@ -53,4 +53,6 @@ dfx build --all
 `dfx.json` sets `"gzip": true`, so dfx 0.30.2 also writes a gzipped artifact:
 `.dfx/local/canisters/<name>/<name>.wasm.gz`.
 
-The root reference canister (`crates/canisters/root`) embeds these gzipped WASMs via `include_bytes!` to simulate a “WASM bundle” used during local orchestration flows.
+The local bootstrap flow stages these gzipped artifacts through `root` into
+root-local stable memory and then publishes ordinary roles into the live
+`wasm_store`. They are no longer embedded directly into `root.wasm`.

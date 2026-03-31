@@ -22,12 +22,15 @@ These four audits cover:
 
 ## Additional System Audits
 
+- [instruction-footprint.md](instruction-footprint.md)
 - [bootstrap-lifecycle-symmetry.md](bootstrap-lifecycle-symmetry.md)
 - [change-friction.md](change-friction.md)
 
 ## Usage Guidance
 
 - Use the standard starter set for broad architectural review rounds.
+- Add `instruction-footprint` when the goal is runtime optimization or perf
+  regression detection.
 - Use `bootstrap-lifecycle-symmetry` after lifecycle/bootstrap changes.
 - Use `change-friction` during refactor planning or release-hardening windows.
 

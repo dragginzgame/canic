@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.19.x] - 2026-03-30 - Library Lane Cleanup and Crate Graph Simplification
 
+- `0.19.6` cleans up stale automation by removing the unused `make release` / `check-versioning` paths and obsolete bootstrap helper scripts, fixes CI’s old `template_store` canister list to the current `wasm_store` topology, and adds a recurring instruction-footprint audit definition for `perf!` and endpoint instruction regression tracking.
 - `0.19.5` rounds out the downstream facade story by adding a feature-gated `sharding` lane on `canic`, so sharding coordinator canisters can keep using `canic::api::canister::placement::ShardingApi` and `start!()` without depending on `canic-sharding-runtime` directly, while `root` and `wasm_store` continue to use the existing `control-plane` feature.
 - `0.19.3` restores a feature-gated `canic` control-plane lane so downstream `root` and `wasm_store` crates can keep using the facade-owned root lifecycle and template/store API paths without making ordinary leaf canisters pull control-plane code by default.
 - `0.19.2` simplifies the workspace crate graph by merging the temporary template helper crates into `canic-control-plane`, deleting the dead `canic-dsl` and `canic-utils` crates, and restoring an empty shared `SubnetState` so the generic state cascade shape is `[as ss ad sd]` again without reintroducing root-owned publication inventory into non-root sync.
