@@ -2,7 +2,7 @@
 
 ## Report Preamble
 
-- Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability.rs`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `crates/canisters/**`
+- Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability.rs`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `canisters/**`
 - Compared baseline report path: `N/A` (first run for this scope on 2026-03-29)
 - Code snapshot identifier: `f26eccd6`
 - Method tag/version: `Method V1.0`
@@ -114,7 +114,7 @@ Pressure rationale:
 | --- | --- | --- | --- |
 | global endpoint family growth | `crates/canic/src/macros/endpoints.rs` + generated `.did` files | `canic_response_capability_v1` appears on all `11` canisters, including `minimal` | Medium |
 | shared DTO fan-out | `crates/canic-core/src/dto/capability.rs` | proof families and capability enums appear in every generated `.did` | Medium |
-| admin surface clustering | `crates/canisters/root/root.did` | all `11` `*_admin` methods are root-only, with `root` at `40` total `canic_*` methods | Medium |
+| admin surface clustering | `canisters/root/root.did` | all `11` `*_admin` methods are root-only, with `root` at `40` total `canic_*` methods | Medium |
 
 ## Capability Surface Growth Table
 
@@ -155,9 +155,9 @@ Moderate structural risk. No correctness failure was identified in this pass, bu
 | --- | --- | --- |
 | `python3` inventory scan over `crates/canic/src/macros/endpoints.rs` | PASS | captured bundle macro count, generated method count, admin/controller/internal counts |
 | `python3` variant-count scan over `crates/canic-core/src/dto/{rpc,capability}.rs` | PASS | captured request/response/proof/service variant counts |
-| `python3` `.did` surface scans over `crates/canisters/*/*.did` | PASS | captured per-canister `canic_*` counts and endpoint-family spread |
-| `rg -n '^  canic_.*_admin :' crates/canisters -g '*.did'` | PASS | confirmed all admin endpoints are root-only |
-| `rg -n 'RoleAttestationProof|DelegatedGrantProof|CapabilityProof|CapabilityService' crates/canisters -g '*.did'` | PASS | confirmed proof/type fan-out across all generated interfaces |
+| `python3` `.did` surface scans over `canisters/*/*.did` | PASS | captured per-canister `canic_*` counts and endpoint-family spread |
+| `rg -n '^  canic_.*_admin :' canisters -g '*.did'` | PASS | confirmed all admin endpoints are root-only |
+| `rg -n 'RoleAttestationProof|DelegatedGrantProof|CapabilityProof|CapabilityService' canisters -g '*.did'` | PASS | confirmed proof/type fan-out across all generated interfaces |
 | `git log --format='' --name-only -n 20 -- crates/canic/src/macros/endpoints.rs crates/canic-core/src/protocol.rs crates/canic-core/src/api/rpc` | PASS | captured recent churn concentration for hotspot scoring |
 
 ## Follow-up Actions

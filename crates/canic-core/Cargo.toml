@@ -38,7 +38,7 @@ candid = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-futures = "0.3"
+futures = { workspace = true }
 pocket-ic = { workspace = true }
 
 [[bench]]

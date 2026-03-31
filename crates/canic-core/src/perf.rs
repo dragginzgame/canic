@@ -57,13 +57,14 @@ pub fn perf_counter() -> u64 {
 
 ///
 /// PerfKey
-/// splitting up by Timer type to avoid confusing string comparisons
+/// Splits perf counters by transport surface so metrics rows remain explicit.
 ///
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PerfKey {
     Endpoint(String),
     Timer(String),
+    Checkpoint { scope: String, label: String },
 }
 
 ///
@@ -122,6 +123,16 @@ pub fn record_endpoint(endpoint: EndpointId, delta_instructions: u64) {
 
 pub fn record_timer(label: &str, delta_instructions: u64) {
     record(PerfKey::Timer(label.to_string()), delta_instructions);
+}
+
+pub fn record_checkpoint(scope: &str, label: &str, delta_instructions: u64) {
+    record(
+        PerfKey::Checkpoint {
+            scope: scope.to_string(),
+            label: label.to_string(),
+        },
+        delta_instructions,
+    );
 }
 
 /// Begin an endpoint scope and push it on the stack.
@@ -218,6 +229,21 @@ mod tests {
             .expect("expected perf entry to exist")
     }
 
+    fn checkpoint_entry_for(scope: &str, label: &str) -> PerfEntry {
+        entries()
+            .into_iter()
+            .find(|entry| {
+                matches!(
+                    &entry.key,
+                    PerfKey::Checkpoint {
+                        scope: entry_scope,
+                        label: entry_label,
+                    } if entry_scope == scope && entry_label == label
+                )
+            })
+            .expect("expected checkpoint perf entry to exist")
+    }
+
     #[test]
     fn nested_endpoints_record_exclusive_totals() {
         reset();
@@ -238,5 +264,18 @@ mod tests {
         assert_eq!(child.total_instructions, 60);
         assert_eq!(parent.count, 1);
         assert_eq!(parent.total_instructions, 140);
+    }
+
+    #[test]
+    fn checkpoints_record_scope_and_label() {
+        reset();
+
+        record_checkpoint("workflow::bootstrap", "load_cfg", 120);
+        record_checkpoint("workflow::bootstrap", "load_cfg", 80);
+
+        let checkpoint = checkpoint_entry_for("workflow::bootstrap", "load_cfg");
+
+        assert_eq!(checkpoint.count, 2);
+        assert_eq!(checkpoint.total_instructions, 200);
     }
 }

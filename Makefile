@@ -1,6 +1,6 @@
 .PHONY: help version tags patch minor major package publish \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
-        demo-install test-watch all ensure-clean security-check \
+        demo-install test-watch all ensure-clean \
         ensure-hooks install-hooks
 
 # in case we need to use this
@@ -75,7 +75,6 @@ help:
 	@echo "Utilities:"
 	@echo "  test-watch       Run tests in watch mode"
 	@echo "  all              Run all checks, tests, and build"
-	@echo "  security-check   Verify GitHub Protected Tags (informational)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
@@ -206,15 +205,6 @@ fmt-check-core:
 
 clean:
 	cargo clean
-
-
-# Security and versioning checks
-security-check:
-	@echo "Security checks are enforced via GitHub settings:"
-	@echo "- Enable Protected Tags for pattern 'v*' (Settings → Tags)"
-	@echo "- Restrict who can create tags and disable force pushes"
-	@echo "- Require PR + CI on 'main' via branch protection"
-	@echo "This target is informational only; no local script runs."
 
 # Run tests in watch mode
 test-watch:

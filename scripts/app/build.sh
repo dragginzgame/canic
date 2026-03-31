@@ -37,7 +37,7 @@ artifact_profile_path() {
 
 source_did_path() {
     local canister="$1"
-    printf '%s\n' "$ROOT/crates/canisters/$canister/$canister.did"
+    printf '%s\n' "$ROOT/canisters/$canister/$canister.did"
 }
 
 artifact_did_path() {
@@ -75,6 +75,7 @@ newest_workspace_input_epoch() {
         "$ROOT/dfx.json" \
         "$ROOT/scripts/app/build.sh" \
         "$ROOT/crates" \
+        "$ROOT/canisters" \
         -type f \
         ! -name '*.did' \
         -printf '%T@\n' 2>/dev/null | sort -nr | head -1
@@ -86,7 +87,7 @@ newest_canister_interface_input_epoch() {
         "$ROOT/Cargo.toml" \
         "$ROOT/Cargo.lock" \
         "$ROOT/scripts/app/build.sh" \
-        "$ROOT/crates/canisters/$canister" \
+        "$ROOT/canisters/$canister" \
         "$ROOT/crates/canic" \
         "$ROOT/crates/canic-core" \
         "$ROOT/crates/canic-cdk" \

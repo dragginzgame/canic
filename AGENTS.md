@@ -30,7 +30,8 @@ If code conflicts with this document, **the code is wrong**.
 * **Format**: `cargo fmt --all`
 * **Lint**: `make clippy`
   (`cargo clippy --workspace --all-targets --all-features -- -D warnings`)
-* **Test**: `make test` (`cargo test --workspace`)
+* **Test**: `make test`
+  (`make clippy` + local reference-topology smoke path + `cargo test --workspace`)
 * **Build**: `make build`
 * **Check only**: `make check`
 
@@ -130,17 +131,25 @@ See detailed breakdown:
 ```
 assets/                     # Documentation assets
 crates/
-├─ canic/                   # Core library (macros, lifecycle, ops, model, dto)
-└─ canisters/               # Reference canisters
-   ├─ root/                 # Root orchestrator
-   ├─ app/                  # Example application
-   ├─ user_hub/             # User signup + provisioning coordinator
-   ├─ user_shard/           # Delegated signing shard
-   ├─ shard/                # Shard implementation
-   ├─ shard_hub/            # Shard coordinator
-   ├─ scale/                # Scaling worker
-   ├─ scale_hub/            # Scaling coordinator
-   └─ blank/                # Minimal test canister
+├─ canic/                   # Public facade crate
+├─ canic-core/              # Core orchestration/runtime crate
+├─ canic-cdk/               # Curated IC CDK facade
+├─ canic-memory/            # Stable-memory helpers/runtime
+├─ canic-control-plane/     # Root/store control-plane runtime
+├─ canic-sharding-runtime/  # Optional sharding runtime lane
+└─ ...                      # Other supporting workspace crates
+canisters/                  # Reference/deployable canisters
+├─ root/                    # Root orchestrator
+├─ app/                     # Example application
+├─ user_hub/                # User signup + provisioning coordinator
+├─ user_shard/              # Delegated signing shard
+├─ shard/                   # Shard implementation
+├─ shard_hub/               # Shard coordinator
+├─ scale/                   # Scaling worker
+├─ scale_hub/               # Scaling coordinator
+├─ minimal/                 # Minimal baseline canister
+├─ test/                    # Test/demo helper canister
+└─ wasm_store/              # WASM store role
 scripts/                    # CI / release helpers
 .github/workflows/          # CI pipelines
 dfx.json                    # Local IC topology

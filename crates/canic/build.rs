@@ -35,7 +35,7 @@ fn main() {
     // NOTE: This path will NOT exist in `cargo package` / `cargo publish` builds because
     // Cargo builds from a staged directory under target/package/ that does not include
     // workspace siblings.
-    let repo_cfg = manifest_dir.join("../canisters/canic.toml");
+    let repo_cfg = manifest_dir.join("../../canisters/canic.toml");
 
     // Determine the config path:
     // - If CANIC_CONFIG_PATH is set, it is authoritative (relative paths resolved from the crate).
@@ -58,7 +58,7 @@ fn main() {
             cfg_path.display()
         );
     } else if !cfg_path.exists() {
-        // Packaged builds won't include ../canisters. Skip build-time validation.
+        // Packaged builds won't include ../../canisters. Skip build-time validation.
         // This keeps `cargo package` / `cargo publish` working.
         //
         // IMPORTANT: Any code that consumes CANIC_CONFIG_PATH must tolerate it being unset

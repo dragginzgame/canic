@@ -84,7 +84,7 @@ Primary code areas:
 - `crates/canic-core/src/dto/capability/**`
 - `crates/canic-core/src/dto/rpc.rs`
 - `crates/canic-core/src/api/rpc/**`
-- generated `.did` files under `crates/canisters/**`
+- generated `.did` files under `canisters/**`
 
 ## False-Positive Filters (Required)
 
@@ -159,7 +159,7 @@ Suggested scans:
 ```bash
 rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints.rs
-rg -n '^  canic_.*_admin :' crates/canisters -g '*.did'
+rg -n '^  canic_.*_admin :' canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 ```
 
@@ -246,7 +246,7 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
@@ -289,8 +289,8 @@ Use generated `.did` files as the consumer-facing surface proxy.
 Suggested scans:
 
 ```bash
-rg -n '^service :' crates/canisters -g '*.did'
-rg -n '^  canic_' crates/canisters -g '*.did'
+rg -n '^service :' canisters -g '*.did'
+rg -n '^  canic_' canisters -g '*.did'
 ```
 
 Required output:
@@ -410,7 +410,7 @@ Suggested scans:
 
 ```bash
 rg 'pub enum |pub struct |pub fn ' crates/canic-core/src/{dto,api,workflow,ops} -g '*.rs'
-rg '^  canic_' crates/canisters -g '*.did'
+rg '^  canic_' canisters -g '*.did'
 git log --name-only -n 20 -- crates/
 ```
 
@@ -478,7 +478,7 @@ Minimum commands to report:
 ```bash
 rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
-rg -n '^  canic_' crates/canisters -g '*.did'
+rg -n '^  canic_' canisters -g '*.did'
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```

@@ -138,8 +138,8 @@ Allowed internal use:
 ## Test-Only Paths
 
 The following are explicitly test-only and guarded in non-debug builds:
-- `user_shard_issue_token` in `crates/canisters/user_shard/src/lib.rs`
-- `register_principal` in `crates/canisters/shard_hub/src/lib.rs`
+- `user_shard_issue_token` in `canisters/user_shard/src/lib.rs`
+- `register_principal` in `canisters/shard_hub/src/lib.rs`
 
 Admin provisioning API (`DelegationApi::provision`) is retained as a
 root-only tooling/test escape hatch and is not the canonical user auth flow.

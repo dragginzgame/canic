@@ -1,6 +1,17 @@
 
 [workspace]
 members = [
+    "canisters/app",
+    "canisters/minimal",
+    "canisters/root",
+    "canisters/scale",
+    "canisters/scale_hub",
+    "canisters/shard",
+    "canisters/shard_hub",
+    "canisters/test",
+    "canisters/user_hub",
+    "canisters/user_shard",
+    "canisters/wasm_store",
     "crates/canic",
     "crates/canic-cdk",
     "crates/canic-control-plane",
@@ -17,17 +28,6 @@ members = [
     "crates/canic-sharding-runtime",
     "crates/canic-testkit",
     "crates/canic-types",
-    "crates/canisters/app",
-    "crates/canisters/minimal",
-    "crates/canisters/root",
-    "crates/canisters/scale",
-    "crates/canisters/scale_hub",
-    "crates/canisters/shard",
-    "crates/canisters/shard_hub",
-    "crates/canisters/test",
-    "crates/canisters/user_hub",
-    "crates/canisters/user_shard",
-    "crates/canisters/wasm_store",
 ]
 resolver = "2"
 
@@ -62,6 +62,7 @@ convert_case = "0.11"
 criterion = "0.8"
 ctor = "0.8"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
+futures = "0.3"
 ic-cdk = "0.20.0"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
@@ -76,6 +77,7 @@ remain = "0.2"
 serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 serde_cbor = "0.11"
+serde_json = "1.0"
 sha2 = "0.11"
 syn = "2.0"
 thiserror = "2.0"

@@ -5,6 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.20.x] - 2026-03-31 - Cleanup and Optimization
+
+- `0.20.0` opens the cleanup and optimization line, using recurring wasm-footprint and instruction-footprint audits to drive shared wasm reduction, lower `perf!` and endpoint instruction counts, and catch regressions before they spread across the runtime floor.
+
+See detailed breakdown:
+[docs/changelog/0.20.md](docs/changelog/0.20.md)
+
+---
+
 ## [0.19.x] - 2026-03-30 - Library Lane Cleanup and Crate Graph Simplification
 
 - `0.19.6` cleans up stale automation by removing the unused `make release` / `check-versioning` paths and obsolete bootstrap helper scripts, fixes CI’s old `template_store` canister list to the current `wasm_store` topology, and adds a recurring instruction-footprint audit definition for `perf!` and endpoint instruction regression tracking.

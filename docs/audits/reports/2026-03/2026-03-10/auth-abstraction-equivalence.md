@@ -29,7 +29,7 @@
 | `crates/canic-dsl-macros/src/endpoint/expand.rs` | macro expansion auth wiring | primary abstraction codegen path | High |
 | `crates/canic-core/src/access/expr.rs` | `eval_access` | abstraction runtime dispatcher | High |
 | `crates/canic-core/src/access/auth.rs` | `delegated_token_verified` | canonical verifier invoked by abstractions | Medium |
-| `crates/canisters/test/src/lib.rs` | macro-protected endpoint | integration parity surface | Medium |
+| `canisters/test/src/lib.rs` | macro-protected endpoint | integration parity surface | Medium |
 
 ## Hub Module Pressure
 
