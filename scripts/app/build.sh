@@ -231,7 +231,12 @@ SOURCE_DID="$(source_did_path "$CAN")"
 ARTIFACT_DID="$(artifact_did_path "$CAN")"
 
 if [ "$CAN" = "root" ]; then
+    echo "Refreshing embedded wasm_store bootstrap artifact via normal custom build path"
+    "$SELF" wasm_store
+    export CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1
     build_requested_canisters "$PROFILE_DIR" root
+elif [ "$CAN" = "wasm_store" ]; then
+    build_requested_canisters "$PROFILE_DIR" wasm_store
 else
     ensure_workspace_wasm_build "$PROFILE_DIR" "nonroot" "${NONROOT_CANISTERS[@]}"
 fi

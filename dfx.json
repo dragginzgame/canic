@@ -13,11 +13,25 @@
                 }
             ],
             "dependencies": [
+                "wasm_store",
                 "app",
                 "minimal",
                 "user_hub",
                 "scale_hub",
                 "test"
+            ]
+        },
+        "wasm_store": {
+            "type": "custom",
+            "candid": ".dfx/local/canisters/wasm_store/wasm_store.did",
+            "build": "bash -c 'scripts/app/build.sh wasm_store'",
+            "wasm": ".dfx/local/canisters/wasm_store/wasm_store.wasm",
+            "shrink": true,
+            "gzip": true,
+            "metadata": [
+                {
+                    "name": "candid:service"
+                }
             ]
         },
         "app": {

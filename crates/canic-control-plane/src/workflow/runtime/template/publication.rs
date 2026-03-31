@@ -904,6 +904,7 @@ impl WasmStorePublicationWorkflow {
             },
         )
         .await?;
+
         TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
             store_binding: target_store_binding,
             ..manifest

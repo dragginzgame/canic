@@ -27,12 +27,21 @@ const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::ne
 pub struct WasmStoreBootstrapApi;
 
 impl WasmStoreBootstrapApi {
-    // Register the built-in bootstrap wasm module used for the first live store install.
-    pub fn register_embedded_root_wasm_store_module(wasm_module: &'static [u8]) {
+    // Register the dedicated embedded bootstrap release set used for the first live store install.
+    pub fn register_embedded_root_wasm_store_release_set(
+        entries: &'static [EmbeddedRootReleaseEntry],
+    ) {
+        let Some(entry) = entries
+            .iter()
+            .find(|entry| entry.role == CanisterRole::WASM_STORE.as_str())
+        else {
+            return;
+        };
+
         ModuleSourceRuntimeApi::register_embedded_module_wasm(
             CanisterRole::WASM_STORE,
             ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID.as_str().to_string(),
-            wasm_module,
+            entry.wasm_module,
         );
     }
 

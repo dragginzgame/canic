@@ -7,6 +7,67 @@ use std::{
 };
 
 const ROOT_RELEASE_ASSET_DIR: &str = "embedded_root_release_bundle";
+const ROOT_WASM_STORE_BOOTSTRAP_ROLE: &str = "wasm_store";
+const ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_FILE: &str =
+    "canic.root-wasm-store-bootstrap-release-set.rs";
+
+#[must_use]
+pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
+    let manifest_dir = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set for root build"),
+    );
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set for root build"));
+    let workspace_root = discover_workspace_root(&manifest_dir);
+    let artifact_root = discover_release_artifact_root(&workspace_root);
+    let generated_path = out_dir.join(ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_FILE);
+    let strict_artifacts =
+        env::var("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_ok_and(|value| value == "1");
+    let artifact_path = artifact_root
+        .join(ROOT_WASM_STORE_BOOTSTRAP_ROLE)
+        .join(format!("{ROOT_WASM_STORE_BOOTSTRAP_ROLE}.wasm.gz"));
+
+    println!("cargo:rerun-if-changed={}", workspace_root.display());
+    println!("cargo:rerun-if-changed={}", config_path.display());
+    println!("cargo:rerun-if-changed={}", artifact_root.display());
+    println!("cargo:rerun-if-changed={}", artifact_path.display());
+    println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS");
+
+    if !artifact_path.is_file() {
+        assert!(
+            !strict_artifacts,
+            "root bootstrap requires the build-produced wasm_store artifact at {}; build wasm_store through the normal DFX/custom build path first",
+            artifact_path.display()
+        );
+
+        println!(
+            "cargo:warning=skipping embedded wasm_store bootstrap release set: missing build-produced artifact at {}",
+            artifact_path.display()
+        );
+        return false;
+    }
+
+    let artifact_path = artifact_path
+        .canonicalize()
+        .expect("canonicalize build-produced wasm_store bootstrap artifact");
+    println!(
+        "cargo:warning=embedding build-produced wasm_store bootstrap artifact from {}",
+        artifact_path.display()
+    );
+
+    let generated = render_root_wasm_store_bootstrap_release_set_source(&artifact_path);
+    fs::write(&generated_path, generated)
+        .expect("write embedded wasm_store bootstrap release set source");
+
+    let generated_abs = generated_path
+        .canonicalize()
+        .expect("canonicalize embedded wasm_store bootstrap release set source path");
+    println!(
+        "cargo:rustc-env=CANIC_ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_PATH={}",
+        generated_abs.display()
+    );
+    println!("cargo:rerun-if-changed={}", generated_abs.display());
+    true
+}
 
 #[must_use]
 pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> bool {
@@ -151,6 +212,22 @@ fn render_root_release_bundle_source(entries: &[(String, PathBuf)]) -> String {
         rendered.push_str("    },\n");
     }
 
+    rendered.push(']');
+    rendered.push('\n');
+    rendered
+}
+
+fn render_root_wasm_store_bootstrap_release_set_source(artifact_path: &Path) -> String {
+    let path = artifact_path.to_string_lossy();
+    let mut rendered = String::from("&[\n");
+
+    rendered.push_str("    canic::__internal::core::bootstrap::EmbeddedRootReleaseEntry {\n");
+    let _ = writeln!(
+        rendered,
+        "        role: {ROOT_WASM_STORE_BOOTSTRAP_ROLE:?},"
+    );
+    let _ = writeln!(rendered, "        wasm_module: include_bytes!({path:?}),");
+    rendered.push_str("    },\n");
     rendered.push(']');
     rendered.push('\n');
     rendered

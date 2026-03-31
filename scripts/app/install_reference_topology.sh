@@ -22,10 +22,27 @@ require_dfx_running() {
 
 wait_for_root_ready() {
     local deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
+    local start_time=$SECONDS
+    local next_report=$SECONDS
 
+    echo "Waiting for ${ROOT_CANISTER} to report canic_ready (timeout ${READY_TIMEOUT_SECONDS}s)"
     while [ "$SECONDS" -lt "$deadline" ]; do
         if dfx canister call "${ROOT_CANISTER}" canic_ready 2>/dev/null | grep -q "true"; then
+            echo "${ROOT_CANISTER} reported canic_ready after $((SECONDS - start_time))s"
             return 0
+        fi
+
+        if [ "$SECONDS" -ge "$next_report" ]; then
+            echo "Still waiting for ${ROOT_CANISTER} canic_ready ($((SECONDS - start_time))s elapsed)"
+
+            if registry_json="$(dfx canister call "${ROOT_CANISTER}" canic_subnet_registry --output json 2>/dev/null)"; then
+                echo "Current subnet registry roles:"
+                printf '%s\n' "${registry_json}" | python3 -c 'import json,sys; data=json.load(sys.stdin); roles=[entry.get("role","?") for entry in data.get("Ok", [])]; print("  " + (", ".join(roles) if roles else "<empty>"))'
+            fi
+
+            echo "Recent root logs:"
+            dfx canister logs "${ROOT_CANISTER}" 2>/dev/null | tail -n 8 || true
+            next_report=$((SECONDS + 5))
         fi
 
         sleep 1
