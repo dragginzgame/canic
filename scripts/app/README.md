@@ -56,7 +56,7 @@ dfx build --all
 `.dfx/local/canisters/<name>/<name>.wasm.gz`.
 
 The normal local bootstrap path now embeds the ordinary release bundle into
-`root.wasm` from the already-built child canister artifacts under
+`root.wasm` from the already-built child canister `.wasm.gz` artifacts under
 `.dfx/$DFX_NETWORK/canisters`. After `dfx build --all`, reinstalling `root`
 is enough; no separate release staging or bootstrap resume step is required.
 
