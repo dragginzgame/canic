@@ -99,9 +99,8 @@ Executed tests:
 
 ### Low
 
-- Local sandbox runs can hit filesystem constraints (`Invalid cross-device link`)
-  when forcing `/tmp` target dirs; replay-focused reruns pass with the default
-  workspace target dir.
+- Local sandbox runs can still vary with temporary-directory and target-dir
+  layout; replay-focused reruns pass with the default workspace target dir.
 
 ## Verdict
 
