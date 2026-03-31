@@ -103,9 +103,17 @@ macro_rules! __canic_start_root_lifecycle_core {
         }
 
         #[doc(hidden)]
+        #[cfg(canic_has_root_release_bundle)]
         fn __canic_embedded_root_release_bundle(
         ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
             include!(env!("CANIC_ROOT_RELEASE_BUNDLE_PATH"))
+        }
+
+        #[doc(hidden)]
+        #[cfg(not(canic_has_root_release_bundle))]
+        fn __canic_embedded_root_release_bundle(
+        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
+            &[]
         }
 
         #[::canic::cdk::init]
