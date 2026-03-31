@@ -27,9 +27,7 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> boo
     let mut built_entries = Vec::new();
 
     for role_name in configured_release_roles(config) {
-        let artifact_path = artifact_root
-            .join(&role_name)
-            .join(format!("{role_name}.wasm"));
+        let artifact_path = resolve_release_wasm_path(&workspace_root, &artifact_root, &role_name);
         if !artifact_path.is_file() {
             println!(
                 "cargo:warning=canic root bundle skipped role '{role_name}': missing built artifact at {}; build dependencies first if this role should bootstrap automatically",
@@ -100,6 +98,10 @@ fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
     network_root
 }
 
+fn discover_cargo_target_root(workspace_root: &Path) -> PathBuf {
+    env::var_os("CARGO_TARGET_DIR").map_or_else(|| workspace_root.join("target"), PathBuf::from)
+}
+
 fn configured_release_roles(config: &ConfigModel) -> Vec<String> {
     let mut roles = Vec::new();
 
@@ -118,6 +120,24 @@ fn configured_release_roles(config: &ConfigModel) -> Vec<String> {
 
     roles.sort();
     roles
+}
+
+fn resolve_release_wasm_path(
+    workspace_root: &Path,
+    artifact_root: &Path,
+    role_name: &str,
+) -> PathBuf {
+    let dfx_path = artifact_root
+        .join(role_name)
+        .join(format!("{role_name}.wasm"));
+    if dfx_path.is_file() {
+        return dfx_path;
+    }
+
+    discover_cargo_target_root(workspace_root)
+        .join("wasm32-unknown-unknown")
+        .join("release")
+        .join(format!("canister_{role_name}.wasm"))
 }
 
 fn render_root_release_bundle_source(entries: &[(String, PathBuf)]) -> String {
