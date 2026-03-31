@@ -218,7 +218,7 @@ Fields:
 
 ```toml
 controllers = ["aaaaa-aa"]
-app_directory = ["user_hub", "scale_hub", "shard_hub"]
+app_directory = ["user_hub", "scale_hub"]
 
 [auth.delegated_tokens]
 enabled = true
@@ -231,8 +231,8 @@ active_window_secs = 600
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["app", "user_hub", "scale_hub", "shard_hub"]
-subnet_directory = ["app", "user_hub", "scale_hub", "shard_hub"]
+auto_create = ["app", "user_hub", "scale_hub"]
+subnet_directory = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]
@@ -263,19 +263,6 @@ policy.min_workers = 2
 [subnets.prime.canisters.scale]
 kind = "replica"
 
-[subnets.prime.canisters.shard_hub]
-kind = "singleton"
-topup.threshold = "10T"
-topup.amount = "5T"
-
-[subnets.prime.canisters.shard_hub.sharding.pools.shards]
-canister_role = "shard"
-policy.capacity = 100
-policy.max_shards = 8
-
-[subnets.prime.canisters.shard]
-kind = "shard"
-
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
@@ -289,7 +276,7 @@ kind = "replica"
 initial_cycles = "3T"
 ```
 
-This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures both scaling and sharding strategies for hub canisters. Each subnet also gets one implicit `wasm_store` automatically.
+This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures sharding on `user_hub` plus scaling on `scale_hub`. Each subnet also gets one implicit `wasm_store` automatically.
 
 ---
 

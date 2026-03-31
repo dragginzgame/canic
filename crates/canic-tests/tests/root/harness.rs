@@ -38,6 +38,16 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const CANISTER_WASM_ROOT_RELATIVE: &str = "../../.dfx/local/canisters";
+const RELEASE_SET_ROLES: &[&str] = &[
+    "app",
+    "minimal",
+    "scale",
+    "scale_hub",
+    "test",
+    "user_hub",
+    "user_shard",
+    "wasm_store",
+];
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 // Maximum management-canister chunk-store payload accepted per call. Use the
@@ -418,6 +428,9 @@ fn load_release_set_artifacts() -> Vec<(CanisterRole, Vec<u8>)> {
         };
         let role = role_os.to_string_lossy().to_string();
         if role == "root" {
+            continue;
+        }
+        if !RELEASE_SET_ROLES.contains(&role.as_str()) {
             continue;
         }
 

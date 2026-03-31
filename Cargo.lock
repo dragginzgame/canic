@@ -410,26 +410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_shard"
-version = "0.20.0"
-dependencies = [
- "candid",
- "canic",
- "canic-internal",
- "ic-cdk",
-]
-
-[[package]]
-name = "canister_shard_hub"
-version = "0.20.0"
-dependencies = [
- "candid",
- "canic",
- "canic-internal",
- "ic-cdk",
-]
-
-[[package]]
 name = "canister_test"
 version = "0.20.0"
 dependencies = [

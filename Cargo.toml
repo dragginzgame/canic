@@ -6,8 +6,6 @@ members = [
     "canisters/root",
     "canisters/scale",
     "canisters/scale_hub",
-    "canisters/shard",
-    "canisters/shard_hub",
     "canisters/test",
     "canisters/user_hub",
     "canisters/user_shard",

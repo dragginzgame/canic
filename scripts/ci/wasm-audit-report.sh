@@ -6,8 +6,8 @@ METHOD_TAG="Method V1"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
 DEFAULT_PROFILE="wasm-release"
-DEFAULT_CANISTERS=(app minimal user_hub user_shard scale_hub scale shard_hub shard test root)
-ROOT_BUNDLE_CANISTERS=(app minimal user_hub user_shard scale_hub scale shard_hub shard test)
+DEFAULT_CANISTERS=(app minimal user_hub user_shard scale_hub scale test root)
+ROOT_BUNDLE_CANISTERS=(app minimal user_hub user_shard scale_hub scale test)
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"

@@ -20,7 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 🗺️ **Topology‑aware config** – typed subnet blocks, app directories, and pool policies validated straight from `canic.toml`.
 * 🌿 **Linear topology sync** – targeted cascades ship a trimmed parent chain plus per‑node direct children, validate roots/cycles, and fail fast to avoid quadratic fan‑out.
 * 🔐 **Auth utilities** – composable `requires(...)` expressions with `all(...)`, `any(...)`, and `not(...)` for controllers, parents, whitelist principals, and more.
-* 🔏 **Delegated auth model** – root-anchored delegated token flow (`root -> shard -> user token`) with direct caller binding (`sub == caller`), explicit audience/scope checks, and local verification.
+* 🔏 **Delegated auth model** – root-anchored delegated token flow (`root -> user_shard -> user token`) with direct caller binding (`sub == caller`), explicit audience/scope checks, and local verification.
 * 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
 * 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
@@ -61,8 +61,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
   * `root/` orchestrator tying together shards, scaling, and pool flows.
   * `app/` – sample application canister used in integration flows.
-  * `user_hub/`, `user_shard/` – delegated signing pool (hub provisions shards).
-  * `shard/`, `shard_hub/` – shard lifecycle pair for pool management.
+  * `user_hub/`, `user_shard/` – sharding placement and delegated signing pool.
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   * `minimal/` – minimal runtime baseline canister.
   * `test/` – workspace‑only test canister used by host‑side fixtures.
@@ -136,7 +135,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `canisters/root` and the hub/shard reference canisters under `canisters/*` for end‑to‑end patterns, including WASM registries and endpoint exports.
+See `canisters/root` and the reference canisters under `canisters/*` for end‑to‑end patterns, including WASM registries and endpoint exports.
 
 ### 4. Define your topology
 

@@ -233,8 +233,6 @@ Default scope is the full reference topology in `dfx.json`:
 - `user_shard`
 - `scale_hub`
 - `scale`
-- `shard_hub`
-- `shard`
 - `test`
 - `wasm_store`
 - `root`
