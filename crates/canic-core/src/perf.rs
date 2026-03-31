@@ -13,6 +13,7 @@ use std::{cell::RefCell, collections::HashMap};
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
     #[cfg(not(test))]
+    #[allow(clippy::missing_const_for_thread_local)]
     pub static PERF_LAST: RefCell<u64> = RefCell::new(perf_counter());
 
     // Unit tests run outside a canister context, so `perf_counter()` would trap.
