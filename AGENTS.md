@@ -59,7 +59,7 @@ If code conflicts with this document, **the code is wrong**.
 * Use:
 
   * `make patch | minor | major`
-  * then `make release`
+  * review the generated commit + tag, then push intentionally
 * Tags are immutable. Never rewrite history.
 
 ---

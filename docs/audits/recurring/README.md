@@ -42,3 +42,4 @@ For general architecture-health audit rounds, start with:
 See also:
 
 - [system/README.md](system/README.md)
+- [system/instruction-footprint.md](system/instruction-footprint.md)

@@ -1,6 +1,6 @@
-.PHONY: help version tags patch minor major release package publish \
+.PHONY: help version tags patch minor major package publish \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
-        demo-install test-watch all ensure-clean security-check check-versioning \
+        demo-install test-watch all ensure-clean security-check \
         ensure-hooks install-hooks
 
 # in case we need to use this
@@ -58,7 +58,6 @@ help:
 	@echo "  patch            Bump patch version (0.0.x)"
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
-	@echo "  release          CI-driven release (local target is no-op)"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish crates to registry"
 	@echo ""
@@ -135,9 +134,6 @@ minor: ensure-clean fmt test-bump
 
 major: ensure-clean fmt test
 	@scripts/ci/bump-version.sh major
-
-release: ensure-clean
-	@echo "Release handled by CI on tag push"
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package
@@ -219,9 +215,6 @@ security-check:
 	@echo "- Restrict who can create tags and disable force pushes"
 	@echo "- Require PR + CI on 'main' via branch protection"
 	@echo "This target is informational only; no local script runs."
-
-check-versioning: security-check
-	bash scripts/ci/security-check.sh
 
 # Run tests in watch mode
 test-watch:
