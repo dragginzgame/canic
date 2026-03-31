@@ -142,11 +142,13 @@ pub async fn bootstrap_init_root_canister() {
     // On fresh init, wait for configured pool imports before auto-create.
     // This avoids creating new canisters while reserve imports are still pending.
     root_import_pool_from_config(true).await;
+    canic_core::perf!("bootstrap_import_pool");
 
     if let Err(err) = root_create_canisters().await {
         log!(Topic::Init, Error, "registry phase failed: {err}");
         return;
     }
+    canic_core::perf!("bootstrap_create_canisters");
 
     if let Err(err) = root_rebuild_directories_from_registry() {
         log!(
@@ -156,8 +158,10 @@ pub async fn bootstrap_init_root_canister() {
         );
         return;
     }
+    canic_core::perf!("bootstrap_rebuild_directories");
 
     let report = root_validate_state();
+    canic_core::perf!("bootstrap_validate_state");
     if !report.ok {
         log!(
             Topic::Init,
@@ -314,8 +318,11 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     );
 
     ensure_required_wasm_store_canister().await?;
+    canic_core::perf!("bootstrap_ensure_wasm_store");
     WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
+    canic_core::perf!("bootstrap_publish_release_set");
     import_default_wasm_store_catalog().await?;
+    canic_core::perf!("bootstrap_import_store_catalog");
     ensure_required_canisters(&data).await
 }
 
@@ -567,7 +574,14 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             continue;
         }
 
-        log!(Topic::Init, Info, "auto_create: creating {role}");
+        let manifest = TemplateManifestOps::approved_for_role_response(role)?;
+        log!(
+            Topic::Init,
+            Info,
+            "auto_create: creating {role} from {}@{}",
+            manifest.template_id,
+            manifest.version
+        );
 
         CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
             role: role.clone(),
@@ -575,6 +589,7 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             extra_arg: None,
         })
         .await?;
+        canic_core::perf!("bootstrap_create_role");
     }
 
     Ok(())
@@ -582,6 +597,7 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
 
 async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     ensure_required_wasm_store_canister().await?;
+    canic_core::perf!("bootstrap_ensure_wasm_store");
     import_default_wasm_store_catalog().await
 }
 
@@ -602,13 +618,16 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
         extra_arg: None,
     })
     .await?;
+    canic_core::perf!("bootstrap_create_wasm_store");
     let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
+    canic_core::perf!("bootstrap_sync_store_inventory");
 
     Ok(())
 }
 
 async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
     WasmStorePublicationWorkflow::import_current_store_catalog().await?;
+    canic_core::perf!("bootstrap_import_store_catalog");
 
     log!(Topic::Init, Info, "ws: imported default catalog");
 

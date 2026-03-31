@@ -4,7 +4,7 @@ pub use publication::WasmStorePublicationWorkflow;
 
 use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
-    ids::{TemplateId, TemplateVersion, WasmStoreBinding},
+    ids::{TemplateId, TemplateReleaseKey, TemplateVersion, WasmStoreBinding},
     ops::storage::{
         state::subnet::SubnetStateOps,
         template::{TemplateChunkedOps, TemplateManifestOps},
@@ -22,6 +22,11 @@ use cp_core::{
 use std::collections::BTreeSet;
 
 const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
+
+// Build one stable release label for logs and install-source reporting.
+fn release_source_label(template_id: &TemplateId, version: &TemplateVersion) -> String {
+    TemplateReleaseKey::new(template_id.clone(), version.clone()).to_string()
+}
 
 // Resolve the approved chunk-backed module source for one role through the current store binding.
 pub async fn resolved_approved_module_source_for_role(
@@ -49,7 +54,7 @@ pub async fn approved_module_source_from_manifest(
 
                 return Ok(ApprovedModuleSource::chunked(
                     store_pid,
-                    manifest.template_id.as_str().to_string(),
+                    release_source_label(&manifest.template_id, &manifest.version),
                     manifest.payload_hash.clone(),
                     info.chunk_hashes,
                     manifest.payload_size_bytes,
@@ -60,7 +65,7 @@ pub async fn approved_module_source_from_manifest(
 
             Ok(ApprovedModuleSource::chunked(
                 store_pid,
-                manifest.template_id.as_str().to_string(),
+                release_source_label(&manifest.template_id, &manifest.version),
                 manifest.payload_hash.clone(),
                 info.chunk_hashes,
                 manifest.payload_size_bytes,
@@ -258,4 +263,20 @@ where
     let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
 
     call_res.map_err(InternalError::public)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_source_label;
+    use crate::ids::{TemplateId, TemplateVersion};
+
+    #[test]
+    fn release_source_label_includes_version() {
+        let label = release_source_label(
+            &TemplateId::new("embedded:user_hub"),
+            &TemplateVersion::new("0.20.2"),
+        );
+
+        assert_eq!(label, "embedded:user_hub@0.20.2");
+    }
 }

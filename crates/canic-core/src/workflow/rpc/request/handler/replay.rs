@@ -45,15 +45,18 @@ pub(super) fn check_replay(
         .metadata()
         .ok_or(RpcWorkflowError::MissingReplayMetadata(capability_name))?;
     let payload_hash = capability.payload_hash()?;
+    crate::perf!("prepare_replay_input");
 
     let decision =
         replay::evaluate_root_replay(ctx, metadata.request_id, metadata.ttl_seconds, payload_hash)
             .map_err(|err| map_replay_guard_error(capability_key, err))?;
+    crate::perf!("evaluate_replay");
 
     match decision {
         ReplayDecision::Fresh(pending) => {
             replay_ops::reserve_root_replay(pending, MAX_ROOT_REPLAY_ENTRIES)
                 .map_err(map_replay_reserve_error)?;
+            crate::perf!("reserve_fresh");
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::Accepted,
@@ -61,6 +64,7 @@ pub(super) fn check_replay(
             Ok(ReplayPreflight::Fresh(pending))
         }
         ReplayDecision::DuplicateSame(cached) => {
+            crate::perf!("decode_cached");
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -68,6 +72,7 @@ pub(super) fn check_replay(
             decode_replay_response(&cached.response_candid).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
+            crate::perf!("duplicate_in_flight");
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -75,6 +80,7 @@ pub(super) fn check_replay(
             Err(RpcWorkflowError::ReplayDuplicateSame(capability_name).into())
         }
         ReplayDecision::DuplicateConflict => {
+            crate::perf!("duplicate_conflict");
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::DuplicateConflict,
@@ -82,6 +88,7 @@ pub(super) fn check_replay(
             Err(RpcWorkflowError::ReplayConflict(capability_name).into())
         }
         ReplayDecision::Expired => {
+            crate::perf!("replay_expired");
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::Expired,
@@ -152,6 +159,7 @@ pub(super) fn commit_replay(
     pending: ReplayPending,
     response: &Response,
 ) -> Result<(), InternalError> {
+    crate::perf!("commit_encode");
     replay_ops::commit_root_replay(pending, response).map_err(map_replay_commit_error)
 }
 
@@ -160,6 +168,7 @@ pub(super) fn commit_replay(
 /// Remove reserved replay state when capability execution fails.
 pub(super) fn abort_replay(pending: ReplayPending) {
     replay_ops::abort_root_replay(pending);
+    crate::perf!("abort_replay");
 }
 
 /// hash_capability_payload

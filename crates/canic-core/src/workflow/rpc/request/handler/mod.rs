@@ -80,12 +80,15 @@ impl RootResponseWorkflow {
         order: AuthorizationPipelineOrder,
     ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
+        crate::perf!("extract_context");
         let capability_req = RootCapabilityCommand::from(req);
         let capability = Self::map_request(capability_req);
         let capability_key = capability.metric_key();
         let capability_name = capability.capability_name();
+        crate::perf!("map_request");
 
         let preflight = Self::preflight(&ctx, &capability, order)?;
+        crate::perf!("preflight");
         let pending = match preflight {
             replay::ReplayPreflight::Fresh(pending) => pending,
             replay::ReplayPreflight::Cached(response) => return Ok(response),
@@ -102,6 +105,7 @@ impl RootResponseWorkflow {
                 return Err(err);
             }
         };
+        crate::perf!("execute_capability");
         if let Err(err) = Self::commit_replay(pending, &response) {
             log!(
                 Topic::Rpc,
@@ -113,6 +117,7 @@ impl RootResponseWorkflow {
                 ctx.now
             );
         }
+        crate::perf!("commit_replay");
         RootCapabilityMetrics::record_execution(
             capability_key,
             RootCapabilityMetricOutcome::Success,

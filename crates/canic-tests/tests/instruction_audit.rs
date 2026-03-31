@@ -5,6 +5,7 @@ mod root;
 
 use canic::{
     Error,
+    cdk::utils::wasm::get_wasm_hash,
     dto::{
         env::EnvSnapshotResponse,
         log::LogEntry,
@@ -15,11 +16,21 @@ use canic::{
     },
     protocol,
 };
+use canic_control_plane::{
+    dto::template::{
+        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput,
+    },
+    ids::{
+        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
+    },
+};
 use canic_internal::canister::{APP, SCALE_HUB, TEST};
 use canic_testkit::pic::Pic;
 use root::harness::setup_root;
 use serde::Serialize;
 use std::{
+    collections::BTreeSet,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -50,7 +61,7 @@ const FLOW_GAPS: &[(&str, &str)] = &[
     ),
     (
         "bootstrap/install/publication flow",
-        "crates/canic-tests/tests/root/harness.rs",
+        "crates/canic-control-plane/src/workflow/bootstrap/root.rs",
     ),
 ];
 
@@ -121,6 +132,16 @@ struct CanonicalPerfRow {
 struct ScenarioResult {
     scenario: AuditScenario,
     row: CanonicalPerfRow,
+}
+
+///
+/// AuditTemplateFixture
+///
+
+struct AuditTemplateFixture {
+    manifest: TemplateManifestInput,
+    prepare: TemplateChunkSetPrepareInput,
+    chunk: TemplateChunkInput,
 }
 
 ///
@@ -209,7 +230,7 @@ fn generate_instruction_footprint_report() {
     write_json(&perf_rows_path, &perf_rows);
     write_endpoint_matrix_tsv(&endpoint_matrix_path, &results);
 
-    let gaps = checkpoint_coverage_gaps();
+    let gaps = checkpoint_coverage_gaps(&checkpoint_sites);
     write_json(&checkpoint_gap_path, &gaps);
     write_flow_checkpoint_log(&flow_checkpoints_path, &checkpoint_sites);
 
@@ -379,6 +400,54 @@ fn scenarios() -> Vec<AuditScenario> {
             freshness_model: "fresh-topology-per-scenario",
             notes: "Minimal local/dev update on the shared test helper canister with no chain-key dependency.",
         },
+        AuditScenario {
+            key: "root:canic_template_stage_manifest_admin:single-chunk",
+            canister: "root",
+            endpoint_or_flow: "canic_template_stage_manifest_admin",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_template_stage_manifest_admin",
+            arg_class: "single-chunk",
+            caller_class: "anonymous-controller",
+            auth_state: "controller-only",
+            replay_state: "n/a",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+release-staging-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Stages one synthetic approved manifest into the root-local release buffer.",
+        },
+        AuditScenario {
+            key: "root:canic_template_prepare_admin:single-chunk",
+            canister: "root",
+            endpoint_or_flow: "canic_template_prepare_admin",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_template_prepare_admin",
+            arg_class: "single-chunk",
+            caller_class: "anonymous-controller",
+            auth_state: "controller-only",
+            replay_state: "n/a",
+            cache_state: "warm-manifest",
+            topology_state: "root_bootstrapped+release-staging-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Prepares one synthetic single-chunk release after its manifest is already staged.",
+        },
+        AuditScenario {
+            key: "root:canic_template_publish_chunk_admin:single-chunk",
+            canister: "root",
+            endpoint_or_flow: "canic_template_publish_chunk_admin",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_template_publish_chunk_admin",
+            arg_class: "single-chunk",
+            caller_class: "anonymous-controller",
+            auth_state: "controller-only",
+            replay_state: "n/a",
+            cache_state: "warm-manifest+prepared",
+            topology_state: "root_bootstrapped+release-staging-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Publishes the only chunk for one synthetic staged release after prepare has completed.",
+        },
     ]
 }
 
@@ -424,6 +493,7 @@ fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) 
 fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
     let setup = setup_root();
     let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_directory);
+    prepare_scenario(&setup.pic, scenario, setup.root_id);
     let before = perf_entries(&setup.pic, target_pid);
 
     execute_scenario(&setup.pic, scenario, target_pid);
@@ -493,6 +563,22 @@ fn scenario_target_pid(
     }
 }
 
+// Prepare scenario-specific prerequisites outside the measured perf window.
+fn prepare_scenario(pic: &Pic, scenario: &AuditScenario, root_id: canic::cdk::types::Principal) {
+    match scenario.key {
+        "root:canic_template_prepare_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            stage_manifest(pic, root_id, &fixture.manifest);
+        }
+        "root:canic_template_publish_chunk_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            stage_manifest(pic, root_id, &fixture.manifest);
+            prepare_chunk_set(pic, root_id, &fixture.prepare);
+        }
+        _ => {}
+    }
+}
+
 // Execute the actual endpoint call for one scenario.
 fn execute_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: canic::cdk::types::Principal) {
     match scenario.key {
@@ -550,8 +636,102 @@ fn execute_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: canic::cdk:
                 .expect("test transport failed");
             response.expect("test application failed");
         }
+        "root:canic_template_stage_manifest_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            stage_manifest(pic, target_pid, &fixture.manifest);
+        }
+        "root:canic_template_prepare_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            prepare_chunk_set(pic, target_pid, &fixture.prepare);
+        }
+        "root:canic_template_publish_chunk_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            publish_chunk(pic, target_pid, &fixture.chunk);
+        }
         other => panic!("unsupported audit scenario: {other}"),
     }
+}
+
+// Build one synthetic staged-release fixture for root admin perf scenarios.
+fn audit_template_fixture(scenario: &AuditScenario) -> AuditTemplateFixture {
+    let slug = scenario.key.replace(':', "-");
+    let bytes = format!("canic-instruction-audit-{slug}").into_bytes();
+    let payload_hash = get_wasm_hash(&bytes);
+    let chunk_hashes = vec![get_wasm_hash(&bytes)];
+    let template_id = TemplateId::from(format!("audit:{slug}"));
+    let version = TemplateVersion::from(format!("0.20-audit-{slug}"));
+
+    AuditTemplateFixture {
+        manifest: TemplateManifestInput {
+            template_id: template_id.clone(),
+            role: APP,
+            version: version.clone(),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes: bytes.len() as u64,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: None,
+            created_at: 0,
+        },
+        prepare: TemplateChunkSetPrepareInput {
+            template_id: template_id.clone(),
+            version: version.clone(),
+            payload_hash,
+            payload_size_bytes: bytes.len() as u64,
+            chunk_hashes,
+        },
+        chunk: TemplateChunkInput {
+            template_id,
+            version,
+            chunk_index: 0,
+            bytes,
+        },
+    }
+}
+
+// Stage one manifest through the root admin surface.
+fn stage_manifest(
+    pic: &Pic,
+    root_id: canic::cdk::types::Principal,
+    manifest: &TemplateManifestInput,
+) {
+    let staged: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            (manifest.clone(),),
+        )
+        .expect("manifest staging transport failed");
+    staged.expect("manifest staging application failed");
+}
+
+// Prepare one staged chunk set through the root admin surface.
+fn prepare_chunk_set(
+    pic: &Pic,
+    root_id: canic::cdk::types::Principal,
+    request: &TemplateChunkSetPrepareInput,
+) {
+    let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
+            (request.clone(),),
+        )
+        .expect("template prepare transport failed");
+    let _ = prepared.expect("template prepare application failed");
+}
+
+// Publish one staged chunk through the root admin surface.
+fn publish_chunk(pic: &Pic, root_id: canic::cdk::types::Principal, request: &TemplateChunkInput) {
+    let published: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            (request.clone(),),
+        )
+        .expect("template publish chunk transport failed");
+    published.expect("template publish chunk application failed");
 }
 
 // Read the current perf metrics table for one canister.
@@ -677,12 +857,19 @@ fn visit_rust_files(dir: &Path, visitor: &mut impl FnMut(&Path)) {
 }
 
 // Build the current checkpoint-gap table from the static critical-flow list.
-fn checkpoint_coverage_gaps() -> Vec<CheckpointCoverageGap> {
+fn checkpoint_coverage_gaps(checkpoint_sites: &[String]) -> Vec<CheckpointCoverageGap> {
     FLOW_GAPS
         .iter()
         .map(|(flow_name, insertion_site)| CheckpointCoverageGap {
             flow_name: (*flow_name).to_string(),
-            status: "PARTIAL".to_string(),
+            status: if checkpoint_sites
+                .iter()
+                .any(|site| site.starts_with(insertion_site))
+            {
+                "PASS".to_string()
+            } else {
+                "PARTIAL".to_string()
+            },
             proposed_first_insertion_site: (*insertion_site).to_string(),
         })
         .collect()
@@ -846,6 +1033,18 @@ fn write_report(
         .file_name()
         .and_then(|name| name.to_str())
         .expect("artifacts directory name");
+    let target_canisters = render_scope(
+        results
+            .iter()
+            .map(|result| result.scenario.canister)
+            .collect::<BTreeSet<_>>(),
+    );
+    let target_endpoints = render_scope(
+        results
+            .iter()
+            .map(|result| result.scenario.endpoint_or_flow)
+            .collect::<BTreeSet<_>>(),
+    );
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -874,8 +1073,12 @@ fn write_report(
     out.push_str(&format!("- Branch: `{}`\n", metadata.branch));
     out.push_str(&format!("- Worktree: `{}`\n", metadata.worktree));
     out.push_str("- Execution environment: `PocketIC`\n");
-    out.push_str("- Target canisters in scope: `app` `root` `scale_hub` `test`\n");
-    out.push_str("- Target endpoints/flows in scope: `canic_time` `canic_env` `canic_log` `canic_subnet_registry` `canic_subnet_state` `plan_create_worker` `test`\n");
+    out.push_str(&format!(
+        "- Target canisters in scope: {target_canisters}\n"
+    ));
+    out.push_str(&format!(
+        "- Target endpoints/flows in scope: {target_endpoints}\n"
+    ));
     out.push_str("- Deferred from this baseline: `scale_hub::create_worker` and sharding assignment updates require chain-key ECDSA in PocketIC; the default root harness does not provision that key yet.\n\n");
 
     out.push_str("## Findings / Checklist\n\n");
@@ -947,26 +1150,42 @@ fn write_report(
     }
 
     out.push_str("## Checkpoint Coverage Gaps\n\n");
+    let covered_gaps = gaps
+        .iter()
+        .filter(|gap| gap.status == "PASS")
+        .collect::<Vec<_>>();
+    let uncovered_gaps = gaps
+        .iter()
+        .filter(|gap| gap.status != "PASS")
+        .collect::<Vec<_>>();
     out.push_str("Critical flows with checkpoints:\n");
-    if checkpoint_sites.is_empty() {
+    if covered_gaps.is_empty() {
         out.push_str("- none\n\n");
     } else {
-        for site in checkpoint_sites {
-            out.push_str(&format!("- `{site}`\n"));
+        for gap in &covered_gaps {
+            out.push_str(&format!("- `{}`\n", gap.flow_name));
         }
         out.push('\n');
     }
     out.push_str("Critical flows without checkpoints:\n");
-    for gap in gaps {
-        out.push_str(&format!("- `{}`\n", gap.flow_name));
+    if uncovered_gaps.is_empty() {
+        out.push_str("- none\n");
+    } else {
+        for gap in &uncovered_gaps {
+            out.push_str(&format!("- `{}`\n", gap.flow_name));
+        }
     }
     out.push('\n');
     out.push_str("Proposed first checkpoint insertion sites:\n");
-    for gap in gaps {
-        out.push_str(&format!(
-            "- `{}` -> `{}`\n",
-            gap.flow_name, gap.proposed_first_insertion_site
-        ));
+    if uncovered_gaps.is_empty() {
+        out.push_str("- none\n");
+    } else {
+        for gap in &uncovered_gaps {
+            out.push_str(&format!(
+                "- `{}` -> `{}`\n",
+                gap.flow_name, gap.proposed_first_insertion_site
+            ));
+        }
     }
     out.push('\n');
 
@@ -994,12 +1213,23 @@ fn write_report(
     out.push_str("## Dependency Fan-In Pressure\n\n");
     out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, but the current persisted perf transport does not yet expose comparable query deltas. Their zero rows in this report are method-limited, not true zero-cost measurements.\n");
     out.push_str("- The sampled non-trivial hotspot fans into `canic-core` placement orchestration (`workflow/placement/scaling`). The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
-    out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
+    if checkpoint_sites.is_empty() {
+        out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
+    } else {
+        out.push_str("- Flow-stage checkpoints now exist in the scaling, sharding, auth, and replay workflows, but the current sampled matrix still does not hit enough update paths to rank checkpoint-stage costs directly.\n\n");
+    }
 
     out.push_str("## Early Warning Signals\n\n");
     out.push_str("| Signal | Status | Evidence |\n");
     out.push_str("| --- | --- | --- |\n");
-    out.push_str("| Flow checkpoint coverage absent | WARN | Current repo scan found zero `perf!` call sites under `crates/`. |\n");
+    if checkpoint_sites.is_empty() {
+        out.push_str("| Flow checkpoint coverage absent | WARN | Current repo scan found zero `perf!` call sites under `crates/`. |\n");
+    } else {
+        out.push_str(&format!(
+            "| Flow checkpoint coverage present | INFO | Current repo scan found {} `perf!` call sites under `crates/`. |\n",
+            checkpoint_sites.len()
+        ));
+    }
     if query_unobservable_count > 0 {
         out.push_str(&format!(
             "| Query endpoint deltas currently not persisted | WARN | {query_unobservable_count} sampled query scenarios returned successfully but left no persisted `MetricsKind::Perf` delta. |\n"
@@ -1029,7 +1259,11 @@ fn write_report(
 
     out.push_str("## Follow-up Actions\n\n");
     out.push_str("1. Owner boundary: `flow observability`\n");
-    out.push_str("   Action: add first stable `perf!` checkpoints to the scaling, sharding, and root-capability workflows so the next rerun can move from endpoint-only totals to real flow-stage attribution.\n");
+    if checkpoint_sites.is_empty() {
+        out.push_str("   Action: add first stable `perf!` checkpoints to the scaling, sharding, and root-capability workflows so the next rerun can move from endpoint-only totals to real flow-stage attribution.\n");
+    } else {
+        out.push_str("   Action: extend the audit matrix with update scenarios that actually traverse the new scaling, sharding, replay, and auth checkpoints so the next rerun can rank stage-level costs instead of just scan-site presence.\n");
+    }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str("   Action: compare `scale_hub::plan_create_worker` against the `test::test` update floor before/after any placement-runtime cleanup, using this report as the `0.20` baseline.\n");
     out.push_str("3. Owner boundary: `shared observability floor`\n");
@@ -1063,6 +1297,15 @@ fn write_report(
     ));
 
     fs::write(path, out).expect("write instruction audit report");
+}
+
+// Render one stable, backtick-quoted scope list for the report preamble.
+fn render_scope(items: BTreeSet<&str>) -> String {
+    items
+        .into_iter()
+        .map(|item| format!("`{item}`"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // Map the current highest-cost labels back to concrete modules/files.

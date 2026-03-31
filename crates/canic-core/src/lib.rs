@@ -69,6 +69,22 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CANIC_MEMORY_MIN: u8 = storage::stable::CANIC_MEMORY_MIN;
 pub const CANIC_MEMORY_MAX: u8 = storage::stable::CANIC_MEMORY_MAX;
 
+#[macro_export]
+macro_rules! perf {
+    ($($label:tt)*) => {{
+        $crate::perf::PERF_LAST.with(|last| {
+            let now = $crate::perf::perf_counter();
+            let then = *last.borrow();
+            let delta = now.saturating_sub(then);
+
+            *last.borrow_mut() = now;
+
+            let label = format!($($label)*);
+            $crate::perf::record_checkpoint(module_path!(), &label, delta);
+        });
+    }};
+}
+
 #[cfg(test)]
 #[macro_export]
 macro_rules! assert_err_variant {

@@ -9,10 +9,11 @@
 #![allow(clippy::unused_async)]
 
 #[cfg(debug_assertions)]
+use canic::api::rpc::RpcApi;
+#[cfg(debug_assertions)]
 use canic::prelude::*;
-use canic::{
-    Error, api::rpc::RpcApi, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse,
-};
+#[cfg(debug_assertions)]
+use canic::{Error, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse};
 #[cfg(debug_assertions)]
 use canic_internal::canister;
 #[cfg(debug_assertions)]

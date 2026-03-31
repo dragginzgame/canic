@@ -115,7 +115,8 @@ source_did_is_current() {
 workspace_wasm_target_path() {
     local canister="$1"
     local profile_dir="$2"
-    printf '%s\n' "$ROOT/target/wasm32-unknown-unknown/$profile_dir/canister_$canister.wasm"
+    local target_root="${CARGO_TARGET_DIR:-$ROOT/target}"
+    printf '%s\n' "$target_root/wasm32-unknown-unknown/$profile_dir/canister_$canister.wasm"
 }
 
 maybe_shrink_wasm_artifact() {
@@ -186,7 +187,7 @@ ensure_workspace_wasm_build() {
         cargo_args+=(-p "canister_$canister")
     done
 
-    CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS=1 cargo "${cargo_args[@]}"
+    cargo "${cargo_args[@]}"
     touch "$(workspace_wasm_build_stamp "$profile_dir")"
 
     flock -u 9
