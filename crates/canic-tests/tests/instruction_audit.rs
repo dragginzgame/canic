@@ -50,7 +50,7 @@ const FLOW_GAPS: &[(&str, &str)] = &[
     ),
     (
         "bootstrap/install/publication flow",
-        "crates/canic/tests/root/harness.rs",
+        "crates/canic-tests/tests/root/harness.rs",
     ),
 ];
 
@@ -709,7 +709,7 @@ fn verification_rows(
 ) -> Vec<VerificationRow> {
     vec![
         VerificationRow {
-            command: "cargo test -p canic --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture".to_string(),
+            command: "cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture".to_string(),
             status: "PASS".to_string(),
             notes: "PocketIC runner completed and wrote the report plus normalized artifacts."
                 .to_string(),

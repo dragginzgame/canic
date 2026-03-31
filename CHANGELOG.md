@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.20.x] - 2026-03-31 - Cleanup and Optimization
 
-- `0.20.0` opens the cleanup and optimization line, using recurring wasm-footprint and instruction-footprint audits to drive shared wasm reduction, lower `perf!` and endpoint instruction counts, and catch regressions before they spread across the runtime floor.
+- `0.20.0` opens the cleanup and optimization line, using recurring wasm-footprint and instruction-footprint audits to drive shared wasm reduction, lower `perf!` and endpoint instruction counts, catch regressions before they spread across the runtime floor, and keep publishable crates free of workspace-only integration-test baggage.
 
 See detailed breakdown:
 [docs/changelog/0.20.md](docs/changelog/0.20.md)

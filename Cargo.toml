@@ -27,6 +27,7 @@ members = [
     "crates/canic-memory",
     "crates/canic-sharding-runtime",
     "crates/canic-testkit",
+    "crates/canic-tests",
     "crates/canic-types",
 ]
 resolver = "2"

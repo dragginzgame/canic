@@ -59,7 +59,7 @@ help:
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
 	@echo "  package          Build a publishable crate tarball"
-	@echo "  publish          Publish crates to registry"
+	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo ""
 	@echo "Development:"
 	@echo "  demo-install    Install the full local reference topology (assumes dfx is already running)"
@@ -138,7 +138,7 @@ package: ensure-clean
 	$(CARGO_ENV) cargo package
 
 publish: ensure-clean
-	$(CARGO_ENV) cargo publish
+	$(CARGO_ENV) scripts/ci/publish-workspace.sh
 
 #
 # Tests

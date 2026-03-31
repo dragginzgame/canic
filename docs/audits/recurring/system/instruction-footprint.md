@@ -509,9 +509,9 @@ Until one exists, each report must:
 Recommended command bundle:
 
 - `rg -n '^[[:space:]]*perf!\\(' crates`
-- `cargo test -p canic --test delegation_flow -- --nocapture --test-threads=1`
-- `cargo test -p canic --test root_replay -- --nocapture --test-threads=1`
-- `cargo test -p canic --test root_hierarchy -- --nocapture --test-threads=1`
+- `cargo test -p canic-tests --test delegation_flow -- --nocapture --test-threads=1`
+- `cargo test -p canic-tests --test root_replay -- --nocapture --test-threads=1`
+- `cargo test -p canic-tests --test root_hierarchy -- --nocapture --test-threads=1`
 - `cargo test -p canic-core --test pic_role_attestation -- --nocapture --test-threads=1`
 - any additional targeted flow tests needed by the scenario matrix
 

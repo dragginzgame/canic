@@ -247,7 +247,7 @@ For each release:
 5. Tag release.
 
 Order must be preserved.
-Typical release flow is `make patch` followed by `cargo publish`.
+Typical release flow is `make patch` followed by `make publish`.
 
 ---
 

@@ -1,0 +1,21 @@
+[package]
+name = "canic-tests"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Workspace-only integration tests for Canic"
+readme = false
+publish = false
+
+[dev-dependencies]
+candid = { workspace = true }
+canic = { workspace = true }
+canic-control-plane = { workspace = true }
+canic-internal = { workspace = true }
+canic-testkit = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
