@@ -1,5 +1,5 @@
 use canic_core::{
-    bootstrap::{EmbeddedRootReleaseEntry, compiled::ConfigModel},
+    bootstrap::{EmbeddedRootBootstrapEntry, EmbeddedRootReleaseEntry, compiled::ConfigModel},
     dto::subnet::SubnetIdentity,
 };
 use std::time::Duration;
@@ -17,7 +17,7 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootReleaseEntry],
+        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
         embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
         embedded_release_version: &str,
     ) {
@@ -30,6 +30,9 @@ impl LifecycleApi {
             config,
             config_source,
             config_path,
+        );
+        crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
+            embedded_wasm_store_bootstrap_release_set,
         );
         crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
             embedded_release_bundle,
@@ -54,7 +57,7 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootReleaseEntry],
+        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
         embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
         embedded_release_version: &str,
     ) {
@@ -66,6 +69,9 @@ impl LifecycleApi {
             config,
             config_source,
             config_path,
+        );
+        crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
+            embedded_wasm_store_bootstrap_release_set,
         );
         crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
             embedded_release_bundle,

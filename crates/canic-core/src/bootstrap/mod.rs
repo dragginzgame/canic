@@ -30,6 +30,22 @@ pub struct EmbeddedRootReleaseEntry {
     pub wasm_module: &'static [u8],
 }
 
+///
+/// EmbeddedRootBootstrapEntry
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EmbeddedRootBootstrapEntry {
+    pub role: &'static str,
+    pub wasm_module: &'static [u8],
+    pub artifact_path: &'static str,
+    pub artifact_kind: &'static str,
+    pub artifact_size_bytes: u64,
+    pub artifact_sha256_hex: &'static str,
+    pub decompressed_size_bytes: Option<u64>,
+    pub decompressed_sha256_hex: Option<&'static str>,
+}
+
 // Install a build-produced configuration model and its canonical TOML source.
 pub fn init_compiled_config(
     config: ConfigModel,

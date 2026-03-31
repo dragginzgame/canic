@@ -28,8 +28,14 @@ canic-memory = { workspace = true }
 canic-sharding-runtime = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+flate2 = { workspace = true }
+sha2 = { workspace = true }
+
 [build-dependencies]
 canic-core = { workspace = true }
+flate2 = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }

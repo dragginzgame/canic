@@ -13,8 +13,12 @@ use crate::{
     support::{self, WasmStoreGcExecutionStats},
 };
 use canic_core::{
-    api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootReleaseEntry,
-    cdk::types::Principal, dto::error::Error, log, log::Topic,
+    api::runtime::install::ModuleSourceRuntimeApi,
+    bootstrap::{EmbeddedRootBootstrapEntry, EmbeddedRootReleaseEntry},
+    cdk::types::Principal,
+    dto::error::Error,
+    log,
+    log::Topic,
 };
 
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
@@ -29,7 +33,7 @@ pub struct WasmStoreBootstrapApi;
 impl WasmStoreBootstrapApi {
     // Register the dedicated embedded bootstrap release set used for the first live store install.
     pub fn register_embedded_root_wasm_store_release_set(
-        entries: &'static [EmbeddedRootReleaseEntry],
+        entries: &'static [EmbeddedRootBootstrapEntry],
     ) {
         let Some(entry) = entries
             .iter()
@@ -42,6 +46,30 @@ impl WasmStoreBootstrapApi {
             CanisterRole::WASM_STORE,
             ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID.as_str().to_string(),
             entry.wasm_module,
+        );
+    }
+
+    // Log the exact embedded bootstrap artifact provenance captured during root build.
+    pub fn log_embedded_root_wasm_store_release_set(
+        entries: &'static [EmbeddedRootBootstrapEntry],
+    ) {
+        let Some(entry) = entries
+            .iter()
+            .find(|entry| entry.role == CanisterRole::WASM_STORE.as_str())
+        else {
+            return;
+        };
+
+        log!(
+            Topic::Init,
+            Info,
+            "ws bootstrap artifact: path={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
+            entry.artifact_path,
+            entry.artifact_kind,
+            entry.artifact_size_bytes,
+            entry.artifact_sha256_hex,
+            entry.decompressed_size_bytes,
+            entry.decompressed_sha256_hex,
         );
     }
 
