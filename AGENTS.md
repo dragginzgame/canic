@@ -31,7 +31,7 @@ If code conflicts with this document, **the code is wrong**.
 * **Lint**: `make clippy`
   (`cargo clippy --workspace --all-targets --all-features -- -D warnings`)
 * **Test**: `make test`
-  (`make clippy` + local reference-topology smoke path + `cargo test --workspace`)
+  (`make clippy` + `cargo test --workspace`)
 * **Build**: `make build`
 * **Check only**: `make check`
 

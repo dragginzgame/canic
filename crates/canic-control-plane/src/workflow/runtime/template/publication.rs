@@ -1007,15 +1007,22 @@ impl WasmStorePublicationWorkflow {
         Ok(binding)
     }
 
-    // Return the deterministic approved manifests managed by the store fleet.
-    fn managed_release_manifests() -> Vec<TemplateManifestResponse> {
-        TemplateManifestOps::approved_manifests_response()
-            .into_iter()
-            .filter(|manifest| {
-                manifest.role != WASM_STORE_ROLE
-                    && manifest.chunking_mode == TemplateChunkingMode::Chunked
-            })
-            .collect()
+    // Return the deterministic approved manifests that still belong to the configured managed fleet.
+    fn managed_release_manifests() -> Result<Vec<TemplateManifestResponse>, InternalError> {
+        let roles = config::current_subnet_managed_release_roles()?;
+
+        Ok(
+            TemplateManifestOps::approved_manifests_for_roles_response(&roles)
+                .into_iter()
+                .filter(|manifest| manifest.chunking_mode == TemplateChunkingMode::Chunked)
+                .collect(),
+        )
+    }
+
+    // Deprecate any currently approved managed release that no longer belongs to the configured fleet.
+    pub fn prune_unconfigured_managed_releases() -> Result<usize, InternalError> {
+        let roles = config::current_subnet_managed_release_roles()?;
+        Ok(TemplateManifestOps::deprecate_approved_roles_not_in(&roles))
     }
 
     // Return the exact fleet stores that already carry one approved release.
@@ -1378,7 +1385,7 @@ impl WasmStorePublicationWorkflow {
 
     // Publish all root-local staged releases into the current subnet's selected wasm store.
     pub async fn publish_staged_release_set_to_current_store() -> Result<(), InternalError> {
-        let manifests = Self::managed_release_manifests()
+        let manifests = Self::managed_release_manifests()?
             .into_iter()
             .filter(|manifest| manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING)
             .collect::<Vec<_>>();
@@ -1411,7 +1418,7 @@ impl WasmStorePublicationWorkflow {
             releases: target_catalog,
         };
 
-        for manifest in Self::managed_release_manifests() {
+        for manifest in Self::managed_release_manifests()? {
             if target_store.has_exact_release(&manifest) {
                 Self::mirror_manifest_to_root_state(target_store_binding.clone(), &manifest);
                 continue;
@@ -1443,7 +1450,7 @@ impl WasmStorePublicationWorkflow {
     // Reconcile root-owned approved manifest bindings against exact releases present in the fleet.
     pub async fn import_current_store_catalog() -> Result<(), InternalError> {
         let fleet = Self::snapshot_publication_store_fleet().await?;
-        for manifest in Self::managed_release_manifests() {
+        for manifest in Self::managed_release_manifests()? {
             let binding = Self::reconciled_binding_for_manifest(&fleet, &manifest)?;
             TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
                 template_id: manifest.template_id,
@@ -1466,7 +1473,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn publish_current_release_set_to_current_store() -> Result<(), InternalError> {
         let mut fleet = Self::snapshot_publication_store_fleet().await?;
 
-        for manifest in Self::managed_release_manifests() {
+        for manifest in Self::managed_release_manifests()? {
             Self::publish_manifest_to_managed_fleet(&mut fleet, manifest).await?;
         }
 

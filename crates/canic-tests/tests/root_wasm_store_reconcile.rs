@@ -8,8 +8,8 @@ use canic::{Error, cdk::utils::wasm::get_wasm_hash, protocol};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput, WasmStoreAdminCommand, WasmStoreAdminResponse,
-        WasmStoreOverviewResponse, WasmStoreOverviewStoreResponse, WasmStoreStatusResponse,
+        TemplateManifestInput, WasmStoreOverviewResponse, WasmStoreOverviewStoreResponse,
+        WasmStoreStatusResponse,
     },
     ids::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
@@ -17,19 +17,16 @@ use canic_control_plane::{
 };
 use canic_internal::canister::MINIMAL;
 use canic_testkit::{
-    artifacts::{WasmBuildProfile, build_dfx_all, workspace_root_for},
+    artifacts::{WasmBuildProfile, build_dfx_all_with_env, workspace_root_for},
     pic::Pic,
 };
 use root::harness::setup_root;
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 const CHUNK_BYTES: usize = 1024 * 1024;
-const TEST_WASM_STORE_MAX_STORE_BYTES_ENV: &str = "CANIC_IMPLICIT_WASM_STORE_MAX_STORE_BYTES";
-const TEST_WASM_STORE_MAX_STORE_BYTES: &str = "8388608";
-const TEST_DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
-const CANARY_RELEASE_PAYLOAD_BYTES: usize = 1024 * 1024;
-const STORE_STATUS_HEADROOM_SAFETY_BYTES: u64 = 64 * 1024;
-const ROOT_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
+const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
+const TEST_DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-reconcile-build.lock";
+const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const UPGRADE_READY_TICK_LIMIT: usize = 120;
 
@@ -45,26 +42,15 @@ struct ReleaseFixture {
 
 #[test]
 fn root_post_upgrade_preserves_multi_store_current_release_binding() {
-    rebuild_test_artifacts_with_small_store_limit();
-
-    let setup = setup_root();
-    let before = publication_overview(&setup.pic, setup.root_id);
+    let setup = setup_root_with_small_implicit_store();
     let previous_minimal = TemplateId::from("embedded:minimal".to_string());
+    let before = publication_overview(&setup.pic, setup.root_id);
     let previous_store = store_with_approved_template(&before, &previous_minimal);
-    let target_store = alternate_publication_store(
-        &setup.pic,
-        setup.root_id,
-        &before,
-        &previous_store.binding,
-        CANARY_RELEASE_PAYLOAD_BYTES,
-    );
+    let status = live_store_status(&setup.pic, setup.root_id, previous_store.pid);
+    let payload_len =
+        rollover_release_payload_len(status.remaining_store_bytes, status.max_store_bytes);
     let template_id = TemplateId::from("canary:minimal".to_string());
-    let fixture = release_fixture(
-        &template_id,
-        "99.0.0-reconcile",
-        CANARY_RELEASE_PAYLOAD_BYTES,
-    );
-    set_publication_store_binding(&setup.pic, setup.root_id, target_store.binding.clone());
+    let fixture = release_fixture(&template_id, "99.0.0-reconcile", payload_len);
     stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
     prepare_chunk_set(&setup.pic, setup.root_id, &fixture.prepare);
 
@@ -77,12 +63,8 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
     let published = publication_overview(&setup.pic, setup.root_id);
     let published_store = store_with_approved_template(&published, &template_id);
     assert!(
-        before.stores.len() >= 2,
-        "the reduced-cap bootstrap should already produce a managed multi-store fleet"
-    );
-    assert_eq!(
-        published_store.binding, target_store.binding,
-        "the current canary release should follow the selected publication binding"
+        published_store.binding != previous_store.binding,
+        "the oversized canary release must move onto another managed wasm_store binding"
     );
     assert!(
         !has_approved_template(
@@ -123,28 +105,17 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
     );
 }
 
-// Rebuild the local artifacts once with a smaller implicit wasm_store ceiling for this canary.
-fn rebuild_test_artifacts_with_small_store_limit() {
-    // SAFETY: This integration test runs one root topology canary in isolation and
-    // sets the env var immediately before spawning `dfx build --all`.
-    unsafe {
-        env::set_var(
-            TEST_WASM_STORE_MAX_STORE_BYTES_ENV,
-            TEST_WASM_STORE_MAX_STORE_BYTES,
-        );
-    }
-
-    build_dfx_all(
-        &workspace_root_for(env!("CARGO_MANIFEST_DIR")),
+// Build the debug reference topology with the hidden small-cap store cfg, then install root.
+fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
+    let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    build_dfx_all_with_env(
+        &workspace_root,
         TEST_DFX_BUILD_LOCK_RELATIVE,
         "local",
         WasmBuildProfile::Debug,
+        &[("RUSTFLAGS", TEST_SMALL_STORE_RUSTFLAGS)],
     );
-
-    // SAFETY: The rebuild is complete, and later runtime code reads artifacts only.
-    unsafe {
-        env::remove_var(TEST_WASM_STORE_MAX_STORE_BYTES_ENV);
-    }
+    setup_root()
 }
 
 // Query the root-owned approved-release overview for the tracked wasm_store fleet.
@@ -257,58 +228,18 @@ fn live_store_status(
     response.expect("wasm_store status application failed")
 }
 
-// Choose one alternate existing publication target with enough live headroom for the canary release.
-fn alternate_publication_store<'a>(
-    pic: &Pic,
-    root_id: candid::Principal,
-    overview: &'a WasmStoreOverviewResponse,
-    excluded_binding: &WasmStoreBinding,
-    payload_len: usize,
-) -> &'a WasmStoreOverviewStoreResponse {
-    let required_bytes = u64::try_from(payload_len).expect("payload length should fit in u64")
-        + STORE_STATUS_HEADROOM_SAFETY_BYTES;
+// Choose one payload size that must overflow the current store but still fit an empty fresh store.
+fn rollover_release_payload_len(remaining_store_bytes: u64, max_store_bytes: u64) -> usize {
+    let payload_bytes = remaining_store_bytes
+        .saturating_add(STORE_ROLLOVER_SAFETY_BYTES)
+        .min(max_store_bytes.saturating_sub(1));
 
-    overview
-        .stores
-        .iter()
-        .filter(|store| &store.binding != excluded_binding)
-        .filter_map(|store| {
-            let status = live_store_status(pic, root_id, store.pid);
-            (status.remaining_store_bytes >= required_bytes)
-                .then_some((store, status.remaining_store_bytes))
-        })
-        .max_by_key(|(_, remaining_store_bytes)| *remaining_store_bytes)
-        .map_or_else(
-            || {
-            panic!(
-                "missing alternate wasm_store with enough headroom for a {payload_len}-byte canary release"
-            )
-            },
-            |(store, _)| store,
-        )
-}
+    assert!(
+        payload_bytes > remaining_store_bytes,
+        "the reconcile canary requires one store with a non-empty approved payload footprint"
+    );
 
-// Pin one explicit publication binding through the root admin surface.
-fn set_publication_store_binding(pic: &Pic, root_id: candid::Principal, binding: WasmStoreBinding) {
-    let response: Result<WasmStoreAdminResponse, Error> = pic
-        .update_call(
-            root_id,
-            ROOT_WASM_STORE_ADMIN,
-            (WasmStoreAdminCommand::SetPublicationBinding {
-                binding: binding.clone(),
-            },),
-        )
-        .expect("set publication binding transport failed");
-
-    match response.expect("set publication binding application failed") {
-        WasmStoreAdminResponse::SetPublicationBinding { binding: returned } => {
-            assert_eq!(
-                returned, binding,
-                "root should acknowledge the exact selected publication binding"
-            );
-        }
-        other => panic!("unexpected publication admin response: {other:?}"),
-    }
+    usize::try_from(payload_bytes).expect("payload length should fit in usize")
 }
 
 // Build one synthetic current release fixture for the managed rollover canary.

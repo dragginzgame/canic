@@ -12,8 +12,8 @@ use crate::{
         WasmStorePublicationSlotResponse, WasmStoreTemplateStatusResponse,
     },
     ids::{
-        CanisterRole, TemplateId, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
-        WasmStoreBinding, WasmStoreGcStatus,
+        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
+        TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
@@ -133,6 +133,17 @@ impl TemplateManifestOps {
 
         manifests.sort_by(|left, right| left.role.cmp(&right.role));
         manifests
+    }
+
+    // Return the currently approved manifests that still belong to the configured managed release set.
+    #[must_use]
+    pub fn approved_manifests_for_roles_response(
+        roles: &BTreeSet<CanisterRole>,
+    ) -> Vec<TemplateManifestResponse> {
+        Self::approved_manifests_response()
+            .into_iter()
+            .filter(|manifest| roles.contains(&manifest.role))
+            .collect()
     }
 
     // Return the approved manifest catalog in a store-safe response shape.
@@ -285,6 +296,33 @@ impl TemplateManifestOps {
 
         TemplateManifestStateStore::upsert(release, input_to_record(input));
     }
+
+    // Deprecate any currently approved managed release whose role is no longer configured.
+    #[must_use]
+    pub fn deprecate_approved_roles_not_in(roles: &BTreeSet<CanisterRole>) -> usize {
+        let mut deprecated = 0;
+
+        for (existing_release, mut existing) in TemplateManifestStateStore::export().entries {
+            if existing.manifest_state != TemplateManifestState::Approved {
+                continue;
+            }
+            if existing.role == CanisterRole::WASM_STORE {
+                continue;
+            }
+            if existing.chunking_mode != TemplateChunkingMode::Chunked {
+                continue;
+            }
+            if roles.contains(&existing.role) {
+                continue;
+            }
+
+            existing.manifest_state = TemplateManifestState::Deprecated;
+            TemplateManifestStateStore::upsert(existing_release, existing);
+            deprecated += 1;
+        }
+
+        deprecated
+    }
 }
 
 // Map a manifest input DTO into the authoritative stored record.
@@ -398,6 +436,15 @@ mod tests {
         input
     }
 
+    fn approved_chunked_input(
+        template_id: &'static str,
+        role: &'static str,
+    ) -> TemplateManifestInput {
+        let mut input = approved_input(template_id, role);
+        input.chunking_mode = TemplateChunkingMode::Chunked;
+        input
+    }
+
     #[test]
     fn replace_approved_keeps_one_approved_manifest_per_role() {
         reset_store();
@@ -436,6 +483,26 @@ mod tests {
         TemplateManifestOps::replace_approved_from_input(approved_input("one", "app"));
 
         assert!(TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
+    }
+
+    #[test]
+    fn deprecate_approved_roles_not_in_prunes_stale_managed_roles() {
+        reset_store();
+
+        TemplateManifestOps::replace_approved_from_input(approved_chunked_input("one", "app"));
+        TemplateManifestOps::replace_approved_from_input(approved_chunked_input("two", "scale"));
+
+        let kept = BTreeSet::from([CanisterRole::new("app")]);
+        let deprecated = TemplateManifestOps::deprecate_approved_roles_not_in(&kept);
+
+        assert_eq!(deprecated, 1);
+
+        let approved_roles = TemplateManifestOps::approved_manifests_response()
+            .into_iter()
+            .map(|manifest| manifest.role)
+            .collect::<Vec<_>>();
+
+        assert_eq!(approved_roles, vec![CanisterRole::new("app")]);
     }
 
     #[test]

@@ -15,7 +15,7 @@ require_dfx_running() {
 
     if ! dfx ping "${NETWORK}" >/dev/null 2>&1; then
         echo "dfx replica is not running for network '${NETWORK}'" >&2
-        echo "Start it in another terminal with scripts/app/dfx_start.sh and rerun." >&2
+        echo "Start the target replica externally and rerun." >&2
         exit 1
     fi
 }
