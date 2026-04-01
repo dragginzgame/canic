@@ -3,7 +3,6 @@
 set -euo pipefail
 
 ROOT_CANISTER="${1:-${ROOT_CANISTER:-root}}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NETWORK="${DFX_NETWORK:-local}"
 READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-120}"
 
@@ -16,6 +15,13 @@ require_dfx_running() {
     if ! dfx ping "${NETWORK}" >/dev/null 2>&1; then
         echo "dfx replica is not running for network '${NETWORK}'" >&2
         echo "Start the target replica externally and rerun." >&2
+        exit 1
+    fi
+}
+
+require_rust_tooling() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        echo "cargo is required for reference topology release staging" >&2
         exit 1
     fi
 }
@@ -86,11 +92,13 @@ wait_for_root_ready() {
 
 echo "Installing reference topology against DFX_NETWORK=${NETWORK}"
 require_dfx_running
+require_rust_tooling
 
 dfx canister create --all -qq
 RELEASE=1 dfx build --all
 dfx ledger fabricate-cycles --canister "${ROOT_CANISTER}" --cycles 9000000000000000 || true
 dfx canister install "${ROOT_CANISTER}" --mode=reinstall -y --argument '(variant { Prime })'
+cargo run -q -p canic-internal --bin stage_root_release_set -- "${ROOT_CANISTER}"
 wait_for_root_ready
 
 echo "Reference topology installed successfully"

@@ -2,6 +2,7 @@
 // This test relies on embedded production config by design.
 
 use canic::{
+    Error,
     cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
@@ -10,17 +11,26 @@ use canic::{
     ids::CanisterRole,
     protocol,
 };
+use canic_control_plane::{
+    dto::template::{
+        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput,
+    },
+    ids::{
+        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
+    },
+};
 use canic_testkit::{
     artifacts::{WasmBuildProfile, build_dfx_all, dfx_artifact_ready, workspace_root_for},
     pic::{ControllerSnapshots, Pic, pic},
 };
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     env, fs, io,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Mutex, MutexGuard, Once},
 };
 
@@ -30,7 +40,10 @@ const ROOT_WASM_ENV: &str = "CANIC_ROOT_WASM";
 /// Default location of the root wasm relative to this crate’s manifest dir.
 const ROOT_WASM_RELATIVE: &str = "../../.dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
+const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
+const ROOT_CONFIG_RELATIVE: &str = "canisters/canic.toml";
 const POCKET_IC_WASM_CHUNK_STORE_LIMIT_BYTES: usize = 100 * 1024 * 1024;
+const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 // WARNING: `Pic` MUST NOT be cached/shared across tests by default.
 // This toggle is intentionally opt-in for local experimentation only.
@@ -158,6 +171,8 @@ fn initialize_setup(root_wasm: Vec<u8>) -> RootSetupState {
                 .create_and_install_root_canister(wasm)
                 .expect("install root canister");
 
+            stage_managed_release_set(&pic, root_id);
+            resume_root_bootstrap(&pic, root_id);
             wait_for_bootstrap(&pic, root_id);
 
             let subnet_directory = fetch_subnet_directory(&pic, root_id);
@@ -212,11 +227,7 @@ fn ensure_local_artifacts_built() {
 
         // `make test` already builds canisters before `cargo test`; avoid redundant
         // `dfx build --all` work unless artifacts are missing.
-        if dfx_artifact_ready(
-            &workspace_root,
-            ROOT_WASM_ARTIFACT_RELATIVE,
-            ROOT_WASM_WATCH_PATHS,
-        ) {
+        if root_release_artifacts_ready(&workspace_root) {
             return;
         }
 
@@ -231,6 +242,181 @@ fn ensure_local_artifacts_built() {
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+}
+
+// Stage the configured ordinary release set into root before bootstrap resumes.
+fn stage_managed_release_set(pic: &Pic, root_id: Principal) {
+    let now_secs = root_time_secs(pic, root_id);
+    let version = TemplateVersion::owned(env!("CARGO_PKG_VERSION").to_string());
+
+    for role in configured_release_roles() {
+        let role_name = role.as_str().to_string();
+        let wasm_module = load_release_wasm_gz(&role_name);
+        let template_id = TemplateId::owned(format!("embedded:{role}"));
+        let payload_hash = canic::cdk::utils::wasm::get_wasm_hash(&wasm_module);
+        let payload_size_bytes = wasm_module.len() as u64;
+        let chunks = wasm_module
+            .chunks(ROOT_RELEASE_CHUNK_BYTES)
+            .map(<[u8]>::to_vec)
+            .collect::<Vec<_>>();
+
+        let manifest = TemplateManifestInput {
+            template_id: template_id.clone(),
+            role: role.clone(),
+            version: version.clone(),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(now_secs),
+            created_at: now_secs,
+        };
+        stage_manifest(pic, root_id, manifest);
+
+        let prepare = TemplateChunkSetPrepareInput {
+            template_id: template_id.clone(),
+            version: version.clone(),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes,
+            chunk_hashes: chunks
+                .iter()
+                .map(|chunk| canic::cdk::utils::wasm::get_wasm_hash(chunk))
+                .collect(),
+        };
+        prepare_chunk_set(pic, root_id, prepare);
+
+        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+            publish_chunk(
+                pic,
+                root_id,
+                TemplateChunkInput {
+                    template_id: template_id.clone(),
+                    version: version.clone(),
+                    chunk_index: u32::try_from(chunk_index)
+                        .expect("release chunk index must fit into nat32"),
+                    bytes,
+                },
+            );
+        }
+    }
+}
+
+// Resume the root bootstrap flow once the ordinary release set is staged.
+fn resume_root_bootstrap(pic: &Pic, root_id: Principal) {
+    let resumed: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
+            (),
+        )
+        .expect("resume root bootstrap transport");
+
+    resumed.expect("resume root bootstrap application");
+}
+
+// Read the current replica time from root so staged manifests use replica timestamps.
+fn root_time_secs(pic: &Pic, root_id: Principal) -> u64 {
+    let now_secs: Result<u64, Error> = pic
+        .query_call(root_id, protocol::CANIC_TIME, ())
+        .expect("query root time transport");
+
+    now_secs.expect("query root time application")
+}
+
+// Return the configured ordinary release roles that must be staged into root.
+fn configured_release_roles() -> Vec<CanisterRole> {
+    let config_path = workspace_root().join(ROOT_CONFIG_RELATIVE);
+    let config_source = fs::read_to_string(&config_path)
+        .unwrap_or_else(|err| panic!("read {} failed: {err}", config_path.display()));
+    let config = canic::__internal::core::bootstrap::parse_config_model(&config_source)
+        .unwrap_or_else(|err| panic!("invalid {}: {err}", config_path.display()));
+    let mut roles = BTreeSet::new();
+
+    for subnet in config.subnets.values() {
+        for role in subnet.canisters.keys() {
+            if role.is_root() || role.is_wasm_store() {
+                continue;
+            }
+
+            roles.insert(role.as_str().to_string());
+        }
+    }
+
+    roles.into_iter().map(CanisterRole::owned).collect()
+}
+
+// Load one built `.wasm.gz` artifact for a configured release role.
+fn load_release_wasm_gz(role_name: &str) -> Vec<u8> {
+    let artifact_path = workspace_root()
+        .join(ROOT_RELEASE_ARTIFACTS_RELATIVE)
+        .join(role_name)
+        .join(format!("{role_name}.wasm.gz"));
+    let bytes = fs::read(&artifact_path)
+        .unwrap_or_else(|err| panic!("read {} failed: {err}", artifact_path.display()));
+    assert!(
+        !bytes.is_empty(),
+        "release artifact must not be empty: {}",
+        artifact_path.display()
+    );
+    bytes
+}
+
+// Confirm the root bootstrap artifact and every managed ordinary release artifact are fresh.
+fn root_release_artifacts_ready(workspace_root: &Path) -> bool {
+    if !dfx_artifact_ready(
+        workspace_root,
+        ROOT_WASM_ARTIFACT_RELATIVE,
+        ROOT_WASM_WATCH_PATHS,
+    ) {
+        return false;
+    }
+
+    configured_release_roles().into_iter().all(|role| {
+        let role_name = role.as_str().to_string();
+        let artifact_relative_path =
+            format!("{ROOT_RELEASE_ARTIFACTS_RELATIVE}/{role_name}/{role_name}.wasm.gz");
+        dfx_artifact_ready(
+            workspace_root,
+            &artifact_relative_path,
+            ROOT_WASM_WATCH_PATHS,
+        )
+    })
+}
+
+// Stage one manifest through the root admin surface.
+fn stage_manifest(pic: &Pic, root_id: Principal, manifest: TemplateManifestInput) {
+    let staged: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            (manifest,),
+        )
+        .expect("stage release manifest transport");
+
+    staged.expect("stage release manifest application");
+}
+
+// Prepare one staged chunk set through the root admin surface.
+fn prepare_chunk_set(pic: &Pic, root_id: Principal, prepare: TemplateChunkSetPrepareInput) {
+    let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
+        .update_call(root_id, protocol::CANIC_TEMPLATE_PREPARE_ADMIN, (prepare,))
+        .expect("prepare release chunk set transport");
+
+    let _ = prepared.expect("prepare release chunk set application");
+}
+
+// Publish one staged release chunk through the root admin surface.
+fn publish_chunk(pic: &Pic, root_id: Principal, chunk: TemplateChunkInput) {
+    let published: Result<(), Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            (chunk,),
+        )
+        .expect("publish release chunk transport");
+
+    published.expect("publish release chunk application");
 }
 
 fn wait_for_bootstrap(pic: &Pic, root_id: Principal) {

@@ -13,6 +13,15 @@ These scripts support the reference canisters under `canisters/` and the local t
 The install/build commands below assume the target `dfx` replica is already
 running. They fail fast if it is not.
 
+If you want a manual convenience helper for local work, use:
+
+```bash
+scripts/app/dfx_start.sh
+```
+
+That helper is optional and repo-local only. The install/test flows still do
+not auto-start `dfx`.
+
 ## Install the Reference Topology
 
 From the repo root:
@@ -25,7 +34,8 @@ This one command:
 - creates the reference canisters in `dfx`
 - builds the release artifacts
 - reinstalls `root` in `Prime` mode
-- lets `root` bootstrap the internal `wasm_store` and publish the configured release set automatically
+- stages the configured ordinary release set into `root` through the Rust helper in `canic-internal`
+- resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged release set
 - waits for `root` to report `READY`
 
 This is a manual local smoke flow, not part of `make test`.
@@ -51,9 +61,7 @@ dfx build --all
 `dfx.json` sets `"gzip": true`, so dfx 0.30.2 also writes a gzipped artifact:
 `.dfx/local/canisters/<name>/<name>.wasm.gz`.
 
-The normal local bootstrap path now embeds the ordinary release bundle into
-`root.wasm` from the already-built child canister `.wasm.gz` artifacts under
-`.dfx/$DFX_NETWORK/canisters`. After `dfx build --all`, reinstalling `root`
-is enough; no separate release staging or bootstrap resume step is required.
-
-There is no separate release-staging helper in the normal install path anymore.
+`root.wasm` stays thin again. Only the bootstrap `wasm_store.wasm.gz` is
+embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
+and are staged after `root` install by the Rust helper binary
+`canic-internal::stage_root_release_set`.

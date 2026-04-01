@@ -103,20 +103,6 @@ macro_rules! __canic_start_root_lifecycle_core {
         }
 
         #[doc(hidden)]
-        #[cfg(canic_has_root_release_bundle)]
-        fn __canic_embedded_root_release_bundle(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
-            include!(env!("CANIC_ROOT_RELEASE_BUNDLE_PATH"))
-        }
-
-        #[doc(hidden)]
-        #[cfg(not(canic_has_root_release_bundle))]
-        fn __canic_embedded_root_release_bundle(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootReleaseEntry] {
-            &[]
-        }
-
-        #[doc(hidden)]
         #[cfg(canic_has_root_wasm_store_bootstrap_release_set)]
         fn __canic_embedded_root_wasm_store_bootstrap_release_set(
         ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootBootstrapEntry] {
@@ -135,8 +121,6 @@ macro_rules! __canic_start_root_lifecycle_core {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
                 __canic_embedded_root_wasm_store_bootstrap_release_set();
-            let embedded_release_bundle = __canic_embedded_root_release_bundle();
-            let embedded_release_version = env!("CARGO_PKG_VERSION");
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 identity,
@@ -144,8 +128,6 @@ macro_rules! __canic_start_root_lifecycle_core {
                 config_source,
                 config_path,
                 embedded_wasm_store_bootstrap_release_set,
-                embedded_release_bundle,
-                embedded_release_version,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
@@ -158,16 +140,12 @@ macro_rules! __canic_start_root_lifecycle_core {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
                 __canic_embedded_root_wasm_store_bootstrap_release_set();
-            let embedded_release_bundle = __canic_embedded_root_release_bundle();
-            let embedded_release_version = env!("CARGO_PKG_VERSION");
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,
                 config_source,
                 config_path,
                 embedded_wasm_store_bootstrap_release_set,
-                embedded_release_bundle,
-                embedded_release_version,
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
