@@ -138,7 +138,12 @@ fn wait_for_root_ready(
 fn root_ready(root_canister: &str) -> Result<bool, Box<dyn std::error::Error>> {
     let output = dfx_call(root_canister, "canic_ready", None, Some("json"))?;
     let data = serde_json::from_str::<Value>(&output)?;
-    Ok(matches!(data.get("Ok"), Some(Value::Bool(true))))
+    Ok(parse_root_ready_value(&data))
+}
+
+// Accept both plain-bool and wrapped-result JSON shapes from `dfx --output json`.
+fn parse_root_ready_value(data: &Value) -> bool {
+    matches!(data, Value::Bool(true)) || matches!(data.get("Ok"), Some(Value::Bool(true)))
 }
 
 // Print recent structured root log entries without raw byte dumps.
@@ -230,4 +235,27 @@ fn print_raw_call(root_canister: &str, method: &str) {
     let _ = Command::new("dfx")
         .args(["canister", "call", root_canister, method])
         .status();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_root_ready_value;
+    use serde_json::json;
+
+    #[test]
+    fn parse_root_ready_accepts_plain_true() {
+        assert!(parse_root_ready_value(&json!(true)));
+    }
+
+    #[test]
+    fn parse_root_ready_accepts_wrapped_ok_true() {
+        assert!(parse_root_ready_value(&json!({ "Ok": true })));
+    }
+
+    #[test]
+    fn parse_root_ready_rejects_false_shapes() {
+        assert!(!parse_root_ready_value(&json!(false)));
+        assert!(!parse_root_ready_value(&json!({ "Ok": false })));
+        assert!(!parse_root_ready_value(&json!({ "Err": "nope" })));
+    }
 }
