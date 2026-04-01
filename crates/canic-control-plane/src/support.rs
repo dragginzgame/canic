@@ -8,6 +8,7 @@ use crate::{
         TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
         WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
         WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
+        WasmStorePublicationStatusResponse, WasmStoreRetiredStoreStatusResponse,
         WasmStoreStatusResponse,
     },
     ids::{
@@ -261,6 +262,21 @@ pub fn publication_overview() -> WasmStoreOverviewResponse {
         publication,
         stores,
     }
+}
+
+/// Return the current live root-facing publication placement status for the managed store fleet.
+pub async fn publication_status() -> Result<WasmStorePublicationStatusResponse, Error> {
+    WasmStorePublicationWorkflow::publication_status()
+        .await
+        .map_err(Error::from)
+}
+
+/// Return the current retired runtime-managed publication store status, if one exists.
+pub async fn retired_publication_store_status()
+-> Result<Option<WasmStoreRetiredStoreStatusResponse>, Error> {
+    WasmStorePublicationWorkflow::retired_publication_store_status()
+        .await
+        .map_err(Error::from)
 }
 
 /// Mark the current retired publication store as prepared for store-local GC execution.

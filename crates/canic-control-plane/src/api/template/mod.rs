@@ -3,7 +3,8 @@ use crate::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
         WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-        WasmStoreOverviewResponse, WasmStoreStatusResponse,
+        WasmStoreOverviewResponse, WasmStorePublicationStatusResponse,
+        WasmStoreRetiredStoreStatusResponse, WasmStoreStatusResponse,
     },
     ids::{
         CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
@@ -219,6 +220,17 @@ impl WasmStorePublicationApi {
     // Return one root-owned overview for every tracked runtime-managed wasm store.
     pub fn overview() -> Result<WasmStoreOverviewResponse, Error> {
         Ok(support::publication_overview())
+    }
+
+    // Return one live root-facing publication placement snapshot for the managed store fleet.
+    pub async fn status() -> Result<WasmStorePublicationStatusResponse, Error> {
+        support::publication_status().await
+    }
+
+    // Return the current retired runtime-managed publication store status, if one exists.
+    pub async fn retired_store_status() -> Result<Option<WasmStoreRetiredStoreStatusResponse>, Error>
+    {
+        support::retired_publication_store_status().await
     }
 
     // Mark the current retired publication store as prepared for store-local GC execution.

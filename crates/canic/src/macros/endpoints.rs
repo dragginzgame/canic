@@ -470,6 +470,18 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStorePublicationApi::overview()
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_wasm_store_publication_status(
+        ) -> Result<::canic::dto::template::WasmStorePublicationStatusResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::status().await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_wasm_store_retired_status(
+        ) -> Result<Option<::canic::dto::template::WasmStoreRetiredStoreStatusResponse>, ::canic::Error> {
+            ::canic::api::canister::template::WasmStorePublicationApi::retired_store_status().await
+        }
+
     };
 }
 
