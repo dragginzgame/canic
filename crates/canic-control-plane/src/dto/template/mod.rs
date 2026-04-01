@@ -187,7 +187,7 @@ pub struct WasmStoreOverviewStoreResponse {
     pub remaining_approved_payload_size: String,
     pub headroom_bytes: Option<u64>,
     pub headroom_size: Option<String>,
-    pub within_headroom: bool,
+    pub within_approved_headroom: bool,
     pub approved_template_count: u32,
     pub max_templates: Option<u32>,
     pub approved_release_count: u32,

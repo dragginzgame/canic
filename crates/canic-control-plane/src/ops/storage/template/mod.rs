@@ -188,7 +188,7 @@ impl TemplateManifestOps {
         let remaining_approved_payload_bytes = limits
             .max_store_bytes
             .saturating_sub(approved_payload_bytes);
-        let within_headroom =
+        let within_approved_headroom =
             headroom_bytes.is_some_and(|threshold| remaining_approved_payload_bytes <= threshold);
         let template_versions = projected_template_versions_for_manifests(&manifests);
         let approved_release_count = u32::try_from(
@@ -229,7 +229,7 @@ impl TemplateManifestOps {
             remaining_approved_payload_size: byte_size(remaining_approved_payload_bytes),
             headroom_bytes,
             headroom_size: headroom_bytes.map(byte_size),
-            within_headroom,
+            within_approved_headroom,
             approved_template_count,
             max_templates: limits.max_templates,
             approved_release_count,

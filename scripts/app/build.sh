@@ -3,11 +3,18 @@
 # don't allow errors
 set -e
 
-SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF="$SCRIPT_DIR/$(basename "$0")"
+
+# Anchor the build helper to its own checkout/copy instead of any inherited
+# shell state so downstream and dfx builds are not poisoned by stale env vars.
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPTS="$ROOT/scripts"
+export ROOT SCRIPTS
 
 # Set up environment
-source "$(dirname "$0")/../env.sh"
-cd "$SCRIPTS"
+source "$SCRIPT_DIR/../env.sh"
+cd "$ROOT"
 
 # Check if an argument was provided
 if [ $# -eq 0 ]; then
@@ -59,7 +66,7 @@ canonical_wasm_store_manifest_path() {
 
     local resolved_manifest
     if resolved_manifest="$(
-        cargo metadata --format-version=1 | python3 -c '
+        cargo metadata --format-version=1 --manifest-path "$ROOT/Cargo.toml" | python3 -c '
 import json, sys
 from pathlib import Path
 
@@ -101,7 +108,7 @@ for package in packages:
 }
 
 resolved_canic_manifest_path() {
-    cargo metadata --format-version=1 | python3 -c '
+    cargo metadata --format-version=1 --manifest-path "$ROOT/Cargo.toml" | python3 -c '
 import json, sys
 
 data = json.load(sys.stdin)

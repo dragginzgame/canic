@@ -789,7 +789,7 @@ type WasmStoreOverviewStoreResponse = record {
   max_template_versions_per_template : opt nat16;
   max_templates : opt nat32;
   remaining_approved_payload_size : text;
-  within_headroom : bool;
+  within_approved_headroom : bool;
   binding : text;
   approved_release_count : nat32;
   headroom_size : opt text;

@@ -4,7 +4,7 @@
 mod root;
 
 use candid::encode_one;
-use canic::{Error, cdk::utils::wasm::get_wasm_hash, protocol};
+use canic::{Error, cdk::utils::wasm::get_wasm_hash, dto::error::ErrorCode, protocol};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -105,6 +105,63 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
     );
 }
 
+#[test]
+fn root_republish_reuses_exact_release_without_allocating_another_store() {
+    let setup = setup_root_with_small_implicit_store();
+    let template_id = TemplateId::from("embedded:minimal".to_string());
+    let before = publication_overview(&setup.pic, setup.root_id);
+    let before_store = store_with_approved_template(&before, &template_id);
+    let before_store_count = before.stores.len();
+    let before_match_count = approved_template_store_count(&before, &template_id);
+
+    publish_current_release_set_to_current_store(&setup.pic, setup.root_id);
+
+    let after = publication_overview(&setup.pic, setup.root_id);
+    let after_store = store_with_approved_template(&after, &template_id);
+    let after_match_count = approved_template_store_count(&after, &template_id);
+
+    assert_eq!(
+        tracked_store_count(&after),
+        before_store_count,
+        "republishing the exact current release set must not allocate another managed wasm_store"
+    );
+    assert_eq!(
+        after_store.binding, before_store.binding,
+        "republishing an exact current release must keep the existing approved binding"
+    );
+    assert_eq!(
+        after_match_count, before_match_count,
+        "republishing an exact current release must not duplicate that approved template across stores"
+    );
+    assert_eq!(
+        after_match_count, 1,
+        "the current minimal release should remain owned by exactly one managed store"
+    );
+}
+
+#[test]
+fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
+    let setup = setup_root_with_small_implicit_store();
+    let fixture = release_fixture(
+        &TemplateId::from("embedded:minimal".to_string()),
+        "0.21.1",
+        128 * 1024,
+    );
+    stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
+    let before = publication_overview(&setup.pic, setup.root_id);
+
+    let err = publish_current_release_set_to_current_store_err(&setup.pic, setup.root_id)
+        .expect_err("conflicting duplicate release must fail");
+
+    assert_eq!(err.code, ErrorCode::Internal);
+
+    let after = publication_overview(&setup.pic, setup.root_id);
+    assert_eq!(
+        after, before,
+        "a conflicting duplicate release must not mutate the managed fleet view on failure"
+    );
+}
+
 // Build the debug reference topology with the hidden small-cap store cfg, then install root.
 fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
     let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
@@ -157,6 +214,23 @@ fn has_approved_template(store: &WasmStoreOverviewStoreResponse, template_id: &T
         .approved_templates
         .iter()
         .any(|entry| &entry.template_id == template_id)
+}
+
+// Count how many tracked stores currently advertise one approved template id.
+fn approved_template_store_count(
+    overview: &WasmStoreOverviewResponse,
+    template_id: &TemplateId,
+) -> usize {
+    overview
+        .stores
+        .iter()
+        .filter(|store| has_approved_template(store, template_id))
+        .count()
+}
+
+// Return the number of tracked runtime-managed wasm stores in the overview.
+const fn tracked_store_count(overview: &WasmStoreOverviewResponse) -> usize {
+    overview.stores.len()
 }
 
 // Stage one manifest through the root admin surface.
@@ -213,6 +287,19 @@ fn publish_current_release_set_to_current_store(pic: &Pic, root_id: candid::Prin
         .expect("publish current release set transport failed");
 
     published.expect("publish current release set application failed");
+}
+
+// Publish the current approved release set through the managed store fleet and return the typed result.
+fn publish_current_release_set_to_current_store_err(
+    pic: &Pic,
+    root_id: candid::Principal,
+) -> Result<(), Error> {
+    pic.update_call(
+        root_id,
+        protocol::CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN,
+        (),
+    )
+    .expect("publish current release set transport failed")
 }
 
 // Query the live wasm_store canister for real occupied/remaining bytes.
