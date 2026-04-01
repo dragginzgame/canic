@@ -42,7 +42,25 @@ pub fn build_dfx_all(
     network: &str,
     profile: WasmBuildProfile,
 ) {
-    let output = run_dfx_build_with_lock(workspace_root, lock_relative_path, network, profile);
+    build_dfx_all_with_env(workspace_root, lock_relative_path, network, profile, &[]);
+}
+
+/// Build all `dfx` canisters while holding a file lock around the build and applying
+/// additional environment overrides.
+pub fn build_dfx_all_with_env(
+    workspace_root: &Path,
+    lock_relative_path: &str,
+    network: &str,
+    profile: WasmBuildProfile,
+    extra_env: &[(&str, &str)],
+) {
+    let output = run_dfx_build_with_lock(
+        workspace_root,
+        lock_relative_path,
+        network,
+        profile,
+        extra_env,
+    );
     assert!(
         output.status.success(),
         "dfx build --all failed: {}",
@@ -87,6 +105,7 @@ fn run_dfx_build_with_lock(
     lock_relative_path: &str,
     network: &str,
     profile: WasmBuildProfile,
+    extra_env: &[(&str, &str)],
 ) -> Output {
     let lock_file = workspace_root.join(lock_relative_path);
     let target_dir = workspace_root.join("target/dfx-build");
@@ -95,7 +114,8 @@ fn run_dfx_build_with_lock(
     }
     let _ = fs::create_dir_all(&target_dir);
 
-    match Command::new("flock")
+    let mut flock = Command::new("flock");
+    flock
         .current_dir(workspace_root)
         .arg(lock_file.as_os_str())
         .arg("bash")
@@ -106,12 +126,15 @@ fn run_dfx_build_with_lock(
             "-lc",
             "dfx canister create --all -qq >/dev/null 2>&1 || true\n\
              dfx build --all",
-        ])
-        .output()
-    {
+        ]);
+    for (key, value) in extra_env {
+        flock.env(key, value);
+    }
+
+    match flock.output() {
         Ok(output) => output,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            run_dfx_build(workspace_root, network, profile)
+            run_dfx_build(workspace_root, network, profile, extra_env)
         }
         Err(err) => panic!("failed to run `flock` for `dfx build --all`: {err}"),
     }
@@ -119,24 +142,37 @@ fn run_dfx_build_with_lock(
 
 // Invoke `dfx canister create --all` and `dfx build --all` directly when `flock` is
 // unavailable.
-fn run_dfx_build(workspace_root: &Path, network: &str, profile: WasmBuildProfile) -> Output {
+fn run_dfx_build(
+    workspace_root: &Path,
+    network: &str,
+    profile: WasmBuildProfile,
+    extra_env: &[(&str, &str)],
+) -> Output {
     let target_dir = workspace_root.join("target/dfx-build");
     let _ = fs::create_dir_all(&target_dir);
 
-    let _ = Command::new("dfx")
+    let mut create = Command::new("dfx");
+    create
         .current_dir(workspace_root)
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .args(["canister", "create", "--all", "-qq"])
-        .output();
+        .args(["canister", "create", "--all", "-qq"]);
+    for (key, value) in extra_env {
+        create.env(key, value);
+    }
+    let _ = create.output();
 
-    Command::new("dfx")
+    let mut build = Command::new("dfx");
+    build
         .current_dir(workspace_root)
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .args(["build", "--all"])
-        .output()
-        .expect("failed to run `dfx build --all`")
+        .args(["build", "--all"]);
+    for (key, value) in extra_env {
+        build.env(key, value);
+    }
+
+    build.output().expect("failed to run `dfx build --all`")
 }

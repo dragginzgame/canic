@@ -65,8 +65,8 @@ help:
 	@echo "  test-packaged-downstream  Verify the hidden packaged-downstream wasm_store build path"
 	@echo ""
 	@echo "Development:"
-	@echo "  demo-install    Install the full local reference topology (assumes dfx is already running)"
-	@echo "  test             Run clippy + all tests"
+	@echo "  demo-install    Install the full local reference topology (fails if dfx is not already running)"
+	@echo "  test             Run clippy + workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
@@ -83,7 +83,7 @@ help:
 	@echo "  make patch       # Bump patch version"
 	@echo "  make patch-quick # Fast patch bump using cargo check"
 	@echo "  make demo-install # Build + install the local reference topology"
-	@echo "  make test        # Run clippy and tests"
+	@echo "  make test        # Run clippy and workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
 
@@ -152,24 +152,23 @@ test-packaged-downstream:
 
 #
 # Tests
-# create the canisters first, or the unit tests will fail
 #
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" scripts/app/install_reference_topology.sh root
 
-test: clippy test-canisters test-unit
+test: clippy test-unit
 
 # Fast iteration path for wasm work.
-# Skips dfx canister install/reinstall and excludes integration tests under
-# `tests/`, which is where the PocketIC-heavy suites live today.
+# Skips integration tests under `tests/`, which is where the PocketIC-heavy
+# suites live today.
 test-wasm: clippy test-unit-fast
 
 # Version-bump gate.
-# Keeps clippy plus the local dfx canister smoke path, but skips PocketIC-heavy
-# integration tests under `tests/` by using the fast unit/lib/bin workspace run.
-test-bump: clippy test-canisters test-unit-fast
+# Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
+# local `dfx` smoke path as an explicit manual target.
+test-bump: clippy test-unit-fast
 
 quick-bump:
 	$(CARGO_ENV) cargo check --workspace

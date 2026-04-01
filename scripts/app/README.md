@@ -8,16 +8,10 @@ These scripts support the reference canisters under `canisters/` and the local t
 - Wasm target + candid tooling:
   - `make install-canister-deps` (installs `wasm32-unknown-unknown` and `candid-extractor`)
 
-## Start a Clean Local Replica
+## Local Replica Contract
 
-```bash
-scripts/app/dfx_start.sh
-```
-
-This runs `dfx` (`dfx stop` then `dfx start --clean --system-canisters`).
-
-Keep that replica running in a separate terminal. The install/build commands
-below assume `dfx` is already running and fail if it is not.
+The install/build commands below assume the target `dfx` replica is already
+running. They fail fast if it is not.
 
 ## Install the Reference Topology
 
@@ -33,6 +27,8 @@ This one command:
 - reinstalls `root` in `Prime` mode
 - lets `root` bootstrap the internal `wasm_store` and publish the configured release set automatically
 - waits for `root` to report `READY`
+
+This is a manual local smoke flow, not part of `make test`.
 
 ## Build Canisters
 

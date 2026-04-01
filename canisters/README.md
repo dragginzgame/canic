@@ -25,11 +25,11 @@ The shared demo topology lives in `canisters/canic.toml` and is referenced by ea
 
 These canisters are wired through `dfx.json` (custom build steps call `scripts/app/build.sh`).
 
-- Start a clean local replica in another terminal: `scripts/app/dfx_start.sh`
 - Install the full local reference topology: `make demo-install`
 - The normal `root` install path no longer needs a separate release-staging helper; `dfx build --all` plus `dfx canister install root` is sufficient when the child role artifacts are present.
 - Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
-- Run the scripted end-to-end flow: `make test-canisters` (or `make test`)
+- Run the scripted local smoke flow: `make test-canisters`
 
 Note: `make demo-install` and `make test-canisters` assume `dfx` is already
-running. They fail fast if the local replica is not available.
+running. They fail fast if the local replica is not available. They are manual
+local smoke helpers, not part of `make test`.
