@@ -21,12 +21,15 @@ use canic_testkit::{
 use std::{
     path::{Path, PathBuf},
     sync::Once,
+    time::Duration,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const READY_TICK_LIMIT: usize = 120;
+const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
 const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
+const INSTALL_CODE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 static BUILD_ONCE: Once = Once::new();
 
 const fn p(id: u8) -> Principal {
@@ -61,10 +64,16 @@ fn lifecycle_boundary_traps_are_phase_correct() {
         pic.install_canister(canic_id, canic_wasm.clone(), init_args, None);
     }));
     assert!(install.is_ok(), "install panicked for canic canister");
+    wait_out_install_code_rate_limit(&pic);
 
     let reinstall_err = pic
         .reinstall_canister(canic_id, canic_wasm.clone(), invalid_init_args(), None)
-        .expect_err("reinstall should fail");
+        .map_err(|err| err.to_string());
+    let reinstall_err = retry_install_code_err(&pic, reinstall_err, || {
+        pic.reinstall_canister(canic_id, canic_wasm.clone(), invalid_init_args(), None)
+            .map_err(|err| err.to_string())
+    })
+    .expect_err("reinstall should fail");
     assert_phase_error("init", &reinstall_err);
 
     let authority_id = pic.create_canister();
@@ -75,15 +84,26 @@ fn lifecycle_boundary_traps_are_phase_correct() {
         encode_one(Principal::anonymous()).expect("encode authority init"),
         None,
     );
+    wait_out_install_code_rate_limit(&pic);
 
     let upgrade_err = pic
         .upgrade_canister(
             authority_id,
-            canic_wasm,
+            canic_wasm.clone(),
             encode_one(()).expect("encode upgrade"),
             None,
         )
-        .expect_err("upgrade should fail");
+        .map_err(|err| err.to_string());
+    let upgrade_err = retry_install_code_err(&pic, upgrade_err, || {
+        pic.upgrade_canister(
+            authority_id,
+            canic_wasm.clone(),
+            encode_one(()).expect("encode upgrade"),
+            None,
+        )
+        .map_err(|err| err.to_string())
+    })
+    .expect_err("upgrade should fail");
     assert_phase_error("post_upgrade", &upgrade_err);
 }
 
@@ -107,17 +127,22 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
 
     pic.install_canister(canic_id, canic_wasm.clone(), init_args, None);
     pic.wait_for_ready(canic_id, READY_TICK_LIMIT, "install");
+    wait_out_install_code_rate_limit(&pic);
 
     for attempt in 1..=3 {
-        pic.upgrade_canister(
-            canic_id,
-            canic_wasm.clone(),
-            encode_one(()).expect("encode upgrade"),
-            None,
-        )
+        retry_install_code_ok(&pic, || {
+            pic.upgrade_canister(
+                canic_id,
+                canic_wasm.clone(),
+                encode_one(()).expect("encode upgrade"),
+                None,
+            )
+            .map_err(|err| err.to_string())
+        })
         .unwrap_or_else(|err| panic!("upgrade attempt {attempt} should succeed: {err}"));
 
         pic.wait_for_ready(canic_id, READY_TICK_LIMIT, "post_upgrade");
+        wait_out_install_code_rate_limit(&pic);
     }
 }
 
@@ -149,15 +174,26 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
         encode_one(Principal::anonymous()).expect("encode authority init"),
         None,
     );
+    wait_out_install_code_rate_limit(&pic);
 
     let upgrade_err = pic
         .upgrade_canister(
             authority_id,
-            canic_wasm,
+            canic_wasm.clone(),
             encode_one(()).expect("encode upgrade"),
             None,
         )
-        .expect_err("upgrade should fail for non-canic stable state");
+        .map_err(|err| err.to_string());
+    let upgrade_err = retry_install_code_err(&pic, upgrade_err, || {
+        pic.upgrade_canister(
+            authority_id,
+            canic_wasm.clone(),
+            encode_one(()).expect("encode upgrade"),
+            None,
+        )
+        .map_err(|err| err.to_string())
+    })
+    .expect_err("upgrade should fail for non-canic stable state");
 
     assert_phase_error("post_upgrade", &upgrade_err);
 }
@@ -172,6 +208,64 @@ fn assert_phase_error(phase: &str, err: &impl ToString) {
         !message.contains("Internal"),
         "unexpected internal error: {message}"
     );
+}
+
+fn wait_out_install_code_rate_limit(pic: &canic_testkit::pic::Pic) {
+    pic.advance_time(INSTALL_CODE_COOLDOWN);
+    pic.tick_n(2);
+}
+
+fn retry_install_code_ok<T, F>(pic: &canic_testkit::pic::Pic, mut op: F) -> Result<T, String>
+where
+    F: FnMut() -> Result<T, String>,
+{
+    let mut last_err = None;
+
+    for _ in 0..INSTALL_CODE_RETRY_LIMIT {
+        match op() {
+            Ok(value) => return Ok(value),
+            Err(err) if is_install_code_rate_limited(&err) => {
+                last_err = Some(err);
+                wait_out_install_code_rate_limit(pic);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| "install_code retry loop exhausted".to_string()))
+}
+
+fn retry_install_code_err<F>(
+    pic: &canic_testkit::pic::Pic,
+    first: Result<(), String>,
+    mut op: F,
+) -> Result<(), String>
+where
+    F: FnMut() -> Result<(), String>,
+{
+    match first {
+        Ok(()) => return Ok(()),
+        Err(err) if !is_install_code_rate_limited(&err) => return Err(err),
+        Err(_) => {}
+    }
+
+    wait_out_install_code_rate_limit(pic);
+
+    for _ in 1..INSTALL_CODE_RETRY_LIMIT {
+        match op() {
+            Ok(()) => return Ok(()),
+            Err(err) if is_install_code_rate_limited(&err) => {
+                wait_out_install_code_rate_limit(pic);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    op()
+}
+
+fn is_install_code_rate_limited(message: &str) -> bool {
+    message.contains("CanisterInstallCodeRateLimited")
 }
 
 fn init_payload(canister_id: Principal) -> CanisterInitPayload {

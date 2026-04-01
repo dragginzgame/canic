@@ -12,7 +12,8 @@ pub use canic_core::protocol::{
     CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG,
     CANIC_WASM_STORE_CHUNK, CANIC_WASM_STORE_COMPLETE_GC, CANIC_WASM_STORE_INFO,
     CANIC_WASM_STORE_OVERVIEW, CANIC_WASM_STORE_PREPARE, CANIC_WASM_STORE_PREPARE_GC,
-    CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
+    CANIC_WASM_STORE_PUBLICATION_STATUS, CANIC_WASM_STORE_PUBLISH_CHUNK,
+    CANIC_WASM_STORE_RETIRED_STATUS, CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
 };
 
 pub const CANIC_APP: &str = "canic_app";
@@ -29,6 +30,7 @@ pub const CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN: &str = "canic_template_publish_chu
 pub const CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN: &str =
     "canic_template_publish_to_current_store_admin";
 pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";
+pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
 pub const CANIC_IC_CYCLES_ACCEPT: &str = "canic_ic_cycles_accept";
 pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";

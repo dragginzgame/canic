@@ -549,7 +549,15 @@ type Result_23 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_24 = variant { Ok : WasmStoreAdminResponse; Err : Error };
 type Result_25 = variant { Ok : WasmStoreBootstrapDebugResponse; Err : Error };
 type Result_26 = variant { Ok : WasmStoreOverviewResponse; Err : Error };
-type Result_27 = variant { Ok : CreateCanisterResponse; Err : Error };
+type Result_27 = variant {
+  Ok : WasmStorePublicationStatusResponse;
+  Err : Error;
+};
+type Result_28 = variant {
+  Ok : opt WasmStoreRetiredStoreStatusResponse;
+  Err : Error;
+};
+type Result_29 = variant { Ok : CreateCanisterResponse; Err : Error };
 type Result_3 = variant { Ok : AppStateResponse; Err : Error };
 type Result_4 = variant { Ok : AttestationKeySet; Err : Error };
 type Result_5 = variant { Ok : Page_1; Err : Error };
@@ -814,6 +822,62 @@ type WasmStorePublicationStateResponse = record {
   detached_binding : opt text;
 };
 // 
+// WasmStorePublicationStatusResponse
+// 
+type WasmStorePublicationStatusResponse = record {
+  stores : vec WasmStorePublicationStoreStatusResponse;
+  managed_release_count : nat32;
+  preferred_binding : opt text;
+  publication : WasmStorePublicationStateResponse;
+};
+// 
+// WasmStorePublicationStoreStatusResponse
+// 
+type WasmStorePublicationStoreStatusResponse = record {
+  pid : principal;
+  created_at : nat64;
+  exact_managed_release_count : nat32;
+  binding : text;
+  store : WasmStoreStatusResponse;
+  publication_candidate_order : opt nat32;
+  is_preferred_binding : bool;
+  conflicting_managed_release_count : nat32;
+  is_selectable_for_publication : bool;
+  is_reserved_for_publication : bool;
+  publication_slot : opt WasmStorePublicationSlotResponse;
+};
+// 
+// WasmStoreRetiredStoreStatusResponse
+// 
+type WasmStoreRetiredStoreStatusResponse = record {
+  retired_binding : text;
+  reclaimable_store_bytes : nat64;
+  generation : nat64;
+  store : WasmStoreStatusResponse;
+  retired_at : nat64;
+  gc_ready : bool;
+};
+// 
+// WasmStoreStatusResponse
+// 
+type WasmStoreStatusResponse = record {
+  gc : WasmStoreGcStatusResponse;
+  templates : vec WasmStoreTemplateStatusResponse;
+  occupied_store_bytes : nat64;
+  headroom_bytes : opt nat64;
+  remaining_store_bytes : nat64;
+  max_store_bytes : nat64;
+  max_template_versions_per_template : opt nat16;
+  max_templates : opt nat32;
+  within_headroom : bool;
+  remaining_store_size : text;
+  release_count : nat32;
+  headroom_size : opt text;
+  max_store_size : text;
+  occupied_store_size : text;
+  template_count : nat32;
+};
+// 
 // WasmStoreTemplateStatusResponse
 // 
 type WasmStoreTemplateStatusResponse = record {
@@ -867,9 +931,11 @@ service : (SubnetIdentity) -> {
       Result,
     );
   canic_wasm_store_overview : () -> (Result_26) query;
+  canic_wasm_store_publication_status : () -> (Result_27);
+  canic_wasm_store_retired_status : () -> (Result_28);
   // create_minimal
   // Controller-only helper for local Canic testing.
-  create_minimal : () -> (Result_27);
+  create_minimal : () -> (Result_29);
   icrc10_supported_standards : () -> (vec record { text; text }) query;
   // stress_perf
   // Synthetic CPU-heavy endpoint to validate perf instrumentation.

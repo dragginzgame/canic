@@ -274,6 +274,37 @@ pub struct WasmStoreRetiredStoreStatusResponse {
 }
 
 ///
+/// WasmStorePublicationStoreStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStorePublicationStoreStatusResponse {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+    pub publication_slot: Option<WasmStorePublicationSlotResponse>,
+    pub is_preferred_binding: bool,
+    pub is_reserved_for_publication: bool,
+    pub is_selectable_for_publication: bool,
+    pub publication_candidate_order: Option<u32>,
+    pub exact_managed_release_count: u32,
+    pub conflicting_managed_release_count: u32,
+    pub store: WasmStoreStatusResponse,
+}
+
+///
+/// WasmStorePublicationStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStorePublicationStatusResponse {
+    pub publication: WasmStorePublicationStateResponse,
+    pub preferred_binding: Option<WasmStoreBinding>,
+    pub managed_release_count: u32,
+    pub stores: Vec<WasmStorePublicationStoreStatusResponse>,
+}
+
+///
 /// WasmStoreFinalizedStoreResponse
 ///
 
