@@ -21,6 +21,7 @@ PUBLISH_ORDER=(
     canic-dsl-macros
     canic
     canic-wasm-store
+    canic-installer
     canic-testkit
 )
 

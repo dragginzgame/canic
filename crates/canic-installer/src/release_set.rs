@@ -43,12 +43,39 @@ pub struct ReleaseSetEntry {
     pub chunk_sha256_hex: Vec<String>,
 }
 
-// Resolve the workspace root from the internal helper crate location.
+// Resolve the downstream workspace root from the current working directory or
+// an explicit override.
 pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?;
-    Ok(workspace_root)
+    if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT") {
+        return Ok(PathBuf::from(path).canonicalize()?);
+    }
+
+    Ok(std::env::current_dir()?.canonicalize()?)
+}
+
+// Resolve the downstream Canic config path.
+#[must_use]
+pub fn config_path(workspace_root: &Path) -> PathBuf {
+    std::env::var_os("CANIC_CONFIG_PATH")
+        .map_or_else(|| workspace_root.join(ROOT_CONFIG_RELATIVE), PathBuf::from)
+}
+
+// Resolve the downstream root canister manifest path.
+#[must_use]
+pub fn root_manifest_path(workspace_root: &Path) -> PathBuf {
+    std::env::var_os("CANIC_ROOT_MANIFEST_PATH").map_or_else(
+        || workspace_root.join(ROOT_MANIFEST_RELATIVE),
+        PathBuf::from,
+    )
+}
+
+// Resolve the downstream workspace manifest path.
+#[must_use]
+pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
+    std::env::var_os("CANIC_WORKSPACE_MANIFEST_PATH").map_or_else(
+        || workspace_root.join(WORKSPACE_MANIFEST_RELATIVE),
+        PathBuf::from,
+    )
 }
 
 // Prefer the selected DFX network artifact root and fall back to local when present.
@@ -95,11 +122,11 @@ pub fn emit_root_release_set_manifest(
     network: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let artifact_root = resolve_artifact_root(workspace_root, network)?;
-    let config_path = workspace_root.join(ROOT_CONFIG_RELATIVE);
+    let config_path = config_path(workspace_root);
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
     let release_version = load_root_package_version(
-        &workspace_root.join(ROOT_MANIFEST_RELATIVE),
-        &workspace_root.join(WORKSPACE_MANIFEST_RELATIVE),
+        &root_manifest_path(workspace_root),
+        &workspace_manifest_path(workspace_root),
     )?;
     let entries = configured_release_roles(&config_path)?
         .into_iter()
@@ -127,18 +154,51 @@ pub fn configured_release_roles(
     config_path: &Path,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
-    let config = parse_config_model(&config_source)
-        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    configured_release_roles_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate the configured ordinary roles for the single subnet that owns `root`.
+fn configured_release_roles_from_source(
+    config_source: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
     let mut roles = BTreeSet::new();
+    let mut root_subnet_roles = None;
 
-    for subnet in config.subnets.values() {
-        for role in subnet.canisters.keys() {
-            if role.is_root() || role.is_wasm_store() {
-                continue;
-            }
-
-            roles.insert(role.as_str().to_string());
+    for (subnet_role, subnet) in &config.subnets {
+        if !subnet
+            .canisters
+            .keys()
+            .any(canic::ids::CanisterRole::is_root)
+        {
+            continue;
         }
+
+        if root_subnet_roles.is_some() {
+            return Err(format!(
+                "multiple subnets define a root canister; release-set staging requires exactly one root subnet (found at least '{subnet_role}')"
+            )
+            .into());
+        }
+
+        root_subnet_roles = Some(
+            subnet
+                .canisters
+                .keys()
+                .filter(|role| !role.is_root() && !role.is_wasm_store())
+                .map(|role| role.as_str().to_string())
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    let root_subnet_roles = root_subnet_roles.ok_or_else(|| {
+        "no subnet defines a root canister; release-set staging requires exactly one root subnet"
+            .to_string()
+    })?;
+
+    for role in root_subnet_roles {
+        roles.insert(role);
     }
 
     Ok(roles.into_iter().collect())
@@ -527,4 +587,109 @@ fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     }
 
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::configured_release_roles_from_source;
+    const REAL_CONFIG: &str = r#"
+controllers = []
+app_directory = ["user_hub", "scale_hub"]
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[auth.delegated_tokens]
+enabled = true
+ecdsa_key_name = "test_key_1"
+
+[standards]
+icrc21 = true
+
+[subnets.prime]
+auto_create = ["app", "user_hub", "scale_hub", "test"]
+subnet_directory = ["app", "user_hub", "scale_hub", "test"]
+pool.minimum_size = 3
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.user_shard.delegated_auth]
+signer = true
+verifier = true
+
+[subnets.prime.canisters.minimal]
+kind = "replica"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+topup_policy.threshold = "10T"
+topup_policy.amount = "4T"
+
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale"
+policy.min_workers = 2
+
+[subnets.prime.canisters.scale]
+kind = "replica"
+
+[subnets.prime.canisters.test]
+kind = "singleton"
+
+[subnets.prime.canisters.test.delegated_auth]
+verifier = true
+
+[subnets.general]
+
+[subnets.general.canisters.minimal]
+kind = "replica"
+"#;
+
+    #[test]
+    fn configured_release_roles_only_uses_root_subnet() {
+        let roles = configured_release_roles_from_source(REAL_CONFIG).unwrap();
+        assert_eq!(
+            roles,
+            vec![
+                "app".to_string(),
+                "minimal".to_string(),
+                "scale".to_string(),
+                "scale_hub".to_string(),
+                "test".to_string(),
+                "user_hub".to_string(),
+                "user_shard".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn configured_release_roles_rejects_multiple_root_subnets() {
+        let config = format!(
+            "{REAL_CONFIG}\n[subnets.backup]\n[subnets.backup.canisters.root]\nkind = \"root\"\n"
+        );
+
+        assert!(configured_release_roles_from_source(&config).is_err());
+    }
+
+    #[test]
+    fn configured_release_roles_rejects_missing_root_subnet() {
+        let config = REAL_CONFIG.replace("[subnets.prime.canisters.root]\nkind = \"root\"\n\n", "");
+
+        assert!(configured_release_roles_from_source(&config).is_err());
+    }
 }

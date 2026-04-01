@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.21.x] - 2026-04-01 - Implicit Wasm Store and Managed Release Fleet
 
+- `0.21.6` publishes `canic-installer` as the downstream thin-root installer surface, moves the manifest/staging binaries off workspace-private `canic-internal`, and hardens `root.release-set.json` so it only stages roles from the single subnet that actually owns `root`.
 - `0.21.4` keeps `root.wasm` thin again by embedding only the bootstrap `wasm_store`, moving ordinary release staging back out to a manifest-driven Rust installer flow in `canic-internal`, removing the hidden `wasm_store` leak from downstream `dfx.json`, and restoring a manual `scripts/app/dfx_start.sh` convenience script without reintroducing auto-started `dfx` into the normal test or install gates.
 - `0.21.3` hardens the managed `wasm_store` fleet again by adding root-facing live publication and retired-store status reads, proving the fixed-target and retire/finalize/delete flows under PocketIC, and making lifecycle-boundary tests resilient to PocketIC install throttling instead of failing on transient rate limits.
 - `0.21.2` hardens the managed `wasm_store` fleet follow-through by clarifying the root-owned approved-state overview surface and adding PocketIC runtime proofs that exact releases are reused while conflicting duplicate `template_id@version` publications fail closed without mutating fleet state.

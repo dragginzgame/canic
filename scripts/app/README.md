@@ -35,7 +35,7 @@ This one command:
 - builds the release artifacts
 - emits a build-produced root release-set manifest from the configured ordinary `.wasm.gz` artifacts
 - reinstalls `root` in `Prime` mode
-- stages the configured ordinary release set into `root` through the Rust helper in `canic-internal`
+- stages the configured ordinary release set into `root` through the published Rust helper in `canic-installer`
 - resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged release set
 - waits for `root` to report `READY`
 
@@ -66,4 +66,4 @@ dfx build --all
 embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
 and are staged after `root` install from the build-produced
 `.dfx/local/canisters/root/root.release-set.json` manifest by the Rust helpers
-in `canic-internal`.
+in `canic-installer`.

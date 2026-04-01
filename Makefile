@@ -156,7 +156,7 @@ test-packaged-downstream:
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-internal --bin install_reference_topology -- root
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-reference-topology -- root
 
 test: clippy test-unit
 

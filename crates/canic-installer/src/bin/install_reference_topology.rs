@@ -1,4 +1,4 @@
-use canic_internal::release_set::{
+use canic_installer::release_set::{
     dfx_call, emit_root_release_set_manifest, load_root_release_set_manifest,
     resolve_artifact_root, resume_root_bootstrap, root_release_set_manifest_path,
     stage_root_release_set, workspace_root,
