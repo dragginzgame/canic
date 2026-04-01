@@ -33,6 +33,7 @@ make demo-install
 This one command:
 - creates the reference canisters in `dfx`
 - builds the release artifacts
+- emits a build-produced root release-set manifest from the configured ordinary `.wasm.gz` artifacts
 - reinstalls `root` in `Prime` mode
 - stages the configured ordinary release set into `root` through the Rust helper in `canic-internal`
 - resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged release set
@@ -51,7 +52,7 @@ dfx build --all
 
 `dfx.json` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
 - builds the Rust canister crate for `wasm32-unknown-unknown`
-- resolves `wasm_store` from the canonical `canic-wasm-store` package instead of a local `canisters/wasm_store` crate
+- keeps `wasm_store` out of downstream `dfx.json` and resolves it internally from the canonical `canic-wasm-store` package instead of a local `canisters/wasm_store` crate
 - discovers the matching `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
@@ -63,5 +64,6 @@ dfx build --all
 
 `root.wasm` stays thin again. Only the bootstrap `wasm_store.wasm.gz` is
 embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
-and are staged after `root` install by the Rust helper binary
-`canic-internal::stage_root_release_set`.
+and are staged after `root` install from the build-produced
+`.dfx/local/canisters/root/root.release-set.json` manifest by the Rust helpers
+in `canic-internal`.
