@@ -41,6 +41,49 @@ pub fn stage_manifest(input: TemplateManifestInput) {
     TemplateManifestOps::replace_approved_from_input(input);
 }
 
+// Publish one embedded root release entry into the root-local approved release buffer.
+fn stage_embedded_root_release_entry(
+    role: CanisterRole,
+    template_id: TemplateId,
+    version: &TemplateVersion,
+    wasm_module: &'static [u8],
+    now_secs: u64,
+) -> Result<(), Error> {
+    let payload_hash = get_wasm_hash(wasm_module);
+    let payload_size_bytes = wasm_module.len() as u64;
+    let chunks = wasm_module
+        .chunks(ROOT_RELEASE_CHUNK_BYTES)
+        .map(<[u8]>::to_vec)
+        .collect::<Vec<_>>();
+
+    TemplateChunkedOps::publish_chunk_set_from_input(
+        TemplateChunkSetInput {
+            template_id: template_id.clone(),
+            version: version.clone(),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes,
+            chunks,
+        },
+        now_secs,
+    )
+    .map_err(Error::from)?;
+
+    TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
+        template_id,
+        role,
+        version: version.clone(),
+        payload_hash,
+        payload_size_bytes,
+        store_binding: WasmStoreBinding::new("bootstrap"),
+        chunking_mode: TemplateChunkingMode::Chunked,
+        manifest_state: TemplateManifestState::Approved,
+        approved_at: Some(now_secs),
+        created_at: now_secs,
+    });
+
+    Ok(())
+}
+
 /// Seed the root-local ordinary release buffer from one embedded build-time bundle.
 pub fn seed_embedded_root_release_bundle(
     entries: &'static [EmbeddedRootReleaseEntry],
@@ -54,38 +97,43 @@ pub fn seed_embedded_root_release_bundle(
     for entry in entries {
         let role = CanisterRole::new(entry.role);
         let template_id = TemplateId::owned(format!("embedded:{role}"));
-        let payload_hash = get_wasm_hash(entry.wasm_module);
-        let payload_size_bytes = entry.wasm_module.len() as u64;
-        let chunks = entry
-            .wasm_module
-            .chunks(ROOT_RELEASE_CHUNK_BYTES)
-            .map(<[u8]>::to_vec)
-            .collect::<Vec<_>>();
-
-        TemplateChunkedOps::publish_chunk_set_from_input(
-            TemplateChunkSetInput {
-                template_id: template_id.clone(),
-                version: version.clone(),
-                payload_hash: payload_hash.clone(),
-                payload_size_bytes,
-                chunks,
-            },
-            now_secs,
-        )
-        .map_err(Error::from)?;
-
-        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
-            template_id,
+        stage_embedded_root_release_entry(
             role,
-            version: version.clone(),
-            payload_hash,
-            payload_size_bytes,
-            store_binding: WasmStoreBinding::new("bootstrap"),
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: Some(now_secs),
-            created_at: now_secs,
-        });
+            template_id,
+            &version,
+            entry.wasm_module,
+            now_secs,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Preserve existing publishable approved releases and only backfill missing embedded roles.
+pub fn ensure_embedded_root_release_bundle(
+    entries: &'static [EmbeddedRootReleaseEntry],
+    version: &str,
+) -> Result<(), Error> {
+    let now_secs = now_secs();
+    let version = TemplateVersion::owned(version.to_string());
+
+    for entry in entries {
+        let role = CanisterRole::new(entry.role);
+
+        if TemplateChunkedOps::has_publishable_chunked_approved_for_role(&role)
+            .map_err(Error::from)?
+        {
+            continue;
+        }
+
+        let template_id = TemplateId::owned(format!("embedded:{role}"));
+        stage_embedded_root_release_entry(
+            role,
+            template_id,
+            &version,
+            entry.wasm_module,
+            now_secs,
+        )?;
     }
 
     Ok(())
@@ -166,7 +214,7 @@ pub fn retire_detached_publication_store_binding() -> Option<WasmStoreBinding> {
     WasmStorePublicationWorkflow::retire_detached_publication_store_binding()
 }
 
-/// Return the current root-owned overview for every tracked runtime-managed wasm store.
+/// Return the current root-owned approved-release overview for every tracked runtime-managed wasm store.
 #[must_use]
 pub fn publication_overview() -> WasmStoreOverviewResponse {
     let store = config::current_subnet_default_wasm_store();

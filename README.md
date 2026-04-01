@@ -57,7 +57,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
-* `crates/canic-wasm-store/` – canonical publishable `wasm_store` canister crate used for the implicit bootstrap store artifact.
+* `crates/canic-wasm-store/` – canonical publishable `wasm_store` canister crate used for the implicit bootstrap store artifact; downstream build helpers can also synthesize the same hidden wrapper directly from `canic` when they only depend on the facade crate.
 * `canisters/` – reference canisters that exercise the library end to end:
 
   * `root/` orchestrator tying together shards, scaling, pool flows, and the implicit bootstrap `wasm_store`.

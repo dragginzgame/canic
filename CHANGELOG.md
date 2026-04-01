@@ -5,9 +5,25 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.21.x] - 2026-04-01 - Implicit Wasm Store and Managed Release Fleet
+
+- `0.21.0` starts the new managed release-fleet line: `root` now owns the implicit `wasm_store` bootstrap, embeds the build-produced `.wasm.gz` bootstrap and ordinary release artifacts, manages a tracked multi-store fleet with exact-release reuse and post-upgrade reconcile, and lets downstreams build through `canic` without carrying a local `wasm_store` crate or a manual bootstrap script.
+
+```toml
+canic = { version = "0.21.0", features = ["control-plane"] }
+```
+
+See detailed breakdown:
+[docs/changelog/0.21.md](docs/changelog/0.21.md)
+
+---
+
 ## [0.20.x] - 2026-03-31 - Cleanup and Optimization
 
-- `0.20.8` publishes the canonical `canic-wasm-store` crate so downstreams can stop carrying a local `wasm_store` canister crate, and switches the embedded ordinary root release bundle to `.wasm.gz` payloads so large topologies stop overflowing the live store on raw wasm bytes alone.
+- `0.20.10` turns root publication into a real `wasm_store` fleet manager: it now places releases from the full approved manifest set across the tracked store inventory, reuses exact existing releases instead of duplicating them, creates fresh stores proactively when no current store can accept a release, and stops assuming the current release set lives in one default store.
+- `0.20.10` also hardens the fleet follow-through: root post-upgrade now reconciles approved manifests against the exact current release bytes instead of conflicting on older copies in older stores, the root store overview now clearly reports approved-release projections instead of pretending to know live occupancy, ordinary embedded release bundles are gzip-only, and the hidden `wasm_store` build path can synthesize its own wrapper so downstreams do not need to carry extra `wasm_store` config or source.
+- `0.20.9` makes root publication multi-store aware by retrying individual releases on a newly promoted `wasm_store` when the current one runs out of capacity, and keeps later installs aligned by importing the catalog from the active publication store instead of assuming the configured default binding always won.
+- `0.20.8` publishes the canonical `canic-wasm-store` crate so downstreams can stop carrying a local `wasm_store` canister crate, switches the embedded ordinary root release bundle to `.wasm.gz` payloads, and lets root roll publication across additional `wasm_store` canisters when one store cannot fit the whole bootstrap release set.
 - `0.20.6` hardens the embedded `wasm_store` bootstrap contract by rejecting empty or non-wasm `.wasm.gz` artifacts during the root build itself, and expands the bootstrap provenance log to include both the original DFX source path and the copied embedded path so downstream artifact bugs fail early and read clearly.
 - `0.20.5` fixes the embedded `wasm_store` bootstrap source so `root` now installs the current DFX-built `.wasm.gz` artifact instead of drifting back to a stale checked-in payload, and logs the exact embedded bootstrap provenance during root init so bootstrap mismatches are visible immediately.
 - `0.20.4` makes ordinary child-role publication an internal root bootstrap detail by embedding the release bundle into `root` during the normal `dfx build --all` flow, so reinstalling `root` is sufficient again in local deployments and the old external release-staging scripts are gone.

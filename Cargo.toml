@@ -62,7 +62,9 @@ convert_case = "0.11"
 criterion = "0.8"
 ctor = "0.8"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
-flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "1.1", default-features = false, features = [
+    "rust_backend",
+] }
 futures = "0.3"
 ic-cdk = "0.20.0"
 ic-cdk-management-canister = "0.1.0"

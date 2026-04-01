@@ -2,7 +2,6 @@ use crate::ids::CanisterRole;
 use serde::{Deserialize, Serialize};
 
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
-const IMPLICIT_WASM_STORE_MAX_STORE_BYTES: u64 = 40_000_000;
 const IMPLICIT_WASM_STORE_HEADROOM_BYTES: u64 = 4_000_000;
 
 ///
@@ -21,11 +20,11 @@ pub struct WasmStoreConfig {
 impl WasmStoreConfig {
     /// Build the one implicit wasm-store preset used on every subnet.
     #[must_use]
-    pub const fn implicit() -> Self {
+    pub fn implicit() -> Self {
         Self {
             canister_role: IMPLICIT_WASM_STORE_ROLE,
             policy: WasmStorePolicy {
-                max_store_bytes: IMPLICIT_WASM_STORE_MAX_STORE_BYTES,
+                max_store_bytes: implicit_wasm_store_max_store_bytes(),
                 headroom_bytes: Some(IMPLICIT_WASM_STORE_HEADROOM_BYTES),
                 max_templates: None,
                 max_template_versions_per_template: None,
@@ -56,6 +55,13 @@ impl WasmStoreConfig {
     pub const fn max_template_versions_per_template(&self) -> Option<u16> {
         self.policy.max_template_versions_per_template
     }
+}
+
+// Resolve the implicit store capacity selected at compile time for this build.
+fn implicit_wasm_store_max_store_bytes() -> u64 {
+    env!("CANIC_IMPLICIT_WASM_STORE_MAX_STORE_BYTES")
+        .parse::<u64>()
+        .expect("CANIC_IMPLICIT_WASM_STORE_MAX_STORE_BYTES must be a valid u64")
 }
 
 ///
