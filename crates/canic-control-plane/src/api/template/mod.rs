@@ -14,12 +14,8 @@ use crate::{
     support::{self, WasmStoreGcExecutionStats},
 };
 use canic_core::{
-    api::runtime::install::ModuleSourceRuntimeApi,
-    bootstrap::{EmbeddedRootBootstrapEntry, EmbeddedRootReleaseEntry},
-    cdk::types::Principal,
-    dto::error::Error,
-    log,
-    log::Topic,
+    api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootBootstrapEntry,
+    cdk::types::Principal, dto::error::Error, log, log::Topic,
 };
 
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
@@ -138,22 +134,6 @@ impl WasmStoreBootstrapApi {
     // Stage one approved manifest in the current canister's local bootstrap source.
     pub fn stage_manifest(input: TemplateManifestInput) {
         support::stage_manifest(input);
-    }
-
-    // Seed the root-local ordinary release buffer from one embedded build-time bundle.
-    pub fn seed_embedded_root_release_bundle(
-        entries: &'static [EmbeddedRootReleaseEntry],
-        version: &str,
-    ) -> Result<(), Error> {
-        support::seed_embedded_root_release_bundle(entries, version)
-    }
-
-    // Preserve current approved releases and only seed missing embedded roles after upgrade.
-    pub fn ensure_embedded_root_release_bundle(
-        entries: &'static [EmbeddedRootReleaseEntry],
-        version: &str,
-    ) -> Result<(), Error> {
-        support::ensure_embedded_root_release_bundle(entries, version)
     }
 
     // Prepare one local chunk set for chunk-by-chunk staging in the current canister.

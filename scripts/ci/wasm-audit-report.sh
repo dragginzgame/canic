@@ -568,7 +568,7 @@ EOF
     for canister in "${CANISTERS[@]}"; do
         local reason="largest retained symbol from raw-built twiggy analysis"
         if [ "$canister" = "root" ]; then
-            reason="bundle-canister outlier; embeds child .wasm.gz artifacts and must not be compared directly to leaf peers"
+            reason="control-plane outlier; embeds only the bootstrap wasm_store artifact and should not be compared directly to leaf peers"
         elif [ "$canister" = "minimal" ]; then
             reason="shared-runtime floor; use this to judge workspace baseline pressure"
         fi
@@ -590,7 +590,7 @@ EOF
 ## Dependency Fan-In Pressure
 
 - \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
-- \`root\` is always interpreted as a bundle canister because it embeds child \`.wasm.gz\` artifacts during build.
+- \`root\` is always interpreted as a control-plane outlier because it still carries the root runtime plus the bootstrap \`wasm_store.wasm.gz\` artifact during build.
 - Large retained hotspots that repeat across many per-canister Twiggy reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
 
 ## Early Warning Signals
@@ -598,7 +598,7 @@ EOF
 | Signal | Status | Evidence |
 | --- | --- | --- |
 | Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
-| Root bundle outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
+| Root control-plane outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
 | Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
 
 ## Per-Canister Snapshot

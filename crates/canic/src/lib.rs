@@ -34,7 +34,6 @@ pub mod __internal {
 #[doc(hidden)]
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub mod __build {
-    pub use crate::build_support::emit_root_release_bundle;
     pub use crate::build_support::emit_root_wasm_store_bootstrap_release_set;
 }
 

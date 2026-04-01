@@ -11,7 +11,11 @@ categories = { workspace = true }
 publish = false
 
 [dependencies]
+canic = { workspace = true }
 canic-core = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true

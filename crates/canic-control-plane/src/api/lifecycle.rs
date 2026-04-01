@@ -1,5 +1,5 @@
 use canic_core::{
-    bootstrap::{EmbeddedRootBootstrapEntry, EmbeddedRootReleaseEntry, compiled::ConfigModel},
+    bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
     dto::subnet::SubnetIdentity,
 };
 use std::time::Duration;
@@ -18,8 +18,6 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
         embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
-        embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
-        embedded_release_version: &str,
     ) {
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
@@ -34,11 +32,6 @@ impl LifecycleApi {
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
-        crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
-            embedded_release_bundle,
-            embedded_release_version,
-        )
-        .expect("seed embedded root release bundle");
     }
 
     /// Delegate root init-time bootstrap scheduling to the current core implementation.
@@ -58,8 +51,6 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
         embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
-        embedded_release_bundle: &'static [EmbeddedRootReleaseEntry],
-        embedded_release_version: &str,
     ) {
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
@@ -73,11 +64,6 @@ impl LifecycleApi {
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
-        crate::api::template::WasmStoreBootstrapApi::ensure_embedded_root_release_bundle(
-            embedded_release_bundle,
-            embedded_release_version,
-        )
-        .expect("preserve embedded root release bundle");
     }
 
     /// Delegate root post-upgrade bootstrap scheduling to the current core implementation.

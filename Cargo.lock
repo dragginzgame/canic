@@ -301,7 +301,11 @@ dependencies = [
 name = "canic-internal"
 version = "0.21.3"
 dependencies = [
+ "canic",
  "canic-core",
+ "serde_json",
+ "sha2 0.11.0",
+ "toml",
 ]
 
 [[package]]

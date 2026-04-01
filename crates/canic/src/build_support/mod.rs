@@ -1,4 +1,3 @@
-use canic_core::bootstrap::compiled::ConfigModel;
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::{
@@ -9,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const ROOT_RELEASE_ASSET_DIR: &str = "embedded_root_release_bundle";
 const ROOT_WASM_STORE_BOOTSTRAP_ROLE: &str = "wasm_store";
 const ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_FILE: &str =
     "canic.root-wasm-store-bootstrap-release-set.rs";
@@ -102,71 +100,6 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     true
 }
 
-#[must_use]
-pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> bool {
-    let manifest_dir = PathBuf::from(
-        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set for root build"),
-    );
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set for root build"));
-    let workspace_root = discover_workspace_root(&manifest_dir);
-    let artifact_root = discover_release_artifact_root(&workspace_root);
-    let asset_dir = out_dir.join(ROOT_RELEASE_ASSET_DIR);
-    let strict_artifacts =
-        env::var("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_ok_and(|value| value == "1");
-
-    fs::create_dir_all(&asset_dir).expect("create embedded root release asset dir");
-
-    println!("cargo:rerun-if-changed={}", workspace_root.display());
-    println!("cargo:rerun-if-changed={}", config_path.display());
-    println!("cargo:rerun-if-changed={}", artifact_root.display());
-    println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS");
-
-    let mut built_entries = Vec::new();
-
-    for role_name in configured_release_roles(config) {
-        let artifact_path = resolve_release_wasm_path(&artifact_root, &role_name);
-        if !artifact_path.is_file() {
-            assert!(
-                !strict_artifacts,
-                "root release bundle requires the build-produced gzip artifact for role '{role_name}' at {}; build the child canisters through the normal DFX/custom build path first",
-                artifact_root
-                    .join(&role_name)
-                    .join(format!("{role_name}.wasm.gz"))
-                    .display()
-            );
-            println!(
-                "cargo:warning=canic root bundle skipped role '{role_name}': missing built artifact at {}; build dependencies first if this role should bootstrap automatically",
-                artifact_path.display()
-            );
-            continue;
-        }
-
-        let out_wasm = asset_dir.join(format!("{role_name}.wasm.gz"));
-        fs::copy(&artifact_path, &out_wasm).unwrap_or_else(|err| {
-            panic!(
-                "copy embedded release wasm for role '{role_name}' from {} to {} failed: {err}",
-                artifact_path.display(),
-                out_wasm.display()
-            )
-        });
-        built_entries.push((role_name, out_wasm));
-    }
-
-    let generated = render_root_release_bundle_source(&built_entries);
-    let generated_path = out_dir.join("canic.root-release-bundle.rs");
-    fs::write(&generated_path, generated).expect("write embedded root release bundle source");
-
-    let generated_abs = generated_path
-        .canonicalize()
-        .expect("canonicalize embedded root release bundle source path");
-    println!(
-        "cargo:rustc-env=CANIC_ROOT_RELEASE_BUNDLE_PATH={}",
-        generated_abs.display()
-    );
-    println!("cargo:rerun-if-changed={}", generated_abs.display());
-    true
-}
-
 fn discover_workspace_root(manifest_dir: &Path) -> PathBuf {
     for candidate in manifest_dir.ancestors() {
         let cargo_toml = candidate.join("Cargo.toml");
@@ -201,48 +134,6 @@ fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
     }
 
     network_root
-}
-
-fn configured_release_roles(config: &ConfigModel) -> Vec<String> {
-    let mut roles = Vec::new();
-
-    for subnet in config.subnets.values() {
-        for role in subnet.canisters.keys() {
-            if role.is_root() || role.is_wasm_store() {
-                continue;
-            }
-
-            let role_name = role.as_str().to_string();
-            if !roles.iter().any(|existing| existing == &role_name) {
-                roles.push(role_name);
-            }
-        }
-    }
-
-    roles.sort();
-    roles
-}
-
-fn resolve_release_wasm_path(artifact_root: &Path, role_name: &str) -> PathBuf {
-    artifact_root
-        .join(role_name)
-        .join(format!("{role_name}.wasm.gz"))
-}
-
-fn render_root_release_bundle_source(entries: &[(String, PathBuf)]) -> String {
-    let mut rendered = String::from("&[\n");
-
-    for (role_name, wasm_path) in entries {
-        let path = wasm_path.to_string_lossy();
-        rendered.push_str("    canic::__internal::core::bootstrap::EmbeddedRootReleaseEntry {\n");
-        let _ = writeln!(rendered, "        role: {role_name:?},");
-        let _ = writeln!(rendered, "        wasm_module: include_bytes!({path:?}),");
-        rendered.push_str("    },\n");
-    }
-
-    rendered.push(']');
-    rendered.push('\n');
-    rendered
 }
 
 fn render_root_wasm_store_bootstrap_release_set_source(

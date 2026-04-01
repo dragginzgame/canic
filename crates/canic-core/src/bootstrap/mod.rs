@@ -20,17 +20,6 @@ pub mod compiled {
     };
 }
 
-///
-/// EmbeddedRootReleaseEntry
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct EmbeddedRootReleaseEntry {
-    pub role: &'static str,
-    pub wasm_module: &'static [u8],
-}
-
-///
 /// EmbeddedRootBootstrapEntry
 ///
 
