@@ -1,0 +1,530 @@
+use canic::protocol;
+use canic_core::bootstrap::parse_config_model;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeSet,
+    fmt::Write,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+const ROOT_CONFIG_RELATIVE: &str = "canisters/canic.toml";
+const ROOT_MANIFEST_RELATIVE: &str = "canisters/root/Cargo.toml";
+const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
+pub const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
+pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
+
+///
+/// RootReleaseSetManifest
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootReleaseSetManifest {
+    pub release_version: String,
+    pub entries: Vec<ReleaseSetEntry>,
+}
+
+///
+/// ReleaseSetEntry
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReleaseSetEntry {
+    pub role: String,
+    pub template_id: String,
+    pub artifact_relative_path: String,
+    pub payload_size_bytes: u64,
+    pub payload_sha256_hex: String,
+    pub chunk_size_bytes: u64,
+    pub chunk_sha256_hex: Vec<String>,
+}
+
+// Resolve the workspace root from the internal helper crate location.
+pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    Ok(workspace_root)
+}
+
+// Prefer the selected DFX network artifact root and fall back to local when present.
+pub fn resolve_artifact_root(
+    workspace_root: &Path,
+    network: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let preferred = workspace_root.join(".dfx").join(network).join("canisters");
+    if preferred.is_dir() {
+        return Ok(preferred);
+    }
+
+    let fallback = workspace_root.join(".dfx/local/canisters");
+    if fallback.is_dir() {
+        return Ok(fallback);
+    }
+
+    Err(format!(
+        "missing built DFX artifacts under {} or {}",
+        preferred.display(),
+        fallback.display()
+    )
+    .into())
+}
+
+// Return the canonical manifest path for the staged root release set.
+pub fn root_release_set_manifest_path(
+    artifact_root: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let manifest_path = artifact_root
+        .join("root")
+        .join(ROOT_RELEASE_SET_MANIFEST_FILE);
+
+    if let Some(parent) = manifest_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    Ok(manifest_path)
+}
+
+// Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
+pub fn emit_root_release_set_manifest(
+    workspace_root: &Path,
+    network: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(workspace_root, network)?;
+    let config_path = workspace_root.join(ROOT_CONFIG_RELATIVE);
+    let manifest_path = root_release_set_manifest_path(&artifact_root)?;
+    let release_version = load_root_package_version(
+        &workspace_root.join(ROOT_MANIFEST_RELATIVE),
+        &workspace_root.join(WORKSPACE_MANIFEST_RELATIVE),
+    )?;
+    let entries = configured_release_roles(&config_path)?
+        .into_iter()
+        .map(|role_name| build_release_set_entry(workspace_root, &artifact_root, &role_name))
+        .collect::<Result<Vec<_>, _>>()?;
+    let manifest = RootReleaseSetManifest {
+        release_version,
+        entries,
+    };
+
+    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
+    Ok(manifest_path)
+}
+
+// Load one previously emitted root release-set manifest from disk.
+pub fn load_root_release_set_manifest(
+    manifest_path: &Path,
+) -> Result<RootReleaseSetManifest, Box<dyn std::error::Error>> {
+    let source = fs::read(manifest_path)?;
+    Ok(serde_json::from_slice(&source)?)
+}
+
+// Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
+pub fn configured_release_roles(
+    config_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    let config = parse_config_model(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    let mut roles = BTreeSet::new();
+
+    for subnet in config.subnets.values() {
+        for role in subnet.canisters.keys() {
+            if role.is_root() || role.is_wasm_store() {
+                continue;
+            }
+
+            roles.insert(role.as_str().to_string());
+        }
+    }
+
+    Ok(roles.into_iter().collect())
+}
+
+// Read the reference root canister version so staged release versions match the install.
+pub fn load_root_package_version(
+    root_manifest_path: &Path,
+    workspace_manifest_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let manifest_source = fs::read_to_string(root_manifest_path)?;
+    let manifest = toml::from_str::<Value>(&manifest_source)?;
+    let version_value = manifest
+        .get("package")
+        .and_then(Value::as_object)
+        .and_then(|package| package.get("version"))
+        .ok_or_else(|| {
+            format!(
+                "missing package.version in {}",
+                root_manifest_path.display()
+            )
+        })?;
+
+    if let Some(version) = version_value.as_str() {
+        return Ok(version.to_string());
+    }
+
+    if version_value
+        .as_object()
+        .and_then(|value| value.get("workspace"))
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        return load_workspace_package_version(workspace_manifest_path);
+    }
+
+    Err(format!(
+        "unsupported package.version format in {}",
+        root_manifest_path.display()
+    )
+    .into())
+}
+
+// Resolve the shared workspace package version used by reference canisters.
+pub fn load_workspace_package_version(
+    workspace_manifest_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let manifest_source = fs::read_to_string(workspace_manifest_path)?;
+    let manifest = toml::from_str::<Value>(&manifest_source)?;
+    let version = manifest
+        .get("workspace")
+        .and_then(Value::as_object)
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(Value::as_object)
+        .and_then(|package| package.get("version"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            format!(
+                "missing workspace.package.version in {}",
+                workspace_manifest_path.display()
+            )
+        })?;
+
+    Ok(version.to_string())
+}
+
+// Read the current root time so staged manifests use replica timestamps.
+pub fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    let payload = dfx_call(root_canister, protocol::CANIC_TIME, None, Some("json"))?;
+    let data = serde_json::from_str::<Value>(&payload)?;
+    let now_nanos = data
+        .get("Ok")
+        .and_then(json_u64)
+        .ok_or_else(|| format!("unexpected canic_time response: {payload}"))?;
+
+    Ok(now_nanos / 1_000_000_000)
+}
+
+// Stage one emitted release-set manifest into root and resume bootstrap-ready state.
+pub fn stage_root_release_set(
+    workspace_root: &Path,
+    root_canister: &str,
+    manifest: &RootReleaseSetManifest,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let now_secs = root_time_secs(root_canister)?;
+
+    for entry in &manifest.entries {
+        stage_release_entry(
+            workspace_root,
+            root_canister,
+            &manifest.release_version,
+            entry,
+            now_secs,
+        )?;
+    }
+
+    Ok(())
+}
+
+// Trigger root bootstrap resume after the ordinary release set is fully staged.
+pub fn resume_root_bootstrap(root_canister: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let _ = dfx_call(
+        root_canister,
+        protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
+        None,
+        None,
+    )?;
+    Ok(())
+}
+
+// Run one `dfx canister call` and return stdout, preserving stderr on failure.
+pub fn dfx_call(
+    canister: &str,
+    method: &str,
+    argument: Option<&str>,
+    output: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut command = Command::new("dfx");
+    command.args(["canister", "call", canister, method]);
+
+    if let Some(output) = output {
+        command.args(["--output", output]);
+    }
+
+    let temp_argument_path = argument.map(write_argument_file).transpose()?;
+    if let Some(path) = temp_argument_path.as_ref() {
+        command.arg("--argument-file").arg(path);
+    }
+
+    let result = command.output()?;
+
+    if let Some(path) = temp_argument_path {
+        let _ = fs::remove_file(path);
+    }
+
+    if !result.status.success() {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        return Err(format!(
+            "dfx canister call {} {} failed: {}\n{}",
+            canister,
+            method,
+            result.status,
+            if stderr.trim().is_empty() {
+                stdout.trim()
+            } else {
+                stderr.trim()
+            }
+        )
+        .into());
+    }
+
+    let stdout = String::from_utf8(result.stdout)?;
+    Ok(stdout)
+}
+
+// Compute the canonical SHA-256 hash used by the template staging APIs.
+#[must_use]
+pub fn wasm_hash(bytes: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher.finalize().to_vec()
+}
+
+// Compute the canonical SHA-256 hash and render it as lowercase hex.
+#[must_use]
+pub fn wasm_hash_hex(bytes: &[u8]) -> String {
+    hex_bytes(&wasm_hash(bytes))
+}
+
+// Encode one string as a Candid text literal.
+#[must_use]
+pub fn idl_text(value: &str) -> String {
+    serde_json::to_string(value).expect("string literal encoding must succeed")
+}
+
+// Encode one blob as a Candid text blob literal.
+#[must_use]
+pub fn idl_blob(bytes: &[u8]) -> String {
+    let mut encoded = String::from("blob \"");
+
+    for byte in bytes {
+        let _ = write!(encoded, "\\{byte:02X}");
+    }
+
+    encoded.push('"');
+    encoded
+}
+
+// Decode a JSON nat that may be emitted as either a number or a string.
+#[must_use]
+pub fn json_u64(value: &Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|raw| raw.parse::<u64>().ok()))
+}
+
+// Build one release-set entry from one built ordinary role artifact.
+fn build_release_set_entry(
+    workspace_root: &Path,
+    artifact_root: &Path,
+    role_name: &str,
+) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
+    let artifact_path = artifact_root
+        .join(role_name)
+        .join(format!("{role_name}.wasm.gz"));
+    let artifact_relative_path = artifact_path
+        .strip_prefix(workspace_root)
+        .map_err(|_| {
+            format!(
+                "artifact {} is not under workspace root {}",
+                artifact_path.display(),
+                workspace_root.display()
+            )
+        })?
+        .to_string_lossy()
+        .to_string();
+    let wasm_module = fs::read(&artifact_path)?;
+
+    if wasm_module.is_empty() {
+        return Err(format!("release artifact is empty: {}", artifact_path.display()).into());
+    }
+
+    let chunk_hashes = wasm_module
+        .chunks(ROOT_RELEASE_CHUNK_BYTES)
+        .map(wasm_hash_hex)
+        .collect::<Vec<_>>();
+
+    Ok(ReleaseSetEntry {
+        role: role_name.to_string(),
+        template_id: format!("embedded:{role_name}"),
+        artifact_relative_path,
+        payload_size_bytes: wasm_module.len() as u64,
+        payload_sha256_hex: wasm_hash_hex(&wasm_module),
+        chunk_size_bytes: ROOT_RELEASE_CHUNK_BYTES as u64,
+        chunk_sha256_hex: chunk_hashes,
+    })
+}
+
+// Stage one manifest, prepare its chunk set, and publish all chunk bytes into root.
+fn stage_release_entry(
+    workspace_root: &Path,
+    root_canister: &str,
+    release_version: &str,
+    entry: &ReleaseSetEntry,
+    now_secs: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let artifact_path = workspace_root.join(&entry.artifact_relative_path);
+    let wasm_module = fs::read(&artifact_path)?;
+
+    if wasm_module.len() as u64 != entry.payload_size_bytes {
+        return Err(format!(
+            "release artifact size drift for {}: manifest={} actual={} ({})",
+            entry.role,
+            entry.payload_size_bytes,
+            wasm_module.len(),
+            artifact_path.display()
+        )
+        .into());
+    }
+
+    let payload_hash = wasm_hash(&wasm_module);
+    let payload_hash_hex = hex_bytes(&payload_hash);
+    if payload_hash_hex != entry.payload_sha256_hex {
+        return Err(format!(
+            "release artifact hash drift for {}: manifest={} actual={} ({})",
+            entry.role,
+            entry.payload_sha256_hex,
+            payload_hash_hex,
+            artifact_path.display()
+        )
+        .into());
+    }
+
+    let chunks = wasm_module
+        .chunks(ROOT_RELEASE_CHUNK_BYTES)
+        .map(<[u8]>::to_vec)
+        .collect::<Vec<_>>();
+    let chunk_hashes = chunks
+        .iter()
+        .map(|chunk| wasm_hash_hex(chunk))
+        .collect::<Vec<_>>();
+
+    if chunk_hashes != entry.chunk_sha256_hex {
+        return Err(format!(
+            "release chunk hash drift for {} ({})",
+            entry.role,
+            artifact_path.display()
+        )
+        .into());
+    }
+
+    let manifest = format!(
+        "(record {{ template_id = {}; role = {}; version = {}; payload_hash = {}; \
+         payload_size_bytes = {} : nat64; store_binding = \"bootstrap\"; \
+         chunking_mode = variant {{ Chunked }}; manifest_state = variant {{ Approved }}; \
+         approved_at = opt ({} : nat64); created_at = {} : nat64 }})",
+        idl_text(&entry.template_id),
+        idl_text(&entry.role),
+        idl_text(release_version),
+        idl_blob(&payload_hash),
+        wasm_module.len(),
+        now_secs,
+        now_secs,
+    );
+    let _ = dfx_call(
+        root_canister,
+        protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+        Some(&manifest),
+        None,
+    )?;
+
+    let chunk_hash_literals = entry
+        .chunk_sha256_hex
+        .iter()
+        .map(|hash| decode_hex(hash).map(|bytes| idl_blob(&bytes)))
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?
+        .join("; ");
+
+    let prepare = format!(
+        "(record {{ template_id = {}; version = {}; payload_hash = {}; \
+         payload_size_bytes = {} : nat64; chunk_hashes = vec {{ {} }} }})",
+        idl_text(&entry.template_id),
+        idl_text(release_version),
+        idl_blob(&payload_hash),
+        wasm_module.len(),
+        chunk_hash_literals,
+    );
+    let _ = dfx_call(
+        root_canister,
+        protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
+        Some(&prepare),
+        None,
+    )?;
+
+    for (chunk_index, chunk) in chunks.iter().enumerate() {
+        let request = format!(
+            "(record {{ template_id = {}; version = {}; chunk_index = {} : nat32; bytes = {} }})",
+            idl_text(&entry.template_id),
+            idl_text(release_version),
+            chunk_index,
+            idl_blob(chunk),
+        );
+        let _ = dfx_call(
+            root_canister,
+            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            Some(&request),
+            None,
+        )?;
+    }
+
+    Ok(())
+}
+
+// Persist one temporary Candid argument file for `dfx --argument-file`.
+fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "canic-stage-root-release-set-{}-{unique}.did",
+        std::process::id()
+    ));
+    fs::write(&path, argument)?;
+    Ok(path)
+}
+
+// Render one byte slice as lowercase hexadecimal.
+fn hex_bytes(bytes: &[u8]) -> String {
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+
+    for byte in bytes {
+        let _ = write!(encoded, "{byte:02x}");
+    }
+
+    encoded
+}
+
+// Decode one lowercase hex string back into bytes.
+fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    if !hex.len().is_multiple_of(2) {
+        return Err(format!("invalid hex length: {}", hex.len()).into());
+    }
+
+    let mut bytes = Vec::with_capacity(hex.len() / 2);
+    for index in (0..hex.len()).step_by(2) {
+        bytes.push(u8::from_str_radix(&hex[index..index + 2], 16)?);
+    }
+
+    Ok(bytes)
+}

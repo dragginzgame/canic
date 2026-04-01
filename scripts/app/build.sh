@@ -245,39 +245,6 @@ canonical_wasm_store_config_path() {
     printf '%s\n' "$ROOT/canisters/canic.toml"
 }
 
-NONROOT_CANISTERS=(
-    app
-    minimal
-    scale
-    scale_hub
-    test
-    user_hub
-    user_shard
-)
-
-workspace_wasm_build_stamp() {
-    local profile_dir="$1"
-    local scope="$2"
-    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build-$scope-$profile_dir.stamp"
-}
-
-workspace_wasm_build_lock() {
-    printf '%s\n' "$ROOT/.dfx/local/canisters/.wasm-build.lock"
-}
-
-newest_workspace_input_epoch() {
-    find \
-        "$ROOT/Cargo.toml" \
-        "$ROOT/Cargo.lock" \
-        "$ROOT/dfx.json" \
-        "$ROOT/scripts/app/build.sh" \
-        "$ROOT/crates" \
-        "$ROOT/canisters" \
-        -type f \
-        ! -name '*.did' \
-        -printf '%T@\n' 2>/dev/null | sort -nr | head -1
-}
-
 newest_canister_interface_input_epoch() {
     local canister="$1"
     local canister_source_root
@@ -341,30 +308,6 @@ maybe_shrink_wasm_artifact() {
     fi
 }
 
-workspace_wasm_build_is_current() {
-    local profile_dir="$1"
-    local scope="$2"
-    shift 2
-    local stamp
-    stamp="$(workspace_wasm_build_stamp "$profile_dir" "$scope")"
-
-    [ -f "$stamp" ] || return 1
-
-    local canister
-    for canister in "$@"; do
-        [ -f "$(workspace_wasm_target_path "$canister" "$profile_dir")" ] || return 1
-    done
-
-    local newest_input
-    newest_input="$(newest_workspace_input_epoch)"
-    [ -n "$newest_input" ] || return 1
-
-    local stamp_epoch
-    stamp_epoch="$(stat -c '%Y' "$stamp")"
-
-    awk "BEGIN { exit !($stamp_epoch >= $newest_input) }"
-}
-
 build_requested_canisters() {
     local profile_dir="$1"
     shift
@@ -408,32 +351,6 @@ build_requested_canisters() {
     cargo "${cargo_args[@]}"
 }
 
-ensure_workspace_wasm_build() {
-    local profile_dir="$1"
-    local scope="$2"
-    shift 2
-
-    mkdir -p "$ROOT/.dfx/local/canisters"
-
-    local lock_file
-    lock_file="$(workspace_wasm_build_lock)"
-
-    exec 9>"$lock_file"
-    flock 9
-
-    if workspace_wasm_build_is_current "$profile_dir" "$scope" "$@"; then
-        flock -u 9
-        exec 9>&-
-        return
-    fi
-
-    build_requested_canisters "$profile_dir" "$@"
-    touch "$(workspace_wasm_build_stamp "$profile_dir" "$scope")"
-
-    flock -u 9
-    exec 9>&-
-}
-
 extract_and_cache_did_from_debug_artifact() {
     local canister="$1"
     local source_did
@@ -466,7 +383,7 @@ if [ "$CAN" = "root" ]; then
 elif [ "$CAN" = "wasm_store" ]; then
     build_requested_canisters "$PROFILE_DIR" wasm_store
 else
-    ensure_workspace_wasm_build "$PROFILE_DIR" "nonroot" "${NONROOT_CANISTERS[@]}"
+    build_requested_canisters "$PROFILE_DIR" "$CAN"
 fi
 cp -f "$(workspace_wasm_target_path "$CAN" "$PROFILE_DIR")" "$WASM_TARGET"
 maybe_shrink_wasm_artifact "$WASM_TARGET"
