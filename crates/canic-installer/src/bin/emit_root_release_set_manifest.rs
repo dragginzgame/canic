@@ -1,4 +1,4 @@
-use canic_internal::release_set::{emit_root_release_set_manifest, workspace_root};
+use canic_installer::release_set::{emit_root_release_set_manifest, workspace_root};
 use std::env;
 
 fn main() {

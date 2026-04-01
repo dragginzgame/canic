@@ -52,6 +52,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `src/storage/` – persisted schemas and storage helpers backing stable memory.
   * `src/view/` – internal read‑only projections used by workflow/policy/ops.
   * `src/workflow/` – orchestration, retries, cascades, and multi‑step behaviors.
+* `crates/canic-installer/` – published installer and release-set tooling for downstream workspaces.
 * `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.

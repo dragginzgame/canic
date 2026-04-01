@@ -5,5 +5,3 @@
 
 pub mod canister;
 pub mod reference;
-#[cfg(any(not(target_arch = "wasm32"), test))]
-pub mod release_set;
