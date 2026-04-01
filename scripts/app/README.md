@@ -46,7 +46,7 @@ dfx build --all
 `dfx.json` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
 - builds the Rust canister crate for `wasm32-unknown-unknown`
 - resolves `wasm_store` from the canonical `canic-wasm-store` package instead of a local `canisters/wasm_store` crate
-- discovers the matching `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, so downstreams do not need their own `wasm_store` crate
+- discovers the matching `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
 

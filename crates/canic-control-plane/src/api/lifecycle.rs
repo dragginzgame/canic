@@ -73,11 +73,11 @@ impl LifecycleApi {
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
-        crate::api::template::WasmStoreBootstrapApi::seed_embedded_root_release_bundle(
+        crate::api::template::WasmStoreBootstrapApi::ensure_embedded_root_release_bundle(
             embedded_release_bundle,
             embedded_release_version,
         )
-        .expect("seed embedded root release bundle");
+        .expect("preserve embedded root release bundle");
     }
 
     /// Delegate root post-upgrade bootstrap scheduling to the current core implementation.

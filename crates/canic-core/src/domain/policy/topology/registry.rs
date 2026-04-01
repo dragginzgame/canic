@@ -71,6 +71,10 @@ impl RegistryPolicy {
                 }
             }
             CanisterKind::Singleton => {
+                if role.is_wasm_store() {
+                    return Ok(());
+                }
+
                 if let Some(entry) = data
                     .entries
                     .iter()

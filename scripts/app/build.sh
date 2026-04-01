@@ -57,7 +57,9 @@ canonical_wasm_store_manifest_path() {
         return
     fi
 
-    cargo metadata --format-version=1 | python3 -c '
+    local resolved_manifest
+    if resolved_manifest="$(
+        cargo metadata --format-version=1 | python3 -c '
 import json, sys
 from pathlib import Path
 
@@ -88,11 +90,139 @@ for package in packages:
         if registry_sibling.is_file():
             print(registry_sibling)
             raise SystemExit(0)
+'
+    )" && [ -n "$resolved_manifest" ]; then
+        printf '%s\n' "$resolved_manifest"
+        return
+    fi
+
+    ensure_generated_wasm_store_wrapper
+    printf '%s\n' "$(generated_wasm_store_wrapper_root)/Cargo.toml"
+}
+
+resolved_canic_manifest_path() {
+    cargo metadata --format-version=1 | python3 -c '
+import json, sys
+
+data = json.load(sys.stdin)
+packages = data.get("packages", [])
+
+for package in packages:
+    if package.get("name") == "canic":
+        print(package["manifest_path"])
+        raise SystemExit(0)
 
 raise SystemExit(
-    "unable to locate canonical '\''canic-wasm-store'\'' package; resolved '\''canic'\'' but found no sibling source checkout or registry crate. Downstreams should depend on the matching published '\''canic'\'' version and let the build helper discover '\''canic-wasm-store'\'' automatically."
+    "unable to locate resolved '\''canic'\'' package in cargo metadata; downstreams that build the implicit wasm_store must depend on '\''canic'\''."
 )
 '
+}
+
+generated_wasm_store_wrapper_root() {
+    printf '%s\n' "$ROOT/.dfx/local/generated/canic-wasm-store"
+}
+
+generated_wasm_store_wrapper_patch_table() {
+    local canic_manifest="$1"
+    local canic_root
+    local sibling_root
+    local crate_name
+    local manifest_path
+    local crate_root
+    local rendered=""
+
+    canic_root="$(dirname "$canic_manifest")"
+    sibling_root="$(dirname "$canic_root")"
+
+    for crate_name in \
+        canic-cdk \
+        canic-control-plane \
+        canic-core \
+        canic-dsl-macros \
+        canic-memory \
+        canic-sharding-runtime \
+        canic-types
+    do
+        manifest_path=""
+
+        if [ -f "$sibling_root/$crate_name/Cargo.toml" ]; then
+            manifest_path="$sibling_root/$crate_name/Cargo.toml"
+        else
+            for candidate in "$sibling_root/$crate_name-"*/Cargo.toml; do
+                if [ -f "$candidate" ]; then
+                    manifest_path="$candidate"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$manifest_path" ]; then
+            continue
+        fi
+
+        crate_root="$(dirname "$manifest_path")"
+        rendered="${rendered}${crate_name} = { path = \"$crate_root\" }\n"
+    done
+
+    if [ -z "$rendered" ]; then
+        return
+    fi
+
+    printf '[patch.crates-io]\n%b' "$rendered"
+}
+
+ensure_generated_wasm_store_wrapper() {
+    local wrapper_root
+    local canic_manifest
+    local canic_root
+    local patch_table
+
+    wrapper_root="$(generated_wasm_store_wrapper_root)"
+    canic_manifest="$(resolved_canic_manifest_path)"
+    canic_root="$(dirname "$canic_manifest")"
+    patch_table="$(generated_wasm_store_wrapper_patch_table "$canic_manifest")"
+
+    mkdir -p "$wrapper_root/src"
+
+    cat > "$wrapper_root/Cargo.toml" <<EOF
+[package]
+name = "canic-generated-wasm-store"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "canister_wasm_store"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { path = "$canic_root", features = ["control-plane"] }
+ic-cdk = "0.20.0"
+candid = { version = "0.10", default-features = false }
+
+[build-dependencies]
+canic = { path = "$canic_root" }
+EOF
+
+    if [ -n "$patch_table" ]; then
+        printf '\n%s\n' "$patch_table" >> "$wrapper_root/Cargo.toml"
+    fi
+
+    cat > "$wrapper_root/build.rs" <<'EOF'
+fn main() {
+    let config_path = std::env::var("CANIC_CONFIG_PATH")
+        .expect("CANIC_CONFIG_PATH must be set for generated wasm_store wrapper");
+
+    canic::build!(config_path);
+}
+EOF
+
+    cat > "$wrapper_root/src/lib.rs" <<'EOF'
+#![allow(clippy::unused_async)]
+
+canic::start_wasm_store!();
+canic::cdk::export_candid_debug!();
+EOF
 }
 
 canonical_wasm_store_source_root() {
@@ -248,7 +378,9 @@ build_requested_canisters() {
             cargo_args+=(--release)
         fi
 
-        CANIC_CONFIG_PATH="$config_path" cargo "${cargo_args[@]}"
+        CANIC_CONFIG_PATH="$config_path" \
+        CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}" \
+        cargo "${cargo_args[@]}"
         return
     fi
 

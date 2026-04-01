@@ -124,7 +124,7 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> boo
     let mut built_entries = Vec::new();
 
     for role_name in configured_release_roles(config) {
-        let artifact_path = resolve_release_wasm_path(&workspace_root, &artifact_root, &role_name);
+        let artifact_path = resolve_release_wasm_path(&artifact_root, &role_name);
         if !artifact_path.is_file() {
             assert!(
                 !strict_artifacts,
@@ -141,18 +141,7 @@ pub fn emit_root_release_bundle(config_path: &Path, config: &ConfigModel) -> boo
             continue;
         }
 
-        assert!(
-            !strict_artifacts || artifact_path.extension().is_some_and(|ext| ext == "gz"),
-            "root release bundle requires the build-produced gzip artifact for role '{role_name}', but resolved {}; remove the raw fallback from the real build path",
-            artifact_path.display()
-        );
-
-        let extension = if artifact_path.extension().is_some_and(|ext| ext == "gz") {
-            "wasm.gz"
-        } else {
-            "wasm"
-        };
-        let out_wasm = asset_dir.join(format!("{role_name}.{extension}"));
+        let out_wasm = asset_dir.join(format!("{role_name}.wasm.gz"));
         fs::copy(&artifact_path, &out_wasm).unwrap_or_else(|err| {
             panic!(
                 "copy embedded release wasm for role '{role_name}' from {} to {} failed: {err}",
@@ -214,10 +203,6 @@ fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
     network_root
 }
 
-fn discover_cargo_target_root(workspace_root: &Path) -> PathBuf {
-    env::var_os("CARGO_TARGET_DIR").map_or_else(|| workspace_root.join("target"), PathBuf::from)
-}
-
 fn configured_release_roles(config: &ConfigModel) -> Vec<String> {
     let mut roles = Vec::new();
 
@@ -238,29 +223,10 @@ fn configured_release_roles(config: &ConfigModel) -> Vec<String> {
     roles
 }
 
-fn resolve_release_wasm_path(
-    workspace_root: &Path,
-    artifact_root: &Path,
-    role_name: &str,
-) -> PathBuf {
-    let dfx_gzip_path = artifact_root
+fn resolve_release_wasm_path(artifact_root: &Path, role_name: &str) -> PathBuf {
+    artifact_root
         .join(role_name)
-        .join(format!("{role_name}.wasm.gz"));
-    if dfx_gzip_path.is_file() {
-        return dfx_gzip_path;
-    }
-
-    let dfx_path = artifact_root
-        .join(role_name)
-        .join(format!("{role_name}.wasm"));
-    if dfx_path.is_file() {
-        return dfx_path;
-    }
-
-    discover_cargo_target_root(workspace_root)
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join(format!("canister_{role_name}.wasm"))
+        .join(format!("{role_name}.wasm.gz"))
 }
 
 fn render_root_release_bundle_source(entries: &[(String, PathBuf)]) -> String {

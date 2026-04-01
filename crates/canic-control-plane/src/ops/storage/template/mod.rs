@@ -150,7 +150,7 @@ impl TemplateManifestOps {
             .collect()
     }
 
-    // Return the root-owned overview snapshot for one tracked runtime wasm store.
+    // Return the root-owned approved-release overview for one tracked runtime wasm store.
     #[must_use]
     pub fn root_store_overview_response(
         store_binding: &WasmStoreBinding,
@@ -170,30 +170,32 @@ impl TemplateManifestOps {
             })
             .collect::<Vec<_>>();
 
-        let payload_bytes = manifests
+        let approved_payload_bytes = manifests
             .iter()
             .map(|(_, record)| record.payload_size_bytes)
             .sum::<u64>();
-        let remaining_payload_bytes = limits.max_store_bytes.saturating_sub(payload_bytes);
+        let remaining_approved_payload_bytes = limits
+            .max_store_bytes
+            .saturating_sub(approved_payload_bytes);
         let within_headroom =
-            headroom_bytes.is_some_and(|threshold| remaining_payload_bytes <= threshold);
+            headroom_bytes.is_some_and(|threshold| remaining_approved_payload_bytes <= threshold);
         let template_versions = projected_template_versions_for_manifests(&manifests);
-        let release_count = u32::try_from(
+        let approved_release_count = u32::try_from(
             template_versions
                 .values()
                 .map(std::collections::BTreeSet::len)
                 .sum::<usize>(),
         )
         .unwrap_or(u32::MAX);
-        let template_count = u32::try_from(template_versions.len()).unwrap_or(u32::MAX);
-        let mut templates = template_versions
+        let approved_template_count = u32::try_from(template_versions.len()).unwrap_or(u32::MAX);
+        let mut approved_templates = template_versions
             .into_iter()
             .map(|(template_id, versions)| WasmStoreTemplateStatusResponse {
                 template_id,
                 versions: u16::try_from(versions.len()).unwrap_or(u16::MAX),
             })
             .collect::<Vec<_>>();
-        templates.sort_by(|left, right| left.template_id.cmp(&right.template_id));
+        approved_templates.sort_by(|left, right| left.template_id.cmp(&right.template_id));
 
         WasmStoreOverviewStoreResponse {
             binding: store_binding.clone(),
@@ -208,20 +210,20 @@ impl TemplateManifestOps {
                 completed_at: gc.completed_at,
                 runs_completed: gc.runs_completed,
             },
-            payload_bytes,
-            payload_size: byte_size(payload_bytes),
+            approved_payload_bytes,
+            approved_payload_size: byte_size(approved_payload_bytes),
             max_store_bytes: limits.max_store_bytes,
             max_store_size: byte_size(limits.max_store_bytes),
-            remaining_payload_bytes,
-            remaining_payload_size: byte_size(remaining_payload_bytes),
+            remaining_approved_payload_bytes,
+            remaining_approved_payload_size: byte_size(remaining_approved_payload_bytes),
             headroom_bytes,
             headroom_size: headroom_bytes.map(byte_size),
             within_headroom,
-            template_count,
+            approved_template_count,
             max_templates: limits.max_templates,
-            release_count,
+            approved_release_count,
             max_template_versions_per_template: limits.max_template_versions_per_template,
-            templates,
+            approved_templates,
         }
     }
 

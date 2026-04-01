@@ -780,23 +780,23 @@ type WasmStoreOverviewResponse = record {
 type WasmStoreOverviewStoreResponse = record {
   gc : WasmStoreGcStatusResponse;
   pid : principal;
-  remaining_payload_bytes : nat64;
-  payload_size : text;
-  templates : vec WasmStoreTemplateStatusResponse;
+  approved_templates : vec WasmStoreTemplateStatusResponse;
   headroom_bytes : opt nat64;
-  remaining_payload_size : text;
+  approved_payload_size : text;
+  remaining_approved_payload_bytes : nat64;
   max_store_bytes : nat64;
   created_at : nat64;
   max_template_versions_per_template : opt nat16;
   max_templates : opt nat32;
+  remaining_approved_payload_size : text;
   within_headroom : bool;
   binding : text;
-  release_count : nat32;
+  approved_release_count : nat32;
   headroom_size : opt text;
-  payload_bytes : nat64;
+  approved_payload_bytes : nat64;
   max_store_size : text;
-  template_count : nat32;
   publication_slot : opt WasmStorePublicationSlotResponse;
+  approved_template_count : nat32;
 };
 // 
 // WasmStorePublicationSlotResponse

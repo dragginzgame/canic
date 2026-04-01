@@ -241,6 +241,33 @@ fn registry_singleton_policy_blocks_under_parent() {
 }
 
 #[test]
+fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
+    let role = CanisterRole::WASM_STORE;
+    let parent_role = CanisterRole::ROOT;
+    let parent_pid = p(6);
+    let existing_pid = p(7);
+
+    let data = RegistryPolicyInput {
+        entries: vec![TopologyPolicyInput {
+            pid: existing_pid,
+            role: role.clone(),
+            parent_pid: Some(parent_pid),
+            module_hash: None,
+        }],
+    };
+
+    RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &data,
+        &singleton_canister_config(),
+        &parent_role,
+        &root_canister_config(),
+    )
+    .expect("wasm_store fleet role should allow multiple stores under the same root");
+}
+
+#[test]
 fn tenant_creation_requires_singleton_parent() {
     let role = CanisterRole::new("tenant_child");
     let parent_role = CanisterRole::new("plain_parent");

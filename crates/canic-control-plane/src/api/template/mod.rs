@@ -147,6 +147,14 @@ impl WasmStoreBootstrapApi {
         support::seed_embedded_root_release_bundle(entries, version)
     }
 
+    // Preserve current approved releases and only seed missing embedded roles after upgrade.
+    pub fn ensure_embedded_root_release_bundle(
+        entries: &'static [EmbeddedRootReleaseEntry],
+        version: &str,
+    ) -> Result<(), Error> {
+        support::ensure_embedded_root_release_bundle(entries, version)
+    }
+
     // Prepare one local chunk set for chunk-by-chunk staging in the current canister.
     pub fn prepare_chunk_set(
         request: TemplateChunkSetPrepareInput,
