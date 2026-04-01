@@ -150,6 +150,9 @@ publish: ensure-clean
 test-packaged-downstream:
 	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-wasm-store.sh
 
+test-packaged-downstream-installer:
+	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-installer.sh
+
 #
 # Tests
 #

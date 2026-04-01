@@ -351,6 +351,38 @@ build_requested_canisters() {
     cargo "${cargo_args[@]}"
 }
 
+emit_root_release_set_manifest_command() {
+    if command -v canic-emit-root-release-set-manifest >/dev/null 2>&1; then
+        printf '%s\n' "canic-emit-root-release-set-manifest"
+        return
+    fi
+
+    if [ -f "$ROOT/crates/canic-installer/Cargo.toml" ]; then
+        printf '%s\n' "cargo run -q -p canic-installer --bin canic-emit-root-release-set-manifest --"
+        return
+    fi
+
+    printf '%s\n' ""
+}
+
+maybe_emit_root_release_set_manifest() {
+    local manifest_command
+    manifest_command="$(emit_root_release_set_manifest_command)"
+
+    [ -n "$manifest_command" ] || return 0
+
+    local manifest_path=""
+    manifest_path="$(
+        CANIC_WORKSPACE_ROOT="$ROOT" \
+        DFX_NETWORK="${DFX_NETWORK:-local}" \
+        bash -lc "$manifest_command --if-ready"
+    )"
+
+    if [ -n "$manifest_path" ]; then
+        echo "Emitted root release-set manifest: $manifest_path"
+    fi
+}
+
 extract_and_cache_did_from_debug_artifact() {
     local canister="$1"
     local source_did
@@ -402,4 +434,8 @@ else
     echo "Building debug (with candid extraction)"
     echo "Running candid extraction on same artifact"
     extract_and_cache_did_from_debug_artifact "$CAN"
+fi
+
+if [ "$CAN" != "wasm_store" ]; then
+    maybe_emit_root_release_set_manifest
 fi

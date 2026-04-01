@@ -67,3 +67,8 @@ embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
 and are staged after `root` install from the build-produced
 `.dfx/local/canisters/root/root.release-set.json` manifest by the Rust helpers
 in `canic-installer`.
+
+During normal custom builds, `scripts/app/build.sh` now opportunistically emits
+that manifest as soon as the full root-subnet ordinary artifact set exists, so
+downstreams do not need a local copy of the manifest-emission logic just to
+keep `.dfx/local/canisters/root/root.release-set.json` in sync.

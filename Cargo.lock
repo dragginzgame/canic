@@ -303,6 +303,7 @@ version = "0.21.6"
 dependencies = [
  "canic",
  "canic-core",
+ "flate2",
  "serde",
  "serde_json",
  "sha2 0.11.0",

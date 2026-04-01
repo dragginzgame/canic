@@ -1,5 +1,6 @@
 use canic::protocol;
 use canic_core::bootstrap::parse_config_model;
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -7,6 +8,7 @@ use std::{
     collections::BTreeSet,
     fmt::Write,
     fs,
+    io::Read,
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -17,6 +19,8 @@ const ROOT_MANIFEST_RELATIVE: &str = "canisters/root/Cargo.toml";
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 pub const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
+const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
+const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
 
 ///
 /// RootReleaseSetManifest
@@ -139,6 +143,26 @@ pub fn emit_root_release_set_manifest(
 
     fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
     Ok(manifest_path)
+}
+
+// Emit the root release-set manifest only once every required ordinary artifact exists.
+pub fn emit_root_release_set_manifest_if_ready(
+    workspace_root: &Path,
+    network: &str,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(workspace_root, network)?;
+    let roles = configured_release_roles(&config_path(workspace_root))?;
+
+    for role_name in roles {
+        let artifact_path = artifact_root
+            .join(&role_name)
+            .join(format!("{role_name}.wasm.gz"));
+        if !artifact_path.is_file() {
+            return Ok(None);
+        }
+    }
+
+    emit_root_release_set_manifest(workspace_root, network).map(Some)
 }
 
 // Load one previously emitted root release-set manifest from disk.
@@ -416,11 +440,7 @@ fn build_release_set_entry(
         })?
         .to_string_lossy()
         .to_string();
-    let wasm_module = fs::read(&artifact_path)?;
-
-    if wasm_module.is_empty() {
-        return Err(format!("release artifact is empty: {}", artifact_path.display()).into());
-    }
+    let wasm_module = read_release_artifact(&artifact_path)?;
 
     let chunk_hashes = wasm_module
         .chunks(ROOT_RELEASE_CHUNK_BYTES)
@@ -447,7 +467,7 @@ fn stage_release_entry(
     now_secs: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let artifact_path = workspace_root.join(&entry.artifact_relative_path);
-    let wasm_module = fs::read(&artifact_path)?;
+    let wasm_module = read_release_artifact(&artifact_path)?;
 
     if wasm_module.len() as u64 != entry.payload_size_bytes {
         return Err(format!(
@@ -553,6 +573,48 @@ fn stage_release_entry(
     Ok(())
 }
 
+// Read one staged release artifact and validate that it is a non-empty gzip stream
+// whose decompressed payload is a real wasm module.
+fn read_release_artifact(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let artifact = fs::read(path)?;
+
+    if artifact.is_empty() {
+        return Err(format!("release artifact is empty: {}", path.display()).into());
+    }
+
+    if !artifact.starts_with(&GZIP_MAGIC) {
+        return Err(format!(
+            "release artifact is not gzip-compressed: {}",
+            path.display()
+        )
+        .into());
+    }
+
+    let mut decoder = GzDecoder::new(&artifact[..]);
+    let mut wasm = Vec::new();
+    decoder
+        .read_to_end(&mut wasm)
+        .map_err(|err| format!("failed to decompress {}: {err}", path.display()))?;
+
+    if wasm.is_empty() {
+        return Err(format!(
+            "release artifact decompresses to zero bytes: {}",
+            path.display()
+        )
+        .into());
+    }
+
+    if !wasm.starts_with(&WASM_MAGIC) {
+        return Err(format!(
+            "release artifact does not decompress to a wasm module: {}",
+            path.display()
+        )
+        .into());
+    }
+
+    Ok(artifact)
+}
+
 // Persist one temporary Candid argument file for `dfx --argument-file`.
 fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
@@ -591,7 +653,9 @@ fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::configured_release_roles_from_source;
+    use super::{configured_release_roles_from_source, read_release_artifact};
+    use flate2::{Compression, write::GzEncoder};
+    use std::{fs, io::Write};
     const REAL_CONFIG: &str = r#"
 controllers = []
 app_directory = ["user_hub", "scale_hub"]
@@ -691,5 +755,63 @@ kind = "replica"
         let config = REAL_CONFIG.replace("[subnets.prime.canisters.root]\nkind = \"root\"\n\n", "");
 
         assert!(configured_release_roles_from_source(&config).is_err());
+    }
+
+    #[test]
+    fn read_release_artifact_accepts_gzipped_wasm() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!(
+            "canic-installer-valid-artifact-{}-{}.wasm.gz",
+            std::process::id(),
+            1
+        ));
+        let bytes = gzipped_bytes(b"\0asm\x01\0\0\0payload");
+        fs::write(&path, &bytes).unwrap();
+
+        let read_back = read_release_artifact(&path).unwrap();
+        assert_eq!(read_back, bytes);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn read_release_artifact_rejects_non_gzip_bytes() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!(
+            "canic-installer-invalid-artifact-{}-{}.wasm.gz",
+            std::process::id(),
+            2
+        ));
+        fs::write(&path, b"not gzip").unwrap();
+
+        let err = read_release_artifact(&path).unwrap_err();
+        assert!(err.to_string().contains("not gzip-compressed"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn read_release_artifact_rejects_non_wasm_gzip() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!(
+            "canic-installer-invalid-artifact-{}-{}.wasm.gz",
+            std::process::id(),
+            3
+        ));
+        fs::write(&path, gzipped_bytes(b"hello world")).unwrap();
+
+        let err = read_release_artifact(&path).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not decompress to a wasm module")
+        );
+
+        let _ = fs::remove_file(path);
+    }
+
+    fn gzipped_bytes(input: &[u8]) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(input).unwrap();
+        encoder.finish().unwrap()
     }
 }

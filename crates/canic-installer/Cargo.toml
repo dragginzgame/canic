@@ -28,6 +28,7 @@ path = "src/bin/install_reference_topology.rs"
 [dependencies]
 canic = { workspace = true }
 canic-core = { workspace = true }
+flate2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
